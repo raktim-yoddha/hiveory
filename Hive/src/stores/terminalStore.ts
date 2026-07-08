@@ -1,17 +1,36 @@
-import { create } from 'zustand';
+import { create } from "zustand";
+
+export interface WorkerBee {
+  id: string;
+  cli: string;
+  cliName: string;
+  customName?: string;
+}
 
 interface TerminalState {
-  activePanes: string[];
-  addPane: (paneId: string) => void;
-  removePane: (paneId: string) => void;
-  activeAgent: 'claude' | 'codex' | 'aider' | 'gemini' | null;
-  setActiveAgent: (agent: 'claude' | 'codex' | 'aider' | 'gemini' | null) => void;
+  workerBees: WorkerBee[];
+  addWorkerBee: (workerBee: WorkerBee) => void;
+  removeWorkerBee: (beeId: string) => void;
+  updateWorkerBee: (beeId: string, updates: Partial<WorkerBee>) => void;
+  maximizedPane: string | null;
+  setMaximizedPane: (paneId: string | null) => void;
 }
 
 export const useTerminalStore = create<TerminalState>((set) => ({
-  activePanes: [],
-  addPane: (paneId) => set((state) => ({ activePanes: [...state.activePanes, paneId] })),
-  removePane: (paneId) => set((state) => ({ activePanes: state.activePanes.filter((p) => p !== paneId) })),
-  activeAgent: null,
-  setActiveAgent: (agent) => set({ activeAgent: agent }),
+  workerBees: [],
+  addWorkerBee: (workerBee) =>
+    set((state) => ({ workerBees: [...state.workerBees, workerBee] })),
+  removeWorkerBee: (beeId) =>
+    set((state) => ({
+      workerBees: state.workerBees.filter((b) => b.id !== beeId),
+      maximizedPane: state.maximizedPane === beeId ? null : state.maximizedPane,
+    })),
+  updateWorkerBee: (beeId, updates) =>
+    set((state) => ({
+      workerBees: state.workerBees.map((b) =>
+        b.id === beeId ? { ...b, ...updates } : b
+      ),
+    })),
+  maximizedPane: null,
+  setMaximizedPane: (paneId) => set({ maximizedPane: paneId }),
 }));

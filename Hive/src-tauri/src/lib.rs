@@ -8,18 +8,6 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TerminalOutput {
-    pub pane_id: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TerminalInput {
-    pub pane_id: String,
-    pub data: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct FileInfo {
     pub name: String,
     pub path: String,
@@ -41,49 +29,50 @@ async fn spawn_terminal(
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
     
-    // Check command type before moving it
-    let is_cmd = command.contains("cmd.exe");
-    let is_powershell = command.contains("powershell.exe");
-    let is_bash_or_wsl = command.contains("bash.exe") || command.contains("wsl.exe");
+    // Clean the command string - remove any null bytes
+    let command = command.trim().replace('\0', "");
     
-    let mut cmd = CommandBuilder::new(command);
+    // Check if this is a CLI agent (not a shell)
+    let is_cli_agent = command.contains("claude-code") || 
+                       command.contains("codex-cli") || 
+                       command.contains("aider") || 
+                       command.contains("gemini-cli") ||
+                       command.contains("antigravity") ||
+                       command.contains("open-code") ||
+                       command.contains("kimi-code") ||
+                       command.contains("cline") ||
+                       command.contains("cursor") ||
+                       command.contains("windsurf");
     
-    // Set working directory by prepending cd command for shell
+    let mut cmd = if is_cli_agent {
+        // For CLI agents on Windows, use cmd.exe to invoke them
+        // Use /K to keep the command prompt open after execution
+        let mut cmd = CommandBuilder::new("cmd.exe");
+        cmd.arg("/K");
+        cmd.arg(&command);
+        cmd
+    } else {
+        // For shells, use the command directly
+        CommandBuilder::new(&command)
+    };
+    
+    // Set working directory. Use the CommandBuilder's own cwd so we never mutate
+    // the shared process-wide current directory (which would race across panes).
     if let Some(dir) = working_dir {
         if let Ok(path) = PathBuf::from(&dir).canonicalize() {
             if path.exists() {
-                let path_str = path.to_string_lossy().to_string();
-                // For Windows shells, we need to change directory differently
-                if is_cmd {
-                    cmd.arg("/k");
-                    cmd.arg(&format!("cd /d \"{}\"", path_str));
-                } else if is_powershell {
-                    cmd.arg("-NoExit");
-                    cmd.arg("-Command");
-                    cmd.arg(&format!("Set-Location '{}'", path_str));
-                } else if is_bash_or_wsl {
-                    cmd.arg("-c");
-                    cmd.arg(&format!("cd \"{}\" && exec $SHELL", path_str));
-                }
-            }
-        }
-    } else {
-        // Default to home directory if no working dir specified
-        if let Ok(home_dir) = std::env::var("USERPROFILE") {
-            if is_cmd {
-                cmd.arg("/k");
-                cmd.arg(&format!("cd /d \"{}\"", home_dir));
-            } else if is_powershell {
-                cmd.arg("-NoExit");
-                cmd.arg("-Command");
-                cmd.arg(&format!("Set-Location '{}'", home_dir));
-            } else if is_bash_or_wsl {
-                cmd.arg("-c");
-                cmd.arg(&format!("cd \"{}\" && exec $SHELL", home_dir));
+                // canonicalize() yields a \\?\ UNC prefix on Windows that some
+                // shells choke on; strip it for a plain path.
+                let path_str = path
+                    .to_string_lossy()
+                    .trim_start_matches(r"\\?\")
+                    .to_string();
+                cmd.cwd(&path_str);
             }
         }
     }
     
+    // Add any additional args
     for arg in args {
         cmd.arg(&arg);
     }
@@ -110,16 +99,20 @@ async fn spawn_terminal(
 
 #[tauri::command]
 async fn write_to_terminal(
-    input: TerminalInput,
+    pane_id: String,
+    data: String,
     state: State<'_, PtySystem>,
 ) -> Result<(), String> {
     let ptys = state.ptys.lock().unwrap();
-    if let Some(pty_pair) = ptys.get(&input.pane_id) {
+    if let Some(pty_pair) = ptys.get(&pane_id) {
         let pty = pty_pair.lock().unwrap();
         let mut writer = pty.master.take_writer().map_err(|e| e.to_string())?;
         writer
-            .write_all(input.data.as_bytes())
+            .write_all(data.as_bytes())
             .map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())?;
+    } else {
+        return Err(format!("No terminal found for pane: {}", pane_id));
     }
     Ok(())
 }
@@ -175,6 +168,19 @@ async fn resize_terminal(
                 pixel_height: 0,
             })
             .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn kill_terminal(
+    pane_id: String,
+    state: State<'_, PtySystem>,
+) -> Result<(), String> {
+    let mut ptys = state.ptys.lock().unwrap();
+    if let Some(pty_pair) = ptys.remove(&pane_id) {
+        // Dropping the PtyPair will terminate the child process
+        drop(pty_pair);
     }
     Ok(())
 }
@@ -292,6 +298,7 @@ pub fn run() {
             write_to_terminal,
             read_from_terminal,
             resize_terminal,
+            kill_terminal,
             read_file,
             write_file,
             list_directory,

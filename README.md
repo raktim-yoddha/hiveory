@@ -1,6 +1,6 @@
-# Hiveory v1
+# Hiveory AI v1
 
-An AI-native dev environment with unified project memory. v1 focuses on three core modules:
+An AI-native dev environment with unified project memory. Hiveory AI v1 focuses on three core modules:
 
 - **Hive**: Tauri desktop shell with terminal panes and file editor
 - **Nectar**: Unified project memory with hybrid vector + keyword search
@@ -10,7 +10,7 @@ An AI-native dev environment with unified project memory. v1 focuses on three co
 
 - **Shell**: Tauri v2 (Rust + Next.js)
 - **Frontend**: Next.js App Router, shadcn/ui, TailwindCSS
-- **Terminal**: xterm.js + portable-pty (Rust)
+- **terminal**: xterm.js + portable-pty (Rust)
 - **Editor**: Monaco
 - **Storage**: SQLite with FTS5
 - **Search**: Hybrid vector + keyword with reciprocal rank fusion
@@ -54,6 +54,7 @@ hiveory/
 ## Key Features
 
 ### Nectar Memory System
+
 - `.nectar/memory/` stores project knowledge as markdown
 - Hybrid search: vector similarity + FTS5 keyword match
 - Reciprocal rank fusion for ranked results
@@ -61,16 +62,18 @@ hiveory/
 - Token-budgeted injection with relevance threshold
 
 ### WorkerBees Adapters
+
 - Unified interface for Claude Code, Codex CLI, Aider, Gemini
 - Automatic context injection from Nectar
 - Structured session summaries routed to appropriate memory files
 - Transparent terminal interaction (no hidden abstractions)
 
 ### Hive Shell
+
 - 1 and 2-pane terminal layouts (extensible to grid)
 - Monaco-based editor with file explorer
 - Basic git status/diff
-- Sidebar modes: Editor / Terminals
+- Sidebar modes: Editor / terminals
 
 ## Development
 

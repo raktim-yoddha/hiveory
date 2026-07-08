@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Hiveory',
+  title: 'Hiveory AI',
   description: 'AI-native dev environment',
 };
 
