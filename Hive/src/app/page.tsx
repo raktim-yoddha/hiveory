@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Sidebar from '@/components/Sidebar';
 import EditorPanel from '@/components/editor/EditorPanel';
 import ADEPanel from '@/components/terminal/ADEPanel';
 import { invoke } from '@tauri-apps/api/core';
+import { File, Terminal, Settings, Search, GitBranch, X, Minus, Square, Copy } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { File, Terminal, Settings, Search, GitBranch, Plus, Minus, Square, X } from 'lucide-react';
 
 export default function Home() {
   const [sidebarMode, setSidebarMode] = useState<'editor' | 'ade'>('editor');
@@ -18,19 +18,41 @@ export default function Home() {
   const [isResizing, setIsResizing] = useState(false);
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const windowRef = useRef<ReturnType<typeof getCurrentWindow> | null>(null);
 
   useEffect(() => {
     const initializeNectar = async () => {
       try {
-        const path = await invoke<string>('get_project_path');
-        setProjectPath(path);
-        await invoke('ensure_nectar_structure', { projectPath: path });
+        // Always use home directory as default for terminal
+        const homeDir = await invoke<string>('get_home_dir');
+        setProjectPath(homeDir);
+        
+        try {
+          const projectPath = await invoke<string>('get_project_path');
+          await invoke('ensure_nectar_structure', { projectPath });
+        } catch (e) {
+          console.error('Failed to initialize Nectar:', e);
+        }
         setInitialized(true);
       } catch (e) {
-        console.error('Failed to initialize Nectar:', e);
+        console.error('Failed to get home directory:', e);
       }
     };
+
+    const initializeWindow = async () => {
+      try {
+        const window = getCurrentWindow();
+        windowRef.current = window;
+        // Don't check initial state to avoid permission issues
+        // We'll track state locally based on user actions
+      } catch (e) {
+        console.error('Failed to initialize window:', e);
+      }
+    };
+
     initializeNectar();
+    initializeWindow();
   }, []);
 
   useEffect(() => {
@@ -45,8 +67,19 @@ export default function Home() {
       }
     };
 
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.dropdown-menu') && !target.closest('.menu-button')) {
+        setActiveMenu(null);
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('click', handleClickOutside);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('click', handleClickOutside);
+    };
   }, [sidebarMode, sidebarCollapsed]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -67,6 +100,50 @@ export default function Home() {
     setIsResizing(false);
   };
 
+  const handleMinimize = async () => {
+    try {
+      if (windowRef.current) {
+        await windowRef.current.minimize();
+      }
+    } catch (e) {
+      console.error('Failed to minimize window:', e);
+    }
+  };
+
+  const handleMaximize = async () => {
+    try {
+      if (windowRef.current) {
+        if (isMaximized) {
+          await windowRef.current.unmaximize();
+          setIsMaximized(false);
+        } else {
+          await windowRef.current.maximize();
+          setIsMaximized(true);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to toggle maximize:', e);
+    }
+  };
+
+  const handleClose = async () => {
+    try {
+      if (windowRef.current) {
+        await windowRef.current.close();
+      }
+    } catch (e) {
+      console.error('Failed to close window:', e);
+    }
+  };
+
+  const handleTitleBarDoubleClick = async () => {
+    await handleMaximize();
+  };
+
+  const handleFolderSelect = (folderPath: string) => {
+    setProjectPath(folderPath);
+  };
+
   useEffect(() => {
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
@@ -81,35 +158,18 @@ export default function Home() {
     };
   }, [isResizing]);
 
-  const handleWindowAction = async (action: 'minimize' | 'maximize' | 'close') => {
-    try {
-      const window = getCurrentWindow();
-      switch (action) {
-        case 'minimize':
-          await window.minimize();
-          break;
-        case 'maximize':
-          await window.toggleMaximize();
-          break;
-        case 'close':
-          await window.destroy();
-          break;
-      }
-    } catch (e) {
-      console.error('Window action failed:', e);
-    }
-  };
-
   const menuItems = {
     file: [
       { label: 'New File', action: () => console.log('New file') },
+      { label: 'New Window', action: () => console.log('New window') },
       { label: 'Open File...', action: () => console.log('Open file') },
       { label: 'Open Folder...', action: () => console.log('Open folder') },
       { label: '-', action: () => {} },
       { label: 'Save', action: () => console.log('Save') },
       { label: 'Save As...', action: () => console.log('Save as') },
+      { label: 'Save All', action: () => console.log('Save all') },
       { label: '-', action: () => {} },
-      { label: 'Exit', action: () => handleWindowAction('close') },
+      { label: 'Exit', action: () => console.log('Exit') },
     ],
     edit: [
       { label: 'Undo', action: () => console.log('Undo') },
@@ -118,6 +178,22 @@ export default function Home() {
       { label: 'Cut', action: () => console.log('Cut') },
       { label: 'Copy', action: () => console.log('Copy') },
       { label: 'Paste', action: () => console.log('Paste') },
+      { label: '-', action: () => {} },
+      { label: 'Find', action: () => console.log('Find') },
+      { label: 'Replace', action: () => console.log('Replace') },
+      { label: '-', action: () => {} },
+      { label: 'Go to Line', action: () => console.log('Go to line') },
+    ],
+    selection: [
+      { label: 'Select All', action: () => console.log('Select all') },
+      { label: '-', action: () => {} },
+      { label: 'Expand Selection', action: () => console.log('Expand selection') },
+      { label: 'Shrink Selection', action: () => console.log('Shrink selection') },
+      { label: '-', action: () => {} },
+      { label: 'Copy Line Up', action: () => console.log('Copy line up') },
+      { label: 'Copy Line Down', action: () => console.log('Copy line down') },
+      { label: 'Move Line Up', action: () => console.log('Move line up') },
+      { label: 'Move Line Down', action: () => console.log('Move line down') },
     ],
     view: [
       { label: 'Command Palette', action: () => console.log('Command palette') },
@@ -125,38 +201,74 @@ export default function Home() {
       { label: 'Explorer', action: () => setActiveView('explorer') },
       { label: 'Search', action: () => setActiveView('search') },
       { label: 'Source Control', action: () => setActiveView('git') },
-      { label: 'Settings', action: () => setActiveView('settings') },
+      { label: 'Extensions', action: () => setActiveView('settings') },
       { label: '-', action: () => {} },
       { label: 'Toggle Sidebar', action: () => setSidebarCollapsed(!sidebarCollapsed) },
+      { label: '-', action: () => {} },
+      { label: 'Appearance', action: () => console.log('Appearance') },
+    ],
+    go: [
+      { label: 'Go to File...', action: () => console.log('Go to file') },
+      { label: 'Go to Line...', action: () => console.log('Go to line') },
+      { label: 'Go to Symbol...', action: () => console.log('Go to symbol') },
+      { label: '-', action: () => {} },
+      { label: 'Back', action: () => console.log('Back') },
+      { label: 'Forward', action: () => console.log('Forward') },
+      { label: '-', action: () => {} },
+      { label: 'Go to Definition', action: () => console.log('Go to definition') },
+      { label: 'Peek Definition', action: () => console.log('Peek definition') },
+    ],
+    run: [
+      { label: 'Run Task', action: () => console.log('Run task') },
+      { label: '-', action: () => {} },
+      { label: 'Start Debugging', action: () => console.log('Start debugging') },
+      { label: 'Run and Debug', action: () => console.log('Run and debug') },
+      { label: '-', action: () => {} },
+      { label: 'Stop Debugging', action: () => console.log('Stop debugging') },
+      { label: 'Restart Debugging', action: () => console.log('Restart debugging') },
     ],
     terminal: [
       { label: 'New Terminal', action: () => setSidebarMode('ade') },
       { label: 'Split Terminal', action: () => console.log('Split terminal') },
       { label: '-', action: () => {} },
       { label: 'Clear Terminal', action: () => console.log('Clear terminal') },
+      { label: '-', action: () => {} },
+      { label: 'Configure Default Shell', action: () => console.log('Configure shell') },
+      { label: '-', action: () => {} },
+      { label: 'Select Terminal Type', action: () => console.log('Select terminal type') },
+      { label: 'Select AI Agent', action: () => console.log('Select AI agent') },
     ],
     help: [
       { label: 'Welcome', action: () => console.log('Welcome') },
+      { label: 'Documentation', action: () => console.log('Documentation') },
+      { label: '-', action: () => {} },
+      { label: 'Keyboard Shortcuts', action: () => console.log('Keyboard shortcuts') },
+      { label: '-', action: () => {} },
+      { label: 'Check for Updates', action: () => console.log('Check updates') },
       { label: 'About', action: () => console.log('About') },
     ],
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#1e1e1e] text-white font-sans select-none">
-      {/* Title Bar */}
-      <div className="h-8 bg-[#323233] flex items-center justify-between px-2 border-b border-[#252526]" data-tauri-drag-region>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gradient-to-br from-indigo-500 to-purple-600 rounded flex items-center justify-center text-xs font-bold">H</div>
-          <span className="text-sm font-medium text-gray-300">Hiveory</span>
+    <div className="h-screen w-screen flex flex-col bg-[#1a1614] text-[#f5f0e6] font-sans select-none">
+      {/* Title Bar - Custom draggable navbar */}
+      <div 
+        className="h-10 bg-[#241f1c] flex items-center px-3 border-b border-[#3d2e1f]"
+        data-tauri-drag-region
+        onDoubleClick={handleTitleBarDoubleClick}
+      >
+        <div className="flex items-center gap-3 flex-1">
+          <div className="w-7 h-7 bg-gradient-to-br from-[#c9a227] to-[#9a7206] rounded flex items-center justify-center text-xs font-bold text-[#0f0d0c] shadow-lg">H</div>
+          <span className="text-sm font-medium text-[#f5f0e6]">Hiveory</span>
           
           {/* Editor/ADE Toggle */}
           <div className="flex items-center gap-1 ml-4">
             <button
               onClick={() => setSidebarMode('editor')}
-              className={`px-3 py-1 text-xs rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
                 sidebarMode === 'editor' 
-                  ? 'bg-[#1e1e1e] text-white' 
-                  : 'text-gray-400 hover:bg-[#2a2d2e] hover:text-white'
+                  ? 'bg-[#3d2e1f] text-[#f5f0e6]' 
+                  : 'text-[#c9b896] hover:bg-[#3d2e1f]/50 hover:text-[#f5f0e6]'
               }`}
             >
               <File size={12} />
@@ -164,59 +276,73 @@ export default function Home() {
             </button>
             <button
               onClick={() => setSidebarMode('ade')}
-              className={`px-3 py-1 text-xs rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
                 sidebarMode === 'ade' 
-                  ? 'bg-[#1e1e1e] text-white' 
-                  : 'text-gray-400 hover:bg-[#2a2d2e] hover:text-white'
+                  ? 'bg-[#3d2e1f] text-[#f5f0e6]' 
+                  : 'text-[#c9b896] hover:bg-[#3d2e1f]/50 hover:text-[#f5f0e6]'
               }`}
             >
               <Terminal size={12} />
               ADE
             </button>
           </div>
+
+          {/* Menu Items */}
+          <div className="flex items-center gap-1 ml-4">
+            {Object.keys(menuItems).map((menu) => (
+              <div key={menu} className="relative">
+                <button
+                  onClick={() => setActiveMenu(activeMenu === menu ? null : menu)}
+                  className="menu-button px-3 py-1.5 text-xs text-[#c9b896] hover:bg-[#3d2e1f]/50 rounded transition-colors capitalize"
+                >
+                  {menu}
+                </button>
+                {activeMenu === menu && (
+                  <div className="dropdown-menu absolute left-0 top-full mt-1 bg-[#241f1c] border border-[#3d2e1f] rounded shadow-lg z-50 min-w-48">
+                    {menuItems[menu as keyof typeof menuItems].map((item, index) => (
+                      item.label === '-' ? (
+                        <div key={index} className="h-px bg-[#3d2e1f] my-1" />
+                      ) : (
+                        <button
+                          key={item.label}
+                          onClick={() => {
+                            item.action();
+                            setActiveMenu(null);
+                          }}
+                          className="w-full px-3 py-1.5 text-left text-xs hover:bg-[#3d2e1f] text-[#f5f0e6]"
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          {Object.keys(menuItems).map((menu) => (
-            <div key={menu} className="relative">
-              <button
-                onClick={() => setActiveMenu(activeMenu === menu ? null : menu)}
-                className="px-3 py-1 text-xs text-gray-300 hover:bg-[#404040] rounded transition-colors capitalize"
-              >
-                {menu}
-              </button>
-              {activeMenu === menu && (
-                <div className="absolute left-0 top-full mt-1 bg-[#252526] border border-[#3c3c3c] rounded shadow-lg z-50 min-w-48">
-                  {menuItems[menu as keyof typeof menuItems].map((item, index) => (
-                    item.label === '-' ? (
-                      <div key={index} className="h-px bg-[#3c3c3c] my-1" />
-                    ) : (
-                      <button
-                        key={item.label}
-                        onClick={() => {
-                          item.action();
-                          setActiveMenu(null);
-                        }}
-                        className="w-full px-3 py-1.5 text-left text-xs hover:bg-[#094771] text-gray-300"
-                      >
-                        {item.label}
-                      </button>
-                    )
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center">
-          <button onClick={() => handleWindowAction('minimize')} className="w-10 h-8 flex items-center justify-center hover:bg-[#404040] text-gray-400 hover:text-white">
+        {/* Window Controls */}
+        <div className="flex items-center gap-1 ml-4">
+          <button
+            onClick={handleMinimize}
+            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
+            title="Minimize"
+          >
             <Minus size={14} />
           </button>
-          <button onClick={() => handleWindowAction('maximize')} className="w-10 h-8 flex items-center justify-center hover:bg-[#404040] text-gray-400 hover:text-white">
-            <Square size={12} />
+          <button
+            onClick={handleMaximize}
+            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
+            title={isMaximized ? "Restore" : "Maximize"}
+          >
+            {isMaximized ? <Copy size={14} /> : <Square size={14} />}
           </button>
-          <button onClick={() => handleWindowAction('close')} className="w-10 h-8 flex items-center justify-center hover:bg-[#e81123] text-gray-400 hover:text-white">
+          <button
+            onClick={handleClose}
+            className="p-1.5 rounded hover:bg-red-600 text-[#c9b896] hover:text-white transition-colors"
+            title="Close"
+          >
             <X size={14} />
           </button>
         </div>
@@ -225,32 +351,60 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Activity Bar */}
-        <div className="w-12 bg-[#333333] flex flex-col items-center py-2 gap-1 border-r border-[#252526]">
+        <div className="w-12 bg-[#241f1c] flex flex-col items-center py-2 gap-1 border-r border-[#3d2e1f]">
           <button
-            onClick={() => { setActiveView('explorer'); setSidebarCollapsed(false); }}
-            className={`p-2 rounded hover:bg-[#2a2d2e] transition-colors ${activeView === 'explorer' ? 'text-white' : 'text-gray-500'}`}
+            onClick={() => { 
+              if (activeView === 'explorer' && !sidebarCollapsed) {
+                setSidebarCollapsed(true);
+              } else {
+                setActiveView('explorer');
+                setSidebarCollapsed(false);
+              }
+            }}
+            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === 'explorer' && !sidebarCollapsed ? 'text-[#c9a227]' : 'text-[#8a7b5c]'}`}
             title="Explorer"
           >
             <File size={20} />
           </button>
           <button
-            onClick={() => { setActiveView('search'); setSidebarCollapsed(false); }}
-            className={`p-2 rounded hover:bg-[#2a2d2e] transition-colors ${activeView === 'search' ? 'text-white' : 'text-gray-500'}`}
+            onClick={() => { 
+              if (activeView === 'search' && !sidebarCollapsed) {
+                setSidebarCollapsed(true);
+              } else {
+                setActiveView('search');
+                setSidebarCollapsed(false);
+              }
+            }}
+            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === 'search' && !sidebarCollapsed ? 'text-[#c9a227]' : 'text-[#8a7b5c]'}`}
             title="Search"
           >
             <Search size={20} />
           </button>
           <button
-            onClick={() => { setActiveView('git'); setSidebarCollapsed(false); }}
-            className={`p-2 rounded hover:bg-[#2a2d2e] transition-colors ${activeView === 'git' ? 'text-white' : 'text-gray-500'}`}
+            onClick={() => { 
+              if (activeView === 'git' && !sidebarCollapsed) {
+                setSidebarCollapsed(true);
+              } else {
+                setActiveView('git');
+                setSidebarCollapsed(false);
+              }
+            }}
+            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === 'git' && !sidebarCollapsed ? 'text-[#c9a227]' : 'text-[#8a7b5c]'}`}
             title="Source Control"
           >
             <GitBranch size={20} />
           </button>
           <div className="flex-1" />
           <button
-            onClick={() => { setActiveView('settings'); setSidebarCollapsed(false); }}
-            className={`p-2 rounded hover:bg-[#2a2d2e] transition-colors ${activeView === 'settings' ? 'text-white' : 'text-gray-500'}`}
+            onClick={() => { 
+              if (activeView === 'settings' && !sidebarCollapsed) {
+                setSidebarCollapsed(true);
+              } else {
+                setActiveView('settings');
+                setSidebarCollapsed(false);
+              }
+            }}
+            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === 'settings' && !sidebarCollapsed ? 'text-[#c9a227]' : 'text-[#8a7b5c]'}`}
             title="Settings"
           >
             <Settings size={20} />
@@ -261,12 +415,12 @@ export default function Home() {
         {!sidebarCollapsed && (
           <>
             <div 
-              className="bg-[#252526] flex flex-col border-r border-[#1e1e1e]" 
+              className="bg-[#241f1c] flex flex-col border-r border-[#3d2e1f]" 
               style={{ width: `${sidebarWidth}px` }}
             >
-              <div className="h-9 flex items-center justify-between px-4 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <div className="h-9 flex items-center justify-between px-4 text-xs font-semibold text-[#c9a227] uppercase tracking-wide">
                 <span>{activeView === 'explorer' ? 'Explorer' : activeView === 'search' ? 'Search' : activeView === 'git' ? 'Source Control' : 'Settings'}</span>
-                <button onClick={() => setSidebarCollapsed(true)} className="text-gray-500 hover:text-white">
+                <button onClick={() => setSidebarCollapsed(true)} className="text-[#8a7b5c] hover:text-[#c9b896]">
                   <X size={14} />
                 </button>
               </div>
@@ -274,10 +428,11 @@ export default function Home() {
                 mode={sidebarMode}
                 onModeChange={setSidebarMode}
                 onFileSelect={setOpenFile}
+                onFolderSelect={handleFolderSelect}
               />
             </div>
             <div 
-              className="w-1 bg-[#252526] hover:bg-[#007acc] cursor-col-resize transition-colors"
+              className="w-1 bg-[#3d2e1f] hover:bg-[#c9a227] cursor-col-resize transition-colors"
               onMouseDown={handleMouseDown}
             />
           </>
@@ -294,7 +449,7 @@ export default function Home() {
       </div>
 
       {/* Status Bar */}
-      <div className="h-6 bg-[#007acc] flex items-center justify-between px-3 text-xs text-white">
+      <div className="h-6 bg-gradient-to-r from-[#9a7206] to-[#c9a227] flex items-center justify-between px-3 text-xs text-[#0f0d0c]">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1">
             <GitBranch size={12} />

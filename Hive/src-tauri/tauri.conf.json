@@ -17,13 +17,14 @@
         "height": 800,
         "resizable": true,
         "fullscreen": false,
-        "decorations": false,
-        "hiddenTitle": true,
-        "titleBarStyle": "Overlay"
+        "decorations": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        "default"
+      ]
     }
   },
   "bundle": {

@@ -55,15 +55,15 @@ async fn spawn_terminal(
                 let path_str = path.to_string_lossy().to_string();
                 // For Windows shells, we need to change directory differently
                 if is_cmd {
-                    cmd.arg("/c");
-                    cmd.arg(&format!("cd /d \"{}\" && cmd.exe", path_str));
+                    cmd.arg("/k");
+                    cmd.arg(&format!("cd /d \"{}\"", path_str));
                 } else if is_powershell {
                     cmd.arg("-NoExit");
                     cmd.arg("-Command");
                     cmd.arg(&format!("Set-Location '{}';", path_str));
                 } else if is_bash_or_wsl {
                     cmd.arg("-c");
-                    cmd.arg(&format!("cd \"{}\" && bash", path_str));
+                    cmd.arg(&format!("cd \"{}\" && exec $SHELL", path_str));
                 }
             }
         }

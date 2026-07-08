@@ -8,6 +8,7 @@ interface SidebarProps {
   mode: 'editor' | 'ade';
   onModeChange: (mode: 'editor' | 'ade') => void;
   onFileSelect: (file: string) => void;
+  onFolderSelect?: (folder: string) => void;
 }
 
 interface FileNode {
@@ -23,6 +24,7 @@ export default function Sidebar({
   mode,
   onModeChange,
   onFileSelect,
+  onFolderSelect,
 }: SidebarProps) {
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [projectPath, setProjectPath] = useState<string>('');
@@ -120,6 +122,9 @@ export default function Sidebar({
           onClick={() => {
             if (node.is_dir) {
               toggleExpand(node, index);
+              if (onFolderSelect) {
+                onFolderSelect(node.path);
+              }
             } else {
               onFileSelect(node.path);
             }

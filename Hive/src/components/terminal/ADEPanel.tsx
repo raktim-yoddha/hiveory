@@ -32,23 +32,16 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
   };
 
   const getGridColumns = () => {
-    const count = panes.length;
-    if (count === 1) return 'grid-cols-1';
-    if (count <= 2) return 'grid-cols-2';
-    if (count <= 4) return 'grid-cols-2';
-    if (count <= 6) return 'grid-cols-3';
-    if (count <= 9) return 'grid-cols-3';
-    if (count <= 12) return 'grid-cols-4';
     return 'grid-cols-4';
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1e1e1e]">
+    <div className="flex-1 flex flex-col bg-[#1a1614]">
       {/* ADE toolbar */}
-      <div className="h-8 bg-[#252526] border-b border-[#3c3c3c] flex items-center justify-between px-3">
+      <div className="h-8 bg-[#241f1c] border-b border-[#3d2e1f] flex items-center justify-between px-3">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-300 font-semibold">ADE</span>
-          <span className="text-xs text-gray-500 bg-[#1e1e1e] px-2 py-0.5 rounded">
+          <span className="text-xs text-[#f5f0e6] font-semibold">ADE</span>
+          <span className="text-xs text-[#8a7b5c] bg-[#1a1614] px-2 py-0.5 rounded">
             {panes.length}/16
           </span>
         </div>
@@ -56,7 +49,7 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
         <button
           onClick={addPane}
           disabled={panes.length >= 16}
-          className="p-1.5 rounded hover:bg-[#3c3c3c] text-gray-400 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Add new terminal"
         >
           <Plus size={14} />
