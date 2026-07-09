@@ -2,7 +2,16 @@
 
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
-import { X, Search, Settings, GitBranch, FileCode, Save } from "lucide-react";
+import {
+  X,
+  File,
+  FileCode,
+  FileText,
+  FileCog,
+  Braces,
+  Hash,
+  type LucideIcon,
+} from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import EditorTerminalPanel from "./EditorTerminalPanel";
 
@@ -33,22 +42,23 @@ export default function EditorPanel({
   const [terminalHeight, setTerminalHeight] = useState(256);
   const [isResizingTerminal, setIsResizingTerminal] = useState(false);
 
-  const getFileIcon = (filename: string) => {
+  const getFileIcon = (filename: string): { Icon: LucideIcon; className: string } => {
     const ext = filename.split(".").pop()?.toLowerCase();
-    const icons: Record<string, string> = {
-      ts: "📘",
-      tsx: "⚛️",
-      js: "📜",
-      jsx: "⚛️",
-      json: "📋",
-      md: "📝",
-      css: "🎨",
-      html: "🌐",
-      rs: "🦀",
-      toml: "⚙️",
-      gitignore: "🚫",
+    const map: Record<string, { Icon: LucideIcon; className: string }> = {
+      ts: { Icon: FileCode, className: "text-bee-gold" },
+      tsx: { Icon: FileCode, className: "text-bee-goldHi" },
+      js: { Icon: FileCode, className: "text-bee-honey" },
+      jsx: { Icon: FileCode, className: "text-bee-goldHi" },
+      rs: { Icon: FileCode, className: "text-bee-err" },
+      json: { Icon: Braces, className: "text-bee-amber" },
+      md: { Icon: FileText, className: "text-bee-textDim" },
+      css: { Icon: Hash, className: "text-bee-gold" },
+      html: { Icon: FileCode, className: "text-bee-warn" },
+      toml: { Icon: FileCog, className: "text-bee-textMuted" },
+      yaml: { Icon: FileCog, className: "text-bee-textMuted" },
+      yml: { Icon: FileCog, className: "text-bee-textMuted" },
     };
-    return icons[ext || ""] || "📄";
+    return map[ext || ""] || { Icon: File, className: "text-bee-textMuted" };
   };
 
   const getLanguageFromPath = (path: string): string => {
@@ -154,35 +164,44 @@ export default function EditorPanel({
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1e1e1e]">
+    <div className="flex-1 flex flex-col bg-bee-canvas/40">
       {/* File tabs */}
-      <div className="h-9 bg-[#252526] flex items-center overflow-x-auto">
+      <div className="h-9 glass-toolbar border-b border-bee-border/60 flex items-center overflow-x-auto">
         {tabs.length === 0 ? (
-          <div className="px-4 text-sm text-gray-500 italic">No files open</div>
+          <div className="px-4 text-[13px] text-bee-textMuted italic">
+            No files open
+          </div>
         ) : (
-          tabs.map((tab) => (
-            <div
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`h-full flex items-center px-3 gap-2 cursor-pointer border-r border-[#1e1e1e] min-w-max transition-colors ${
-                activeTab === tab.id
-                  ? "bg-[#1e1e1e] text-white"
-                  : "bg-[#2d2d2d] text-gray-400 hover:bg-[#323232]"
-              }`}
-            >
-              <span className="text-sm">{getFileIcon(tab.name)}</span>
-              <span className="text-sm font-medium">{tab.name}</span>
-              {tab.modified && (
-                <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              )}
-              <button
-                onClick={(e) => closeTab(tab.id, e)}
-                className="p-1 rounded hover:bg-[#3c3c3c] opacity-0 group-hover:opacity-100 transition-opacity"
+          tabs.map((tab) => {
+            const { Icon, className } = getFileIcon(tab.name);
+            const active = activeTab === tab.id;
+            return (
+              <div
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`group relative h-full flex items-center px-3 gap-2 cursor-pointer min-w-max transition-colors ${
+                  active
+                    ? "bg-bee-surface/60 text-bee-text"
+                    : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/30"
+                }`}
               >
-                <X size={14} />
-              </button>
-            </div>
-          ))
+                {active && (
+                  <span className="absolute top-0 left-0 right-0 h-0.5 bg-bee-gold" />
+                )}
+                <Icon size={14} className={className} />
+                <span className="text-[13px] font-medium">{tab.name}</span>
+                {tab.modified && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-bee-gold" />
+                )}
+                <button
+                  onClick={(e) => closeTab(tab.id, e)}
+                  className="p-0.5 rounded hover:bg-bee-border/70 text-bee-textMuted hover:text-bee-text opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -191,22 +210,57 @@ export default function EditorPanel({
         {/* Editor */}
         <div className="flex-1 relative min-h-0">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-gray-500">
-              Loading...
+            <div className="flex items-center justify-center h-full text-bee-textMuted">
+              Loading…
             </div>
           ) : (
             <Editor
               height="100%"
               defaultLanguage={language}
-              theme="vs-dark"
+              theme="hiveory-dark"
               value={
                 activeTab
                   ? tabs.find((t) => t.id === activeTab)?.content
                   : "// Select a file to edit"
               }
               onChange={handleEditorChange}
+              beforeMount={(monaco) => {
+                monaco.editor.defineTheme("hiveory-dark", {
+                  base: "vs-dark",
+                  inherit: true,
+                  rules: [
+                    { token: "comment", foreground: "8a7b5c", fontStyle: "italic" },
+                    { token: "keyword", foreground: "d4b84a" },
+                    { token: "string", foreground: "c9b896" },
+                    { token: "number", foreground: "e8c547" },
+                    { token: "type", foreground: "d0a43f" },
+                    { token: "function", foreground: "d4b84a" },
+                    { token: "variable", foreground: "f5f0e6" },
+                  ],
+                  colors: {
+                    "editor.background": "#1a1614",
+                    "editor.foreground": "#f5f0e6",
+                    "editorLineNumber.foreground": "#5c4f3a",
+                    "editorLineNumber.activeForeground": "#c9a227",
+                    "editorCursor.foreground": "#c9a227",
+                    "editor.selectionBackground": "#3d2e1f",
+                    "editor.lineHighlightBackground": "#241f1c80",
+                    "editorIndentGuide.background1": "#2b2420",
+                    "editorIndentGuide.activeBackground1": "#3d2e1f",
+                    "editorGutter.background": "#1a1614",
+                    "editorWidget.background": "#241f1c",
+                    "editorWidget.border": "#3d2e1f",
+                    "editorSuggestWidget.background": "#241f1c",
+                    "editorSuggestWidget.selectedBackground": "#3d2e1f",
+                    "minimap.background": "#17130f",
+                    "scrollbarSlider.background": "#9a720655",
+                    "scrollbarSlider.hoverBackground": "#c9a22755",
+                  },
+                });
+              }}
               onMount={(editor, monaco) => {
                 editorRef.current = editor;
+                monaco.editor.setTheme("hiveory-dark");
                 editor.onDidChangeCursorPosition((e: any) => {
                   setCursorPosition({
                     line: e.position.lineNumber,
@@ -217,7 +271,9 @@ export default function EditorPanel({
               options={{
                 minimap: { enabled: true },
                 fontSize: 14,
-                fontFamily: "JetBrains Mono, Consolas, Monaco, monospace",
+                fontFamily:
+                  'var(--font-mono), "JetBrains Mono", "Cascadia Code", Consolas, monospace',
+                fontLigatures: true,
                 lineNumbers: "on",
                 scrollBeyondLastLine: false,
                 renderWhitespace: "selection",
@@ -226,11 +282,14 @@ export default function EditorPanel({
                 wordWrap: "off",
                 formatOnPaste: true,
                 formatOnType: true,
+                smoothScrolling: true,
+                cursorSmoothCaretAnimation: "on",
+                roundedSelection: true,
                 suggest: {
                   showKeywords: true,
                   showSnippets: true,
                 },
-                padding: { top: 10 },
+                padding: { top: 12 },
               }}
             />
           )}
@@ -238,7 +297,7 @@ export default function EditorPanel({
 
         {/* Resize handle */}
         <div
-          className="h-1 bg-[#241f1c] hover:bg-[#c9a227] cursor-ns-resize transition-colors flex-shrink-0"
+          className="h-1 bg-bee-border/60 hover:bg-bee-gold cursor-ns-resize transition-colors flex-shrink-0"
           onMouseDown={handleTerminalMouseDown}
         />
 

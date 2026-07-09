@@ -1,7 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ChevronRight, ChevronDown, Folder, File, FolderOpen } from 'lucide-react';
+import {
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  File,
+  FileCode,
+  FileText,
+  FileCog,
+  Braces,
+  Hash,
+  FolderOpen,
+  type LucideIcon,
+} from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface SidebarProps {
@@ -95,67 +107,80 @@ export default function Sidebar({
     setFileTree(newTree);
   };
 
-  const getFileIcon = (filename: string) => {
+  const getFileIcon = (filename: string): { Icon: LucideIcon; className: string } => {
     const ext = filename.split('.').pop()?.toLowerCase();
-    const icons: Record<string, string> = {
-      ts: '📘',
-      tsx: '⚛️',
-      js: '📜',
-      jsx: '⚛️',
-      json: '📋',
-      md: '📝',
-      css: '🎨',
-      html: '🌐',
-      rs: '🦀',
-      toml: '⚙️',
-      gitignore: '🚫',
+    const map: Record<string, { Icon: LucideIcon; className: string }> = {
+      ts: { Icon: FileCode, className: 'text-bee-gold' },
+      tsx: { Icon: FileCode, className: 'text-bee-goldHi' },
+      js: { Icon: FileCode, className: 'text-bee-honey' },
+      jsx: { Icon: FileCode, className: 'text-bee-goldHi' },
+      rs: { Icon: FileCode, className: 'text-bee-err' },
+      json: { Icon: Braces, className: 'text-bee-amber' },
+      md: { Icon: FileText, className: 'text-bee-textDim' },
+      css: { Icon: Hash, className: 'text-bee-gold' },
+      scss: { Icon: Hash, className: 'text-bee-gold' },
+      html: { Icon: FileCode, className: 'text-bee-warn' },
+      toml: { Icon: FileCog, className: 'text-bee-textMuted' },
+      yaml: { Icon: FileCog, className: 'text-bee-textMuted' },
+      yml: { Icon: FileCog, className: 'text-bee-textMuted' },
     };
-    return icons[ext || ''] || '📄';
+    return map[ext || ''] || { Icon: File, className: 'text-bee-textMuted' };
   };
 
   const renderFileTree = (nodes: FileNode[], level: number = 0) => {
-    return nodes.map((node, index) => (
-      <div key={node.path}>
-        <div
-          className="flex items-center gap-1 px-2 py-0.5 text-sm cursor-pointer hover:bg-[#2a2d2e] rounded"
-          style={{ paddingLeft: `${level * 12 + 8}px` }}
-          onClick={() => {
-            if (node.is_dir) {
-              toggleExpand(node, index);
-              if (onFolderSelect) {
-                onFolderSelect(node.path);
+    return nodes.map((node, index) => {
+      const { Icon, className } = getFileIcon(node.name);
+      return (
+        <div key={node.path}>
+          <div
+            className="group flex items-center gap-1.5 px-2 py-1 text-[13px] cursor-pointer rounded-md text-bee-textDim hover:bg-bee-gold/10 hover:text-bee-text transition-colors"
+            style={{ paddingLeft: `${level * 12 + 8}px` }}
+            onClick={() => {
+              if (node.is_dir) {
+                toggleExpand(node, index);
+                if (onFolderSelect) {
+                  onFolderSelect(node.path);
+                }
+              } else {
+                onFileSelect(node.path);
               }
-            } else {
-              onFileSelect(node.path);
-            }
-          }}
-        >
-          {node.is_dir ? (
-            <>
-              {node.expanded ? <ChevronDown size={12} className="text-gray-500" /> : <ChevronRight size={12} className="text-gray-500" />}
-              {node.expanded ? <FolderOpen size={14} className="text-yellow-500" /> : <Folder size={14} className="text-yellow-500" />}
-            </>
-          ) : (
-            <>
-              <span className="w-3" />
-              <span className="text-sm">{getFileIcon(node.name)}</span>
-            </>
-          )}
-          <span className="ml-1 text-gray-300">{node.name}</span>
+            }}
+          >
+            {node.is_dir ? (
+              <>
+                {node.expanded ? (
+                  <ChevronDown size={13} className="text-bee-textMuted flex-shrink-0" />
+                ) : (
+                  <ChevronRight size={13} className="text-bee-textMuted flex-shrink-0" />
+                )}
+                {node.expanded ? (
+                  <FolderOpen size={14} className="text-bee-gold flex-shrink-0" />
+                ) : (
+                  <Folder size={14} className="text-bee-gold flex-shrink-0" />
+                )}
+              </>
+            ) : (
+              <>
+                <span className="w-[13px] flex-shrink-0" />
+                <Icon size={14} className={`${className} flex-shrink-0`} />
+              </>
+            )}
+            <span className="ml-0.5 truncate">{node.name}</span>
+          </div>
+          {node.expanded && node.children && renderFileTree(node.children, level + 1)}
         </div>
-        {node.expanded && node.children && renderFileTree(node.children, level + 1)}
-      </div>
-    ));
+      );
+    });
   };
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-auto px-1.5">
       {loading ? (
-        <div className="px-4 py-2 text-sm text-gray-500">Loading...</div>
+        <div className="px-3 py-2 text-[13px] text-bee-textMuted">Loading…</div>
+      ) : fileTree.length === 0 ? (
+        <div className="px-3 py-2 text-[13px] text-bee-textMuted">No files</div>
       ) : (
-        <div className="py-1">
-          {renderFileTree(fileTree)}
-        </div>
+        <div className="py-1.5">{renderFileTree(fileTree)}</div>
       )}
     </div>
   );

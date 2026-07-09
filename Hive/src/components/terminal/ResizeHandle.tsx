@@ -54,13 +54,13 @@ export default function ResizeHandle({ direction, onResize, onResizeEnd, classNa
       ref={containerRef}
       className={`
         ${direction === 'horizontal' ? 'h-1.5 w-full cursor-row-resize' : 'w-1.5 h-full cursor-col-resize'}
-        ${isDragging ? 'bg-[#007acc]' : 'bg-[#3c3c3c] hover:bg-[#505050]'}
+        ${isDragging ? 'bg-bee-gold' : 'bg-bee-border/60 hover:bg-bee-gold/60'}
         transition-colors duration-150 flex items-center justify-center
         ${className}
       `}
       onMouseDown={handleMouseDown}
     >
-      <GripVertical size={12} className="text-gray-500 opacity-0 hover:opacity-100 transition-opacity" />
+      <GripVertical size={12} className="text-bee-textMuted opacity-0 hover:opacity-100 transition-opacity" />
     </div>
   );
 }

@@ -338,27 +338,29 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#1a1614] text-[#f5f0e6] font-sans select-none">
+    <div className="h-screen w-screen flex flex-col text-bee-text font-sans select-none">
       {/* Title Bar - Custom draggable navbar */}
       <div
-        className="h-10 bg-[#241f1c] flex items-center px-3 border-b border-[#3d2e1f]"
+        className="h-11 glass-toolbar flex items-center px-3 border-b border-bee-border/60"
         data-tauri-drag-region
         onDoubleClick={handleTitleBarDoubleClick}
       >
         <div className="flex items-center gap-3 flex-1">
-          <div className="w-7 h-7 bg-gradient-to-br from-[#c9a227] to-[#9a7206] rounded flex items-center justify-center text-xs font-bold text-[#0f0d0c] shadow-lg">
+          <div className="w-7 h-7 bg-gradient-to-br from-bee-goldHi to-bee-goldDim rounded-lg flex items-center justify-center text-xs font-bold text-[#1a1200] shadow-glow">
             H
           </div>
-          <span className="text-sm font-medium text-[#f5f0e6]">Hiveory AI</span>
+          <span className="text-sm font-semibold tracking-tight text-bee-text">
+            Hiveory<span className="text-bee-gold">AI</span>
+          </span>
 
-          {/* Editor/ADE Toggle */}
-          <div className="flex items-center gap-1 ml-4">
+          {/* Editor/ADE Toggle — segmented glass control */}
+          <div className="flex items-center p-0.5 ml-4 rounded-lg glass border-bee-border/70">
             <button
               onClick={() => setSidebarMode("editor")}
-              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1.5 transition-all ${
                 sidebarMode === "editor"
-                  ? "bg-[#3d2e1f] text-[#f5f0e6]"
-                  : "text-[#c9b896] hover:bg-[#3d2e1f]/50 hover:text-[#f5f0e6]"
+                  ? "bg-bee-gold/15 text-bee-goldHi shadow-glow"
+                  : "text-bee-textDim hover:text-bee-text"
               }`}
             >
               <File size={12} />
@@ -366,10 +368,10 @@ export default function Home() {
             </button>
             <button
               onClick={() => setSidebarMode("ade")}
-              className={`px-3 py-1.5 text-xs rounded flex items-center gap-1.5 transition-colors ${
+              className={`px-3 py-1 text-xs rounded-md flex items-center gap-1.5 transition-all ${
                 sidebarMode === "ade"
-                  ? "bg-[#3d2e1f] text-[#f5f0e6]"
-                  : "text-[#c9b896] hover:bg-[#3d2e1f]/50 hover:text-[#f5f0e6]"
+                  ? "bg-bee-gold/15 text-bee-goldHi shadow-glow"
+                  : "text-bee-textDim hover:text-bee-text"
               }`}
             >
               <Terminal size={12} />
@@ -385,16 +387,20 @@ export default function Home() {
                   onClick={() =>
                     setActiveMenu(activeMenu === menu ? null : menu)
                   }
-                  className="menu-button px-3 py-1.5 text-xs text-[#c9b896] hover:bg-[#3d2e1f]/50 rounded transition-colors capitalize"
+                  className={`menu-button px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
+                    activeMenu === menu
+                      ? "bg-bee-gold/10 text-bee-text"
+                      : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
+                  }`}
                 >
                   {menu}
                 </button>
                 {activeMenu === menu && (
-                  <div className="dropdown-menu absolute left-0 top-full mt-1 bg-[#241f1c] border border-[#3d2e1f] rounded shadow-lg z-50 min-w-48">
+                  <div className="dropdown-menu absolute left-0 top-full mt-1.5 glass-hi rounded-xl z-50 min-w-52 p-1 animate-fade-in">
                     {menuItems[menu as keyof typeof menuItems].map(
                       (item, index) =>
                         item.label === "-" ? (
-                          <div key={index} className="h-px bg-[#3d2e1f] my-1" />
+                          <div key={index} className="h-px bg-bee-border/60 my-1 mx-1" />
                         ) : (
                           <button
                             key={item.label}
@@ -402,7 +408,7 @@ export default function Home() {
                               item.action();
                               setActiveMenu(null);
                             }}
-                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-[#3d2e1f] text-[#f5f0e6]"
+                            className="w-full px-3 py-1.5 text-left text-xs rounded-lg hover:bg-bee-gold/15 hover:text-bee-goldHi text-bee-textDim transition-colors"
                           >
                             {item.label}
                           </button>
@@ -416,24 +422,24 @@ export default function Home() {
         </div>
 
         {/* Window Controls */}
-        <div className="flex items-center gap-1 ml-4">
+        <div className="flex items-center gap-0.5 ml-4">
           <button
             onClick={handleMinimize}
-            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
             title="Minimize"
           >
             <Minus size={14} />
           </button>
           <button
             onClick={handleMaximize}
-            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
             title={isMaximized ? "Restore" : "Maximize"}
           >
             {isMaximized ? <Copy size={14} /> : <Square size={14} />}
           </button>
           <button
             onClick={handleClose}
-            className="p-1.5 rounded hover:bg-red-600 text-[#c9b896] hover:text-white transition-colors"
+            className="p-1.5 rounded-md hover:bg-bee-err/80 text-bee-textDim hover:text-white transition-colors"
             title="Close"
           >
             <X size={14} />
@@ -444,49 +450,40 @@ export default function Home() {
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Activity Bar */}
-        <div className="w-12 bg-[#241f1c] flex flex-col items-center py-2 gap-1 border-r border-[#3d2e1f]">
-          <button
-            onClick={() => {
-              if (activeView === "explorer" && !sidebarCollapsed) {
-                setSidebarCollapsed(true);
-              } else {
-                setActiveView("explorer");
-                setSidebarCollapsed(false);
-              }
-            }}
-            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === "explorer" && !sidebarCollapsed ? "text-[#c9a227]" : "text-[#8a7b5c]"}`}
-            title="Explorer"
-          >
-            <File size={20} />
-          </button>
-          <button
-            onClick={() => {
-              if (activeView === "search" && !sidebarCollapsed) {
-                setSidebarCollapsed(true);
-              } else {
-                setActiveView("search");
-                setSidebarCollapsed(false);
-              }
-            }}
-            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === "search" && !sidebarCollapsed ? "text-[#c9a227]" : "text-[#8a7b5c]"}`}
-            title="Search"
-          >
-            <Search size={20} />
-          </button>
-          <button
-            onClick={() => {
-              if (activeView === "git" && !sidebarCollapsed) {
-                setSidebarCollapsed(true);
-              } else {
-                setActiveView("git");
-                setSidebarCollapsed(false);
-              }
-            }}
-            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === "git" && !sidebarCollapsed ? "text-[#c9a227]" : "text-[#8a7b5c]"}`}
-            title="Source Control"
-          >
-            <GitBranch size={20} />
-          </button>
+        <div className="w-12 glass-rail flex flex-col items-center py-2 gap-1 border-r border-bee-border/60">
+          {(
+            [
+              { view: "explorer", icon: File, title: "Explorer" },
+              { view: "search", icon: Search, title: "Search" },
+              { view: "git", icon: GitBranch, title: "Source Control" },
+            ] as const
+          ).map(({ view, icon: Icon, title }) => {
+            const active = activeView === view && !sidebarCollapsed;
+            return (
+              <button
+                key={view}
+                onClick={() => {
+                  if (active) {
+                    setSidebarCollapsed(true);
+                  } else {
+                    setActiveView(view);
+                    setSidebarCollapsed(false);
+                  }
+                }}
+                className={`relative p-2 rounded-lg transition-colors ${
+                  active
+                    ? "text-bee-goldHi bg-bee-gold/10"
+                    : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"
+                }`}
+                title={title}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-bee-gold" />
+                )}
+                <Icon size={20} />
+              </button>
+            );
+          })}
           <div className="flex-1" />
           <button
             onClick={() => {
@@ -497,7 +494,7 @@ export default function Home() {
                 setSidebarCollapsed(false);
               }
             }}
-            className={`p-2 rounded hover:bg-[#3d2e1f]/50 transition-colors ${activeView === "settings" && !sidebarCollapsed ? "text-[#c9a227]" : "text-[#8a7b5c]"}`}
+            className={`p-2 rounded-lg transition-colors ${activeView === "settings" && !sidebarCollapsed ? "text-bee-goldHi bg-bee-gold/10" : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"}`}
             title="Settings"
           >
             <Settings size={20} />
@@ -508,10 +505,10 @@ export default function Home() {
         {!sidebarCollapsed && (
           <>
             <div
-              className="bg-[#241f1c] flex flex-col border-r border-[#3d2e1f]"
+              className="glass flex flex-col border-y-0 border-l-0 border-r border-bee-border/60"
               style={{ width: `${sidebarWidth}px` }}
             >
-              <div className="h-9 flex items-center justify-between px-4 text-xs font-semibold text-[#c9a227] uppercase tracking-wide">
+              <div className="h-9 flex items-center justify-between px-4 text-[11px] font-semibold text-bee-gold uppercase tracking-[0.14em]">
                 <span>
                   {activeView === "explorer"
                     ? "Explorer"
@@ -523,7 +520,7 @@ export default function Home() {
                 </span>
                 <button
                   onClick={() => setSidebarCollapsed(true)}
-                  className="text-[#8a7b5c] hover:text-[#c9b896]"
+                  className="text-bee-textMuted hover:text-bee-textDim transition-colors"
                 >
                   <X size={14} />
                 </button>
@@ -536,7 +533,7 @@ export default function Home() {
               />
             </div>
             <div
-              className="w-1 bg-[#3d2e1f] hover:bg-[#c9a227] cursor-col-resize transition-colors"
+              className="w-px bg-bee-border/60 hover:bg-bee-gold cursor-col-resize transition-colors"
               onMouseDown={handleMouseDown}
             />
           </>
@@ -553,15 +550,15 @@ export default function Home() {
       </div>
 
       {/* Status Bar */}
-      <div className="h-6 bg-gradient-to-r from-[#9a7206] to-[#c9a227] flex items-center justify-between px-3 text-xs text-[#0f0d0c]">
+      <div className="h-6 glass-toolbar border-t border-bee-border/60 flex items-center justify-between px-3 text-[11px] text-bee-textDim">
         <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <GitBranch size={12} />
+          <span className="flex items-center gap-1.5 text-bee-gold">
+            <GitBranch size={11} />
             main
           </span>
-          <span>0 errors, 0 warnings</span>
+          <span className="text-bee-textMuted">0 errors, 0 warnings</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 text-bee-textMuted">
           <span>Ln 1, Col 1</span>
           <span>UTF-8</span>
           <span>TypeScript</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2, Maximize2, Minimize2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import TerminalPane from "./TerminalPane";
 import CLIPicker, { CLIType } from "./CLIPicker";
 import { invoke } from "@tauri-apps/api/core";
@@ -12,7 +12,7 @@ interface ADEPanelProps {
   workingDir?: string | null;
 }
 
-export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
+export default function ADEPanel({ workingDir }: ADEPanelProps) {
   const workerBees = useTerminalStore((state) => state.workerBees);
   const addWorkerBee = useTerminalStore((state) => state.addWorkerBee);
   const removeWorkerBee = useTerminalStore((state) => state.removeWorkerBee);
@@ -121,12 +121,14 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#1a1614] relative">
+    <div className="flex-1 flex flex-col bg-bee-canvas/40 relative">
       {/* ADE toolbar */}
-      <div className="h-8 bg-[#241f1c] border-b border-[#3d2e1f] flex items-center justify-between px-3">
-        <div className="flex items-center gap-3">
-          <span className="text-xs">WorkerBees</span>
-          <span className="text-xs text-[#8a7b5c] bg-[#1a1614] px-2 py-0.5 rounded">
+      <div className="h-9 glass-toolbar border-b border-bee-border/60 flex items-center justify-between px-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xs font-semibold tracking-wide text-bee-text">
+            WorkerBees
+          </span>
+          <span className="text-[11px] font-medium text-bee-gold bg-bee-gold/10 border border-bee-gold/20 px-2 py-0.5 rounded-full">
             {workerBees.length}/16
           </span>
         </div>
@@ -135,10 +137,11 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
           ref={addButtonRef}
           onClick={handleAddButtonClick}
           disabled={workerBees.length >= 16}
-          className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-bee-gold/10 border border-bee-gold/20 text-bee-goldHi hover:bg-bee-gold/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           title="Add new WorkerBee"
         >
-          <Plus size={14} />
+          <Plus size={13} />
+          Add
         </button>
       </div>
 
@@ -154,11 +157,19 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
       {/* ADE panes - Grid layout */}
       <div className="flex-1 min-h-0 p-2 overflow-y-auto">
         {workerBees.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-[#8a7b5c] text-sm">
-            No WorkerBees running. Click + to add one.
+          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+            <div className="w-14 h-14 rounded-2xl glass flex items-center justify-center text-2xl shadow-glass">
+              🐝
+            </div>
+            <div className="text-sm text-bee-textDim">No WorkerBees running</div>
+            <div className="text-xs text-bee-textMuted">
+              Click{" "}
+              <span className="text-bee-gold font-medium">Add</span> to launch a
+              CLI agent
+            </div>
           </div>
         ) : maximizedPane ? (
-          <div className="h-full">
+          <div className="h-full overflow-hidden rounded-xl glass shadow-glass">
             <TerminalPane
               paneId={maximizedPane}
               workingDir={workingDir}
@@ -181,7 +192,7 @@ export default function ADEPanel({ layout, workingDir }: ADEPanelProps) {
             {workerBees.map((bee) => (
               <div
                 key={bee.id}
-                className="flex flex-col relative overflow-hidden rounded-lg border border-[#3d2e1f]"
+                className="flex flex-col relative overflow-hidden rounded-xl glass shadow-glass"
                 style={{ minHeight: "240px" }}
               >
                 <TerminalPane

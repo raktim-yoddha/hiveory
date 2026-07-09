@@ -8,49 +8,102 @@
   box-sizing: border-box;
 }
 
-/* Professional bee theme color palette */
+/* Warm bee/honey design tokens */
 :root {
-  --bee-dark: #1a1614;
-  --bee-darker: #0f0d0c;
-  --bee-panel: #241f1c;
+  --bee-canvas: #14100e;
+  --bee-canvas-hi: #1c1613;
+  --bee-surface: 36 31 28; /* rgb parts for alpha compositing */
+  --bee-surface-hi: 43 36 32;
   --bee-border: #3d2e1f;
   --bee-gold: #c9a227;
-  --bee-gold-light: #d4b84a;
-  --bee-gold-dark: #9a7206;
+  --bee-gold-hi: #d4b84a;
   --bee-honey: #e8c547;
-  --bee-text-primary: #f5f0e6;
-  --bee-text-secondary: #c9b896;
+  --bee-text: #f5f0e6;
+  --bee-text-dim: #c9b896;
   --bee-text-muted: #8a7b5c;
 }
 
+html,
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
-  background: var(--bee-dark);
-  color: var(--bee-text-primary);
+  color: var(--bee-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Custom scrollbar styles for professional bee theme */
+@layer components {
+  /* Warm honeycomb canvas — the backdrop everything floats over */
+  .app-canvas {
+    background-color: var(--bee-canvas);
+    background-image:
+      radial-gradient(1200px 700px at 15% -10%, rgba(201, 162, 39, 0.10), transparent 60%),
+      radial-gradient(1000px 800px at 100% 0%, rgba(154, 114, 6, 0.10), transparent 55%),
+      radial-gradient(900px 900px at 50% 120%, rgba(60, 46, 31, 0.35), transparent 60%),
+      /* subtle honeycomb hatch */
+      repeating-linear-gradient(60deg, rgba(201, 162, 39, 0.028) 0 1px, transparent 1px 26px),
+      repeating-linear-gradient(-60deg, rgba(201, 162, 39, 0.028) 0 1px, transparent 1px 26px),
+      linear-gradient(180deg, var(--bee-canvas-hi), var(--bee-canvas));
+  }
+
+  /* Base translucent glass panel */
+  .glass {
+    background-color: rgb(var(--bee-surface) / 0.66);
+    backdrop-filter: blur(14px) saturate(1.05);
+    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+    border: 1px solid rgba(61, 46, 31, 0.65);
+    box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.55), inset 0 1px 0 0 rgba(245, 240, 230, 0.04);
+  }
+
+  /* Elevated glass — dropdowns, modals, cards */
+  .glass-hi {
+    background-color: rgb(var(--bee-surface-hi) / 0.86);
+    backdrop-filter: blur(22px) saturate(1.1);
+    -webkit-backdrop-filter: blur(22px) saturate(1.1);
+    border: 1px solid rgba(201, 162, 39, 0.16);
+    box-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(245, 240, 230, 0.06);
+  }
+
+  /* Thin header/toolbar/status bars */
+  .glass-toolbar {
+    background-color: rgb(var(--bee-surface) / 0.60);
+    backdrop-filter: blur(14px) saturate(1.05);
+    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+    border-color: rgba(61, 46, 31, 0.6);
+  }
+
+  /* Activity rail */
+  .glass-rail {
+    background-color: rgb(var(--bee-surface) / 0.5);
+    backdrop-filter: blur(14px) saturate(1.05);
+    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  }
+}
+
+/* Warm scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #1a1614;
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #b8860b 0%, #9a7206 100%);
-  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.55) 0%, rgba(154, 114, 6, 0.55) 100%);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #d4a417 0%, #b8860b 100%);
+  background: linear-gradient(180deg, rgba(212, 184, 74, 0.8) 0%, rgba(184, 134, 11, 0.8) 100%);
+  background-clip: padding-box;
 }
-
 ::-webkit-scrollbar-corner {
-  background: #1a1614;
+  background: transparent;
 }
 
 /* xterm.js helper elements fix */
@@ -71,4 +124,9 @@ body {
   top: 0 !important;
   left: 0 !important;
   pointer-events: none !important;
+}
+
+/* Let the terminal breathe inside its glass pane */
+.xterm {
+  padding: 6px 8px;
 }

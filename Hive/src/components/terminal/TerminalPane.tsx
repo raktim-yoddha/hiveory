@@ -6,11 +6,10 @@ import { FitAddon } from "xterm-addon-fit";
 import { SearchAddon } from "xterm-addon-search";
 import {
   Terminal,
-  Bot,
   ChevronDown,
   Copy,
   Trash2,
-  X,
+  Eraser,
   Maximize2,
   Minimize2,
 } from "lucide-react";
@@ -112,8 +111,8 @@ export default function TerminalPane({
             foreground: "#f5f0e6",
             cursor: "#c9a227",
             cursorAccent: "#0f0d0c",
-            selectionBackground: "#3d2e1f",
-            selectionForeground: "#f5f0e6",
+            selectionBackground: "rgba(201, 162, 39, 0.28)",
+            selectionForeground: "#fffbeb",
             black: "#1a1614",
             red: "#ef4444",
             green: "#22c55e",
@@ -274,9 +273,9 @@ export default function TerminalPane({
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[#1a1614] overflow-hidden">
+    <div className="flex flex-col h-full bg-[#1a1614]/85 overflow-hidden">
       {/* terminal header */}
-      <div className="h-8 bg-[#241f1c] border-b border-[#3d2e1f] flex items-center justify-between px-2">
+      <div className="h-8 glass-toolbar border-b border-bee-border/50 flex items-center justify-between px-2">
         <div className="flex items-center gap-2">
           {isEditing && onEditChange ? (
             <input
@@ -289,14 +288,17 @@ export default function TerminalPane({
                 if (e.key === 'Escape') onCancelRename?.();
               }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-[#1a1614] text-[#f5f0e6] px-2 py-0.5 rounded text-xs w-32 focus:outline-none focus:ring-1 focus:ring-[#c9a227]"
+              className="bg-bee-canvas text-bee-text px-2 py-0.5 rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-bee-gold border border-bee-border"
               autoFocus
             />
           ) : (
-            <span 
+            <span
               onDoubleClick={onRename}
-              className="text-xs text-[#f5f0e6] font-medium cursor-pointer hover:text-[#c9a227]"
+              className="flex items-center gap-1.5 text-xs text-bee-text font-medium cursor-pointer hover:text-bee-gold transition-colors"
             >
+              {isWorkerBee && (
+                <span className="w-1.5 h-1.5 rounded-full bg-bee-gold shadow-glow" />
+              )}
               {displayName}
             </span>
           )}
@@ -309,16 +311,16 @@ export default function TerminalPane({
                   e.stopPropagation();
                   setShowTerminalMenu(!showTerminalMenu);
                 }}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-[#1a1614] border border-[#3d2e1f] rounded hover:border-[#c9a227] text-[#c9b896] hover:text-[#f5f0e6] transition-all"
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-bee-canvas/70 border border-bee-border hover:border-bee-gold/60 text-bee-textDim hover:text-bee-text transition-all"
               >
-                <Terminal size={11} className="text-[#c9a227]" />
+                <Terminal size={11} className="text-bee-gold" />
                 {TERMINAL_LABELS[selectedTerminal]}
-                <ChevronDown size={10} className="text-[#8a7b5c]" />
+                <ChevronDown size={10} className="text-bee-textMuted" />
               </button>
               {showTerminalMenu && (
-                <div className="dropdown-menu absolute left-0 top-8 bg-[#241f1c] border border-[#3d2e1f] rounded shadow-lg z-20 min-w-36">
-                  <div className="px-2 py-1.5 text-xs text-[#c9a227] font-medium border-b border-[#3d2e1f]">
-                    terminal Type
+                <div className="dropdown-menu absolute left-0 top-8 glass-hi rounded-xl z-20 min-w-40 p-1 animate-fade-in">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-bee-gold font-semibold">
+                    Terminal Type
                   </div>
                   {(Object.keys(TERMINAL_LABELS) as TerminalType[]).map(
                     (terminal) => (
@@ -330,14 +332,14 @@ export default function TerminalPane({
                           setShowTerminalMenu(false);
                           setIsSpawned(false);
                         }}
-                        className={`w-full px-3 py-1.5 text-left text-xs hover:bg-[#3d2e1f] flex items-center gap-2 ${selectedTerminal === terminal ? "bg-[#3d2e1f] text-[#f5f0e6]" : "text-[#c9b896]"}`}
+                        className={`w-full px-2.5 py-1.5 text-left text-xs rounded-lg flex items-center gap-2 transition-colors ${selectedTerminal === terminal ? "bg-bee-gold/15 text-bee-goldHi" : "text-bee-textDim hover:bg-bee-border/50 hover:text-bee-text"}`}
                       >
                         <Terminal
                           size={11}
                           className={
                             selectedTerminal === terminal
-                              ? "text-[#c9a227]"
-                              : "text-[#8a7b5c]"
+                              ? "text-bee-gold"
+                              : "text-bee-textMuted"
                           }
                         />
                         {TERMINAL_LABELS[terminal]}
@@ -353,35 +355,38 @@ export default function TerminalPane({
           {onToggleMaximize && (
             <button
               onClick={onToggleMaximize}
-              className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
+              className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
               title={isMaximized ? "Restore" : "Maximize"}
             >
               {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             </button>
           )}
-          {onClose && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onClose(); }}
-              className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
-              title="Close"
-            >
-              <Trash2 size={12} />
-            </button>
-          )}
           <button
             onClick={handleCopy}
-            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
-            title="Copy"
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
+            title="Copy selection"
           >
             <Copy size={12} />
           </button>
           <button
             onClick={handleClear}
-            className="p-1.5 rounded hover:bg-[#3d2e1f] text-[#c9b896] hover:text-[#f5f0e6] transition-colors"
-            title="Clear"
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
+            title="Clear terminal"
           >
-            <Trash2 size={12} />
+            <Eraser size={12} />
           </button>
+          {onClose && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="p-1.5 rounded-md text-bee-textDim hover:bg-bee-err/25 hover:text-bee-err transition-colors"
+              title="Delete WorkerBee"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
         </div>
       </div>
 

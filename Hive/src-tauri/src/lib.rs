@@ -1,4 +1,4 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -15,8 +15,17 @@ pub struct FileInfo {
     pub is_dir: bool,
 }
 
+/// One live terminal: the master pty, the child handle (so we can actually kill
+/// it), a persistent stdin writer, and a buffer fed by a background reader thread.
+struct PtySession {
+    master: Box<dyn MasterPty + Send>,
+    child: Box<dyn Child + Send + Sync>,
+    writer: Box<dyn Write + Send>,
+    output: Arc<Mutex<String>>,
+}
+
 struct PtySystem {
-    ptys: Mutex<HashMap<String, Arc<Mutex<portable_pty::PtyPair>>>>,
+    sessions: Mutex<HashMap<String, Arc<Mutex<PtySession>>>>,
 }
 
 #[tauri::command]
@@ -85,15 +94,56 @@ async fn spawn_terminal(
             pixel_height: 0,
         })
         .map_err(|e| e.to_string())?;
-    
-    let _child = pty_pair
+
+    // Spawn the child, then drop the slave so the master sees EOF when the child exits.
+    let child = pty_pair
         .slave
         .spawn_command(cmd)
         .map_err(|e| e.to_string())?;
-    
-    let mut ptys = state.ptys.lock().unwrap();
-    ptys.insert(pane_id.clone(), Arc::new(Mutex::new(pty_pair)));
-    
+    drop(pty_pair.slave);
+
+    let writer = pty_pair.master.take_writer().map_err(|e| e.to_string())?;
+    let reader = pty_pair
+        .master
+        .try_clone_reader()
+        .map_err(|e| e.to_string())?;
+
+    // Background thread drains the pty into a shared buffer so reads never block
+    // the async command handler (portable-pty readers are blocking).
+    let output = Arc::new(Mutex::new(String::new()));
+    let output_writer = output.clone();
+    std::thread::spawn(move || {
+        let mut reader = reader;
+        let mut buffer = [0u8; 4096];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(n) => {
+                    if let Ok(mut buf) = output_writer.lock() {
+                        buf.push_str(&String::from_utf8_lossy(&buffer[..n]));
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    let session = PtySession {
+        master: pty_pair.master,
+        child,
+        writer,
+        output,
+    };
+
+    let mut sessions = state.sessions.lock().unwrap();
+    // If a pane with this id already exists, kill it first to avoid orphans.
+    if let Some(old) = sessions.remove(&pane_id) {
+        if let Ok(mut old) = old.lock() {
+            let _ = old.child.kill();
+        }
+    }
+    sessions.insert(pane_id.clone(), Arc::new(Mutex::new(session)));
+
     Ok(pane_id)
 }
 
@@ -103,18 +153,21 @@ async fn write_to_terminal(
     data: String,
     state: State<'_, PtySystem>,
 ) -> Result<(), String> {
-    let ptys = state.ptys.lock().unwrap();
-    if let Some(pty_pair) = ptys.get(&pane_id) {
-        let pty = pty_pair.lock().unwrap();
-        let mut writer = pty.master.take_writer().map_err(|e| e.to_string())?;
-        writer
+    let session = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions.get(&pane_id).cloned()
+    };
+    if let Some(session) = session {
+        let mut session = session.lock().unwrap();
+        session
+            .writer
             .write_all(data.as_bytes())
             .map_err(|e| e.to_string())?;
-        writer.flush().map_err(|e| e.to_string())?;
+        session.writer.flush().map_err(|e| e.to_string())?;
+        Ok(())
     } else {
-        return Err(format!("No terminal found for pane: {}", pane_id));
+        Err(format!("No terminal found for pane: {}", pane_id))
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -122,29 +175,14 @@ async fn read_from_terminal(
     pane_id: String,
     state: State<'_, PtySystem>,
 ) -> Result<String, String> {
-    let ptys = state.ptys.lock().unwrap();
-    if let Some(pty_pair) = ptys.get(&pane_id) {
-        let pty = pty_pair.lock().unwrap();
-        let mut reader = pty.master.try_clone_reader().map_err(|e| e.to_string())?;
-        let mut output = String::new();
-        let mut buffer = [0u8; 4096];
-        
-        // Non-blocking read with timeout
-        let start = std::time::Instant::now();
-        while start.elapsed() < std::time::Duration::from_millis(100) {
-            match reader.read(&mut buffer) {
-                Ok(0) => break,
-                Ok(n) => {
-                    output.push_str(&String::from_utf8_lossy(&buffer[..n]));
-                }
-                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                    continue;
-                }
-                Err(e) => return Err(e.to_string()),
-            }
-        }
-        Ok(output)
+    let session = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions.get(&pane_id).cloned()
+    };
+    if let Some(session) = session {
+        let session = session.lock().unwrap();
+        let mut buf = session.output.lock().unwrap();
+        Ok(std::mem::take(&mut *buf))
     } else {
         Ok(String::new())
     }
@@ -157,10 +195,14 @@ async fn resize_terminal(
     cols: u16,
     state: State<'_, PtySystem>,
 ) -> Result<(), String> {
-    let ptys = state.ptys.lock().unwrap();
-    if let Some(pty_pair) = ptys.get(&pane_id) {
-        let pty = pty_pair.lock().unwrap();
-        pty.master
+    let session = {
+        let sessions = state.sessions.lock().unwrap();
+        sessions.get(&pane_id).cloned()
+    };
+    if let Some(session) = session {
+        let session = session.lock().unwrap();
+        session
+            .master
             .resize(PtySize {
                 rows,
                 cols,
@@ -177,10 +219,16 @@ async fn kill_terminal(
     pane_id: String,
     state: State<'_, PtySystem>,
 ) -> Result<(), String> {
-    let mut ptys = state.ptys.lock().unwrap();
-    if let Some(pty_pair) = ptys.remove(&pane_id) {
-        // Dropping the PtyPair will terminate the child process
-        drop(pty_pair);
+    let session = {
+        let mut sessions = state.sessions.lock().unwrap();
+        sessions.remove(&pane_id)
+    };
+    if let Some(session) = session {
+        if let Ok(mut session) = session.lock() {
+            // Kill the child process explicitly, then reap it.
+            let _ = session.child.kill();
+            let _ = session.child.wait();
+        }
     }
     Ok(())
 }
@@ -286,7 +334,7 @@ async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let pty_system = PtySystem {
-        ptys: Mutex::new(HashMap::new()),
+        sessions: Mutex::new(HashMap::new()),
     };
 
     tauri::Builder::default()

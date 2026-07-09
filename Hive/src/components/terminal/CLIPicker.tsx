@@ -63,18 +63,18 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
     return { left: safeX, top: safeY };
   };
   return (
-    <div 
-      className="fixed bg-[#241f1c] border border-[#3d2e1f] rounded shadow-2xl z-50 w-80 max-h-96 overflow-hidden"
+    <div
+      className="fixed glass-hi rounded-xl z-50 w-80 max-h-96 overflow-hidden animate-scale-in"
       style={getSafePosition()}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="px-3 py-2 border-b border-[#3d2e1f]">
+      <div className="px-3 py-2.5 border-b border-bee-border/50">
         <div className="flex items-center gap-2">
-          <Bot size={14} className="text-[#c9a227]" />
-          <span className="text-sm font-medium text-[#f5f0e6]">Select CLI Agent</span>
+          <Bot size={14} className="text-bee-gold" />
+          <span className="text-sm font-semibold text-bee-text">Select CLI Agent</span>
         </div>
       </div>
-      <div className="overflow-y-auto max-h-80">
+      <div className="overflow-y-auto max-h-80 p-1">
         {CLI_OPTIONS.map((cli) => (
           <button
             key={cli.id}
@@ -82,13 +82,15 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
               onSelect(cli.id);
               onClose();
             }}
-            className="w-full px-3 py-2 text-left hover:bg-[#3d2e1f] transition-colors border-b border-[#3d2e1f]/30 last:border-0"
+            className="group w-full px-2.5 py-2 text-left rounded-lg hover:bg-bee-gold/12 transition-colors"
           >
-            <div className="flex items-start gap-2">
-              <Bot size={12} className="text-[#8a7b5c] mt-0.5 flex-shrink-0" />
+            <div className="flex items-start gap-2.5">
+              <span className="mt-1 w-1.5 h-1.5 rounded-full bg-bee-gold/50 group-hover:bg-bee-gold group-hover:shadow-glow flex-shrink-0 transition-all" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-[#f5f0e6] font-medium">{cli.name}</div>
-                <div className="text-xs text-[#8a7b5c] mt-0.5">{cli.description}</div>
+                <div className="text-sm text-bee-text font-medium group-hover:text-bee-goldHi transition-colors">
+                  {cli.name}
+                </div>
+                <div className="text-xs text-bee-textMuted mt-0.5">{cli.description}</div>
               </div>
             </div>
           </button>
