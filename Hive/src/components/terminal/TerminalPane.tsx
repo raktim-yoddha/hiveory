@@ -14,6 +14,8 @@ import {
   Minimize2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { buildNectarInjection, logNectarInjection } from "@/lib/nectarContext";
+import { useSettingsStore, envForCli } from "@/stores/settingsStore";
 
 interface TerminalPaneProps {
   paneId?: string;
@@ -71,6 +73,7 @@ export default function TerminalPane({
   const [, setIsSpawned] = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState<TerminalType>("powershell");
   const [showTerminalMenu, setShowTerminalMenu] = useState(false);
+  const apiKeys = useSettingsStore((s) => s.apiKeys);
 
   const isWorkerBee = !!workerBee;
   const displayName = isWorkerBee
@@ -183,11 +186,14 @@ export default function TerminalPane({
             ? workerBee.cli
             : TERMINAL_COMMANDS[selectedTerminal];
 
+          const env = isWorkerBee ? envForCli(workerBee.cli, apiKeys) : undefined;
+
           await invoke("spawn_terminal", {
             paneId,
             command,
             args: [],
             workingDir: spawnDir,
+            env,
           });
 
           if (disposed || !terminal) return;
@@ -218,6 +224,40 @@ export default function TerminalPane({
             }
           };
           readOutput();
+
+          // WorkerBees are forced through Nectar retrieval per AGENTS.md §4.2:
+          // read project memory, inject it as the agent's first turn, and log
+          // what was injected for audit. Give the CLI a moment to boot its
+          // input prompt before typing into its stdin.
+          if (isWorkerBee && spawnDir) {
+            (async () => {
+              try {
+                await invoke("ensure_nectar_structure", {
+                  projectPath: spawnDir,
+                });
+                const injection = await buildNectarInjection(spawnDir!);
+                if (!injection || disposed || !terminal) return;
+
+                await new Promise((resolve) => setTimeout(resolve, 1200));
+                if (disposed || !terminal) return;
+
+                terminal.writeln(
+                  `\x1b[38;5;178m[nectar] injecting ${injection.sources.length} memory file(s): ${injection.sources
+                    .map((s) => s.file)
+                    .join(", ")}\x1b[0m`,
+                );
+                writeToProcess(injection.text + "\r");
+                await logNectarInjection(
+                  spawnDir!,
+                  paneId,
+                  workerBee!.cliName,
+                  injection,
+                );
+              } catch (e) {
+                console.error("Nectar injection failed:", e);
+              }
+            })();
+          }
         } catch (e) {
           if (!disposed && terminal) {
             terminal.writeln(`\x1b[31mFailed to spawn terminal: ${e}\x1b[0m`);

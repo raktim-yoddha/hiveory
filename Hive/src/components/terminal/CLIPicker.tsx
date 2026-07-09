@@ -2,7 +2,8 @@
 
 import { Bot } from 'lucide-react';
 
-export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'gemini-cli' | 'antigravity' | 'open-code' | 'kimi-code' | 'cline' | 'cursor' | 'windsurf';
+// v1 scope per AGENTS.md §5: Claude Code, Codex CLI, Aider, Gemini CLI only.
+export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'gemini-cli';
 
 export interface CLIInfo {
   id: CLIType;
@@ -10,17 +11,20 @@ export interface CLIInfo {
   description: string;
 }
 
+// The actual executable invoked in the pty — must match a binary the user has
+// installed and on PATH (e.g. `npm i -g @anthropic-ai/claude-code`).
+export const CLI_COMMANDS: Record<CLIType, string> = {
+  'claude-code': 'claude',
+  'codex-cli': 'codex',
+  aider: 'aider',
+  'gemini-cli': 'gemini',
+};
+
 const CLI_OPTIONS: CLIInfo[] = [
-  { id: 'claude-code', name: 'Claude Code', description: 'Anthropic Claude CLI' },
-  { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI' },
-  { id: 'aider', name: 'Aider', description: 'AI pair programming tool' },
-  { id: 'gemini-cli', name: 'Gemini CLI', description: 'Google Gemini CLI' },
-  { id: 'antigravity', name: 'Antigravity', description: 'Antigravity AI CLI' },
-  { id: 'open-code', name: 'OpenCode', description: 'OpenCode AI assistant' },
-  { id: 'kimi-code', name: 'Kimi Code', description: 'Moonshot AI CLI' },
-  { id: 'cline', name: 'Cline', description: 'Cline AI assistant' },
-  { id: 'cursor', name: 'Cursor', description: 'Cursor AI CLI' },
-  { id: 'windsurf', name: 'Windsurf', description: 'Windsurf AI CLI' },
+  { id: 'claude-code', name: 'Claude Code', description: 'Anthropic Claude CLI · claude' },
+  { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI · codex' },
+  { id: 'aider', name: 'Aider', description: 'AI pair programming tool · aider' },
+  { id: 'gemini-cli', name: 'Gemini CLI', description: 'Google Gemini CLI · gemini' },
 ];
 
 interface CLIPickerProps {
@@ -33,17 +37,17 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
   // Calculate safe position to keep dropdown within viewport
   const getSafePosition = () => {
     if (!position) return undefined;
-    
+
     const dropdownWidth = 320; // w-80 = 20rem = 320px
-    const dropdownHeight = 384; // max-h-96 = 24rem = 384px
+    const dropdownHeight = 260;
     const padding = 8;
-    
+
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
-    
+
     let safeX = position.x;
     let safeY = position.y;
-    
+
     // Prevent horizontal overflow
     if (safeX + dropdownWidth > windowWidth - padding) {
       safeX = windowWidth - dropdownWidth - padding;
@@ -51,7 +55,7 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
     if (safeX < padding) {
       safeX = padding;
     }
-    
+
     // Prevent vertical overflow - show above if not enough space below
     if (safeY + dropdownHeight > windowHeight - padding) {
       safeY = position.y - dropdownHeight - padding;
@@ -59,7 +63,7 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
         safeY = padding;
       }
     }
-    
+
     return { left: safeX, top: safeY };
   };
   return (

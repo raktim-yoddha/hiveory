@@ -7,6 +7,8 @@ export interface WorkerBee {
   customName?: string;
 }
 
+export type GridLayout = "auto" | 1 | 2 | 3 | 4;
+
 interface TerminalState {
   workerBees: WorkerBee[];
   addWorkerBee: (workerBee: WorkerBee) => void;
@@ -14,6 +16,8 @@ interface TerminalState {
   updateWorkerBee: (beeId: string, updates: Partial<WorkerBee>) => void;
   maximizedPane: string | null;
   setMaximizedPane: (paneId: string | null) => void;
+  gridLayout: GridLayout;
+  setGridLayout: (layout: GridLayout) => void;
 }
 
 export const useTerminalStore = create<TerminalState>((set) => ({
@@ -33,4 +37,6 @@ export const useTerminalStore = create<TerminalState>((set) => ({
     })),
   maximizedPane: null,
   setMaximizedPane: (paneId) => set({ maximizedPane: paneId }),
+  gridLayout: "auto",
+  setGridLayout: (layout) => set({ gridLayout: layout }),
 }));

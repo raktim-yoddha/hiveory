@@ -34,6 +34,7 @@ async fn spawn_terminal(
     command: String,
     args: Vec<String>,
     working_dir: Option<String>,
+    env: Option<HashMap<String, String>>,
     state: State<'_, PtySystem>,
 ) -> Result<String, String> {
     let pty_system = native_pty_system();
@@ -41,17 +42,14 @@ async fn spawn_terminal(
     // Clean the command string - remove any null bytes
     let command = command.trim().replace('\0', "");
     
-    // Check if this is a CLI agent (not a shell)
-    let is_cli_agent = command.contains("claude-code") || 
-                       command.contains("codex-cli") || 
-                       command.contains("aider") || 
-                       command.contains("gemini-cli") ||
-                       command.contains("antigravity") ||
-                       command.contains("open-code") ||
-                       command.contains("kimi-code") ||
-                       command.contains("cline") ||
-                       command.contains("cursor") ||
-                       command.contains("windsurf");
+    // Check if this is a CLI agent (not a shell). v1 supports Claude Code,
+    // Codex CLI, Aider, and Gemini CLI (AGENTS.md §5) — matched against the
+    // actual executable names, not marketing/product names.
+    let is_shell = matches!(
+        command.as_str(),
+        "cmd.exe" | "powershell.exe" | "bash.exe" | "wsl.exe"
+    );
+    let is_cli_agent = !is_shell;
     
     let mut cmd = if is_cli_agent {
         // For CLI agents on Windows, use cmd.exe to invoke them
@@ -85,7 +83,14 @@ async fn spawn_terminal(
     for arg in args {
         cmd.arg(&arg);
     }
-    
+
+    // API keys for the CLI agent (e.g. ANTHROPIC_API_KEY), set from Settings.
+    if let Some(env_vars) = env {
+        for (key, value) in env_vars {
+            cmd.env(&key, &value);
+        }
+    }
+
     let pty_pair = pty_system
         .openpty(PtySize {
             rows: 24,
@@ -294,6 +299,42 @@ async fn get_home_dir() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitStatus {
+    pub branch: String,
+    pub changed: u32,
+}
+
+// AGENTS.md §6: editor mode needs "basic git status/diff" — shell out to the
+// system `git`, no bundled git library required for this minimal read.
+#[tauri::command]
+async fn git_status(project_path: String) -> Result<GitStatus, String> {
+    let branch_output = std::process::Command::new("git")
+        .args(["-C", &project_path, "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !branch_output.status.success() {
+        return Err("Not a git repository".to_string());
+    }
+
+    let branch = String::from_utf8_lossy(&branch_output.stdout)
+        .trim()
+        .to_string();
+
+    let status_output = std::process::Command::new("git")
+        .args(["-C", &project_path, "status", "--porcelain"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let changed = String::from_utf8_lossy(&status_output.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count() as u32;
+
+    Ok(GitStatus { branch, changed })
+}
+
 #[tauri::command]
 async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
     let nectar_path = std::path::Path::new(&project_path).join(".nectar");
@@ -352,7 +393,8 @@ pub fn run() {
             list_directory,
             get_project_path,
             get_home_dir,
-            ensure_nectar_structure
+            ensure_nectar_structure,
+            git_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

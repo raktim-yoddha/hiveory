@@ -21,6 +21,9 @@ interface SidebarProps {
   onModeChange: (mode: 'editor' | 'ade') => void;
   onFileSelect: (file: string) => void;
   onFolderSelect?: (folder: string) => void;
+  /** The project folder the user actually opened. Falls back to the Tauri
+   * process's cwd only if the user hasn't opened a folder yet. */
+  rootPath?: string | null;
 }
 
 interface FileNode {
@@ -37,6 +40,7 @@ export default function Sidebar({
   onModeChange,
   onFileSelect,
   onFolderSelect,
+  rootPath,
 }: SidebarProps) {
   const [fileTree, setFileTree] = useState<FileNode[]>([]);
   const [projectPath, setProjectPath] = useState<string>('');
@@ -44,10 +48,14 @@ export default function Sidebar({
 
   useEffect(() => {
     const loadProject = async () => {
+      setLoading(true);
       try {
-        const path = await invoke<string>('get_project_path');
+        // Prefer the folder the user actually opened; only fall back to the
+        // Tauri process's own cwd if no project has been opened yet.
+        const path = rootPath || (await invoke<string>('get_project_path'));
         setProjectPath(path);
-        await loadDirectory(path);
+        const tree = await loadDirectory(path);
+        setFileTree(tree);
       } catch (e) {
         console.error('Failed to load project:', e);
       } finally {
@@ -55,23 +63,18 @@ export default function Sidebar({
       }
     };
     loadProject();
-  }, []);
+  }, [rootPath]);
 
   const loadDirectory = async (path: string): Promise<FileNode[]> => {
-    try {
-      const files = await invoke<any[]>('list_directory', { path });
-      return files.map((f: any) => ({
-        name: f.name,
-        path: f.path,
-        is_file: f.is_file,
-        is_dir: f.is_dir,
-        children: f.is_dir ? [] : undefined,
-        expanded: false,
-      }));
-    } catch (e) {
-      console.error('Failed to load directory:', e);
-      return [];
-    }
+    const files = await invoke<any[]>('list_directory', { path });
+    return files.map((f: any) => ({
+      name: f.name,
+      path: f.path,
+      is_file: f.is_file,
+      is_dir: f.is_dir,
+      children: f.is_dir ? [] : undefined,
+      expanded: false,
+    }));
   };
 
   const toggleExpand = async (node: FileNode, index: number) => {
@@ -85,11 +88,13 @@ export default function Sidebar({
         
         if (currentNode.path === node.path) {
           if (!currentNode.expanded && (!currentNode.children || currentNode.children.length === 0)) {
-            loadDirectory(node.path).then(children => {
-              currentNode.children = children;
-              currentNode.expanded = true;
-              setFileTree([...newTree]);
-            });
+            loadDirectory(node.path)
+              .then(children => {
+                currentNode.children = children;
+                currentNode.expanded = true;
+                setFileTree([...newTree]);
+              })
+              .catch(e => console.error('Failed to load directory:', e));
           } else {
             currentNode.expanded = !currentNode.expanded;
           }

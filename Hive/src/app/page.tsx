@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import EditorPanel from "@/components/editor/EditorPanel";
 import ADEPanel from "@/components/terminal/ADEPanel";
+import CLIPicker, { CLIType, CLI_COMMANDS } from "@/components/terminal/CLIPicker";
+import SettingsModal from "@/components/SettingsModal";
+import { useTerminalStore, WorkerBee, GridLayout } from "@/stores/terminalStore";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
@@ -16,8 +19,18 @@ import {
   Minus,
   Square,
   Copy,
+  Plus,
+  LayoutGrid,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+
+const LAYOUT_OPTIONS: { value: GridLayout; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: 1, label: "1" },
+  { value: 2, label: "2" },
+  { value: 3, label: "3" },
+  { value: 4, label: "4" },
+];
 
 export default function Home() {
   const [sidebarMode, setSidebarMode] = useState<"editor" | "ade">("editor");
@@ -32,27 +45,26 @@ export default function Home() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [gitStatus, setGitStatus] = useState<{
+    branch: string;
+    changed: number;
+  } | null>(null);
   const windowRef = useRef<ReturnType<typeof getCurrentWindow> | null>(null);
 
+  const workerBees = useTerminalStore((state) => state.workerBees);
+  const addWorkerBee = useTerminalStore((state) => state.addWorkerBee);
+  const gridLayout = useTerminalStore((state) => state.gridLayout);
+  const setGridLayout = useTerminalStore((state) => state.setGridLayout);
+
+  const [showCLIPicker, setShowCLIPicker] = useState(false);
+  const [pickerPosition, setPickerPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
-    const initializeNectar = async () => {
-      try {
-        // Always use home directory as default for terminal
-        const homeDir = await invoke<string>("get_home_dir");
-        setProjectPath(homeDir);
-
-        try {
-          const projectPath = await invoke<string>("get_project_path");
-          await invoke("ensure_nectar_structure", { projectPath });
-        } catch (e) {
-          console.error("Failed to initialize Nectar:", e);
-        }
-        setInitialized(true);
-      } catch (e) {
-        console.error("Failed to get home directory:", e);
-      }
-    };
-
     const initializeWindow = async () => {
       try {
         const window = getCurrentWindow();
@@ -64,8 +76,8 @@ export default function Home() {
       }
     };
 
-    initializeNectar();
     initializeWindow();
+    setInitialized(true);
   }, []);
 
   useEffect(() => {
@@ -105,7 +117,8 @@ export default function Home() {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (isResizing) {
-      const newWidth = e.clientX;
+      // Sidebar starts right after the 48px activity rail.
+      const newWidth = e.clientX - 48;
       if (newWidth >= 150 && newWidth <= 500) {
         setSidebarWidth(newWidth);
       }
@@ -153,8 +166,15 @@ export default function Home() {
     await handleMaximize();
   };
 
-  const handleFolderSelect = (folderPath: string) => {
+  // A project folder is where Nectar's `.nectar/` structure lives — make sure
+  // it exists as soon as we know which folder that is.
+  const handleFolderSelect = async (folderPath: string) => {
     setProjectPath(folderPath);
+    try {
+      await invoke("ensure_nectar_structure", { projectPath: folderPath });
+    } catch (e) {
+      console.error("Failed to initialize Nectar for folder:", e);
+    }
   };
 
   const handleNewFile = async () => {
@@ -194,13 +214,67 @@ export default function Home() {
         title: "Open Folder",
       });
       if (folderPath && typeof folderPath === "string") {
-        setProjectPath(folderPath);
+        await handleFolderSelect(folderPath);
         setActiveView("explorer");
         setSidebarCollapsed(false);
       }
     } catch (e) {
       console.error("Failed to open folder:", e);
     }
+  };
+
+  // AGENTS.md §6: editor mode needs "basic git status/diff" — poll the real
+  // repo state for the opened project instead of a hardcoded "main" label.
+  useEffect(() => {
+    if (!projectPath) {
+      setGitStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchStatus = async () => {
+      try {
+        const status = await invoke<{ branch: string; changed: number }>(
+          "git_status",
+          { projectPath },
+        );
+        if (!cancelled) setGitStatus(status);
+      } catch {
+        if (!cancelled) setGitStatus(null);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [projectPath]);
+
+  const handleAddButtonClick = () => {
+    if (addButtonRef.current) {
+      const rect = addButtonRef.current.getBoundingClientRect();
+      setPickerPosition({ x: rect.left, y: rect.bottom + 4 });
+    }
+    setShowCLIPicker(true);
+  };
+
+  const handleCLISelect = (cli: CLIType) => {
+    const cliNames: Record<CLIType, string> = {
+      "claude-code": "Claude Code",
+      "codex-cli": "Codex CLI",
+      aider: "Aider",
+      "gemini-cli": "Gemini CLI",
+    };
+
+    const newWorkerBee: WorkerBee = {
+      id: `workerbee-${Date.now()}`,
+      cli: CLI_COMMANDS[cli],
+      cliName: cliNames[cli],
+    };
+
+    addWorkerBee(newWorkerBee);
   };
 
   useEffect(() => {
@@ -339,13 +413,18 @@ export default function Home() {
 
   return (
     <div className="h-screen w-screen flex flex-col text-bee-text font-sans select-none">
-      {/* Title Bar - Custom draggable navbar */}
+      {/* Title Bar - Custom draggable navbar
+          `relative z-50` is load-bearing: glass-toolbar's backdrop-filter makes
+          this div a stacking context, which traps any z-index on its dropdown
+          descendants (menu dropdown, CLIPicker) — without an explicit z-index
+          here, Main Content (later in DOM order) paints over the whole title
+          bar subtree regardless of the dropdown's own z-50. */}
       <div
-        className="h-11 glass-toolbar flex items-center px-3 border-b border-bee-border/60"
+        className="relative z-50 h-11 glass-toolbar flex items-center px-3 border-b border-bee-border/60"
         data-tauri-drag-region
         onDoubleClick={handleTitleBarDoubleClick}
       >
-        <div className="flex items-center gap-3 flex-1">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-7 h-7 bg-gradient-to-br from-bee-goldHi to-bee-goldDim rounded-lg flex items-center justify-center text-xs font-bold text-[#1a1200] shadow-glow">
             H
           </div>
@@ -379,50 +458,116 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Menu Items */}
-          <div className="flex items-center gap-1 ml-4">
-            {Object.keys(menuItems).map((menu) => (
-              <div key={menu} className="relative">
-                <button
-                  onClick={() =>
-                    setActiveMenu(activeMenu === menu ? null : menu)
-                  }
-                  className={`menu-button px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
-                    activeMenu === menu
-                      ? "bg-bee-gold/10 text-bee-text"
-                      : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
-                  }`}
-                >
-                  {menu}
-                </button>
-                {activeMenu === menu && (
-                  <div className="dropdown-menu absolute left-0 top-full mt-1.5 glass-hi rounded-xl z-50 min-w-52 p-1 animate-fade-in">
-                    {menuItems[menu as keyof typeof menuItems].map(
-                      (item, index) =>
-                        item.label === "-" ? (
-                          <div key={index} className="h-px bg-bee-border/60 my-1 mx-1" />
-                        ) : (
-                          <button
-                            key={item.label}
-                            onClick={() => {
-                              item.action();
-                              setActiveMenu(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left text-xs rounded-lg hover:bg-bee-gold/15 hover:text-bee-goldHi text-bee-textDim transition-colors"
-                          >
-                            {item.label}
-                          </button>
-                        ),
+          {sidebarMode === "editor" ? (
+            /* Menu Items */
+            <div className="flex items-center gap-1 ml-4">
+              {Object.keys(menuItems).map((menu) => (
+                <div key={menu} className="relative">
+                  <button
+                    onClick={() =>
+                      setActiveMenu(activeMenu === menu ? null : menu)
+                    }
+                    className={`menu-button px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
+                      activeMenu === menu
+                        ? "bg-bee-gold/10 text-bee-text"
+                        : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
+                    }`}
+                  >
+                    {menu}
+                  </button>
+                  {activeMenu === menu && (
+                    <div className="dropdown-menu absolute left-0 top-full mt-1.5 glass-hi rounded-xl z-50 min-w-52 p-1 animate-fade-in">
+                      {menuItems[menu as keyof typeof menuItems].map(
+                        (item, index) =>
+                          item.label === "-" ? (
+                            <div
+                              key={index}
+                              className="h-px bg-bee-border/60 my-1 mx-1"
+                            />
+                          ) : (
+                            <button
+                              key={item.label}
+                              onClick={() => {
+                                item.action();
+                                setActiveMenu(null);
+                              }}
+                              className="w-full px-3 py-1.5 text-left text-xs rounded-lg hover:bg-bee-gold/15 hover:text-bee-goldHi text-bee-textDim transition-colors"
+                            >
+                              {item.label}
+                            </button>
+                          ),
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* WorkerBees controls — replaces the menu bar entirely in ADE mode,
+               so there is only ever one toolbar row. */
+            <div className="flex items-center gap-3 ml-4 min-w-0">
+              <span className="text-xs font-semibold tracking-wide text-bee-text">
+                WorkerBees
+              </span>
+              <span className="text-[11px] font-medium text-bee-gold bg-bee-gold/10 border border-bee-gold/20 px-2 py-0.5 rounded-full flex-shrink-0">
+                {workerBees.length}/16
+              </span>
+
+              <div className="flex items-center p-0.5 rounded-lg glass border-bee-border/70">
+                {LAYOUT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.label}
+                    onClick={() => setGridLayout(opt.value)}
+                    title={
+                      opt.value === "auto"
+                        ? "Auto layout"
+                        : `${opt.value} column${opt.value === 1 ? "" : "s"}`
+                    }
+                    className={`px-2 py-1 text-[11px] rounded-md flex items-center gap-1 transition-all ${
+                      gridLayout === opt.value
+                        ? "bg-bee-gold/15 text-bee-goldHi"
+                        : "text-bee-textDim hover:text-bee-text"
+                    }`}
+                  >
+                    {opt.value === "auto" ? (
+                      <LayoutGrid size={11} />
+                    ) : (
+                      opt.label
                     )}
-                  </div>
-                )}
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
+
+              <button
+                ref={addButtonRef}
+                onClick={handleAddButtonClick}
+                disabled={workerBees.length >= 16}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-bee-gold/10 border border-bee-gold/20 text-bee-goldHi hover:bg-bee-gold/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                title="Add new WorkerBee"
+              >
+                <Plus size={13} />
+                Add
+              </button>
+              {showCLIPicker && pickerPosition && (
+                <CLIPicker
+                  position={pickerPosition}
+                  onSelect={handleCLISelect}
+                  onClose={() => setShowCLIPicker(false)}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Window Controls */}
         <div className="flex items-center gap-0.5 ml-4">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
+            title="CLI Agent API Keys"
+          >
+            <Settings size={14} />
+          </button>
           <button
             onClick={handleMinimize}
             className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
@@ -449,93 +594,101 @@ export default function Home() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Activity Bar */}
-        <div className="w-12 glass-rail flex flex-col items-center py-2 gap-1 border-r border-bee-border/60">
-          {(
-            [
-              { view: "explorer", icon: File, title: "Explorer" },
-              { view: "search", icon: Search, title: "Search" },
-              { view: "git", icon: GitBranch, title: "Source Control" },
-            ] as const
-          ).map(({ view, icon: Icon, title }) => {
-            const active = activeView === view && !sidebarCollapsed;
-            return (
+        {/* Activity Bar + Explorer sidebar — editor mode only; ADE mode has no
+            left-hand chrome at all. */}
+        {sidebarMode === "editor" && (
+          <>
+            <div className="w-12 glass-rail flex flex-col items-center py-2 gap-1 border-r border-bee-border/60">
+              {(
+                [
+                  { view: "explorer", icon: File, title: "Explorer" },
+                  { view: "search", icon: Search, title: "Search" },
+                  { view: "git", icon: GitBranch, title: "Source Control" },
+                ] as const
+              ).map(({ view, icon: Icon, title }) => {
+                const active = activeView === view && !sidebarCollapsed;
+                return (
+                  <button
+                    key={view}
+                    onClick={() => {
+                      if (active) {
+                        setSidebarCollapsed(true);
+                      } else {
+                        setActiveView(view);
+                        setSidebarCollapsed(false);
+                      }
+                    }}
+                    className={`relative p-2 rounded-lg transition-colors ${
+                      active
+                        ? "text-bee-goldHi bg-bee-gold/10"
+                        : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"
+                    }`}
+                    title={title}
+                  >
+                    {active && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-bee-gold" />
+                    )}
+                    <Icon size={20} />
+                  </button>
+                );
+              })}
+              <div className="flex-1" />
               <button
-                key={view}
                 onClick={() => {
-                  if (active) {
+                  if (activeView === "settings" && !sidebarCollapsed) {
                     setSidebarCollapsed(true);
                   } else {
-                    setActiveView(view);
+                    setActiveView("settings");
                     setSidebarCollapsed(false);
                   }
                 }}
-                className={`relative p-2 rounded-lg transition-colors ${
-                  active
-                    ? "text-bee-goldHi bg-bee-gold/10"
-                    : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"
-                }`}
-                title={title}
+                className={`p-2 rounded-lg transition-colors ${activeView === "settings" && !sidebarCollapsed ? "text-bee-goldHi bg-bee-gold/10" : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"}`}
+                title="Settings"
               >
-                {active && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-bee-gold" />
-                )}
-                <Icon size={20} />
+                <Settings size={20} />
               </button>
-            );
-          })}
-          <div className="flex-1" />
-          <button
-            onClick={() => {
-              if (activeView === "settings" && !sidebarCollapsed) {
-                setSidebarCollapsed(true);
-              } else {
-                setActiveView("settings");
-                setSidebarCollapsed(false);
-              }
-            }}
-            className={`p-2 rounded-lg transition-colors ${activeView === "settings" && !sidebarCollapsed ? "text-bee-goldHi bg-bee-gold/10" : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"}`}
-            title="Settings"
-          >
-            <Settings size={20} />
-          </button>
-        </div>
-
-        {/* Sidebar */}
-        {!sidebarCollapsed && (
-          <>
-            <div
-              className="glass flex flex-col border-y-0 border-l-0 border-r border-bee-border/60"
-              style={{ width: `${sidebarWidth}px` }}
-            >
-              <div className="h-9 flex items-center justify-between px-4 text-[11px] font-semibold text-bee-gold uppercase tracking-[0.14em]">
-                <span>
-                  {activeView === "explorer"
-                    ? "Explorer"
-                    : activeView === "search"
-                      ? "Search"
-                      : activeView === "git"
-                        ? "Source Control"
-                        : "Settings"}
-                </span>
-                <button
-                  onClick={() => setSidebarCollapsed(true)}
-                  className="text-bee-textMuted hover:text-bee-textDim transition-colors"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <Sidebar
-                mode={sidebarMode}
-                onModeChange={setSidebarMode}
-                onFileSelect={setOpenFile}
-                onFolderSelect={handleFolderSelect}
-              />
             </div>
-            <div
-              className="w-px bg-bee-border/60 hover:bg-bee-gold cursor-col-resize transition-colors"
-              onMouseDown={handleMouseDown}
-            />
+
+            {/* Sidebar */}
+            {!sidebarCollapsed && (
+              <>
+                <div
+                  className="glass flex flex-col border-y-0 border-l-0 border-r border-bee-border/60 flex-shrink-0"
+                  style={{ width: `${sidebarWidth}px` }}
+                >
+                  <div className="h-9 flex items-center justify-between px-4 text-[11px] font-semibold text-bee-gold uppercase tracking-[0.14em]">
+                    <span>
+                      {activeView === "explorer"
+                        ? "Explorer"
+                        : activeView === "search"
+                          ? "Search"
+                          : activeView === "git"
+                            ? "Source Control"
+                            : "Settings"}
+                    </span>
+                    <button
+                      onClick={() => setSidebarCollapsed(true)}
+                      className="text-bee-textMuted hover:text-bee-textDim transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <Sidebar
+                    mode={sidebarMode}
+                    onModeChange={setSidebarMode}
+                    onFileSelect={setOpenFile}
+                    onFolderSelect={handleFolderSelect}
+                    rootPath={projectPath}
+                  />
+                </div>
+                <div
+                  className="w-1.5 -mx-0.5 z-10 cursor-col-resize group flex-shrink-0"
+                  onMouseDown={handleMouseDown}
+                >
+                  <div className="w-px h-full mx-auto bg-bee-border/60 group-hover:bg-bee-gold transition-colors" />
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -544,7 +697,7 @@ export default function Home() {
           {sidebarMode === "editor" ? (
             <EditorPanel openFile={openFile} projectPath={projectPath} />
           ) : (
-            <ADEPanel layout={1} workingDir={projectPath} />
+            <ADEPanel workingDir={projectPath} />
           )}
         </div>
       </div>
@@ -554,9 +707,13 @@ export default function Home() {
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5 text-bee-gold">
             <GitBranch size={11} />
-            main
+            {gitStatus?.branch ?? "no repo"}
           </span>
-          <span className="text-bee-textMuted">0 errors, 0 warnings</span>
+          {gitStatus && gitStatus.changed > 0 && (
+            <span className="text-bee-textMuted">
+              {gitStatus.changed} changed
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-4 text-bee-textMuted">
           <span>Ln 1, Col 1</span>
@@ -565,6 +722,10 @@ export default function Home() {
           <span>Spaces: 2</span>
         </div>
       </div>
+
+      {showSettings && (
+        <SettingsModal onClose={() => setShowSettings(false)} />
+      )}
     </div>
   );
 }
