@@ -3,7 +3,8 @@
 import { Bot } from 'lucide-react';
 
 // v1 scope per AGENTS.md §5: Claude Code, Codex CLI, Aider, Gemini CLI only.
-export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'gemini-cli';
+// Extended with OpenCode, Kimi Code, Cline for broader CLI agent support.
+export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'gemini-cli' | 'opencode' | 'kimi-code' | 'cline';
 
 export interface CLIInfo {
   id: CLIType;
@@ -18,6 +19,9 @@ export const CLI_COMMANDS: Record<CLIType, string> = {
   'codex-cli': 'codex',
   aider: 'aider',
   'gemini-cli': 'gemini',
+  'opencode': 'opencode',
+  'kimi-code': 'kimi',
+  'cline': 'cline',
 };
 
 const CLI_OPTIONS: CLIInfo[] = [
@@ -25,6 +29,9 @@ const CLI_OPTIONS: CLIInfo[] = [
   { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI · codex' },
   { id: 'aider', name: 'Aider', description: 'AI pair programming tool · aider' },
   { id: 'gemini-cli', name: 'Gemini CLI', description: 'Google Gemini CLI · gemini' },
+  { id: 'opencode', name: 'OpenCode', description: 'Open-source coding assistant · opencode' },
+  { id: 'kimi-code', name: 'Kimi Code', description: 'Moonshot AI coding assistant · kimi' },
+  { id: 'cline', name: 'Cline', description: 'Claude-powered coding agent · cline' },
 ];
 
 interface CLIPickerProps {

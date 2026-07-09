@@ -143,9 +143,6 @@ export default function Sidebar({
             onClick={() => {
               if (node.is_dir) {
                 toggleExpand(node, index);
-                if (onFolderSelect) {
-                  onFolderSelect(node.path);
-                }
               } else {
                 onFileSelect(node.path);
               }

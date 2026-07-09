@@ -5,6 +5,7 @@ export interface WorkerBee {
   cli: string;
   cliName: string;
   customName?: string;
+  args?: string[];
 }
 
 export type GridLayout = "auto" | 1 | 2 | 3 | 4;

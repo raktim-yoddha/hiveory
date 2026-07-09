@@ -10,10 +10,14 @@ import {
   FileCog,
   Braces,
   Hash,
+  Save,
+  Loader2,
+  Check,
   type LucideIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import EditorTerminalPanel from "./EditorTerminalPanel";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface EditorPanelProps {
   openFile: string | null;
@@ -27,6 +31,7 @@ interface OpenTab {
   language: string;
   modified: boolean;
   content: string;
+  saveState: 'saved' | 'saving' | 'unsaved';
 }
 
 export default function EditorPanel({
@@ -41,6 +46,9 @@ export default function EditorPanel({
   const [loading, setLoading] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(256);
   const [isResizingTerminal, setIsResizingTerminal] = useState(false);
+  
+  const autosaveEnabled = useSettingsStore((s) => s.autosaveEnabled);
+  const autosaveInterval = useSettingsStore((s) => s.autosaveInterval);
 
   const getFileIcon = (filename: string): { Icon: LucideIcon; className: string } => {
     const ext = filename.split(".").pop()?.toLowerCase();
@@ -80,7 +88,15 @@ export default function EditorPanel({
 
   useEffect(() => {
     const loadFile = async () => {
-      if (openFile && !tabs.find((t) => t.path === openFile)) {
+      if (openFile) {
+        const existingTab = tabs.find((t) => t.path === openFile);
+        if (existingTab) {
+          // Switch to existing tab instead of creating duplicate
+          setActiveTab(existingTab.id);
+          setLanguage(existingTab.language);
+          return;
+        }
+
         setLoading(true);
         try {
           const content = await invoke<string>("read_file", { path: openFile });
@@ -91,6 +107,7 @@ export default function EditorPanel({
             language: getLanguageFromPath(openFile),
             modified: false,
             content,
+            saveState: 'saved',
           };
           setTabs([...tabs, newTab]);
           setActiveTab(newTab.id);
@@ -113,18 +130,25 @@ export default function EditorPanel({
     }
   };
 
-  const saveFile = async () => {
-    if (!activeTab) return;
-    const tab = tabs.find((t) => t.id === activeTab);
+  const saveFile = async (tabId?: string) => {
+    const targetTabId = tabId || activeTab;
+    if (!targetTabId) return;
+    const tab = tabs.find((t) => t.id === targetTabId);
     if (!tab) return;
 
     try {
+      setTabs(
+        tabs.map((t) => (t.id === targetTabId ? { ...t, saveState: 'saving' } : t)),
+      );
       await invoke("write_file", { path: tab.path, content: tab.content });
       setTabs(
-        tabs.map((t) => (t.id === activeTab ? { ...t, modified: false } : t)),
+        tabs.map((t) => (t.id === targetTabId ? { ...t, modified: false, saveState: 'saved' } : t)),
       );
     } catch (e) {
       console.error("Failed to save file:", e);
+      setTabs(
+        tabs.map((t) => (t.id === targetTabId ? { ...t, saveState: 'unsaved' } : t)),
+      );
     }
   };
 
@@ -132,10 +156,40 @@ export default function EditorPanel({
     if (!activeTab) return;
     setTabs(
       tabs.map((t) =>
-        t.id === activeTab ? { ...t, content: value || "", modified: true } : t,
+        t.id === activeTab ? { ...t, content: value || "", modified: true, saveState: 'unsaved' } : t,
       ),
     );
   };
+
+  // Autosave effect
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+
+    const interval = setInterval(() => {
+      tabs.forEach((tab) => {
+        if (tab.modified && tab.saveState === 'unsaved') {
+          saveFile(tab.id);
+        }
+      });
+    }, autosaveInterval);
+
+    return () => clearInterval(interval);
+  }, [tabs, autosaveEnabled, autosaveInterval]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (activeTab) {
+          saveFile(activeTab);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab]);
 
   const handleTerminalMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -166,42 +220,59 @@ export default function EditorPanel({
   return (
     <div className="flex-1 flex flex-col bg-bee-canvas/40">
       {/* File tabs */}
-      <div className="h-9 glass-toolbar border-b border-bee-border/60 flex items-center overflow-x-auto">
-        {tabs.length === 0 ? (
-          <div className="px-4 text-[13px] text-bee-textMuted italic">
-            No files open
-          </div>
-        ) : (
-          tabs.map((tab) => {
-            const { Icon, className } = getFileIcon(tab.name);
-            const active = activeTab === tab.id;
-            return (
-              <div
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`group relative h-full flex items-center px-3 gap-2 cursor-pointer min-w-max transition-colors ${
-                  active
-                    ? "bg-bee-surface/60 text-bee-text"
-                    : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/30"
-                }`}
-              >
-                {active && (
-                  <span className="absolute top-0 left-0 right-0 h-0.5 bg-bee-gold" />
-                )}
-                <Icon size={14} className={className} />
-                <span className="text-[13px] font-medium">{tab.name}</span>
-                {tab.modified && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-bee-gold" />
-                )}
-                <button
-                  onClick={(e) => closeTab(tab.id, e)}
-                  className="p-0.5 rounded hover:bg-bee-border/70 text-bee-textMuted hover:text-bee-text opacity-0 group-hover:opacity-100 transition-opacity"
+      <div className="h-9 glass-toolbar border-b border-bee-border/60 flex items-center justify-between overflow-x-auto">
+        <div className="flex items-center overflow-x-auto">
+          {tabs.length === 0 ? (
+            <div className="px-4 text-[13px] text-bee-textMuted italic">
+              No files open
+            </div>
+          ) : (
+            tabs.map((tab) => {
+              const { Icon, className } = getFileIcon(tab.name);
+              const active = activeTab === tab.id;
+              return (
+                <div
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`group relative h-full flex items-center px-3 gap-2 cursor-pointer min-w-max transition-colors ${
+                    active
+                      ? "bg-bee-surface/60 text-bee-text"
+                      : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/30"
+                  }`}
                 >
-                  <X size={13} />
-                </button>
-              </div>
-            );
-          })
+                  {active && (
+                    <span className="absolute top-0 left-0 right-0 h-0.5 bg-bee-gold" />
+                  )}
+                  <Icon size={14} className={className} />
+                  <span className="text-[13px] font-medium">{tab.name}</span>
+                  {tab.saveState === 'saving' && (
+                    <Loader2 size={12} className="text-bee-gold animate-spin" />
+                  )}
+                  {tab.saveState === 'saved' && tab.modified === false && (
+                    <Check size={12} className="text-bee-gold/50" />
+                  )}
+                  {tab.saveState === 'unsaved' && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-bee-gold" />
+                  )}
+                  <button
+                    onClick={(e) => closeTab(tab.id, e)}
+                    className="p-0.5 rounded hover:bg-bee-border/70 text-bee-textMuted hover:text-bee-text opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+        {activeTab && (
+          <button
+            onClick={() => saveFile()}
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors mr-2"
+            title="Save file"
+          >
+            <Save size={14} />
+          </button>
         )}
       </div>
 

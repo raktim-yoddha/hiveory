@@ -1,4 +1,5 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -13,6 +14,177 @@ pub struct FileInfo {
     pub path: String,
     pub is_file: bool,
     pub is_dir: bool,
+}
+
+// Nectar command structures
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarInitRequest {
+    pub project_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarInitResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarEnsureStructureRequest {
+    pub project_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarEnsureStructureResponse {
+    pub success: bool,
+    pub created_files: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarReadMemoryFileRequest {
+    pub project_path: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarReadMemoryFileResponse {
+    pub content: String,
+    pub frontmatter: Option<serde_json::Value>,
+    pub file_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarWriteMemoryFileRequest {
+    pub project_path: String,
+    pub relative_path: String,
+    pub content: String,
+    pub frontmatter: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarWriteMemoryFileResponse {
+    pub success: bool,
+    pub path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarListMemoryFilesRequest {
+    pub project_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarListMemoryFilesResponse {
+    pub files: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarParseMarkdownToChunksRequest {
+    pub content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ChunkInfo {
+    pub text: String,
+    pub heading: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarParseMarkdownToChunksResponse {
+    pub chunks: Vec<ChunkInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarIndexFileRequest {
+    pub project_path: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarIndexFileResponse {
+    pub success: bool,
+    pub chunks_indexed: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarSearchRequest {
+    pub project_path: String,
+    pub query: String,
+    pub limit: Option<usize>,
+    pub min_score: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SearchResult {
+    pub chunk: ChunkInfo,
+    pub source_file: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarSearchResponse {
+    pub results: Vec<SearchResult>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarInjectRequest {
+    pub project_path: String,
+    pub task: String,
+    pub open_files: Vec<String>,
+    pub git_diff: Option<String>,
+    pub max_tokens: Option<usize>,
+    pub max_chunks: Option<usize>,
+    pub min_score: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct InjectedChunk {
+    pub content: String,
+    pub source_file: String,
+    pub score: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarInjectResponse {
+    pub chunks: Vec<InjectedChunk>,
+    pub query: String,
+    pub total_tokens: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarFormatContextRequest {
+    pub agent_type: String,
+    pub chunks: Vec<InjectedChunk>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarFormatContextResponse {
+    pub formatted_text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarLogSessionRequest {
+    pub project_path: String,
+    pub session_id: String,
+    pub agent_type: String,
+    pub task: String,
+    pub query: String,
+    pub chunks: Vec<InjectedChunk>,
+    pub total_tokens: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarLogSessionResponse {
+    pub success: bool,
+    pub log_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarCloseRequest {
+    pub project_path: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarCloseResponse {
+    pub success: bool,
 }
 
 /// One live terminal: the master pty, the child handle (so we can actually kill
@@ -37,29 +209,32 @@ async fn spawn_terminal(
     env: Option<HashMap<String, String>>,
     state: State<'_, PtySystem>,
 ) -> Result<String, String> {
+    println!("[Rust] spawn_terminal called: pane_id={}, command={}, args={:?}", pane_id, command, args);
+    
     let pty_system = native_pty_system();
     
     // Clean the command string - remove any null bytes
     let command = command.trim().replace('\0', "");
     
-    // Check if this is a CLI agent (not a shell). v1 supports Claude Code,
-    // Codex CLI, Aider, and Gemini CLI (AGENTS.md §5) — matched against the
-    // actual executable names, not marketing/product names.
+    // Check if this is a shell. v1 supports cmd.exe, powershell.exe, bash.exe, wsl.exe.
+    // CLI agents (claude, aider, codex, gemini, etc.) should run directly without cmd.exe wrapping.
     let is_shell = matches!(
         command.as_str(),
         "cmd.exe" | "powershell.exe" | "bash.exe" | "wsl.exe"
     );
-    let is_cli_agent = !is_shell;
     
-    let mut cmd = if is_cli_agent {
-        // For CLI agents on Windows, use cmd.exe to invoke them
-        // Use /K to keep the command prompt open after execution
-        let mut cmd = CommandBuilder::new("cmd.exe");
-        cmd.arg("/K");
-        cmd.arg(&command);
-        cmd
+    let mut cmd = if is_shell {
+        // For shells on Windows, use cmd.exe /K to keep them interactive
+        if command == "cmd.exe" {
+            let mut cmd = CommandBuilder::new("cmd.exe");
+            cmd.arg("/K");
+            cmd
+        } else {
+            // For other shells (powershell, bash, wsl), run directly
+            CommandBuilder::new(&command)
+        }
     } else {
-        // For shells, use the command directly
+        // For CLI agents, run the command directly without wrapping
         CommandBuilder::new(&command)
     };
     
@@ -336,8 +511,10 @@ async fn git_status(project_path: String) -> Result<GitStatus, String> {
 }
 
 #[tauri::command]
-async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
-    let nectar_path = std::path::Path::new(&project_path).join(".nectar");
+async fn nectar_ensure_structure(
+    req: NectarEnsureStructureRequest,
+) -> Result<NectarEnsureStructureResponse, String> {
+    let nectar_path = std::path::Path::new(&req.project_path).join(".nectar");
     let dirs = [
         nectar_path.join("memory"),
         nectar_path.join("agents").join("sessions"),
@@ -345,6 +522,8 @@ async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
         nectar_path.join("tasks"),
         nectar_path.join("index"),
     ];
+
+    let mut created_files = Vec::new();
 
     for dir in dirs {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -366,10 +545,533 @@ async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
         let file_path = memory_path.join(filename);
         if !file_path.exists() {
             fs::write(&file_path, content).map_err(|e| e.to_string())?;
+            created_files.push(filename.to_string());
         }
     }
 
+    Ok(NectarEnsureStructureResponse {
+        success: true,
+        created_files,
+    })
+}
+
+// Keep old command for backward compatibility, will remove later
+#[tauri::command]
+async fn ensure_nectar_structure(project_path: String) -> Result<(), String> {
+    let req = NectarEnsureStructureRequest {
+        project_path,
+    };
+    nectar_ensure_structure(req).await.map(|_| ())
+}
+
+#[tauri::command]
+async fn nectar_read_memory_file(
+    req: NectarReadMemoryFileRequest,
+) -> Result<NectarReadMemoryFileResponse, String> {
+    let full_path = std::path::Path::new(&req.project_path)
+        .join(".nectar")
+        .join(&req.relative_path);
+
+    let content = fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Simple frontmatter parsing - look for YAML between --- markers
+    let frontmatter = if content.starts_with("---") {
+        let parts: Vec<&str> = content.splitn(3, "---").collect();
+        if parts.len() >= 2 {
+            serde_yaml::from_str(parts[1]).ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Determine file type based on path
+    let file_type = if req.relative_path.starts_with("agents/sessions/") {
+        "agent_session".to_string()
+    } else if req.relative_path.starts_with("agents/summaries/") {
+        "agent_summary".to_string()
+    } else if req.relative_path == "agents/handoffs.md" {
+        "handoff".to_string()
+    } else if req.relative_path.starts_with("tasks/") {
+        "task_state".to_string()
+    } else {
+        "memory".to_string()
+    };
+
+    Ok(NectarReadMemoryFileResponse {
+        content,
+        frontmatter,
+        file_type,
+    })
+}
+
+#[tauri::command]
+async fn nectar_write_memory_file(
+    req: NectarWriteMemoryFileRequest,
+) -> Result<NectarWriteMemoryFileResponse, String> {
+    let full_path = std::path::Path::new(&req.project_path)
+        .join(".nectar")
+        .join(&req.relative_path);
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+
+    // Add frontmatter if provided
+    let file_content = if let Some(fm) = req.frontmatter {
+        let fm_str = serde_yaml::to_string(&fm)
+            .map_err(|e| format!("Failed to serialize frontmatter: {}", e))?;
+        format!("---\n{}\n---\n{}", fm_str, req.content)
+    } else {
+        req.content.clone()
+    };
+
+    fs::write(&full_path, file_content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(NectarWriteMemoryFileResponse {
+        success: true,
+        path: req.relative_path,
+    })
+}
+
+#[tauri::command]
+async fn nectar_list_memory_files(
+    req: NectarListMemoryFilesRequest,
+) -> Result<NectarListMemoryFilesResponse, String> {
+    let memory_path = std::path::Path::new(&req.project_path)
+        .join(".nectar")
+        .join("memory");
+
+    if !memory_path.exists() {
+        return Ok(NectarListMemoryFilesResponse {
+            files: Vec::new(),
+        });
+    }
+
+    let entries = fs::read_dir(&memory_path)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+        if path.extension().map_or(false, |ext| ext == "md") {
+            if let Some(file_name) = path.file_name() {
+                if let Some(name_str) = file_name.to_str() {
+                    files.push(format!("memory/{}", name_str));
+                }
+            }
+        }
+    }
+
+    files.sort();
+    Ok(NectarListMemoryFilesResponse { files })
+}
+
+#[tauri::command]
+async fn nectar_parse_markdown_to_chunks(
+    req: NectarParseMarkdownToChunksRequest,
+) -> Result<NectarParseMarkdownToChunksResponse, String> {
+    let mut chunks = Vec::new();
+    let mut current_heading: Option<String> = None;
+    let mut current_text = String::new();
+    
+    let lines: Vec<&str> = req.content.lines().collect();
+    
+    for line in lines {
+        let trimmed = line.trim();
+        
+        // Check if this is a heading
+        if trimmed.starts_with('#') {
+            // Save previous chunk if there's content
+            if !current_text.trim().is_empty() {
+                chunks.push(ChunkInfo {
+                    text: current_text.trim().to_string(),
+                    heading: current_heading.clone(),
+                });
+                current_text = String::new();
+            }
+            
+            // Extract heading level and text
+            let heading_text = trimmed.trim_start_matches('#').trim().to_string();
+            current_heading = Some(heading_text);
+        } else if !trimmed.is_empty() {
+            // Add paragraph text
+            current_text.push_str(trimmed);
+            current_text.push_str("\n\n");
+        }
+    }
+    
+    // Don't forget the last chunk
+    if !current_text.trim().is_empty() {
+        chunks.push(ChunkInfo {
+            text: current_text.trim().to_string(),
+            heading: current_heading,
+        });
+    }
+    
+    Ok(NectarParseMarkdownToChunksResponse { chunks })
+}
+
+fn get_db_path(project_path: &str) -> PathBuf {
+    Path::new(project_path).join(".nectar").join("nectar.db")
+}
+
+fn init_db(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS memory_files (
+            id TEXT PRIMARY KEY,
+            path TEXT NOT NULL,
+            type TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS chunks (
+            id TEXT PRIMARY KEY,
+            source_file TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            heading TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            FOREIGN KEY (source_file) REFERENCES memory_files(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    // Create FTS5 table for keyword search
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+            content,
+            source_file,
+            heading,
+            content_rowid
+        )",
+        [],
+    )?;
+
     Ok(())
+}
+
+#[tauri::command]
+async fn nectar_index_file(
+    req: NectarIndexFileRequest,
+) -> Result<NectarIndexFileResponse, String> {
+    let db_path = get_db_path(&req.project_path);
+    
+    // Create database if it doesn't exist
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+    
+    init_db(&conn).map_err(|e| format!("Failed to initialize database: {}", e))?;
+    
+    // Read the memory file
+    let read_req = NectarReadMemoryFileRequest {
+        project_path: req.project_path.clone(),
+        relative_path: req.relative_path.clone(),
+    };
+    
+    let memory_file = nectar_read_memory_file(read_req).await
+        .map_err(|e| format!("Failed to read memory file: {}", e))?;
+    
+    // Parse to chunks
+    let parse_req = NectarParseMarkdownToChunksRequest {
+        content: memory_file.content.clone(),
+    };
+    
+    let chunks_response = nectar_parse_markdown_to_chunks(parse_req).await
+        .map_err(|e| format!("Failed to parse markdown: {}", e))?;
+    
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+    
+    // Delete existing chunks for this file
+    conn.execute(
+        "DELETE FROM chunks WHERE source_file = ?",
+        params![&req.relative_path],
+    ).map_err(|e| format!("Failed to delete old chunks: {}", e))?;
+    
+    // Insert new chunks
+    for (i, chunk) in chunks_response.chunks.iter().enumerate() {
+        let chunk_id = format!("{}:{}:{}", req.relative_path, i, now);
+        
+        conn.execute(
+            "INSERT INTO chunks (id, source_file, chunk_index, content, heading, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            params![
+                &chunk_id,
+                &req.relative_path,
+                i as i32,
+                &chunk.text,
+                &chunk.heading,
+                now,
+                now,
+            ],
+        ).map_err(|e| format!("Failed to insert chunk: {}", e))?;
+    }
+    
+    // Update or insert memory file record
+    conn.execute(
+        "INSERT OR REPLACE INTO memory_files (id, path, type, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)",
+        params![
+            &req.relative_path,
+            &req.relative_path,
+            &memory_file.file_type,
+            now,
+            now,
+        ],
+    ).map_err(|e| format!("Failed to update memory file record: {}", e))?;
+    
+    // Rebuild FTS index
+    conn.execute(
+        "INSERT INTO chunks_fts (rowid, content, source_file, heading)
+         SELECT rowid, content, source_file, heading FROM chunks",
+        [],
+    ).map_err(|e| format!("Failed to rebuild FTS index: {}", e))?;
+    
+    Ok(NectarIndexFileResponse {
+        success: true,
+        chunks_indexed: chunks_response.chunks.len(),
+    })
+}
+
+#[tauri::command]
+async fn nectar_search(
+    req: NectarSearchRequest,
+) -> Result<NectarSearchResponse, String> {
+    let db_path = get_db_path(&req.project_path);
+    
+    let conn = Connection::open(&db_path)
+        .map_err(|e| format!("Failed to open database: {}", e))?;
+    
+    init_db(&conn).map_err(|e| format!("Failed to initialize database: {}", e))?;
+    
+    let limit = req.limit.unwrap_or(10);
+    let min_score = req.min_score.unwrap_or(0.0);
+    
+    // Simple keyword search using FTS5
+    let query = format!("SELECT content, source_file, heading, bm25(chunks_fts) as score FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT {}", limit);
+    
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Failed to prepare search: {}", e))?;
+    
+    let search_term = req.query.replace('"', "\"\""); // Escape quotes
+    let mut results = Vec::new();
+    
+    let rows = stmt.query_map([&search_term], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, f64>(3)?,
+        ))
+    }).map_err(|e| format!("Failed to execute search: {}", e))?;
+    
+    for row in rows {
+        let (content, source_file, heading, score) = row.map_err(|e| e.to_string())?;
+        
+        // Convert BM25 score to a 0-1 range (BM25 is typically 0-10, lower is better)
+        let normalized_score = 1.0 / (1.0 + score);
+        
+        if normalized_score >= min_score {
+            results.push(SearchResult {
+                chunk: ChunkInfo {
+                    text: content,
+                    heading,
+                },
+                source_file,
+                score: normalized_score,
+            });
+        }
+    }
+    
+    Ok(NectarSearchResponse { results })
+}
+
+// Simple token counter (approximate - 4 chars per token)
+fn estimate_tokens(text: &str) -> usize {
+    (text.len() / 4) + 1
+}
+
+#[tauri::command]
+async fn nectar_inject(
+    req: NectarInjectRequest,
+) -> Result<NectarInjectResponse, String> {
+    let max_tokens = req.max_tokens.unwrap_or(4000);
+    let max_chunks = req.max_chunks.unwrap_or(20);
+    let min_score = req.min_score.unwrap_or(0.0);
+    
+    // Build search query from task, open files, and git diff
+    let mut query_parts = vec![req.task.clone()];
+    query_parts.extend(req.open_files.clone());
+    if let Some(diff) = &req.git_diff {
+        query_parts.push(diff.clone());
+    }
+    let query = query_parts.join(" ");
+    
+    // Search for relevant chunks
+    let search_req = NectarSearchRequest {
+        project_path: req.project_path.clone(),
+        query: query.clone(),
+        limit: Some(max_chunks * 2), // Get more than needed, then filter by tokens
+        min_score: Some(min_score),
+    };
+    
+    let search_result = nectar_search(search_req).await?;
+    
+    // Filter chunks by token budget
+    let mut selected_chunks = Vec::new();
+    let mut total_tokens = 0;
+    
+    for result in search_result.results {
+        let chunk_tokens = estimate_tokens(&result.chunk.text);
+        if total_tokens + chunk_tokens <= max_tokens {
+            selected_chunks.push(InjectedChunk {
+                content: result.chunk.text,
+                source_file: result.source_file,
+                score: result.score,
+            });
+            total_tokens += chunk_tokens;
+        }
+        if selected_chunks.len() >= max_chunks {
+            break;
+        }
+    }
+    
+    Ok(NectarInjectResponse {
+        chunks: selected_chunks,
+        query,
+        total_tokens,
+    })
+}
+
+#[tauri::command]
+async fn nectar_format_context(
+    req: NectarFormatContextRequest,
+) -> Result<NectarFormatContextResponse, String> {
+    if req.chunks.is_empty() {
+        return Ok(NectarFormatContextResponse {
+            formatted_text: String::new(),
+        });
+    }
+    
+    let formatted = match req.agent_type.as_str() {
+        "claude" => {
+            format!(
+                "<context>\n{}\n</context>",
+                req.chunks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| format!(
+                        "### Context {} (score: {:.3})\nSource: {}\n\n{}",
+                        i + 1,
+                        c.score,
+                        c.source_file,
+                        c.content
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n\n---\n\n")
+            )
+        }
+        "codex" | "aider" | "gemini" => {
+            format!(
+                "Context:\n{}",
+                req.chunks
+                    .iter()
+                    .enumerate()
+                    .map(|(i, c)| format!(
+                        "[{}] {} (score: {:.3})\n{}",
+                        i + 1,
+                        c.source_file,
+                        c.score,
+                        c.content
+                    ))
+                    .collect::<Vec<_>>()
+                    .join("\n\n")
+            )
+        }
+        _ => {
+            // Default format
+            format!(
+                "{}",
+                req.chunks
+                    .iter()
+                    .map(|c| format!("{}\n{}", c.source_file, c.content))
+                    .collect::<Vec<_>>()
+                    .join("\n\n---\n\n")
+            )
+        }
+    };
+    
+    Ok(NectarFormatContextResponse {
+        formatted_text: formatted,
+    })
+}
+
+#[tauri::command]
+async fn nectar_log_session(
+    req: NectarLogSessionRequest,
+) -> Result<NectarLogSessionResponse, String> {
+    let log_content = format!(
+        "# Session Started\n\nAgent: {}\nTask: {}\nQuery: {}\nInjection: {} chunks retrieved\nTotal tokens: {}\n\n## Retrieved Chunks\n\n{}\n",
+        req.agent_type,
+        req.task,
+        req.query,
+        req.chunks.len(),
+        req.total_tokens,
+        req.chunks
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!(
+                "{}. {} (score: {:.3})\n{}",
+                i + 1,
+                c.source_file,
+                c.score,
+                c.content
+            ))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    );
+    
+    let write_req = NectarWriteMemoryFileRequest {
+        project_path: req.project_path.clone(),
+        relative_path: format!("agents/sessions/{}.md", req.session_id),
+        content: log_content,
+        frontmatter: Some(serde_json::json!({
+            "agent": req.agent_type,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64
+        })),
+    };
+    
+    nectar_write_memory_file(write_req).await?;
+    
+    Ok(NectarLogSessionResponse {
+        success: true,
+        log_path: format!("agents/sessions/{}.md", req.session_id),
+    })
+}
+
+#[tauri::command]
+async fn nectar_close(
+    _req: NectarCloseRequest,
+) -> Result<NectarCloseResponse, String> {
+    // For now, this is a no-op since we open/close connections per command
+    // In the future, we might want to maintain a connection pool
+    Ok(NectarCloseResponse { success: true })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -394,6 +1096,17 @@ pub fn run() {
             get_project_path,
             get_home_dir,
             ensure_nectar_structure,
+            nectar_ensure_structure,
+            nectar_read_memory_file,
+            nectar_write_memory_file,
+            nectar_list_memory_files,
+            nectar_parse_markdown_to_chunks,
+            nectar_index_file,
+            nectar_search,
+            nectar_inject,
+            nectar_format_context,
+            nectar_log_session,
+            nectar_close,
             git_status
         ])
         .run(tauri::generate_context!())

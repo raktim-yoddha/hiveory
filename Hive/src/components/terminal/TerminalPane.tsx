@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Terminal as XTerm, ITerminalOptions } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { SearchAddon } from "xterm-addon-search";
+import { WebglAddon } from "xterm-addon-webgl";
 import {
   Terminal,
   ChevronDown,
@@ -14,7 +15,6 @@ import {
   Minimize2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { buildNectarInjection, logNectarInjection } from "@/lib/nectarContext";
 import { useSettingsStore, envForCli } from "@/stores/settingsStore";
 
 interface TerminalPaneProps {
@@ -26,6 +26,7 @@ interface TerminalPaneProps {
     cli: string;
     cliName: string;
     customName?: string;
+    args?: string[]; // Add args to support CLI-specific arguments
   };
   onClose?: () => void;
   onToggleMaximize?: () => void;
@@ -92,6 +93,7 @@ export default function TerminalPane({
 
     let disposed = false;
     let terminal: XTerm | null = null;
+    let webglAddon: WebglAddon | null = null;
     let onDataDisposable: { dispose: () => void } | null = null;
     let handleResize: (() => void) | null = null;
 
@@ -150,6 +152,16 @@ export default function TerminalPane({
         fitAddon.fit();
         terminalInstance.current = terminal;
 
+        // Try to load WebGL addon for better performance, fall back gracefully
+        try {
+          webglAddon = new WebglAddon();
+          terminal.loadAddon(webglAddon);
+          console.log('[TerminalPane] WebGL addon loaded successfully');
+        } catch (e) {
+          console.warn('[TerminalPane] WebGL addon not available, using canvas renderer:', e);
+          // Terminal continues to work with canvas/DOM renderer
+        }
+
         // Pipe user keystrokes into the process's stdin.
         onDataDisposable = terminal.onData((data) => {
           writeToProcess(data);
@@ -182,16 +194,27 @@ export default function TerminalPane({
 
         // Spawn terminal
         try {
-          const command = isWorkerBee
-            ? workerBee.cli
-            : TERMINAL_COMMANDS[selectedTerminal];
+          let command: string;
+          let args: string[] = [];
+
+          if (isWorkerBee) {
+            // For WorkerBees, use the CLI command directly with any provided args
+            command = workerBee.cli;
+            args = workerBee.args || [];
+            console.log(`[TerminalPane] Spawning WorkerBee CLI: paneId=${paneId}, command=${command}, args=${args.join(' ')}, workingDir=${spawnDir}`);
+          } else {
+            // For regular terminals, use the selected terminal type
+            command = TERMINAL_COMMANDS[selectedTerminal];
+            args = [];
+            console.log(`[TerminalPane] Spawning terminal: paneId=${paneId}, command=${command}, workingDir=${spawnDir}`);
+          }
 
           const env = isWorkerBee ? envForCli(workerBee.cli, apiKeys) : undefined;
 
           await invoke("spawn_terminal", {
             paneId,
             command,
-            args: [],
+            args,
             workingDir: spawnDir,
             env,
           });
@@ -224,40 +247,6 @@ export default function TerminalPane({
             }
           };
           readOutput();
-
-          // WorkerBees are forced through Nectar retrieval per AGENTS.md §4.2:
-          // read project memory, inject it as the agent's first turn, and log
-          // what was injected for audit. Give the CLI a moment to boot its
-          // input prompt before typing into its stdin.
-          if (isWorkerBee && spawnDir) {
-            (async () => {
-              try {
-                await invoke("ensure_nectar_structure", {
-                  projectPath: spawnDir,
-                });
-                const injection = await buildNectarInjection(spawnDir!);
-                if (!injection || disposed || !terminal) return;
-
-                await new Promise((resolve) => setTimeout(resolve, 1200));
-                if (disposed || !terminal) return;
-
-                terminal.writeln(
-                  `\x1b[38;5;178m[nectar] injecting ${injection.sources.length} memory file(s): ${injection.sources
-                    .map((s) => s.file)
-                    .join(", ")}\x1b[0m`,
-                );
-                writeToProcess(injection.text + "\r");
-                await logNectarInjection(
-                  spawnDir!,
-                  paneId,
-                  workerBee!.cliName,
-                  injection,
-                );
-              } catch (e) {
-                console.error("Nectar injection failed:", e);
-              }
-            })();
-          }
         } catch (e) {
           if (!disposed && terminal) {
             terminal.writeln(`\x1b[31mFailed to spawn terminal: ${e}\x1b[0m`);
@@ -274,9 +263,31 @@ export default function TerminalPane({
       disposed = true;
       if (handleResize) window.removeEventListener("resize", handleResize);
       onDataDisposable?.dispose();
-      terminal?.dispose();
-      terminalInstance.current = null;
-      setIsSpawned(false);
+      
+      // Dispose WebGL addon first, wrapped in try/catch
+      // This is a known issue with xterm-addon-webgl: dispose() can throw
+      // if the WebGL context was lost or never fully initialized
+      try {
+        if (webglAddon) {
+          webglAddon.dispose();
+          webglAddon = null;
+        }
+      } catch (e) {
+        console.warn('[TerminalPane] Failed to dispose WebGL addon:', e);
+      }
+      
+      // Then dispose the terminal
+      try {
+        if (terminal) {
+          terminal.dispose();
+        }
+      } catch (e) {
+        console.warn('[TerminalPane] Failed to dispose terminal:', e);
+      } finally {
+        // Always clear the ref even if disposal throws
+        terminalInstance.current = null;
+        setIsSpawned(false);
+      }
     };
   }, [
     paneId,

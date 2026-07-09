@@ -40,3 +40,4 @@ coverage
 target
 Cargo.lock
 AGENTS.md
+MIGRATION_REPORT.md

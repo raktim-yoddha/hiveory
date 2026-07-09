@@ -89,14 +89,16 @@ export default function ADEPanel({ workingDir }: ADEPanelProps) {
       {/* ADE panes - Grid layout */}
       <div className="flex-1 min-h-0 p-2 overflow-y-auto">
         {workerBees.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-            <div className="w-14 h-14 rounded-2xl glass flex items-center justify-center text-2xl shadow-glass">
+          <div className="flex flex-col items-center justify-center h-full gap-4 text-center animate-fade-in">
+            <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center text-3xl shadow-glass animate-scale-in">
               🐝
             </div>
-            <div className="text-sm text-bee-textDim">No WorkerBees running</div>
-            <div className="text-xs text-bee-textMuted">
-              Click <span className="text-bee-gold font-medium">Add</span> to
-              launch a CLI agent
+            <div className="space-y-1">
+              <div className="text-sm font-medium text-bee-textDim">No WorkerBees running</div>
+              <div className="text-xs text-bee-textMuted">
+                Click <span className="text-bee-gold font-medium">Add</span> to
+                launch a CLI agent
+              </div>
             </div>
           </div>
         ) : maximizedPane ? (
@@ -127,7 +129,7 @@ export default function ADEPanel({ workingDir }: ADEPanelProps) {
             {workerBees.map((bee) => (
               <div
                 key={bee.id}
-                className="flex flex-col relative overflow-hidden rounded-xl glass shadow-glass"
+                className="flex flex-col relative overflow-hidden rounded-xl glass shadow-glass transition-all duration-300 hover:shadow-glass-lg"
                 style={{ minHeight: "240px" }}
               >
                 <TerminalPane

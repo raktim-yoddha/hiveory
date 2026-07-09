@@ -64,7 +64,19 @@ export class SearchEngine {
       SELECT id, source_file, chunk_index, content, embedding, created_at, updated_at
       FROM chunks
     `);
-    const chunks = stmt.getAsObject() as Chunk[];
+    const chunks: Chunk[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as any;
+      chunks.push({
+        id: row.id as string,
+        source_file: row.source_file as string,
+        chunk_index: row.chunk_index as number,
+        content: row.content as string,
+        embedding: row.embedding ? Array.from(new Uint8Array(row.embedding)) : undefined,
+        created_at: row.created_at as number,
+        updated_at: row.updated_at as number,
+      });
+    }
     stmt.free();
     
     const results: SearchResult[] = [];
@@ -105,24 +117,30 @@ export class SearchEngine {
       LIMIT ?
     `);
     stmt.bind([query, limit]);
-    const results = stmt.getAsObject() as (Chunk & { score: number })[];
+    
+    const results: SearchResult[] = [];
+    while (stmt.step()) {
+      const row = stmt.getAsObject() as any;
+      const score = row.score as number;
+      if (score >= minScore) {
+        results.push({
+          chunk: {
+            id: row.id as string,
+            source_file: row.source_file as string,
+            chunk_index: row.chunk_index as number,
+            content: row.content as string,
+            embedding: row.embedding ? Array.from(new Uint8Array(row.embedding)) : undefined,
+            created_at: row.created_at as number,
+            updated_at: row.updated_at as number,
+          },
+          score,
+          source: 'keyword' as const,
+        });
+      }
+    }
     stmt.free();
     
-    return results
-      .filter(r => r.score >= minScore)
-      .map(r => ({
-        chunk: {
-          id: r.id,
-          source_file: r.source_file,
-          chunk_index: r.chunk_index,
-          content: r.content,
-          embedding: r.embedding,
-          created_at: r.created_at,
-          updated_at: r.updated_at,
-        },
-        score: r.score,
-        source: 'keyword' as const,
-      }));
+    return results;
   }
 
   // Reciprocal Rank Fusion for hybrid search

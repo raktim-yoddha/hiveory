@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, KeyRound, Eye, EyeOff } from "lucide-react";
+import { X, KeyRound, Eye, EyeOff, Terminal, Sliders } from "lucide-react";
 import { useSettingsStore, ApiKeys } from "@/stores/settingsStore";
 
 interface SettingsModalProps {
@@ -17,7 +17,7 @@ const FIELDS: {
   {
     key: "anthropic",
     label: "Anthropic API Key",
-    cli: "Claude Code, Aider",
+    cli: "Claude Code, Aider, Cline",
     placeholder: "sk-ant-...",
   },
   {
@@ -32,12 +32,28 @@ const FIELDS: {
     cli: "Gemini CLI",
     placeholder: "AIza...",
   },
+  {
+    key: "openrouter",
+    label: "OpenRouter API Key",
+    cli: "OpenCode, Cline",
+    placeholder: "sk-or-...",
+  },
+  {
+    key: "moonshot",
+    label: "Moonshot API Key",
+    cli: "Kimi Code",
+    placeholder: "sk-...",
+  },
 ];
 
 export default function SettingsModal({ onClose }: SettingsModalProps) {
   const apiKeys = useSettingsStore((s) => s.apiKeys);
   const setApiKey = useSettingsStore((s) => s.setApiKey);
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const defaultWorkerBee = useSettingsStore((s) => s.defaultWorkerBee);
+  const setDefaultWorkerBee = useSettingsStore((s) => s.setDefaultWorkerBee);
+  const nectarTokenBudget = useSettingsStore((s) => s.nectarTokenBudget);
+  const setNectarTokenBudget = useSettingsStore((s) => s.setNectarTokenBudget);
 
   return (
     <div
@@ -107,6 +123,52 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
               </div>
             </div>
           ))}
+
+          <div className="border-t border-bee-border/50 pt-4 flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <Terminal size={16} className="text-bee-gold" />
+              <span className="text-sm font-semibold text-bee-text">
+                WorkerBee Settings
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-bee-textDim">
+                Default CLI Agent
+              </label>
+              <select
+                value={defaultWorkerBee}
+                onChange={(e) => setDefaultWorkerBee(e.target.value)}
+                className="w-full bg-bee-canvas/70 border border-bee-border rounded-lg px-3 py-2 text-sm text-bee-text outline-none focus:ring-1 focus:ring-bee-gold transition-colors"
+              >
+                <option value="claude">Claude Code</option>
+                <option value="codex">Codex CLI</option>
+                <option value="aider">Aider</option>
+                <option value="gemini">Gemini CLI</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-bee-textDim">
+                Nectar Token Budget
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={nectarTokenBudget}
+                  onChange={(e) => setNectarTokenBudget(parseInt(e.target.value) || 4000)}
+                  min="1000"
+                  max="16000"
+                  step="500"
+                  className="flex-1 bg-bee-canvas/70 border border-bee-border rounded-lg px-3 py-2 text-sm text-bee-text outline-none focus:ring-1 focus:ring-bee-gold transition-colors font-mono"
+                />
+                <span className="text-xs text-bee-textMuted">tokens</span>
+              </div>
+              <p className="text-[10px] text-bee-textMuted">
+                Maximum tokens of project context to inject into CLI sessions
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="px-4 py-3 border-t border-bee-border/50 flex justify-end">

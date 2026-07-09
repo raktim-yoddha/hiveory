@@ -1,6 +1,5 @@
-import { ChildProcess } from 'child_process';
-import { Nectar, InjectionContext } from '@hiveory/nectar';
-import { WorkerBeeAdapter, LaunchContext, SessionSummary } from './adapters/types';
+import { Nectar, InjectionContext, InjectionResult } from '@hiveory/nectar-api';
+import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './adapters/types';
 import { ClaudeCodeAdapter } from './adapters/claude-code';
 import { CodexAdapter } from './adapters/codex';
 import { AiderAdapter } from './adapters/aider';
@@ -15,16 +14,22 @@ export interface LaunchOptions {
   gitDiff?: string;
 }
 
+export interface LaunchResult {
+  sessionId: string;
+  command: CommandConfig;
+  injectionText?: string;
+}
+
 export class WorkerBeeLauncher {
   private nectar: Nectar;
-  private activeProcesses: Map<string, { process: ChildProcess; adapter: WorkerBeeAdapter; sessionId: string }>;
+  private activeSessions: Map<string, { adapter: WorkerBeeAdapter; sessionId: string }>;
 
   constructor(nectar: Nectar) {
     this.nectar = nectar;
-    this.activeProcesses = new Map();
+    this.activeSessions = new Map();
   }
 
-  async launch(options: LaunchOptions): Promise<string> {
+  async launch(options: LaunchOptions): Promise<LaunchResult> {
     const sessionId = `${options.agentType}-${Date.now()}`;
     
     // Get Nectar context
@@ -34,7 +39,11 @@ export class WorkerBeeLauncher {
       gitDiff: options.gitDiff,
     };
     
-    const nectarContext = await this.nectar.inject(injectionContext);
+    const nectarContext = await this.nectar.inject(
+      injectionContext.task,
+      injectionContext.openFiles,
+      injectionContext.gitDiff
+    );
     
     // Log injection
     const memoryManager = this.nectar.getMemoryManager();
@@ -56,36 +65,38 @@ export class WorkerBeeLauncher {
       nectarContext,
     };
 
-    // Launch process
-    const process = await adapter.launch(launchContext);
+    // Get command config from adapter
+    const command = adapter.getCommand(launchContext);
     
-    // Set up output handlers
-    process.stdout?.on('data', (data) => {
-      adapter.onOutput(data.toString());
-    });
+    // Format injection text for the CLI
+    const injectionText = adapter.formatContext(nectarContext);
     
-    process.stderr?.on('data', (data) => {
-      adapter.onOutput(data.toString());
-    });
+    // Prepend injection text to the CLI's task argument
+    if (injectionText && command.args.length > 0) {
+      command.args[0] = `${injectionText}\n\n${command.args[0]}`;
+    } else if (injectionText) {
+      command.args.unshift(injectionText);
+    }
 
-    // Track process
-    this.activeProcesses.set(sessionId, { process, adapter, sessionId });
+    // Track session
+    this.activeSessions.set(sessionId, { adapter, sessionId });
 
-    return sessionId;
+    return {
+      sessionId,
+      command,
+      injectionText,
+    };
   }
 
   async endSession(sessionId: string, summary: SessionSummary): Promise<void> {
-    const session = this.activeProcesses.get(sessionId);
+    const session = this.activeSessions.get(sessionId);
     if (!session) return;
 
     // Call adapter's session end handler
     await session.adapter.onSessionEnd(summary);
     
-    // Kill process
-    session.process.kill();
-    
     // Remove from tracking
-    this.activeProcesses.delete(sessionId);
+    this.activeSessions.delete(sessionId);
   }
 
   private createAdapter(type: 'claude' | 'codex' | 'aider' | 'gemini'): WorkerBeeAdapter {
@@ -102,6 +113,6 @@ export class WorkerBeeLauncher {
   }
 
   getActiveSessions(): string[] {
-    return Array.from(this.activeProcesses.keys());
+    return Array.from(this.activeSessions.keys());
   }
 }

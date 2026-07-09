@@ -1,5 +1,4 @@
-import { ChildProcess } from 'child_process';
-import { InjectionResult } from '@hiveory/nectar';
+import { InjectionResult } from '@hiveory/nectar-api';
 
 export interface AdapterConfig {
   projectPath: string;
@@ -14,6 +13,13 @@ export interface LaunchContext {
   openFiles: string[];
   gitDiff?: string;
   nectarContext: InjectionResult;
+}
+
+export interface CommandConfig {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+  injectionText?: string;
 }
 
 export interface SessionSummary {
@@ -31,8 +37,7 @@ export interface WorkerBeeAdapter {
   readonly name: string;
   readonly type: 'claude' | 'codex' | 'aider' | 'gemini';
 
-  launch(context: LaunchContext): Promise<ChildProcess>;
-  onOutput(data: string): void;
+  getCommand(context: LaunchContext): CommandConfig;
   onSessionEnd(summary: SessionSummary): Promise<void>;
   formatContext(context: InjectionResult): string;
 }

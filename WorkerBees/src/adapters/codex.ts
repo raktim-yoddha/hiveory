@@ -1,6 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
-import { WorkerBeeAdapter, LaunchContext, SessionSummary } from './types';
-import { Nectar } from '@hiveory/nectar';
+import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './types';
+import { Nectar } from '@hiveory/nectar-api';
 
 export class CodexAdapter implements WorkerBeeAdapter {
   readonly name = 'Codex CLI';
@@ -8,28 +7,21 @@ export class CodexAdapter implements WorkerBeeAdapter {
 
   constructor(private nectar: Nectar) {}
 
-  launch(context: LaunchContext): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const args = [];
-      
-      // Codex CLI accepts context via --context flag
-      const contextText = this.formatContext(context.nectarContext);
-      if (contextText) {
-        args.push('--context', contextText);
-      }
+  getCommand(context: LaunchContext): CommandConfig {
+    const args = [];
+    
+    // Codex CLI accepts context via --context flag
+    const contextText = this.formatContext(context.nectarContext);
+    if (contextText) {
+      args.push('--context', contextText);
+    }
 
-      const process = spawn('codex', [...args, context.task], {
-        cwd: context.paneId,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+    args.push(context.task);
 
-      process.on('error', reject);
-      process.on('spawn', () => resolve(process));
-    });
-  }
-
-  onOutput(data: string): void {
-    console.log('[Codex]', data);
+    return {
+      command: 'codex',
+      args,
+    };
   }
 
   async onSessionEnd(summary: SessionSummary): Promise<void> {
@@ -53,11 +45,11 @@ export class CodexAdapter implements WorkerBeeAdapter {
     }
   }
 
-  formatContext(context: import('@hiveory/nectar').InjectionResult): string {
+  formatContext(context: import('@hiveory/nectar-api').InjectionResult): string {
     if (context.chunks.length === 0) return '';
     
     return `Context:\n${context.chunks
-      .map((c, i) => `${i + 1}. [${c.sourceFile}] ${c.content.substring(0, 200)}...`)
+      .map((c, i) => `${i + 1}. [${c.source_file}] ${c.content.substring(0, 200)}...`)
       .join('\n')}\n`;
   }
 

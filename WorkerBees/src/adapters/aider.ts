@@ -1,6 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
-import { WorkerBeeAdapter, LaunchContext, SessionSummary } from './types';
-import { Nectar } from '@hiveory/nectar';
+import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './types';
+import { Nectar } from '@hiveory/nectar-api';
 
 export class AiderAdapter implements WorkerBeeAdapter {
   readonly name = 'Aider';
@@ -8,30 +7,21 @@ export class AiderAdapter implements WorkerBeeAdapter {
 
   constructor(private nectar: Nectar) {}
 
-  launch(context: LaunchContext): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const args = [];
-      
-      // Aider accepts context via --message or stdin
-      const contextText = this.formatContext(context.nectarContext);
-      if (contextText) {
-        args.push('--message', `${contextText}\n\n${context.task}`);
-      } else {
-        args.push('--message', context.task);
-      }
+  getCommand(context: LaunchContext): CommandConfig {
+    const args = [];
+    
+    // Aider accepts context via --message or stdin
+    const contextText = this.formatContext(context.nectarContext);
+    if (contextText) {
+      args.push('--message', `${contextText}\n\n${context.task}`);
+    } else {
+      args.push('--message', context.task);
+    }
 
-      const process = spawn('aider', args, {
-        cwd: context.paneId,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      process.on('error', reject);
-      process.on('spawn', () => resolve(process));
-    });
-  }
-
-  onOutput(data: string): void {
-    console.log('[Aider]', data);
+    return {
+      command: 'aider',
+      args,
+    };
   }
 
   async onSessionEnd(summary: SessionSummary): Promise<void> {
@@ -55,11 +45,11 @@ export class AiderAdapter implements WorkerBeeAdapter {
     }
   }
 
-  formatContext(context: import('@hiveory/nectar').InjectionResult): string {
+  formatContext(context: import('@hiveory/nectar-api').InjectionResult): string {
     if (context.chunks.length === 0) return '';
     
     return `# Project Context\n\n${context.chunks
-      .map((c, i) => `## ${c.sourceFile}\n${c.content}`)
+      .map((c, i) => `## ${c.source_file}\n${c.content}`)
       .join('\n\n')}\n`;
   }
 

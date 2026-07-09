@@ -1,6 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
-import { WorkerBeeAdapter, LaunchContext, SessionSummary } from './types';
-import { Nectar } from '@hiveory/nectar';
+import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './types';
+import { Nectar } from '@hiveory/nectar-api';
 
 export class ClaudeCodeAdapter implements WorkerBeeAdapter {
   readonly name = 'Claude Code';
@@ -8,30 +7,16 @@ export class ClaudeCodeAdapter implements WorkerBeeAdapter {
 
   constructor(private nectar: Nectar) {}
 
-  launch(context: LaunchContext): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const args = [];
-      
-      // Add context as a system message
-      const contextText = this.formatContext(context.nectarContext);
-      if (contextText) {
-        // Claude Code accepts context via stdin or file
-        // For now, we'll prepend it to the task
-      }
+  getCommand(context: LaunchContext): CommandConfig {
+    const args = [];
+    
+    // Claude Code accepts the task as the main argument
+    args.push(context.task);
 
-      const process = spawn('claude', [...args, context.task], {
-        cwd: context.paneId,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-
-      process.on('error', reject);
-      process.on('spawn', () => resolve(process));
-    });
-  }
-
-  onOutput(data: string): void {
-    // Handle Claude Code output
-    console.log('[Claude Code]', data);
+    return {
+      command: 'claude',
+      args,
+    };
   }
 
   async onSessionEnd(summary: SessionSummary): Promise<void> {
@@ -57,11 +42,11 @@ export class ClaudeCodeAdapter implements WorkerBeeAdapter {
     }
   }
 
-  formatContext(context: import('@hiveory/nectar').InjectionResult): string {
+  formatContext(context: import('@hiveory/nectar-api').InjectionResult): string {
     if (context.chunks.length === 0) return '';
     
     return `<context>\n${context.chunks
-      .map((c, i) => `### Context ${i + 1} (score: ${c.score.toFixed(3)})\nSource: ${c.sourceFile}\n\n${c.content}`)
+      .map((c, i) => `### Context ${i + 1} (score: ${c.score.toFixed(3)})\nSource: ${c.source_file}\n\n${c.content}`)
       .join('\n\n---\n\n')}\n</context>\n`;
   }
 

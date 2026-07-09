@@ -1,6 +1,5 @@
-import { spawn, ChildProcess } from 'child_process';
-import { WorkerBeeAdapter, LaunchContext, SessionSummary } from './types';
-import { Nectar } from '@hiveory/nectar';
+import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './types';
+import { Nectar } from '@hiveory/nectar-api';
 
 export class GeminiAdapter implements WorkerBeeAdapter {
   readonly name = 'Gemini CLI';
@@ -8,27 +7,20 @@ export class GeminiAdapter implements WorkerBeeAdapter {
 
   constructor(private nectar: Nectar) {}
 
-  launch(context: LaunchContext): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const args = [];
-      
-      const contextText = this.formatContext(context.nectarContext);
-      if (contextText) {
-        args.push('--context', contextText);
-      }
+  getCommand(context: LaunchContext): CommandConfig {
+    const args = [];
+    
+    const contextText = this.formatContext(context.nectarContext);
+    if (contextText) {
+      args.push('--context', contextText);
+    }
 
-      const process = spawn('gemini', [...args, context.task], {
-        cwd: context.paneId,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+    args.push(context.task);
 
-      process.on('error', reject);
-      process.on('spawn', () => resolve(process));
-    });
-  }
-
-  onOutput(data: string): void {
-    console.log('[Gemini]', data);
+    return {
+      command: 'gemini',
+      args,
+    };
   }
 
   async onSessionEnd(summary: SessionSummary): Promise<void> {
@@ -52,11 +44,11 @@ export class GeminiAdapter implements WorkerBeeAdapter {
     }
   }
 
-  formatContext(context: import('@hiveory/nectar').InjectionResult): string {
+  formatContext(context: import('@hiveory/nectar-api').InjectionResult): string {
     if (context.chunks.length === 0) return '';
     
     return `Context:\n${context.chunks
-      .map((c, i) => `${i + 1}. ${c.sourceFile}: ${c.content.substring(0, 150)}...`)
+      .map((c, i) => `${i + 1}. ${c.source_file}: ${c.content.substring(0, 150)}...`)
       .join('\n')}\n`;
   }
 

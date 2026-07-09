@@ -2,3 +2,4 @@ packages:
   - 'Hive'
   - 'Nectar'
   - 'WorkerBees'
+  - 'NectarAPI'
