@@ -3,13 +3,19 @@ import { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from '
 import { ClaudeCodeAdapter } from './adapters/claude-code';
 import { CodexAdapter } from './adapters/codex';
 import { AiderAdapter } from './adapters/aider';
-import { GeminiAdapter } from './adapters/gemini';
+import { AntigravityAdapter } from './adapters/antigravity';
+import { OpenCodeAdapter } from './adapters/opencode';
+import { KimiCodeAdapter } from './adapters/kimi-code';
+import { ClineAdapter } from './adapters/cline';
+import { CursorAdapter } from './adapters/cursor';
+import { KiroAdapter } from './adapters/kiro';
+import { KiloAdapter } from './adapters/kilo';
 
 export interface LaunchOptions {
   projectPath: string;
   paneId: string;
   task: string;
-  agentType: 'claude' | 'codex' | 'aider' | 'gemini';
+  agentType: 'claude' | 'codex' | 'aider' | 'antigravity' | 'opencode' | 'kimi' | 'cline' | 'cursor' | 'kiro' | 'kilo';
   openFiles?: string[];
   gitDiff?: string;
 }
@@ -99,7 +105,7 @@ export class WorkerBeeLauncher {
     this.activeSessions.delete(sessionId);
   }
 
-  private createAdapter(type: 'claude' | 'codex' | 'aider' | 'gemini'): WorkerBeeAdapter {
+  private createAdapter(type: 'claude' | 'codex' | 'aider' | 'antigravity' | 'opencode' | 'kimi' | 'cline' | 'cursor' | 'kiro' | 'kilo'): WorkerBeeAdapter {
     switch (type) {
       case 'claude':
         return new ClaudeCodeAdapter(this.nectar);
@@ -107,8 +113,20 @@ export class WorkerBeeLauncher {
         return new CodexAdapter(this.nectar);
       case 'aider':
         return new AiderAdapter(this.nectar);
-      case 'gemini':
-        return new GeminiAdapter(this.nectar);
+      case 'antigravity':
+        return new AntigravityAdapter(this.nectar);
+      case 'opencode':
+        return new OpenCodeAdapter(this.nectar);
+      case 'kimi':
+        return new KimiCodeAdapter(this.nectar);
+      case 'cline':
+        return new ClineAdapter(this.nectar);
+      case 'cursor':
+        return new CursorAdapter(this.nectar);
+      case 'kiro':
+        return new KiroAdapter(this.nectar);
+      case 'kilo':
+        return new KiloAdapter(this.nectar);
     }
   }
 

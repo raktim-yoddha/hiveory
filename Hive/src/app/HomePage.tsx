@@ -324,10 +324,13 @@ export default function HomePage() {
       "claude-code": "Claude Code",
       "codex-cli": "Codex CLI",
       aider: "Aider",
-      "gemini-cli": "Gemini CLI",
+      "antigravity-cli": "Antigravity CLI",
       opencode: "OpenCode",
       "kimi-code": "Kimi Code",
       cline: "Cline",
+      cursor: "Cursor CLI",
+      kiro: "Kiro CLI",
+      kilo: "Kilo CLI",
     };
 
     const newWorkerBee: WorkerBee = {
@@ -782,13 +785,15 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Main Panel */}
-        <div className="flex-1 flex overflow-hidden min-w-0">
-          {sidebarMode === "editor" ? (
-            <EditorPanel openFile={openFile} projectPath={projectPath} />
-          ) : (
-            <WorkerBeesPanel workingDir={projectPath} />
-          )}
+        {/* Main Panel — both panels stay mounted at all times so their
+            xterm/Monaco instances and PTY processes survive tab switches.
+            CSS `hidden` (display:none) hides the inactive one without
+            unmounting its React subtree. */}
+        <div className={`flex-1 flex overflow-hidden min-w-0 ${sidebarMode !== "editor" ? "hidden" : ""}`}>
+          <EditorPanel openFile={openFile} projectPath={projectPath} />
+        </div>
+        <div className={`flex-1 flex overflow-hidden min-w-0 ${sidebarMode !== "ade" ? "hidden" : ""}`}>
+          <WorkerBeesPanel workingDir={projectPath} />
         </div>
       </div>
 

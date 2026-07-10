@@ -54,7 +54,7 @@ export function envForCli(command: string, apiKeys: ApiKeys): Record<string, str
     case "codex":
       if (apiKeys.openai) env.OPENAI_API_KEY = apiKeys.openai;
       break;
-    case "gemini":
+    case "agy":
       if (apiKeys.google) {
         env.GEMINI_API_KEY = apiKeys.google;
         env.GOOGLE_API_KEY = apiKeys.google;
@@ -72,6 +72,13 @@ export function envForCli(command: string, apiKeys: ApiKeys): Record<string, str
       if (apiKeys.moonshot) env.MOONSHOT_API_KEY = apiKeys.moonshot;
       break;
     case "cline":
+      if (apiKeys.anthropic) env.ANTHROPIC_API_KEY = apiKeys.anthropic;
+      if (apiKeys.openrouter) env.OPENROUTER_API_KEY = apiKeys.openrouter;
+      break;
+    case "cursor":
+    case "kiro":
+    case "kilo":
+      if (apiKeys.openai) env.OPENAI_API_KEY = apiKeys.openai;
       if (apiKeys.anthropic) env.ANTHROPIC_API_KEY = apiKeys.anthropic;
       if (apiKeys.openrouter) env.OPENROUTER_API_KEY = apiKeys.openrouter;
       break;

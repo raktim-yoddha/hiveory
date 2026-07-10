@@ -890,8 +890,8 @@ async fn nectar_index_file(
         params![&req.relative_path],
     ).map_err(|e| format!("Failed to clear old FTS rows: {}", e))?;
     conn.execute(
-        "INSERT INTO chunks_fts (rowid, content, source_file, heading)
-         SELECT rowid, content, source_file, heading FROM chunks WHERE source_file = ?",
+        "INSERT INTO chunks_fts (content, source_file, heading)
+         SELECT content, source_file, heading FROM chunks WHERE source_file = ?",
         params![&req.relative_path],
     ).map_err(|e| format!("Failed to rebuild FTS index: {}", e))?;
     
@@ -1039,7 +1039,7 @@ async fn nectar_format_context(
                     .join("\n\n---\n\n")
             )
         }
-        "codex" | "aider" | "gemini" => {
+        "codex" | "aider" | "agy" | "opencode" | "kimi" | "cline" | "cursor" | "kiro" | "kilo" => {
             format!(
                 "Context:\n{}",
                 req.chunks

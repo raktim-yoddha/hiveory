@@ -16,9 +16,12 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
   const maximizedPane = useWorkerBeesStore((state) => state.maximizedPane);
   const setMaximizedPane = useWorkerBeesStore((state) => state.setMaximizedPane);
   const gridLayout = useWorkerBeesStore((state) => state.gridLayout);
+  const reorderWorkerBees = useWorkerBeesStore((state) => state.reorderWorkerBees);
 
   const [editingBee, setEditingBee] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   // Debug: confirm every WorkerBee (and therefore every grid row) is actually
   // mounted in the tree, so a missing row can be diagnosed as CSS vs. data.
@@ -76,12 +79,19 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
     4: "grid-cols-4",
   };
 
-  const getGridColumns = () => {
-    if (gridLayout !== "auto") return FIXED_COLUMN_CLASSES[gridLayout];
+  const getGridColsCount = () => {
     const count = workerBees.length;
-    if (count <= 1) return "grid-cols-1";
-    if (count <= 4) return "grid-cols-2";
-    return "grid-cols-4";
+    if (gridLayout !== "auto") {
+      // Never show more columns than panes — avoids empty ghost columns.
+      return Math.min(gridLayout as number, Math.max(1, count));
+    }
+    if (count <= 1) return 1;
+    if (count <= 2) return 2;
+    if (count <= 4) return 2;
+    if (count <= 6) return 3;
+    if (count <= 9) return 3;
+    if (count <= 12) return 4;
+    return 4; // 13-16
   };
 
   return (
@@ -100,62 +110,77 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
               </div>
             </div>
           </div>
-        ) : maximizedPane ? (
-          <div className="h-full overflow-hidden rounded-xl glass shadow-glass">
-            {(() => {
-              const bee = workerBees.find((b) => b.id === maximizedPane);
-              if (!bee) return null;
-              return (
-                <WorkerBeePane
-                  paneId={maximizedPane}
-                  workingDir={workingDir}
-                  workerBee={bee}
-                  onRename={
-                    editingBee === maximizedPane
-                      ? saveRename
-                      : () => startRename(maximizedPane)
-                  }
-                  isEditing={editingBee === maximizedPane}
-                  editValue={editValue}
-                  onEditChange={setEditValue}
-                  onCancelRename={cancelRename}
-                  onClose={() => handleRemoveWorkerBee(maximizedPane)}
-                  onToggleMaximize={() => toggleMaximize(maximizedPane)}
-                  isMaximized={true}
-                />
-              );
-            })()}
-          </div>
         ) : (
           <div
-            className={`grid gap-2 ${getGridColumns()} min-h-full`}
-            style={{ gridAutoRows: "minmax(240px, 1fr)" }}
+            className="grid gap-2 h-full"
+            style={{
+              gridTemplateColumns: maximizedPane ? "1fr" : `repeat(${getGridColsCount()}, minmax(0, 1fr))`,
+              gridAutoRows: maximizedPane ? "1fr" : "1fr",
+              minHeight: maximizedPane ? "100%" : `${Math.ceil(workerBees.length / getGridColsCount()) * 240}px`,
+            }}
           >
-            {workerBees.map((bee) => (
-              <div
-                key={bee.id}
-                className="flex flex-col relative overflow-hidden rounded-xl glass shadow-glass transition-all duration-300 hover:shadow-glass-lg h-full"
-                style={{ minHeight: "240px" }}
-              >
-                <WorkerBeePane
-                  paneId={bee.id}
-                  workingDir={workingDir}
-                  workerBee={bee}
-                  onRename={
-                    editingBee === bee.id
-                      ? saveRename
-                      : () => startRename(bee.id)
-                  }
-                  isEditing={editingBee === bee.id}
-                  editValue={editValue}
-                  onEditChange={setEditValue}
-                  onCancelRename={cancelRename}
-                  onClose={() => handleRemoveWorkerBee(bee.id)}
-                  onToggleMaximize={() => toggleMaximize(bee.id)}
-                  isMaximized={false}
-                />
-              </div>
-            ))}
+            {workerBees.map((bee, index) => {
+              const isThisMaximized = maximizedPane === bee.id;
+              const shouldHide = maximizedPane !== null && !isThisMaximized;
+              return (
+                <div
+                  key={bee.id}
+                  draggable={!isThisMaximized}
+                  onDragStart={(e) => {
+                    const target = e.target as HTMLElement;
+                    const isHeader = target.closest(".glass-toolbar");
+                    if (!isHeader) {
+                      e.preventDefault();
+                      return;
+                    }
+                    setDraggedIndex(index);
+                    e.dataTransfer.effectAllowed = "move";
+                  }}
+                  onDragEnd={() => {
+                    setDraggedIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (draggedIndex !== null && draggedIndex !== index) {
+                      setDragOverIndex(index);
+                    }
+                  }}
+                  onDrop={() => {
+                    if (draggedIndex !== null && draggedIndex !== index) {
+                      reorderWorkerBees(draggedIndex, index);
+                    }
+                    setDraggedIndex(null);
+                    setDragOverIndex(null);
+                  }}
+                  className={`flex flex-col relative overflow-hidden rounded-xl glass shadow-glass transition-all duration-300 hover:shadow-glass-lg ${
+                    shouldHide ? "hidden" : "h-full"
+                  } ${
+                    draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
+                  } ${
+                    dragOverIndex === index ? "border border-bee-gold/60 shadow-[0_0_12px_rgba(201,162,39,0.3)]" : ""
+                  }`}
+                >
+                  <WorkerBeePane
+                    paneId={bee.id}
+                    workingDir={workingDir}
+                    workerBee={bee}
+                    onRename={
+                      editingBee === bee.id
+                        ? saveRename
+                        : () => startRename(bee.id)
+                    }
+                    isEditing={editingBee === bee.id}
+                    editValue={editValue}
+                    onEditChange={setEditValue}
+                    onCancelRename={cancelRename}
+                    onClose={() => handleRemoveWorkerBee(bee.id)}
+                    onToggleMaximize={() => toggleMaximize(bee.id)}
+                    isMaximized={isThisMaximized}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

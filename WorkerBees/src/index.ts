@@ -3,4 +3,10 @@ export { WorkerBeeAdapter, AdapterConfig, LaunchContext, SessionSummary, Command
 export { ClaudeCodeAdapter } from './adapters/claude-code';
 export { CodexAdapter } from './adapters/codex';
 export { AiderAdapter } from './adapters/aider';
-export { GeminiAdapter } from './adapters/gemini';
+export { AntigravityAdapter } from './adapters/antigravity';
+export { OpenCodeAdapter } from './adapters/opencode';
+export { KimiCodeAdapter } from './adapters/kimi-code';
+export { ClineAdapter } from './adapters/cline';
+export { CursorAdapter } from './adapters/cursor';
+export { KiroAdapter } from './adapters/kiro';
+export { KiloAdapter } from './adapters/kilo';

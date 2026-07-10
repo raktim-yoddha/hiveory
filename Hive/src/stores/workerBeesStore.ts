@@ -23,6 +23,7 @@ interface WorkerBeesState {
   setMaximizedPane: (paneId: string | null) => void;
   gridLayout: GridLayout;
   setGridLayout: (layout: GridLayout) => void;
+  reorderWorkerBees: (fromIndex: number, toIndex: number) => void;
 }
 
 export const useWorkerBeesStore = create<WorkerBeesState>((set) => ({
@@ -44,4 +45,11 @@ export const useWorkerBeesStore = create<WorkerBeesState>((set) => ({
   setMaximizedPane: (paneId) => set({ maximizedPane: paneId }),
   gridLayout: "auto",
   setGridLayout: (layout) => set({ gridLayout: layout }),
+  reorderWorkerBees: (fromIndex, toIndex) =>
+    set((state) => {
+      const result = Array.from(state.workerBees);
+      const [removed] = result.splice(fromIndex, 1);
+      result.splice(toIndex, 0, removed);
+      return { workerBees: result };
+    }),
 }));

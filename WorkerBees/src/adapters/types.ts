@@ -35,7 +35,7 @@ export interface SessionSummary {
 
 export interface WorkerBeeAdapter {
   readonly name: string;
-  readonly type: 'claude' | 'codex' | 'aider' | 'gemini';
+  readonly type: 'claude' | 'codex' | 'aider' | 'antigravity' | 'opencode' | 'kimi' | 'cline' | 'cursor' | 'kiro' | 'kilo';
 
   getCommand(context: LaunchContext): CommandConfig;
   onSessionEnd(summary: SessionSummary): Promise<void>;

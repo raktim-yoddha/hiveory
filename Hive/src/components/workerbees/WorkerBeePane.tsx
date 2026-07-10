@@ -83,6 +83,33 @@ export default function WorkerBeePane({
   const apiKeys = useSettingsStore((s) => s.apiKeys);
   const nectarTokenBudget = useSettingsStore((s) => s.nectarTokenBudget);
 
+  const [paneWidth, setPaneWidth] = useState(0);
+  const [paneHeight, setPaneHeight] = useState(0);
+
+  const getFontSize = () => {
+    if (paneWidth < 280) return 9;
+    if (paneWidth < 380) return 11;
+    if (paneWidth < 500) return 12;
+    return 14;
+  };
+
+  const fontSize = getFontSize();
+
+  useEffect(() => {
+    if (terminalInstance.current) {
+      terminalInstance.current.options.fontSize = fontSize;
+      if (fitAddonRef.current) {
+        try {
+          fitAddonRef.current.fit();
+          const { rows, cols } = terminalInstance.current;
+          invoke("resize_terminal", { paneId, rows, cols }).catch(console.error);
+        } catch (e) {
+          console.warn("Failed to refit terminal after font size change:", e);
+        }
+      }
+    }
+  }, [fontSize, paneId]);
+
   const displayName = workerBee.customName || workerBee.cliName;
 
   const writeToProcess = (data: string) => {
@@ -252,7 +279,7 @@ export default function WorkerBeePane({
         const options: ITerminalOptions = {
           cursorBlink: true,
           cursorStyle: "block",
-          fontSize: 14,
+          fontSize: getFontSize(),
           fontFamily: 'Cascadia Code, Consolas, "Courier New", monospace',
           fontWeight: "400",
           fontWeightBold: "700",
@@ -294,6 +321,20 @@ export default function WorkerBeePane({
         terminal.loadAddon(searchAddon);
         fitAddonRef.current = fitAddon;
 
+        // Custom keyboard intercept to ensure Ctrl+C sends SIGINT to process, not kills pane
+        terminal.attachCustomKeyEventHandler((arg) => {
+          if (arg.ctrlKey && arg.code === "KeyC") {
+            if (terminal?.hasSelection()) {
+              return false; // let xterm handle copying
+            }
+            if (arg.type === "keydown") {
+              writeToProcess("\x03");
+            }
+            return false;
+          }
+          return true;
+        });
+
         terminal.open(terminalRef.current!);
         terminalInstance.current = terminal;
 
@@ -317,7 +358,6 @@ export default function WorkerBeePane({
         const syncSize = () => {
           if (disposed || !terminal) return;
           const { rows, cols } = terminal;
-          console.log(`[WorkerBeePane - ${paneId}] syncSize: rows=${rows}, cols=${cols}, proposed=`, fitAddonRef.current?.proposeDimensions());
           invoke("resize_terminal", { paneId, rows, cols }).catch(console.error);
         };
 
@@ -344,7 +384,14 @@ export default function WorkerBeePane({
         handleResize = fitAndSync;
         window.addEventListener("resize", handleResize);
 
-        const resizeObserver = new ResizeObserver(() => fitAndSync());
+        const resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const { width, height } = entry.contentRect;
+            setPaneWidth(width);
+            setPaneHeight(height);
+          }
+          fitAndSync();
+        });
         resizeObserver.observe(terminalRef.current!);
         observerRef = resizeObserver;
 
@@ -414,28 +461,30 @@ export default function WorkerBeePane({
               onDoubleClick={onRename}
               className="flex items-center gap-1.5 text-xs text-bee-text font-medium cursor-pointer hover:text-bee-gold transition-colors truncate"
             >
-              <span
-                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                  spawnState === "error"
-                    ? "bg-bee-err"
-                    : spawnState === "connecting"
-                      ? "bg-bee-warn animate-pulse"
-                      : "bg-bee-gold shadow-glow"
-                }`}
-                title={
-                  spawnState === "error"
-                    ? "Failed to start"
-                    : spawnState === "connecting"
-                      ? "Starting…"
-                      : "Running"
-                }
-              />
-              {displayName}
+              {paneWidth >= 160 && (
+                <span
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    spawnState === "error"
+                      ? "bg-bee-err"
+                      : spawnState === "connecting"
+                        ? "bg-bee-warn animate-pulse"
+                        : "bg-bee-gold shadow-glow"
+                  }`}
+                  title={
+                    spawnState === "error"
+                      ? "Failed to start"
+                      : spawnState === "connecting"
+                        ? "Starting…"
+                        : "Running"
+                  }
+                />
+              )}
+              <span className="truncate">{displayName}</span>
             </span>
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {onToggleMaximize && (
+          {onToggleMaximize && paneWidth >= 240 && (
             <button
               onClick={onToggleMaximize}
               className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
@@ -444,20 +493,24 @@ export default function WorkerBeePane({
               {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
             </button>
           )}
-          <button
-            onClick={handleCopy}
-            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
-            title="Copy selection"
-          >
-            <Copy size={12} />
-          </button>
-          <button
-            onClick={handleClear}
-            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
-            title="Clear terminal"
-          >
-            <Eraser size={12} />
-          </button>
+          {paneWidth >= 240 && (
+            <button
+              onClick={handleCopy}
+              className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
+              title="Copy selection"
+            >
+              <Copy size={12} />
+            </button>
+          )}
+          {paneWidth >= 240 && (
+            <button
+              onClick={handleClear}
+              className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textDim hover:text-bee-text transition-colors"
+              title="Clear terminal"
+            >
+              <Eraser size={12} />
+            </button>
+          )}
           {onClose && (
             <button
               onClick={(e) => {

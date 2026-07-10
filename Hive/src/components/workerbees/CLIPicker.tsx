@@ -4,7 +4,7 @@ import { Bot } from 'lucide-react';
 
 // v1 scope per AGENTS.md §5: Claude Code, Codex CLI, Aider, Gemini CLI only.
 // Extended with OpenCode, Kimi Code, Cline for broader CLI agent support.
-export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'gemini-cli' | 'opencode' | 'kimi-code' | 'cline';
+export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'antigravity-cli' | 'opencode' | 'kimi-code' | 'cline' | 'cursor' | 'kiro' | 'kilo';
 
 export interface CLIInfo {
   id: CLIType;
@@ -18,20 +18,26 @@ export const CLI_COMMANDS: Record<CLIType, string> = {
   'claude-code': 'claude',
   'codex-cli': 'codex',
   aider: 'aider',
-  'gemini-cli': 'gemini',
+  'antigravity-cli': 'agy',
   'opencode': 'opencode',
   'kimi-code': 'kimi',
   'cline': 'cline',
+  cursor: 'cursor',
+  kiro: 'kiro',
+  kilo: 'kilo',
 };
 
 const CLI_OPTIONS: CLIInfo[] = [
   { id: 'claude-code', name: 'Claude Code', description: 'Anthropic Claude CLI · claude' },
   { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI · codex' },
   { id: 'aider', name: 'Aider', description: 'AI pair programming tool · aider' },
-  { id: 'gemini-cli', name: 'Gemini CLI', description: 'Google Gemini CLI · gemini' },
+  { id: 'antigravity-cli', name: 'Antigravity CLI', description: 'Google Antigravity CLI · antigravity' },
   { id: 'opencode', name: 'OpenCode', description: 'Open-source coding assistant · opencode' },
   { id: 'kimi-code', name: 'Kimi Code', description: 'Moonshot AI coding assistant · kimi' },
   { id: 'cline', name: 'Cline', description: 'Claude-powered coding agent · cline' },
+  { id: 'cursor', name: 'Cursor CLI', description: 'Cursor editor AI CLI · cursor' },
+  { id: 'kiro', name: 'Kiro CLI', description: 'Kiro AI coding helper · kiro' },
+  { id: 'kilo', name: 'Kilo CLI', description: 'Kilo AI terminal agent · kilo' },
 ];
 
 interface CLIPickerProps {
