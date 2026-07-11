@@ -1,7 +1,7 @@
 import initSqlJs from 'sql.js';
 import path from 'path';
 import fs from 'fs/promises';
-import { initializeSchema, getSchemaVersion, setSchemaVersion } from './schema';
+import { initializeSchema, getSchemaVersion, setSchemaVersion } from './schema.js';
 
 const CURRENT_SCHEMA_VERSION = 1;
 
@@ -35,13 +35,32 @@ export class NectarDatabase {
   }
 
   private migrate(): void {
+    // If the DB is already populated (e.g. created by the Rust backend, which
+    // uses an FTS5 table sql.js can't create), skip schema init entirely —
+    // re-running initializeSchema would throw on the FTS5 CREATE.
+    if (this.tableExists('chunks')) return;
+
     const version = getSchemaVersion(this.db);
-    
+
     if (version === 0) {
       initializeSchema(this.db);
       setSchemaVersion(this.db, CURRENT_SCHEMA_VERSION);
     }
     // Future migrations would go here
+  }
+
+  private tableExists(name: string): boolean {
+    try {
+      const stmt = this.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"
+      );
+      stmt.bind([name]);
+      const found = stmt.step();
+      stmt.free();
+      return found;
+    } catch {
+      return false;
+    }
   }
 
   getDatabase(): initSqlJs.Database {

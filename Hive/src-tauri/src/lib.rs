@@ -524,6 +524,65 @@ async fn get_project_path() -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Return the absolute path to the Nectar MCP server script.
+///
+/// The server now lives in the standalone `@hiveory/nectar-mcp` package at
+/// `Nectar/nectar-mcp/dist/server.js` (built from TypeScript), not the old
+/// `Hive/mcp-server/index.js`. We probe a few candidate locations relative to
+/// the app cwd so this works in dev (cwd = Hive) and from the repo root.
+#[tauri::command]
+async fn get_nectar_mcp_path() -> Result<String, String> {
+    let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
+
+    let candidates = [
+        // dev: cwd is the Hive/ dir
+        cwd.join("..")
+            .join("Nectar")
+            .join("nectar-mcp")
+            .join("dist")
+            .join("server.js"),
+        // repo root as cwd
+        cwd.join("Nectar")
+            .join("nectar-mcp")
+            .join("dist")
+            .join("server.js"),
+    ];
+
+    for candidate in candidates.iter() {
+        if candidate.exists() {
+            return Ok(candidate.to_string_lossy().to_string());
+        }
+    }
+
+    Err(format!(
+        "Nectar MCP server not found. Looked in: {:?}",
+        candidates
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+    ))
+}
+
+/// Create a directory and all its parents (like `mkdir -p`).
+#[tauri::command]
+async fn ensure_dir(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory {}: {}", path, e))
+}
+
+/// Run a one-off command and return stdout (used for CLI MCP registration).
+#[tauri::command]
+async fn run_command(command: String, args: Vec<String>) -> Result<String, String> {
+    let output = std::process::Command::new(&command)
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to run {}: {}", command, e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("{} failed: {}", command, stderr));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 #[tauri::command]
 async fn get_home_dir() -> Result<String, String> {
     std::env::var("USERPROFILE")
@@ -1440,7 +1499,10 @@ pub fn run() {
             nectar_format_context,
             nectar_log_session,
             nectar_close,
-            git_status
+            git_status,
+            get_nectar_mcp_path,
+            ensure_dir,
+            run_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

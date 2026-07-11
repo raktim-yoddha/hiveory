@@ -5,7 +5,10 @@ export interface Chunk {
   source_file: string;
   chunk_index: number;
   content: string;
+  // Optional: Rust-produced keyword-only DBs omit the embedding column.
   embedding?: number[];
+  // Optional: present in Rust-produced DBs (heading of the source section).
+  heading?: string;
   created_at: number;
   updated_at: number;
 }
@@ -87,11 +90,16 @@ export function initializeSchema(db: initSqlJs.Database): void {
 }
 
 export function getSchemaVersion(db: initSqlJs.Database): number {
-  const stmt = db.prepare('SELECT value FROM metadata WHERE key = ?');
-  stmt.bind(['schema_version']);
-  const result = stmt.getAsObject() as { value: string } | undefined;
-  stmt.free();
-  return result ? parseInt(result.value, 10) : 0;
+  try {
+    const stmt = db.prepare('SELECT value FROM metadata WHERE key = ?');
+    stmt.bind(['schema_version']);
+    const result = stmt.getAsObject() as { value: string } | undefined;
+    stmt.free();
+    return result && result.value ? parseInt(result.value, 10) : 0;
+  } catch {
+    // No metadata table yet (e.g. a Rust-produced DB) -> treat as version 0.
+    return 0;
+  }
 }
 
 export function setSchemaVersion(db: initSqlJs.Database, version: number): void {

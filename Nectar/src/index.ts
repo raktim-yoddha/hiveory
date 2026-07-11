@@ -1,7 +1,7 @@
-import { NectarDatabase } from './db';
-import { MemoryManager } from './memory';
-import { SearchEngine } from './search';
-import { InjectionPipeline, InjectionConfig, InjectionContext } from './injection';
+import { NectarDatabase } from './db/index.js';
+import { MemoryManager } from './memory/index.js';
+import { SearchEngine } from './search/index.js';
+import { InjectionPipeline, InjectionConfig, InjectionContext } from './injection/index.js';
 
 export class Nectar {
   private db: NectarDatabase;
@@ -111,7 +111,7 @@ export class Nectar {
   }
 }
 
-export * from './db';
-export * from './memory';
-export * from './search';
-export * from './injection';
+export * from './db/index.js';
+export * from './memory/index.js';
+export * from './search/index.js';
+export * from './injection/index.js';

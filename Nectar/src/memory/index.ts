@@ -3,7 +3,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
-import { NectarDatabase } from '../db';
+import { NectarDatabase } from '../db/index.js';
 
 export interface MemoryFile {
   path: string;

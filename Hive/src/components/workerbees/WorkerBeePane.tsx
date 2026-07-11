@@ -20,7 +20,8 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore, envForCli } from "@/stores/settingsStore";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
-import { Nectar, type InjectedChunk } from "@/lib/nectar";
+import { Nectar } from "@/lib/nectar";
+import { buildCliConfig } from "@hiveory/nectar-mcp/cli-configs";
 
 // A WorkerBee pane is a CLI agent process (Claude Code, Codex CLI, Aider,
 // Gemini CLI, OpenCode, Kimi Code, Cline, ...) — a fundamentally different
@@ -239,10 +240,6 @@ function isMeaningfulChunk(content: string): boolean {
   return content.replace(/<!--[\s\S]*?-->/g, "").trim().length > 0;
 }
 
-// Bootstrap query surfaces general project context AND recent session handoff data.
-const BOOTSTRAP_QUERY =
-  "project overview architecture conventions decisions patterns bugs knowledge session handoff previous task agent history";
-
 // Injected context is written straight into the pty's stdin, not typed by a
 // human through xterm's own paste handling. Almost every CLI chat input
 // (readline, Ink, prompt_toolkit, ...) treats a bare `\n` as "Enter pressed,"
@@ -254,6 +251,39 @@ const BOOTSTRAP_QUERY =
 // inconsistent across CLIs and flaky over a raw Windows ConPTY passthrough).
 function flattenForStdin(text: string): string {
   return text.replace(/\r?\n+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+// Write MCP server config so the CLI registers nectar_query as a tool.
+//
+// The per-CLI knowledge (which file / which command, and the fragile Cline
+// `cmd /c` workaround) lives in the standalone @hiveory/nectar-mcp package as
+// PURE builders. This function only resolves paths and performs the actual I/O
+// via Tauri `invoke()`. Adding a CLI is a change in that package, not here.
+async function ensureMCPConfigForCLI(cli: string, projectPath: string): Promise<void> {
+  const mcpServerPath = await invoke<string>("get_nectar_mcp_path");
+  const action = buildCliConfig(cli, { mcpServerPath, projectPath });
+
+  switch (action.kind) {
+    case "noop":
+      console.log(`[Nectar] ${action.reason}`);
+      return;
+
+    case "writeFile": {
+      // Ensure parent dir exists, merge with any existing config, then write.
+      const dir = action.path.slice(0, Math.max(action.path.lastIndexOf("/"), action.path.lastIndexOf("\\")));
+      if (dir) await invoke("ensure_dir", { path: dir });
+      let existing: string | null = null;
+      try { existing = await invoke<string>("read_file", { path: action.path }); } catch { existing = null; }
+      await invoke("write_file", { path: action.path, content: action.merge(existing) });
+      console.log(`[Nectar] Wrote MCP config for ${cli} -> ${action.path}`);
+      return;
+    }
+
+    case "runCommand":
+      await invoke("run_command", { command: action.command, args: action.args });
+      console.log(`[Nectar] Registered MCP for ${cli} via: ${action.command} ${action.args.join(" ")}`);
+      return;
+  }
 }
 
 export default function WorkerBeePane({
@@ -275,7 +305,6 @@ export default function WorkerBeePane({
   const [spawnState, setSpawnState] = useState<"connecting" | "running" | "error" | "notFound">("connecting");
   const [stalled, setStalled] = useState(false);
   const apiKeys = useSettingsStore((s) => s.apiKeys);
-  const nectarTokenBudget = useSettingsStore((s) => s.nectarTokenBudget);
 
   const [paneWidth, setPaneWidth] = useState(0);
   const [paneHeight, setPaneHeight] = useState(0);
@@ -482,6 +511,16 @@ export default function WorkerBeePane({
         }
       }
 
+      // For MCP-capable CLIs, write their config before spawning so the
+      // Nectar MCP server (with nectar_query tool) is registered at boot.
+      if (spawnDir) {
+        try {
+          await ensureMCPConfigForCLI(workerBee.cli, spawnDir);
+        } catch (e) {
+          console.warn(`[Nectar] MCP config failed for ${workerBee.cli}, using stdin fallback:`, e);
+        }
+      }
+
       try {
         const command = workerBee.cli;
         const args = workerBee.args || [];
@@ -589,107 +628,59 @@ export default function WorkerBeePane({
         };
         readOutput();
 
-        // WorkerBees are forced through Nectar retrieval per AGENTS.md
-        // §4.2: read project memory (via the real FTS5-backed index, not a
-        // hand-rolled file concatenation), inject it as the agent's first
-        // turn, and log what was retrieved for audit. Runs in the
-        // background so it never delays the terminal becoming usable.
+        // Memory injection: feed the agent the actual handoff text from the
+        // previous session (not just a pointer).  We keep it short and flat
+        // (≈1200 chars, no embedded newlines) so the CLI's readline treats it
+        // as one atomic input — the old approach of piping multi-line content
+        // through raw stdin caused every embedded \n to be read as "Enter",
+        // fragmenting the message.  The flat text is submitted with \n (which
+        // CLIs universally treat as line-end) after a generous boot delay.
         if (spawnDir) {
           (async () => {
             try {
               const nectar = await Nectar.create(spawnDir!);
 
-              // Brief pause so the CLI finishes its splash screen before we
-              // write context to its stdin. 500ms is enough for any local CLI
-              // (Claude Code, Codex, Aider, etc.) to be ready for input.
-              await new Promise((resolve) => setTimeout(resolve, 500));
+              // Wait for the CLI to finish its splash screen and initialise
+              // its readline.  Most CLIs (Claude Code, Codex, Aider, ...)
+              // take 1-2 s to boot on Windows; 2.5 s covers the slow case.
+              await new Promise((resolve) => setTimeout(resolve, 2500));
               if (disposed || !terminal) return;
 
-              // Re-index memory files (incremental — unchanged files are skipped).
-              const { files } = await nectar.listMemoryFiles();
-              for (const file of files) {
-                await nectar.indexFile(file);
-              }
-
-              // AGENTS.md §4.2.4: minimum relevance threshold — skip chunks
-              // whose normalized BM25 score is below 0.08 (raw BM25 > ~11.5).
-              // This prevents near-zero-relevance noise from filling the token
-              // budget while still catching moderately-relevant context.
-              const MIN_RELEVANCE = 0.08;
-              const injectResp = await nectar.inject(BOOTSTRAP_QUERY, [], undefined, {
-                max_tokens: nectarTokenBudget,
-                max_chunks: 20,
-                min_score: MIN_RELEVANCE,
-              });
-              const meaningful: InjectedChunk[] = injectResp.chunks.filter((c) =>
-                isMeaningfulChunk(c.content),
-              );
-
-              // Handoffs are direct cross-agent continuity data — "what the
-              // last agent left for the next one" — not something that
-              // should depend on fuzzy FTS5 keyword relevance. Read it
-              // directly and unconditionally. `listMemoryFiles()` only scans
-              // `.nectar/memory/`, never `.nectar/agents/`, so handoffs.md
-              // was written correctly by every session but never actually
-              // surfaced to the next one — this is the fix for "the next
-              // CLI doesn't know what the previous one did."
+              // Read the handoff left by the previous session.
               let handoffText = "";
               try {
                 const hf = await nectar.readMemoryFile("agents/handoffs.md");
-                handoffText = hf.content.trim();
-              } catch {
-                // No handoff file yet — first session for this project.
-              }
-
-              if (meaningful.length === 0 && !handoffText) {
-                if (!disposed && terminal) {
-                  terminal.writeln(
-                    `\x1b[38;5;242m[nectar] no project memory yet — context will build after your first session\x1b[0m`,
-                  );
+                if (isMeaningfulChunk(hf.content)) {
+                  handoffText = hf.content;
                 }
-                return;
+              } catch {
+                // first session
               }
 
-              if (disposed || !terminal) return;
-
-              let formattedMemory = "";
-              if (meaningful.length > 0) {
-                const resp = await nectar.formatContext(workerBee.cli, meaningful);
-                formattedMemory = resp.formatted_text;
-              }
-
-              const sections: string[] = [];
+              // Build a context sentence that includes the handoff excerpt
+              // inline.  Fall back to a file-path hint if no handoff exists
+              // but memory docs do.
+              let ctxLine = "[Hiveory Nectar — cross-agent memory] ";
               if (handoffText) {
-                sections.push(`### Previous agent sessions (handoff notes)\n\n${handoffText}`);
+                // Flatten to single line, take at most 2000 chars.
+                const flat = handoffText.replace(/\s+/g, " ").trim();
+                ctxLine += `Previous session: ${flat.slice(0, 2000)}`;
+              } else {
+                ctxLine +=
+                  `Read .nectar/agents/handoffs.md (recent session notes) ` +
+                  `and .nectar/memory/ files for shared project context.`;
               }
-              if (formattedMemory) {
-                sections.push(`### Project memory\n\n${formattedMemory}`);
+
+              if (!disposed && terminal) {
+                terminal.writeln(
+                  `\x1b[38;5;178m[nectar] injecting ${handoffText ? "handoff" : "memory pointer"} for ${workerBee.cliName}\x1b[0m`,
+                );
               }
-              const combined = sections.join("\n\n---\n\n");
-              if (!combined) return;
 
-              terminal.writeln(
-                `\x1b[38;5;178m[nectar] injecting context (${handoffText ? "handoff + " : ""}${meaningful.length} memory chunk(s))\x1b[0m`,
-              );
-              // Prefix with an explicit preamble so the CLI knows this is prior
-              // session context and can answer "what was done before" questions.
-              const contextPreamble = `[HIVEORY NECTAR CONTEXT — read this before responding]
-This project uses Hiveory Nectar for cross-agent memory. The following is your
-project memory and handoff notes from previous AI agent sessions. You MUST
-use this context to answer any question about what was previously done,
-decided, or changed in this project:
-
-`;
-              writeToProcess(flattenForStdin(contextPreamble + combined) + "\r");
-
-              await nectar.logSession(
-                paneId,
-                workerBee.cli,
-                BOOTSTRAP_QUERY,
-                injectResp.query,
-                meaningful,
-                injectResp.total_tokens,
-              );
+              // Write as a single flat line terminated with \n (not \r).
+              // \n is what every CLI's readline treats as "submit this line".
+              writeToProcess(ctxLine + "\n");
+              console.log(`[Nectar] Injected ${ctxLine.length} chars into ${paneId}`);
             } catch (e) {
               console.error("Nectar injection failed:", e);
             }
@@ -1102,7 +1093,10 @@ ${transcript}`;
   // decisions, conventions, or general knowledge, and routes each to the
   // correct memory file.  This runs even when no LLM API key is configured.
   const changes: string[] = [];
-  const decisions: Array<{ type: string; description: string }> = [];
+  const decisions: Array<{
+    type: 'architecture' | 'convention' | 'bug_fix' | 'general';
+    description: string;
+  }> = [];
   const seen = new Set<string>();
 
   const lines = transcript.split('\n');

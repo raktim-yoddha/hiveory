@@ -1,5 +1,4 @@
 packages:
   - 'Hive'
   - 'Nectar'
-  - 'WorkerBees'
-  - 'NectarAPI'
+  - 'Nectar/nectar-mcp'

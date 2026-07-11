@@ -1,5 +1,5 @@
-import { SearchEngine, SearchResult } from '../search';
-import { MemoryManager } from '../memory';
+import { SearchEngine, SearchResult } from '../search/index.js';
+import { MemoryManager } from '../memory/index.js';
 
 export interface InjectionContext {
   task: string;
@@ -36,9 +36,12 @@ export class InjectionPipeline {
     this.searchEngine = searchEngine;
     this.memoryManager = memoryManager;
     this.config = {
-      maxTokens: config.maxTokens || 4000,
-      minScore: config.minScore || 0.1,
-      maxChunks: config.maxChunks || 10,
+      // Use ?? so an explicit 0 is honoured (|| would clobber 0 with the
+      // default). RRF-fused scores are inherently small (~1/60), so callers
+      // frequently need minScore: 0.
+      maxTokens: config.maxTokens ?? 4000,
+      minScore: config.minScore ?? 0.1,
+      maxChunks: config.maxChunks ?? 10,
     };
   }
 

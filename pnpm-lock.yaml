@@ -20,9 +20,9 @@ importers:
       '@hiveory/nectar':
         specifier: workspace:*
         version: link:../Nectar
-      '@hiveory/worker-bees':
+      '@hiveory/nectar-mcp':
         specifier: workspace:*
-        version: link:../WorkerBees
+        version: link:../Nectar/nectar-mcp
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -128,24 +128,11 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.20.0)
 
-  NectarAPI:
+  Nectar/nectar-mcp:
     dependencies:
-      '@tauri-apps/api':
-        specifier: ^2.1.0
-        version: 2.11.1
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
-      typescript:
-        specifier: ^5.6.0
-        version: 5.9.3
-
-  WorkerBees:
-    dependencies:
-      '@hiveory/nectar-api':
+      '@hiveory/nectar':
         specifier: workspace:*
-        version: link:../NectarAPI
+        version: link:..
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -153,9 +140,6 @@ importers:
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
-      vitest:
-        specifier: ^2.1.0
-        version: 2.1.9(@types/node@22.20.0)
 
 packages:
 

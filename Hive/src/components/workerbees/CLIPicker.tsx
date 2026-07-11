@@ -31,7 +31,7 @@ const CLI_OPTIONS: CLIInfo[] = [
   { id: 'claude-code', name: 'Claude Code', description: 'Anthropic Claude CLI · claude' },
   { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI · codex' },
   { id: 'aider', name: 'Aider', description: 'AI pair programming tool · aider' },
-  { id: 'antigravity-cli', name: 'Antigravity CLI', description: 'Google Antigravity CLI · antigravity' },
+  { id: 'antigravity-cli', name: 'Antigravity CLI', description: 'Google Antigravity CLI · agy' },
   { id: 'opencode', name: 'OpenCode', description: 'Open-source coding assistant · opencode' },
   { id: 'kimi-code', name: 'Kimi Code', description: 'Moonshot AI coding assistant · kimi' },
   { id: 'cline', name: 'Cline', description: 'Claude-powered coding agent · cline' },

@@ -1,0 +1,36 @@
+{
+  "name": "@hiveory/nectar-mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "bin": {
+    "nectar-mcp": "./dist/server.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./tools/nectar-query": {
+      "types": "./dist/tools/nectar-query.d.ts",
+      "import": "./dist/tools/nectar-query.js"
+    },
+    "./cli-configs": {
+      "types": "./dist/cli-configs/index.d.ts",
+      "import": "./dist/cli-configs/index.js"
+    }
+  },
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "start": "node ./dist/server.js"
+  },
+  "dependencies": {
+    "@hiveory/nectar": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
