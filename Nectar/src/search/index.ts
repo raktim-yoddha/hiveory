@@ -19,38 +19,42 @@ export class SearchEngine {
     this.db = db;
   }
 
-  // Simple embedding function - in production, use a real embedding model
-  private async embedText(text: string): Promise<number[]> {
-    // For v1, we'll use a simple hash-based embedding
-    // This is a placeholder - in production, use OpenAI embeddings or similar
-    const embedding = new Array(384).fill(0);
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = ((hash << 5) - hash) + text.charCodeAt(i);
-      hash = hash & hash;
+  // Deterministic 384-dim character n-gram embedding (matches Rust backend).
+  // No external model — just hash over (uni- bi- tri-)grams, L2-normalised.
+  private embedText(text: string): number[] {
+    const DIMS = 384;
+    const vec = new Array(DIMS).fill(0);
+    const chars = Array.from(text);
+
+    // Trigram hits
+    for (let i = 0; i < chars.length - 2; i++) {
+      const idx = (chars[i].charCodeAt(0) * 31 + chars[i + 1].charCodeAt(0) * 7 + chars[i + 2].charCodeAt(0)) % DIMS;
+      vec[idx] += 1.0;
     }
-    for (let i = 0; i < embedding.length; i++) {
-      embedding[i] = Math.sin(hash * (i + 1)) * 0.1;
+    // Bigram hits
+    for (let i = 0; i < chars.length - 1; i++) {
+      const idx = (chars[i].charCodeAt(0) * 31 + chars[i + 1].charCodeAt(0)) % DIMS;
+      vec[idx] += 0.5;
     }
-    return embedding;
+    // Unigram hits
+    for (const c of chars) {
+      const idx = c.charCodeAt(0) % DIMS;
+      vec[idx] += 0.25;
+    }
+
+    // L2-normalise so cosine similarity = dot product
+    const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
+    if (norm > 0) {
+      for (let i = 0; i < DIMS; i++) vec[i] /= norm;
+    }
+    return vec;
   }
 
-  // Cosine similarity
+  // Cosine similarity (both vectors are L2-normalised, so this is just dot product)
   private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0;
-    
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-    
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
-      normA += a[i] * a[i];
-      normB += b[i] * b[i];
-    }
-    
-    if (normA === 0 || normB === 0) return 0;
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    if (a.length !== b.length || a.length === 0) return 0;
+    const dot = a.reduce((s, v, i) => s + v * b[i], 0);
+    return Math.max(0, Math.min(1, dot));
   }
 
   async vectorSearch(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {

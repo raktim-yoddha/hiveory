@@ -81,10 +81,12 @@ pub struct NectarParseMarkdownToChunksRequest {
     pub content: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ChunkInfo {
     pub text: String,
     pub heading: Option<String>,
+    #[serde(default)]
+    pub chunk_index: Option<usize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -112,7 +114,7 @@ pub struct NectarSearchRequest {
     pub min_score: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SearchResult {
     pub chunk: ChunkInfo,
     pub source_file: String,
@@ -135,7 +137,7 @@ pub struct NectarInjectRequest {
     pub min_score: Option<f64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InjectedChunk {
     pub content: String,
     pub source_file: String,
@@ -725,36 +727,12 @@ async fn nectar_list_memory_files(
         }
     }
 
-    // 2. agents/handoffs.md — always include if it exists (carries what the last agent left)
-    let handoffs_path = nectar_base.join("agents").join("handoffs.md");
-    if handoffs_path.exists() {
-        files.push("agents/handoffs.md".to_string());
-    }
-
-    // 3. The 5 most-recent session files so new agents know what just happened
-    let sessions_path = nectar_base.join("agents").join("sessions");
-    if sessions_path.exists() {
-        let mut session_entries: Vec<_> = fs::read_dir(&sessions_path)
-            .map_err(|e| format!("Failed to read sessions dir: {}", e))?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
-            .collect();
-
-        // Sort by modification time, newest first
-        session_entries.sort_by_key(|e| {
-            e.metadata()
-                .and_then(|m| m.modified())
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-        });
-        session_entries.reverse();
-
-        for entry in session_entries.iter().take(5) {
-            if let Some(name_str) = entry.path().file_name().and_then(|n| n.to_str()) {
-                files.push(format!("agents/sessions/{}", name_str));
-            }
-        }
-    }
-
+    // NOTE: Only memory/ files are returned here. agents/handoffs.md and
+    // agents/sessions/* are NEVER included — handoffs are read directly by
+    // the frontend (bypassing the index), and session logs are human-audit
+    // only. Including them would cause a self-polluting feedback loop where
+    // audit logs containing query text match FTS5 and get re-injected as
+    // "relevant memory" on the next turn.
     files.sort();
     Ok(NectarListMemoryFilesResponse { files })
 }
@@ -779,6 +757,7 @@ async fn nectar_parse_markdown_to_chunks(
                 chunks.push(ChunkInfo {
                     text: current_text.trim().to_string(),
                     heading: current_heading.clone(),
+                    chunk_index: Some(chunks.len()),
                 });
                 current_text = String::new();
             }
@@ -798,6 +777,7 @@ async fn nectar_parse_markdown_to_chunks(
         chunks.push(ChunkInfo {
             text: current_text.trim().to_string(),
             heading: current_heading,
+            chunk_index: Some(chunks.len()),
         });
     }
     
@@ -809,6 +789,11 @@ fn get_db_path(project_path: &str) -> PathBuf {
 }
 
 fn init_db(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS nectar_meta (key TEXT PRIMARY KEY, value TEXT)",
+        [],
+    )?;
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS memory_files (
             id TEXT PRIMARY KEY,
@@ -827,6 +812,7 @@ fn init_db(conn: &Connection) -> Result<(), rusqlite::Error> {
             chunk_index INTEGER NOT NULL,
             content TEXT NOT NULL,
             heading TEXT,
+            embedding BLOB,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL,
             FOREIGN KEY (source_file) REFERENCES memory_files(id) ON DELETE CASCADE
@@ -834,16 +820,38 @@ fn init_db(conn: &Connection) -> Result<(), rusqlite::Error> {
         [],
     )?;
 
-    // Create FTS5 table for keyword search
-    conn.execute(
-        "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-            content,
-            source_file,
-            heading,
-            content_rowid
-        )",
-        [],
-    )?;
+    // Migration v1 → v2: add chunk_index to FTS5 (needed for RRF dedup)
+    let schema_version: i32 = conn
+        .query_row(
+            "SELECT value FROM nectar_meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    if schema_version < 2 {
+        // Rebuild FTS5 with chunk_index column so hybrid-search RRF can dedup
+        // by (source_file, chunk_index) instead of content hashing.
+        conn.execute("DROP TABLE IF EXISTS chunks_fts", [])?;
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+                content, source_file, heading, chunk_index
+            )",
+            [],
+        )?;
+        // Add embedding column for vector search (safe if already present)
+        conn.execute_batch("ALTER TABLE chunks ADD COLUMN embedding BLOB;").ok();
+        // Re-populate FTS5 from existing chunks (no-op if chunks is empty)
+        conn.execute(
+            "INSERT INTO chunks_fts (content, source_file, heading, chunk_index)
+             SELECT content, source_file, heading, chunk_index FROM chunks",
+            [],
+        )?;
+        conn.execute(
+            "INSERT OR REPLACE INTO nectar_meta (key, value) VALUES ('schema_version', '2')",
+            [],
+        )?;
+    }
 
     Ok(())
 }
@@ -852,13 +860,40 @@ fn init_db(conn: &Connection) -> Result<(), rusqlite::Error> {
 async fn nectar_index_file(
     req: NectarIndexFileRequest,
 ) -> Result<NectarIndexFileResponse, String> {
+    // AGENTS.md §4.3: re-chunking must be incremental.  Check the file's
+    // modification time against the DB's updated_at; skip if unchanged.
+    let file_path = std::path::Path::new(&req.project_path)
+        .join(".nectar")
+        .join(&req.relative_path);
+    let file_mtime = fs::metadata(&file_path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
     let db_path = get_db_path(&req.project_path);
     
-    // Create database if it doesn't exist
     let conn = Connection::open(&db_path)
         .map_err(|e| format!("Failed to open database: {}", e))?;
-    
     init_db(&conn).map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+    // Fast-path: if file hasn't been modified since last index, skip entirely.
+    if file_mtime > 0 {
+        let db_updated: Result<i64, _> = conn.query_row(
+            "SELECT updated_at FROM memory_files WHERE id = ?",
+            params![&req.relative_path],
+            |row| row.get(0),
+        );
+        if let Ok(db_updated) = db_updated {
+            if file_mtime <= db_updated {
+                return Ok(NectarIndexFileResponse {
+                    success: true,
+                    chunks_indexed: 0,
+                });
+            }
+        }
+    }
     
     // Read the memory file
     let read_req = NectarReadMemoryFileRequest {
@@ -904,39 +939,36 @@ async fn nectar_index_file(
         params![&req.relative_path],
     ).map_err(|e| format!("Failed to delete old chunks: {}", e))?;
 
-    // Insert new chunks
+    // Insert new chunks with embeddings (AGENTS.md §4.3 — indexing pipeline)
     for (i, chunk) in chunks_response.chunks.iter().enumerate() {
         let chunk_id = format!("{}:{}:{}", req.relative_path, i, now);
+        let embedding = embed_text(&chunk.text);
+        let emb_blob = embedding_to_blob(&embedding);
 
         conn.execute(
-            "INSERT INTO chunks (id, source_file, chunk_index, content, heading, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO chunks (id, source_file, chunk_index, content, heading, embedding, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 &chunk_id,
                 &req.relative_path,
                 i as i32,
                 &chunk.text,
                 &chunk.heading,
+                &emb_blob,
                 now,
                 now,
             ],
         ).map_err(|e| format!("Failed to insert chunk: {}", e))?;
     }
     
-    // Refresh the FTS rows for just this file. Rebuilding from the WHOLE
-    // `chunks` table (the previous behavior) without clearing first means
-    // every later call re-inserts rowids already indexed by an earlier
-    // call for a DIFFERENT file, which SQLite rejects as a duplicate rowid
-    // — this started surfacing once every WorkerBee spawn began indexing
-    // all memory files, since the second WorkerBee's pass would collide
-    // with rows the first pass already added.
+    // Refresh the FTS rows for just this file.
     conn.execute(
         "DELETE FROM chunks_fts WHERE source_file = ?",
         params![&req.relative_path],
     ).map_err(|e| format!("Failed to clear old FTS rows: {}", e))?;
     conn.execute(
-        "INSERT INTO chunks_fts (content, source_file, heading)
-         SELECT content, source_file, heading FROM chunks WHERE source_file = ?",
+        "INSERT INTO chunks_fts (content, source_file, heading, chunk_index)
+         SELECT content, source_file, heading, chunk_index FROM chunks WHERE source_file = ?",
         params![&req.relative_path],
     ).map_err(|e| format!("Failed to rebuild FTS index: {}", e))?;
     
@@ -959,49 +991,245 @@ async fn nectar_search(
     
     let limit = req.limit.unwrap_or(10);
     let min_score = req.min_score.unwrap_or(0.0);
+    let search_term = sanitize_fts5_query(&req.query);
     
-    // Simple keyword search using FTS5
-    let query = format!("SELECT content, source_file, heading, bm25(chunks_fts) as score FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT {}", limit);
+    // AGENTS.md §4.2: hybrid retrieval — both signals, merged with RRF.
+    // 1. Keyword signal via FTS5/BM25
+    let keyword_results = fts5_keyword_search(&conn, &search_term, limit, min_score)
+        .unwrap_or_default();
     
-    let mut stmt = conn.prepare(&query)
-        .map_err(|e| format!("Failed to prepare search: {}", e))?;
+    // 2. Vector signal via char-n-gram embedding + cosine similarity
+    let vector_results = vector_search(&conn, &search_term, limit, min_score)
+        .unwrap_or_default();
     
-    let search_term = req.query.replace('"', "\"\""); // Escape quotes
-    let mut results = Vec::new();
-    
-    let rows = stmt.query_map([&search_term], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, Option<String>>(2)?,
-            row.get::<_, f64>(3)?,
-        ))
-    }).map_err(|e| format!("Failed to execute search: {}", e))?;
-    
-    for row in rows {
-        let (content, source_file, heading, score) = row.map_err(|e| e.to_string())?;
-        
-        // Convert BM25 score to a 0-1 range (BM25 is typically 0-10, lower is better)
-        let normalized_score = 1.0 - (1.0 / (1.0 + score.abs()));
-        
-        if normalized_score >= min_score {
-            results.push(SearchResult {
-                chunk: ChunkInfo {
-                    text: content,
-                    heading,
-                },
-                source_file,
-                score: normalized_score,
-            });
-        }
-    }
+    // 3. Merge with Reciprocal Rank Fusion
+    let results = reciprocal_rank_fusion(vector_results, keyword_results, 60.0, limit);
     
     Ok(NectarSearchResponse { results })
 }
 
-// Simple token counter (approximate - 4 chars per token)
+// Simple token counter (approximate — 4 chars per token)
 fn estimate_tokens(text: &str) -> usize {
-    (text.len() / 4) + 1
+    let len = text.len();
+    if len == 0 { 0 } else { (len / 4) + 1 }
+}
+
+// Strip FTS5 metacharacters from user-supplied query text so we never crash on
+// syntax errors.  FTS5 treats `"`, `(`, `)`, `*`, and leading `-` as operators
+// — a git diff or a user prompt containing any of these will raise "unterminated
+// string" or "syntax error" at the MATCH step if left raw.
+fn sanitize_fts5_query(text: &str) -> String {
+    let no_quotes = text.replace('"', " ");
+    let no_parens = no_quotes.replace('(', " ").replace(')', " ");
+    let no_star = no_parens.replace('*', " ");
+    // Strip leading `-` from each token so FTS5 doesn't interpret them as NOT
+    no_star
+        .split_whitespace()
+        .map(|w| w.trim_start_matches('-'))
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+// ── Vector embeddings (AGENTS.md §4.2 — hybrid retrieval) ──────────────
+
+// Deterministic 384-dim character n-gram embedding. No external model, no
+// network call — just a hash over (uni- bi- tri-)grams, L2-normalised.
+// Combines with FTS5 via RRF for the hybrid search that AGENTS.md mandates.
+const EMBED_DIMS: usize = 384;
+
+fn embed_text(text: &str) -> Vec<f32> {
+    let mut vec = vec![0.0f32; EMBED_DIMS];
+    let chars: Vec<char> = text.chars().collect();
+
+    // Trigram hits
+    for w in chars.windows(3) {
+        let idx = (w[0] as usize * 31 + w[1] as usize * 7 + w[2] as usize) % EMBED_DIMS;
+        vec[idx] += 1.0;
+    }
+    // Bigram hits
+    for w in chars.windows(2) {
+        let idx = (w[0] as usize * 31 + w[1] as usize) % EMBED_DIMS;
+        vec[idx] += 0.5;
+    }
+    // Unigram hits
+    for &c in &chars {
+        let idx = (c as usize) % EMBED_DIMS;
+        vec[idx] += 0.25;
+    }
+
+    // L2-normalise so cosine similarity simplifies to dot product
+    let norm: f32 = vec.iter().map(|v| v * v).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for v in &mut vec {
+            *v /= norm;
+        }
+    }
+    vec
+}
+
+fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+    // Both are L2-normalised → dot = cosine
+    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
+    dot.clamp(0.0, 1.0) as f64
+}
+
+fn embedding_to_blob(emb: &[f32]) -> Vec<u8> {
+    emb.iter().flat_map(|f| f.to_le_bytes()).collect()
+}
+
+// ── Hybrid search (AGENTS.md §4.2) ─────────────────────────────────────
+
+fn fts5_keyword_search(
+    conn: &Connection,
+    search_term: &str,
+    limit: usize,
+    min_score: f64,
+) -> Result<Vec<SearchResult>, String> {
+    if search_term.is_empty() {
+        return Ok(Vec::new());
+    }
+    let query = format!(
+        "SELECT content, source_file, heading, chunk_index, bm25(chunks_fts) as score \
+         FROM chunks_fts WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?"
+    );
+    let mut stmt = conn.prepare(&query)
+        .map_err(|e| format!("Prepare FTS5: {}", e))?;
+    let rows = stmt.query_map(params![&search_term, &(limit as i64)], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, i32>(3)?,
+            row.get::<_, f64>(4)?,
+        ))
+    }).map_err(|e| format!("FTS5 query: {}", e))?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (content, source_file, heading, chunk_idx, raw_score) =
+            row.map_err(|e| e.to_string())?;
+        // BM25: 0 → 1.0 (perfect), 10 → 0.09 (poor)
+        let normalized = 1.0 / (1.0 + raw_score);
+        if normalized >= min_score {
+            results.push(SearchResult {
+                chunk: ChunkInfo {
+                    text: content,
+                    heading,
+                    chunk_index: Some(chunk_idx as usize),
+                },
+                source_file,
+                score: normalized,
+            });
+        }
+    }
+    Ok(results)
+}
+
+fn vector_search(
+    conn: &Connection,
+    query_text: &str,
+    limit: usize,
+    min_score: f64,
+) -> Result<Vec<SearchResult>, String> {
+    let query_emb = embed_text(query_text);
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, source_file, heading, chunk_index, content, embedding \
+             FROM chunks WHERE embedding IS NOT NULL",
+        )
+        .map_err(|e| format!("Prepare vector search: {}", e))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let blob: Vec<u8> = row.get(5)?;
+            let emb: Vec<f32> = blob
+                .chunks_exact(4)
+                .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            Ok((
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+                row.get::<_, i32>(3)?,
+                row.get::<_, String>(4)?,
+                emb,
+            ))
+        })
+        .map_err(|e| format!("Vector query: {}", e))?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (source_file, heading, chunk_idx, content, emb) =
+            row.map_err(|e| e.to_string())?;
+        let score = cosine_similarity(&query_emb, &emb);
+        if score >= min_score {
+            results.push(SearchResult {
+                chunk: ChunkInfo {
+                    text: content,
+                    heading,
+                    chunk_index: Some(chunk_idx as usize),
+                },
+                source_file,
+                score,
+            });
+        }
+    }
+
+    results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    results.truncate(limit);
+    Ok(results)
+}
+
+/// Reciprocal Rank Fusion (RRF) — merge two ranked result lists using
+/// k=60 (standard RRF constant).  Dedup by (source_file, chunk_index).
+fn reciprocal_rank_fusion(
+    mut vector_results: Vec<SearchResult>,
+    mut keyword_results: Vec<SearchResult>,
+    k: f64,
+    limit: usize,
+) -> Vec<SearchResult> {
+    // Rank within each list (highest score → rank 1)
+    vector_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    keyword_results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+
+    let mut rrf_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut rrf_chunks: std::collections::HashMap<String, SearchResult> =
+        std::collections::HashMap::new();
+
+    let key_fn = |r: &SearchResult| -> String {
+        format!(
+            "{}:{}",
+            r.source_file,
+            r.chunk.chunk_index.unwrap_or(0)
+        )
+    };
+
+    for (rank, result) in vector_results.iter().enumerate() {
+        let key = key_fn(result);
+        *rrf_scores.entry(key.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f64);
+        rrf_chunks.entry(key).or_insert_with(|| result.clone());
+    }
+    for (rank, result) in keyword_results.iter().enumerate() {
+        let key = key_fn(result);
+        *rrf_scores.entry(key.clone()).or_insert(0.0) += 1.0 / (k + (rank + 1) as f64);
+        rrf_chunks.entry(key).or_insert_with(|| result.clone());
+    }
+
+    let mut merged: Vec<SearchResult> = rrf_chunks
+        .into_iter()
+        .map(|(key, mut r)| {
+            r.score = rrf_scores.remove(&key).unwrap_or(0.0);
+            r
+        })
+        .collect();
+
+    merged.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
+    merged.truncate(limit);
+    merged
 }
 
 #[tauri::command]
@@ -1012,11 +1240,15 @@ async fn nectar_inject(
     let max_chunks = req.max_chunks.unwrap_or(20);
     let min_score = req.min_score.unwrap_or(0.0);
     
-    // Build search query from task, open files, and git diff
-    let mut query_parts = vec![req.task.clone()];
-    query_parts.extend(req.open_files.clone());
+    // Build search query from task, open files, and git diff.
+    // Sanitize each part for FTS5 so git-diff symbols (`@@`, `-`, `"`, etc.)
+    // don't crash the query parser.
+    let mut query_parts = vec![sanitize_fts5_query(&req.task)];
+    for f in &req.open_files {
+        query_parts.push(sanitize_fts5_query(f));
+    }
     if let Some(diff) = &req.git_diff {
-        query_parts.push(diff.clone());
+        query_parts.push(sanitize_fts5_query(diff));
     }
     let query = query_parts.join(" ");
     

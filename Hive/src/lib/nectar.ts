@@ -48,6 +48,7 @@ export interface NectarParseMarkdownToChunksRequest {
 export interface ChunkInfo {
   text: string;
   heading?: string;
+  chunk_index?: number;
 }
 
 export interface NectarParseMarkdownToChunksResponse {

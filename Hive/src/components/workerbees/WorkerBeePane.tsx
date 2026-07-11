@@ -599,24 +599,27 @@ export default function WorkerBeePane({
             try {
               const nectar = await Nectar.create(spawnDir!);
 
-              // Wait for the CLI to boot AND for any previous session's Nectar
-              // writes (handoffs.md, session logs) to flush to disk before we
-              // re-index. 1800ms covers CLI boot time + async IPC write latency
-              // from a just-closed WorkerBee pane.
-              await new Promise((resolve) => setTimeout(resolve, 1800));
+              // Brief pause so the CLI finishes its splash screen before we
+              // write context to its stdin. 500ms is enough for any local CLI
+              // (Claude Code, Codex, Aider, etc.) to be ready for input.
+              await new Promise((resolve) => setTimeout(resolve, 500));
               if (disposed || !terminal) return;
 
-              // Re-index AFTER the delay so handoff writes from the previous
-              // session are on disk and picked up by the FTS5/vector index.
+              // Re-index memory files (incremental — unchanged files are skipped).
               const { files } = await nectar.listMemoryFiles();
               for (const file of files) {
                 await nectar.indexFile(file);
               }
 
+              // AGENTS.md §4.2.4: minimum relevance threshold — skip chunks
+              // whose normalized BM25 score is below 0.08 (raw BM25 > ~11.5).
+              // This prevents near-zero-relevance noise from filling the token
+              // budget while still catching moderately-relevant context.
+              const MIN_RELEVANCE = 0.08;
               const injectResp = await nectar.inject(BOOTSTRAP_QUERY, [], undefined, {
                 max_tokens: nectarTokenBudget,
                 max_chunks: 20,
-                min_score: 0,
+                min_score: MIN_RELEVANCE,
               });
               const meaningful: InjectedChunk[] = injectResp.chunks.filter((c) =>
                 isMeaningfulChunk(c.content),
@@ -1094,14 +1097,44 @@ ${transcript}`;
     }
   }
 
-  // Fallback (Offline fallback)
+  // Offline keyword-based extraction (AGENTS.md §4.2.6 — no AI dependency).
+  // Scans the transcript for patterns that indicate bug fixes, architecture
+  // decisions, conventions, or general knowledge, and routes each to the
+  // correct memory file.  This runs even when no LLM API key is configured.
+  const changes: string[] = [];
+  const decisions: Array<{ type: string; description: string }> = [];
+  const seen = new Set<string>();
+
+  const lines = transcript.split('\n');
+  for (const line of lines) {
+    const t = line.trim();
+    if (t.length < 15) continue;
+
+    // Bug fixes
+    if (/\b(bug|fix|error|crash|panic|exception|hotfix|regression)\b/i.test(t) &&
+        /(file|function|method|class|route|query|mutation|type|import|export|config|test|spec)/i.test(t)) {
+      const key = `bug:${t.slice(0, 80)}`;
+      if (!seen.has(key)) { seen.add(key); decisions.push({ type: 'bug_fix', description: t.slice(0, 200) }); }
+    }
+    // Architecture decisions
+    if (/\b(decided|chose|architect|refactor|restructur|migrat|move\s+to|switch\s+to|replac|extract|split|merge|rename)\b/i.test(t) &&
+        !/\b(bug|fix|error)\b/i.test(t)) {
+      const key = `arch:${t.slice(0, 80)}`;
+      if (!seen.has(key)) { seen.add(key); decisions.push({ type: 'architecture', description: t.slice(0, 200) }); }
+    }
+    // Conventions / patterns
+    if (/\b(convention|style|naming|pattern|standard|guideline|format|lint|prettier|eslint)\b/i.test(t)) {
+      const key = `conv:${t.slice(0, 80)}`;
+      if (!seen.has(key)) { seen.add(key); decisions.push({ type: 'convention', description: t.slice(0, 200) }); }
+    }
+    // File-level changes (git-style)
+    if (/^(created|modified|updated|deleted|renamed|added|changed|removed)\s+\S+\.\w+/i.test(t)) {
+      changes.push(t);
+    }
+  }
+
   return {
-    changes: ["AI session completed. No LLM API key was available to extract specific changes."],
-    decisions: [
-      {
-        type: "general",
-        description: `Session completed. Configure API keys in Settings to enable automatic Nectar memory synthesis.`
-      }
-    ]
+    changes: changes.length > 0 ? [...new Set(changes)].slice(0, 10) : ["Session completed."],
+    decisions: decisions.length > 0 ? decisions.slice(0, 10) : [{ type: 'general', description: "Session transcript available in agents/sessions/ for manual review." }]
   };
 }
