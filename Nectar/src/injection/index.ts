@@ -103,7 +103,7 @@ export class InjectionPipeline {
   }
 
   // Format injection for different agent types
-  formatForAgent(result: InjectionResult, agentType: 'claude' | 'codex' | 'aider' | 'gemini'): string {
+  formatForAgent(result: InjectionResult, agentType: 'claude' | 'codex' | 'aider' | 'antigravity' | 'agy'): string {
     if (result.chunks.length === 0) {
       return '';
     }

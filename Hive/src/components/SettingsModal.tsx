@@ -29,7 +29,7 @@ const FIELDS: {
   {
     key: "google",
     label: "Google API Key",
-    cli: "Gemini CLI",
+    cli: "Antigravity CLI",
     placeholder: "AIza...",
   },
   {
@@ -144,7 +144,7 @@ export default function SettingsModal({ onClose }: SettingsModalProps) {
                 <option value="claude">Claude Code</option>
                 <option value="codex">Codex CLI</option>
                 <option value="aider">Aider</option>
-                <option value="gemini">Gemini CLI</option>
+                <option value="agy">Antigravity CLI</option>
               </select>
             </div>
 

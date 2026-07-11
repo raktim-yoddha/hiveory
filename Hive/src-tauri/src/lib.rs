@@ -448,6 +448,27 @@ async fn kill_terminal(
 }
 
 #[tauri::command]
+async fn is_process_alive(
+    pane_id: String,
+    state: State<'_, PtySystem>,
+) -> Result<bool, String> {
+    let sessions = state.sessions.lock().unwrap();
+    if let Some(session) = sessions.get(&pane_id) {
+        if let Ok(mut session) = session.lock() {
+            match session.child.try_wait() {
+                Ok(Some(_status)) => Ok(false), // Exited
+                Ok(None) => Ok(true), // Still running
+                Err(_) => Ok(false),
+            }
+        } else {
+            Ok(false)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
@@ -684,28 +705,52 @@ async fn nectar_write_memory_file(
 async fn nectar_list_memory_files(
     req: NectarListMemoryFilesRequest,
 ) -> Result<NectarListMemoryFilesResponse, String> {
-    let memory_path = std::path::Path::new(&req.project_path)
-        .join(".nectar")
-        .join("memory");
-
-    if !memory_path.exists() {
-        return Ok(NectarListMemoryFilesResponse {
-            files: Vec::new(),
-        });
-    }
-
-    let entries = fs::read_dir(&memory_path)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    let nectar_base = std::path::Path::new(&req.project_path).join(".nectar");
+    let memory_path = nectar_base.join("memory");
 
     let mut files = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "md") {
-            if let Some(file_name) = path.file_name() {
-                if let Some(name_str) = file_name.to_str() {
+
+    // 1. All files in memory/
+    if memory_path.exists() {
+        let entries = fs::read_dir(&memory_path)
+            .map_err(|e| format!("Failed to read directory: {}", e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path();
+            if path.extension().map_or(false, |ext| ext == "md") {
+                if let Some(name_str) = path.file_name().and_then(|n| n.to_str()) {
                     files.push(format!("memory/{}", name_str));
                 }
+            }
+        }
+    }
+
+    // 2. agents/handoffs.md — always include if it exists (carries what the last agent left)
+    let handoffs_path = nectar_base.join("agents").join("handoffs.md");
+    if handoffs_path.exists() {
+        files.push("agents/handoffs.md".to_string());
+    }
+
+    // 3. The 5 most-recent session files so new agents know what just happened
+    let sessions_path = nectar_base.join("agents").join("sessions");
+    if sessions_path.exists() {
+        let mut session_entries: Vec<_> = fs::read_dir(&sessions_path)
+            .map_err(|e| format!("Failed to read sessions dir: {}", e))?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "md"))
+            .collect();
+
+        // Sort by modification time, newest first
+        session_entries.sort_by_key(|e| {
+            e.metadata()
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+        });
+        session_entries.reverse();
+
+        for entry in session_entries.iter().take(5) {
+            if let Some(name_str) = entry.path().file_name().and_then(|n| n.to_str()) {
+                files.push(format!("agents/sessions/{}", name_str));
             }
         }
     }
@@ -1145,6 +1190,7 @@ pub fn run() {
             read_from_terminal,
             resize_terminal,
             kill_terminal,
+            is_process_alive,
             read_file,
             write_file,
             list_directory,
