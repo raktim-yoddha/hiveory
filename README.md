@@ -199,6 +199,11 @@ cd QueenBee
 pnpm build
 pnpm test
 
+# WorkerBees adapters + launcher (standalone)
+cd WorkerBees
+pnpm build
+pnpm test
+
 # TaskComb kanban (v2)
 cd TaskComb
 pnpm build
@@ -309,6 +314,15 @@ hiveory/
 │       │   └── cli-configs/      # per-CLI config builders (one file per CLI)
 │       └── package.json
 │
+├── WorkerBees/                   # CLI agent adapters + launcher (standalone)
+│   ├── src/
+│   │   ├── adapters/             # Per-CLI adapter implementations (10 agents)
+│   │   ├── cli-configs/          # MCP config builders per CLI
+│   │   ├── launcher.ts           # WorkerBeeLauncher — Nectar injection + session management
+│   │   ├── types.ts              # WorkerBeeAdapter interface + shared types
+│   │   └── index.ts
+│   └── tests/
+│
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── package.json
@@ -349,6 +363,12 @@ hiveory/
 - `Board` — kanban state: `addCard()`, `moveCard()`, `getCardsByColumn()`
 - `DefaultDispatchResolver` — resolve project path, CLI, worktree dir from a card
 - `buildDispatchCommand()` — produce the HiveMind dispatch command for a card
+
+**`@hiveory/worker-bees`** (`WorkerBees/src/index.ts`) — restored standalone package
+- `WorkerBeeLauncher` — `launch()`, `endSession()`, `getActiveSessions()`
+- `WorkerBeeAdapter` — adapter interface for per-CLI logic (`getCommand`, `onSessionEnd`, `formatContext`)
+- 10 adapters: `OpenCodeAdapter`, `ClaudeCodeAdapter`, `CodexAdapter`, `KiloAdapter`, `ClineAdapter`, `AntigravityAdapter`, `AiderAdapter`, `KimiCodeAdapter`, `CursorAdapter`, `KiroAdapter`
+- `buildCliConfig(cli, spec, options)` — resolve per-CLI MCP config (re-exported from `cli-configs/`)
 
 ## ⬇️ Download Release Apps
 
