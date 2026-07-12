@@ -13,16 +13,15 @@ export { opencodeConfig, claudeCodeConfig, codexConfig, kiloCodeConfig, clineCon
 // tangled `if (cli === ...) { ... } else if ...` chain in WorkerBeePane.tsx.
 // Adding a CLI = add one file + one entry here.
 //
-// NOTE: `agy` (Antigravity) is intentionally NOT in this default map. Its
-// plugin-based MCP path is proven to load but a live model-initiated tool call
-// has not yet been confirmed, so it is gated behind an explicit opt-in (see
-// `buildCliConfig` options). Until then Antigravity uses the stdin fallback.
 const BUILDERS: Record<string, (spec: McpServerSpec) => CliConfigAction> = {
   opencode: opencodeConfig,
   claude: claudeCodeConfig,
   codex: codexConfig,
   kilo: kiloCodeConfig,
   cline: clineConfig,
+  // Antigravity uses a plugin-based MCP path (writePluginDir) rather than a
+  // file/command action, so it is NOT added to BUILDERS — its builder is
+  // resolved by the special case in buildCliConfig below.
 };
 
 /** CLI ids that have a Nectar MCP config builder active by default. */
@@ -30,15 +29,14 @@ export const MCP_CAPABLE_CLIS = Object.keys(BUILDERS);
 
 /**
  * CLI ids that have a builder available but gated behind an opt-in flag.
- * Currently: Antigravity's plugin path (unproven end-to-end tool call).
  */
-export const EXPERIMENTAL_MCP_CLIS = ['agy'];
+export const EXPERIMENTAL_MCP_CLIS: string[] = [];
 
 export interface BuildCliConfigOptions {
   /**
-   * Enable experimental/opt-in MCP paths that are not proven end-to-end.
-   * When true, Antigravity (`agy`) returns its plugin `writePluginDir` action
-   * instead of a `noop`. Default false -> Antigravity falls back to stdin.
+   * Enable Antigravity's plugin-based MCP path.
+   * When true, `agy` returns its plugin `writePluginDir` action instead of a
+   * `noop`. Default false -> Antigravity falls back to stdin.
    */
   enableAntigravityPlugin?: boolean;
 }
@@ -53,7 +51,9 @@ export function buildCliConfig(
   spec: McpServerSpec,
   options: BuildCliConfigOptions = {},
 ): CliConfigAction {
-  // Experimental, opt-in only: Antigravity plugin path.
+  // Antigravity: uses a plugin-based MCP path (writePluginDir + agy plugin install)
+  // instead of a project config file. Gated behind enableAntigravityPlugin so the
+  // host can opt in once it's confirmed the end-to-end tool-call works live.
   if (cli === 'agy') {
     if (options.enableAntigravityPlugin) {
       return antigravityConfig(spec);
@@ -61,8 +61,8 @@ export function buildCliConfig(
     return {
       kind: 'noop',
       reason:
-        "Antigravity plugin path is opt-in (not yet proven end-to-end); using stdin fallback. " +
-        'Enable via enableAntigravityPlugin.',
+        "Antigravity plugin MCP is gated behind enableAntigravityPlugin; using stdin fallback. " +
+        'Set enableAntigravityPlugin: true in ensureMCPConfigForCLI to activate.',
     };
   }
 

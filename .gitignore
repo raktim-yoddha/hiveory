@@ -8,6 +8,13 @@ dist
 .next
 out
 
+# Turbo cache (local, machine-specific, regenerated on every build)
+.turbo
+/.turbo
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Nectar
 .nectar/
 nectar.db

@@ -94,12 +94,24 @@ export class SearchEngine {
 
   // Build (once per engine) an FTS4 mirror of the `chunks` table so keyword
   // search works even though sql.js can't read the Rust FTS5 table.
+  //
+  // When the DB was created by the JS schema (NectarDatabase.migrate →
+  // initializeSchema), the schema already creates a chunks_fts4 table that the
+  // triggers auto-populate — in that case we skip the full rebuild.  When the
+  // DB was created by the Rust backend (which uses FTS5), the chunks_fts4 table
+  // doesn't exist yet, so we create it and copy all rows once.
   private ensureFtsMirror(): void {
     if (this.ftsMirrorReady) return;
     this.ftsMirrorReady = true;
     const db = this.db.getDatabase();
     try {
       db.run('CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts4 USING fts4(content, source_file, chunk_index)');
+      // If the FTS4 table already has rows (JS schema + triggers populated it),
+      // skip the full rebuild — it's already in sync.
+      try {
+        const count = db.exec("SELECT COUNT(*) FROM chunks_fts4");
+        if (count.length > 0 && parseInt(count[0].values[0][0] as string, 10) > 0) return;
+      } catch { /* table just created — fall through to rebuild */ }
       // Rebuild from scratch — cheap for the small DB sizes Nectar handles,
       // and guarantees the mirror reflects the current `chunks` rows.
       try { db.run('DELETE FROM chunks_fts4'); } catch { /* table just created */ }

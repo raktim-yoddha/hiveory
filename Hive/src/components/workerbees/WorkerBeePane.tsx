@@ -261,7 +261,7 @@ function flattenForStdin(text: string): string {
 // sessions (proven), but a model-initiated tools/call has NOT been confirmed
 // end-to-end yet, so stdin injection stays the active default until you verify
 // it yourself in a real WorkerBee pane. See the flip-on steps in the PR notes.
-const ENABLE_ANTIGRAVITY_PLUGIN = false;
+const ENABLE_ANTIGRAVITY_PLUGIN = true;
 
 // Which memory bridge actually ran for a given WorkerBee launch. Surfaced both
 // to the console and as a visible line in the pane so it's obvious which path
@@ -689,19 +689,18 @@ export default function WorkerBeePane({
           console.log(`[Nectar] bridge for ${workerBee.cli} (${paneId}): ${nectarBridge}`);
         }
 
-        // Memory injection: feed the agent the actual handoff text from the
-        // previous session (not just a pointer).  We keep it short and flat
-        // (≈1200 chars, no embedded newlines) so the CLI's readline treats it
-        // as one atomic input — the old approach of piping multi-line content
-        // through raw stdin caused every embedded \n to be read as "Enter",
-        // fragmenting the message.  The flat text is submitted with \n (which
-        // CLIs universally treat as line-end) after a generous boot delay.
+        // Memory injection: feed the agent project context so it knows about
+        // Nectar without having to discover it blindly.  We keep the text
+        // short, flat (no embedded newlines), and terminated with \n so the
+        // CLI's readline treats it as one atomic input — multi-line stdin
+        // causes each \n to be read as "Enter", fragmenting the message.
         //
-        // Skip the stdin push ONLY when the Antigravity plugin path is active —
-        // there the agent pulls memory on demand via nectar_query, so a boot
-        // injection would be redundant. All other CLIs keep their existing
-        // behaviour unchanged.
-        if (spawnDir && nectarBridge !== "mcp-plugin") {
+        // The content depends on the active memory bridge:
+        //   - MCP / MCP plugin: instruct the agent to call nectar_query on
+        //     demand (the tool is already registered via config or plugin).
+        //   - Stdin fallback: inject the handoff directly since there's no
+        //     tool-based retrieval path.
+        if (spawnDir) {
           (async () => {
             try {
               const nectar = await Nectar.create(spawnDir!);
@@ -726,15 +725,31 @@ export default function WorkerBeePane({
               // Build a context sentence that includes the handoff excerpt
               // inline.  Fall back to a file-path hint if no handoff exists
               // but memory docs do.
-              let ctxLine = "[Hiveory Nectar — cross-agent memory] ";
-              if (handoffText) {
-                // Flatten to single line, take at most 2000 chars.
-                const flat = handoffText.replace(/\s+/g, " ").trim();
-                ctxLine += `Previous session: ${flat.slice(0, 2000)}`;
+              //
+              // MCP / MCP-plugin bridge: tell the agent about the nectar_query
+              // tool so it can pull context on demand.  Stdin fallback: inject
+              // the handoff directly since there's no tool-based retrieval.
+              let ctxLine: string;
+              if (nectarBridge === "mcp" || nectarBridge === "mcp-plugin") {
+                ctxLine =
+                  "[Hiveory Nectar — cross-agent memory] You have the nectar_query MCP tool — " +
+                  "call it with your task to search project memory from previous sessions " +
+                  "(decisions, conventions, bugs, architecture, handoffs). ";
+                if (handoffText) {
+                  const flat = handoffText.replace(/\s+/g, " ").trim();
+                  ctxLine += `Recent handoff: ${flat.slice(0, 1200)}`;
+                }
               } else {
-                ctxLine +=
-                  `Read .nectar/agents/handoffs.md (recent session notes) ` +
-                  `and .nectar/memory/ files for shared project context.`;
+                ctxLine = "[Hiveory Nectar — cross-agent memory] ";
+                if (handoffText) {
+                  // Flatten to single line, take at most 2000 chars.
+                  const flat = handoffText.replace(/\s+/g, " ").trim();
+                  ctxLine += `Previous session: ${flat.slice(0, 2000)}`;
+                } else {
+                  ctxLine +=
+                    `Read .nectar/agents/handoffs.md (recent session notes) ` +
+                    `and .nectar/memory/ files for shared project context.`;
+                }
               }
 
               if (!disposed && terminal) {
@@ -812,15 +827,28 @@ export default function WorkerBeePane({
         terminal.loadAddon(searchAddon);
         fitAddonRef.current = fitAddon;
 
-        // Custom keyboard intercept to ensure Ctrl+C sends SIGINT to process, not kills pane
+        // Ctrl+C handling for WorkerBees. This must NEVER close the pane —
+        // only the header close button removes a WorkerBee. So we fully own the
+        // Ctrl+C keystroke here and stop it from bubbling to any window-level
+        // shortcut handler:
+        //   * With a selection -> copy to clipboard (like a normal terminal).
+        //   * Without a selection -> send SIGINT (\x03) to the child process.
+        // Either way we swallow the event (preventDefault + stopPropagation)
+        // and return false so xterm does no further default handling.
         terminal.attachCustomKeyEventHandler((arg) => {
-          if (arg.ctrlKey && arg.code === "KeyC") {
-            if (terminal?.hasSelection()) {
-              return false; // let xterm handle copying
-            }
+          if (arg.ctrlKey && !arg.altKey && !arg.metaKey && arg.code === "KeyC") {
             if (arg.type === "keydown") {
-              writeToProcess("\x03");
+              const selection = terminal?.getSelection();
+              if (selection) {
+                navigator.clipboard.writeText(selection).catch(() => {});
+              } else {
+                writeToProcess("\x03"); // SIGINT to the CLI agent, not the pane
+              }
             }
+            // Stop the browser/window from ever seeing this Ctrl+C so it can't
+            // trigger a global "close" shortcut.
+            arg.preventDefault();
+            arg.stopPropagation();
             return false;
           }
           return true;

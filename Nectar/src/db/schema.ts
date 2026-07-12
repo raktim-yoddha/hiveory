@@ -55,30 +55,33 @@ export function initializeSchema(db: initSqlJs.Database): void {
     )
   `);
 
-  // FTS5 virtual table for keyword search
+  // FTS4 virtual table for keyword search (sql.js compatible — the bundled
+  // sql.js build has NO fts5 module, only fts4).  SearchEngine also creates a
+  // chunks_fts4 mirror for databases that were created by the Rust backend
+  // (which uses FTS5).  Using FTS4 here avoids the CREATE crash and means the
+  // triggers keep the FTS index in sync automatically.
   db.run(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+    CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts4 USING fts4(
       content,
       source_file,
-      chunk_index,
-      content_rowid=rowid
+      chunk_index
     )
   `);
 
   // Triggers to keep FTS in sync
   db.run(`
     CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
-      INSERT INTO chunks_fts(rowid, content, source_file, chunk_index)
+      INSERT INTO chunks_fts4(docid, content, source_file, chunk_index)
       VALUES (new.rowid, new.content, new.source_file, new.chunk_index);
     END;
 
     CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
-      DELETE FROM chunks_fts WHERE rowid = old.rowid;
+      DELETE FROM chunks_fts4 WHERE docid = old.rowid;
     END;
 
     CREATE TRIGGER IF NOT EXISTS chunks_au AFTER UPDATE ON chunks BEGIN
-      UPDATE chunks_fts SET content = new.content, source_file = new.source_file, chunk_index = new.chunk_index
-      WHERE rowid = new.rowid;
+      UPDATE chunks_fts4 SET content = new.content, source_file = new.source_file, chunk_index = new.chunk_index
+      WHERE docid = new.rowid;
     END;
   `);
 

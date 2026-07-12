@@ -166,3 +166,12 @@ body {
 .animate-scale-in {
   animation: scale-in 0.25s ease-out;
 }
+
+/* Hide scrollbars on horizontal tab strips while keeping scroll behaviour */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

@@ -180,7 +180,15 @@ export class Nectar {
       content,
       frontmatter,
     };
-    return await invoke<NectarWriteMemoryFileResponse>("nectar_write_memory_file", { req });
+    const result = await invoke<NectarWriteMemoryFileResponse>("nectar_write_memory_file", { req });
+    // Keep the search index in sync with every write so nectar_query can
+    // actually find this content — indexFile() is otherwise never invoked.
+    try {
+      await this.indexFile(relativePath);
+    } catch (e) {
+      console.warn(`[Nectar] Failed to index ${relativePath} after write:`, e);
+    }
+    return result;
   }
 
   async listMemoryFiles(): Promise<NectarListMemoryFilesResponse> {
