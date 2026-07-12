@@ -9,6 +9,10 @@ import SettingsModal from "@/components/SettingsModal";
 import { useWorkerBeesStore, WorkerBee, GridLayout } from "@/stores/workerBeesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { getTauriAPIs, loadTauriAPIs } from "@/lib/tauri";
+import WorkspaceTabStrip from "@/components/workspace/WorkspaceTabStrip";
+import BoardView from "@/components/board/BoardView";
+import QueenBeeMissionInput from "@/components/queenbee/QueenBeeMissionInput";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import {
   File,
   Terminal,
@@ -23,6 +27,8 @@ import {
   LayoutGrid,
   Check,
   FolderOpen,
+  LayoutDashboard,
+  ClipboardList,
 } from "lucide-react";
 
 const LAYOUT_OPTIONS: { value: GridLayout; label: string }[] = [
@@ -34,7 +40,6 @@ const LAYOUT_OPTIONS: { value: GridLayout; label: string }[] = [
 ];
 
 export default function HomePage() {
-  const [sidebarMode, setSidebarMode] = useState<"editor" | "ade">("editor");
   const [openFile, setOpenFile] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [activeView, setActiveView] = useState<
@@ -61,13 +66,18 @@ export default function HomePage() {
   const gridLayout = useWorkerBeesStore((state) => state.gridLayout);
   const setGridLayout = useWorkerBeesStore((state) => state.setGridLayout);
   const refitTerminals = useWorkerBeesStore((state) => state.refitTerminals);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const mode = useWorkspaceStore((s) => s.mode);
+  const setMode = useWorkspaceStore((s) => s.setMode);
+  const addWorkspace = useWorkspaceStore((s) => s.addWorkspace);
 
   // Whenever the user switches tabs, wait one frame for the hidden panel to
   // become visible then tell all xterm instances to re-fit to the new size.
   useEffect(() => {
     const id = requestAnimationFrame(() => refitTerminals());
     return () => cancelAnimationFrame(id);
-  }, [sidebarMode]);
+  }, [mode]);
 
   const [showCLIPicker, setShowCLIPicker] = useState(false);
   const [pickerPosition, setPickerPosition] = useState<{
@@ -100,7 +110,9 @@ export default function HomePage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "`") {
         e.preventDefault();
-        setSidebarMode(sidebarMode === "ade" ? "editor" : "ade");
+        const modes: Array<'editor' | 'ade' | 'board'> = ['editor', 'ade', 'board'];
+        const idx = modes.indexOf(mode);
+        setMode(modes[(idx + 1) % modes.length]);
       }
       if (e.ctrlKey && e.key === "b") {
         e.preventDefault();
@@ -139,7 +151,7 @@ export default function HomePage() {
       window.removeEventListener("click", handleClickOutside);
       window.removeEventListener("mousedown", handlePickerOutside);
     };
-  }, [sidebarMode, sidebarCollapsed]);
+  }, [mode, sidebarCollapsed]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -509,12 +521,12 @@ export default function HomePage() {
             Hiveory<span className="text-bee-gold">AI</span>
           </span>
 
-          {/* Editor/ADE Toggle — segmented glass control */}
+          {/* Editor/ADE/Board Toggle — segmented glass control */}
           <div className="flex items-center p-0.5 ml-4 rounded-lg glass border-bee-border/70">
             <button
-              onClick={() => setSidebarMode("editor")}
+              onClick={() => setMode("editor")}
               className={`px-3 py-1 text-xs rounded-md flex items-center transition-all ${
-                sidebarMode === "editor"
+                mode === "editor"
                   ? "bg-bee-gold/15 text-bee-goldHi shadow-glow"
                   : "text-bee-textDim hover:text-bee-text"
               }`}
@@ -523,9 +535,9 @@ export default function HomePage() {
               Editor
             </button>
             <button
-              onClick={() => setSidebarMode("ade")}
+              onClick={() => setMode("ade")}
               className={`px-3 py-1 text-xs rounded-md flex items-center transition-all ${
-                sidebarMode === "ade"
+                mode === "ade"
                   ? "bg-bee-gold/15 text-bee-goldHi shadow-glow"
                   : "text-bee-textDim hover:text-bee-text"
               }`}
@@ -533,9 +545,23 @@ export default function HomePage() {
               <Terminal size={12} />
               ADE
             </button>
+            <button
+              onClick={() => setMode("board")}
+              className={`px-3 py-1 text-xs rounded-md flex items-center transition-all ${
+                mode === "board"
+                  ? "bg-bee-gold/15 text-bee-goldHi shadow-glow"
+                  : "text-bee-textDim hover:text-bee-text"
+              }`}
+            >
+              <LayoutDashboard size={12} />
+              Board
+            </button>
           </div>
 
-          {sidebarMode === "editor" ? (
+          {/* Workspace tab strip — always visible */}
+          <WorkspaceTabStrip />
+
+          {mode === "editor" ? (
             /* Menu Items */
             <div className="flex items-center gap-1 ml-4">
               {Object.keys(menuItems).map((menu) => (
@@ -697,7 +723,7 @@ export default function HomePage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Activity Bar + Explorer sidebar — editor mode only; ADE mode has no
             left-hand chrome at all. */}
-        {sidebarMode === "editor" && (
+        {mode === "editor" && (
           <>
             <div className="w-12 glass-rail flex flex-col items-center py-2 gap-1 border-r border-bee-border/60">
               {(
@@ -775,8 +801,8 @@ export default function HomePage() {
                     </button>
                   </div>
                   <Sidebar
-                    mode={sidebarMode}
-                    onModeChange={setSidebarMode}
+                    mode={mode}
+                    onModeChange={setMode}
                     onFileSelect={setOpenFile}
                     onFolderSelect={handleFolderSelect}
                     rootPath={projectPath}
@@ -797,11 +823,15 @@ export default function HomePage() {
             xterm/Monaco instances and PTY processes survive tab switches.
             CSS `hidden` (display:none) hides the inactive one without
             unmounting its React subtree. */}
-        <div className={`flex-1 flex overflow-hidden min-w-0 ${sidebarMode !== "editor" ? "hidden" : ""}`}>
+        <div className={`flex-1 flex overflow-hidden min-w-0 ${mode !== "editor" ? "hidden" : ""}`}>
           <EditorPanel openFile={openFile} projectPath={projectPath} />
         </div>
-        <div className={`flex-1 flex overflow-hidden min-w-0 ${sidebarMode !== "ade" ? "hidden" : ""}`}>
+        <div className={`flex-1 flex flex-col overflow-hidden min-w-0 ${mode !== "ade" ? "hidden" : ""}`}>
+          <QueenBeeMissionInput projectPath={projectPath || ''} />
           <WorkerBeesPanel workingDir={projectPath} />
+        </div>
+        <div className={`flex-1 flex overflow-hidden min-w-0 ${mode !== "board" ? "hidden" : ""}`}>
+          <BoardView />
         </div>
       </div>
 

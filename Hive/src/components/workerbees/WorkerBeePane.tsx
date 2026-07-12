@@ -21,7 +21,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore, envForCli } from "@/stores/settingsStore";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
 import { Nectar } from "@/lib/nectar";
-import { buildCliConfig } from "@hiveory/nectar-mcp/cli-configs";
+import { buildCliConfig } from "@hiveory/worker-bees/cli-configs";
+import RoleBadge from "./RoleBadge";
 
 // A WorkerBee pane is a CLI agent process (Claude Code, Codex CLI, Aider,
 // Gemini CLI, OpenCode, Kimi Code, Cline, ...) — a fundamentally different
@@ -34,6 +35,8 @@ export interface WorkerBeeInfo {
   cliName: string;
   customName?: string;
   args?: string[];
+  role?: string;
+  branchName?: string;
 }
 
 interface WorkerBeePaneProps {
@@ -1001,6 +1004,9 @@ export default function WorkerBeePane({
                         : "Running"
                   }
                 />
+              )}
+              {workerBee.role && (
+                <RoleBadge role={workerBee.role} branchName={workerBee.branchName} />
               )}
               <span className="truncate">{displayName}</span>
             </span>

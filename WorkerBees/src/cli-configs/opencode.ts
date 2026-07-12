@@ -1,11 +1,5 @@
 import { CliConfigAction, McpServerSpec, nectarCommand } from './types.js';
 
-// OpenCode: writes `opencode.json` (project root) with an `mcp.nectar` entry of
-// type "local" (spawns the server as a child process over stdio).
-//
-// IMPORTANT: OpenCode reads its config from `opencode.json` at the project root,
-// NOT from `.opencode/opencode.json`. The `.opencode/` directory is for agents,
-// commands, plugins, and skills — not the main config file.
 export function opencodeConfig(spec: McpServerSpec): CliConfigAction {
   const command = nectarCommand(spec);
   const configFile = spec.projectPath + '/opencode.json';

@@ -1,7 +1,5 @@
 import { CliConfigAction, McpServerSpec, nectarCommand } from './types.js';
 
-// Claude Code: writes a project-level `.mcp.json` with an `mcpServers.nectar`
-// entry. Claude uses the { command, args } shape rather than a single argv.
 export function claudeCodeConfig(spec: McpServerSpec): CliConfigAction {
   const command = nectarCommand(spec);
   const configFile = spec.projectPath + '/.mcp.json';

@@ -1,4 +1,8 @@
 packages:
   - 'Hive'
+  - 'HiveMind'
   - 'Nectar'
   - 'Nectar/nectar-mcp'
+  - 'QueenBee'
+  - 'TaskComb'
+  - 'WorkerBees'

@@ -1,0 +1,10 @@
+export { OpenCodeAdapter } from './opencode.js';
+export { ClaudeCodeAdapter } from './claude-code.js';
+export { CodexAdapter } from './codex.js';
+export { KiloAdapter } from './kilo.js';
+export { ClineAdapter } from './cline.js';
+export { AntigravityAdapter } from './antigravity.js';
+export { AiderAdapter } from './aider.js';
+export { KimiCodeAdapter } from './kimi-code.js';
+export { CursorAdapter } from './cursor.js';
+export { KiroAdapter } from './kiro.js';

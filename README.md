@@ -1,12 +1,16 @@
-# Hiveory AI
+# Hiveory AI v2
 
 > Project intelligence lives in the project, not in a chat session.
 
-Hiveory AI is a local-first, AI-native desktop dev environment. You open a project, run any supported CLI coding agent (Claude Code, Codex, Aider, Gemini, OpenCode, Cline, Kilo, and more) inside a terminal pane, and every agent automatically reads from and writes to **one shared, project-scoped memory store** — so switching agents mid-project never means starting over.
+Hiveory AI is a local-first, AI-native desktop dev environment. You open a project, run any supported CLI coding agent inside a terminal pane, and every agent automatically reads from and writes to **one shared, project-scoped memory store**. v2 adds **coordination between multiple agents working in parallel** — hand a goal to QueenBee and let a team of agents build it, each in its own isolated worktree, all sharing the same memory.
 
 - **Unified memory (Nectar)** — hybrid vector + keyword search over project knowledge, shared across all agents
 - **WorkerBees** — launch CLI coding agents in real terminal panes, wired to memory via MCP or stdin injection
 - **Hive shell** — Tauri desktop app with terminal panes, Monaco editor, file explorer, and basic git status/diff
+- **Agent orchestration (HiveMind)** — registry, lock management, git worktree isolation, structured handoffs, and a plan/dispatch/approve/review engine
+- **Planning (QueenBee)** — breaks a human goal into tasks with declared file ownership and dependencies
+- **Kanban board (TaskComb)** — Backlog → Todo → In Progress → Review → Done, drag-to-dispatch triggers HiveMind
+- **Workspaces** — multiple saved project contexts as tabs, each with its own pane layout and running agents
 - **Model-agnostic** — swap Claude Code → Codex → Aider without losing context
 - **Human-readable memory** — `.nectar/memory/*.md` is plain, git-diffable markdown
 
@@ -26,17 +30,22 @@ Hiveory AI is a local-first, AI-native desktop dev environment. You open a proje
 
 **1. Open a project** — Launch Hiveory AI and open any project folder. On open, a `.nectar/` memory store is created (or reused) inside that project.
 
-**2. Pick a mode** — The sidebar has two modes:
+**2. Pick a mode** — Three modes via the title bar toggle (or Ctrl+`` ` ``):
 - **Editor** — file tree + Monaco editor (open/edit/save) with basic git status/diff and an inline terminal.
-- **Terminals** — 1 or 2-pane terminal layouts for running agents.
+- **ADE** — WorkerBee pane grid for running CLI agents, plus a QueenBee mission input bar at the top.
+- **Board** — kanban view (Backlog → Todo → In Progress → Review → Done) for tracking multi-agent missions.
 
-**3. Launch a WorkerBee** — Open a terminal pane and pick a CLI agent (Claude Code, Codex, Aider, Gemini, OpenCode, Cline, Kilo, Kimi, Antigravity). It runs as a normal child process you can type into — Hiveory wires project memory in automatically.
+**3. Launch a WorkerBee** — In ADE mode, open a terminal pane and pick a CLI agent (OpenCode, Claude Code, Codex, Cline, Kilo, Antigravity, or others). It runs as a normal child process you can type into — Hiveory wires project memory in automatically. A `[nectar] memory bridge: ...` line shows which path is active.
 
-**4. Let memory flow** — For MCP-capable agents, a `nectar_query` tool is registered so the agent pulls ranked memory on demand. For others, a compact handoff summary is injected at boot. A visible `[nectar] memory bridge: ...` line shows which path is active.
+**4. Let memory flow** — For MCP-capable agents, a `nectar_query` tool is registered so the agent pulls ranked memory on demand. For others, a compact handoff summary is injected at boot. A visible role badge and branch indicator appears on panes that belong to an active mission.
 
-**5. Swap agents freely** — Close one agent, open another. It picks up decisions, conventions, and handoffs recorded by the previous agent from the same `.nectar/` — no re-explaining.
+**5. Coordinate multiple agents (v2)** — In Board mode, hand a goal to QueenBee via the docked mission input. QueenBee reads Nectar for context, breaks the goal into tasks with declared file ownership, and surfaces them as editable draft cards. Review the plan, then dispatch — HiveMind creates isolated git worktrees and launches WorkerBees for each task. As Builders finish, cards move to Review where a Reviewer diffs and approves. Every agent reads/writes the same Nectar memory.
 
-**6. Inspect & rebuild** — `.nectar/memory/*.md` is readable markdown. Delete `nectar.db` / `.nectar/index/` and re-index — retrieval rebuilds fully from the markdown alone.
+**6. Workspace tabs** — Create multiple workspace tabs (color-coded), each with its own project folder, pane layout, and running agents. Agents in non-active tabs keep running in the background.
+
+**7. Swap agents freely** — Close one agent, open another. It picks up decisions, conventions, and handoffs recorded by the previous agent from the same `.nectar/` — no re-explaining.
+
+**8. Inspect & rebuild** — `.nectar/memory/*.md` is readable markdown. Delete `nectar.db` / `.nectar/index/` and re-index — retrieval rebuilds fully from the markdown alone.
 
 ## ⚙️ Implementation Process
 
@@ -54,6 +63,30 @@ flowchart LR
     MCP --> NEC[(nectar.db + memory/*.md)]
     RS --> NEC
     UI -->|stdin fallback| AG
+    UI --> HM[HiveMind Orchestrator]
+    HM --> QB[QueenBee Planner]
+    HM --> TC[TaskComb Kanban]
+    HM --> WT[Git Worktrees]
+    WT --> AG
+```
+
+**v2 Multi-agent orchestration flow**
+
+```mermaid
+flowchart LR
+    GL[Human Goal] --> QB[QueenBee: Breakdown]
+    QB -->|tasks with owns/reads/depends-on| HM[HiveMind: Orchestrator]
+    HM -->|plan| TC[TaskComb: Board cards]
+    HM -->|conflict check| LR[Lock Registry]
+    HM -->|create worktrees| WT[Git Worktrees]
+    WT --> B1[Builder 1: worktree A]
+    WT --> B2[Builder 2: worktree B]
+    B1 -->|handoff| RV[Reviewer: diff + approve]
+    B2 -->|handoff| RV
+    RV -->|merge + cleanup| D[Done]
+    B1 --> NLR[Nectar: shared memory]
+    B2 --> NLR
+    RV --> NLR
 ```
 
 **Memory bridge selection (per agent)**
@@ -62,7 +95,7 @@ flowchart LR
 flowchart LR
     L[Launch WorkerBee] --> Q{MCP capable?}
     Q -->|opencode/claude/codex/kilo/cline| M[Write MCP config → nectar_query tool]
-    Q -->|agy opt-in| P[Install agy plugin → mcp_config.json]
+    Q -->|agy| P[Install agy plugin → mcp_config.json]
     Q -->|others| S[stdin boot injection]
     M --> R[Agent pulls memory on demand]
     P --> R
@@ -94,22 +127,24 @@ flowchart LR
 
 ## 🧰 Tech Stack
 
-| Layer          | Technology                                                                 |
-| -------------- | -------------------------------------------------------------------------- |
-| Desktop Shell  | Tauri v2 (Rust)                                                             |
-| Frontend       | Next.js (App Router), React, TailwindCSS                                    |
-| Frontend State | Zustand (persisted settings)                                               |
-| Terminal       | `xterm.js` + `xterm-addon-webgl` / `-fit` / `-search`                      |
-| PTY            | `portable-pty` (Rust) via Tauri IPC bridge                                  |
-| Editor         | Monaco (`@monaco-editor/react`)                                            |
-| Storage        | SQLite — `rusqlite` (Rust) + `sql.js` (Node) → `nectar.db`                 |
-| Vector Search  | In-DB embeddings + cosine similarity                                        |
-| Keyword Search | SQLite FTS5 (Rust) / FTS4 mirror (Node)                                     |
-| Memory Parsing | `gray-matter` + `remark` / `unified`                                        |
-| Agent Bridge   | Model Context Protocol (MCP) stdio server + per-CLI config                  |
-| Git            | `simple-git` (basic status/diff)                                           |
-| Monorepo       | `pnpm` workspaces + Turborepo                                               |
-| Language       | TypeScript, Rust                                                            |
+| Layer                   | Technology                                                               |
+| ----------------------- | ------------------------------------------------------------------------ |
+| Desktop Shell           | Tauri v2 (Rust)                                                           |
+| Frontend                | Next.js (App Router), React, TailwindCSS                                  |
+| Frontend State          | Zustand (persisted settings, workspaces)                                  |
+| Terminal                | `xterm.js` + `xterm-addon-webgl` / `-fit` / `-search`                    |
+| PTY                     | `portable-pty` (Rust) via Tauri IPC bridge                                |
+| Editor                  | Monaco (`@monaco-editor/react`)                                          |
+| Storage                 | SQLite — `rusqlite` (Rust) + `sql.js` (Node) → `nectar.db`               |
+| Vector Search           | In-DB embeddings + cosine similarity                                      |
+| Keyword Search          | SQLite FTS5 (Rust) / FTS4 mirror (Node)                                   |
+| Memory Parsing          | `gray-matter` + `remark` / `unified`                                      |
+| Agent Bridge            | Model Context Protocol (MCP) stdio server + per-CLI config                |
+| Git Worktree Isolation  | Native `git worktree` via child_process                                   |
+| Kanban                  | Native React components (no external lib)                                 |
+| Git                     | `simple-git` (basic status/diff)                                          |
+| Monorepo                | `pnpm` workspaces + Turborepo                                             |
+| Language                | TypeScript, Rust                                                          |
 
 ## 📦 Setup & Installation
 
@@ -127,8 +162,8 @@ flowchart LR
 # 1. Install all workspace dependencies
 pnpm install
 
-# 2. Build all packages (Nectar, nectar-mcp, Hive frontend)
-pnpm build
+# 2. Build all packages (Nectar, nectar-mcp, HiveMind, QueenBee, TaskComb, Hive frontend)
+pnpm turbo build
 
 # 3. Run the desktop app in dev mode (Rust + Next.js hot reload)
 cd Hive
@@ -142,10 +177,10 @@ cd Hive
 pnpm dev
 ```
 
-### Backend / memory package (standalone)
+### Standalone package development
 
 ```bash
-# Nectar memory + hybrid search — builds and tests without the desktop app
+# Nectar memory + hybrid search
 cd Nectar
 pnpm build
 pnpm test
@@ -153,6 +188,25 @@ pnpm test
 # Nectar MCP server (exposes nectar_query over stdio)
 cd Nectar/nectar-mcp
 pnpm build
+
+# HiveMind orchestration (v2)
+cd HiveMind
+pnpm build
+pnpm test
+
+# QueenBee planning (v2)
+cd QueenBee
+pnpm build
+pnpm test
+
+# TaskComb kanban (v2)
+cd TaskComb
+pnpm build
+pnpm test
+
+# Or build all at once from the root
+pnpm turbo build
+pnpm turbo test
 ```
 
 ### Build the desktop app (installers)
@@ -201,15 +255,45 @@ hiveory/
 │   ├── src/                      # Next.js frontend
 │   │   ├── app/                  # App Router pages
 │   │   ├── components/
+│   │   │   ├── board/            # Kanban board view (v2)
 │   │   │   ├── editor/           # Monaco editor + file explorer
+│   │   │   ├── queenbee/         # QueenBee mission input bar (v2)
 │   │   │   ├── terminal/         # xterm panes + layout
-│   │   │   └── workerbees/       # CLI agent panes + picker
-│   │   ├── stores/               # Zustand stores (settings, workerbees)
+│   │   │   ├── workerbees/       # CLI agent panes + picker + RoleBadge (v2)
+│   │   │   └── workspace/        # Workspace tab strip (v2)
+│   │   ├── stores/               # Zustand stores (settings, workerbees, workspaces v2)
 │   │   └── lib/                  # Nectar client + Tauri helpers
 │   └── src-tauri/                # Rust: PTY, filesystem, Nectar IPC, git
 │       ├── src/lib.rs
 │       ├── icons/
 │       └── tauri.conf.json
+│
+├── HiveMind/                     # Agent orchestration (v2, standalone)
+│   ├── src/
+│   │   ├── registry/             # Agent registry: track WorkerBees per task
+│   │   ├── locks/                # File-ownership lock registry (advisory)
+│   │   ├── worktree/             # Git worktree create/remove wrapper
+│   │   ├── handoffs/             # Structured handoff files per task
+│   │   ├── roles/                # Role definitions (Coordinator/Builder/Scout/Reviewer)
+│   │   ├── orchestrator.ts       # Plan/dispatch/approve/reject engine
+│   │   └── index.ts              # Public API
+│   └── tests/
+│
+├── QueenBee/                     # AI planning (v2, standalone)
+│   ├── src/
+│   │   ├── breakdown.ts          # Goal → task list (LLM prompt + template)
+│   │   ├── assignment.ts         # Task → role + CLI assignment
+│   │   ├── tracking.ts           # Task progress state machine
+│   │   ├── review-routing.ts     # Reviewer feedback routing
+│   │   └── index.ts
+│   └── tests/
+│
+├── TaskComb/                     # Kanban board (v2, standalone)
+│   ├── src/
+│   │   ├── board.ts              # Column state + card CRUD
+│   │   ├── dispatch.ts           # Drag-to-dispatch → HiveMind command
+│   │   └── index.ts
+│   └── tests/
 │
 ├── Nectar/                       # Unified memory package (standalone)
 │   ├── src/
@@ -244,6 +328,27 @@ hiveory/
 - `MCP_CAPABLE_CLIS`, `EXPERIMENTAL_MCP_CLIS`
 - Per-CLI builders: `opencodeConfig`, `claudeCodeConfig`, `codexConfig`, `kiloCodeConfig`, `clineConfig`, `antigravityConfig`
 - `NECTAR_QUERY_TOOL`, `runNectarQuery(projectPath, args)` (from `tools/nectar-query`)
+
+**`@hiveory/hivemind`** (`HiveMind/src/index.ts`) — v2
+- `HiveMind` — top-level class: `create()`, plan/dispatch/complete/approve/reject
+- `AgentRegistry` — track WorkerBees, status lifecycle, mission queries
+- `LockRegistry` — advisory file-ownership conflict detection
+- `WorktreeManager` — `git worktree add/remove/merge-and-remove` wrapper
+- `HandoffManager` — read/write `.nectar/agents/handoffs/<task>.md`
+- `RoleManager` — four fixed roles: Coordinator, Builder, Scout, Reviewer
+- `Orchestrator` — `plan()`, `dispatch()`, `complete()`, `approve()`, `reject()`
+
+**`@hiveory/queenbee`** (`QueenBee/src/index.ts`) — v2
+- `breakdown()` / `templateBreakdown()` — goal → task list with owns/reads/depends-on
+- `buildBreakdownPrompt()` — LLM prompt template for Nectar-aware breakdown
+- `DefaultAssignmentStrategy` — task → role + CLI assignment
+- `ProgressTracker` — task status lifecycle (backlog → done)
+- `ReviewRouter` — approval/rejection routing (reassign/retry/complete)
+
+**`@hiveory/taskcomb`** (`TaskComb/src/index.ts`) — v2
+- `Board` — kanban state: `addCard()`, `moveCard()`, `getCardsByColumn()`
+- `DefaultDispatchResolver` — resolve project path, CLI, worktree dir from a card
+- `buildDispatchCommand()` — produce the HiveMind dispatch command for a card
 
 ## ⬇️ Download Release Apps
 
