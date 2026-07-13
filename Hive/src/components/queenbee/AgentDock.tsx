@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Settings, ExternalLink } from "lucide-react";
+import { Send, Settings, Pin, PinOff, ExternalLink } from "lucide-react";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProviderStore } from "@/stores/providerStore";
 
@@ -14,7 +14,12 @@ interface Message {
 
 type AgentType = "QueenBee" | "Scout" | "Reviewer";
 
-export default function AgentDock() {
+interface AgentDockProps {
+  docked?: boolean;
+  onToggleDock?: () => void;
+}
+
+export default function AgentDock({ docked, onToggleDock }: AgentDockProps) {
   const [activeAgent, setActiveAgent] = useState<AgentType>("QueenBee");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -192,6 +197,13 @@ export default function AgentDock() {
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-bee-textMuted font-mono">{activeAgent}</span>
+          <button
+            onClick={onToggleDock}
+            className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
+            title={docked ? "Switch to floating overlay" : "Dock to side"}
+          >
+            {docked ? <PinOff size={12} /> : <Pin size={12} />}
+          </button>
           <button
             onClick={() => setShowConfig(!showConfig)}
             className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"

@@ -1,13 +1,15 @@
 "use client";
 
-import { X, Plus } from "lucide-react";
+import { X, Plus, Pin, PinOff } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 interface WorkspacesPanelProps {
   onClose: () => void;
+  docked?: boolean;
+  onToggleDock?: () => void;
 }
 
-export default function WorkspacesPanel({ onClose }: WorkspacesPanelProps) {
+export default function WorkspacesPanel({ onClose, docked, onToggleDock }: WorkspacesPanelProps) {
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
@@ -29,16 +31,25 @@ export default function WorkspacesPanel({ onClose }: WorkspacesPanelProps) {
   return (
     <div
       className="h-full glass-hi border-r border-bee-border/60 flex flex-col overflow-hidden animate-fade-in"
-      style={{ width: "260px", minWidth: "260px" }}
+      style={{ width: "280px", minWidth: "280px" }}
     >
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-bee-border/50">
         <span className="text-xs font-semibold text-bee-gold uppercase tracking-wider">Workspaces</span>
-        <button
-          onClick={onClose}
-          className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
-        >
-          <X size={14} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onToggleDock}
+            className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
+            title={docked ? "Switch to floating overlay" : "Dock to side"}
+          >
+            {docked ? <PinOff size={13} /> : <Pin size={13} />}
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {workspaces.map((ws) => {
@@ -46,7 +57,7 @@ export default function WorkspacesPanel({ onClose }: WorkspacesPanelProps) {
           return (
             <div
               key={ws.id}
-              onClick={() => { setActiveWorkspace(ws.id); onClose(); }}
+              onClick={() => { setActiveWorkspace(ws.id); if (!docked) onClose(); }}
               className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-all ${
                 isActive
                   ? "bg-bee-gold/10 text-bee-goldHi"

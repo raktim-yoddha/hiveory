@@ -544,14 +544,12 @@ export default function WorkerBeePane({
       spawned = true;
 
       if (!spawnDir) {
+        // Default to home directory (not the app's own source dir).
+        // If a project is open, workingDir overrides to that project folder.
         try {
-          spawnDir = await invoke<string>("get_project_path");
-        } catch {
-          try {
-            spawnDir = await invoke<string>("get_home_dir");
-          } catch (e2) {
-            console.error("Failed to get working directory:", e2);
-          }
+          spawnDir = await invoke<string>("get_home_dir");
+        } catch (e2) {
+          console.error("Failed to get home directory:", e2);
         }
       }
 

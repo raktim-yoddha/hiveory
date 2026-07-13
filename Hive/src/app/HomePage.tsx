@@ -70,6 +70,8 @@ export default function HomePage() {
   const [showWorkspaces, setShowWorkspaces] = useState(false);
   const [showBoard, setShowBoard] = useState(false);
   const [showAgentDock, setShowAgentDock] = useState(true);
+  const [workspacesDocked, setWorkspacesDocked] = useState(false);
+  const [queenbeeDocked, setQueenbeeDocked] = useState(false);
 
   // Whenever the user switches tabs, wait one frame for the hidden panel to
   // become visible then tell all xterm instances to re-fit to the new size.
@@ -812,28 +814,41 @@ export default function HomePage() {
           <EditorPanel openFile={openFile} projectPath={projectPath} />
         </div>
         <div className={`flex-1 flex overflow-hidden min-w-0 relative ${mode !== "ade" ? "hidden" : ""}`}>
-          {/* Workspaces side panel — absolutely positioned overlay, does not affect grid width */}
+          {/* Workspaces side panel */}
           {showWorkspaces && (
-            <div className="absolute left-0 top-0 bottom-0 z-40">
-              <WorkspacesPanel onClose={() => setShowWorkspaces(false)} />
+            <div className={workspacesDocked ? "" : "absolute left-0 top-0 bottom-0 z-40"}>
+              <WorkspacesPanel
+                onClose={() => setShowWorkspaces(false)}
+                docked={workspacesDocked}
+                onToggleDock={() => setWorkspacesDocked(!workspacesDocked)}
+              />
             </div>
           )}
 
-          {/* Main grid area — always full width */}
-          <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* Main grid area */}
+          <div className={`flex-1 flex flex-col overflow-hidden relative ${workspacesDocked ? "" : ""}`}>
             <WorkerBeesPanel
               workingDir={projectPath}
               onToggleWorkspaces={() => setShowWorkspaces(!showWorkspaces)}
               onToggleBoard={() => setShowBoard(!showBoard)}
               onToggleAgentDock={() => setShowAgentDock(!showAgentDock)}
+              workspacesDocked={workspacesDocked}
+              queenbeeDocked={queenbeeDocked}
             />
           </div>
 
           {/* Board popup (floating over grid, top-right) */}
           <BoardPopup isOpen={showBoard} onClose={() => setShowBoard(false)} />
 
-          {/* Agent Dock (right side panel, conditionally rendered) */}
-          {showAgentDock && <AgentDock />}
+          {/* Agent Dock (right side) */}
+          {showAgentDock && (
+            <div className={queenbeeDocked ? "" : "absolute right-0 top-0 bottom-0 z-40"}>
+              <AgentDock
+                docked={queenbeeDocked}
+                onToggleDock={() => setQueenbeeDocked(!queenbeeDocked)}
+              />
+            </div>
+          )}
         </div>
       </div>
 

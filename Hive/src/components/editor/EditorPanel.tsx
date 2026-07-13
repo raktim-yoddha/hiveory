@@ -249,10 +249,21 @@ export default function EditorPanel({
             tabs.map((tab) => {
               const { Icon, className } = getFileIcon(tab.name);
               const active = activeTab === tab.id;
+              // Disambiguation: if another tab has the same filename, append the parent folder
+              const sameName = tabs.filter((t) => t.name === tab.name);
+              const showPath = sameName.length > 1;
+              const parentFolder = tab.path.split(/[\\/]/).slice(-2, -1)[0];
+              const fullLabel = showPath && parentFolder ? `${tab.name} (${parentFolder})` : tab.name;
+              // Middle-ellipsis truncation
+              const maxLen = 28;
+              const displayLabel = fullLabel.length > maxLen
+                ? fullLabel.slice(0, Math.floor((maxLen - 3) / 2)) + '...' + fullLabel.slice(-Math.ceil((maxLen - 3) / 2))
+                : fullLabel;
               return (
                 <div
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
+                  title={tab.path}
                   className={`group relative h-full flex items-center px-3 gap-2 cursor-pointer min-w-max transition-colors ${
                     active
                       ? "bg-bee-surface/60 text-bee-text"
@@ -263,7 +274,14 @@ export default function EditorPanel({
                     <span className="absolute top-0 left-0 right-0 h-0.5 bg-bee-gold" />
                   )}
                   <Icon size={14} className={className} />
-                  <span className="text-[13px] font-medium">{tab.name}</span>
+                  <span className="text-[13px] font-medium truncate max-w-[28ch]" title={tab.path}>
+                    {displayLabel}
+                  </span>
+                  {showPath && parentFolder && (
+                    <span className="text-[10px] text-bee-textMuted ml-0.5 truncate max-w-[12ch]">
+                      {parentFolder}
+                    </span>
+                  )}
                   {tab.saveState === 'saving' && (
                     <Loader2 size={12} className="text-bee-gold animate-spin" />
                   )}

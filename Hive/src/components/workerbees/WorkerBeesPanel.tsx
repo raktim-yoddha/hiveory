@@ -4,16 +4,18 @@ import { useEffect, useState } from "react";
 import WorkerBeePane from "./WorkerBeePane";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
-import { LayoutList, Columns3, Bot } from "lucide-react";
+import { LayoutList, Columns3, Bot, Hexagon } from "lucide-react";
 
 interface WorkerBeesPanelProps {
   workingDir?: string | null;
   onToggleWorkspaces?: () => void;
   onToggleBoard?: () => void;
   onToggleAgentDock?: () => void;
+  workspacesDocked?: boolean;
+  queenbeeDocked?: boolean;
 }
 
-export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onToggleBoard, onToggleAgentDock }: WorkerBeesPanelProps) {
+export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onToggleBoard, onToggleAgentDock, workspacesDocked, queenbeeDocked }: WorkerBeesPanelProps) {
   const workerBees = useWorkerBeesStore((state) => state.workerBees);
   const removeWorkerBee = useWorkerBeesStore((state) => state.removeWorkerBee);
   const updateWorkerBee = useWorkerBeesStore((state) => state.updateWorkerBee);
@@ -86,19 +88,19 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
     4: "grid-cols-4",
   };
 
+  const dockedCount = (workspacesDocked ? 1 : 0) + (queenbeeDocked ? 1 : 0);
+
   const getGridColsCount = () => {
     const count = workerBees.length;
+    const maxCols = dockedCount === 0 ? 4 : dockedCount === 1 ? 3 : 2;
     if (gridLayout !== "auto") {
-      // Never show more columns than panes — avoids empty ghost columns.
-      return Math.min(gridLayout as number, Math.max(1, count));
+      return Math.min(gridLayout as number, maxCols, Math.max(1, count));
     }
     if (count <= 1) return 1;
-    if (count <= 2) return 2;
-    if (count <= 4) return 2;
-    if (count <= 6) return 3;
-    if (count <= 9) return 3;
-    if (count <= 12) return 4;
-    return 4; // 13-16
+    if (count <= maxCols) return Math.min(count, maxCols);
+    if (count <= maxCols * 2) return maxCols;
+    if (count <= maxCols * 3) return maxCols;
+    return maxCols;
   };
 
   return (
@@ -130,8 +132,8 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
       <div className="flex-1 min-h-0 p-2 overflow-y-auto">
         {workerBees.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center text-3xl shadow-glass animate-scale-in">
-              🐝
+            <div className="w-16 h-16 rounded-2xl glass flex items-center justify-center shadow-glass animate-scale-in">
+              <Hexagon size={28} className="text-bee-gold" />
             </div>
             <div className="space-y-1">
               <div className="text-sm font-medium text-bee-textDim">No WorkerBees running</div>
