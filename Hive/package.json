@@ -13,6 +13,7 @@
   "dependencies": {
     "@hiveory/nectar": "workspace:*",
     "@hiveory/nectar-mcp": "workspace:*",
+    "@hiveory/taskcomb": "workspace:*",
     "@hiveory/worker-bees": "workspace:*",
     "@monaco-editor/react": "^4.6.0",
     "@tauri-apps/api": "^2.1.0",

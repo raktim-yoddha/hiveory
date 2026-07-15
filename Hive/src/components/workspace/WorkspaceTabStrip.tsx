@@ -37,6 +37,8 @@ export default function WorkspaceTabStrip() {
       color: randomColor(),
       boundProjectPath: "",
       paneLayout: [],
+      taskCards: [],
+      nextSortOrder: 0,
     };
     addWorkspace(ws);
   };

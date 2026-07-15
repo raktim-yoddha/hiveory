@@ -171,6 +171,41 @@ pub struct NectarLogSessionRequest {
     pub query: String,
     pub chunks: Vec<InjectedChunk>,
     pub total_tokens: usize,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub worktree_id: Option<String>,
+    #[serde(default)]
+    pub message_count: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarListSessionsRequest {
+    pub project_path: String,
+    pub scope: String,
+    pub filter: Option<String>,
+    pub worktree_id: Option<String>,
+    pub workspace_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarSessionEntry {
+    pub id: String,
+    pub agent_type: String,
+    pub title: String,
+    pub branch: Option<String>,
+    pub worktree_id: Option<String>,
+    pub message_count: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub timestamp: Option<i64>,
+    pub preview: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NectarListSessionsResponse {
+    pub sessions: Vec<NectarSessionEntry>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1435,17 +1470,38 @@ async fn nectar_log_session(
             .join("\n\n")
     );
     
+    let now_millis = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let mut frontmatter = serde_json::json!({
+        "agent": req.agent_type,
+        "timestamp": now_millis,
+    });
+    // Store optional fields in frontmatter so nectar_list_sessions can read them
+    // without parsing the full markdown body.
+    if let Some(title) = &req.title {
+        frontmatter["title"] = serde_json::json!(title);
+    } else {
+        frontmatter["title"] = serde_json::json!(&req.task);
+    }
+    if let Some(branch) = &req.branch {
+        frontmatter["branch"] = serde_json::json!(branch);
+    }
+    if let Some(worktree_id) = &req.worktree_id {
+        frontmatter["worktree_id"] = serde_json::json!(worktree_id);
+    }
+    if let Some(message_count) = req.message_count {
+        frontmatter["message_count"] = serde_json::json!(message_count);
+    }
+    frontmatter["total_tokens"] = serde_json::json!(req.total_tokens);
+    
     let write_req = NectarWriteMemoryFileRequest {
         project_path: req.project_path.clone(),
         relative_path: format!("agents/sessions/{}.md", req.session_id),
         content: log_content,
-        frontmatter: Some(serde_json::json!({
-            "agent": req.agent_type,
-            "timestamp": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64
-        })),
+        frontmatter: Some(frontmatter),
     };
     
     nectar_write_memory_file(write_req).await?;
@@ -1454,6 +1510,140 @@ async fn nectar_log_session(
         success: true,
         log_path: format!("agents/sessions/{}.md", req.session_id),
     })
+}
+
+#[tauri::command]
+async fn nectar_list_sessions(
+    req: NectarListSessionsRequest,
+) -> Result<NectarListSessionsResponse, String> {
+    let sessions_dir = std::path::Path::new(&req.project_path)
+        .join(".nectar")
+        .join("agents")
+        .join("sessions");
+
+    let mut sessions = Vec::new();
+
+    if !sessions_dir.exists() {
+        return Ok(NectarListSessionsResponse { sessions });
+    }
+
+    let entries = fs::read_dir(&sessions_dir)
+        .map_err(|e| format!("Failed to read sessions directory: {}", e))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let ext = path.extension().unwrap_or_default().to_string_lossy().to_string();
+        if ext != "md" {
+            continue;
+        }
+
+        let content = match fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        // Parse frontmatter
+        let (frontmatter, body) = if content.starts_with("---") {
+            let parts: Vec<&str> = content.splitn(3, "---").collect();
+            if parts.len() >= 3 {
+                (serde_yaml::from_str::<serde_json::Value>(parts[1]).ok(), Some(parts[2]))
+            } else {
+                (None, None)
+            }
+        } else {
+            (None, Some(content.as_str()))
+        };
+
+        let file_stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+
+        let agent_type = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("agent").and_then(|v| v.as_str()))
+            .unwrap_or("unknown")
+            .to_string();
+
+        let title = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("title").and_then(|v| v.as_str()))
+            .unwrap_or(&file_stem)
+            .to_string();
+
+        let branch = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("branch").and_then(|v| v.as_str()))
+            .map(|s| s.to_string());
+
+        let worktree_id = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("worktree_id").and_then(|v| v.as_str()))
+            .map(|s| s.to_string());
+
+        let message_count = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("message_count").and_then(|v| v.as_i64()));
+
+        let total_tokens = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("total_tokens").and_then(|v| v.as_i64()));
+
+        let timestamp = frontmatter
+            .as_ref()
+            .and_then(|fm| fm.get("timestamp").and_then(|v| v.as_i64()));
+
+        // Extract preview from body: first non-empty line after the heading
+        let preview = body.and_then(|b| {
+            b.lines()
+                .skip(1)
+                .find(|l| !l.trim().is_empty() && !l.starts_with('#'))
+                .map(|l| l.trim().to_string())
+        });
+
+        let session_entry = NectarSessionEntry {
+            id: file_stem,
+            agent_type,
+            title,
+            branch,
+            worktree_id,
+            message_count,
+            total_tokens,
+            timestamp,
+            preview,
+        };
+
+        sessions.push(session_entry);
+    }
+
+    // Sort by timestamp descending (newest first)
+    sessions.sort_by(|a, b| b.timestamp.unwrap_or(0).cmp(&a.timestamp.unwrap_or(0)));
+
+    // Apply scope filter
+    if req.scope == "worktree" {
+        if let Some(ref wt_id) = req.worktree_id {
+            sessions.retain(|s| s.worktree_id.as_deref() == Some(wt_id.as_str()));
+        } else {
+            // If no worktree_id provided, filter to sessions without a worktree_id
+            // (backward compatibility with old sessions)
+            sessions.retain(|s| s.worktree_id.is_none());
+        }
+    }
+
+    // Apply text filter
+    if let Some(ref filter_text) = req.filter {
+        if !filter_text.is_empty() {
+            let lower = filter_text.to_lowercase();
+            sessions.retain(|s| {
+                s.title.to_lowercase().contains(&lower)
+                    || s.agent_type.to_lowercase().contains(&lower)
+                    || s.preview.as_deref().unwrap_or("").to_lowercase().contains(&lower)
+            });
+        }
+    }
+
+    Ok(NectarListSessionsResponse { sessions })
 }
 
 #[tauri::command]
@@ -1498,6 +1688,7 @@ pub fn run() {
             nectar_inject,
             nectar_format_context,
             nectar_log_session,
+            nectar_list_sessions,
             nectar_close,
             git_status,
             get_nectar_mcp_path,

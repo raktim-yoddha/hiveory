@@ -2,18 +2,34 @@ export type ColumnId = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
 
 export const COLUMNS: ColumnId[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
 
+export interface ColumnDefinition {
+  id: ColumnId;
+  title: string;
+  color: string;
+  icon: string;
+}
+
+export const DEFAULT_COLUMNS: ColumnDefinition[] = [
+  { id: 'backlog', title: 'Backlog', color: 'neutral', icon: 'circle' },
+  { id: 'todo', title: 'Todo', color: 'blue', icon: 'circle' },
+  { id: 'in-progress', title: 'In Progress', color: 'conductor-progress', icon: 'conductor-progress' },
+  { id: 'review', title: 'Review', color: 'conductor-review', icon: 'conductor-review' },
+  { id: 'done', title: 'Done', color: 'conductor-done', icon: 'conductor-done' },
+];
+
 export interface TaskCard {
   id: string;
   title: string;
   description: string;
   column: ColumnId;
+  sortOrder: number;
   owns: string[];
   reads: string[];
   dependsOn: string[];
   assignedRole?: string;
   assignedCli?: string;
   missionId?: string;
-  agentId?: string;
+  workerBeeId?: string;
   worktreeBranch?: string;
   blockingReason?: string;
   createdAt: number;
@@ -30,10 +46,11 @@ export class Board {
     return full;
   }
 
-  moveCard(cardId: string, toColumn: ColumnId): TaskCard | undefined {
+  moveCard(cardId: string, toColumn: ColumnId, sortOrder?: number): TaskCard | undefined {
     const card = this.cards.get(cardId);
     if (card) {
       card.column = toColumn;
+      if (sortOrder !== undefined) card.sortOrder = sortOrder;
       card.updatedAt = Date.now();
     }
     return card;
@@ -48,7 +65,9 @@ export class Board {
   }
 
   getCardsByColumn(column: ColumnId): TaskCard[] {
-    return Array.from(this.cards.values()).filter(c => c.column === column);
+    return Array.from(this.cards.values())
+      .filter(c => c.column === column)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   getAllCards(): TaskCard[] {

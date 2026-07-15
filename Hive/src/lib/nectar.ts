@@ -121,11 +121,39 @@ export interface NectarLogSessionRequest {
   query: string;
   chunks: InjectedChunk[];
   total_tokens: number;
+  title?: string;
+  branch?: string;
+  worktree_id?: string;
+  message_count?: number;
 }
 
 export interface NectarLogSessionResponse {
   success: boolean;
   log_path: string;
+}
+
+export interface NectarListSessionsRequest {
+  project_path: string;
+  scope: 'worktree' | 'workspace' | 'all';
+  filter?: string;
+  worktree_id?: string;
+  workspace_id?: string;
+}
+
+export interface NectarSessionEntry {
+  id: string;
+  agent_type: string;
+  title: string;
+  branch: string | null;
+  worktree_id: string | null;
+  message_count: number | null;
+  total_tokens: number | null;
+  timestamp: number | null;
+  preview: string | null;
+}
+
+export interface NectarListSessionsResponse {
+  sessions: NectarSessionEntry[];
 }
 
 export interface NectarCloseRequest {
@@ -267,6 +295,22 @@ export class Nectar {
       total_tokens: totalTokens,
     };
     return await invoke<NectarLogSessionResponse>("nectar_log_session", { req });
+  }
+
+  async listSessions(
+    scope: 'worktree' | 'workspace' | 'all' = 'all',
+    filter?: string,
+    worktreeId?: string,
+    workspaceId?: string
+  ): Promise<NectarListSessionsResponse> {
+    const req: NectarListSessionsRequest = {
+      project_path: this.projectPath,
+      scope,
+      filter,
+      worktree_id: worktreeId,
+      workspace_id: workspaceId,
+    };
+    return await invoke<NectarListSessionsResponse>("nectar_list_sessions", { req });
   }
 
   async close(): Promise<NectarCloseResponse> {

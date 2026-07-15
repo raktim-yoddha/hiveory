@@ -4,57 +4,73 @@ import { useEffect, useState } from "react";
 import WorkerBeePane from "./WorkerBeePane";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
-import { LayoutList, Columns3, Bot, Hexagon } from "lucide-react";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useWorkspaceBoardPanel, WorkspaceKanbanDrawer } from "@hiveory/taskcomb";
+import { LayoutList, Columns3, Bot, Hexagon, LayoutGrid, ScrollText } from "lucide-react";
 
 interface WorkerBeesPanelProps {
   workingDir?: string | null;
   onToggleWorkspaces?: () => void;
   onToggleBoard?: () => void;
   onToggleAgentDock?: () => void;
+  onToggleSessionHistory?: () => void;
   workspacesDocked?: boolean;
   queenbeeDocked?: boolean;
+  sessionHistoryOpen?: boolean;
 }
 
-export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onToggleBoard, onToggleAgentDock, workspacesDocked, queenbeeDocked }: WorkerBeesPanelProps) {
+
+export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onToggleAgentDock, onToggleSessionHistory, workspacesDocked, queenbeeDocked, sessionHistoryOpen }: WorkerBeesPanelProps) {
   const workerBees = useWorkerBeesStore((state) => state.workerBees);
+  const replaceAll = useWorkerBeesStore((state) => state.replaceAll);
   const removeWorkerBee = useWorkerBeesStore((state) => state.removeWorkerBee);
   const updateWorkerBee = useWorkerBeesStore((state) => state.updateWorkerBee);
   const maximizedPane = useWorkerBeesStore((state) => state.maximizedPane);
   const setMaximizedPane = useWorkerBeesStore((state) => state.setMaximizedPane);
   const gridLayout = useWorkerBeesStore((state) => state.gridLayout);
+  const setGridLayout = useWorkerBeesStore((state) => state.setGridLayout);
   const reorderWorkerBees = useWorkerBeesStore((state) => state.reorderWorkerBees);
   const refitTerminals = useWorkerBeesStore((state) => state.refitTerminals);
+
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const boardOpen = useWorkspaceStore((s) => s.boardOpen);
+  const setBoardOpen = useWorkspaceStore((s) => s.setBoardOpen);
+  const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
+  const setTasks = useWorkspaceStore((s) => s.setTasks);
+
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  const { isOpenOrPreview, isDragPreview, openBoard, closeBoard, toggleBoard, previewBoard, solidifyBoard, cancelBoardPreview } = useWorkspaceBoardPanel();
 
   const [editingBee, setEditingBee] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  // Debug: confirm every WorkerBee (and therefore every grid row) is actually
-  // mounted in the tree, so a missing row can be diagnosed as CSS vs. data.
+  // Sync active workspace's paneLayout → workerBeesStore
+  // When the active workspace changes, load its WorkerBees into the store
   useEffect(() => {
-    console.log(
-      `[WorkerBees] ${workerBees.length} bee(s) mounted, layout=${gridLayout}:`,
-      workerBees.map((b) => b.id),
-    );
-  }, [workerBees, gridLayout]);
+    if (activeWorkspace) {
+      replaceAll(activeWorkspace.paneLayout);
+    }
+  }, [activeWorkspaceId, activeWorkspace?.paneLayout.length]);
+
+  // Sync workerBeesStore → active workspace's paneLayout on changes
+  useEffect(() => {
+    if (activeWorkspace && workerBees !== activeWorkspace.paneLayout) {
+      updateWorkspace(activeWorkspace.id, { paneLayout: workerBees });
+    }
+  }, [workerBees]);
 
   const handleRemoveWorkerBee = (beeId: string) => {
-    // Kill the pty process first
     invoke("kill_terminal", { paneId: beeId })
-      .then(() => {
-        removeWorkerBee(beeId);
-      })
-      .catch((error) => {
-        console.error(`Failed to kill WorkerBee: ${beeId}`, error);
-        // Still remove the pane even if kill fails
-        removeWorkerBee(beeId);
-      });
+      .then(() => removeWorkerBee(beeId))
+      .catch(() => removeWorkerBee(beeId));
   };
 
   const toggleMaximize = (beeId: string) => {
     setMaximizedPane(maximizedPane === beeId ? null : beeId);
-    // Re-fit all terminals one frame after the CSS layout resolves
     requestAnimationFrame(() => refitTerminals());
   };
 
@@ -79,8 +95,6 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
     setEditValue("");
   };
 
-  // Tailwind's scanner needs literal class strings — a template-interpolated
-  // `grid-cols-${n}` would silently fail to generate the utility.
   const FIXED_COLUMN_CLASSES: Record<1 | 2 | 3 | 4, string> = {
     1: "grid-cols-1",
     2: "grid-cols-2",
@@ -103,9 +117,17 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
     return maxCols;
   };
 
+  const LAYOUT_OPTIONS = [
+    { value: "auto" as const, label: "Auto" },
+    { value: 1 as const, label: "1" },
+    { value: 2 as const, label: "2" },
+    { value: 3 as const, label: "3" },
+    { value: 4 as const, label: "4" },
+  ];
+
   return (
     <div className="flex-1 flex flex-col bg-bee-canvas/40 relative">
-      {/* ADE toolbar — Workspaces / Board toggles */}
+      {/* ADE toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-bee-border/50 flex-shrink-0">
         <button
           onClick={onToggleWorkspaces}
@@ -115,8 +137,14 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
           Workspaces
         </button>
         <button
-          onClick={onToggleBoard}
-          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] text-bee-textDim hover:text-bee-text hover:bg-bee-border/40 transition-colors"
+          onClick={toggleBoard}
+          data-workspace-board-trigger
+          data-workspace-board-preview={isDragPreview ? "true" : undefined}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors ${
+            isOpenOrPreview
+              ? "bg-bee-gold/15 text-bee-goldHi"
+              : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
+          }`}
         >
           <Columns3 size={12} />
           Board
@@ -128,7 +156,44 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
           <Bot size={12} />
           QueenBee
         </button>
+        <button
+          onClick={onToggleSessionHistory}
+          className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] transition-colors ${
+            sessionHistoryOpen
+              ? "bg-bee-gold/15 text-bee-goldHi"
+              : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
+          }`}
+        >
+          <ScrollText size={12} />
+          Sessions
+        </button>
+
+        <div className="ml-auto flex items-center gap-1">
+          {/* Workspace name label */}
+          {activeWorkspace && (
+            <span className="text-[10px] text-bee-textMuted mr-2 truncate max-w-[100px]">
+              {activeWorkspace.name}
+            </span>
+          )}
+          <div className="flex items-center p-0.5 rounded-lg glass border-bee-border/70">
+            {LAYOUT_OPTIONS.map((opt) => (
+              <button
+                key={opt.label}
+                onClick={() => setGridLayout(opt.value)}
+                title={opt.value === "auto" ? "Auto layout" : `${opt.value} column${opt.value === 1 ? "" : "s"}`}
+                className={`px-2 py-1 text-[11px] rounded-md flex items-center gap-1 transition-all ${
+                  gridLayout === opt.value
+                    ? "bg-bee-gold/15 text-bee-goldHi"
+                    : "text-bee-textDim hover:text-bee-text"
+                }`}
+              >
+                {opt.value === "auto" ? <LayoutGrid size={11} /> : opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
       <div className="flex-1 min-h-0 p-2 overflow-y-auto">
         {workerBees.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-center animate-fade-in">
@@ -138,8 +203,7 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
             <div className="space-y-1">
               <div className="text-sm font-medium text-bee-textDim">No WorkerBees running</div>
               <div className="text-xs text-bee-textMuted">
-                Click <span className="text-bee-gold font-medium">Add</span> to
-                launch a CLI agent
+                Click <span className="text-bee-gold font-medium">Add</span> to launch a CLI agent
               </div>
             </div>
           </div>
@@ -162,35 +226,22 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
                   onDragStart={(e) => {
                     const target = e.target as HTMLElement;
                     const isHeader = target.closest(".glass-toolbar");
-                    if (!isHeader) {
-                      e.preventDefault();
-                      return;
-                    }
+                    if (!isHeader) { e.preventDefault(); return; }
                     setDraggedIndex(index);
                     e.dataTransfer.effectAllowed = "move";
                   }}
-                  onDragEnd={() => {
-                    setDraggedIndex(null);
-                    setDragOverIndex(null);
-                  }}
+                  onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
                   onDragOver={(e) => {
                     e.preventDefault();
-                    if (draggedIndex !== null && draggedIndex !== index) {
-                      setDragOverIndex(index);
-                    }
+                    if (draggedIndex !== null && draggedIndex !== index) setDragOverIndex(index);
                   }}
                   onDrop={() => {
-                    if (draggedIndex !== null && draggedIndex !== index) {
-                      reorderWorkerBees(draggedIndex, index);
-                    }
-                    setDraggedIndex(null);
-                    setDragOverIndex(null);
+                    if (draggedIndex !== null && draggedIndex !== index) reorderWorkerBees(draggedIndex, index);
+                    setDraggedIndex(null); setDragOverIndex(null);
                   }}
                   className={`flex flex-col relative overflow-hidden rounded-xl glass shadow-glass transition-all duration-300 hover:shadow-glass-lg ${
                     shouldHide ? "hidden" : "h-full"
-                  } ${
-                    draggedIndex === index ? "opacity-30 scale-[0.98]" : ""
-                  } ${
+                  } ${draggedIndex === index ? "opacity-30 scale-[0.98]" : ""} ${
                     dragOverIndex === index ? "border border-bee-gold/60 shadow-[0_0_12px_rgba(201,162,39,0.3)]" : ""
                   }`}
                 >
@@ -198,11 +249,7 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
                     paneId={bee.id}
                     workingDir={workingDir}
                     workerBee={bee}
-                    onRename={
-                      editingBee === bee.id
-                        ? saveRename
-                        : () => startRename(bee.id)
-                    }
+                    onRename={editingBee === bee.id ? saveRename : () => startRename(bee.id)}
                     isEditing={editingBee === bee.id}
                     editValue={editValue}
                     onEditChange={setEditValue}
@@ -217,6 +264,17 @@ export default function WorkerBeesPanel({ workingDir, onToggleWorkspaces, onTogg
           </div>
         )}
       </div>
+
+      {/* Kanban board drawer */}
+      {isOpenOrPreview && activeWorkspace && (
+        <WorkspaceKanbanDrawer
+          open={!isDragPreview}
+          dragPreview={isDragPreview}
+          tasks={activeWorkspace.taskCards}
+          onTasksChange={(tasks) => setTasks(activeWorkspace.id, tasks)}
+          onClose={() => { closeBoard(); setBoardOpen(false); }}
+        />
+      )}
     </div>
   );
 }

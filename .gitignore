@@ -47,5 +47,9 @@ coverage
 target
 Cargo.lock
 AGENTS.md
+AGENTS1.md
 TESTCASE.md
 MIGRATION_REPORT.md
+/orca
+SIMILAR.md
+TESTAGENTS.md

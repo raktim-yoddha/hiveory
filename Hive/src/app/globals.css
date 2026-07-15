@@ -179,3 +179,82 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* ===== Kanban board animations (Orca-inspired) ===== */
+
+/* Sheet entry — clip-path reveal from left edge */
+@keyframes workspace-kanban-sheet-in {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+/* Sheet exit — clip-path conceal to left edge */
+@keyframes workspace-kanban-sheet-out {
+  from { clip-path: inset(0 0 0 0); }
+  to   { clip-path: inset(0 100% 0 0); }
+}
+
+.workspace-kanban-sheet-content {
+  animation: workspace-kanban-sheet-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
+  animation: workspace-kanban-sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Toolbar pulse for drag preview */
+@keyframes workspace-board-trigger-preview-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.55); }
+  70%, 100% { box-shadow: 0 0 0 5px rgba(201, 162, 39, 0); }
+}
+[data-workspace-board-trigger][data-workspace-board-preview='true'] {
+  animation: workspace-board-trigger-preview-pulse 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-kanban-sheet-content {
+    animation: none;
+  }
+  [data-workspace-board-trigger][data-workspace-board-preview='true'] {
+    animation: none;
+  }
+}
+
+/* Sleek scrollbar for side panels (Orca-inspired) */
+.scrollbar-sleek {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 162, 39, 0.25) transparent;
+}
+.scrollbar-sleek::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-sleek::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-sleek::-webkit-scrollbar-thumb {
+  background: rgba(201, 162, 39, 0.25);
+  border-radius: 3px;
+}
+.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 162, 39, 0.45);
+}
+
+/* Card drag state */
+[data-workspace-board-card-pointer-dragging='true'] {
+  outline: 1px solid var(--bee-gold, #c9a227) !important;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.36);
+}
+
+/* Grabbing cursor globally during drag */
+:root[data-workspace-board-pointer-dragging] * {
+  cursor: grabbing !important;
+}
+
+/* Drag preview: stack effect for multi-card */
+[data-workspace-board-card-drag-preview='true'] {
+  position: fixed;
+  overflow: visible;
+  isolation: isolate;
+}

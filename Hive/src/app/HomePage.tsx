@@ -6,12 +6,13 @@ import EditorPanel from "@/components/editor/EditorPanel";
 import WorkerBeesPanel from "@/components/workerbees/WorkerBeesPanel";
 import CLIPicker, { CLIType, CLI_COMMANDS } from "@/components/workerbees/CLIPicker";
 import SettingsPage from "@/components/settings/SettingsPage";
-import { useWorkerBeesStore, WorkerBee, GridLayout } from "@/stores/workerBeesStore";
+import { useWorkerBeesStore, WorkerBee } from "@/stores/workerBeesStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { getTauriAPIs, loadTauriAPIs } from "@/lib/tauri";
 import WorkspacesPanel from "@/components/workspace/WorkspacesPanel";
-import BoardPopup from "@/components/board/BoardPopup";
 import AgentDock from "@/components/queenbee/AgentDock";
+import ADEWorktreeSidebar from "@/components/ade/ADEWorktreeSidebar";
+import ADESessionHistory from "@/components/ade/ADESessionHistory";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import {
   File,
@@ -28,9 +29,10 @@ import {
   Check,
   FolderOpen,
   Bot,
+  ScrollText,
 } from "lucide-react";
 
-const LAYOUT_OPTIONS: { value: GridLayout; label: string }[] = [
+const LAYOUT_OPTIONS: { value: "auto" | 1 | 2 | 3 | 4; label: string }[] = [
   { value: "auto", label: "Auto" },
   { value: 1, label: "1" },
   { value: 2, label: "2" },
@@ -62,19 +64,24 @@ export default function HomePage() {
 
   const workerBees = useWorkerBeesStore((state) => state.workerBees);
   const addWorkerBee = useWorkerBeesStore((state) => state.addWorkerBee);
+  const setAgentStatus = useWorkerBeesStore((state) => state.setAgentStatus);
   const gridLayout = useWorkerBeesStore((state) => state.gridLayout);
   const setGridLayout = useWorkerBeesStore((state) => state.setGridLayout);
   const refitTerminals = useWorkerBeesStore((state) => state.refitTerminals);
   const mode = useWorkspaceStore((s) => s.mode);
   const setMode = useWorkspaceStore((s) => s.setMode);
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
+  const boardOpen = useWorkspaceStore((s) => s.boardOpen);
+  const setBoardOpen = useWorkspaceStore((s) => s.setBoardOpen);
+
   const [showWorkspaces, setShowWorkspaces] = useState(false);
-  const [showBoard, setShowBoard] = useState(false);
   const [showAgentDock, setShowAgentDock] = useState(true);
+  const [showSessionHistory, setShowSessionHistory] = useState(false);
   const [workspacesDocked, setWorkspacesDocked] = useState(false);
   const [queenbeeDocked, setQueenbeeDocked] = useState(false);
 
-  // Whenever the user switches tabs, wait one frame for the hidden panel to
-  // become visible then tell all xterm instances to re-fit to the new size.
   useEffect(() => {
     const id = requestAnimationFrame(() => refitTerminals());
     return () => cancelAnimationFrame(id);
@@ -96,13 +103,10 @@ export default function HomePage() {
           const window = apis.getCurrentWindow();
           windowRef.current = window;
         }
-        // Don't check initial state to avoid permission issues
-        // We'll track state locally based on user actions
       } catch (e) {
         console.error("Failed to initialize window:", e);
       }
     };
-
     initializeWindow();
     setInitialized(true);
   }, []);
@@ -131,10 +135,6 @@ export default function HomePage() {
       }
     };
 
-    // Real DOM containment via a ref, checked on mousedown (fires before the
-    // Add button's own click handler), instead of matching CSS class names —
-    // that approach missed clicks landing anywhere that wasn't tagged with
-    // the exact expected class/attribute and left the picker stuck open.
     const handlePickerOutside = (e: MouseEvent) => {
       if (
         cliPickerContainerRef.current &&
@@ -161,7 +161,6 @@ export default function HomePage() {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (isResizing) {
-      // Sidebar starts right after the 48px activity rail.
       const newWidth = e.clientX - 48;
       if (newWidth >= 150 && newWidth <= 500) {
         setSidebarWidth(newWidth);
@@ -173,16 +172,26 @@ export default function HomePage() {
     setIsResizing(false);
   };
 
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    } else {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
+
   const handleMinimize = async () => {
     try {
       const apis = getTauriAPIs();
       if (apis?.getCurrentWindow) {
         const window = apis.getCurrentWindow();
-        if (window) {
-          await window.minimize();
-        } else {
-          console.warn("Tauri window not available yet");
-        }
+        if (window) await window.minimize();
       }
     } catch (e) {
       console.error("Failed to minimize window:", e);
@@ -202,8 +211,6 @@ export default function HomePage() {
             await window.maximize();
             setIsMaximized(true);
           }
-        } else {
-          console.warn("Tauri window not available yet");
         }
       }
     } catch (e) {
@@ -216,11 +223,7 @@ export default function HomePage() {
       const apis = getTauriAPIs();
       if (apis?.getCurrentWindow) {
         const window = apis.getCurrentWindow();
-        if (window) {
-          await window.close();
-        } else {
-          console.warn("Tauri window not available yet");
-        }
+        if (window) await window.close();
       }
     } catch (e) {
       console.error("Failed to close window:", e);
@@ -231,8 +234,6 @@ export default function HomePage() {
     await handleMaximize();
   };
 
-  // A project folder is where Nectar's `.nectar/` structure lives — make sure
-  // it exists as soon as we know which folder that is.
   const handleFolderSelect = async (folderPath: string) => {
     setProjectPath(folderPath);
     try {
@@ -249,10 +250,7 @@ export default function HomePage() {
     try {
       const apis = getTauriAPIs();
       if (!apis?.save || !apis?.invoke) return;
-      const filePath = await apis.save({
-        title: "New File",
-        defaultPath: projectPath || undefined,
-      });
+      const filePath = await apis.save({ title: "New File", defaultPath: projectPath || undefined });
       if (filePath) {
         await apis.invoke("write_file", { path: filePath, content: "" });
         setOpenFile(filePath);
@@ -266,13 +264,8 @@ export default function HomePage() {
     try {
       const apis = getTauriAPIs();
       if (!apis?.open) return;
-      const filePath = await apis.open({
-        multiple: false,
-        title: "Open File",
-      });
-      if (filePath && typeof filePath === "string") {
-        setOpenFile(filePath);
-      }
+      const filePath = await apis.open({ multiple: false, title: "Open File" });
+      if (filePath && typeof filePath === "string") setOpenFile(filePath);
     } catch (e) {
       console.error("Failed to open file:", e);
     }
@@ -282,11 +275,7 @@ export default function HomePage() {
     try {
       const apis = getTauriAPIs();
       if (!apis?.open) return;
-      const folderPath = await apis.open({
-        directory: true,
-        multiple: false,
-        title: "Open Folder",
-      });
+      const folderPath = await apis.open({ directory: true, multiple: false, title: "Open Folder" });
       if (folderPath && typeof folderPath === "string") {
         await handleFolderSelect(folderPath);
         setActiveView("explorer");
@@ -297,35 +286,20 @@ export default function HomePage() {
     }
   };
 
-  // AGENTS.md §6: editor mode needs "basic git status/diff" — poll the real
-  // repo state for the opened project instead of a hardcoded "main" label.
   useEffect(() => {
-    if (!projectPath) {
-      setGitStatus(null);
-      return;
-    }
-
+    if (!projectPath) { setGitStatus(null); return; }
     let cancelled = false;
     const fetchStatus = async () => {
       try {
         const apis = getTauriAPIs();
         if (!apis?.invoke) return;
-        const status = await apis.invoke<{ branch: string; changed: number }>(
-          "git_status",
-          { projectPath },
-        );
+        const status = await apis.invoke<{ branch: string; changed: number }>("git_status", { projectPath });
         if (!cancelled) setGitStatus(status);
-      } catch {
-        if (!cancelled) setGitStatus(null);
-      }
+      } catch { if (!cancelled) setGitStatus(null); }
     };
-
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => { cancelled = true; clearInterval(interval); };
   }, [projectPath]);
 
   const handleAddButtonClick = () => {
@@ -361,21 +335,18 @@ export default function HomePage() {
     };
 
     addWorkerBee(newWorkerBee);
-  };
+    setAgentStatus(newWorkerBee.id, "launching");
 
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
-    } else {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+    // Sync to active workspace
+    if (activeWorkspaceId) {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+      if (ws) {
+        updateWorkspace(activeWorkspaceId, {
+          paneLayout: [...ws.paneLayout, newWorkerBee],
+        });
+      }
     }
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isResizing]);
+  };
 
   const menuItems = {
     file: [
@@ -388,11 +359,7 @@ export default function HomePage() {
       { label: "Save As...", action: () => console.log("Save as") },
       { label: "Save All", action: () => console.log("Save all") },
       { label: "-", action: () => {} },
-      {
-        label: "Autosave",
-        action: () => setAutosaveEnabled(!autosaveEnabled),
-        checked: autosaveEnabled,
-      },
+      { label: "Autosave", action: () => setAutosaveEnabled(!autosaveEnabled), checked: autosaveEnabled },
       { label: "-", action: () => {} },
       { label: "Exit", action: handleClose },
     ],
@@ -412,14 +379,8 @@ export default function HomePage() {
     selection: [
       { label: "Select All", action: () => console.log("Select all") },
       { label: "-", action: () => {} },
-      {
-        label: "Expand Selection",
-        action: () => console.log("Expand selection"),
-      },
-      {
-        label: "Shrink Selection",
-        action: () => console.log("Shrink selection"),
-      },
+      { label: "Expand Selection", action: () => console.log("Expand selection") },
+      { label: "Shrink Selection", action: () => console.log("Shrink selection") },
       { label: "-", action: () => {} },
       { label: "Copy Line Up", action: () => console.log("Copy line up") },
       { label: "Copy Line Down", action: () => console.log("Copy line down") },
@@ -427,20 +388,14 @@ export default function HomePage() {
       { label: "Move Line Down", action: () => console.log("Move line down") },
     ],
     view: [
-      {
-        label: "Command Palette",
-        action: () => console.log("Command palette"),
-      },
+      { label: "Command Palette", action: () => console.log("Command palette") },
       { label: "-", action: () => {} },
       { label: "Explorer", action: () => setActiveView("explorer") },
       { label: "Search", action: () => setActiveView("search") },
       { label: "Source Control", action: () => setActiveView("git") },
       { label: "Extensions", action: () => setActiveView("settings") },
       { label: "-", action: () => {} },
-      {
-        label: "Toggle Sidebar",
-        action: () => setSidebarCollapsed(!sidebarCollapsed),
-      },
+      { label: "Toggle Sidebar", action: () => setSidebarCollapsed(!sidebarCollapsed) },
       { label: "-", action: () => {} },
       { label: "Appearance", action: () => console.log("Appearance") },
     ],
@@ -452,63 +407,37 @@ export default function HomePage() {
       { label: "Back", action: () => console.log("Back") },
       { label: "Forward", action: () => console.log("Forward") },
       { label: "-", action: () => {} },
-      {
-        label: "Go to Definition",
-        action: () => console.log("Go to definition"),
-      },
-      {
-        label: "Peek Definition",
-        action: () => console.log("Peek definition"),
-      },
+      { label: "Go to Definition", action: () => console.log("Go to definition") },
+      { label: "Peek Definition", action: () => console.log("Peek definition") },
     ],
     run: [
       { label: "Run Task", action: () => console.log("Run task") },
       { label: "-", action: () => {} },
-      {
-        label: "Start Debugging",
-        action: () => console.log("Start debugging"),
-      },
+      { label: "Start Debugging", action: () => console.log("Start debugging") },
       { label: "Run and Debug", action: () => console.log("Run and debug") },
       { label: "-", action: () => {} },
       { label: "Stop Debugging", action: () => console.log("Stop debugging") },
-      {
-        label: "Restart Debugging",
-        action: () => console.log("Restart debugging"),
-      },
+      { label: "Restart Debugging", action: () => console.log("Restart debugging") },
     ],
     terminal: [
       { label: "Clear terminal", action: () => console.log("Clear terminal") },
       { label: "-", action: () => {} },
-      {
-        label: "Configure Default Shell",
-        action: () => console.log("Configure shell"),
-      },
+      { label: "Configure Default Shell", action: () => console.log("Configure shell") },
     ],
     help: [
       { label: "Welcome", action: () => console.log("Welcome") },
       { label: "Documentation", action: () => console.log("Documentation") },
       { label: "-", action: () => {} },
-      {
-        label: "Keyboard Shortcuts",
-        action: () => console.log("Keyboard shortcuts"),
-      },
+      { label: "Keyboard Shortcuts", action: () => console.log("Keyboard shortcuts") },
       { label: "-", action: () => {} },
-      {
-        label: "Check for Updates",
-        action: () => console.log("Check updates"),
-      },
+      { label: "Check for Updates", action: () => console.log("Check updates") },
       { label: "About", action: () => console.log("About") },
     ],
   };
 
   return (
     <div className="h-screen w-screen flex flex-col text-bee-text font-sans select-none">
-      {/* Title Bar - Custom draggable navbar
-          `relative z-50` is load-bearing: glass-toolbar's backdrop-filter makes
-          this div a stacking context, which traps any z-index on its dropdown
-          descendants (menu dropdown, CLIPicker) — without an explicit z-index
-          here, Main Content (later in DOM order) paints over the whole title
-          bar subtree regardless of the dropdown's own z-50. */}
+      {/* Title Bar */}
       <div
         className="relative z-50 h-11 glass-toolbar flex items-center px-3 border-b border-bee-border/60"
         data-tauri-drag-region
@@ -522,7 +451,7 @@ export default function HomePage() {
             Hiveory<span className="text-bee-gold">AI</span>
           </span>
 
-          {/* Editor/ADE Toggle — segmented glass control */}
+          {/* Editor/ADE Toggle */}
           <div className="flex items-center p-0.5 ml-4 rounded-lg glass border-bee-border/70">
             <button
               onClick={() => setMode("editor")}
@@ -549,14 +478,11 @@ export default function HomePage() {
           </div>
 
           {mode === "editor" ? (
-            /* Menu Items */
             <div className="flex items-center gap-1 ml-4">
               {Object.keys(menuItems).map((menu) => (
                 <div key={menu} className="relative">
                   <button
-                    onClick={() =>
-                      setActiveMenu(activeMenu === menu ? null : menu)
-                    }
+                    onClick={() => setActiveMenu(activeMenu === menu ? null : menu)}
                     className={`menu-button px-2.5 py-1 text-xs rounded-md transition-colors capitalize ${
                       activeMenu === menu
                         ? "bg-bee-gold/10 text-bee-text"
@@ -567,30 +493,23 @@ export default function HomePage() {
                   </button>
                   {activeMenu === menu && (
                     <div className="dropdown-menu absolute left-0 top-full mt-1.5 glass-hi rounded-xl z-50 min-w-52 p-1 animate-fade-in">
-                      {menuItems[menu as keyof typeof menuItems].map(
-                        (item, index) =>
-                          item.label === "-" ? (
-                            <div
-                              key={index}
-                              className="h-px bg-bee-border/60 my-1 mx-1"
-                            />
-                          ) : (
-                            <button
-                              key={item.label}
-                              onClick={() => {
-                                item.action();
-                                setActiveMenu(null);
-                              }}
-                              className="w-full px-3 py-1.5 text-left text-xs rounded-lg hover:bg-bee-gold/15 hover:text-bee-goldHi text-bee-textDim transition-colors flex items-center gap-2"
-                            >
-                              <span className="w-3 flex-shrink-0">
-                                {"checked" in item && item.checked && (
-                                  <Check size={12} className="text-bee-gold" />
-                                )}
-                              </span>
-                              {item.label}
-                            </button>
-                          ),
+                      {menuItems[menu as keyof typeof menuItems].map((item, index) =>
+                        item.label === "-" ? (
+                          <div key={index} className="h-px bg-bee-border/60 my-1 mx-1" />
+                        ) : (
+                          <button
+                            key={item.label}
+                            onClick={() => { item.action(); setActiveMenu(null); }}
+                            className="w-full px-3 py-1.5 text-left text-xs rounded-lg hover:bg-bee-gold/15 hover:text-bee-goldHi text-bee-textDim transition-colors flex items-center gap-2"
+                          >
+                            <span className="w-3 flex-shrink-0">
+                              {"checked" in item && item.checked && (
+                                <Check size={12} className="text-bee-gold" />
+                              )}
+                            </span>
+                            {item.label}
+                          </button>
+                        ),
                       )}
                     </div>
                   )}
@@ -598,8 +517,6 @@ export default function HomePage() {
               ))}
             </div>
           ) : (
-            /* WorkerBees controls — replaces the menu bar entirely in ADE mode,
-               so there is only ever one toolbar row. */
             <div className="flex items-center gap-3 ml-4 min-w-0">
               <span className="text-xs font-semibold tracking-wide text-bee-text">
                 WorkerBees
@@ -608,10 +525,6 @@ export default function HomePage() {
                 {workerBees.length}/16
               </span>
 
-              {/* Same folder picker + handleFolderSelect as Editor's File >
-                  Open Folder — both write the same projectPath state in
-                  HomePage, so picking a project here also updates the
-                  Editor's explorer, and vice versa. */}
               <button
                 onClick={handleOpenFolder}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs glass border-bee-border/70 text-bee-textDim hover:text-bee-text transition-colors min-w-0 flex-shrink"
@@ -619,9 +532,7 @@ export default function HomePage() {
               >
                 <FolderOpen size={12} className="text-bee-gold flex-shrink-0" />
                 <span className="truncate max-w-[140px]">
-                  {projectPath
-                    ? projectPath.split(/[\\/]/).filter(Boolean).pop()
-                    : "Open Project"}
+                  {projectPath ? projectPath.split(/[\\/]/).filter(Boolean).pop() : "Open Project"}
                 </span>
               </button>
 
@@ -630,22 +541,14 @@ export default function HomePage() {
                   <button
                     key={opt.label}
                     onClick={() => setGridLayout(opt.value)}
-                    title={
-                      opt.value === "auto"
-                        ? "Auto layout"
-                        : `${opt.value} column${opt.value === 1 ? "" : "s"}`
-                    }
+                    title={opt.value === "auto" ? "Auto layout" : `${opt.value} column${opt.value === 1 ? "" : "s"}`}
                     className={`px-2 py-1 text-[11px] rounded-md flex items-center gap-1 transition-all ${
                       gridLayout === opt.value
                         ? "bg-bee-gold/15 text-bee-goldHi"
                         : "text-bee-textDim hover:text-bee-text"
                     }`}
                   >
-                    {opt.value === "auto" ? (
-                      <LayoutGrid size={11} />
-                    ) : (
-                      opt.label
-                    )}
+                    {opt.value === "auto" ? <LayoutGrid size={11} /> : opt.label}
                   </button>
                 ))}
               </div>
@@ -708,54 +611,29 @@ export default function HomePage() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Activity Bar + Explorer sidebar — editor mode only; ADE mode has no
-            left-hand chrome at all. */}
         {mode === "editor" && (
           <>
             <div className="w-12 glass-rail flex flex-col items-center py-2 gap-1 border-r border-bee-border/60">
-              {(
-                [
-                  { view: "explorer", icon: File, title: "Explorer" },
-                  { view: "search", icon: Search, title: "Search" },
-                  { view: "git", icon: GitBranch, title: "Source Control" },
-                ] as const
-              ).map(({ view, icon: Icon, title }) => {
+              {([{ view: "explorer", icon: File, title: "Explorer" },
+                { view: "search", icon: Search, title: "Search" },
+                { view: "git", icon: GitBranch, title: "Source Control" },
+              ] as const).map(({ view, icon: Icon, title }) => {
                 const active = activeView === view && !sidebarCollapsed;
                 return (
                   <button
                     key={view}
-                    onClick={() => {
-                      if (active) {
-                        setSidebarCollapsed(true);
-                      } else {
-                        setActiveView(view);
-                        setSidebarCollapsed(false);
-                      }
-                    }}
-                    className={`relative p-2 rounded-lg transition-colors ${
-                      active
-                        ? "text-bee-goldHi bg-bee-gold/10"
-                        : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"
-                    }`}
+                    onClick={() => { if (active) setSidebarCollapsed(true); else { setActiveView(view); setSidebarCollapsed(false); } }}
+                    className={`relative p-2 rounded-lg transition-colors ${active ? "text-bee-goldHi bg-bee-gold/10" : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"}`}
                     title={title}
                   >
-                    {active && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-bee-gold" />
-                    )}
+                    {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-full bg-bee-gold" />}
                     <Icon size={20} />
                   </button>
                 );
               })}
               <div className="flex-1" />
               <button
-                onClick={() => {
-                  if (activeView === "settings" && !sidebarCollapsed) {
-                    setSidebarCollapsed(true);
-                  } else {
-                    setActiveView("settings");
-                    setSidebarCollapsed(false);
-                  }
-                }}
+                onClick={() => { if (activeView === "settings" && !sidebarCollapsed) setSidebarCollapsed(true); else { setActiveView("settings"); setSidebarCollapsed(false); } }}
                 className={`p-2 rounded-lg transition-colors ${activeView === "settings" && !sidebarCollapsed ? "text-bee-goldHi bg-bee-gold/10" : "text-bee-textMuted hover:text-bee-textDim hover:bg-bee-border/40"}`}
                 title="Settings"
               >
@@ -763,42 +641,16 @@ export default function HomePage() {
               </button>
             </div>
 
-            {/* Sidebar */}
             {!sidebarCollapsed && (
               <>
-                <div
-                  className="glass flex flex-col border-y-0 border-l-0 border-r border-bee-border/60 flex-shrink-0"
-                  style={{ width: `${sidebarWidth}px` }}
-                >
+                <div className="glass flex flex-col border-y-0 border-l-0 border-r border-bee-border/60 flex-shrink-0" style={{ width: `${sidebarWidth}px` }}>
                   <div className="h-9 flex items-center justify-between px-4 text-[11px] font-semibold text-bee-gold uppercase tracking-[0.14em]">
-                    <span>
-                      {activeView === "explorer"
-                        ? "Explorer"
-                        : activeView === "search"
-                          ? "Search"
-                          : activeView === "git"
-                            ? "Source Control"
-                            : "Settings"}
-                    </span>
-                    <button
-                      onClick={() => setSidebarCollapsed(true)}
-                      className="text-bee-textMuted hover:text-bee-textDim transition-colors"
-                    >
-                      <X size={14} />
-                    </button>
+                    <span>{activeView === "explorer" ? "Explorer" : activeView === "search" ? "Search" : activeView === "git" ? "Source Control" : "Settings"}</span>
+                    <button onClick={() => setSidebarCollapsed(true)} className="text-bee-textMuted hover:text-bee-textDim transition-colors"><X size={14} /></button>
                   </div>
-                  <Sidebar
-                    mode={mode}
-                    onModeChange={setMode}
-                    onFileSelect={setOpenFile}
-                    onFolderSelect={handleFolderSelect}
-                    rootPath={projectPath}
-                  />
+                  <Sidebar mode={mode} onModeChange={setMode} onFileSelect={setOpenFile} onFolderSelect={handleFolderSelect} rootPath={projectPath} />
                 </div>
-                <div
-                  className="w-1.5 -mx-0.5 z-10 cursor-col-resize group flex-shrink-0"
-                  onMouseDown={handleMouseDown}
-                >
+                <div className="w-1.5 -mx-0.5 z-10 cursor-col-resize group flex-shrink-0" onMouseDown={handleMouseDown}>
                   <div className="w-px h-full mx-auto bg-bee-border/60 group-hover:bg-bee-gold transition-colors" />
                 </div>
               </>
@@ -806,46 +658,44 @@ export default function HomePage() {
           </>
         )}
 
-        {/* Main Panel — both panels stay mounted at all times so their
-            xterm/Monaco instances and PTY processes survive tab switches.
-            CSS `hidden` (display:none) hides the inactive one without
-            unmounting its React subtree. */}
         <div className={`flex-1 flex overflow-hidden min-w-0 ${mode !== "editor" ? "hidden" : ""}`}>
           <EditorPanel openFile={openFile} projectPath={projectPath} />
         </div>
         <div className={`flex-1 flex overflow-hidden min-w-0 relative ${mode !== "ade" ? "hidden" : ""}`}>
-          {/* Workspaces side panel */}
-          {showWorkspaces && (
-            <div className={workspacesDocked ? "" : "absolute left-0 top-0 bottom-0 z-40"}>
-              <WorkspacesPanel
-                onClose={() => setShowWorkspaces(false)}
-                docked={workspacesDocked}
-                onToggleDock={() => setWorkspacesDocked(!workspacesDocked)}
-              />
-            </div>
-          )}
+          {/* Left sidebar — Workspace/Worktree list (always visible, resizable) */}
+          <div className="relative h-full flex-shrink-0">
+            <ADEWorktreeSidebar />
+          </div>
 
           {/* Main grid area */}
-          <div className={`flex-1 flex flex-col overflow-hidden relative ${workspacesDocked ? "" : ""}`}>
+          <div className="flex-1 flex flex-col overflow-hidden relative">
             <WorkerBeesPanel
               workingDir={projectPath}
               onToggleWorkspaces={() => setShowWorkspaces(!showWorkspaces)}
-              onToggleBoard={() => setShowBoard(!showBoard)}
+              onToggleBoard={() => setBoardOpen(!boardOpen)}
               onToggleAgentDock={() => setShowAgentDock(!showAgentDock)}
+              onToggleSessionHistory={() => setShowSessionHistory(!showSessionHistory)}
               workspacesDocked={workspacesDocked}
               queenbeeDocked={queenbeeDocked}
+              sessionHistoryOpen={showSessionHistory}
             />
           </div>
 
-          {/* Board popup (floating over grid, top-right) */}
-          <BoardPopup isOpen={showBoard} onClose={() => setShowBoard(false)} />
-
-          {/* Agent Dock (right side) */}
-          {showAgentDock && (
+          {/* Right panel — toggle between AgentDock and SessionHistory */}
+          {showAgentDock && !showSessionHistory && (
             <div className={queenbeeDocked ? "" : "absolute right-0 top-0 bottom-0 z-40"}>
               <AgentDock
                 docked={queenbeeDocked}
                 onToggleDock={() => setQueenbeeDocked(!queenbeeDocked)}
+              />
+            </div>
+          )}
+          {showSessionHistory && (
+            <div className="h-full flex-shrink-0">
+              <ADESessionHistory
+                projectPath={projectPath}
+                activeWorktreeId={activeWorkspaceId}
+                activeWorkspaceId={activeWorkspaceId}
               />
             </div>
           )}
@@ -860,9 +710,7 @@ export default function HomePage() {
             {gitStatus?.branch ?? "no repo"}
           </span>
           {gitStatus && gitStatus.changed > 0 && (
-            <span className="text-bee-textMuted">
-              {gitStatus.changed} changed
-            </span>
+            <span className="text-bee-textMuted">{gitStatus.changed} changed</span>
           )}
         </div>
         <div className="flex items-center gap-4 text-bee-textMuted">
@@ -873,9 +721,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {showSettings && (
-        <SettingsPage onClose={() => setShowSettings(false)} />
-      )}
+      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
     </div>
   );
 }

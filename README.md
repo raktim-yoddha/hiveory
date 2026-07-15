@@ -40,9 +40,9 @@ Hiveory AI is a local-first, AI-native desktop dev environment. You open a proje
 
 **5. Let memory flow** — For MCP-capable agents, a `nectar_query` tool is registered so the agent pulls ranked memory on demand. For others, a compact handoff summary is injected at boot. A visible role badge and branch indicator appears on panes that belong to an active mission.
 
-**6. Coordinate multiple agents (v2)** — Talk to QueenBee in the right-side conversational dock. QueenBee reads Nectar for context, breaks goals into tasks with declared file ownership, and dispatches them autonomously — HiveMind creates isolated git worktrees and launches WorkerBees for each task. Track progress via the Board popup (button in the ADE toolbar). As Builders finish, cards move to Review where a Reviewer diffs and approves. Every agent reads/writes the same Nectar memory.
+**6. Coordinate multiple agents (v2)** — Talk to QueenBee in the right-side conversational dock. QueenBee reads Nectar for context, breaks goals into tasks with declared file ownership, and dispatches them autonomously — HiveMind creates isolated git worktrees and launches WorkerBees for each task. Track progress via the Board drawer (button in the ADE toolbar, slides in with a clip-path animation inspired by Orca's `WorkspaceKanbanDrawer`). Cards can be dragged across columns with custom pointer-based drag & drop (threshold-gated at 5px, with floating preview and drop indicator). As Builders finish, cards move to Review where a Reviewer diffs and approves. Every agent reads/writes the same Nectar memory.
 
-**7. Workspaces** — Click the Workspaces button in the ADE toolbar to open the side panel. Create multiple workspaces (each with its own project folder, pane layout, and running agents). Agents in non-active workspaces keep running in the background.
+**7. Workspaces** — Click the Workspaces button in the ADE toolbar to open the side panel. Create multiple workspaces (each with its own project folder, pane layout, and running agents). Each workspace shows inline agent status badges (launching/running/idle/error/done) and task card counts. Switching workspaces routes the pane grid to that workspace's WorkerBees — agents in non-active workspaces keep running in the background (per-workspace state routing pattern adapted from Orca's `tabsByWorktree` / `layoutByWorktree`).
 
 **8. Swap agents freely** — Close one agent, open another. It picks up decisions, conventions, and handoffs recorded by the previous agent from the same `.nectar/` — no re-explaining.
 
@@ -142,7 +142,7 @@ flowchart LR
 | Memory Parsing          | `gray-matter` + `remark` / `unified`                                      |
 | Agent Bridge            | Model Context Protocol (MCP) stdio server + per-CLI config                |
 | Git Worktree Isolation  | Native `git worktree` via child_process                                   |
-| Kanban                  | Native React components (no external lib)                                 |
+| Kanban                  | Native React components with custom pointer-based drag & drop (inspired by Orca's `use-workspace-kanban-card-pointer-drag.ts`) |
 | Git                     | `simple-git` (basic status/diff)                                          |
 | Monorepo                | `pnpm` workspaces + Turborepo                                             |
 | Language                | TypeScript, Rust                                                          |
@@ -261,7 +261,6 @@ hiveory/
 │   ├── src/                      # Next.js frontend
 │   │   ├── app/                  # App Router pages
 │   │   ├── components/
-│   │   │   ├── board/            # Kanban board popup (v2)
 │   │   │   ├── editor/           # Monaco editor + file explorer
 │   │   │   ├── queenbee/         # QueenBee AgentDock conversational panel
 │   │   │   ├── settings/         # Settings page: ProvidersSection + ModelsSection
@@ -295,7 +294,7 @@ hiveory/
 │   │   └── index.ts
 │   └── tests/
 │
-├── TaskComb/                     # Kanban board (v2, standalone)
+├── TaskComb/                     # Kanban board (v2, standalone) — includes React components (drawer, lanes, cards, drag & drop)
 │   ├── src/
 │   │   ├── board.ts              # Column state + card CRUD
 │   │   ├── dispatch.ts           # Drag-to-dispatch → HiveMind command
@@ -384,6 +383,29 @@ Prebuilt Windows installers (x64) are produced by `pnpm tauri:build` at
 
 A standalone executable is also available at
 `Hive/src-tauri/target/release/hiveory-ai.exe`.
+
+## 📄 Reference
+
+A detailed feature mapping between **Hiveory v2** and **Orca** (Stably AI's parallel-agent IDE) lives in [`SIMILAR.md`](./SIMILAR.md). It documents Orca's implementations for workspaces, git worktree isolation, kanban board UI/UX, drag-and-drop mechanics, and session persistence — along with which patterns apply to Hiveory and which are out of scope.
+
+### ADE Redesign Pass (Orca-inspired)
+
+The following changes were made during the ADE UI/UX redesign pass, using Orca as a visual and interaction reference:
+
+| Change | Orca source | Files affected |
+|---|---|---|
+| Kanban board replaced with slide-out drawer using `clip-path` animation | `WorkspaceKanbanDrawer.tsx`, `main.css:1614` | New in `TaskComb/src/components/`: `WorkspaceKanbanDrawer.tsx`, `WorkspaceKanbanLaneGrid.tsx`, `WorkspaceKanbanStatusLane.tsx`, `WorkspaceKanbanCard.tsx`, `WorkspaceKanbanDrawerHeader.tsx` |
+| Custom pointer-based drag & drop (threshold-gated, floating preview, drop indicator) | `use-workspace-kanban-card-pointer-drag.ts` | New in `TaskComb/src/components/`: `use-workspace-kanban-card-pointer-drag.ts` |
+| Multi-selection (click/shift/cmd) | `use-workspace-kanban-selection.ts` | New in `TaskComb/src/components/`: `use-workspace-kanban-selection.ts` |
+| Column resize (pointer + keyboard) | `use-workspace-kanban-column-resize.ts` | New in `TaskComb/src/components/`: `use-workspace-kanban-column-resize.ts` |
+| Board open/close/drag-preview state machine | `useWorkspaceBoardPanel.ts` | New in `TaskComb/src/components/`: `useWorkspaceBoardPanel.ts` |
+| Toolbar pulse animation during drag preview | `main.css:1649` | `Hive/src/app/globals.css` |
+| Workspace panel: agent status badges per workspace | `WorktreeCardAgents.tsx` | `Hive/src/components/workspace/WorkspacesPanel.tsx` (redesigned) |
+| Per-workspace WorkerBee state routing (switch workspace → switch grid) | `setActiveWorktree`, `tabsByWorktree` pattern | `Hive/src/components/workerbees/WorkerBeesPanel.tsx`, `Hive/src/app/HomePage.tsx`, `Hive/src/stores/workspaceStore.ts`, `Hive/src/stores/workerBeesStore.ts` |
+| Task card data model enriched with `sortOrder`, `owns`, `reads`, `dependsOn`, `blockingReason` | `TaskCard` type adapted from Orca's workspace-status model per AGENTS1.md §3.2 | `TaskComb/src/board.ts` (canonical type), `Hive/src/stores/workspaceStore.ts` (imports from `@hiveory/taskcomb`) |
+| Left sidebar: Workspace-grouped worktree rows with live-status dot, primary badge, subtitle, search + filter, resizable (min 220px / max 500px) | `WorktreeCard.tsx`, `WorktreeCardStatusSlot.tsx`, `StatusIndicator.tsx`, `SidebarFilter.tsx`, `useSidebarResize` (min 220 / max 500) | New `Hive/src/components/ade/ADEWorktreeSidebar.tsx` |
+| Right panel: Agent Session History with scope tabs ("This worktree" / "This workspace" / "All"), search, collapsible agent-type group headers, session cards with branch chip and relative timestamp | `AiVaultPanel.tsx`, `AiVaultPanelHeader.tsx`, `AiVaultPanelControls.tsx` (VaultScopeSwitch, VaultGroupHeader), `AiVaultSessionRow.tsx`, `AiVaultSessionVirtualList.tsx` | New `Hive/src/components/ade/ADESessionHistory.tsx` |
+| Backend: `nectar_list_sessions` Tauri IPC command — reads `.nectar/agents/sessions/*.md`, parses frontmatter, returns sorted/filtered session entries | Orca's `ai-vault-types.ts` (AiVaultSession, AiVaultListArgs/Result) adapted for Nectar's file-based model per AGENTS.md §3 (no AI Vault scanners) | `Hive/src-tauri/src/lib.rs` (new `nectar_list_sessions` command, extended `NectarLogSessionRequest` with `title`/`branch`/`worktree_id`/`message_count`), `Hive/src/lib/nectar.ts` (new `listSessions()` method, `NectarSessionEntry` type) |
 
 ## 📄 License
 

@@ -1,9 +1,5 @@
 import { create } from "zustand";
 
-// WorkerBees are a standalone feature (AGENTS.md §5): CLI agent processes
-// wired to Nectar, not plain shell terminals. This store only ever holds
-// WorkerBee state — the plain-terminal UI in `components/terminal/` doesn't
-// use it at all.
 export interface WorkerBee {
   id: string;
   cli: string;
@@ -12,6 +8,8 @@ export interface WorkerBee {
   args?: string[];
 }
 
+export type AgentStatus = 'launching' | 'running' | 'idle' | 'error' | 'done';
+
 export type GridLayout = "auto" | 1 | 2 | 3 | 4;
 
 interface WorkerBeesState {
@@ -19,15 +17,16 @@ interface WorkerBeesState {
   addWorkerBee: (workerBee: WorkerBee) => void;
   removeWorkerBee: (beeId: string) => void;
   updateWorkerBee: (beeId: string, updates: Partial<WorkerBee>) => void;
+  agentStatuses: Record<string, AgentStatus>;
+  setAgentStatus: (beeId: string, status: AgentStatus) => void;
   maximizedPane: string | null;
   setMaximizedPane: (paneId: string | null) => void;
   gridLayout: GridLayout;
   setGridLayout: (layout: GridLayout) => void;
   reorderWorkerBees: (fromIndex: number, toIndex: number) => void;
-  // Incremented whenever visible panels change (tab switch, maximize/minimize)
-  // so xterm panes can watch this and re-fit themselves.
   refitCount: number;
   refitTerminals: () => void;
+  replaceAll: (bees: WorkerBee[]) => void;
 }
 
 export const useWorkerBeesStore = create<WorkerBeesState>((set) => ({
@@ -35,15 +34,24 @@ export const useWorkerBeesStore = create<WorkerBeesState>((set) => ({
   addWorkerBee: (workerBee) =>
     set((state) => ({ workerBees: [...state.workerBees, workerBee] })),
   removeWorkerBee: (beeId) =>
-    set((state) => ({
-      workerBees: state.workerBees.filter((b) => b.id !== beeId),
-      maximizedPane: state.maximizedPane === beeId ? null : state.maximizedPane,
-    })),
+    set((state) => {
+      const { [beeId]: _, ...rest } = state.agentStatuses;
+      return {
+        workerBees: state.workerBees.filter((b) => b.id !== beeId),
+        maximizedPane: state.maximizedPane === beeId ? null : state.maximizedPane,
+        agentStatuses: rest,
+      };
+    }),
   updateWorkerBee: (beeId, updates) =>
     set((state) => ({
       workerBees: state.workerBees.map((b) =>
         b.id === beeId ? { ...b, ...updates } : b
       ),
+    })),
+  agentStatuses: {},
+  setAgentStatus: (beeId, status) =>
+    set((state) => ({
+      agentStatuses: { ...state.agentStatuses, [beeId]: status },
     })),
   maximizedPane: null,
   setMaximizedPane: (paneId) => set({ maximizedPane: paneId }),
@@ -58,4 +66,5 @@ export const useWorkerBeesStore = create<WorkerBeesState>((set) => ({
     }),
   refitCount: 0,
   refitTerminals: () => set((state) => ({ refitCount: state.refitCount + 1 })),
+  replaceAll: (bees) => set({ workerBees: bees }),
 }));
