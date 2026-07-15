@@ -14,7 +14,13 @@ Hiveory AI is a local-first, AI-native desktop dev environment. You open a proje
 - **Model-agnostic** — swap Claude Code → Codex → Aider without losing context
 - **Human-readable memory** — `.nectar/memory/*.md` is plain, git-diffable markdown
 
-> **Implementation status (v2):** The shell, terminal panes, Nectar memory (full Rust-backed read/write/search), the TaskComb board UI, and QueenBee conversational modes (Steward/Forager/Stinger) are wired and working. The multi-agent orchestration spine — QueenBee breakdown → HiveMind dispatch into isolated worktrees → review → merge — exists as standalone, independently-tested packages (`@hiveory/hivemind`, `@hiveory/queenbee`) but is **not yet wired into the Hive shell** (no `create_worktree` command; the shell doesn't call `Orchestrator`). QueenBee is also conversational-only today — it has no tool-calling layer to trigger UI actions. Treat the end-to-end "hand a goal, agents build it" flow as the target, not current behavior.
+> **Implementation status (v2):** The shell, terminal panes, Nectar memory (full Rust-backed read/write/search), the TaskComb board UI, and QueenBee conversational modes (Steward/Forager/Stinger) are wired and working.
+>
+> **QueenBee tool-calling** is implemented ([`Hive/src/lib/queenbeeTools.ts`](Hive/src/lib/queenbeeTools.ts)): QueenBee can perform UI actions conversationally — create workspaces, add/move tasks, launch WorkerBees, toggle the board — via provider tool-calling (Anthropic + OpenAI formats), gated per mode (Steward acts; Forager/Stinger are read-only auditors).
+>
+> **Orchestration spine:** the git-worktree isolation the Node-only `@hiveory/hivemind` package couldn't provide to the renderer is now backed by Rust Tauri commands (`create_worktree`/`merge_worktree`/`remove_worktree`), and the renderer dispatch service ([`Hive/src/lib/dispatch.ts`](Hive/src/lib/dispatch.ts)) wires `QueenBee.breakdown()` → worktree → WorkerBee launch → board card, reachable through QueenBee's `dispatch_goal` tool after the human approves.
+>
+> **Verified** by typecheck, unit tests (`queenbeeTools`, `planDispatch`), and `cargo build`. The full GUI flow (real git worktrees + PTY spawn end-to-end) still needs manual verification in a running desktop build — that path can't be exercised headless.
 
 ## 📑 Table of Contents
 

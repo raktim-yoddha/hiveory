@@ -661,6 +661,84 @@ async fn git_status(project_path: String) -> Result<GitStatus, String> {
     Ok(GitStatus { branch, changed })
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorktreeInfo {
+    pub path: String,
+    pub branch: String,
+    pub task_id: String,
+}
+
+// HiveMind orchestration: git worktree isolation. HiveMind/src/worktree/index.ts
+// implements this in Node (child_process) and is therefore unusable from the
+// Tauri renderer — these commands are the backend the renderer dispatch calls.
+#[tauri::command]
+async fn create_worktree(project_path: String, task_id: String) -> Result<WorktreeInfo, String> {
+    let branch = format!("agent/{}", task_id);
+    let project = std::path::Path::new(&project_path);
+    let parent = project
+        .parent()
+        .ok_or_else(|| "project path has no parent directory".to_string())?;
+    let name = project
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "invalid project path".to_string())?;
+    let worktree_str = parent
+        .join(format!("{}-{}", name, task_id))
+        .to_string_lossy()
+        .to_string();
+
+    let output = std::process::Command::new("git")
+        .args(["-C", &project_path, "worktree", "add", &worktree_str, "-b", &branch])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(WorktreeInfo { path: worktree_str, branch, task_id })
+}
+
+fn remove_worktree_inner(project_path: &str, worktree_path: &str) -> Result<(), String> {
+    let output = std::process::Command::new("git")
+        .args(["-C", project_path, "worktree", "remove", worktree_path, "--force"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Merge an agent's branch back into the project, then remove its worktree.
+#[tauri::command]
+async fn merge_worktree(
+    project_path: String,
+    branch: String,
+    worktree_path: String,
+) -> Result<(), String> {
+    let merge = std::process::Command::new("git")
+        .args(["-C", &project_path, "merge", &branch])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !merge.status.success() {
+        return Err(format!(
+            "git merge failed: {}",
+            String::from_utf8_lossy(&merge.stderr)
+        ));
+    }
+    remove_worktree_inner(&project_path, &worktree_path)
+}
+
+#[tauri::command]
+async fn remove_worktree(project_path: String, worktree_path: String) -> Result<(), String> {
+    remove_worktree_inner(&project_path, &worktree_path)
+}
+
 #[tauri::command]
 async fn nectar_ensure_structure(
     req: NectarEnsureStructureRequest,
@@ -1691,6 +1769,9 @@ pub fn run() {
             nectar_list_sessions,
             nectar_close,
             git_status,
+            create_worktree,
+            merge_worktree,
+            remove_worktree,
             get_nectar_mcp_path,
             ensure_dir,
             run_command

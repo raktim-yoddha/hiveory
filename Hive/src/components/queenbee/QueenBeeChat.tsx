@@ -3,8 +3,21 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Settings, Pin, PinOff, ExternalLink, ClipboardList, Search, Zap, ChevronDown, type LucideIcon } from "lucide-react";
 import { MODE_SYSTEM_PROMPTS, detectModeIntent, type QueenBeeMode } from "@hiveory/queenbee";
+import type { ColumnId } from "@hiveory/taskcomb";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useProviderStore } from "@/stores/providerStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useWorkerBeesStore } from "@/stores/workerBeesStore";
+import {
+  toAnthropicTools,
+  toOpenAITools,
+  executeTool,
+  ToolError,
+  ASYNC_TOOLS,
+  type ToolContext,
+} from "@/lib/queenbeeTools";
+import { useProjectStore } from "@/stores/projectStore";
+import { dispatchGoal } from "@/lib/dispatch";
 
 interface Message {
   id: string;
@@ -80,10 +93,84 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings }: Q
     return providers.find((p) => p.apiKey) || providers[0] || null;
   };
 
+  // Bind QueenBee's tools to the live stores. Reads getState() fresh on each
+  // call so tool results reflect prior tool mutations within the same turn.
+  const buildToolContext = (): ToolContext => {
+    const effectiveWsId = () => {
+      const s = useWorkspaceStore.getState();
+      return s.activeWorkspaceId || s.workspaces[0]?.id || "";
+    };
+    const activeWorkspace = () => {
+      const s = useWorkspaceStore.getState();
+      return s.workspaces.find((w) => w.id === effectiveWsId());
+    };
+    return {
+      createWorkspace: (name) => {
+        const id = `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        useWorkspaceStore.getState().addWorkspace({
+          id, name, color: "#c9a227", boundProjectPath: "",
+          paneLayout: [], taskCards: [], nextSortOrder: 0,
+        });
+        return id;
+      },
+      listWorkspaces: () =>
+        useWorkspaceStore.getState().workspaces.map((w) => ({ id: w.id, name: w.name })),
+      addTask: (title, description) =>
+        useWorkspaceStore.getState().addTask(effectiveWsId(), title, description),
+      listTasks: () =>
+        (activeWorkspace()?.taskCards ?? []).map((t) => ({ id: t.id, title: t.title, column: t.column })),
+      moveTask: (taskId, column) => {
+        const w = activeWorkspace();
+        if (!w || !w.taskCards.some((t) => t.id === taskId)) return false;
+        useWorkspaceStore.getState().moveTask(w.id, taskId, column as ColumnId);
+        return true;
+      },
+      launchWorkerBee: (cli, name) =>
+        useWorkerBeesStore.getState().addWorkerBee({
+          id: `bee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          cli, cliName: cli, customName: name,
+        }),
+      setBoardOpen: (open) => useWorkspaceStore.getState().setBoardOpen(open),
+    };
+  };
+
+  const runTool = async (name: string, args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+    try {
+      if (ASYNC_TOOLS.has(name)) {
+        if (activeMode !== "Steward") throw new ToolError(`Tool "${name}" is not available in ${activeMode} mode.`);
+        if (name === "dispatch_goal") {
+          const goal = String(args.goal || "");
+          if (!goal) throw new ToolError('Missing required argument "goal" for dispatch_goal.');
+          const projectPath = useProjectStore.getState().projectPath || "";
+          const results = await dispatchGoal(goal, projectPath, {
+            launchWorkerBee: (cli, displayName, cwd) =>
+              useWorkerBeesStore.getState().addWorkerBee({
+                id: `bee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                cli, cliName: cli, customName: displayName, args: cwd ? ["--cwd", cwd] : undefined,
+              }),
+            addCard: (title, description) => {
+              const s = useWorkspaceStore.getState();
+              s.addTask(s.activeWorkspaceId || s.workspaces[0]?.id || "", title, description);
+            },
+          });
+          const ok = results.filter((r) => !r.error);
+          const failed = results.filter((r) => r.error);
+          const lines = results.map((r) =>
+            r.error ? `- ✗ ${r.title}: ${r.error}` : `- ✓ ${r.title} (${r.cli})${r.worktree ? ` @ ${r.worktree.branch}` : ""}`,
+          );
+          return `Dispatched ${ok.length}/${results.length} task(s)${failed.length ? `, ${failed.length} failed` : ""}:\n${lines.join("\n")}`;
+        }
+      }
+      return executeTool(activeMode, name, args, ctx);
+    } catch (e) {
+      if (e instanceof ToolError) return `Error: ${e.message}`;
+      return `Error: ${(e as Error)?.message || "tool failed"}`;
+    }
+  };
+
   const callApi = async (message: string): Promise<string> => {
     const provider = findProviderForModel();
     const apiKey = provider?.apiKey || "";
-    const providerId = provider?.id || "unknown";
 
     if (!apiKey) {
       return `[${activeMode}] No API key configured for model "${queenbeeModel}". Connect a provider in Settings.`;
@@ -95,49 +182,90 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings }: Q
       .map(m => ({ role: m.sender === "user" ? "user" : "assistant", content: m.text }));
 
     const systemPrompt = MODE_SYSTEM_PROMPTS[activeMode];
+    const ctx = buildToolContext();
+    const MAX_TURNS = 6; // cap the tool-use loop so a misbehaving model can't spin forever
 
     try {
       const isAnthropic = provider?.apiType === "anthropic-messages";
       const baseUrl = provider?.baseUrl?.replace(/\/+$/, "") || "";
 
       if (isAnthropic) {
-        const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        const model = queenbeeModel.replace("anthropic/", "");
+        const tools = toAnthropicTools(activeMode);
+        const msgs: any[] = [...history, { role: "user", content: message }];
+
+        for (let turn = 0; turn < MAX_TURNS; turn++) {
+          const resp = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({ model, system: systemPrompt, messages: msgs, tools, max_tokens: 1000 }),
+          });
+          const data = await resp.json();
+          const blocks: any[] = Array.isArray(data?.content) ? data.content : [];
+          const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+          const toolUses = blocks.filter((b) => b.type === "tool_use");
+
+          if (toolUses.length === 0) {
+            return text || `[${activeMode}] No response from model.`;
+          }
+
+          // Execute each tool call, feed results back, loop.
+          msgs.push({ role: "assistant", content: blocks });
+          const toolResults = await Promise.all(
+            toolUses.map(async (tu) => ({
+              type: "tool_result",
+              tool_use_id: tu.id,
+              content: await runTool(tu.name, tu.input || {}, ctx),
+            })),
+          );
+          msgs.push({ role: "user", content: toolResults });
+        }
+        return `[${activeMode}] Stopped after ${MAX_TURNS} tool turns.`;
+      }
+
+      // OpenAI-compatible chat completions
+      const model = queenbeeModel.includes("/") ? queenbeeModel.split("/").slice(1).join("/") : queenbeeModel;
+      const tools = toOpenAITools(activeMode);
+      const msgs: any[] = [
+        { role: "system", content: systemPrompt },
+        ...history,
+        { role: "user", content: message },
+      ];
+
+      for (let turn = 0; turn < MAX_TURNS; turn++) {
+        const resp = await fetch(`${baseUrl}/chat/completions`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            ...(provider?.headers || {}),
           },
-          body: JSON.stringify({
-            model: queenbeeModel.replace("anthropic/", ""),
-            system: systemPrompt,
-            messages: [...history, { role: "user", content: message }],
-            max_tokens: 1000,
-          }),
+          body: JSON.stringify({ model, messages: msgs, tools, tool_choice: "auto", max_tokens: 1000 }),
         });
         const data = await resp.json();
-        return data?.content?.[0]?.text || `[${activeMode}] No response from model.`;
-      }
+        const choice = data?.choices?.[0]?.message;
+        const toolCalls: any[] = choice?.tool_calls || [];
 
-      const resp = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-          ...(provider?.headers || {}),
-        },
-        body: JSON.stringify({
-          model: queenbeeModel.includes("/") ? queenbeeModel.split("/").slice(1).join("/") : queenbeeModel,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...history,
-            { role: "user", content: message },
-          ],
-          max_tokens: 1000,
-        }),
-      });
-      const data = await resp.json();
-      return data?.choices?.[0]?.message?.content || `[${activeMode}] No response from model.`;
+        if (toolCalls.length === 0) {
+          return choice?.content || `[${activeMode}] No response from model.`;
+        }
+
+        msgs.push(choice);
+        for (const tc of toolCalls) {
+          let args: Record<string, unknown> = {};
+          try { args = JSON.parse(tc.function?.arguments || "{}"); } catch { /* leave empty; runTool reports missing args */ }
+          msgs.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: await runTool(tc.function?.name, args, ctx),
+          });
+        }
+      }
+      return `[${activeMode}] Stopped after ${MAX_TURNS} tool turns.`;
     } catch (e: any) {
       console.error(`[QueenBee/${activeMode}] API error:`, e);
       return `[${activeMode}] Error: ${e?.message || "API call failed"}`;
