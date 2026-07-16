@@ -398,19 +398,19 @@ The standalone executable is at `Hive/src-tauri/target/release/hiveory-ai.exe`.
 
 Key changes in the ADE (Agent Development Environment) UI/UX pass:
 
-| Change | Where |
-|---|---|
-| Kanban board rendered as a slide-out drawer with a `clip-path` animation | `TaskComb/src/components/`: `TaskCombDrawer`, `TaskCombLaneGrid`, `TaskCombStatusLane`, `TaskCombCard`, `TaskCombDrawerHeader` |
-| Custom pointer-based drag & drop (5px threshold, floating preview, drop indicator) | `TaskComb/src/components/use-taskcomb-card-pointer-drag.ts` |
-| Multi-selection (click/shift/cmd) and pointer/keyboard column resize | `use-taskcomb-selection.ts`, `use-taskcomb-column-resize.ts` |
-| Board open/close/drag-preview state machine | `useTaskCombBoardPanel.ts` |
-| Per-workspace WorkerBee state routing (switch workspace → switch grid) | `WorkerBeesPanel.tsx`, `HomePage.tsx`, `workspaceStore.ts`, `workerBeesStore.ts` |
-| Task card model with `sortOrder`, `owns`, `reads`, `dependsOn`, `blockingReason` | `TaskComb/src/board.ts` (canonical type), consumed by `workspaceStore.ts` |
-| Left sidebar: flat one-row-per-workspace list with live-status dot, inline rename, branch label, search + filter, resizable (220–500px) | `Hive/src/components/ade/ADEWorktreeSidebar.tsx` |
-| Right dock: QueenBee chat + Agent Session History merged into Chat/History sub-tabs | `ADERightDock.tsx`, `ADESessionHistory.tsx` |
-| Backend `nectar_list_sessions` command — reads `.nectar/agents/sessions/*.md`, parses frontmatter, returns sorted/filtered entries | `Hive/src-tauri/src/lib.rs`, `Hive/src/lib/nectar.ts` |
-| Git worktree isolation commands (`create_worktree`/`merge_worktree`/`remove_worktree`) + renderer dispatch | `Hive/src-tauri/src/lib.rs`, `Hive/src/lib/dispatch.ts` |
-| QueenBee tool-calling (create workspace, add/move task, launch WorkerBee, dispatch) | `Hive/src/lib/queenbeeTools.ts` |
+| Change                                                                                                                                  | Where                                                                                                                          |
+| -----------------------------------------------------------------------------------------------------------------------------------------| --------------------------------------------------------------------------------------------------------------------------------|
+| Kanban board rendered as a slide-out drawer with a `clip-path` animation                                                                | `TaskComb/src/components/`: `TaskCombDrawer`, `TaskCombLaneGrid`, `TaskCombStatusLane`, `TaskCombCard`, `TaskCombDrawerHeader` |
+| Custom pointer-based drag & drop (5px threshold, floating preview, drop indicator)                                                      | `TaskComb/src/components/use-taskcomb-card-pointer-drag.ts`                                                                    |
+| Multi-selection (click/shift/cmd) and pointer/keyboard column resize                                                                    | `use-taskcomb-selection.ts`, `use-taskcomb-column-resize.ts`                                                                   |
+| Board open/close/drag-preview state machine                                                                                             | `useTaskCombBoardPanel.ts`                                                                                                     |
+| Per-workspace WorkerBee state routing (switch workspace → switch grid)                                                                  | `WorkerBeesPanel.tsx`, `HomePage.tsx`, `workspaceStore.ts`, `workerBeesStore.ts`                                               |
+| Task card model with `sortOrder`, `owns`, `reads`, `dependsOn`, `blockingReason`                                                        | `TaskComb/src/board.ts` (canonical type), consumed by `workspaceStore.ts`                                                      |
+| Left sidebar: flat one-row-per-workspace list with live-status dot, inline rename, branch label, search + filter, resizable (220–500px) | `Hive/src/components/ade/ADEWorktreeSidebar.tsx`                                                                               |
+| Right dock: QueenBee chat + Agent Session History merged into Chat/History sub-tabs                                                     | `ADERightDock.tsx`, `ADESessionHistory.tsx`                                                                                    |
+| Backend `nectar_list_sessions` command — reads `.nectar/agents/sessions/*.md`, parses frontmatter, returns sorted/filtered entries      | `Hive/src-tauri/src/lib.rs`, `Hive/src/lib/nectar.ts`                                                                          |
+| Git worktree isolation commands (`create_worktree`/`merge_worktree`/`remove_worktree`) + renderer dispatch                              | `Hive/src-tauri/src/lib.rs`, `Hive/src/lib/dispatch.ts`                                                                        |
+| QueenBee tool-calling (create workspace, add/move task, launch WorkerBee, dispatch)                                                     | `Hive/src/lib/queenbeeTools.ts`                                                                                                |
 
 ## 📄 License
 
