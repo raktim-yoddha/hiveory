@@ -6,6 +6,9 @@ export interface WorkerBee {
   cliName: string;
   customName?: string;
   args?: string[];
+  // 'agent' (a CLI coding agent, the default) or 'shell' (a plain terminal you
+  // can run any command in). Shell panes render TerminalPane instead of WorkerBeePane.
+  kind?: 'agent' | 'shell';
 }
 
 export type AgentStatus = 'launching' | 'running' | 'idle' | 'error' | 'done';

@@ -18,6 +18,7 @@ import {
   Square,
   Copy,
   Plus,
+  Terminal as TerminalIcon,
   LayoutGrid,
   FolderOpen,
   GitBranch,
@@ -257,6 +258,22 @@ export default function HomePage() {
     }
   };
 
+  // Open a plain shell terminal pane (not a CLI agent). TerminalPane picks the
+  // actual shell (PowerShell/cmd/Git Bash/WSL) itself.
+  const handleAddTerminal = () => {
+    const terminal: WorkerBee = {
+      id: `terminal-${Date.now()}`,
+      cli: "shell",
+      cliName: "Terminal",
+      kind: "shell",
+    };
+    addWorkerBee(terminal);
+    if (activeWorkspaceId) {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+      if (ws) updateWorkspace(activeWorkspaceId, { paneLayout: [...ws.paneLayout, terminal] });
+    }
+  };
+
   // Determine if each sidebar is visible and whether it takes flex space
   const leftVisible = leftPinned ? leftOpen : leftOpen;
   const rightVisible = rightPinned ? rightOpen : rightOpen;
@@ -359,6 +376,15 @@ export default function HomePage() {
               />
             )}
           </div>
+
+          <button
+            onClick={handleAddTerminal}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-bee-canvas/60 border border-bee-border text-bee-textDim hover:text-bee-text hover:border-bee-gold/60 transition-colors flex-shrink-0"
+            title="Open a plain shell terminal"
+          >
+            <TerminalIcon size={12} />
+            <span className="hidden sm:inline">Terminal</span>
+          </button>
         </div>
 
         {/* Right section — right sidebar toggle + window controls */}

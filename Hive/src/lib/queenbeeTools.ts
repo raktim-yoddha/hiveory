@@ -30,6 +30,7 @@ export interface ToolContext {
   listTasks: () => Array<{ id: string; title: string; column: string }>;
   moveTask: (taskId: string, column: string) => boolean;
   launchWorkerBee: (cli: string, name?: string) => void;
+  launchTerminal: (name?: string) => void;
   setBoardOpen: (open: boolean) => void;
   openSettings: () => boolean;
   // workspaces
@@ -104,6 +105,13 @@ export const TOOLS: ToolDef[] = [
       name: { type: "string", description: "Optional display name for the pane" },
     },
     required: ["cli"],
+    mutates: true,
+  },
+  {
+    name: "launch_terminal",
+    description: "Open a plain shell terminal pane (PowerShell/cmd/bash) for running arbitrary commands — not a CLI agent.",
+    params: { name: { type: "string", description: "Optional display name" } },
+    required: [],
     mutates: true,
   },
   {
@@ -366,6 +374,10 @@ export function executeTool(
     case "launch_worker_bee": {
       ctx.launchWorkerBee(String(args.cli), args.name ? String(args.name) : undefined);
       return `Launched WorkerBee "${args.name || args.cli}".`;
+    }
+    case "launch_terminal": {
+      ctx.launchTerminal(args.name ? String(args.name) : undefined);
+      return `Opened a terminal${args.name ? ` "${args.name}"` : ""}.`;
     }
     case "set_board": {
       const open = args.open === true || args.open === "true";

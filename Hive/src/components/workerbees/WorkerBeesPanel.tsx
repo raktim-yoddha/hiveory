@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import WorkerBeePane from "./WorkerBeePane";
+import TerminalPane from "../terminal/TerminalPane";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -104,9 +105,9 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
               <Hexagon size={28} className="text-bee-gold" />
             </div>
             <div className="space-y-1">
-              <div className="text-sm font-medium text-bee-textDim">No WorkerBees running</div>
+              <div className="text-sm font-medium text-bee-textDim">Nothing running</div>
               <div className="text-xs text-bee-textMuted">
-                Click <span className="text-bee-gold font-medium">Add</span> in the title bar to launch a CLI agent
+                Click <span className="text-bee-gold font-medium">Add</span> to launch a CLI agent, or <span className="text-bee-gold font-medium">Terminal</span> for a shell
               </div>
             </div>
           </div>
@@ -148,19 +149,35 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
                     dragOverIndex === index ? "border border-bee-gold/60 shadow-[0_0_12px_rgba(201,162,39,0.3)]" : ""
                   }`}
                 >
-                  <WorkerBeePane
-                    paneId={bee.id}
-                    workingDir={workingDir}
-                    workerBee={bee}
-                    onRename={editingBee === bee.id ? saveRename : () => startRename(bee.id)}
-                    isEditing={editingBee === bee.id}
-                    editValue={editValue}
-                    onEditChange={setEditValue}
-                    onCancelRename={cancelRename}
-                    onClose={() => handleRemoveWorkerBee(bee.id)}
-                    onToggleMaximize={() => toggleMaximize(bee.id)}
-                    isMaximized={isThisMaximized}
-                  />
+                  {bee.kind === "shell" ? (
+                    <TerminalPane
+                      paneId={bee.id}
+                      workingDir={workingDir}
+                      tabName={bee.customName || bee.cliName}
+                      onRename={editingBee === bee.id ? saveRename : () => startRename(bee.id)}
+                      isEditing={editingBee === bee.id}
+                      editValue={editValue}
+                      onEditChange={setEditValue}
+                      onCancelRename={cancelRename}
+                      onClose={() => handleRemoveWorkerBee(bee.id)}
+                      onToggleMaximize={() => toggleMaximize(bee.id)}
+                      isMaximized={isThisMaximized}
+                    />
+                  ) : (
+                    <WorkerBeePane
+                      paneId={bee.id}
+                      workingDir={workingDir}
+                      workerBee={bee}
+                      onRename={editingBee === bee.id ? saveRename : () => startRename(bee.id)}
+                      isEditing={editingBee === bee.id}
+                      editValue={editValue}
+                      onEditChange={setEditValue}
+                      onCancelRename={cancelRename}
+                      onClose={() => handleRemoveWorkerBee(bee.id)}
+                      onToggleMaximize={() => toggleMaximize(bee.id)}
+                      isMaximized={isThisMaximized}
+                    />
+                  )}
                 </div>
               );
             })}

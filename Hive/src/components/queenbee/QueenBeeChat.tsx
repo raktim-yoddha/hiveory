@@ -136,6 +136,11 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
           id: `bee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           cli, cliName: cli, customName: name,
         }),
+      launchTerminal: (name) =>
+        useWorkerBeesStore.getState().addWorkerBee({
+          id: `terminal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          cli: "shell", cliName: "Terminal", customName: name, kind: "shell",
+        }),
       setBoardOpen: (open) => useWorkspaceStore.getState().setBoardOpen(open),
       openSettings: () => {
         if (!onOpenSettings) return false;

@@ -9,6 +9,7 @@ function ctx(over: Partial<ToolContext> = {}): ToolContext {
     listTasks: vi.fn(() => [{ id: "t-1", title: "A", column: "todo" }]),
     moveTask: vi.fn(() => true),
     launchWorkerBee: vi.fn(),
+    launchTerminal: vi.fn(),
     setBoardOpen: vi.fn(),
     openSettings: vi.fn(() => true),
     deleteWorkspace: vi.fn(() => true),
@@ -62,6 +63,12 @@ describe("executeTool", () => {
 
   it("Forager may read the board", () => {
     expect(executeTool("Forager", "list_tasks", {}, ctx())).toContain("A");
+  });
+
+  it("launches a plain terminal", () => {
+    const c = ctx();
+    expect(executeTool("Steward", "launch_terminal", { name: "build" }, c)).toContain("terminal");
+    expect(c.launchTerminal).toHaveBeenCalledWith("build");
   });
 
   it("opens settings", () => {
