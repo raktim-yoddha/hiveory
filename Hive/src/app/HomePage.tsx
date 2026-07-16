@@ -19,6 +19,7 @@ import {
   Copy,
   Plus,
   Terminal as TerminalIcon,
+  ChevronDown,
   LayoutGrid,
   FolderOpen,
   GitBranch,
@@ -81,6 +82,17 @@ export default function HomePage() {
   } | null>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const cliPickerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Detected shells for the Terminal launcher dropdown.
+  const [detectedShells, setDetectedShells] = useState<{ id: string; label: string; command: string }[]>([]);
+  const [showTermMenu, setShowTermMenu] = useState(false);
+  useEffect(() => {
+    const apis = getTauriAPIs();
+    if (!apis?.invoke) return;
+    apis.invoke("detect_shells")
+      .then((s: any) => setDetectedShells(Array.isArray(s) ? s : []))
+      .catch(() => setDetectedShells([]));
+  }, []);
 
   useEffect(() => {
     const initializeWindow = async () => {
@@ -258,13 +270,13 @@ export default function HomePage() {
     }
   };
 
-  // Open a plain shell terminal pane (not a CLI agent). TerminalPane picks the
-  // actual shell (PowerShell/cmd/Git Bash/WSL) itself.
-  const handleAddTerminal = () => {
+  // Open a plain shell terminal pane (not a CLI agent) running the chosen shell.
+  const handleAddTerminal = (shell?: { label: string; command: string }) => {
+    setShowTermMenu(false);
     const terminal: WorkerBee = {
       id: `terminal-${Date.now()}`,
-      cli: "shell",
-      cliName: "Terminal",
+      cli: shell?.command ?? "shell",
+      cliName: shell?.label ?? "Terminal",
       kind: "shell",
     };
     addWorkerBee(terminal);
@@ -274,9 +286,7 @@ export default function HomePage() {
     }
   };
 
-  // Determine if each sidebar is visible and whether it takes flex space
-  const leftVisible = leftPinned ? leftOpen : leftOpen;
-  const rightVisible = rightPinned ? rightOpen : rightOpen;
+  // Pinned sidebars take flex space (docked); unpinned float over the content.
   const leftTakesSpace = leftPinned && leftOpen;
   const rightTakesSpace = rightPinned && rightOpen;
 
@@ -377,14 +387,39 @@ export default function HomePage() {
             )}
           </div>
 
-          <button
-            onClick={handleAddTerminal}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-bee-canvas/60 border border-bee-border text-bee-textDim hover:text-bee-text hover:border-bee-gold/60 transition-colors flex-shrink-0"
-            title="Open a plain shell terminal"
-          >
-            <TerminalIcon size={12} />
-            <span className="hidden sm:inline">Terminal</span>
-          </button>
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowTermMenu((v) => !v)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-bee-canvas/60 border border-bee-border text-bee-textDim hover:text-bee-text hover:border-bee-gold/60 transition-colors"
+              title="Open a shell terminal"
+            >
+              <TerminalIcon size={12} />
+              <span className="hidden sm:inline">Terminal</span>
+              <ChevronDown size={10} className="text-bee-textMuted" />
+            </button>
+            {showTermMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowTermMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-44 glass-hi rounded-xl p-1 animate-fade-in">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-bee-gold font-semibold">Detected shells</div>
+                  {detectedShells.length === 0 ? (
+                    <div className="px-2.5 py-2 text-[11px] text-bee-textMuted">Detecting…</div>
+                  ) : (
+                    detectedShells.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleAddTerminal(s)}
+                        className="w-full px-2.5 py-1.5 text-left text-xs rounded-lg flex items-center gap-2 text-bee-textDim hover:bg-bee-border/50 hover:text-bee-text transition-colors"
+                      >
+                        <TerminalIcon size={11} className="text-bee-gold" />
+                        {s.label}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Right section — right sidebar toggle + window controls */}
@@ -435,9 +470,9 @@ export default function HomePage() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left sidebar — takes flex space when pinned, overlays when unpinned */}
+        {/* Left sidebar — docked (takes space) when pinned, floating overlay when unpinned */}
         {leftOpen && (
-          <div className={`${leftTakesSpace ? "relative flex-shrink-0" : "absolute left-0 top-0 bottom-0 z-40"}`}>
+          <div className={`${leftTakesSpace ? "relative flex-shrink-0" : "absolute left-0 top-0 bottom-0 z-40 shadow-2xl shadow-black/40"}`}>
             <ADEWorktreeSidebar
               pinned={leftPinned}
               onTogglePin={() => setLeftPinned((p) => !p)}
@@ -453,9 +488,9 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Right dock — takes flex space when pinned, overlays when unpinned */}
+        {/* Right dock — docked (takes space) when pinned, floating overlay when unpinned */}
         {rightOpen && (
-          <div className={`${rightTakesSpace ? "relative flex-shrink-0" : "absolute right-0 top-0 bottom-0 z-40"}`}>
+          <div className={`${rightTakesSpace ? "relative flex-shrink-0" : "absolute right-0 top-0 bottom-0 z-40 shadow-2xl shadow-black/40"}`}>
             <ADERightDock
               projectPath={projectPath}
               activeWorkspaceId={activeWorkspaceId}

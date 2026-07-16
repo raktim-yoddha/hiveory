@@ -25,6 +25,9 @@ interface TerminalPaneProps {
   paneId?: string;
   workingDir?: string | null;
   tabName?: string;
+  /** Shell chosen at launch (e.g. "pwsh.exe"). Overrides the in-pane picker until the user switches. */
+  shellCommand?: string;
+  shellLabel?: string;
   onClose?: () => void;
   onToggleMaximize?: () => void;
   isMaximized?: boolean;
@@ -56,6 +59,8 @@ export default function TerminalPane({
   paneId = "terminal-1",
   workingDir,
   tabName,
+  shellCommand,
+  shellLabel,
   onClose,
   onToggleMaximize,
   isMaximized,
@@ -71,6 +76,9 @@ export default function TerminalPane({
   const fitAddonRef = useRef<FitAddon | null>(null);
   const [, setIsSpawned] = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState<TerminalType>("powershell");
+  // The shell chosen at launch. Cleared when the user picks from the in-pane
+  // menu, so that menu takes over from then on.
+  const [launchCommand, setLaunchCommand] = useState<string | undefined>(shellCommand);
   const [showTerminalMenu, setShowTerminalMenu] = useState(false);
 
   const displayName = tabName || paneId;
@@ -130,9 +138,9 @@ export default function TerminalPane({
         }
       }
 
-      // Spawn terminal
+      // Spawn terminal — the launch-chosen shell wins until the user switches.
       try {
-        const command = TERMINAL_COMMANDS[selectedTerminal];
+        const command = launchCommand || TERMINAL_COMMANDS[selectedTerminal];
         const { rows, cols } = terminal;
 
         await invoke("spawn_terminal", {
@@ -318,7 +326,7 @@ export default function TerminalPane({
         setIsSpawned(false);
       }
     };
-  }, [paneId, selectedTerminal, workingDir]);
+  }, [paneId, selectedTerminal, launchCommand, workingDir]);
 
   const handleCopy = () => {
     if (terminalInstance.current) {
@@ -384,7 +392,7 @@ export default function TerminalPane({
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-bee-canvas/70 border border-bee-border hover:border-bee-gold/60 text-bee-textDim hover:text-bee-text transition-all"
             >
               <Terminal size={11} className="text-bee-gold" />
-              {TERMINAL_LABELS[selectedTerminal]}
+              {launchCommand ? (shellLabel || launchCommand) : TERMINAL_LABELS[selectedTerminal]}
               <ChevronDown size={10} className="text-bee-textMuted" />
             </button>
             {showTerminalMenu && (
@@ -398,6 +406,7 @@ export default function TerminalPane({
                       key={terminal}
                       onClick={(e) => {
                         e.stopPropagation();
+                        setLaunchCommand(undefined);
                         setSelectedTerminal(terminal);
                         setShowTerminalMenu(false);
                         setIsSpawned(false);

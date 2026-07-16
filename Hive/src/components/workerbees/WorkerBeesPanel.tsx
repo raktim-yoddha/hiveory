@@ -154,6 +154,8 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
                       paneId={bee.id}
                       workingDir={workingDir}
                       tabName={bee.customName || bee.cliName}
+                      shellCommand={bee.cli !== "shell" ? bee.cli : undefined}
+                      shellLabel={bee.cliName}
                       onRename={editingBee === bee.id ? saveRename : () => startRename(bee.id)}
                       isEditing={editingBee === bee.id}
                       editValue={editValue}

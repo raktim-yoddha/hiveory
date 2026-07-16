@@ -662,6 +662,61 @@ async fn git_status(project_path: String) -> Result<GitStatus, String> {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct ShellInfo {
+    pub id: String,
+    pub label: String,
+    pub command: String,
+}
+
+// Return true if `name` resolves to a file on PATH.
+fn exe_on_path(name: &str) -> Option<String> {
+    let paths = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&paths) {
+        let full = dir.join(name);
+        if full.is_file() {
+            return Some(full.to_string_lossy().into_owned());
+        }
+    }
+    None
+}
+
+/// Detect the shells actually installed so the UI only offers ones that work.
+#[tauri::command]
+async fn detect_shells() -> Result<Vec<ShellInfo>, String> {
+    let mut shells = Vec::new();
+    let mut push = |id: &str, label: &str, cmd: &str| {
+        if exe_on_path(cmd).is_some() {
+            shells.push(ShellInfo { id: id.into(), label: label.into(), command: cmd.into() });
+        }
+    };
+
+    #[cfg(windows)]
+    {
+        push("powershell", "Windows PowerShell", "powershell.exe");
+        push("pwsh", "PowerShell 7", "pwsh.exe");
+        push("cmd", "Command Prompt", "cmd.exe");
+        push("git-bash", "Git Bash", "bash.exe");
+        push("wsl", "WSL", "wsl.exe");
+    }
+    #[cfg(not(windows))]
+    {
+        push("bash", "Bash", "bash");
+        push("zsh", "Zsh", "zsh");
+        push("fish", "Fish", "fish");
+        push("sh", "sh", "sh");
+    }
+
+    // Never return empty — fall back to the platform default so the button works.
+    if shells.is_empty() {
+        #[cfg(windows)]
+        shells.push(ShellInfo { id: "cmd".into(), label: "Command Prompt".into(), command: "cmd.exe".into() });
+        #[cfg(not(windows))]
+        shells.push(ShellInfo { id: "sh".into(), label: "sh".into(), command: "sh".into() });
+    }
+    Ok(shells)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WorktreeInfo {
     pub path: String,
     pub branch: String,
@@ -1769,6 +1824,7 @@ pub fn run() {
             nectar_list_sessions,
             nectar_close,
             git_status,
+            detect_shells,
             create_worktree,
             merge_worktree,
             remove_worktree,
