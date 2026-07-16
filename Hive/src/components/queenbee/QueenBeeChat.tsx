@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Settings, Pin, PinOff, ExternalLink, ClipboardList, Search, Zap, ChevronDown, type LucideIcon } from "lucide-react";
+import { Send, Settings, Pin, PinOff, ExternalLink, ClipboardList, Search, ShieldCheck, ChevronDown, type LucideIcon } from "lucide-react";
 import { MODE_SYSTEM_PROMPTS, detectModeIntent, type QueenBeeMode } from "@hiveory/queenbee";
 import type { ColumnId } from "@hiveory/taskcomb";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -35,7 +35,14 @@ interface Message {
 const MODE_ICONS: Record<QueenBeeMode, LucideIcon> = {
   Steward: ClipboardList,
   Forager: Search,
-  Stinger: Zap,
+  Stinger: ShieldCheck,
+};
+
+// Full role labels shown in the QueenBee selector dropdown.
+const MODE_LABELS: Record<QueenBeeMode, string> = {
+  Steward: "Steward Manager",
+  Forager: "Forager Reviewer",
+  Stinger: "Stinger Security",
 };
 
 interface QueenBeeChatProps {
@@ -195,10 +202,13 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
         return true;
       },
       setDefaultWorkerBee: (cli) => useSettingsStore.getState().setDefaultWorkerBee(cli),
-      setGridLayout: (layout) =>
-        useWorkerBeesStore.getState().setGridLayout(
-          layout === "auto" ? "auto" : (Number(layout) as GridLayout),
-        ),
+      setGridLayout: (layout) => {
+        const named = ["auto", "grid", "cols", "rows", "master"];
+        const value: GridLayout = named.includes(layout)
+          ? (layout as GridLayout)
+          : (Number(layout) as GridLayout);
+        useWorkerBeesStore.getState().setGridLayout(value);
+      },
       maximizePane: (id) => useWorkerBeesStore.getState().setMaximizedPane(id),
       refitTerminals: () => useWorkerBeesStore.getState().refitTerminals(),
       setLeftSidebar: (open) => useUiStore.getState().setLeftOpen(open),
@@ -484,19 +494,23 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
           </button>
           {showModeMenu && (
             <div className="absolute left-0 top-full mt-1 glass-hi rounded-lg z-50 min-w-40 p-1 animate-fade-in">
-              {(["Steward", "Forager", "Stinger"] as QueenBeeMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => handleModeSwitch(mode)}
-                  className={`w-full px-2.5 py-1.5 text-left text-xs rounded-md transition-colors ${
-                    activeMode === mode
-                      ? "bg-bee-gold/10 text-bee-goldHi"
-                      : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
+              {(["Steward", "Forager", "Stinger"] as QueenBeeMode[]).map((mode) => {
+                const Icon = MODE_ICONS[mode];
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleModeSwitch(mode)}
+                    className={`flex items-center gap-2 w-full px-2.5 py-1.5 text-left text-xs rounded-md transition-colors ${
+                      activeMode === mode
+                        ? "bg-bee-gold/10 text-bee-goldHi"
+                        : "text-bee-textDim hover:text-bee-text hover:bg-bee-border/40"
+                    }`}
+                  >
+                    <Icon size={13} className="shrink-0 text-bee-gold" />
+                    {MODE_LABELS[mode]}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

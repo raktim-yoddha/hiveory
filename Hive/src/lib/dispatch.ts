@@ -1,12 +1,17 @@
-import { breakdown } from "@hiveory/queenbee";
+import { breakdown, DefaultAssignmentStrategy } from "@hiveory/queenbee";
 import type { QueenBeeTask } from "@hiveory/queenbee";
 import { invoke } from "@tauri-apps/api/core";
 
 // The orchestration spine, wired for the renderer. HiveMind's Orchestrator is
-// Node-only (child_process git, fs handoffs), so the renderer drives the same
-// flow through Rust worktree commands + the existing WorkerBee launch path:
+// Node-only (child_process git, fs handoffs), so Hive drives the same flow
+// through Tauri Rust commands + the existing WorkerBee launch path:
 //
-//   goal → QueenBee.breakdown() → per task: create_worktree → launch bee → card
+//   goal → QueenBee.breakdown() → QueenBee.DefaultAssignmentStrategy →
+//   per task: create_worktree (Tauri) → launch bee → board card
+//
+// Assignment strategy uses QueenBee's DefaultAssignmentStrategy internally,
+// mapping role → worktree needs locally since Tauri worktree commands are
+// async (HiveMind's WorktreeManager uses node:child_process synchronously).
 //
 // GUI-level behaviour (real git worktrees, PTY spawn) can only be verified by
 // running the Tauri app; the pure planning below is unit-tested.

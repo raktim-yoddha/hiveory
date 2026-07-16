@@ -1,44 +1,10 @@
 'use client';
 
 import { Bot } from 'lucide-react';
+import { CLI_METADATA } from '@hiveory/worker-bees';
+import type { CLISlug } from '@hiveory/worker-bees';
 
-// v1 scope per AGENTS.md §5: Claude Code, Codex CLI, Aider, Gemini CLI only.
-// Extended with OpenCode, Kimi Code, Cline for broader CLI agent support.
-export type CLIType = 'claude-code' | 'codex-cli' | 'aider' | 'antigravity-cli' | 'opencode' | 'kimi-code' | 'cline' | 'cursor' | 'kiro' | 'kilo';
-
-export interface CLIInfo {
-  id: CLIType;
-  name: string;
-  description: string;
-}
-
-// The actual executable invoked in the pty — must match a binary the user has
-// installed and on PATH (e.g. `npm i -g @anthropic-ai/claude-code`).
-export const CLI_COMMANDS: Record<CLIType, string> = {
-  'claude-code': 'claude',
-  'codex-cli': 'codex',
-  aider: 'aider',
-  'antigravity-cli': 'agy',
-  'opencode': 'opencode',
-  'kimi-code': 'kimi',
-  'cline': 'cline',
-  cursor: 'cursor',
-  kiro: 'kiro',
-  kilo: 'kilo',
-};
-
-const CLI_OPTIONS: CLIInfo[] = [
-  { id: 'claude-code', name: 'Claude Code', description: 'Anthropic Claude CLI · claude' },
-  { id: 'codex-cli', name: 'Codex CLI', description: 'OpenAI Codex CLI · codex' },
-  { id: 'aider', name: 'Aider', description: 'AI pair programming tool · aider' },
-  { id: 'antigravity-cli', name: 'Antigravity CLI', description: 'Google Antigravity CLI · agy' },
-  { id: 'opencode', name: 'OpenCode', description: 'Open-source coding assistant · opencode' },
-  { id: 'kimi-code', name: 'Kimi Code', description: 'Moonshot AI coding assistant · kimi' },
-  { id: 'cline', name: 'Cline', description: 'Claude-powered coding agent · cline' },
-  { id: 'cursor', name: 'Cursor CLI', description: 'Cursor editor AI CLI · cursor' },
-  { id: 'kiro', name: 'Kiro CLI', description: 'Kiro AI coding helper · kiro' },
-  { id: 'kilo', name: 'Kilo CLI', description: 'Kilo AI terminal agent · kilo' },
-];
+export type CLIType = CLISlug;
 
 interface CLIPickerProps {
   onSelect: (cli: CLIType) => void;
@@ -46,12 +12,17 @@ interface CLIPickerProps {
   position?: { x: number; y: number };
 }
 
+const CLI_OPTIONS = CLI_METADATA.map((c) => ({
+  id: c.id as CLIType,
+  name: c.name,
+  description: `${c.description} · ${c.command}`,
+}));
+
 export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProps) {
-  // Calculate safe position to keep dropdown within viewport
   const getSafePosition = () => {
     if (!position) return undefined;
 
-    const dropdownWidth = 320; // w-80 = 20rem = 320px
+    const dropdownWidth = 320;
     const dropdownHeight = 260;
     const padding = 8;
 
@@ -61,7 +32,6 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
     let safeX = position.x;
     let safeY = position.y;
 
-    // Prevent horizontal overflow
     if (safeX + dropdownWidth > windowWidth - padding) {
       safeX = windowWidth - dropdownWidth - padding;
     }
@@ -69,7 +39,6 @@ export default function CLIPicker({ onSelect, onClose, position }: CLIPickerProp
       safeX = padding;
     }
 
-    // Prevent vertical overflow - show above if not enough space below
     if (safeY + dropdownHeight > windowHeight - padding) {
       safeY = position.y - dropdownHeight - padding;
       if (safeY < padding) {

@@ -13,7 +13,8 @@ export interface WorkerBee {
 
 export type AgentStatus = 'launching' | 'running' | 'idle' | 'error' | 'done';
 
-export type GridLayout = "auto" | 1 | 2 | 3 | 4;
+// Pane layout presets. Named presets reflow flexibly; numbers pin a column count.
+export type GridLayout = "auto" | "grid" | "cols" | "rows" | "master" | 1 | 2 | 3 | 4;
 
 interface WorkerBeesState {
   workerBees: WorkerBee[];

@@ -4,6 +4,10 @@ const config: Config = {
   content: [
     './index.html',
     './src/**/*.{js,ts,jsx,tsx}',
+    // Sibling workspace packages ship React UI with Tailwind classes; scan them
+    // too or their utilities (text sizes, spacing) get purged and render huge.
+    '../TaskComb/src/**/*.{ts,tsx}',
+    '../TaskComb/dist/**/*.js',
   ],
   theme: {
     extend: {

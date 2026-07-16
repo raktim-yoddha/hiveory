@@ -223,21 +223,24 @@ body {
 /* Sleek scrollbar for side panels */
 .scrollbar-sleek {
   scrollbar-width: thin;
-  scrollbar-color: rgba(201, 162, 39, 0.25) transparent;
+  scrollbar-color: rgba(201, 162, 39, 0.45) transparent;
 }
 .scrollbar-sleek::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 .scrollbar-sleek::-webkit-scrollbar-track {
   background: transparent;
 }
 .scrollbar-sleek::-webkit-scrollbar-thumb {
-  background: rgba(201, 162, 39, 0.25);
-  border-radius: 3px;
+  background: rgba(201, 162, 39, 0.45);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
-  background: rgba(201, 162, 39, 0.45);
+  background: rgba(201, 162, 39, 0.7);
+  background-clip: content-box;
 }
 
 /* Card drag state */

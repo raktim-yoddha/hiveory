@@ -16,6 +16,7 @@
     "@hiveory/nectar-mcp": "workspace:*",
     "@hiveory/queenbee": "workspace:*",
     "@hiveory/taskcomb": "workspace:*",
+    "@hiveory/hivemind": "workspace:*",
     "@hiveory/worker-bees": "workspace:*",
     "@tauri-apps/api": "^2.1.0",
     "@tauri-apps/plugin-shell": "^2.0.0",

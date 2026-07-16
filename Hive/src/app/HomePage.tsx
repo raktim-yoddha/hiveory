@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import WorkerBeesPanel from "@/components/workerbees/WorkerBeesPanel";
-import CLIPicker, { CLIType, CLI_COMMANDS } from "@/components/workerbees/CLIPicker";
+import CLIPicker, { CLIType } from "@/components/workerbees/CLIPicker";
+import { CLI_METADATA } from "@hiveory/worker-bees";
 import SettingsPage from "@/components/settings/SettingsPage";
 import { useWorkerBeesStore, WorkerBee } from "@/stores/workerBeesStore";
 import { getTauriAPIs, loadTauriAPIs } from "@/lib/tauri";
@@ -20,20 +21,29 @@ import {
   Plus,
   Terminal as TerminalIcon,
   ChevronDown,
-  LayoutGrid,
   FolderOpen,
   GitBranch,
   PanelLeft,
   PanelRight,
   Columns3,
+  Grid2x2,
+  Rows3,
+  LayoutPanelLeft,
+  Sparkles,
+  type LucideIcon,
 } from "lucide-react";
 
-const LAYOUT_OPTIONS: { value: "auto" | 1 | 2 | 3 | 4; label: string }[] = [
-  { value: "auto", label: "Auto" },
-  { value: 1, label: "1" },
-  { value: 2, label: "2" },
-  { value: 3, label: "3" },
-  { value: 4, label: "4" },
+import type { GridLayout } from "@/stores/workerBeesStore";
+
+// Icon presets reflow flexibly; the trailing numbers pin a fixed column count.
+const LAYOUT_OPTIONS: { value: GridLayout; label: string; icon?: LucideIcon }[] = [
+  { value: "auto",   label: "Auto",      icon: Sparkles },
+  { value: "grid",   label: "Grid",      icon: Grid2x2 },
+  { value: "rows",   label: "Rows",      icon: Rows3 },
+  { value: "master", label: "Spotlight", icon: LayoutPanelLeft },
+  { value: 2, label: "2 columns" },
+  { value: 3, label: "3 columns" },
+  { value: 4, label: "4 columns" },
 ];
 
 export default function HomePage() {
@@ -238,23 +248,11 @@ export default function HomePage() {
   };
 
   const handleCLISelect = (cli: CLIType) => {
-    const cliNames: Record<CLIType, string> = {
-      "claude-code": "Claude Code",
-      "codex-cli": "Codex CLI",
-      aider: "Aider",
-      "antigravity-cli": "Antigravity CLI",
-      opencode: "OpenCode",
-      "kimi-code": "Kimi Code",
-      cline: "Cline",
-      cursor: "Cursor CLI",
-      kiro: "Kiro CLI",
-      kilo: "Kilo CLI",
-    };
-
+    const meta = CLI_METADATA.find((c) => c.id === cli);
     const newWorkerBee: WorkerBee = {
       id: `workerbee-${Date.now()}`,
-      cli: CLI_COMMANDS[cli],
-      cliName: cliNames[cli],
+      cli: meta?.command ?? cli,
+      cliName: meta?.name ?? cli,
     };
 
     addWorkerBee(newWorkerBee);
@@ -288,7 +286,9 @@ export default function HomePage() {
 
   // Pinned sidebars take flex space (docked); unpinned float over the content.
   const leftTakesSpace = leftPinned && leftOpen;
-  const rightTakesSpace = rightPinned && rightOpen;
+  // Right dock always reserves space when open — floating it over the center
+  // buried the Mission Pipeline's right edge under the panel.
+  const rightTakesSpace = rightOpen;
 
   return (
     <div className="h-screen w-screen flex flex-col text-bee-text font-sans select-none">
@@ -351,20 +351,23 @@ export default function HomePage() {
           </button>
 
           <div className="flex items-center p-0.5 rounded-lg glass border-bee-border/70">
-            {LAYOUT_OPTIONS.map((opt) => (
-              <button
-                key={opt.label}
-                onClick={() => setGridLayout(opt.value)}
-                title={opt.value === "auto" ? "Auto layout" : `${opt.value} column${opt.value === 1 ? "" : "s"}`}
-                className={`px-1.5 py-1 text-[10px] rounded-md flex items-center gap-1 transition-all ${
-                  gridLayout === opt.value
-                    ? "bg-bee-gold/15 text-bee-goldHi"
-                    : "text-bee-textDim hover:text-bee-text"
-                }`}
-              >
-                {opt.value === "auto" ? <LayoutGrid size={10} /> : opt.label}
-              </button>
-            ))}
+            {LAYOUT_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              return (
+                <button
+                  key={opt.label}
+                  onClick={() => setGridLayout(opt.value)}
+                  title={`${opt.label} layout`}
+                  className={`px-1.5 py-1 rounded-md flex items-center justify-center min-w-[22px] text-[11px] font-medium transition-all ${
+                    gridLayout === opt.value
+                      ? "bg-bee-gold/15 text-bee-goldHi"
+                      : "text-bee-textDim hover:text-bee-text"
+                  }`}
+                >
+                  {Icon ? <Icon size={12} /> : opt.value}
+                </button>
+              );
+            })}
           </div>
 
           <div ref={cliPickerContainerRef} className="flex-shrink-0">
@@ -482,8 +485,8 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Main grid area */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Main grid area — min-w-0 allows flex to shrink below children's intrinsic width when sidebars are docked */}
+        <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
           <WorkerBeesPanel
             workingDir={projectPath}
           />

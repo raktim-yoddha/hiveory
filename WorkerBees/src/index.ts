@@ -1,5 +1,7 @@
 export { WorkerBeeLauncher } from './launcher.js';
 export type { WorkerBeeAdapter, LaunchContext, SessionSummary, CommandConfig } from './types.js';
+export { CLI_METADATA, CLI_BY_COMMAND, CLI_BY_ID } from './cli-info.js';
+export type { CLISlug, CLIInfo } from './cli-info.js';
 export {
   OpenCodeAdapter,
   ClaudeCodeAdapter,

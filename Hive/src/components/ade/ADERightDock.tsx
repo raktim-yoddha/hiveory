@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   MessageSquareText,
-  ScrollText,
   Search,
   GitBranch,
   X,
@@ -23,9 +22,8 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import QueenBeeChat from "@/components/queenbee/QueenBeeChat";
-import ADESessionHistory from "@/components/ade/ADESessionHistory";
 
-type DockTab = "chat" | "history" | "explorer" | "search" | "git";
+type DockTab = "chat" | "explorer" | "search" | "git";
 
 interface Props {
   projectPath: string | null;
@@ -309,7 +307,6 @@ function GitPanel({ projectPath }: { projectPath: string | null }) {
 // ── Dock ───────────────────────────────────────────────────────
 const TABS: { id: DockTab; label: string; icon: typeof MessageSquareText }[] = [
   { id: "chat", label: "Chat", icon: MessageSquareText },
-  { id: "history", label: "History", icon: ScrollText },
   { id: "explorer", label: "Explorer", icon: Folder },
   { id: "search", label: "Search", icon: Search },
   { id: "git", label: "Git", icon: GitBranch },
@@ -352,7 +349,7 @@ export default function ADERightDock({ projectPath, activeWorkspaceId, pinned = 
   return (
     <div
       ref={dockRef}
-      className="relative h-full flex flex-col bg-bee-surface/70 backdrop-blur-md border-l border-bee-border/50 overflow-hidden"
+      className="relative h-full flex flex-col bg-bee-surface/70 backdrop-blur-md border-l border-bee-border/50"
       style={{ width: dockWidth, minWidth: RIGHT_DOCK_MIN, maxWidth: RIGHT_DOCK_MAX }}
     >
       {/* Dock header with sub-tabs. Below ~440px the labels don't fit alongside
@@ -397,18 +394,16 @@ export default function ADERightDock({ projectPath, activeWorkspaceId, pinned = 
 
       {/* Resize handle — left edge, mirrors left sidebar's right-edge handle */}
       <div
-        className="absolute -left-1.5 top-0 z-10 flex h-full w-3 cursor-col-resize items-stretch justify-center group"
+        className="absolute -left-2 top-0 z-40 flex h-full w-4 cursor-col-resize items-stretch justify-center group select-none"
         onMouseDown={handleResizeStart}
+        title="Drag to resize panel"
       >
-        <div className="h-full w-px bg-bee-border/40 transition-colors group-hover:bg-bee-gold/60 group-active:bg-bee-gold" />
+        <div className={`h-full w-0.5 transition-colors ${isResizing ? "bg-bee-gold" : "bg-bee-border/60 group-hover:bg-bee-gold/80"}`} />
       </div>
 
       {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {activeTab === "chat" && <QueenBeeChat docked onToggleDock={() => {}} onOpenSettings={onOpenSettings} onOpenProject={onOpenProject} />}
-        {activeTab === "history" && (
-          <ADESessionHistory projectPath={projectPath} activeWorkspaceId={activeWorkspaceId} />
-        )}
         {activeTab === "explorer" && <ExplorerPanel projectPath={projectPath} />}
         {activeTab === "search" && <SearchPanel projectPath={projectPath} />}
         {activeTab === "git" && <GitPanel projectPath={projectPath} />}

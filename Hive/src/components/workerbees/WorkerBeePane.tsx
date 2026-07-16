@@ -23,6 +23,7 @@ import { useSettingsStore, envForCli } from "@/stores/settingsStore";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
 import { Nectar } from "@/lib/nectar";
 import { buildCliConfig } from "@hiveory/worker-bees/cli-configs";
+import { CLI_BY_COMMAND } from "@hiveory/worker-bees";
 import RoleBadge from "./RoleBadge";
 
 // A WorkerBee pane is a CLI agent process (Claude Code, Codex CLI, Aider,
@@ -58,76 +59,8 @@ interface WorkerBeePaneProps {
 // installed, rather than leaving the user staring at an ambiguous spinner.
 const STALL_HINT_MS = 8000;
 
-// Install instructions keyed by the CLI executable name.
-interface InstallInfo {
-  displayName: string;
-  installCmd: string;
-  docsUrl: string;
-  description: string;
-}
-
-const CLI_INSTALL_INFO: Record<string, InstallInfo> = {
-  claude: {
-    displayName: "Claude Code",
-    installCmd: "npm install -g @anthropic-ai/claude-code",
-    docsUrl: "https://docs.anthropic.com/en/docs/claude-code",
-    description: "Anthropic's agentic coding CLI",
-  },
-  codex: {
-    displayName: "Codex CLI",
-    installCmd: "npm install -g @openai/codex",
-    docsUrl: "https://github.com/openai/codex",
-    description: "OpenAI Codex terminal agent",
-  },
-  aider: {
-    displayName: "Aider",
-    installCmd: "pip install aider-chat",
-    docsUrl: "https://aider.chat/docs/install.html",
-    description: "AI pair programming in your terminal",
-  },
-  agy: {
-    displayName: "Antigravity CLI",
-    installCmd: "npm install -g @google/antigravity-cli",
-    docsUrl: "https://antigravity.google",
-    description: "Google Antigravity developer suite CLI",
-  },
-  opencode: {
-    displayName: "OpenCode",
-    installCmd: "npm install -g opencode-ai",
-    docsUrl: "https://opencode.ai",
-    description: "Open-source AI coding assistant",
-  },
-  kimi: {
-    displayName: "Kimi Code",
-    installCmd: "pip install kimi-code",
-    docsUrl: "https://kimi.moonshot.cn",
-    description: "Moonshot AI coding assistant",
-  },
-  cline: {
-    displayName: "Cline",
-    installCmd: "npm install -g cline",
-    docsUrl: "https://github.com/cline/cline",
-    description: "Claude-powered autonomous coding agent",
-  },
-  cursor: {
-    displayName: "Cursor CLI",
-    installCmd: "# Install Cursor IDE — CLI ships with the app\ncursor --version",
-    docsUrl: "https://cursor.com/downloads",
-    description: "Cursor editor AI CLI",
-  },
-  kiro: {
-    displayName: "Kiro",
-    installCmd: "npm install -g kiro-cli",
-    docsUrl: "https://kiro.dev",
-    description: "Kiro AI coding helper",
-  },
-  kilo: {
-    displayName: "Kilo",
-    installCmd: "npm install -g kilo-ai",
-    docsUrl: "https://kilo.ai",
-    description: "Kilo AI terminal agent",
-  },
-};
+// CLI install instructions — imported from @hiveory/worker-bees which is the
+// single source of truth for all CLI agent metadata.
 
 // Returns true if a spawn error message indicates the executable wasn't found.
 function isNotFoundError(err: unknown): boolean {
@@ -162,7 +95,7 @@ interface CLINotFoundCardProps {
 
 function CLINotFoundCard({ cli, cliName, onClose }: CLINotFoundCardProps) {
   const [copied, setCopied] = useState(false);
-  const info = CLI_INSTALL_INFO[cli];
+  const info = CLI_BY_COMMAND[cli];
 
   const copy = () => {
     navigator.clipboard.writeText(info?.installCmd ?? cli);
@@ -179,7 +112,7 @@ function CLINotFoundCard({ cli, cliName, onClose }: CLINotFoundCardProps) {
         </div>
         <div>
           <p className="text-sm font-semibold text-bee-text">
-            {info?.displayName ?? cliName} not installed
+            {info?.name ?? cliName} not installed
           </p>
           <p className="text-[11px] text-bee-textMuted mt-0.5">
             {info?.description ?? `Could not find \`${cli}\` on PATH`}
@@ -955,7 +888,7 @@ export default function WorkerBeePane({
     <div className="flex flex-col h-full bg-[#1a1614]/85 overflow-hidden">
       {/* pane header — honey gradient so WorkerBee (agent) panes read clearly
           apart from plain shell terminals, which keep the neutral dark toolbar. */}
-      <div className="h-8 border-b border-bee-gold/40 bg-gradient-to-r from-bee-gold/[0.18] to-bee-gold/[0.06] backdrop-blur-md flex items-center justify-between px-2">
+      <div data-pane-drag className="h-8 border-b border-bee-gold/40 bg-gradient-to-r from-bee-gold/[0.18] to-bee-gold/[0.06] backdrop-blur-md flex items-center justify-between px-2 cursor-grab active:cursor-grabbing">
         <div className="flex items-center gap-2 min-w-0">
           {isEditing && onEditChange ? (
             <input

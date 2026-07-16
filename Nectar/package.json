@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./tauri": {
+      "types": "./dist/tauri/index.d.ts",
+      "import": "./dist/tauri/index.js"
     }
   },
   "scripts": {
@@ -23,7 +27,16 @@
     "sql.js": "^1.12.0",
     "unified": "^11.0.0"
   },
+  "peerDependencies": {
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@tauri-apps/api": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "@types/node": "^22.0.0",
     "@types/sql.js": "^1.4.11",
     "typescript": "^5.6.0",

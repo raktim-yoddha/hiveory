@@ -17,6 +17,9 @@ importers:
 
   Hive:
     dependencies:
+      '@hiveory/hivemind':
+        specifier: workspace:*
+        version: link:../HiveMind
       '@hiveory/nectar':
         specifier: workspace:*
         version: link:../Nectar
@@ -136,6 +139,9 @@ importers:
         specifier: ^11.0.0
         version: 11.0.5
     devDependencies:
+      '@tauri-apps/api':
+        specifier: ^2.11.1
+        version: 2.11.1
       '@types/node':
         specifier: ^22.0.0
         version: 22.20.0

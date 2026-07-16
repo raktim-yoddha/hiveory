@@ -358,7 +358,7 @@ export default function TerminalPane({
   return (
     <div className="flex flex-col h-full bg-[#1a1614]/85 overflow-hidden">
       {/* terminal header */}
-      <div className="h-8 glass-toolbar border-b border-bee-border/50 flex items-center justify-between px-2">
+      <div data-pane-drag className="h-8 glass-toolbar border-b border-bee-border/50 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing">
         <div className="flex items-center gap-2">
           {isEditing && onEditChange ? (
             <input
