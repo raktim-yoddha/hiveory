@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import WorkerBeePane from "./WorkerBeePane";
 import TerminalPane from "../terminal/TerminalPane";
+import MissionBoard from "../board/MissionBoard";
 import { invoke } from "@tauri-apps/api/core";
 import { useWorkerBeesStore } from "@/stores/workerBeesStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useTaskCombBoardPanel, TaskCombDrawer } from "@hiveory/taskcomb";
-import { Bot, Hexagon } from "lucide-react";
+import { Hexagon } from "lucide-react";
 
 interface WorkerBeesPanelProps {
   workingDir?: string | null;
@@ -24,16 +24,15 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
   const reorderWorkerBees = useWorkerBeesStore((state) => state.reorderWorkerBees);
   const refitTerminals = useWorkerBeesStore((state) => state.refitTerminals);
 
+  const agentStatuses = useWorkerBeesStore((state) => state.agentStatuses);
+
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const boardOpen = useWorkspaceStore((s) => s.boardOpen);
   const setBoardOpen = useWorkspaceStore((s) => s.setBoardOpen);
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
-  const setTasks = useWorkspaceStore((s) => s.setTasks);
 
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-
-  const { isOpenOrPreview, isDragPreview, openBoard, closeBoard, toggleBoard, previewBoard, solidifyBoard, cancelBoardPreview } = useTaskCombBoardPanel();
 
   const [editingBee, setEditingBee] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -187,16 +186,14 @@ export default function WorkerBeesPanel({ workingDir }: WorkerBeesPanelProps) {
         )}
       </div>
 
-      {/* Kanban board drawer (triggered by board icon in title bar) */}
-      {isOpenOrPreview && activeWorkspace && (
-        <TaskCombDrawer
-          open={!isDragPreview}
-          dragPreview={isDragPreview}
-          tasks={activeWorkspace.taskCards}
-          onTasksChange={(tasks) => setTasks(activeWorkspace.id, tasks)}
-          onClose={() => { closeBoard(); setBoardOpen(false); }}
-        />
-      )}
+      {/* Mission board (toggled by the board icon in the title bar) — a local,
+          token-free pipeline view of tasks / worktrees / assignments. */}
+      <MissionBoard
+        open={boardOpen}
+        tasks={activeWorkspace?.taskCards ?? []}
+        statuses={agentStatuses}
+        onClose={() => setBoardOpen(false)}
+      />
     </div>
   );
 }
