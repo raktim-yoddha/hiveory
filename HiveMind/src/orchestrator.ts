@@ -1,8 +1,9 @@
 import { AgentRegistry, type AgentStatus } from './registry/index.js';
 import { LockRegistry, type LockConflict } from './locks/index.js';
-import { WorktreeManager, type WorktreeInfo } from './worktree/index.js';
-import { HandoffManager } from './handoffs/index.js';
 import { RoleManager, type Role } from './roles/index.js';
+// Type-only: erased at compile time, so the core stays free of Node built-ins.
+import type { WorktreeOps, WorktreeInfo } from './ports.js';
+import type { HandoffManager } from './handoffs/index.js';
 
 export interface TaskSpec {
   id: string;
@@ -25,7 +26,7 @@ export class Orchestrator {
   constructor(
     private registry: AgentRegistry,
     private locks: LockRegistry,
-    private worktree: WorktreeManager,
+    private worktree: WorktreeOps,
     private handoffs: HandoffManager,
     private roles: RoleManager,
   ) {}
@@ -70,7 +71,8 @@ export class Orchestrator {
     let worktree: WorktreeInfo | undefined;
 
     if (roleDef.needsWorktree) {
-      worktree = this.worktree.create(task.id);
+      // await: WorktreeOps may be async (the desktop app goes through Tauri IPC).
+      worktree = await this.worktree.create(task.id);
     }
 
     const agentId = `agent-${task.id}-${Date.now()}`;
@@ -116,7 +118,9 @@ export class Orchestrator {
     if (!agent) return;
 
     if (agent.worktreePath) {
-      this.worktree.mergeAndRemove(agent.worktreePath, agent.branchName);
+      // Merge must land before we mark it merged / release the file locks —
+      // otherwise a failed merge would free files an unmerged branch still owns.
+      await this.worktree.mergeAndRemove(agent.worktreePath, agent.branchName);
     }
 
     this.registry.updateStatus(agentId, 'merged');

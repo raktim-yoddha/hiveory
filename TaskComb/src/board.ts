@@ -1,3 +1,5 @@
+import { moveCard as moveCardIn, cardsByColumn } from './cards.js';
+
 export type ColumnId = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
 
 export const COLUMNS: ColumnId[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
@@ -36,6 +38,11 @@ export interface TaskCard {
   updatedAt: number;
 }
 
+/**
+ * Stateful board. Semantics live in `cards.ts` (pure array ops) — this is a
+ * thin stateful wrapper so both this and an immutable store share one
+ * implementation.
+ */
 export class Board {
   private cards = new Map<string, TaskCard>();
 
@@ -47,13 +54,10 @@ export class Board {
   }
 
   moveCard(cardId: string, toColumn: ColumnId, sortOrder?: number): TaskCard | undefined {
-    const card = this.cards.get(cardId);
-    if (card) {
-      card.column = toColumn;
-      if (sortOrder !== undefined) card.sortOrder = sortOrder;
-      card.updatedAt = Date.now();
-    }
-    return card;
+    if (!this.cards.has(cardId)) return undefined;
+    const next = moveCardIn(this.getAllCards(), cardId, toColumn, sortOrder);
+    this.cards = new Map(next.map((c) => [c.id, c]));
+    return this.cards.get(cardId);
   }
 
   getCard(cardId: string): TaskCard | undefined {
@@ -65,9 +69,7 @@ export class Board {
   }
 
   getCardsByColumn(column: ColumnId): TaskCard[] {
-    return Array.from(this.cards.values())
-      .filter(c => c.column === column)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    return cardsByColumn(this.getAllCards(), column);
   }
 
   getAllCards(): TaskCard[] {

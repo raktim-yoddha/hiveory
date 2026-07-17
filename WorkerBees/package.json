@@ -18,8 +18,9 @@
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
-    "test": "vitest",
-    "lint": "eslint src --ext .ts"
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hiveory/nectar": "workspace:*"

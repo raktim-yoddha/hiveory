@@ -1,24 +1,24 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import WorkerBeesPanel from "@/components/workerbees/WorkerBeesPanel";
-import CLIPicker, { CLIType } from "@/components/workerbees/CLIPicker";
+import WorkerBeesPanel from "@/features/worker-bees/WorkerBeesPanel";
+import type { CLIType } from "@/features/worker-bees/cli-types";
 import { CLI_METADATA } from "@hiveory/worker-bees";
-import SettingsPage from "@/components/settings/SettingsPage";
-import { useWorkerBeesStore, WorkerBee } from "@/stores/workerBeesStore";
-import { getTauriAPIs, loadTauriAPIs } from "@/lib/tauri";
-import ADEWorktreeSidebar from "@/components/ade/ADEWorktreeSidebar";
-import ADERightDock from "@/components/ade/ADERightDock";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useProjectStore } from "@/stores/projectStore";
-import { useUiStore } from "@/stores/uiStore";
+import SettingsPage from "@/features/settings/SettingsPage";
+import { useWorkerBeesStore, WorkerBee } from "@/features/worker-bees/workerBeesStore";
+import { getTauriAPIs, loadTauriAPIs } from "@/shared/tauri";
+import ADEWorktreeSidebar from "@/features/workspaces/WorkspacesSidebar";
+import ADERightDock from "@/features/dock/RightDock";
+import { useWorkspaceStore } from "@/features/workspaces/workspaceStore";
+import { useProjectStore } from "@/shared/projectStore";
+import { useUiStore } from "@/shared/uiStore";
 import {
   Settings,
+  Bot,
   X,
   Minus,
   Square,
   Copy,
-  Plus,
   Terminal as TerminalIcon,
   ChevronDown,
   FolderOpen,
@@ -30,20 +30,27 @@ import {
   Rows3,
   LayoutPanelLeft,
   Sparkles,
+  Columns2,
+  Columns4,
+  Globe,
   type LucideIcon,
 } from "lucide-react";
 
-import type { GridLayout } from "@/stores/workerBeesStore";
+import type { GridLayout } from "@/features/worker-bees/workerBeesStore";
 
-// Icon presets reflow flexibly; the trailing numbers pin a fixed column count.
-const LAYOUT_OPTIONS: { value: GridLayout; label: string; icon?: LucideIcon }[] = [
-  { value: "auto",   label: "Auto",      icon: Sparkles },
-  { value: "grid",   label: "Grid",      icon: Grid2x2 },
-  { value: "rows",   label: "Rows",      icon: Rows3 },
-  { value: "master", label: "Spotlight", icon: LayoutPanelLeft },
-  { value: 2, label: "2 columns" },
-  { value: 3, label: "3 columns" },
-  { value: 4, label: "4 columns" },
+const LAYOUT_OPTIONS: {
+  value: GridLayout;
+  label: string;
+  hint: string;
+  icon: LucideIcon;
+}[] = [
+  { value: "auto",   label: "Auto",      hint: "Fit to pane count", icon: Sparkles },
+  { value: "grid",   label: "Grid",      hint: "Balanced grid",     icon: Grid2x2 },
+  { value: "rows",   label: "Rows",      hint: "Stacked",           icon: Rows3 },
+  { value: "master", label: "Spotlight", hint: "Focus + stack",     icon: LayoutPanelLeft },
+  { value: 2, label: "2 Columns", hint: "Fixed", icon: Columns2 },
+  { value: 3, label: "3 Columns", hint: "Fixed", icon: Columns3 },
+  { value: 4, label: "4 Columns", hint: "Fixed", icon: Columns4 },
 ];
 
 export default function HomePage() {
@@ -86,16 +93,11 @@ export default function HomePage() {
   }, []);
 
   const [showCLIPicker, setShowCLIPicker] = useState(false);
-  const [pickerPosition, setPickerPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-  const addButtonRef = useRef<HTMLButtonElement>(null);
-  const cliPickerContainerRef = useRef<HTMLDivElement>(null);
 
   // Detected shells for the Terminal launcher dropdown.
   const [detectedShells, setDetectedShells] = useState<{ id: string; label: string; command: string }[]>([]);
   const [showTermMenu, setShowTermMenu] = useState(false);
+  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   useEffect(() => {
     const apis = getTauriAPIs();
     if (!apis?.invoke) return;
@@ -128,21 +130,9 @@ export default function HomePage() {
       }
     };
 
-    const handlePickerOutside = (e: MouseEvent) => {
-      if (
-        cliPickerContainerRef.current &&
-        !cliPickerContainerRef.current.contains(e.target as Node)
-      ) {
-        setShowCLIPicker(false);
-      }
-    };
-
+    // Dropdowns close via their own click-catcher overlay.
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("mousedown", handlePickerOutside);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("mousedown", handlePickerOutside);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const handleMinimize = async () => {
@@ -235,18 +225,6 @@ export default function HomePage() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [projectPath]);
 
-  const handleAddButtonClick = () => {
-    if (showCLIPicker) {
-      setShowCLIPicker(false);
-    } else {
-      if (addButtonRef.current) {
-        const rect = addButtonRef.current.getBoundingClientRect();
-        setPickerPosition({ x: rect.left, y: rect.bottom + 4 });
-      }
-      setShowCLIPicker(true);
-    }
-  };
-
   const handleCLISelect = (cli: CLIType) => {
     const meta = CLI_METADATA.find((c) => c.id === cli);
     const newWorkerBee: WorkerBee = {
@@ -268,6 +246,21 @@ export default function HomePage() {
     }
   };
 
+  // Open a CDP-driven browser pane (localhost preview, agent-readable screenshots).
+  const handleAddBrowser = () => {
+    const pane: WorkerBee = {
+      id: `browser-${Date.now()}`,
+      cli: "browser",
+      cliName: "Browser",
+      kind: "browser",
+    };
+    addWorkerBee(pane);
+    if (activeWorkspaceId) {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+      if (ws) updateWorkspace(activeWorkspaceId, { paneLayout: [...ws.paneLayout, pane] });
+    }
+  };
+
   // Open a plain shell terminal pane (not a CLI agent) running the chosen shell.
   const handleAddTerminal = (shell?: { label: string; command: string }) => {
     setShowTermMenu(false);
@@ -283,6 +276,9 @@ export default function HomePage() {
       if (ws) updateWorkspace(activeWorkspaceId, { paneLayout: [...ws.paneLayout, terminal] });
     }
   };
+
+  const activeLayout =
+    LAYOUT_OPTIONS.find((o) => o.value === gridLayout) ?? LAYOUT_OPTIONS[0];
 
   // Pinned sidebars take flex space (docked); unpinned float over the content.
   const leftTakesSpace = leftPinned && leftOpen;
@@ -350,45 +346,91 @@ export default function HomePage() {
             </span>
           </button>
 
-          <div className="flex items-center p-0.5 rounded-lg glass border-bee-border/70">
-            {LAYOUT_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              return (
-                <button
-                  key={opt.label}
-                  onClick={() => setGridLayout(opt.value)}
-                  title={`${opt.label} layout`}
-                  className={`px-1.5 py-1 rounded-md flex items-center justify-center min-w-[22px] text-[11px] font-medium transition-all ${
-                    gridLayout === opt.value
-                      ? "bg-bee-gold/15 text-bee-goldHi"
-                      : "text-bee-textDim hover:text-bee-text"
-                  }`}
-                >
-                  {Icon ? <Icon size={12} /> : opt.value}
-                </button>
-              );
-            })}
-          </div>
-
-          <div ref={cliPickerContainerRef} className="flex-shrink-0">
+          <div className="relative flex-shrink-0">
             <button
-              ref={addButtonRef}
-              onClick={handleAddButtonClick}
-              disabled={false}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] bg-bee-gold/10 border border-bee-gold/20 text-bee-goldHi hover:bg-bee-gold/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Add new WorkerBee"
+              onClick={() => setShowLayoutMenu((v) => !v)}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] glass border-bee-border/70 text-bee-textDim hover:text-bee-text transition-colors"
+              title="Pane layout"
             >
-              <Plus size={12} />
-              <span className="hidden sm:inline">Add</span>
+              <activeLayout.icon size={12} className="text-bee-gold" />
+              <span className="hidden sm:inline">{activeLayout.label}</span>
+              <ChevronDown size={10} className="text-bee-textMuted" />
             </button>
-            {showCLIPicker && pickerPosition && (
-              <CLIPicker
-                position={pickerPosition}
-                onSelect={handleCLISelect}
-                onClose={() => setShowCLIPicker(false)}
-              />
+            {showLayoutMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowLayoutMenu(false)} />
+                <div className="absolute left-0 top-full mt-1 z-50 min-w-48 glass-hi rounded-xl p-1 animate-fade-in">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-bee-gold font-semibold">
+                    Pane layout
+                  </div>
+                  {LAYOUT_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const active = gridLayout === opt.value;
+                    return (
+                      <button
+                        key={opt.label}
+                        onClick={() => { setGridLayout(opt.value); setShowLayoutMenu(false); }}
+                        className={`w-full px-2.5 py-1.5 text-left text-xs rounded-lg flex items-center gap-2 transition-colors ${
+                          active
+                            ? "bg-bee-gold/10 text-bee-goldHi"
+                            : "text-bee-textDim hover:bg-bee-border/50 hover:text-bee-text"
+                        }`}
+                      >
+                        <Icon size={12} className={active ? "text-bee-gold" : "text-bee-textMuted"} />
+                        <span className="flex-1">{opt.label}</span>
+                        <span className="text-[9px] text-bee-textMuted">{opt.hint}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
+
+          {/* WorkerBee launcher — same dropdown pattern as Terminal. */}
+          <div className="relative flex-shrink-0">
+            <button
+              onClick={() => setShowCLIPicker((v) => !v)}
+              className="flex items-center gap-1 rounded-lg border border-bee-gold/20 bg-bee-gold/10 px-2 py-1 text-[11px] text-bee-goldHi transition-colors hover:bg-bee-gold/20"
+              title="Launch a WorkerBee (CLI agent)"
+            >
+              <Bot size={12} />
+              <span className="hidden sm:inline">WorkerBee</span>
+              <ChevronDown size={10} className="text-bee-goldHi/70" />
+            </button>
+            {showCLIPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowCLIPicker(false)} />
+                <div className="absolute left-0 top-full z-50 mt-1 max-h-[70vh] min-w-56 overflow-y-auto scrollbar-sleek rounded-xl glass-hi p-1 animate-fade-in">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-bee-gold">
+                    CLI agents
+                  </div>
+                  {CLI_METADATA.map((cli) => (
+                    <button
+                      key={cli.id}
+                      onClick={() => { handleCLISelect(cli.id as CLIType); setShowCLIPicker(false); }}
+                      className="flex w-full items-start gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-bee-textDim transition-colors hover:bg-bee-border/50 hover:text-bee-text"
+                    >
+                      <Bot size={11} className="mt-0.5 shrink-0 text-bee-gold" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{cli.name}</span>
+                        <span className="block truncate text-[9px] text-bee-textMuted">{cli.command}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={handleAddBrowser}
+            className="flex flex-shrink-0 items-center gap-1 rounded-lg border border-bee-border bg-bee-canvas/60 px-2 py-1 text-[11px] text-bee-textDim transition-colors hover:border-bee-gold/60 hover:text-bee-text"
+            title="Open a browser pane (localhost preview + agent screenshots)"
+          >
+            <Globe size={12} />
+            <span className="hidden sm:inline">Browser</span>
+          </button>
 
           <div className="relative flex-shrink-0">
             <button

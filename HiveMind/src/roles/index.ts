@@ -35,7 +35,11 @@ const ROLE_DEFS: Record<Role, RoleDefinition> = {
     name: 'Reviewer',
     description: 'Diffs branch against main, checks scope, approves or rejects with structured feedback.',
     canWriteCode: false,
-    needsWorktree: true,
+    // A reviewer inspects an *existing* builder branch. `dispatch()` only knows
+    // how to create a fresh `agent/<taskId>` branch, which would be empty and
+    // useless here — so no worktree until WorktreeOps can check out an existing
+    // branch. Reviewing works fine from the main checkout via `git diff`.
+    needsWorktree: false,
   },
 };
 

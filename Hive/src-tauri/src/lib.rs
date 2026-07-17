@@ -1788,6 +1788,189 @@ async fn nectar_close(
     Ok(NectarCloseResponse { success: true })
 }
 
+// ── CDP browser ─────────────────────────────────────────────────
+// The Tauri webview can't be screenshotted, so the browser pane drives a real
+// Chromium over the Chrome DevTools Protocol instead. We reuse an already
+// installed browser (Edge ships with Windows) rather than bundling one.
+
+struct BrowserState {
+    child: Mutex<Option<std::process::Child>>,
+    /// Profile dir of the running instance, removed on stop.
+    profile: Mutex<Option<PathBuf>>,
+}
+
+/// Kill the whole browser process tree.
+///
+/// Chromium spawns helper processes and holds a `SingletonLock` in its profile.
+/// Killing only the parent leaves those alive, so the next launch dies with
+/// exit code 21 (PROFILE_IN_USE).
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .output();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn find_chromium() -> Option<String> {
+    let candidates: &[&str] = if cfg!(target_os = "windows") {
+        &[
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+    } else if cfg!(target_os = "macos") {
+        &[
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+    } else {
+        &["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/microsoft-edge"]
+    };
+    candidates.iter().find(|p| Path::new(p).exists()).map(|p| p.to_string())
+}
+
+/// Launch a headless Chromium with CDP enabled. Returns the debugging port.
+/// Idempotent: if one is already running, the existing port is reused.
+#[tauri::command]
+async fn launch_cdp_browser(port: u16, state: State<'_, BrowserState>) -> Result<u16, String> {
+    {
+        let mut guard = state.child.lock().map_err(|e| e.to_string())?;
+        if let Some(child) = guard.as_mut() {
+            // Still alive? Reuse it.
+            match child.try_wait() {
+                Ok(None) => return Ok(port),
+                _ => { *guard = None; }
+            }
+        }
+    }
+
+    // Something already serving CDP on this port (an orphan from a previous run,
+    // or a browser we lost the handle to during a reload) — reuse it instead of
+    // starting a second instance that would just fight over the port.
+    if http_get_body(port, "/json/version").is_ok() {
+        return Ok(port);
+    }
+
+    let exe = find_chromium()
+        .ok_or_else(|| "No Chromium-based browser found (install Microsoft Edge or Google Chrome)".to_string())?;
+
+    // Fresh profile per launch. A fixed dir means a stale SingletonLock from a
+    // killed instance makes every future launch exit 21 (PROFILE_IN_USE).
+    let profile = std::env::temp_dir().join(format!(
+        "hiveory-cdp-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    ));
+
+    let child = std::process::Command::new(&exe)
+        .arg(format!("--remote-debugging-port={}", port))
+        .arg(format!("--user-data-dir={}", profile.to_string_lossy()))
+        .arg("--remote-allow-origins=*")
+        .arg("--headless=new")
+        .arg("--hide-scrollbars")
+        .arg("--mute-audio")
+        .arg("--no-first-run")
+        .arg("--no-default-browser-check")
+        .arg("--disable-features=Translate,MediaRouter")
+        .arg("--disable-backgrounding-occluded-windows")
+        .arg("--disable-renderer-backgrounding")
+        .arg("about:blank")
+        .spawn()
+        .map_err(|e| format!("Failed to launch browser: {e}"))?;
+
+    *state.child.lock().map_err(|e| e.to_string())? = Some(child);
+    *state.profile.lock().map_err(|e| e.to_string())? = Some(profile);
+    Ok(port)
+}
+
+/// One-shot HTTP/1.1 GET over a raw socket, returning the response body.
+///
+/// Deliberately not done from the renderer with fetch(): Chromium's DevTools
+/// HTTP endpoint sends no CORS headers, so the browser blocks that request. From
+/// Rust there is no origin and no CORS. No HTTP crate needed for one GET.
+fn http_get_body(port: u16, path: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|e| e.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .map_err(|e| e.to_string())?;
+    let req = format!(
+        "GET {} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n",
+        path, port
+    );
+    stream.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&raw);
+    // Split headers from body.
+    match text.find("\r\n\r\n") {
+        Some(i) => Ok(text[i + 4..].to_string()),
+        None => Err("malformed HTTP response from browser".to_string()),
+    }
+}
+
+/// Resolve the browser's CDP websocket endpoint, waiting while it boots.
+/// Returns the `ws://` URL the renderer connects to (websockets ignore CORS).
+#[tauri::command]
+async fn cdp_ws_url(port: u16, state: State<'_, BrowserState>) -> Result<String, String> {
+    let mut last_err = String::from("browser did not start");
+
+    for _ in 0..50 {
+        // Bail early with a useful reason if the process already died.
+        {
+            let mut guard = state.child.lock().map_err(|e| e.to_string())?;
+            if let Some(child) = guard.as_mut() {
+                if let Ok(Some(status)) = child.try_wait() {
+                    *guard = None;
+                    return Err(format!(
+                        "browser exited early (status {status}). Close any running Edge/Chrome started with --remote-debugging-port, or try again."
+                    ));
+                }
+            }
+        }
+
+        match http_get_body(port, "/json/version") {
+            Ok(body) => match serde_json::from_str::<serde_json::Value>(&body) {
+                Ok(json) => {
+                    if let Some(url) = json.get("webSocketDebuggerUrl").and_then(|v| v.as_str()) {
+                        return Ok(url.to_string());
+                    }
+                    last_err = "browser response had no webSocketDebuggerUrl".to_string();
+                }
+                Err(e) => last_err = format!("bad JSON from browser: {e}"),
+            },
+            Err(e) => last_err = e,
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+
+    Err(format!("could not reach the browser on port {port}: {last_err}"))
+}
+
+#[tauri::command]
+async fn stop_cdp_browser(state: State<'_, BrowserState>) -> Result<(), String> {
+    if let Some(mut child) = state.child.lock().map_err(|e| e.to_string())?.take() {
+        kill_tree(&mut child);
+    }
+    // Best-effort: drop the throwaway profile so temp doesn't fill up with them.
+    if let Some(dir) = state.profile.lock().map_err(|e| e.to_string())?.take() {
+        let _ = fs::remove_dir_all(dir);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let pty_system = PtySystem {
@@ -1796,6 +1979,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(pty_system)
+        .manage(BrowserState { child: Mutex::new(None), profile: Mutex::new(None) })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -1830,7 +2014,10 @@ pub fn run() {
             remove_worktree,
             get_nectar_mcp_path,
             ensure_dir,
-            run_command
+            run_command,
+            launch_cdp_browser,
+            cdp_ws_url,
+            stop_cdp_browser
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

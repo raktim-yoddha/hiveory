@@ -1,4 +1,9 @@
 export { Board, COLUMNS, DEFAULT_COLUMNS } from './board.js';
+// Pure card semantics — shared by Board and by immutable hosts (see cards.ts).
+export {
+  createCard, newCardId, addCard, moveCard, removeCard, updateCard, cardsByColumn,
+} from './cards.js';
+export type { NewCardInput } from './cards.js';
 export { DefaultDispatchResolver, buildDispatchCommand } from './dispatch.js';
 export type { TaskCard, ColumnId, ColumnDefinition } from './board.js';
 export type { DispatchCommand, DispatchResolver } from './dispatch.js';
@@ -21,3 +26,5 @@ export { groupTasksByColumn } from './components/taskcomb-worktree-groups.js';
 
 // Pipeline board
 export { default as PipelineBoard } from './components/PipelineBoard.js';
+export { default as ProgressBoard } from './components/ProgressBoard.js';
+export { default as TaskListBoard } from './components/TaskListBoard.js';

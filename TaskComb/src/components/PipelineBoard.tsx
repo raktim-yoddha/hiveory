@@ -31,7 +31,7 @@ const PAL: Record<string, Palette> = {
   planner:     { icon: Calendar,   accent: "#22c55e" },
   coordinator: { icon: GitBranch,  accent: "#f59e0b" },
   builder:     { icon: Code2,      accent: "#3b82f6" },
-  aggregator:  { icon: Layers,     accent: "#9ca3af" },
+  aggregator:  { icon: Layers,     accent: "#c9a227" },
   reviewer:    { icon: ShieldCheck,accent: "#22c55e" },
   verifier:    { icon: BadgeCheck, accent: "#f59e0b" },
   end:         { icon: Square,     accent: "#6b7280" },
@@ -81,8 +81,10 @@ function GraphNode({ n }: { n: NodeD }) {
       className="absolute flex flex-col overflow-hidden rounded-lg"
       style={{
         left: n.x, top: n.y, width: NW, height: NH,
-        background: "linear-gradient(180deg,#22232e 0%,#191a22 100%)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        // Honey palette (bee.surfaceHi -> bee.canvasHi). Cold blue-greys read as
+        // foreign next to the app's warm surfaces.
+        background: "linear-gradient(180deg,#2b2420 0%,#1c1613 100%)",
+        border: "1px solid #3d2e1f",
         boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
         padding: "7px 9px 8px",
       }}
@@ -105,7 +107,7 @@ function GraphNode({ n }: { n: NodeD }) {
         {n.role}
       </span>
       {n.statusText && (
-        <span className="text-[8px] text-[#8b8b96] leading-[1.35] truncate mt-auto pb-px">
+        <span className="text-[8px] text-bee-textMuted leading-[1.35] truncate mt-auto pb-px">
           {n.statusText}
         </span>
       )}
