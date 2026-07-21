@@ -2420,6 +2420,123 @@ async fn bee_voice_transcribe(wav_path: String, model: String) -> Result<String,
 // moment it closes. A global OS listener (rdev) leaked past app exit and fired
 // when Hiveory wasn't focused, so it was removed.
 
+// ── Open-VSX (openvscode-server) ─────────────────────────────────
+// HoneyFlow's Open-VSX component embeds a local `openvscode-server` (which uses
+// the Open-VSX marketplace by default) in an iframe, so real VS Code extensions
+// run. The binary is NOT bundled — the user points at an installed one (or one
+// on PATH). We only own the process lifecycle, keyed by pane id.
+struct OpenVsxState {
+    servers: Mutex<HashMap<String, std::process::Child>>,
+}
+
+fn openvscode_bin(explicit: Option<String>) -> String {
+    if let Some(p) = explicit {
+        let p = p.trim();
+        if !p.is_empty() {
+            return p.to_string();
+        }
+    }
+    "openvscode-server".to_string()
+}
+
+/// Spawn openvscode-server for a pane and return the port it listens on.
+/// Idempotent: if this pane's server is alive (or the port already serves),
+/// the port is returned without starting a second one.
+/// Build a Command for openvscode-server (via cmd.exe on Windows for .cmd).
+fn openvscode_cmd(exe: &str) -> std::process::Command {
+    if cfg!(target_os = "windows") {
+        let mut c = std::process::Command::new("cmd");
+        c.arg("/C").arg(exe);
+        c
+    } else {
+        std::process::Command::new(exe)
+    }
+}
+
+#[tauri::command]
+async fn start_openvsx(
+    pane_id: String,
+    bin: Option<String>,
+    port: u16,
+    extensions: Option<Vec<String>>,
+    state: State<'_, OpenVsxState>,
+) -> Result<u16, String> {
+    {
+        let mut guard = state.servers.lock().map_err(|e| e.to_string())?;
+        if let Some(child) = guard.get_mut(&pane_id) {
+            match child.try_wait() {
+                Ok(None) => return Ok(port),
+                _ => {
+                    guard.remove(&pane_id);
+                }
+            }
+        }
+    }
+    if http_get_body(port, "/").is_ok() {
+        return Ok(port);
+    }
+
+    let exe = openvscode_bin(bin);
+
+    // Spawn the server FIRST and return fast so the pane stops spinning.
+    let mut cmd = openvscode_cmd(&exe);
+    cmd.arg("--host")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg(port.to_string())
+        .arg("--without-connection-token");
+
+    let child = cmd
+        .spawn()
+        .map_err(|e| format!("Failed to start openvscode-server ('{exe}'): {e}. Set the binary path in the pane's settings."))?;
+    state
+        .servers
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(pane_id, child);
+
+    // Best-effort: install requested extensions in the background. This used to
+    // run inline with a blocking .output() before the server was even spawned,
+    // which hung the whole async command (and the pane's "Starting…" spinner)
+    // whenever an install stalled on a slow/offline Open-VSX download.
+    // ponytail: fire-and-forget thread; extensions appear once the CLI finishes.
+    if let Some(ids) = extensions {
+        if !ids.is_empty() {
+            let exe = exe.clone();
+            std::thread::spawn(move || {
+                for id in ids {
+                    let _ = openvscode_cmd(&exe)
+                        .arg("--install-extension")
+                        .arg(&id)
+                        .arg("--force")
+                        .output();
+                }
+            });
+        }
+    }
+    Ok(port)
+}
+
+/// True once the server answers HTTP on its port.
+#[tauri::command]
+async fn openvsx_ready(port: u16) -> Result<bool, String> {
+    Ok(http_get_body(port, "/").is_ok())
+}
+
+/// Stop (and reap) the server for a pane.
+#[tauri::command]
+async fn stop_openvsx(pane_id: String, state: State<'_, OpenVsxState>) -> Result<(), String> {
+    let child = state
+        .servers
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove(&pane_id);
+    if let Some(mut c) = child {
+        kill_tree(&mut c);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let pty_system = PtySystem {
@@ -2429,6 +2546,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(pty_system)
         .manage(BrowserState { child: Mutex::new(None), profile: Mutex::new(None) })
+        .manage(OpenVsxState { servers: Mutex::new(HashMap::new()) })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -2467,6 +2585,9 @@ pub fn run() {
             launch_cdp_browser,
             cdp_ws_url,
             stop_cdp_browser,
+            start_openvsx,
+            openvsx_ready,
+            stop_openvsx,
             android_sdk_status,
             create_avd,
             delete_avd,

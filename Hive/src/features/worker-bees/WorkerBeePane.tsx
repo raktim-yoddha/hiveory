@@ -710,7 +710,7 @@ export default function WorkerBeePane({
           cursorBlink: true,
           cursorStyle: "block",
           fontSize: getFontSize(),
-          fontFamily: 'Cascadia Code, Consolas, "Courier New", monospace',
+          fontFamily: '"Geist Mono", Cascadia Code, Consolas, monospace',
           fontWeight: "400",
           fontWeightBold: "700",
           lineHeight: 1.2,
@@ -977,10 +977,11 @@ export default function WorkerBeePane({
         </div>
       </div>
 
-      {/* terminal content */}
+      {/* terminal content — bg matches the xterm theme so the whole-cell fit
+          remainder on the right/bottom blends in instead of showing a strip. */}
       <div
         className="flex-1 overflow-hidden relative min-h-0 p-2"
-        style={{ contain: "layout paint" }}
+        style={{ contain: "layout paint", background: "#1a1614" }}
       >
         {/* xterm canvas — hidden (not unmounted) when CLI isn't installed */}
         <div

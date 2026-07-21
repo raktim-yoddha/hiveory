@@ -20,13 +20,34 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@hiveory/plugins": [
+        "../HivePlugins/src"
+      ],
+      "@hiveory/plugins/*": [
+        "../HivePlugins/src/*"
+      ],
+      "@hiveory/honeyflow": [
+        "../HoneyFlow/src"
+      ],
+      "@hiveory/honeyflow/*": [
+        "../HoneyFlow/src/*"
+      ],
+      "@hiveory/hiveextension": [
+        "../HiveExtension/src"
+      ],
+      "@hiveory/hiveextension/*": [
+        "../HiveExtension/src/*"
       ]
     },
     "isolatedModules": true
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "../HivePlugins/src/**/*",
+    "../HoneyFlow/src/**/*",
+    "../HiveExtension/src/**/*"
   ],
   "exclude": [
     "node_modules",

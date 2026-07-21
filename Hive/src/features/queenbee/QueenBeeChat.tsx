@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Settings, Pin, PinOff, ExternalLink, ClipboardList, Search, ShieldCheck, ChevronDown, type LucideIcon } from "lucide-react";
+import { Send, Settings, Pin, PinOff, ExternalLink, ClipboardList, Search, ShieldCheck, ChevronDown, Maximize2, Minimize2, type LucideIcon } from "lucide-react";
+import QueenCrown from "@/shared/QueenCrown";
 import VoiceButton from "@/features/voice/VoiceButton";
 import { MODE_SYSTEM_PROMPTS, detectModeIntent, type QueenBeeMode } from "@hiveory/queenbee";
 import type { ColumnId } from "@hiveory/taskcomb";
@@ -52,9 +53,21 @@ interface QueenBeeChatProps {
   onToggleDock?: () => void;
   onOpenSettings?: () => void;
   onOpenProject?: () => void;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
-export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onOpenProject }: QueenBeeChatProps) {
+export default function QueenBeeChat({
+  docked,
+  onToggleDock,
+  onOpenSettings,
+  onOpenProject,
+  isExpanded: propIsExpanded,
+  onToggleExpand,
+}: QueenBeeChatProps) {
+  const [internalExpanded, setInternalExpanded] = useState(false);
+  const isExpanded = propIsExpanded ?? internalExpanded;
+  const handleToggleExpand = onToggleExpand ?? (() => setInternalExpanded((prev) => !prev));
   const [activeMode, setActiveMode] = useState<QueenBeeMode>("Steward");
   const welcomeText: Record<QueenBeeMode, string> = {
     Steward: "I'm QueenBee Steward. Tell me what you want to build and I'll dispatch WorkerBees to execute the work.",
@@ -545,9 +558,16 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
   };
 
   return (
-    <div className="h-full w-full glass-hi border-l border-bee-border/60 flex flex-col">
+    <div
+      className={
+        isExpanded
+          ? "fixed inset-0 z-[150] bg-bee-canvas/95 backdrop-blur-md border border-bee-gold/30 shadow-2xl flex flex-col animate-fade-in p-2"
+          : "h-full w-full glass-hi border-l border-bee-border/60 flex flex-col"
+      }
+    >
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-bee-border/50 relative">
-        <div className="relative">
+        <div className="relative flex items-center gap-2">
+          <QueenCrown className="size-4 text-bee-gold shrink-0" />
           <button
             onClick={() => setShowModeMenu(!showModeMenu)}
             className="flex items-center gap-1.5 text-xs font-semibold text-bee-gold hover:text-bee-goldHi transition-colors"
@@ -579,6 +599,13 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
         </div>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-bee-textMuted font-mono">{activeMode}</span>
+          <button
+            onClick={handleToggleExpand}
+            className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-gold transition-colors"
+            title={isExpanded ? "Exit full screen" : "Expand to full screen"}
+          >
+            {isExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </button>
           <button
             onClick={onToggleDock}
             className="p-1 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
@@ -678,7 +705,7 @@ export default function QueenBeeChat({ docked, onToggleDock, onOpenSettings, onO
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${activeMode}…`}
-            className="flex-1 bg-bee-canvas/70 border border-bee-border rounded-lg px-3 py-1.5 text-xs text-bee-text placeholder-bee-textMuted outline-none focus:ring-1 focus:ring-bee-gold transition-colors"
+            className="flex-1 bg-[#1a1512] border border-bee-border/70 rounded-lg px-3 py-1.5 text-xs text-[#f5f0e6] placeholder:text-bee-textMuted/60 outline-none focus:border-bee-gold/70 focus:bg-[#211b17] transition-colors"
           />
           <VoiceButton onTranscript={(t) => setInputValue((v) => (v ? `${v} ${t}` : t))} />
           {thinking ? (

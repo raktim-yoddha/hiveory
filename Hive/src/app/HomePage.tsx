@@ -6,6 +6,8 @@ import KanbanPanel from "@/features/task-comb/TaskCombPanel";
 import VoiceHotkeys from "@/features/voice/VoiceHotkeys";
 import HiveoryLogo from "@/shared/HiveoryLogo";
 import SettingsPage from "@/features/settings/SettingsPage";
+import ExtensionsMarketplace from "@/features/extensions/ExtensionsMarketplace";
+import { Blocks } from "lucide-react";
 import { useWorkerBeesStore, WorkerBee } from "@/features/worker-bees/workerBeesStore";
 import { getTauriAPIs, loadTauriAPIs } from "@/shared/tauri";
 import ADEWorktreeSidebar from "@/features/workspaces/WorkspacesSidebar";
@@ -19,43 +21,20 @@ import {
   Minus,
   Square,
   Copy,
-  ChevronDown,
   FolderOpen,
   GitBranch,
   PanelLeft,
   PanelRight,
   Columns3,
-  Grid2x2,
-  Rows3,
-  LayoutPanelLeft,
-  Sparkles,
-  Columns2,
-  Columns4,
-  type LucideIcon,
 } from "lucide-react";
 
-import type { GridLayout } from "@/features/worker-bees/workerBeesStore";
-
-const LAYOUT_OPTIONS: {
-  value: GridLayout;
-  label: string;
-  hint: string;
-  icon: LucideIcon;
-}[] = [
-  { value: "auto",   label: "Auto",      hint: "Fit to pane count", icon: Sparkles },
-  { value: "grid",   label: "Grid",      hint: "Balanced grid",     icon: Grid2x2 },
-  { value: "rows",   label: "Rows",      hint: "Stacked",           icon: Rows3 },
-  { value: "master", label: "Spotlight", hint: "Focus + stack",     icon: LayoutPanelLeft },
-  { value: 2, label: "2 Columns", hint: "Fixed", icon: Columns2 },
-  { value: 3, label: "3 Columns", hint: "Fixed", icon: Columns3 },
-  { value: 4, label: "4 Columns", hint: "Fixed", icon: Columns4 },
-];
 
 export default function HomePage() {
   const [initialized, setInitialized] = useState(false);
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showExtensions, setShowExtensions] = useState(false);
   const [gitStatus, setGitStatus] = useState<{
     branch: string;
     changed: number;
@@ -75,8 +54,6 @@ export default function HomePage() {
 
   const workerBees = useWorkerBeesStore((state) => state.workerBees);
   const agentStatuses = useWorkerBeesStore((state) => state.agentStatuses);
-  const gridLayout = useWorkerBeesStore((state) => state.gridLayout);
-  const setGridLayout = useWorkerBeesStore((state) => state.setGridLayout);
   const refitTerminals = useWorkerBeesStore((state) => state.refitTerminals);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
@@ -89,7 +66,6 @@ export default function HomePage() {
     const id = requestAnimationFrame(() => refitTerminals());
     return () => cancelAnimationFrame(id);
   }, []);
-  const [showLayoutMenu, setShowLayoutMenu] = useState(false);
 
   useEffect(() => {
     const initializeWindow = async () => {
@@ -212,8 +188,6 @@ export default function HomePage() {
 
   // Pane adds live in each plane's own header now (see PlaneHost).
 
-  const activeLayout =
-    LAYOUT_OPTIONS.find((o) => o.value === gridLayout) ?? LAYOUT_OPTIONS[0];
 
   // Pinned sidebars take flex space (docked); unpinned float over the content.
   const leftTakesSpace = leftPinned && leftOpen;
@@ -258,15 +232,11 @@ export default function HomePage() {
         {/* Center section — branding + controls */}
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <HiveoryLogo size={24} className="shadow-glow" />
+            <HiveoryLogo size={24} />
             <span className="text-xs font-semibold tracking-tight text-bee-text hidden sm:inline">
               Hive<span className="text-bee-gold">ory</span>
             </span>
           </div>
-
-          <span className="text-[11px] font-medium text-bee-gold bg-bee-gold/10 border border-bee-gold/20 px-2 py-0.5 rounded-full flex-shrink-0">
-            {workerBees.length}
-          </span>
 
           <button
             onClick={handleOpenFolder}
@@ -279,46 +249,8 @@ export default function HomePage() {
             </span>
           </button>
 
-          <div className="relative flex-shrink-0">
-            <button
-              onClick={() => setShowLayoutMenu((v) => !v)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] glass border-bee-border/70 text-bee-textDim hover:text-bee-text transition-colors"
-              title="Pane layout"
-            >
-              <activeLayout.icon size={12} className="text-bee-gold" />
-              <span className="hidden sm:inline">{activeLayout.label}</span>
-              <ChevronDown size={10} className="text-bee-textMuted" />
-            </button>
-            {showLayoutMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowLayoutMenu(false)} />
-                <div className="absolute left-0 top-full mt-1 z-50 min-w-48 glass-hi rounded-xl p-1 animate-fade-in">
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-bee-gold font-semibold">
-                    Pane layout
-                  </div>
-                  {LAYOUT_OPTIONS.map((opt) => {
-                    const Icon = opt.icon;
-                    const active = gridLayout === opt.value;
-                    return (
-                      <button
-                        key={opt.label}
-                        onClick={() => { setGridLayout(opt.value); setShowLayoutMenu(false); }}
-                        className={`w-full px-2.5 py-1.5 text-left text-xs rounded-lg flex items-center gap-2 transition-colors ${
-                          active
-                            ? "bg-bee-gold/10 text-bee-goldHi"
-                            : "text-bee-textDim hover:bg-bee-border/50 hover:text-bee-text"
-                        }`}
-                      >
-                        <Icon size={12} className={active ? "text-bee-gold" : "text-bee-textMuted"} />
-                        <span className="flex-1">{opt.label}</span>
-                        <span className="text-[9px] text-bee-textMuted">{opt.hint}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
+          {/* Plane layout is chosen by dragging a pane to the top snap picker
+              (see PlaneHost) — no title-bar dropdown needed. */}
 
           {/* Plane switcher — one center surface at a time (WorkerBees /
               Terminal / Browser / CoWorkers / Emulator). Adds moved into each
@@ -338,6 +270,14 @@ export default function HomePage() {
             title="Toggle right panel"
           >
             <PanelRight size={16} />
+          </button>
+
+          <button
+            onClick={() => setShowExtensions(true)}
+            className="p-1.5 rounded-md hover:bg-bee-border/60 text-bee-textMuted hover:text-bee-text transition-colors"
+            title="Browse extensions (Open-VSX)"
+          >
+            <Blocks size={14} />
           </button>
 
           <div className="w-px h-4 bg-bee-border/40 mx-1" />
@@ -379,6 +319,7 @@ export default function HomePage() {
         {leftOpen && (
           <div className={`${leftTakesSpace ? "relative flex-shrink-0" : "absolute left-0 top-0 bottom-0 z-40 shadow-2xl shadow-black/40"}`}>
             <ADEWorktreeSidebar
+              projectPath={projectPath}
               pinned={leftPinned}
               onTogglePin={() => setLeftPinned((p) => !p)}
               onClose={() => setLeftOpen(false)}
@@ -432,6 +373,7 @@ export default function HomePage() {
       </div>
 
       {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+      {showExtensions && <ExtensionsMarketplace onClose={() => setShowExtensions(false)} />}
 
       {/* Global voice hotkeys: Ctrl+Win (type anywhere) · Ctrl+Alt (WorkerBee). */}
       <VoiceHotkeys />

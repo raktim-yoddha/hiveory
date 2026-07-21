@@ -39,8 +39,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-sans)', 'Inter', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'JetBrains Mono', 'Cascadia Code', 'Consolas', 'monospace'],
+        sans: ['var(--font-sans)', 'Geist', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'Geist Mono', 'Cascadia Code', 'Consolas', 'monospace'],
       },
       borderRadius: {
         xl: '0.875rem',

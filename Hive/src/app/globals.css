@@ -1,8 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Self-hosted variable fonts (bundled by Vite) — the app is local-first, so
+   no runtime Google Fonts fetch. Geist for UI, Geist Mono for terminals. */
+@font-face {
+  font-family: 'Geist';
+  src: url('../assets/fonts/geist.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../assets/fonts/geist-mono.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 * {
   margin: 0;
@@ -12,8 +27,8 @@
 
 /* Warm bee/honey design tokens */
 :root {
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Geist', sans-serif;
+  --font-mono: 'Geist Mono', monospace;
   --bee-canvas: #14100e;
   --bee-canvas-hi: #1c1613;
   --bee-surface: 36 31 28; /* rgb parts for alpha compositing */
@@ -33,11 +48,87 @@ body {
 }
 
 body {
-  font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow: hidden;
   color: var(--bee-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.008em;
+}
+
+/* Terminal panes and code keep tabular figures so columns never wobble */
+.font-mono, code, kbd, pre {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Global scrollbar — extremely thin, themed, unobtrusive. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 162, 39, 0.3) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(201, 162, 39, 0.28);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 162, 39, 0.55);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+/* xterm manages its own scroll — hide its viewport bar (wheel still works) */
+.xterm-viewport {
+  scrollbar-width: none;
+}
+.xterm-viewport::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Global input & autofill dark theme enforcement */
+input, select, textarea {
+  color: #f5f0e6 !important;
+  caret-color: #c9a227;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: #f5f0e6 !important;
+  -webkit-box-shadow: 0 0 0px 1000px #1a1512 inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Kill Chromium's default blue focus ring — components draw their own gold ring */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+
+[data-queenbee-input] {
+  background-color: #1a1512 !important;
+  color: #f5f0e6 !important;
+  border-color: rgba(201, 162, 39, 0.35) !important;
+}
+
+[data-queenbee-input]:focus {
+  background-color: #211b17 !important;
+  border-color: rgba(201, 162, 39, 0.75) !important;
+  box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.25) !important;
 }
 
 @layer components {
@@ -48,7 +139,6 @@ body {
       radial-gradient(1200px 700px at 15% -10%, rgba(201, 162, 39, 0.10), transparent 60%),
       radial-gradient(1000px 800px at 100% 0%, rgba(154, 114, 6, 0.10), transparent 55%),
       radial-gradient(900px 900px at 50% 120%, rgba(60, 46, 31, 0.35), transparent 60%),
-      /* subtle honeycomb hatch */
       repeating-linear-gradient(60deg, rgba(201, 162, 39, 0.028) 0 1px, transparent 1px 26px),
       repeating-linear-gradient(-60deg, rgba(201, 162, 39, 0.028) 0 1px, transparent 1px 26px),
       linear-gradient(180deg, var(--bee-canvas-hi), var(--bee-canvas));
@@ -74,190 +164,51 @@ body {
     background-color: rgb(var(--bee-surface-hi) / 0.86);
     backdrop-filter: blur(22px) saturate(1.1);
     -webkit-backdrop-filter: blur(22px) saturate(1.1);
-    border: 1px solid rgba(201, 162, 39, 0.16);
-    box-shadow: 0 18px 48px -16px rgba(0, 0, 0, 0.65), inset 0 1px 0 0 rgba(245, 240, 230, 0.06);
-    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+    border: 1px solid rgba(61, 46, 31, 0.85);
+    box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.7), inset 0 1px 0 0 rgba(245, 240, 230, 0.08);
   }
 
-  /* Thin header/toolbar/status bars */
-  .glass-toolbar {
-    background-color: rgb(var(--bee-surface) / 0.60);
-    backdrop-filter: blur(14px) saturate(1.05);
-    -webkit-backdrop-filter: blur(14px) saturate(1.05);
-    border-color: rgba(61, 46, 31, 0.6);
+  /* Active pane — subtle gold shine when its input/terminal is focused. */
+  .pane-active {
+    border-color: rgba(201, 162, 39, 0.55) !important;
+    box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.35),
+      0 10px 30px -14px rgba(201, 162, 39, 0.5),
+      inset 0 1px 0 0 rgba(245, 240, 230, 0.05);
   }
 
-  /* Activity rail */
-  .glass-rail {
-    background-color: rgb(var(--bee-surface) / 0.5);
-    backdrop-filter: blur(14px) saturate(1.05);
-    -webkit-backdrop-filter: blur(14px) saturate(1.05);
+  /* Sleek customized scrollbar */
+  .scrollbar-sleek::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
   }
-}
 
-/* Warm scrollbars */
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, rgba(201, 162, 39, 0.55) 0%, rgba(154, 114, 6, 0.55) 100%);
-  border-radius: 6px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(212, 184, 74, 0.8) 0%, rgba(184, 134, 11, 0.8) 100%);
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-/* xterm.js helper elements fix */
-.xterm-helper-textarea {
-  position: absolute !important;
-  opacity: 0 !important;
-  width: 1px !important;
-  height: 1px !important;
-  top: 0 !important;
-  left: 0 !important;
-  pointer-events: none !important;
-}
-
-.xterm-char-measure-element {
-  position: absolute !important;
-  opacity: 0 !important;
-  visibility: hidden !important;
-  top: 0 !important;
-  left: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Let the terminal breathe inside its glass pane */
-.xterm {
-  padding: 0;
-}
-
-/* Smooth animations */
-@keyframes fade-in {
-  from {
-    opacity: 0;
+  .scrollbar-sleek::-webkit-scrollbar-track {
+    background: transparent;
   }
-  to {
-    opacity: 1;
+
+  .scrollbar-sleek::-webkit-scrollbar-thumb {
+    background: rgba(201, 162, 39, 0.25);
+    border-radius: 999px;
   }
-}
 
-@keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
+  .scrollbar-sleek::-webkit-scrollbar-thumb:hover {
+    background: rgba(201, 162, 39, 0.5);
   }
-  to {
-    opacity: 1;
-    transform: scale(1);
+
+  /* Hairline horizontal scrollbar — for the tab strip, so tabs don't get
+     pushed up by a chunky track. */
+  .scrollbar-hair::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
   }
-}
-
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-.animate-scale-in {
-  animation: scale-in 0.25s ease-out;
-}
-
-/* Hide scrollbars on horizontal tab strips while keeping scroll behaviour */
-.no-scrollbar {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* ===== Kanban board animations ===== */
-
-/* Sheet entry — clip-path reveal from left edge */
-@keyframes workspace-kanban-sheet-in {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0 0 0); }
-}
-
-/* Sheet exit — clip-path conceal to left edge */
-@keyframes workspace-kanban-sheet-out {
-  from { clip-path: inset(0 0 0 0); }
-  to   { clip-path: inset(0 100% 0 0); }
-}
-
-.workspace-kanban-sheet-content {
-  animation: workspace-kanban-sheet-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.workspace-kanban-sheet-content[data-workspace-board-drag-preview='true'] {
-  animation: workspace-kanban-sheet-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Toolbar pulse for drag preview */
-@keyframes workspace-board-trigger-preview-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.55); }
-  70%, 100% { box-shadow: 0 0 0 5px rgba(201, 162, 39, 0); }
-}
-[data-workspace-board-trigger][data-workspace-board-preview='true'] {
-  animation: workspace-board-trigger-preview-pulse 1.4s ease-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .workspace-kanban-sheet-content {
-    animation: none;
+  .scrollbar-hair::-webkit-scrollbar-track {
+    background: transparent;
   }
-  [data-workspace-board-trigger][data-workspace-board-preview='true'] {
-    animation: none;
+  .scrollbar-hair::-webkit-scrollbar-thumb {
+    background: rgba(201, 162, 39, 0.25);
+    border-radius: 999px;
   }
-}
-
-/* Sleek scrollbar for side panels */
-.scrollbar-sleek {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(201, 162, 39, 0.45) transparent;
-}
-.scrollbar-sleek::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.scrollbar-sleek::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scrollbar-sleek::-webkit-scrollbar-thumb {
-  background: rgba(201, 162, 39, 0.45);
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-.scrollbar-sleek::-webkit-scrollbar-thumb:hover {
-  background: rgba(201, 162, 39, 0.7);
-  background-clip: content-box;
-}
-
-/* Card drag state */
-[data-workspace-board-card-pointer-dragging='true'] {
-  outline: 1px solid var(--bee-gold, #c9a227) !important;
-  outline-offset: 1px;
-  box-shadow: 0 0 0 1px rgba(201, 162, 39, 0.36);
-}
-
-/* Grabbing cursor globally during drag */
-:root[data-workspace-board-pointer-dragging] * {
-  cursor: grabbing !important;
-}
-
-/* Drag preview: stack effect for multi-card */
-[data-workspace-board-card-drag-preview='true'] {
-  position: fixed;
-  overflow: visible;
-  isolation: isolate;
+  .scrollbar-hair::-webkit-scrollbar-thumb:hover {
+    background: rgba(201, 162, 39, 0.5);
+  }
 }

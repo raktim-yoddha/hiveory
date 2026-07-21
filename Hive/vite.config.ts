@@ -8,6 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@hiveory/plugins': path.resolve(__dirname, '../HivePlugins/src'),
+      '@hiveory/honeyflow': path.resolve(__dirname, '../HoneyFlow/src'),
+      '@hiveory/hiveextension': path.resolve(__dirname, '../HiveExtension/src'),
     },
   },
   server: {

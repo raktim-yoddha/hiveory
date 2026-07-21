@@ -185,7 +185,7 @@ export default function TerminalPane({
           cursorBlink: true,
           cursorStyle: "block",
           fontSize: 14,
-          fontFamily: 'Cascadia Code, Consolas, "Courier New", monospace',
+          fontFamily: '"Geist Mono", Cascadia Code, Consolas, monospace',
           fontWeight: "400",
           fontWeightBold: "700",
           lineHeight: 1.2,
@@ -344,8 +344,12 @@ export default function TerminalPane({
 
   return (
     <div className="flex flex-col h-full bg-[#1a1614]/85 overflow-hidden">
-      {/* terminal header */}
-      <div data-pane-drag className="h-8 border-b border-bee-gold/40 bg-gradient-to-r from-bee-gold/[0.18] to-bee-gold/[0.06] backdrop-blur-md flex items-center justify-between px-2 cursor-grab active:cursor-grabbing">
+      {/* terminal header — blade (steel) theme, distinct from the gold agents */}
+      <div
+        data-pane-drag
+        className="h-8 border-b flex items-center justify-between px-2 cursor-grab active:cursor-grabbing backdrop-blur-md"
+        style={{ borderColor: "rgba(159,178,201,0.34)", background: "linear-gradient(90deg, rgba(159,178,201,0.18), rgba(159,178,201,0.05))" }}
+      >
         <div className="flex items-center gap-2">
           {isEditing && onEditChange ? (
             <input
@@ -358,24 +362,21 @@ export default function TerminalPane({
                 if (e.key === 'Escape') onCancelRename?.();
               }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-bee-canvas text-bee-text px-2 py-0.5 rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-bee-gold border border-bee-border"
+              className="bg-bee-canvas text-bee-text px-2 py-0.5 rounded-md text-xs w-32 focus:outline-none focus:ring-1 focus:ring-[#9fb2c9] border border-bee-border"
               autoFocus
             />
           ) : (
             <span
               onDoubleClick={onRename}
-              className="text-xs text-bee-text font-medium cursor-pointer hover:text-bee-gold transition-colors"
+              className="text-xs text-bee-text font-medium cursor-pointer hover:text-[#9fb2c9] transition-colors"
             >
               {displayName}
             </span>
           )}
 
-          {/* Shell is chosen at creation (via the Terminal plane's + menu),
-              so the header just labels it — no in-pane switcher. */}
-          <span className="flex items-center gap-1.5 px-2 py-0.5 text-[11px] text-bee-textDim">
-            <Terminal size={11} className="text-bee-gold" />
-            {launchCommand ? (shellLabel || launchCommand) : TERMINAL_LABELS[selectedTerminal]}
-          </span>
+          {/* No separate shell-label chip — the tab name already identifies the
+              terminal. Showing both duplicated the name (and reappeared on
+              rename). */}
         </div>
         <div className="flex items-center gap-1">
           {onToggleMaximize && (
