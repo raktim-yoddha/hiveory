@@ -1,11 +1,10 @@
 [package]
-name = "agentic-super-app-protocol"
+name = "agentic-super-app-secret-store"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-serde.workspace = true
-serde_json.workspace = true
+keyring = "4"
 thiserror.workspace = true
-ts-rs = "12"
+uuid.workspace = true

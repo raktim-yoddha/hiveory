@@ -4,6 +4,12 @@ members = [
   "agentic-super-app-crates/agentic-super-app-protocol",
   "agentic-super-app-crates/agentic-super-app-domain-common",
   "agentic-super-app-crates/agentic-super-app-security",
+  "agentic-super-app-crates/agentic-super-app-persistence",
+  "agentic-super-app-crates/agentic-super-app-secret-store",
+  "agentic-super-app-crates/agentic-super-app-model-gateway",
+  "agentic-super-app-crates/agentic-super-app-job-runtime",
+  "agentic-super-app-crates/agentic-super-app-tool-runtime",
+  "agentic-super-app-crates/agentic-super-app-notification-service",
   "agentic-super-app-tooling",
 ]
 resolver = "2"
@@ -19,3 +25,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["serde", "v7"] }
+async-trait = "0.1"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+sqlx = { version = "0.9", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }

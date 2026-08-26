@@ -3,5 +3,9 @@
   "identifier": "agentic-super-app-default",
   "description": "Minimum bootstrap permissions for the single trusted local renderer.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "notification:allow-is-permission-granted",
+    "notification:allow-request-permission"
+  ]
 }

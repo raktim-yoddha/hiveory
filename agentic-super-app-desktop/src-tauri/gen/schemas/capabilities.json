@@ -1,1 +1,1 @@
-{"agentic-super-app-default":{"identifier":"agentic-super-app-default","description":"Minimum bootstrap permissions for the single trusted local renderer.","local":true,"windows":["main"],"permissions":["core:default"]}}
+{"agentic-super-app-default":{"identifier":"agentic-super-app-default","description":"Minimum bootstrap permissions for the single trusted local renderer.","local":true,"windows":["main"],"permissions":["core:default","notification:allow-is-permission-granted","notification:allow-request-permission"]}}

@@ -1,0 +1,12 @@
+[package]
+name = "agentic-super-app-notification-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-job-runtime = { path = "../agentic-super-app-job-runtime" }
+agentic-super-app-persistence = { path = "../agentic-super-app-persistence" }
+agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+sqlx.workspace = true
+thiserror.workspace = true

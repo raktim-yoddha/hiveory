@@ -1,0 +1,13 @@
+[package]
+name = "agentic-super-app-job-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-persistence = { path = "../agentic-super-app-persistence" }
+agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+sqlx.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

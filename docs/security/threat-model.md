@@ -6,7 +6,7 @@ User files, process execution authority, source-control credentials, provider cr
 
 ## Current controls
 
-The renderer has only three non-privileged bootstrap commands. No filesystem, shell, process, network, clipboard, updater, or secret-store plugin permission is granted. The host owns mode state; renderer preview fallback has no authority.
+The renderer has non-privileged shell and diagnostics commands only. The host owns mode state, SQLite access, operating-system keychain access, provider networking, job cancellation, audit writes, and native notification dispatch. Renderer preview fallback has no authority. Provider diagnostics require an explicitly stored key and an explicitly selected model; diagnostic requests set provider-side response storage to false.
 
 ## Deferred risks and required controls
 
@@ -18,5 +18,7 @@ The renderer has only three non-privileged bootstrap commands. No filesystem, sh
 | Terminal/process escape | command policy, workspace scoping, approval tiers, process-tree cleanup |
 | Malicious repository content | workspace trust, path normalization, preview isolation |
 | Event replay corruption | transactional migrations, idempotency receipts, monotonic sequence checks |
+| Interrupted diagnostic work | durable job state and checkpoints, with incomplete work marked `Interrupted` on restart |
+| Native notification abuse | renderer permission request only; host persists and dispatches notification content |
 
 Security-sensitive implementation requires a new ADR and acceptance test before activation.

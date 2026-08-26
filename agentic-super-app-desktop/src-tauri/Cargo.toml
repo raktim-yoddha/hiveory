@@ -10,9 +10,18 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 agentic-super-app-protocol = { path = "../../agentic-super-app-crates/agentic-super-app-protocol" }
+agentic-super-app-job-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-job-runtime" }
+agentic-super-app-model-gateway = { path = "../../agentic-super-app-crates/agentic-super-app-model-gateway" }
+agentic-super-app-notification-service = { path = "../../agentic-super-app-crates/agentic-super-app-notification-service" }
+agentic-super-app-persistence = { path = "../../agentic-super-app-crates/agentic-super-app-persistence" }
+agentic-super-app-secret-store = { path = "../../agentic-super-app-crates/agentic-super-app-secret-store" }
+agentic-super-app-tool-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-tool-runtime" }
 serde.workspace = true
 tauri = { version = "2", features = [] }
+tauri-plugin-notification = "2"
+sqlx.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 
 [lib]
 name = "agentic_super_app_app_host"
