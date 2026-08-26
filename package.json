@@ -1,0 +1,12 @@
+{
+  "name": "agentic-super-app-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "build": "pnpm --dir agentic-super-app-renderer build",
+    "check": "pnpm --dir agentic-super-app-renderer check",
+    "test": "pnpm --dir agentic-super-app-renderer test",
+    "audit:identity": "node agentic-super-app-tooling/scripts/agentic-super-app-prohibited-name-scan.mjs",
+    "audit:references": "node agentic-super-app-tooling/scripts/agentic-super-app-reference-guard.mjs"
+  }
+}

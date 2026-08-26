@@ -1,0 +1,11 @@
+feature_id,source_behavior,target_owner,phase,status,acceptance_test
+agent-run-lifecycle,Visible run lifecycle with streamed progress,agentic-super-app-agent-runtime,2,selected,Run lifecycle transition test
+tool-approval,Explicit approve or deny before privileged tool action,agentic-super-app-tool-runtime,2,selected,Denied action never launches test
+workspace-trust,Workspace-scoped trust before code mutation,agentic-super-app-code-domain,3,selected,Untrusted workspace mutation rejection test
+terminal-lifecycle,Host-managed terminal session lifecycle,agentic-super-app-code-runtime,3,selected,Process cleanup and restart test
+provider-adapter,Host-owned model provider adapter,agentic-super-app-model-gateway,2,selected,Adapter contract conformance test
+command-receipt,Idempotent command receipt,persistence,2,selected,Duplicate command returns one durable result test
+event-projection,Renderer consumes cached host projection,shared-runtime,2,selected,Replay projection equivalence test
+subscription-cursor,Resumable monotonic stream cursor,shared-protocol,2,deferred,Cursor recovery test
+browser-preview,Auxiliary untrusted browser preview,code-domain,4,deferred,Preview has no host capability test
+remote-connection,Remote workspace connectivity,code-runtime,5,deferred,Remote lifecycle recovery test

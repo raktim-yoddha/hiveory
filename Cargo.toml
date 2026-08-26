@@ -1,0 +1,21 @@
+[workspace]
+members = [
+  "agentic-super-app-desktop/src-tauri",
+  "agentic-super-app-crates/agentic-super-app-protocol",
+  "agentic-super-app-crates/agentic-super-app-domain-common",
+  "agentic-super-app-crates/agentic-super-app-security",
+  "agentic-super-app-tooling",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/agentic-super-app/agentic-super-app"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["serde", "v7"] }

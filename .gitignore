@@ -1,0 +1,13 @@
+/target/
+/node_modules/
+/agentic-super-app-renderer/node_modules/
+/agentic-super-app-renderer/dist/
+/agentic-super-app-desktop/src-tauri/target/
+/agentic-super-app-crates/agentic-super-app-protocol/bindings/
+*.log
+.env
+.env.*
+!.env.example
+/techn 
+tauri-agent-super-app-prd.md
+THIRD_PARTY_NOTICES.md

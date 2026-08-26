@@ -1,0 +1,8 @@
+[package]
+name = "agentic-super-app-tooling"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-protocol = { path = "../agentic-super-app-crates/agentic-super-app-protocol" }

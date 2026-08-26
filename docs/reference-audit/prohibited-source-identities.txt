@@ -1,0 +1,5 @@
+# Case-insensitive source identities that must not appear in implementation paths.
+hermes-agent
+orca
+t3code
+bridgemind

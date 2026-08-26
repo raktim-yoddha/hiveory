@@ -1,0 +1,23 @@
+[package]
+name = "agentic-super-app-app-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+agentic-super-app-protocol = { path = "../../agentic-super-app-crates/agentic-super-app-protocol" }
+serde.workspace = true
+tauri = { version = "2", features = [] }
+thiserror.workspace = true
+
+[lib]
+name = "agentic_super_app_app_host"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "agentic-super-app-desktop"
+path = "src/main.rs"

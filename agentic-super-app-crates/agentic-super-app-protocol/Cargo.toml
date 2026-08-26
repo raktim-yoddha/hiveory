@@ -1,0 +1,10 @@
+[package]
+name = "agentic-super-app-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+ts-rs = "12"

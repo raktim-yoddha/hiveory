@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "agentic-super-app-default",
+  "description": "Minimum bootstrap permissions for the single trusted local renderer.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
