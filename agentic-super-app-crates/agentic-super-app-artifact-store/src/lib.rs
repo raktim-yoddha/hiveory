@@ -1,4 +1,4 @@
-use agentic_super_app_protocol::ChatAttachmentSummary;
+use agentic_super_app_protocol::{AgentArtifactKind, ChatAttachmentSummary};
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
@@ -39,6 +39,16 @@ pub enum AgenticSuperAppArtifactError {
 pub struct AgenticSuperAppStoredAttachment {
     pub summary: ChatAttachmentSummary,
     pub absolute_path: PathBuf,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgenticSuperAppStoredAgentArtifact {
+    pub kind: AgentArtifactKind,
+    pub name: String,
+    pub relative_path: String,
+    pub absolute_path: PathBuf,
+    pub bytes: u64,
+    pub sha256: String,
 }
 
 #[derive(Debug, Clone)]
@@ -175,6 +185,62 @@ impl AgenticSuperAppArtifactStore {
             return Err(AgenticSuperAppArtifactError::Storage);
         }
         Ok(self.root.join(relative))
+    }
+
+    /// Store a text artifact emitted by an Agent under its private content
+    /// root. The caller persists the returned metadata with the run; this
+    /// method never accepts an absolute or parent-traversing path.
+    pub fn write_agent_text(
+        &self,
+        run_id: &str,
+        name: &str,
+        content: &str,
+        kind: AgentArtifactKind,
+    ) -> Result<AgenticSuperAppStoredAgentArtifact, AgenticSuperAppArtifactError> {
+        if run_id.trim().is_empty() || content.len() as u64 > TEXT_LIMIT {
+            return Err(AgenticSuperAppArtifactError::TooLarge);
+        }
+        let safe_run_id = sanitize_archive_name(run_id);
+        let safe_name = sanitize_archive_name(name);
+        if safe_name.is_empty() {
+            return Err(AgenticSuperAppArtifactError::Storage);
+        }
+        let bytes = content.as_bytes();
+        let sha256 = hex_digest(bytes);
+        let relative_path = format!("agent-artifacts/{safe_run_id}/{sha256}-{safe_name}");
+        let destination = self.resolve_relative_path(&relative_path)?;
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent).map_err(|_| AgenticSuperAppArtifactError::Storage)?;
+        }
+        if !destination.exists() {
+            let temporary = self
+                .root
+                .join("tmp")
+                .join(format!("{}.part", Uuid::now_v7()));
+            if let Some(parent) = temporary.parent() {
+                fs::create_dir_all(parent).map_err(|_| AgenticSuperAppArtifactError::Storage)?;
+            }
+            let mut output =
+                File::create(&temporary).map_err(|_| AgenticSuperAppArtifactError::Storage)?;
+            output
+                .write_all(bytes)
+                .and_then(|_| output.sync_all())
+                .map_err(|_| AgenticSuperAppArtifactError::Storage)?;
+            if fs::rename(&temporary, &destination).is_err() {
+                let _ = fs::remove_file(&temporary);
+                if !destination.exists() {
+                    return Err(AgenticSuperAppArtifactError::Storage);
+                }
+            }
+        }
+        Ok(AgenticSuperAppStoredAgentArtifact {
+            kind,
+            name: safe_name,
+            relative_path,
+            absolute_path: destination,
+            bytes: bytes.len() as u64,
+            sha256,
+        })
     }
 
     pub fn remove_relative_path(

@@ -12,6 +12,7 @@ use std::{
 };
 use uuid::Uuid;
 
+pub mod agent;
 pub mod chat;
 pub mod code;
 pub mod orchestration;

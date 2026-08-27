@@ -1341,6 +1341,591 @@ pub struct CodeCheckpointDiffRequest {
     pub compare_to_checkpoint_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentApprovalPolicy {
+    AlwaysAsk,
+    AskForMutations,
+    AllowWithinScope,
+    Deny,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMemoryPolicy {
+    Disabled,
+    ExplicitOnly,
+    IncludeSummaries,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentRunState {
+    Queued,
+    Preparing,
+    Running,
+    AwaitingApproval,
+    AwaitingInput,
+    Interrupted,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentToolRisk {
+    ReadOnly,
+    InternalMutation,
+    FilesystemMutation,
+    ExternallyVisible,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentToolCallState {
+    Proposed,
+    AwaitingApproval,
+    Approved,
+    Executing,
+    Completed,
+    Denied,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentApprovalDecision {
+    Approve,
+    Deny,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentMemoryClass {
+    AgentKnowledge,
+    UserPreference,
+    RunSummary,
+    SkillObservation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentSkillOrigin {
+    Builtin,
+    ApplicationData,
+    ConfiguredDirectory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentArtifactKind {
+    Text,
+    Json,
+    Markdown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentEventKind {
+    RunStateChanged,
+    AssistantTextDelta,
+    ReasoningSummary,
+    ToolCallProposed,
+    ToolCallStarted,
+    ToolCallCompleted,
+    ToolCallFailed,
+    ApprovalRequested,
+    ApprovalResolved,
+    InputRequested,
+    SkillLoaded,
+    MemoryRetrieved,
+    ArtifactCreated,
+    ChildRunCreated,
+    CompactionCreated,
+    UsageRecorded,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRuntimeLimits {
+    pub max_steps: u32,
+    pub max_tool_calls: u32,
+    pub max_duration_seconds: u32,
+    pub max_context_tokens: u32,
+    pub max_subagent_depth: u8,
+    pub max_concurrent_subagents: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub avatar_color: String,
+    pub provider_account_id: String,
+    pub model: String,
+    pub version: u32,
+    pub archived: bool,
+    pub active_run_state: Option<AgentRunState>,
+    pub enabled_skill_count: u32,
+    pub enabled_tool_count: u32,
+    pub folder_grant_count: u32,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentFolderGrant {
+    pub id: String,
+    pub agent_id: String,
+    pub display_name: String,
+    pub root_path: String,
+    pub read: bool,
+    pub write: bool,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub input_schema_json: String,
+    pub risk: AgentToolRisk,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillSummary {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub origin: AgentSkillOrigin,
+    pub source_path: String,
+    pub triggers: Vec<String>,
+    pub permissions: Vec<String>,
+    pub enabled: bool,
+    pub valid: bool,
+    pub validation_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillConflict {
+    pub trigger: String,
+    pub skill_ids: Vec<String>,
+    pub selected_skill_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentMemorySummary {
+    pub id: String,
+    pub agent_id: String,
+    pub class: AgentMemoryClass,
+    pub content: String,
+    pub source_type: String,
+    pub source_id: Option<String>,
+    pub enabled: bool,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentArtifactSummary {
+    pub id: String,
+    pub run_id: String,
+    pub name: String,
+    pub kind: AgentArtifactKind,
+    pub relative_path: String,
+    pub bytes: u64,
+    pub sha256: String,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentToolCallSummary {
+    pub id: String,
+    pub run_id: String,
+    pub call_id: String,
+    pub name: String,
+    pub arguments_json: String,
+    pub risk: AgentToolRisk,
+    pub state: AgentToolCallState,
+    pub approval_id: Option<String>,
+    pub result_preview: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentApprovalSummary {
+    pub id: String,
+    pub run_id: String,
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub target: String,
+    pub arguments_json: String,
+    pub fingerprint: String,
+    pub reversible: bool,
+    pub state: String,
+    pub created_at_unix_ms: i64,
+    pub resolved_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRunSummary {
+    pub id: String,
+    pub agent_id: String,
+    pub agent_version: u32,
+    pub conversation_id: String,
+    pub state: AgentRunState,
+    pub prompt_preview: String,
+    pub background: bool,
+    pub step_count: u32,
+    pub tool_call_count: u32,
+    pub pending_approval_id: Option<String>,
+    pub lease_generation: u64,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub error: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+    pub completed_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentMessage {
+    pub id: String,
+    pub run_id: String,
+    pub role: String,
+    pub kind: String,
+    pub content: String,
+    pub tool_call_id: Option<String>,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRunDetail {
+    pub summary: AgentRunSummary,
+    pub messages: Vec<AgentMessage>,
+    pub tool_calls: Vec<AgentToolCallSummary>,
+    pub approvals: Vec<AgentApprovalSummary>,
+    pub skills: Vec<AgentSkillSummary>,
+    pub memories: Vec<AgentMemorySummary>,
+    pub artifacts: Vec<AgentArtifactSummary>,
+    pub child_runs: Vec<AgentRunSummary>,
+    pub event_cursor: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentDetail {
+    pub summary: AgentSummary,
+    pub operating_brief: String,
+    pub system_instructions: String,
+    pub approval_policy: AgentApprovalPolicy,
+    pub memory_policy: AgentMemoryPolicy,
+    pub runtime_limits: AgentRuntimeLimits,
+    pub folders: Vec<AgentFolderGrant>,
+    pub tools: Vec<AgentToolDefinition>,
+    pub skills: Vec<AgentSkillSummary>,
+    pub conflicts: Vec<AgentSkillConflict>,
+    pub recent_runs: Vec<AgentRunSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentDashboard {
+    pub agents: Vec<AgentSummary>,
+    pub active_runs: Vec<AgentRunSummary>,
+    pub pending_approvals: Vec<AgentApprovalSummary>,
+    pub recent_runs: Vec<AgentRunSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentCreateRequest {
+    pub name: String,
+    pub description: String,
+    pub operating_brief: String,
+    pub avatar_color: String,
+    pub provider_account_id: String,
+    pub model: String,
+    pub system_instructions: String,
+    pub approval_policy: AgentApprovalPolicy,
+    pub memory_policy: AgentMemoryPolicy,
+    pub runtime_limits: AgentRuntimeLimits,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentUpdateRequest {
+    pub agent_id: String,
+    pub name: String,
+    pub description: String,
+    pub operating_brief: String,
+    pub avatar_color: String,
+    pub provider_account_id: String,
+    pub model: String,
+    pub system_instructions: String,
+    pub approval_policy: AgentApprovalPolicy,
+    pub memory_policy: AgentMemoryPolicy,
+    pub runtime_limits: AgentRuntimeLimits,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentIdRequest {
+    pub agent_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentFolderGrantRequest {
+    pub agent_id: String,
+    pub path: String,
+    pub read: bool,
+    pub write: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentFolderGrantDeleteRequest {
+    pub agent_id: String,
+    pub grant_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillToggleRequest {
+    pub agent_id: String,
+    pub skill_id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillConflictResolutionRequest {
+    pub agent_id: String,
+    pub trigger: String,
+    pub skill_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentMemoryQuery {
+    pub agent_id: String,
+    pub search: Option<String>,
+    pub class: Option<AgentMemoryClass>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentMemoryMutationRequest {
+    pub agent_id: String,
+    pub memory_id: Option<String>,
+    pub class: AgentMemoryClass,
+    pub content: String,
+    pub source_type: String,
+    pub source_id: Option<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentMemoryDeleteRequest {
+    pub agent_id: String,
+    pub memory_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRunStartRequest {
+    pub agent_id: String,
+    pub conversation_id: Option<String>,
+    pub prompt: String,
+    pub background: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRunControlRequest {
+    pub run_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentApprovalDecisionRequest {
+    pub run_id: String,
+    pub approval_id: String,
+    pub fingerprint: String,
+    pub decision: AgentApprovalDecision,
+    pub comment: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentInputRequest {
+    pub run_id: String,
+    pub answer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentRunsQuery {
+    pub agent_id: Option<String>,
+    pub state: Option<AgentRunState>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentEventsQuery {
+    pub run_id: String,
+    pub after_sequence: u64,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentEventEnvelope {
+    pub run_id: String,
+    pub sequence: u64,
+    pub event_id: String,
+    pub kind: AgentEventKind,
+    pub step: u32,
+    pub tool_call_id: Option<String>,
+    pub payload: String,
+    pub emitted_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillCatalog {
+    pub skills: Vec<AgentSkillSummary>,
+    pub conflicts: Vec<AgentSkillConflict>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentExportRequest {
+    pub agent_id: String,
+    pub destination: String,
+    pub include_memory: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentConversationSummary {
+    pub id: String,
+    pub agent_id: String,
+    pub title: String,
+    pub message_count: u32,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentConversationDetail {
+    pub id: String,
+    pub agent_id: String,
+    pub title: String,
+    pub messages: Vec<AgentMessage>,
+    pub runs: Vec<AgentRunSummary>,
+    pub draft: String,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentConversationQuery {
+    pub agent_id: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentConversationCreateRequest {
+    pub agent_id: String,
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentConversationMessageRequest {
+    pub agent_id: String,
+    pub conversation_id: Option<String>,
+    pub prompt: String,
+    pub background: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentModelTurnRequest {
+    pub model: String,
+    pub system_instructions: String,
+    pub input_items_json: Vec<String>,
+    pub tools: Vec<AgentToolDefinition>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentProviderStreamEventKind {
+    TextDelta,
+    ReasoningSummary,
+    FunctionCall,
+    OutputItem,
+    Usage,
+    Completed,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentProviderStreamEvent {
+    pub provider_sequence: i64,
+    pub kind: AgentProviderStreamEventKind,
+    pub text: Option<String>,
+    pub call_id: Option<String>,
+    pub name: Option<String>,
+    pub arguments_json: Option<String>,
+    pub item_json: Option<String>,
+    pub input_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
+    pub error_code: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentProviderToolOutput {
+    pub call_id: String,
+    pub output_json: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct BootstrapSnapshot {
@@ -1507,6 +2092,59 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeCleanupConfirmRequest::export_all(&config)?;
     CodeOrchestrationEventsQuery::export_all(&config)?;
     CodeCheckpointDiffRequest::export_all(&config)?;
+    AgentApprovalPolicy::export_all(&config)?;
+    AgentMemoryPolicy::export_all(&config)?;
+    AgentRunState::export_all(&config)?;
+    AgentToolRisk::export_all(&config)?;
+    AgentToolCallState::export_all(&config)?;
+    AgentApprovalDecision::export_all(&config)?;
+    AgentMemoryClass::export_all(&config)?;
+    AgentSkillOrigin::export_all(&config)?;
+    AgentArtifactKind::export_all(&config)?;
+    AgentEventKind::export_all(&config)?;
+    AgentRuntimeLimits::export_all(&config)?;
+    AgentSummary::export_all(&config)?;
+    AgentFolderGrant::export_all(&config)?;
+    AgentToolDefinition::export_all(&config)?;
+    AgentSkillSummary::export_all(&config)?;
+    AgentSkillConflict::export_all(&config)?;
+    AgentMemorySummary::export_all(&config)?;
+    AgentArtifactSummary::export_all(&config)?;
+    AgentToolCallSummary::export_all(&config)?;
+    AgentApprovalSummary::export_all(&config)?;
+    AgentRunSummary::export_all(&config)?;
+    AgentMessage::export_all(&config)?;
+    AgentRunDetail::export_all(&config)?;
+    AgentDetail::export_all(&config)?;
+    AgentDashboard::export_all(&config)?;
+    AgentCreateRequest::export_all(&config)?;
+    AgentUpdateRequest::export_all(&config)?;
+    AgentIdRequest::export_all(&config)?;
+    AgentFolderGrantRequest::export_all(&config)?;
+    AgentFolderGrantDeleteRequest::export_all(&config)?;
+    AgentSkillToggleRequest::export_all(&config)?;
+    AgentSkillConflictResolutionRequest::export_all(&config)?;
+    AgentMemoryQuery::export_all(&config)?;
+    AgentMemoryMutationRequest::export_all(&config)?;
+    AgentMemoryDeleteRequest::export_all(&config)?;
+    AgentRunStartRequest::export_all(&config)?;
+    AgentRunControlRequest::export_all(&config)?;
+    AgentApprovalDecisionRequest::export_all(&config)?;
+    AgentInputRequest::export_all(&config)?;
+    AgentRunsQuery::export_all(&config)?;
+    AgentEventsQuery::export_all(&config)?;
+    AgentEventEnvelope::export_all(&config)?;
+    AgentSkillCatalog::export_all(&config)?;
+    AgentExportRequest::export_all(&config)?;
+    AgentConversationSummary::export_all(&config)?;
+    AgentConversationDetail::export_all(&config)?;
+    AgentConversationQuery::export_all(&config)?;
+    AgentConversationCreateRequest::export_all(&config)?;
+    AgentConversationMessageRequest::export_all(&config)?;
+    AgentModelTurnRequest::export_all(&config)?;
+    AgentProviderStreamEventKind::export_all(&config)?;
+    AgentProviderStreamEvent::export_all(&config)?;
+    AgentProviderToolOutput::export_all(&config)?;
     BootstrapSnapshot::export_all(&config)?;
     SetActiveModeCommand::export_all(&config)?;
     BuildInformation::export_all(&config)?;

@@ -5,10 +5,11 @@ import { agenticSuperAppClient, type ApplicationMode, type DiagnosticSnapshot, t
 import { AgenticSuperAppChat } from './chat/agentic-super-app-chat'
 const AgenticSuperAppCode = lazy(() => import('./code/agentic-super-app-code').then((module) => ({ default: module.AgenticSuperAppCode })))
 const AgenticSuperAppCodeRuns = lazy(() => import('./code/agentic-super-app-code-runs').then((module) => ({ default: module.AgenticSuperAppCodeRuns })))
+const AgenticSuperAppAgent = lazy(() => import('./agent/agentic-super-app-agent').then((module) => ({ default: module.AgenticSuperAppAgent })))
 
 type ModeDefinition = { mode: ApplicationMode; label: string; description: string; icon: typeof Bot; navigation: string[] }
 const modes: ModeDefinition[] = [
-  { mode: 'agent', label: 'Agent', description: 'Autonomous workspaces, reviews, and approvals will appear here.', icon: Bot, navigation: ['Runs', 'Profiles', 'Skills'] },
+  { mode: 'agent', label: 'Agent', description: 'Named assistants, explicit tools, durable runs, and inspectable memory.', icon: Bot, navigation: ['Workspace', 'Runs', 'Skills'] },
   { mode: 'code', label: 'Code', description: 'Projects, worker lanes, checkpoints, and reviewable runs live here.', icon: Code2, navigation: ['Workbench', 'Runs'] },
   { mode: 'chat', label: 'Chat', description: 'Focused conversations and artifacts will appear here.', icon: MessageSquare, navigation: ['Conversations', 'Artifacts', 'Archive'] },
 ]
@@ -26,7 +27,6 @@ export function AgenticSuperAppShell() {
 
   useEffect(() => { void agenticSuperAppClient.bootstrap().then((item) => { setActiveMode(item.active_mode); setConnected(true) }).catch(() => setConnected(false)); refresh(); agenticSuperAppClient.subscribe((event) => { setEvents((items) => [event, ...items].slice(0, 30)); refresh() }) }, [])
   const selectMode = (mode: ApplicationMode) => { setScreen('workspace'); if (mode === 'code') setCodeScreen('workbench'); setActiveMode(mode); void agenticSuperAppClient.setActiveMode(mode).then((item) => setActiveMode(item.active_mode)).catch(() => undefined) }
-  const ModeIcon = definition.icon
   return <main className="agentic-super-app-shell">
     <header className="agentic-super-app-titlebar">
       <div className="agentic-super-app-brand"><PanelLeft size={16} aria-hidden="true" /><span>Agentic Super App</span></div>
@@ -36,9 +36,9 @@ export function AgenticSuperAppShell() {
     <section className={`agentic-super-app-workspace ${screen === 'workspace' && activeMode === 'chat' ? 'is-chat-mode' : ''} ${screen === 'workspace' && activeMode === 'code' ? 'is-code-mode' : ''}`}>
       <aside className="agentic-super-app-rail" aria-label={screen === 'diagnostics' ? 'Global navigation' : `${definition.label} navigation`}>
         {screen === 'diagnostics' ? <><div className="agentic-super-app-rail-heading">System</div><button className="is-selected"><Activity size={15} />Diagnostics</button><button onClick={() => setScreen('workspace')}><PanelLeft size={15} />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.map((item) => <button key={item} className={activeMode === 'code' && ((item === 'Runs' && codeScreen === 'runs') || (item === 'Workbench' && codeScreen === 'workbench')) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'code') setCodeScreen(item === 'Runs' ? 'runs' : 'workbench') }}>{item}</button>)}</>}
-        <div className="agentic-super-app-rail-footer">Phase 5 orchestration slice</div>
+        <div className="agentic-super-app-rail-footer">Phase 6 agent slice</div>
       </aside>
-      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : <section className="agentic-super-app-content" aria-labelledby="agentic-super-app-page-title"><div className="agentic-super-app-content-header"><ModeIcon size={22} aria-hidden="true" /><div><p className="agentic-super-app-eyebrow">{definition.label} workspace</p><h1 id="agentic-super-app-page-title">Ready for the next layer</h1></div></div><p className="agentic-super-app-description">{definition.description}</p><div className="agentic-super-app-empty-state"><div className="agentic-super-app-empty-mark"><ModeIcon size={28} aria-hidden="true" /></div><h2>Shared foundation online</h2><p>Open Diagnostics to configure an opt-in provider test, inspect durable jobs, and verify recovery.</p></div></section>}
+      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Agent workspace…</section>}><AgenticSuperAppAgent /></Suspense>}
     </section>
   </main>
 }

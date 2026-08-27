@@ -20,9 +20,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentic-super-app-agent-domain"
+version = "0.1.0"
+dependencies = [
+ "agentic-super-app-protocol",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "agentic-super-app-agent-runtime"
+version = "0.1.0"
+dependencies = [
+ "agentic-super-app-agent-domain",
+ "agentic-super-app-artifact-store",
+ "agentic-super-app-model-gateway",
+ "agentic-super-app-persistence",
+ "agentic-super-app-protocol",
+ "agentic-super-app-secret-store",
+ "agentic-super-app-tool-runtime",
+ "async-trait",
+ "cap-std",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "agentic-super-app-app-host"
 version = "0.1.0"
 dependencies = [
+ "agentic-super-app-agent-runtime",
  "agentic-super-app-artifact-store",
  "agentic-super-app-chat-domain",
  "agentic-super-app-code-domain",
@@ -186,6 +221,7 @@ dependencies = [
 name = "agentic-super-app-persistence"
 version = "0.1.0"
 dependencies = [
+ "agentic-super-app-agent-domain",
  "agentic-super-app-code-domain",
  "agentic-super-app-protocol",
  "serde",

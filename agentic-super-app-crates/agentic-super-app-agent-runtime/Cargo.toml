@@ -1,0 +1,24 @@
+[package]
+name = "agentic-super-app-agent-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-agent-domain = { path = "../agentic-super-app-agent-domain" }
+agentic-super-app-artifact-store = { path = "../agentic-super-app-artifact-store" }
+agentic-super-app-model-gateway = { path = "../agentic-super-app-model-gateway" }
+agentic-super-app-persistence = { path = "../agentic-super-app-persistence" }
+agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+agentic-super-app-secret-store = { path = "../agentic-super-app-secret-store" }
+agentic-super-app-tool-runtime = { path = "../agentic-super-app-tool-runtime" }
+async-trait.workspace = true
+cap-std.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

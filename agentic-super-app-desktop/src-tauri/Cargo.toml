@@ -11,6 +11,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 agentic-super-app-protocol = { path = "../../agentic-super-app-crates/agentic-super-app-protocol" }
 agentic-super-app-artifact-store = { path = "../../agentic-super-app-crates/agentic-super-app-artifact-store" }
+agentic-super-app-agent-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-agent-runtime" }
 agentic-super-app-chat-domain = { path = "../../agentic-super-app-crates/agentic-super-app-chat-domain" }
 agentic-super-app-code-domain = { path = "../../agentic-super-app-crates/agentic-super-app-code-domain" }
 agentic-super-app-code-orchestration = { path = "../../agentic-super-app-crates/agentic-super-app-code-orchestration" }

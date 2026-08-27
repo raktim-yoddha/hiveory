@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+use agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntime;
 use agentic_super_app_artifact_store::{
     AgenticSuperAppArtifactError, AgenticSuperAppArtifactStore, AgenticSuperAppStoredAttachment,
 };
@@ -24,10 +25,17 @@ use agentic_super_app_persistence::{
     AgenticSuperAppPersistence, AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID,
 };
 use agentic_super_app_protocol::{
-    current_protocol_version, ApiError, ApplicationMode, BootstrapSnapshot, BuildInformation,
-    ChatAttachmentImportRequest, ChatBranchRequest, ChatConversationDetail, ChatCreateRequest,
-    ChatDeleteRequest, ChatDraftRequest, ChatEditRequest, ChatEventEnvelope, ChatEventsQuery,
-    ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
+    current_protocol_version, AgentApprovalDecisionRequest, AgentConversationCreateRequest,
+    AgentConversationDetail, AgentConversationQuery, AgentConversationSummary, AgentCreateRequest,
+    AgentDashboard, AgentDetail, AgentEventEnvelope, AgentEventsQuery, AgentExportRequest,
+    AgentFolderGrant, AgentFolderGrantDeleteRequest, AgentFolderGrantRequest, AgentIdRequest,
+    AgentInputRequest, AgentMemoryDeleteRequest, AgentMemoryMutationRequest, AgentMemoryQuery,
+    AgentMemorySummary, AgentRunControlRequest, AgentRunDetail, AgentRunStartRequest,
+    AgentRunSummary, AgentRunsQuery, AgentSkillCatalog, AgentSkillConflictResolutionRequest,
+    AgentSkillToggleRequest, AgentUpdateRequest, ApiError, ApplicationMode, BootstrapSnapshot,
+    BuildInformation, ChatAttachmentImportRequest, ChatBranchRequest, ChatConversationDetail,
+    ChatCreateRequest, ChatDeleteRequest, ChatDraftRequest, ChatEditRequest, ChatEventEnvelope,
+    ChatEventsQuery, ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
     ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
     CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
@@ -86,6 +94,7 @@ struct AgenticSuperAppFoundation {
     audit: AgenticSuperAppAuditLog,
     chat: AgenticSuperAppChatStore,
     artifacts: AgenticSuperAppArtifactStore,
+    agent_runtime: AgenticSuperAppAgentRuntime,
     chat_events: broadcast::Sender<ChatEventEnvelope>,
     chat_cancellations: Arc<std::sync::Mutex<HashMap<String, CancellationToken>>>,
     recovery_message: Arc<RwLock<Option<String>>>,
@@ -144,15 +153,6 @@ impl AgenticSuperAppFoundation {
             .interrupt_active_turns()
             .await
             .map_err(|error| error.to_string())?;
-        let recovery_message =
-            if interrupted > 0 || interrupted_chats > 0 || interrupted_orchestration > 0 {
-                Some(format!(
-                    "Recovered {} interrupted operation(s) after restart.",
-                    interrupted + interrupted_chats + interrupted_orchestration
-                ))
-            } else {
-                None
-            };
         let jobs = AgenticSuperAppJobRuntime::new(persistence.clone());
         let secrets: AgenticSuperAppSecretStoreHandle = Arc::new(AgenticSuperAppKeyringSecretStore);
         let provider: Arc<dyn AgenticSuperAppModelProvider> =
@@ -160,6 +160,34 @@ impl AgenticSuperAppFoundation {
         let notifications =
             AgenticSuperAppNotificationService::new(persistence.clone(), jobs.clone());
         let audit = AgenticSuperAppAuditLog::new(persistence.clone());
+        let artifacts = AgenticSuperAppArtifactStore::new(artifact_root.clone());
+        let agent_runtime = AgenticSuperAppAgentRuntime::new(
+            agentic_super_app_persistence::agent::AgenticSuperAppAgentStore::new(
+                persistence.clone(),
+            ),
+            provider.clone(),
+            artifacts.clone(),
+            audit.clone(),
+            artifact_root.join("skills"),
+        );
+        let interrupted_agents = agent_runtime
+            .recover()
+            .await
+            .map_err(|error| error.to_string())?;
+        agent_runtime
+            .initialize()
+            .await
+            .map_err(|error| error.to_string())?;
+        let recovered_operations =
+            interrupted + interrupted_chats + interrupted_orchestration + interrupted_agents;
+        let recovery_message = if recovered_operations > 0 {
+            Some(format!(
+                "Recovered {} interrupted operation(s) after restart.",
+                recovered_operations
+            ))
+        } else {
+            None
+        };
         let (chat_events, _) = broadcast::channel(512);
         Ok(Self {
             persistence,
@@ -169,7 +197,8 @@ impl AgenticSuperAppFoundation {
             notifications,
             audit,
             chat,
-            artifacts: AgenticSuperAppArtifactStore::new(artifact_root),
+            artifacts,
+            agent_runtime,
             chat_events,
             chat_cancellations: Arc::new(std::sync::Mutex::new(HashMap::new())),
             recovery_message: Arc::new(RwLock::new(recovery_message)),
@@ -308,6 +337,363 @@ async fn agentic_super_app_query_diagnostic_snapshot(
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<DiagnosticSnapshot, ApiError> {
     foundation.diagnostic_snapshot().await
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_dashboard(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDashboard, ApiError> {
+    foundation
+        .agent_runtime
+        .dashboard()
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agents(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<agentic_super_app_protocol::AgentSummary>, ApiError> {
+    foundation
+        .agent_runtime
+        .list_agents()
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent(
+    request: AgentIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .agent_detail(&request.agent_id)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_agent(
+    request: AgentCreateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .create_agent(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_update_agent(
+    request: AgentUpdateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .update_agent(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_archive_agent(
+    request: AgentIdRequest,
+    archived: bool,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .archive_agent(&request.agent_id, archived)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_delete_agent(
+    request: AgentIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .delete_agent(&request.agent_id)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_add_agent_folder(
+    request: AgentFolderGrantRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentFolderGrant, ApiError> {
+    foundation
+        .agent_runtime
+        .add_folder(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_delete_agent_folder(
+    request: AgentFolderGrantDeleteRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .delete_folder(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_skills(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentSkillCatalog, ApiError> {
+    foundation
+        .agent_runtime
+        .skill_catalog()
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_toggle_agent_skill(
+    request: AgentSkillToggleRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .set_skill(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_resolve_agent_skill_conflict(
+    request: AgentSkillConflictResolutionRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .set_skill_conflict(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_memory(
+    query: AgentMemoryQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<AgentMemorySummary>, ApiError> {
+    foundation
+        .agent_runtime
+        .memory(&query)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_remember_agent_memory(
+    request: AgentMemoryMutationRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentMemorySummary, ApiError> {
+    foundation
+        .agent_runtime
+        .remember(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_delete_agent_memory(
+    request: AgentMemoryDeleteRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .delete_memory(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_conversations(
+    query: AgentConversationQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<AgentConversationSummary>, ApiError> {
+    foundation
+        .agent_runtime
+        .conversations(&query)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_conversation(
+    conversation_id: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentConversationDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .conversation(&conversation_id)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_agent_conversation(
+    request: AgentConversationCreateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentConversationDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .create_conversation(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_runs(
+    query: AgentRunsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<AgentRunSummary>, ApiError> {
+    foundation
+        .agent_runtime
+        .runs(&query)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_run(
+    run_id: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunDetail, ApiError> {
+    foundation
+        .agent_runtime
+        .run_detail(&run_id)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_events(
+    query: AgentEventsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<AgentEventEnvelope>, ApiError> {
+    foundation
+        .agent_runtime
+        .events(&query)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_stream_agent_events(
+    query: AgentEventsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<AgentEventEnvelope>,
+) -> Result<(), ApiError> {
+    let mut receiver = foundation.agent_runtime.subscribe();
+    let backlog = foundation
+        .agent_runtime
+        .events(&query)
+        .await
+        .map_err(agent_runtime_error)?;
+    let cursor = backlog
+        .last()
+        .map(|event| event.sequence)
+        .unwrap_or(query.after_sequence);
+    for event in backlog {
+        if channel.send(event).is_err() {
+            return Ok(());
+        }
+    }
+    let run_id = query.run_id;
+    tauri::async_runtime::spawn(async move {
+        while let Ok(event) = receiver.recv().await {
+            if event.run_id != run_id || event.sequence <= cursor {
+                continue;
+            }
+            if channel.send(event).is_err() {
+                break;
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_start_agent_run(
+    request: AgentRunStartRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .start_run(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_resume_agent_run(
+    request: AgentRunControlRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .resume_run(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_cancel_agent_run(
+    request: AgentRunControlRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .cancel_run(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_decide_agent_approval(
+    request: AgentApprovalDecisionRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .decide_approval(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_submit_agent_input(
+    request: AgentInputRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentRunSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .submit_input(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_export_agent(
+    request: AgentExportRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .export_agent(&request)
+        .await
+        .map_err(agent_runtime_error)
 }
 
 #[tauri::command]
@@ -2671,6 +3057,34 @@ pub fn run() {
             agentic_super_app_command_set_active_mode,
             agentic_super_app_query_build_information,
             agentic_super_app_query_diagnostic_snapshot,
+            agentic_super_app_query_agent_dashboard,
+            agentic_super_app_query_agents,
+            agentic_super_app_query_agent,
+            agentic_super_app_command_create_agent,
+            agentic_super_app_command_update_agent,
+            agentic_super_app_command_archive_agent,
+            agentic_super_app_command_delete_agent,
+            agentic_super_app_command_add_agent_folder,
+            agentic_super_app_command_delete_agent_folder,
+            agentic_super_app_query_agent_skills,
+            agentic_super_app_command_toggle_agent_skill,
+            agentic_super_app_command_resolve_agent_skill_conflict,
+            agentic_super_app_query_agent_memory,
+            agentic_super_app_command_remember_agent_memory,
+            agentic_super_app_command_delete_agent_memory,
+            agentic_super_app_query_agent_conversations,
+            agentic_super_app_query_agent_conversation,
+            agentic_super_app_command_create_agent_conversation,
+            agentic_super_app_query_agent_runs,
+            agentic_super_app_query_agent_run,
+            agentic_super_app_query_agent_events,
+            agentic_super_app_stream_agent_events,
+            agentic_super_app_command_start_agent_run,
+            agentic_super_app_command_resume_agent_run,
+            agentic_super_app_command_cancel_agent_run,
+            agentic_super_app_command_decide_agent_approval,
+            agentic_super_app_command_submit_agent_input,
+            agentic_super_app_command_export_agent,
             agentic_super_app_query_code_snapshot,
             agentic_super_app_query_code_workspace,
             agentic_super_app_query_code_runs,
@@ -2763,6 +3177,43 @@ fn secret_error(_: agentic_super_app_secret_store::AgenticSuperAppSecretStoreErr
         "The operating system credential store is unavailable.",
         RetryClass::AfterUserAction,
     )
+}
+fn agent_runtime_error(
+    error: agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError,
+) -> ApiError {
+    match error {
+        agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError::InvalidInput(
+            message,
+        ) => validation_error(message),
+        agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError::Provider(_) => {
+            application_error(
+                "agent_provider_failed",
+                "The Agent provider request failed. Check the provider account and try again.",
+                RetryClass::AfterUserAction,
+            )
+        }
+        agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError::Cancelled => {
+            application_error(
+                "agent_cancelled",
+                "The Agent run was cancelled.",
+                RetryClass::Safe,
+            )
+        }
+        agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError::Artifact(_) => {
+            application_error(
+                "artifact_unavailable",
+                "The Agent artifact could not be stored.",
+                RetryClass::Safe,
+            )
+        }
+        agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntimeError::Store(error) => {
+            application_error(
+                "persistence_unavailable",
+                error.to_string(),
+                RetryClass::Safe,
+            )
+        }
+    }
 }
 fn provider_error(_: AgenticSuperAppProviderError) -> ApiError {
     application_error(

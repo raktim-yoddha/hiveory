@@ -12,6 +12,54 @@ export type SharedEventEnvelope = { sequence: number; kind: string; job_id: stri
 export type DiagnosticSnapshot = { providers: ProviderAccountSummary[]; recent_jobs: JobSummary[]; notifications: NotificationSummary[]; recovery_message: string | null }
 export type BootstrapSnapshot = { protocol: { major: number }; active_mode: ApplicationMode; product_name: string }
 
+export type AgentApprovalPolicy = 'always_ask' | 'ask_for_mutations' | 'allow_within_scope' | 'deny'
+export type AgentMemoryPolicy = 'disabled' | 'explicit_only' | 'include_summaries'
+export type AgentRunState = 'queued' | 'preparing' | 'running' | 'awaiting_approval' | 'awaiting_input' | 'interrupted' | 'completed' | 'failed' | 'cancelled'
+export type AgentToolRisk = 'read_only' | 'internal_mutation' | 'filesystem_mutation' | 'externally_visible'
+export type AgentToolCallState = 'proposed' | 'awaiting_approval' | 'approved' | 'executing' | 'completed' | 'denied' | 'failed' | 'cancelled'
+export type AgentApprovalDecision = 'approve' | 'deny'
+export type AgentMemoryClass = 'agent_knowledge' | 'user_preference' | 'run_summary' | 'skill_observation'
+export type AgentSkillOrigin = 'builtin' | 'application_data' | 'configured_directory'
+export type AgentArtifactKind = 'text' | 'json' | 'markdown'
+export type AgentEventKind = 'run_state_changed' | 'assistant_text_delta' | 'reasoning_summary' | 'tool_call_proposed' | 'tool_call_started' | 'tool_call_completed' | 'tool_call_failed' | 'approval_requested' | 'approval_resolved' | 'input_requested' | 'skill_loaded' | 'memory_retrieved' | 'artifact_created' | 'child_run_created' | 'compaction_created' | 'usage_recorded'
+export type AgentRuntimeLimits = { max_steps: number; max_tool_calls: number; max_duration_seconds: number; max_context_tokens: number; max_subagent_depth: number; max_concurrent_subagents: number }
+export type AgentSummary = { id: string; name: string; description: string; avatar_color: string; provider_account_id: string; model: string; version: number; archived: boolean; active_run_state: AgentRunState | null; enabled_skill_count: number; enabled_tool_count: number; folder_grant_count: number; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type AgentFolderGrant = { id: string; agent_id: string; display_name: string; root_path: string; read: boolean; write: boolean; created_at_unix_ms: number }
+export type AgentToolDefinition = { name: string; description: string; input_schema_json: string; risk: AgentToolRisk }
+export type AgentSkillSummary = { id: string; name: string; version: string; description: string; origin: AgentSkillOrigin; source_path: string; triggers: string[]; permissions: string[]; enabled: boolean; valid: boolean; validation_message: string | null }
+export type AgentSkillConflict = { trigger: string; skill_ids: string[]; selected_skill_id: string | null }
+export type AgentMemorySummary = { id: string; agent_id: string; class: AgentMemoryClass; content: string; source_type: string; source_id: string | null; enabled: boolean; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type AgentArtifactSummary = { id: string; run_id: string; name: string; kind: AgentArtifactKind; relative_path: string; bytes: number; sha256: string; created_at_unix_ms: number }
+export type AgentToolCallSummary = { id: string; run_id: string; call_id: string; name: string; arguments_json: string; risk: AgentToolRisk; state: AgentToolCallState; approval_id: string | null; result_preview: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type AgentApprovalSummary = { id: string; run_id: string; tool_call_id: string; tool_name: string; target: string; arguments_json: string; fingerprint: string; reversible: boolean; state: string; created_at_unix_ms: number; resolved_at_unix_ms: number | null }
+export type AgentRunSummary = { id: string; agent_id: string; agent_version: number; conversation_id: string; state: AgentRunState; prompt_preview: string; background: boolean; step_count: number; tool_call_count: number; pending_approval_id: string | null; lease_generation: number; input_tokens: number | null; output_tokens: number | null; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number; completed_at_unix_ms: number | null }
+export type AgentMessage = { id: string; run_id: string; role: string; kind: string; content: string; tool_call_id: string | null; created_at_unix_ms: number }
+export type AgentRunDetail = { summary: AgentRunSummary; messages: AgentMessage[]; tool_calls: AgentToolCallSummary[]; approvals: AgentApprovalSummary[]; skills: AgentSkillSummary[]; memories: AgentMemorySummary[]; artifacts: AgentArtifactSummary[]; child_runs: AgentRunSummary[]; event_cursor: number }
+export type AgentDetail = { summary: AgentSummary; operating_brief: string; system_instructions: string; approval_policy: AgentApprovalPolicy; memory_policy: AgentMemoryPolicy; runtime_limits: AgentRuntimeLimits; folders: AgentFolderGrant[]; tools: AgentToolDefinition[]; skills: AgentSkillSummary[]; conflicts: AgentSkillConflict[]; recent_runs: AgentRunSummary[] }
+export type AgentDashboard = { agents: AgentSummary[]; active_runs: AgentRunSummary[]; pending_approvals: AgentApprovalSummary[]; recent_runs: AgentRunSummary[] }
+export type AgentCreateRequest = { name: string; description: string; operating_brief: string; avatar_color: string; provider_account_id: string; model: string; system_instructions: string; approval_policy: AgentApprovalPolicy; memory_policy: AgentMemoryPolicy; runtime_limits: AgentRuntimeLimits }
+export type AgentUpdateRequest = AgentCreateRequest & { agent_id: string }
+export type AgentFolderGrantRequest = { agent_id: string; path: string; read: boolean; write: boolean }
+export type AgentFolderGrantDeleteRequest = { agent_id: string; grant_id: string }
+export type AgentSkillToggleRequest = { agent_id: string; skill_id: string; enabled: boolean }
+export type AgentSkillConflictResolutionRequest = { agent_id: string; trigger: string; skill_id: string }
+export type AgentMemoryQuery = { agent_id: string; search: string | null; class: AgentMemoryClass | null; limit: number | null }
+export type AgentMemoryMutationRequest = { agent_id: string; memory_id: string | null; class: AgentMemoryClass; content: string; source_type: string; source_id: string | null; enabled: boolean }
+export type AgentMemoryDeleteRequest = { agent_id: string; memory_id: string }
+export type AgentRunStartRequest = { agent_id: string; conversation_id: string | null; prompt: string; background: boolean }
+export type AgentRunControlRequest = { run_id: string }
+export type AgentApprovalDecisionRequest = { run_id: string; approval_id: string; fingerprint: string; decision: AgentApprovalDecision; comment: string | null }
+export type AgentInputRequest = { run_id: string; answer: string }
+export type AgentRunsQuery = { agent_id: string | null; state: AgentRunState | null; limit: number | null }
+export type AgentEventsQuery = { run_id: string; after_sequence: number; limit: number | null }
+export type AgentEventEnvelope = { run_id: string; sequence: number; event_id: string; kind: AgentEventKind; step: number; tool_call_id: string | null; payload: string; emitted_at_unix_ms: number }
+export type AgentSkillCatalog = { skills: AgentSkillSummary[]; conflicts: AgentSkillConflict[] }
+export type AgentExportRequest = { agent_id: string; destination: string; include_memory: boolean }
+export type AgentConversationSummary = { id: string; agent_id: string; title: string; message_count: number; updated_at_unix_ms: number }
+export type AgentConversationDetail = { id: string; agent_id: string; title: string; messages: AgentMessage[]; runs: AgentRunSummary[]; draft: string; updated_at_unix_ms: number }
+export type AgentConversationQuery = { agent_id: string; limit: number | null }
+export type AgentConversationCreateRequest = { agent_id: string; title: string | null }
+
 export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
 export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'open_preview'
 export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; updated_at_unix_ms: number }
@@ -138,6 +186,11 @@ const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
 const previewCodeRuns = new Map<string, CodeRunDetail>()
 const previewCodeSubscribers = new Set<(event: CodeOrchestrationEventEnvelope) => void>()
+const previewAgentSubscribers = new Set<(event: AgentEventEnvelope) => void>()
+const previewAgentSummary: AgentSummary = { id: 'local-operator', name: 'Local operator', description: 'A focused assistant for your explicitly granted folders.', avatar_color: '#22d3ee', provider_account_id: previewProvider.id, model: previewProvider.default_model ?? 'gpt-5.6-mini', version: 1, archived: false, active_run_state: null, enabled_skill_count: 1, enabled_tool_count: 8, folder_grant_count: 0, created_at_unix_ms: Date.now(), updated_at_unix_ms: Date.now() }
+const previewAgentRuns = new Map<string, AgentRunDetail>()
+const previewAgentSkills: AgentSkillSummary[] = [{ id: 'folder-brief', name: 'Folder brief', version: '1.0.0', description: 'Summarize an explicitly granted folder without changing it.', origin: 'builtin', source_path: 'builtin/folder-brief/SKILL.md', triggers: ['brief', 'summarize folder'], permissions: ['folder.list', 'folder.read_text'], enabled: true, valid: true, validation_message: null }, { id: 'decision-log', name: 'Decision log', version: '1.0.0', description: 'Capture an explicit decision in durable Agent memory.', origin: 'builtin', source_path: 'builtin/decision-log/SKILL.md', triggers: ['decision'], permissions: ['memory.remember'], enabled: false, valid: true, validation_message: null }]
+const previewAgentTools: AgentToolDefinition[] = [{ name: 'folder.list', description: 'List entries in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.read_text', description: 'Read a UTF-8 file in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.write_text', description: 'Write a UTF-8 file in an explicitly writable folder.', input_schema_json: '{}', risk: 'filesystem_mutation' }, { name: 'memory.search', description: 'Search inspectable durable memory.', input_schema_json: '{}', risk: 'read_only' }, { name: 'memory.remember', description: 'Store an explicit non-sensitive memory.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'artifact.create_text', description: 'Create a private text artifact.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'user.request_input', description: 'Pause and ask the user for missing information.', input_schema_json: '{}', risk: 'read_only' }, { name: 'delegate_task', description: 'Start a bounded child run with inherited permissions.', input_schema_json: '{}', risk: 'externally_visible' }]
 
 function requestId() { return globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 function previewId(prefix: string) { return `${prefix}-${requestId()}` }
@@ -264,6 +317,32 @@ function previewAdvanceRun(runId: string) {
   previewRecountRun(detail)
 }
 
+function previewAgentDetail(): AgentDetail {
+  return { summary: structuredClone(previewAgentSummary), operating_brief: 'Work only inside folders the user explicitly grants. Explain planned mutations before they happen.', system_instructions: 'You are a careful local-first assistant. Keep actions inspectable and ask before mutations.', approval_policy: 'ask_for_mutations', memory_policy: 'explicit_only', runtime_limits: { max_steps: 24, max_tool_calls: 32, max_duration_seconds: 1800, max_context_tokens: 128000, max_subagent_depth: 2, max_concurrent_subagents: 2 }, folders: [], tools: structuredClone(previewAgentTools), skills: structuredClone(previewAgentSkills), conflicts: [], recent_runs: [...previewAgentRuns.values()].map((run) => run.summary).slice(0, 12) }
+}
+function previewAgentDashboard(): AgentDashboard {
+  return { agents: [structuredClone(previewAgentSummary)], active_runs: [...previewAgentRuns.values()].map((run) => run.summary).filter((run) => ['queued', 'preparing', 'running', 'awaiting_approval', 'awaiting_input', 'interrupted'].includes(run.state)), pending_approvals: [], recent_runs: [...previewAgentRuns.values()].map((run) => run.summary).slice(0, 20) }
+}
+function previewAgentRun(request: AgentRunStartRequest): AgentRunSummary {
+  const id = previewId('agent-run')
+  const now = previewNow()
+  const conversationId = request.conversation_id ?? previewId('agent-conversation')
+  const summary: AgentRunSummary = { id, agent_id: request.agent_id, agent_version: 1, conversation_id: conversationId, state: 'running', prompt_preview: request.prompt.slice(0, 160), background: request.background, step_count: 1, tool_call_count: 0, pending_approval_id: null, lease_generation: 1, input_tokens: null, output_tokens: null, error: null, created_at_unix_ms: now, updated_at_unix_ms: now, completed_at_unix_ms: null }
+  const detail: AgentRunDetail = { summary, messages: [{ id: previewId('message'), run_id: id, role: 'user', kind: 'prompt', content: request.prompt, tool_call_id: null, created_at_unix_ms: now }], tool_calls: [], approvals: [], skills: structuredClone(previewAgentSkills.filter((skill) => skill.enabled)), memories: [], artifacts: [], child_runs: [], event_cursor: 0 }
+  previewAgentRuns.set(id, detail)
+  setTimeout(() => {
+    const current = previewAgentRuns.get(id)
+    if (!current || current.summary.state !== 'running') return
+    const text = 'Preview run complete. In the desktop host, this turn is backed by the durable Agent runtime and explicit tool approvals.'
+    current.summary.state = 'completed'; current.summary.completed_at_unix_ms = previewNow(); current.summary.updated_at_unix_ms = previewNow(); current.messages.push({ id: previewId('message'), run_id: id, role: 'assistant', kind: 'text', content: text, tool_call_id: null, created_at_unix_ms: previewNow() }); current.event_cursor += 1
+    const event: AgentEventEnvelope = { run_id: id, sequence: current.event_cursor, event_id: previewId('event'), kind: 'assistant_text_delta', step: 1, tool_call_id: null, payload: JSON.stringify({ text }), emitted_at_unix_ms: previewNow() }
+    previewAgentSubscribers.forEach((subscriber) => subscriber(event))
+    previewAgentSummary.active_run_state = null; previewAgentSummary.updated_at_unix_ms = previewNow()
+  }, 420)
+  previewAgentSummary.active_run_state = 'running'; previewAgentSummary.updated_at_unix_ms = now
+  return structuredClone(summary)
+}
+
 async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload): Promise<TResponse> {
   const result = await invoke<ResponseEnvelope<TResponse>>(name, { command: envelope(payload) })
   return unwrap(result)
@@ -282,6 +361,43 @@ export const agenticSuperAppClient = {
   subscribe(onEvent: (event: SharedEventEnvelope) => void): void { if (agenticSuperAppIsTauri) void invoke('agentic_super_app_stream_shared_events', { channel: new Channel<SharedEventEnvelope>(onEvent) }) },
   async testNotification(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_send_test_notification') },
   async restartRecovery(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_prepare_restart_recovery') },
+
+  async agentDashboard(): Promise<AgentDashboard> { return agenticSuperAppIsTauri ? tauriQuery<AgentDashboard>('agentic_super_app_query_agent_dashboard') : previewAgentDashboard() },
+  async agents(): Promise<AgentSummary[]> { return agenticSuperAppIsTauri ? tauriQuery<AgentSummary[]>('agentic_super_app_query_agents') : [structuredClone(previewAgentSummary)] },
+  async agent(agentId: string): Promise<AgentDetail> { return agenticSuperAppIsTauri ? tauriQuery<AgentDetail>('agentic_super_app_query_agent', { request: { agent_id: agentId } }) : previewAgentDetail() },
+  async createAgent(request: AgentCreateRequest): Promise<AgentDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<AgentDetail>('agentic_super_app_command_create_agent', { request })
+    Object.assign(previewAgentSummary, { name: request.name, description: request.description, model: request.model, avatar_color: request.avatar_color })
+    return previewAgentDetail()
+  },
+  async updateAgent(request: AgentUpdateRequest): Promise<AgentDetail> { return agenticSuperAppIsTauri ? tauriQuery<AgentDetail>('agentic_super_app_command_update_agent', { request }) : previewAgentDetail() },
+  async archiveAgent(agentId: string, archived: boolean): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_archive_agent', { request: { agent_id: agentId }, archived }) },
+  async deleteAgent(agentId: string): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_delete_agent', { request: { agent_id: agentId } }) },
+  async addAgentFolder(request: AgentFolderGrantRequest): Promise<AgentFolderGrant> { return tauriQuery<AgentFolderGrant>('agentic_super_app_command_add_agent_folder', { request }) },
+  async deleteAgentFolder(request: AgentFolderGrantDeleteRequest): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_delete_agent_folder', { request }) },
+  async agentSkills(): Promise<AgentSkillCatalog> { return agenticSuperAppIsTauri ? tauriQuery<AgentSkillCatalog>('agentic_super_app_query_agent_skills') : { skills: structuredClone(previewAgentSkills), conflicts: [] } },
+  async toggleAgentSkill(request: AgentSkillToggleRequest): Promise<AgentDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<AgentDetail>('agentic_super_app_command_toggle_agent_skill', { request })
+    const skill = previewAgentSkills.find((item) => item.id === request.skill_id); if (skill) skill.enabled = request.enabled; return previewAgentDetail()
+  },
+  async agentMemory(query: AgentMemoryQuery): Promise<AgentMemorySummary[]> { return agenticSuperAppIsTauri ? tauriQuery<AgentMemorySummary[]>('agentic_super_app_query_agent_memory', { query }) : [] },
+  async rememberAgentMemory(request: AgentMemoryMutationRequest): Promise<AgentMemorySummary> { return tauriQuery<AgentMemorySummary>('agentic_super_app_command_remember_agent_memory', { request }) },
+  async deleteAgentMemory(request: AgentMemoryDeleteRequest): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_delete_agent_memory', { request }) },
+  async agentConversations(query: AgentConversationQuery): Promise<AgentConversationSummary[]> { return agenticSuperAppIsTauri ? tauriQuery<AgentConversationSummary[]>('agentic_super_app_query_agent_conversations', { query }) : [] },
+  async createAgentConversation(request: AgentConversationCreateRequest): Promise<AgentConversationDetail> { return tauriQuery<AgentConversationDetail>('agentic_super_app_command_create_agent_conversation', { request }) },
+  async agentConversation(conversationId: string): Promise<AgentConversationDetail> { return tauriQuery<AgentConversationDetail>('agentic_super_app_query_agent_conversation', { conversationId }) },
+  async agentRuns(query: AgentRunsQuery): Promise<AgentRunSummary[]> { return agenticSuperAppIsTauri ? tauriQuery<AgentRunSummary[]>('agentic_super_app_query_agent_runs', { query }) : [...previewAgentRuns.values()].map((run) => run.summary) },
+  async agentRun(runId: string): Promise<AgentRunDetail> { return agenticSuperAppIsTauri ? tauriQuery<AgentRunDetail>('agentic_super_app_query_agent_run', { runId }) : structuredClone(previewAgentRuns.get(runId) ?? (() => { throw new Error('Run was not found.') })()) },
+  async startAgentRun(request: AgentRunStartRequest): Promise<AgentRunSummary> { return agenticSuperAppIsTauri ? tauriQuery<AgentRunSummary>('agentic_super_app_command_start_agent_run', { request }) : previewAgentRun(request) },
+  async resumeAgentRun(request: AgentRunControlRequest): Promise<AgentRunSummary> { return agenticSuperAppIsTauri ? tauriQuery<AgentRunSummary>('agentic_super_app_command_resume_agent_run', { request }) : (previewAgentRuns.get(request.run_id)?.summary ?? (() => { throw new Error('Run was not found.') })()) },
+  async cancelAgentRun(request: AgentRunControlRequest): Promise<AgentRunSummary> { return agenticSuperAppIsTauri ? tauriQuery<AgentRunSummary>('agentic_super_app_command_cancel_agent_run', { request }) : (previewAgentRuns.get(request.run_id)?.summary ?? (() => { throw new Error('Run was not found.') })()) },
+  async decideAgentApproval(request: AgentApprovalDecisionRequest): Promise<AgentRunSummary> { return tauriQuery<AgentRunSummary>('agentic_super_app_command_decide_agent_approval', { request }) },
+  async submitAgentInput(request: AgentInputRequest): Promise<AgentRunSummary> { return tauriQuery<AgentRunSummary>('agentic_super_app_command_submit_agent_input', { request }) },
+  subscribeAgent(runId: string, onEvent: (event: AgentEventEnvelope) => void, afterSequence = 0): () => void {
+    if (agenticSuperAppIsTauri) { const channel = new Channel<AgentEventEnvelope>(onEvent); void invoke('agentic_super_app_stream_agent_events', { query: { run_id: runId, after_sequence: afterSequence, limit: 500 }, channel }); return () => undefined }
+    const subscriber = (event: AgentEventEnvelope) => { if (event.run_id === runId && event.sequence > afterSequence) onEvent(event) }; previewAgentSubscribers.add(subscriber); return () => previewAgentSubscribers.delete(subscriber)
+  },
+  async exportAgent(request: AgentExportRequest): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_export_agent', { request }) },
 
   async codeSnapshot(): Promise<CodeSnapshot> {
     return agenticSuperAppIsTauri ? tauriQuery<CodeSnapshot>('agentic_super_app_query_code_snapshot') : previewCodeSummary()
