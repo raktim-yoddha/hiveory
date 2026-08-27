@@ -21,6 +21,15 @@ The renderer has non-privileged shell, diagnostics, and Chat presentation comman
 | Interrupted diagnostic work | durable job state and checkpoints, with incomplete work marked `Interrupted` on restart |
 | Native notification abuse | renderer permission request only; host persists and dispatches notification content |
 
+## Phase 4 controls verified in code
+
+- Workspace intake canonicalizes the selected directory once and keeps an open `cap-std` directory capability. Relative paths reject absolute/prefix/parent components, and intermediate or target symlinks are not opened or edited.
+- Untrusted workspaces expose read/list only. The host checks the trust-derived capability for every write, process, Git, and preview command; the renderer cannot grant itself authority.
+- Editor writes use an expected SHA-256 fingerprint, a uniquely named sibling temporary file, `sync_all`, and capability-scoped rename. Concurrent disk edits return a conflict instead of silently overwriting them.
+- PTY/ConPTY commands are structured. Shell selection comes from the host environment, the coding-agent adapter is fixed to Codex CLI, output is bounded by the channel contract, and force-stop requests terminate the PTY process group or Windows process tree.
+- Preview URLs reject embedded credentials, allow localhost HTTP or explicitly user-entered HTTPS, and open in an auxiliary webview with no renderer capabilities, same-origin navigation filtering, and denied `window.open` children.
+- Git integration is read-only in this phase and returns redacted stable errors; no remote credentials, commit mutation, or arbitrary Git argument surface is exposed.
+
 ## Phase 3 controls verified in code
 
 - Attachment imports reject symlinks/non-regular files, enforce PDF/image/text byte limits, validate magic/content, hash content, and store under an application-controlled root.

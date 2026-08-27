@@ -9,5 +9,6 @@
 .env.*
 !.env.example
 /techn 
+/graphify-out/
 tauri-agent-super-app-prd.md
 THIRD_PARTY_NOTICES.md

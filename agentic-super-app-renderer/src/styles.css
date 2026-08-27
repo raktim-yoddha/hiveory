@@ -25,3 +25,98 @@
 @keyframes agentic-super-app-pulse { 0%, 100% { opacity: .55; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.1); } } @keyframes agentic-super-app-dots { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
 @media (max-width: 920px) { .agentic-super-app-chat { grid-template-columns: 235px minmax(0, 1fr); }.agentic-super-app-chat-composer-controls select, .agentic-super-app-chat-composer-controls input { max-width: 112px; }.agentic-super-app-chat-composer-controls input { width: 88px; }.agentic-super-app-composer-hint { display: none; } }
 @media (max-width: 720px) { .agentic-super-app-chat { display: block; height: auto; min-height: calc(100vh - 52px); }.agentic-super-app-chat-sidebar { max-height: 310px; border-right: 0; border-bottom: 1px solid #292f38; }.agentic-super-app-chat-sidebar-footer { display: none; }.agentic-super-app-chat-main { min-height: calc(100vh - 362px); }.agentic-super-app-chat-header { padding: 13px 14px; }.agentic-super-app-chat-title-wrap input { width: min(58vw, 260px); }.agentic-super-app-chat-context-bar { padding: 8px 14px; }.agentic-super-app-chat-transcript { padding: 20px 14px 30px; }.agentic-super-app-chat-composer { margin: 0 10px 12px; }.agentic-super-app-chat-composer-toolbar { align-items: flex-end; }.agentic-super-app-chat-composer-controls { flex-wrap: wrap; }.agentic-super-app-chat-composer-controls select, .agentic-super-app-chat-composer-controls input { max-width: 120px; }.agentic-super-app-chat-status, .agentic-super-app-chat-edit { margin-left: 10px; margin-right: 10px; }.agentic-super-app-chat-message { margin-bottom: 20px; } }
+
+.agentic-super-app-workspace.is-code-mode { min-height: calc(100vh - 52px); }
+.agentic-super-app-code { display: flex; min-width: 0; min-height: calc(100vh - 52px); flex-direction: column; background: #0f141a; }
+.agentic-super-app-code-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 76px; padding: 14px 22px; border-bottom: 1px solid #29323c; background: rgba(17, 22, 28, .94); }
+.agentic-super-app-code-header h1 { margin: 0; font-size: clamp(19px, 2.1vw, 28px); letter-spacing: -.035em; }
+.agentic-super-app-code-actions, .agentic-super-app-code-card-heading, .agentic-super-app-code-pane-heading, .agentic-super-app-code-workspace-meta, .agentic-super-app-code-trusted-bar, .agentic-super-app-code-session-strip { display: flex; align-items: center; }
+.agentic-super-app-code-actions { gap: 7px; }
+.agentic-super-app-code button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; border: 1px solid #466c93; border-radius: 6px; padding: 7px 10px; color: #f4f8fc; background: #285782; cursor: pointer; }
+.agentic-super-app-code button:hover:not(:disabled) { border-color: #6593c0; background: #326e9f; }
+.agentic-super-app-code button:disabled { cursor: not-allowed; opacity: .45; }
+.agentic-super-app-code button.is-secondary { border-color: #3a4654; color: #c1ccd8; background: #222b35; }
+.agentic-super-app-code button.is-danger { border-color: #824f54; color: #ffd2d2; background: #552d35; }
+.agentic-super-app-code-grid { display: grid; min-height: 0; flex: 1; grid-template-columns: 244px minmax(0, 1fr); }
+.agentic-super-app-code-sidebar { min-width: 0; overflow: auto; border-right: 1px solid #29323c; background: #141a20; }
+.agentic-super-app-code-sidebar-heading { display: flex; align-items: center; justify-content: space-between; padding: 15px 14px 8px; color: #94a3b5; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.agentic-super-app-code-count { display: grid; min-width: 19px; height: 19px; place-items: center; border: 1px solid #354555; border-radius: 99px; color: #9eb8d1; background: #1b2631; font-size: 10px; letter-spacing: 0; }
+.agentic-super-app-code-workspaces { display: grid; gap: 3px; padding: 0 8px 10px; }
+.agentic-super-app-code-workspaces > button { display: grid; grid-template-columns: 16px minmax(0, 1fr) 7px; justify-content: initial; gap: 8px; min-height: 45px; border-color: transparent; padding: 8px 7px; text-align: left; color: #b6c1ce; background: transparent; }
+.agentic-super-app-code-workspaces > button:hover:not(:disabled), .agentic-super-app-code-workspaces > button.is-active { border-color: #334d67; background: #1b2a38; }
+.agentic-super-app-code-workspaces > button > span:not(.agentic-super-app-trust-dot) { display: grid; min-width: 0; gap: 3px; }
+.agentic-super-app-code-workspaces strong { overflow: hidden; color: #e2eaf2; font-size: 12px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-code-workspaces small { overflow: hidden; color: #748292; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-trust-dot { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: #8995a2; box-shadow: 0 0 0 3px rgba(137, 149, 162, .1); }
+.agentic-super-app-trust-dot.trusted { background: #34c759; box-shadow: 0 0 0 3px rgba(52, 199, 89, .12); }
+.agentic-super-app-code-breadcrumb { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 0 13px 8px; color: #6f7e8d; font-size: 10px; }
+.agentic-super-app-code-breadcrumb span { display: inline-flex; align-items: center; gap: 3px; }
+.agentic-super-app-code-breadcrumb button { min-height: 22px; border: 0; padding: 2px 3px; color: #8facbf; background: transparent; font-size: 10px; }
+.agentic-super-app-code-breadcrumb button:hover:not(:disabled) { color: #d4e7f7; background: #202b37; }
+.agentic-super-app-code-file-tree { display: grid; gap: 1px; padding: 0 8px; }
+.agentic-super-app-code-file-tree > button { display: flex; justify-content: flex-start; min-width: 0; min-height: 30px; border-color: transparent; padding: 5px 7px; color: #aeb9c6; background: transparent; font-size: 12px; text-align: left; }
+.agentic-super-app-code-file-tree > button > span { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-code-file-tree > button > svg:last-child { margin-left: auto; }
+.agentic-super-app-code-file-tree > button:hover:not(:disabled), .agentic-super-app-code-file-tree > button.is-selected { border-color: #33485e; color: #f0f6fb; background: #1b2835; }
+.agentic-super-app-code-sidebar-empty { display: grid; justify-items: center; gap: 9px; padding: 48px 22px; color: #73808e; text-align: center; }
+.agentic-super-app-code-sidebar-empty p { margin: 0; font-size: 12px; line-height: 1.5; }
+.agentic-super-app-code-muted { margin: 0; color: #788695; font-size: 11px; line-height: 1.5; }
+.agentic-super-app-code-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: auto; background: radial-gradient(circle at 75% -10%, #1c2a3a 0, #0f141a 42%); }
+.agentic-super-app-code-workspace-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 20px 12px; border-bottom: 1px solid #242d37; }
+.agentic-super-app-code-workspace-bar h2 { margin: 0; color: #eef4fa; font-size: 17px; letter-spacing: -.02em; }
+.agentic-super-app-code-workspace-meta { flex-shrink: 0; gap: 12px; color: #8d9baa; font-size: 11px; }
+.agentic-super-app-code-workspace-meta > span { display: inline-flex; align-items: center; gap: 5px; }
+.agentic-super-app-code-trust { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #59616b; border-radius: 99px; padding: 4px 8px; font-size: 10px; }
+.agentic-super-app-code-trust.trusted { border-color: #3c7250; color: #a1d5aa; background: #192a20; }
+.agentic-super-app-code-trust.untrusted { border-color: #735943; color: #f0c28f; background: #2a2119; }
+.agentic-super-app-code-trust-banner { display: flex; align-items: center; gap: 11px; margin: 12px 20px 0; border: 1px solid #735a3f; border-radius: 8px; padding: 10px 11px; color: #f0c28f; background: rgba(54, 38, 24, .62); }
+.agentic-super-app-code-trust-banner > div { min-width: 0; flex: 1; }
+.agentic-super-app-code-trust-banner strong { color: #f5d4aa; font-size: 12px; }
+.agentic-super-app-code-trust-banner p { margin: 3px 0 0; color: #c6a781; font-size: 11px; line-height: 1.4; }
+.agentic-super-app-code-trusted-bar { justify-content: space-between; gap: 12px; margin: 12px 20px 0; color: #92c69c; font-size: 11px; }
+.agentic-super-app-code-trusted-bar > span { display: inline-flex; align-items: center; gap: 6px; }
+.agentic-super-app-code-pane-toolbar { display: flex; align-items: center; gap: 10px; min-height: 34px; margin: 12px 20px 0; border: 1px solid #2d3a47; border-radius: 7px 7px 0 0; padding: 5px 8px; color: #9db1c5; background: #17212c; font-size: 11px; }
+.agentic-super-app-code-pane-toolbar > span:first-child { display: inline-flex; align-items: center; gap: 6px; color: #c5d6e7; }
+.agentic-super-app-code-pane-list { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
+.agentic-super-app-code-pane-list span { border: 1px solid #3a4d60; border-radius: 99px; padding: 2px 6px; color: #8da9c1; font-size: 9px; text-transform: capitalize; }
+.agentic-super-app-mini-button { display: inline-grid !important; width: 27px; min-height: 27px !important; place-items: center; border-color: #3a4856 !important; padding: 4px !important; color: #9eb5c9 !important; background: #202b36 !important; }
+.agentic-super-app-mini-button:hover:not(:disabled) { color: #e5f1fc !important; background: #2b4154 !important; }
+.agentic-super-app-code-workbench { display: grid; min-height: 460px; margin: 0 20px; grid-template-rows: minmax(270px, 1fr) 215px; border-right: 1px solid #2d3a47; border-bottom: 1px solid #2d3a47; border-left: 1px solid #2d3a47; background: #0d1319; }
+.agentic-super-app-code-editor-pane, .agentic-super-app-code-terminal-pane { display: grid; min-width: 0; min-height: 0; grid-template-rows: 34px minmax(0, 1fr); overflow: hidden; }
+.agentic-super-app-code-terminal-pane { border-top: 1px solid #2d3a47; grid-template-rows: 34px minmax(0, 1fr) 24px; }
+.agentic-super-app-code-pane-heading { justify-content: space-between; gap: 8px; min-width: 0; border-bottom: 1px solid #273440; padding: 5px 8px; color: #a9bfd3; background: #17212b; font-size: 11px; }
+.agentic-super-app-code-pane-heading > span, .agentic-super-app-code-pane-heading > div { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.agentic-super-app-code-pane-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-code-language { border: 1px solid #394b5d; border-radius: 99px; padding: 2px 6px; color: #8daac0; font-size: 9px; }
+.agentic-super-app-code-terminal-actions { gap: 3px !important; }
+.agentic-super-app-code-editor-empty, .agentic-super-app-code-binary, .agentic-super-app-code-welcome { display: grid; align-content: center; justify-items: center; gap: 9px; color: #7e8e9f; text-align: center; }
+.agentic-super-app-code-editor-empty p, .agentic-super-app-code-binary p { margin: 0; font-size: 12px; }
+.agentic-super-app-code-binary { color: #cda778; }
+.agentic-super-app-monaco-wrap { position: relative; min-height: 0; }
+.agentic-super-app-monaco-editor { width: 100%; height: 100%; min-height: 220px; }
+.agentic-super-app-monaco-editor.is-hidden { display: none; }
+.agentic-super-app-code-editor-loading { display: grid; height: 100%; min-height: 220px; place-items: center; color: #778797; font-size: 12px; }
+.agentic-super-app-code-textarea-fallback { width: 100%; height: 100%; min-height: 220px; resize: none; border: 0; padding: 13px; color: #dbe6f0; background: #0d1319; font: 12px/1.55 "JetBrains Mono", Consolas, monospace; outline: 0; }
+.agentic-super-app-xterm { min-height: 0; overflow: hidden; padding: 7px 9px 3px; background: #0b1120; }
+.agentic-super-app-xterm .xterm { height: 100%; padding: 0; }
+.agentic-super-app-xterm .xterm-viewport { background: #0b1120 !important; }
+.agentic-super-app-code-terminal-status { overflow: hidden; border-top: 1px solid #202c38; padding: 5px 9px; color: #718396; background: #111923; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-code-bottom-grid { display: grid; gap: 10px; margin: 12px 20px 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.agentic-super-app-code-card { display: flex; min-width: 0; min-height: 150px; flex-direction: column; gap: 9px; border: 1px solid #2c3946; border-radius: 7px; padding: 10px; background: #151e27; }
+.agentic-super-app-code-card-heading { justify-content: space-between; gap: 8px; color: #b9cce0; }
+.agentic-super-app-code-card-heading > div { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.agentic-super-app-code-card-heading h3 { margin: 0; color: #e1ebf5; font-size: 12px; }
+.agentic-super-app-code-git-summary { display: flex; justify-content: space-between; gap: 8px; color: #94adbf; font: 10px "JetBrains Mono", Consolas, monospace; }
+.agentic-super-app-code-change-list { display: grid; min-height: 0; overflow: auto; }
+.agentic-super-app-code-change-list button { justify-content: flex-start; min-height: 27px; border-color: transparent; padding: 4px 3px; color: #adbcca; background: transparent; font: 10px "JetBrains Mono", Consolas, monospace; text-align: left; }
+.agentic-super-app-code-change-list button:hover:not(:disabled) { border-color: #334d63; background: #1b2b39; }
+.agentic-super-app-code-change-list button small { margin-left: auto; color: #7590a6; font-size: 9px; }
+.agentic-super-app-code-change-mark { display: inline-grid; width: 19px; height: 19px; flex-shrink: 0; place-items: center; border: 1px solid #48607a; border-radius: 4px; color: #9fc5e8; font: 10px "JetBrains Mono", Consolas, monospace; }
+.agentic-super-app-code-change-mark.added { border-color: #467751; color: #a5d7ad; }.agentic-super-app-code-change-mark.modified { border-color: #526e8e; color: #abd1f3; }.agentic-super-app-code-change-mark.deleted { border-color: #865050; color: #efaaaa; }.agentic-super-app-code-change-mark.conflict { border-color: #977044; color: #f1c48f; }
+.agentic-super-app-code-diff-card pre { min-height: 100px; max-height: 145px; overflow: auto; margin: 0; color: #b9d1e5; font: 10px/1.45 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; }
+.agentic-super-app-code-preview-form { display: flex; gap: 6px; margin-top: auto; }.agentic-super-app-code-preview-form input { min-width: 0; flex: 1; border: 1px solid #364858; border-radius: 5px; padding: 7px 8px; color: #e1edf7; background: #0e151c; font: 11px "JetBrains Mono", Consolas, monospace; outline: 0; }.agentic-super-app-code-preview-form input:focus { border-color: #6296c1; }
+.agentic-super-app-code-session-strip { flex-wrap: wrap; gap: 8px 17px; margin: 10px 20px 16px; color: #748596; font-size: 10px; }.agentic-super-app-code-session-strip span { display: inline-flex; align-items: center; gap: 5px; }
+.agentic-super-app-code-welcome { max-width: 520px; margin: auto; padding: 42px; }.agentic-super-app-code-welcome h2 { margin: 8px 0 0; color: #ecf3f9; font-size: 20px; }.agentic-super-app-code-welcome p { margin: 0 0 7px; color: #9aaaba; font-size: 13px; line-height: 1.6; }
+.agentic-super-app-code-feedback { position: sticky; z-index: 2; bottom: 12px; width: fit-content; max-width: calc(100% - 40px); margin: 0 20px 12px auto; }
+@media (max-width: 1100px) { .agentic-super-app-code-bottom-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.agentic-super-app-code-bottom-grid > :last-child { grid-column: 1 / -1; } }
+@media (max-width: 760px) { .agentic-super-app-code-header { align-items: flex-start; flex-direction: column; padding: 14px; }.agentic-super-app-code-header .agentic-super-app-content-header { width: 100%; }.agentic-super-app-code-grid { display: block; }.agentic-super-app-code-sidebar { max-height: 265px; border-right: 0; border-bottom: 1px solid #29323c; }.agentic-super-app-code-main { min-height: 700px; }.agentic-super-app-code-workspace-bar, .agentic-super-app-code-trust-banner { margin-left: 12px; margin-right: 12px; }.agentic-super-app-code-workspace-bar { align-items: flex-start; flex-direction: column; padding-left: 0; padding-right: 0; }.agentic-super-app-code-trust-banner { align-items: flex-start; flex-wrap: wrap; }.agentic-super-app-code-trust-banner button { margin-left: 28px; }.agentic-super-app-code-trusted-bar, .agentic-super-app-code-pane-toolbar, .agentic-super-app-code-workbench, .agentic-super-app-code-bottom-grid, .agentic-super-app-code-session-strip { margin-left: 12px; margin-right: 12px; }.agentic-super-app-code-workbench { min-height: 560px; grid-template-rows: 330px 230px; }.agentic-super-app-code-bottom-grid { grid-template-columns: 1fr; }.agentic-super-app-code-bottom-grid > :last-child { grid-column: auto; } }

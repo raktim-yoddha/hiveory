@@ -485,6 +485,379 @@ pub struct ChatStreamRequest {
     pub after_global_sequence: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeWorkspaceTrust {
+    Untrusted,
+    Trusted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeWorkspaceCapability {
+    ReadFiles,
+    WriteFiles,
+    ExecuteProcesses,
+    ReadGit,
+    OpenPreview,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceSummary {
+    pub id: String,
+    pub host_id: String,
+    pub display_name: String,
+    pub root_path: String,
+    pub repository_name: Option<String>,
+    pub branch: Option<String>,
+    pub is_git_repository: bool,
+    pub trust: CodeWorkspaceTrust,
+    pub capabilities: Vec<CodeWorkspaceCapability>,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceOpenRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceTrustRequest {
+    pub workspace_id: String,
+    pub grant: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceQuery {
+    pub workspace_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceDetail {
+    pub summary: CodeWorkspaceSummary,
+    pub layout: CodePaneLayout,
+    pub open_documents: Vec<CodeDocumentSummary>,
+    pub terminals: Vec<CodeTerminalSummary>,
+    pub previews: Vec<CodePreviewSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeSnapshot {
+    pub workspaces: Vec<CodeWorkspaceSummary>,
+    pub active_workspace_id: Option<String>,
+    pub adapters: Vec<CodeAdapterSummary>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeFileKind {
+    File,
+    Directory,
+    Symlink,
+    Binary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeFileNode {
+    pub name: String,
+    pub relative_path: String,
+    pub kind: CodeFileKind,
+    pub size: Option<u64>,
+    pub language: Option<String>,
+    pub modified_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeFileTreeQuery {
+    pub workspace_id: String,
+    pub relative_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeFileTree {
+    pub workspace_id: String,
+    pub directory: String,
+    pub entries: Vec<CodeFileNode>,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeReadFileRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeSaveFileRequest {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub content: String,
+    pub expected_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDocumentSummary {
+    pub relative_path: String,
+    pub language: Option<String>,
+    pub last_fingerprint: Option<String>,
+    pub last_opened_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDocument {
+    pub workspace_id: String,
+    pub relative_path: String,
+    pub content: String,
+    pub language: Option<String>,
+    pub fingerprint: String,
+    pub bytes: u64,
+    pub read_only: bool,
+    pub binary: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodePaneKind {
+    Terminal,
+    CodingAgent,
+    Editor,
+    Diff,
+    Preview,
+    Problems,
+    Empty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodePaneOrientation {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePaneNode {
+    pub pane_id: String,
+    pub parent_id: Option<String>,
+    pub kind: CodePaneKind,
+    pub orientation: Option<CodePaneOrientation>,
+    pub ratio_percent: Option<u8>,
+    pub children: Vec<String>,
+    pub resource_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePaneLayout {
+    pub workspace_id: String,
+    pub version: u32,
+    pub root_id: String,
+    pub nodes: Vec<CodePaneNode>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeSaveLayoutRequest {
+    pub workspace_id: String,
+    pub layout: CodePaneLayout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeTerminalKind {
+    Shell,
+    CodingAgent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeTerminalState {
+    Starting,
+    Running,
+    Exited,
+    Failed,
+    Interrupted,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub kind: CodeTerminalKind,
+    pub state: CodeTerminalState,
+    pub pid: Option<u32>,
+    pub adapter_id: Option<String>,
+    pub session_id: Option<String>,
+    pub exit_code: Option<i32>,
+    pub started_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalStartRequest {
+    pub workspace_id: String,
+    pub kind: CodeTerminalKind,
+    pub cols: u16,
+    pub rows: u16,
+    pub adapter_id: Option<String>,
+    pub model: Option<String>,
+    pub resume_session_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalInputRequest {
+    pub terminal_id: String,
+    pub data: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalResizeRequest {
+    pub terminal_id: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalStopRequest {
+    pub terminal_id: String,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeTerminalEventKind {
+    Started,
+    Output,
+    Exited,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalEvent {
+    pub terminal_id: String,
+    pub kind: CodeTerminalEventKind,
+    pub data_base64: Option<String>,
+    pub exit_code: Option<i32>,
+    pub message: Option<String>,
+    pub emitted_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeAdapterCapability {
+    Resume,
+    ModelSelection,
+    ReasoningEffort,
+    PermissionModes,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeAdapterSummary {
+    pub id: String,
+    pub display_name: String,
+    pub executable: String,
+    pub detected: bool,
+    pub authenticated: bool,
+    pub capabilities: Vec<CodeAdapterCapability>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStatusRequest {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitFileStatus {
+    pub relative_path: String,
+    pub status: String,
+    pub staged: bool,
+    pub conflict: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStatus {
+    pub workspace_id: String,
+    pub branch: Option<String>,
+    pub ahead: usize,
+    pub behind: usize,
+    pub files: Vec<CodeGitFileStatus>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitDiffRequest {
+    pub workspace_id: String,
+    pub relative_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitDiff {
+    pub workspace_id: String,
+    pub relative_path: Option<String>,
+    pub content: String,
+    pub binary: bool,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodePreviewState {
+    Open,
+    Closed,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePreviewRequest {
+    pub workspace_id: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePreviewSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub url: String,
+    pub origin: String,
+    pub state: CodePreviewState,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct BootstrapSnapshot {
@@ -569,6 +942,46 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     ChatSidebarQuery::export_all(&config)?;
     ChatEventsQuery::export_all(&config)?;
     ChatStreamRequest::export_all(&config)?;
+    CodeWorkspaceTrust::export_all(&config)?;
+    CodeWorkspaceCapability::export_all(&config)?;
+    CodeWorkspaceSummary::export_all(&config)?;
+    CodeWorkspaceOpenRequest::export_all(&config)?;
+    CodeWorkspaceTrustRequest::export_all(&config)?;
+    CodeWorkspaceQuery::export_all(&config)?;
+    CodeWorkspaceDetail::export_all(&config)?;
+    CodeSnapshot::export_all(&config)?;
+    CodeFileKind::export_all(&config)?;
+    CodeFileNode::export_all(&config)?;
+    CodeFileTreeQuery::export_all(&config)?;
+    CodeFileTree::export_all(&config)?;
+    CodeReadFileRequest::export_all(&config)?;
+    CodeSaveFileRequest::export_all(&config)?;
+    CodeDocumentSummary::export_all(&config)?;
+    CodeDocument::export_all(&config)?;
+    CodePaneKind::export_all(&config)?;
+    CodePaneOrientation::export_all(&config)?;
+    CodePaneNode::export_all(&config)?;
+    CodePaneLayout::export_all(&config)?;
+    CodeSaveLayoutRequest::export_all(&config)?;
+    CodeTerminalKind::export_all(&config)?;
+    CodeTerminalState::export_all(&config)?;
+    CodeTerminalSummary::export_all(&config)?;
+    CodeTerminalStartRequest::export_all(&config)?;
+    CodeTerminalInputRequest::export_all(&config)?;
+    CodeTerminalResizeRequest::export_all(&config)?;
+    CodeTerminalStopRequest::export_all(&config)?;
+    CodeTerminalEventKind::export_all(&config)?;
+    CodeTerminalEvent::export_all(&config)?;
+    CodeAdapterCapability::export_all(&config)?;
+    CodeAdapterSummary::export_all(&config)?;
+    CodeGitStatusRequest::export_all(&config)?;
+    CodeGitFileStatus::export_all(&config)?;
+    CodeGitStatus::export_all(&config)?;
+    CodeGitDiffRequest::export_all(&config)?;
+    CodeGitDiff::export_all(&config)?;
+    CodePreviewState::export_all(&config)?;
+    CodePreviewRequest::export_all(&config)?;
+    CodePreviewSummary::export_all(&config)?;
     BootstrapSnapshot::export_all(&config)?;
     SetActiveModeCommand::export_all(&config)?;
     BuildInformation::export_all(&config)?;

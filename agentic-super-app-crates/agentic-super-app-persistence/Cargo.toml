@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agentic-super-app-code-domain = { path = "../agentic-super-app-code-domain" }
 agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
 serde.workspace = true
 serde_json.workspace = true

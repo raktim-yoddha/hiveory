@@ -4,6 +4,12 @@ use agentic_super_app_artifact_store::{
     AgenticSuperAppArtifactError, AgenticSuperAppArtifactStore, AgenticSuperAppStoredAttachment,
 };
 use agentic_super_app_chat_domain::{estimate_context_tokens, validate_send_request};
+use agentic_super_app_code_domain::{default_layout, validate_layout};
+use agentic_super_app_code_runtime::{
+    AgenticSuperAppCodeRuntime, AgenticSuperAppCodeRuntimeError, TerminalEventSink,
+    CODEX_ADAPTER_ID,
+};
+use agentic_super_app_git_service::{AgenticSuperAppGitError, AgenticSuperAppGitService};
 use agentic_super_app_job_runtime::AgenticSuperAppJobRuntime;
 use agentic_super_app_model_gateway::{
     AgenticSuperAppModelProvider, AgenticSuperAppOpenAiResponsesProvider,
@@ -21,6 +27,12 @@ use agentic_super_app_protocol::{
     ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
     ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
+    CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff, CodeGitDiffRequest, CodeGitStatus,
+    CodeGitStatusRequest, CodePaneLayout, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
+    CodeReadFileRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
+    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalResizeRequest,
+    CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSummary, CodeWorkspaceDetail,
+    CodeWorkspaceOpenRequest, CodeWorkspaceQuery, CodeWorkspaceTrust, CodeWorkspaceTrustRequest,
     CommandEnvelope, DiagnosticSnapshot, JobState, ProviderDiagnosticRequest, ResponseEnvelope,
     RetryClass, SetActiveModeCommand, SharedEventEnvelope, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
 };
@@ -28,11 +40,15 @@ use agentic_super_app_secret_store::{
     AgenticSuperAppKeyringSecretStore, AgenticSuperAppSecretStoreHandle,
 };
 use agentic_super_app_tool_runtime::AgenticSuperAppAuditLog;
+use agentic_super_app_workspace_service::{
+    AgenticSuperAppWorkspaceError, AgenticSuperAppWorkspaceService,
+};
 use base64::{engine::general_purpose::STANDARD, Engine};
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{ipc::Channel, Manager, State};
 use tauri_plugin_notification::NotificationExt;
@@ -63,6 +79,10 @@ struct AgenticSuperAppFoundation {
     chat_events: broadcast::Sender<ChatEventEnvelope>,
     chat_cancellations: Arc<std::sync::Mutex<HashMap<String, CancellationToken>>>,
     recovery_message: Arc<RwLock<Option<String>>>,
+    code_workspaces: AgenticSuperAppWorkspaceService,
+    code_runtime: AgenticSuperAppCodeRuntime,
+    code_git: AgenticSuperAppGitService,
+    code_active_workspace_id: Arc<RwLock<Option<String>>>,
 }
 
 impl AgenticSuperAppFoundation {
@@ -70,8 +90,29 @@ impl AgenticSuperAppFoundation {
         let persistence = AgenticSuperAppPersistence::open(&database_path)
             .await
             .map_err(|error| error.to_string())?;
+        let code_workspaces = AgenticSuperAppWorkspaceService::new();
+        let persisted_workspaces = persistence
+            .code_workspaces()
+            .await
+            .map_err(|error| error.to_string())?;
+        for summary in &persisted_workspaces {
+            let _ = code_workspaces.open_workspace(
+                Path::new(&summary.root_path),
+                Some(&summary.id),
+                summary.trust,
+            );
+        }
+        let code_active_workspace_id = Arc::new(RwLock::new(
+            persisted_workspaces
+                .first()
+                .map(|summary| summary.id.clone()),
+        ));
         let interrupted = persistence
             .interrupt_active_jobs()
+            .await
+            .map_err(|error| error.to_string())?;
+        persistence
+            .interrupt_active_code_terminals()
             .await
             .map_err(|error| error.to_string())?;
         let chat = AgenticSuperAppChatStore::new(persistence.clone());
@@ -107,6 +148,10 @@ impl AgenticSuperAppFoundation {
             chat_events,
             chat_cancellations: Arc::new(std::sync::Mutex::new(HashMap::new())),
             recovery_message: Arc::new(RwLock::new(recovery_message)),
+            code_workspaces,
+            code_runtime: AgenticSuperAppCodeRuntime::new(),
+            code_git: AgenticSuperAppGitService,
+            code_active_workspace_id,
         })
     }
     async fn diagnostic_snapshot(&self) -> Result<DiagnosticSnapshot, ApiError> {
@@ -131,6 +176,71 @@ impl AgenticSuperAppFoundation {
                 .read()
                 .map_err(|_| unavailable_error())?
                 .clone(),
+        })
+    }
+
+    async fn code_snapshot(&self) -> Result<CodeSnapshot, ApiError> {
+        Ok(CodeSnapshot {
+            workspaces: self.code_workspaces.summaries().map_err(workspace_error)?,
+            active_workspace_id: self
+                .code_active_workspace_id
+                .read()
+                .map_err(|_| unavailable_error())?
+                .clone(),
+            adapters: self.code_runtime.adapters(),
+        })
+    }
+
+    async fn code_detail(&self, workspace_id: &str) -> Result<CodeWorkspaceDetail, ApiError> {
+        let summary = self
+            .code_workspaces
+            .summary(workspace_id)
+            .map_err(workspace_error)?;
+        let layout = match self
+            .persistence
+            .code_layout(workspace_id)
+            .await
+            .map_err(database_error)?
+        {
+            Some(layout)
+                if layout.workspace_id == workspace_id && validate_layout(&layout).is_ok() =>
+            {
+                layout
+            }
+            _ => default_layout(workspace_id),
+        };
+        let mut terminals = self
+            .persistence
+            .code_terminals(workspace_id)
+            .await
+            .map_err(database_error)?;
+        for terminal in self
+            .code_runtime
+            .list()
+            .map_err(runtime_error)?
+            .into_iter()
+            .filter(|terminal| terminal.workspace_id == workspace_id)
+        {
+            if let Some(existing) = terminals.iter_mut().find(|item| item.id == terminal.id) {
+                *existing = terminal;
+            } else {
+                terminals.push(terminal);
+            }
+        }
+        Ok(CodeWorkspaceDetail {
+            summary,
+            layout,
+            open_documents: self
+                .persistence
+                .code_documents(workspace_id)
+                .await
+                .map_err(database_error)?,
+            terminals,
+            previews: self
+                .persistence
+                .code_previews(workspace_id)
+                .await
+                .map_err(database_error)?,
         })
     }
 }
@@ -172,6 +282,451 @@ async fn agentic_super_app_query_diagnostic_snapshot(
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<DiagnosticSnapshot, ApiError> {
     foundation.diagnostic_snapshot().await
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_snapshot(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeSnapshot, ApiError> {
+    foundation.code_snapshot().await
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_workspace(
+    query: CodeWorkspaceQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeWorkspaceDetail, ApiError> {
+    let workspace_id = query
+        .workspace_id
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| validation_error("A workspace is required."))?;
+    foundation.code_detail(&workspace_id).await
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_open_code_workspace(
+    command: CommandEnvelope<CodeWorkspaceOpenRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let path = command.payload.path.trim();
+    if path.is_empty() {
+        return Err(validation_error("Choose a workspace folder first."));
+    }
+    let summary = foundation
+        .code_workspaces
+        .open_workspace(Path::new(path), None, CodeWorkspaceTrust::Untrusted)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_workspace(&summary)
+        .await
+        .map_err(database_error)?;
+    foundation
+        .persistence
+        .save_code_layout(&default_layout(&summary.id))
+        .await
+        .map_err(database_error)?;
+    *foundation
+        .code_active_workspace_id
+        .write()
+        .map_err(|_| unavailable_error())? = Some(summary.id.clone());
+    foundation
+        .audit
+        .record(
+            "code.workspace.open",
+            "success",
+            "info",
+            Some(&summary.id),
+            Some("workspace opened with untrusted defaults"),
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(
+        &command.request_id,
+        foundation.code_detail(&summary.id).await?,
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_trust_code_workspace(
+    command: CommandEnvelope<CodeWorkspaceTrustRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let trust = if command.payload.grant {
+        CodeWorkspaceTrust::Trusted
+    } else {
+        CodeWorkspaceTrust::Untrusted
+    };
+    let summary = foundation
+        .code_workspaces
+        .set_trust(&command.payload.workspace_id, trust)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_workspace(&summary)
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.workspace.trust",
+            "success",
+            if command.payload.grant {
+                "warning"
+            } else {
+                "info"
+            },
+            Some(&summary.id),
+            if command.payload.grant {
+                Some("user granted file writes, process execution, Git reads, and preview access")
+            } else {
+                Some("workspace returned to read-only defaults")
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(
+        &command.request_id,
+        foundation.code_detail(&summary.id).await?,
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_file_tree(
+    query: CodeFileTreeQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeFileTree, ApiError> {
+    foundation
+        .code_workspaces
+        .file_tree(&query.workspace_id, query.relative_path.as_deref())
+        .map_err(workspace_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_file(
+    request: CodeReadFileRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeDocument, ApiError> {
+    let document = foundation
+        .code_workspaces
+        .read_file(&request.workspace_id, &request.relative_path)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_document(
+            &request.workspace_id,
+            &agentic_super_app_protocol::CodeDocumentSummary {
+                relative_path: document.relative_path.clone(),
+                language: document.language.clone(),
+                last_fingerprint: Some(document.fingerprint.clone()),
+                last_opened_at_unix_ms: now_ms(),
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(document)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_save_code_file(
+    command: CommandEnvelope<CodeSaveFileRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeDocument>, ApiError> {
+    validate_code_command(&command)?;
+    let document = foundation
+        .code_workspaces
+        .save_file(
+            &command.payload.workspace_id,
+            &command.payload.relative_path,
+            &command.payload.content,
+            command.payload.expected_fingerprint.as_deref(),
+        )
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_document(
+            &command.payload.workspace_id,
+            &agentic_super_app_protocol::CodeDocumentSummary {
+                relative_path: document.relative_path.clone(),
+                language: document.language.clone(),
+                last_fingerprint: Some(document.fingerprint.clone()),
+                last_opened_at_unix_ms: now_ms(),
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.file.save",
+            "success",
+            "info",
+            Some(&command.payload.relative_path),
+            Some("atomic save with optimistic fingerprint check"),
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, document))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_save_code_layout(
+    command: CommandEnvelope<CodeSaveLayoutRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodePaneLayout>, ApiError> {
+    validate_code_command(&command)?;
+    if command.payload.workspace_id != command.payload.layout.workspace_id {
+        return Err(validation_error("Layout and workspace IDs must match."));
+    }
+    validate_layout(&command.payload.layout)
+        .map_err(|error| validation_error(format!("Invalid pane layout: {error}")))?;
+    foundation
+        .code_workspaces
+        .summary(&command.payload.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_layout(&command.payload.layout)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, command.payload.layout))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_git_status(
+    request: CodeGitStatusRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeGitStatus, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&request.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .code_git
+        .status(&request.workspace_id, &root)
+        .map_err(git_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_git_diff(
+    request: CodeGitDiffRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeGitDiff, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&request.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .code_git
+        .diff(
+            &request.workspace_id,
+            &root,
+            request.relative_path.as_deref(),
+        )
+        .map_err(git_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_start_code_terminal(
+    command: CommandEnvelope<CodeTerminalStartRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<CodeTerminalEvent>,
+) -> Result<ResponseEnvelope<CodeTerminalSummary>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ExecuteProcesses,
+        )
+        .map_err(workspace_error)?;
+    if command.payload.kind == agentic_super_app_protocol::CodeTerminalKind::CodingAgent
+        && command
+            .payload
+            .adapter_id
+            .as_deref()
+            .unwrap_or(CODEX_ADAPTER_ID)
+            != CODEX_ADAPTER_ID
+    {
+        return Err(validation_error(
+            "Only the configured Codex adapter is available in Phase 4.",
+        ));
+    }
+    let root = foundation
+        .code_workspaces
+        .root_path(&command.payload.workspace_id)
+        .map_err(workspace_error)?;
+    let persistence = foundation.persistence.clone();
+    let sink: TerminalEventSink = Arc::new(move |event| {
+        let _ = channel.send(event.clone());
+        if matches!(
+            event.kind,
+            agentic_super_app_protocol::CodeTerminalEventKind::Exited
+        ) {
+            let persistence = persistence.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = persistence
+                    .finish_code_terminal(
+                        &event.terminal_id,
+                        agentic_super_app_protocol::CodeTerminalState::Exited,
+                        event.exit_code,
+                    )
+                    .await;
+            });
+        }
+    });
+    let summary = foundation
+        .code_runtime
+        .start(&command.payload, &root, sink)
+        .map_err(runtime_error)?;
+    foundation
+        .persistence
+        .save_code_terminal(&summary)
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.terminal.start",
+            "success",
+            "info",
+            Some(&summary.id),
+            Some(
+                if summary.kind == agentic_super_app_protocol::CodeTerminalKind::CodingAgent {
+                    "structured coding-agent adapter launch"
+                } else {
+                    "workspace-scoped PTY launch"
+                },
+            ),
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, summary))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_write_code_terminal(
+    command: CommandEnvelope<CodeTerminalInputRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_runtime
+        .write(&command.payload)
+        .map_err(runtime_error)?;
+    Ok(response(&command.request_id, true))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_resize_code_terminal(
+    command: CommandEnvelope<CodeTerminalResizeRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_runtime
+        .resize(&command.payload)
+        .map_err(runtime_error)?;
+    Ok(response(&command.request_id, true))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_stop_code_terminal(
+    command: CommandEnvelope<CodeTerminalStopRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    let stopped = foundation
+        .code_runtime
+        .stop(&command.payload)
+        .map_err(runtime_error)?;
+    if stopped {
+        let _ = foundation
+            .persistence
+            .finish_code_terminal(
+                &command.payload.terminal_id,
+                agentic_super_app_protocol::CodeTerminalState::Interrupted,
+                None,
+            )
+            .await;
+    }
+    Ok(response(&command.request_id, stopped))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_open_code_preview(
+    app: tauri::AppHandle,
+    command: CommandEnvelope<CodePreviewRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodePreviewSummary>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::OpenPreview,
+        )
+        .map_err(workspace_error)?;
+    let url = validate_preview_url(&command.payload.url)?;
+    let origin = url.origin().ascii_serialization();
+    let label = format!("agentic-preview-{}", uuid::Uuid::now_v7());
+    let allowed_origin = origin.clone();
+    tauri::WebviewWindowBuilder::new(
+        &app,
+        &label,
+        tauri::utils::config::WebviewUrl::External(url.clone()),
+    )
+    .title("Local preview")
+    .on_navigation(move |next| next.origin().ascii_serialization() == allowed_origin)
+    .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
+    .build()
+    .map_err(|error| {
+        application_error(
+            "preview_open_failed",
+            error.to_string(),
+            RetryClass::AfterUserAction,
+        )
+    })?;
+    let preview = CodePreviewSummary {
+        id: label,
+        workspace_id: command.payload.workspace_id.clone(),
+        url: url.to_string(),
+        origin,
+        state: CodePreviewState::Open,
+    };
+    foundation
+        .persistence
+        .save_code_preview(&preview, now_ms())
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.preview.open",
+            "success",
+            "info",
+            Some(&preview.origin),
+            Some("isolated auxiliary webview with same-origin navigation policy"),
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, preview))
 }
 
 #[tauri::command]
@@ -1050,6 +1605,131 @@ fn validate_chat_command<T>(command: &CommandEnvelope<T>) -> Result<(), ApiError
     Ok(())
 }
 
+fn validate_code_command<T>(command: &CommandEnvelope<T>) -> Result<(), ApiError> {
+    validate_chat_command(command)
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
+fn validate_preview_url(value: &str) -> Result<url::Url, ApiError> {
+    let url = url::Url::parse(value.trim())
+        .map_err(|_| validation_error("Preview URL must be a valid HTTP or HTTPS URL."))?;
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(validation_error(
+            "Preview URLs cannot contain embedded credentials.",
+        ));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| validation_error("Preview URL must include a host."))?;
+    match url.scheme() {
+        "http" if matches!(host, "localhost" | "127.0.0.1" | "::1") => Ok(url),
+        "https" => Ok(url),
+        _ => Err(validation_error(
+            "Preview allows localhost HTTP or explicitly approved HTTPS origins only.",
+        )),
+    }
+}
+
+fn workspace_error(error: AgenticSuperAppWorkspaceError) -> ApiError {
+    let (code, message, retry) = match error {
+        AgenticSuperAppWorkspaceError::InvalidRoot(_) => (
+            "workspace_invalid_root",
+            "The selected workspace folder could not be opened.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::NotFound => (
+            "workspace_not_found",
+            "The workspace is no longer available.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::Untrusted
+        | AgenticSuperAppWorkspaceError::CapabilityDenied(_) => (
+            "workspace_trust_required",
+            "Trust this workspace before using this capability.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::InvalidPath(_) => (
+            "workspace_path_denied",
+            "That path is outside the approved workspace policy.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::FileTooLarge => (
+            "code_file_too_large",
+            "The file is too large for the inline editor.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::BinaryFile => (
+            "code_binary_file",
+            "Binary files cannot be edited in the inline editor.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::FileConflict => (
+            "code_file_conflict",
+            "The file changed on disk. Reload it before saving.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::SymlinkNotAllowed => (
+            "code_symlink_denied",
+            "Symbolic links are not opened or edited through Code mode.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppWorkspaceError::Io(_) => (
+            "workspace_io_failed",
+            "The workspace filesystem operation failed.",
+            RetryClass::Safe,
+        ),
+    };
+    application_error(code, message, retry)
+}
+
+fn runtime_error(error: AgenticSuperAppCodeRuntimeError) -> ApiError {
+    let (code, message) = match error {
+        AgenticSuperAppCodeRuntimeError::InvalidDimensions => (
+            "terminal_invalid_dimensions",
+            "The terminal size is outside the supported range.",
+        ),
+        AgenticSuperAppCodeRuntimeError::UnsupportedAdapter => (
+            "code_adapter_unavailable",
+            "The requested coding-agent adapter is unavailable.",
+        ),
+        AgenticSuperAppCodeRuntimeError::TerminalNotFound => (
+            "terminal_not_found",
+            "The terminal session is no longer available.",
+        ),
+        AgenticSuperAppCodeRuntimeError::Operation(_) => (
+            "terminal_operation_failed",
+            "The terminal operation could not be completed.",
+        ),
+    };
+    application_error(code, message, RetryClass::AfterUserAction)
+}
+
+fn git_error(error: AgenticSuperAppGitError) -> ApiError {
+    match error {
+        AgenticSuperAppGitError::NotRepository => application_error(
+            "git_not_repository",
+            "The workspace is not a Git repository.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::InvalidPath(_) => application_error(
+            "git_path_denied",
+            "The requested diff path is outside the workspace policy.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::Git(_) => application_error(
+            "git_read_failed",
+            "Git status or diff could not be read.",
+            RetryClass::Safe,
+        ),
+    }
+}
+
 fn response<T>(request_id: &str, payload: T) -> ResponseEnvelope<T> {
     ResponseEnvelope {
         protocol: current_protocol_version(),
@@ -1450,6 +2130,21 @@ pub fn run() {
             agentic_super_app_command_set_active_mode,
             agentic_super_app_query_build_information,
             agentic_super_app_query_diagnostic_snapshot,
+            agentic_super_app_query_code_snapshot,
+            agentic_super_app_query_code_workspace,
+            agentic_super_app_command_open_code_workspace,
+            agentic_super_app_command_trust_code_workspace,
+            agentic_super_app_query_code_file_tree,
+            agentic_super_app_query_code_file,
+            agentic_super_app_command_save_code_file,
+            agentic_super_app_command_save_code_layout,
+            agentic_super_app_query_code_git_status,
+            agentic_super_app_query_code_git_diff,
+            agentic_super_app_command_start_code_terminal,
+            agentic_super_app_command_write_code_terminal,
+            agentic_super_app_command_resize_code_terminal,
+            agentic_super_app_command_stop_code_terminal,
+            agentic_super_app_command_open_code_preview,
             agentic_super_app_query_chat_sidebar,
             agentic_super_app_query_chat_conversation,
             agentic_super_app_query_chat_events,

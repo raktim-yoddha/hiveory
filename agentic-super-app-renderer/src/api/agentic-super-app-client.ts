@@ -12,6 +12,33 @@ export type SharedEventEnvelope = { sequence: number; kind: string; job_id: stri
 export type DiagnosticSnapshot = { providers: ProviderAccountSummary[]; recent_jobs: JobSummary[]; notifications: NotificationSummary[]; recovery_message: string | null }
 export type BootstrapSnapshot = { protocol: { major: number }; active_mode: ApplicationMode; product_name: string }
 
+export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
+export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'open_preview'
+export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; updated_at_unix_ms: number }
+export type CodeWorkspaceDetail = { summary: CodeWorkspaceSummary; layout: CodePaneLayout; open_documents: CodeDocumentSummary[]; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
+export type CodeSnapshot = { workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
+export type CodeFileKind = 'file' | 'directory' | 'symlink' | 'binary'
+export type CodeFileNode = { name: string; relative_path: string; kind: CodeFileKind; size: number | null; language: string | null; modified_at_unix_ms: number | null }
+export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
+export type CodeDocumentSummary = { relative_path: string; language: string | null; last_fingerprint: string | null; last_opened_at_unix_ms: number }
+export type CodeDocument = { workspace_id: string; relative_path: string; content: string; language: string | null; fingerprint: string; bytes: number; read_only: boolean; binary: boolean }
+export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty'
+export type CodePaneOrientation = 'horizontal' | 'vertical'
+export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: CodePaneKind; orientation: CodePaneOrientation | null; ratio_percent: number | null; children: string[]; resource_id: string | null }
+export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[] }
+export type CodeTerminalKind = 'shell' | 'coding_agent'
+export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted'
+export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
+export type CodeTerminalEvent = { terminal_id: string; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
+export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
+export type CodeAdapterSummary = { id: string; display_name: string; executable: string; detected: boolean; authenticated: boolean; capabilities: CodeAdapterCapability[] }
+export type CodeGitFileStatus = { relative_path: string; status: string; staged: boolean; conflict: boolean }
+export type CodeGitStatus = { workspace_id: string; branch: string | null; ahead: number; behind: number; files: CodeGitFileStatus[] }
+export type CodeGitDiff = { workspace_id: string; relative_path: string | null; content: string; binary: boolean; truncated: boolean }
+export type CodePreviewState = 'open' | 'closed' | 'blocked'
+export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
+
 export type ChatAttachmentSummary = { id: string; display_name: string; mime_type: string; bytes: number; sha256: string }
 export type ChatMessagePart =
   | { kind: 'text'; text: string }
@@ -46,12 +73,26 @@ type ChatEditRequest = { conversation_id: string; message_id: string; text: stri
 type ChatBranchRequest = { conversation_id: string; message_id: string }
 type ChatDeleteAttachmentRequest = { conversation_id: string; message_id: string; attachment_id: string }
 type ChatExportRequest = { conversation_id: string; branch_id: string; destination: string }
+type CodeWorkspaceOpenRequest = { path: string }
+type CodeWorkspaceTrustRequest = { workspace_id: string; grant: boolean }
+type CodeFileTreeQuery = { workspace_id: string; relative_path: string | null }
+type CodeReadFileRequest = { workspace_id: string; relative_path: string }
+type CodeSaveFileRequest = { workspace_id: string; relative_path: string; content: string; expected_fingerprint: string | null }
+type CodeSaveLayoutRequest = { workspace_id: string; layout: CodePaneLayout }
+type CodeGitStatusRequest = { workspace_id: string }
+type CodeGitDiffRequest = { workspace_id: string; relative_path: string | null }
+type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; resume_session_id: string | null }
+type CodeTerminalInputRequest = { terminal_id: string; data: string }
+type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
+type CodeTerminalStopRequest = { terminal_id: string; force: boolean }
+type CodePreviewRequest = { workspace_id: string; url: string }
 
 const protocol: ProtocolVersion = { major: 1, minor: 0, patch: 0 }
 const agenticSuperAppIsTauri = '__TAURI_INTERNALS__' in window
 const previewProvider: ProviderAccountSummary = { id: 'agentic-super-app-openai', display_name: 'OpenAI Responses', default_model: 'gpt-5.6-mini', secret_configured: false, enabled: true }
 const previewConversations = new Map<string, ChatConversationDetail>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
+const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
 
 function requestId() { return globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 function previewId(prefix: string) { return `${prefix}-${requestId()}` }
@@ -75,6 +116,55 @@ function previewEvent(detail: ChatConversationDetail, kind: string, messageId: s
   return event
 }
 function previewResponse<T>(payload: T): Promise<T> { return Promise.resolve(payload) }
+function previewCodeLayout(workspaceId: string): CodePaneLayout {
+  return {
+    workspace_id: workspaceId,
+    version: 1,
+    root_id: 'root',
+    nodes: [
+      { pane_id: 'root', parent_id: null, kind: 'empty', orientation: 'horizontal', ratio_percent: 24, children: ['editor', 'terminal'], resource_id: null },
+      { pane_id: 'editor', parent_id: 'root', kind: 'editor', orientation: null, ratio_percent: null, children: [], resource_id: null },
+      { pane_id: 'terminal', parent_id: 'root', kind: 'terminal', orientation: null, ratio_percent: null, children: [], resource_id: null },
+    ],
+  }
+}
+function previewCodeWorkspace(path: string): { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> } {
+  const id = previewId('workspace')
+  const now = previewNow()
+  const files = new Map<string, CodeDocument>()
+  const seed = (relativePath: string, content: string, language: string) => files.set(relativePath, { workspace_id: id, relative_path: relativePath, content, language, fingerprint: `preview-${relativePath}`, bytes: content.length, read_only: false, binary: false })
+  seed('README.md', '# Agentic Super App\n\nThis is the Phase 4 browser preview workspace.\n', 'markdown')
+  seed('src/main.tsx', "export function main() {\n  return 'Code mode is ready'\n}\n", 'typescript')
+  const summary: CodeWorkspaceSummary = { id, host_id: 'browser-preview', display_name: path.split(/[\\/]/).filter(Boolean).pop() || 'Preview workspace', root_path: path || '~/agentic-demo', repository_name: 'agentic-demo', branch: 'main', is_git_repository: true, trust: 'untrusted', capabilities: ['read_files'], updated_at_unix_ms: now }
+  const detail: CodeWorkspaceDetail = { summary, layout: previewCodeLayout(id), open_documents: [], terminals: [], previews: [] }
+  const value = { detail, files }
+  previewCodeWorkspaces.set(id, value)
+  return value
+}
+function previewCodeDetail(workspaceId: string): CodeWorkspaceDetail {
+  const workspace = previewCodeWorkspaces.get(workspaceId)
+  if (!workspace) throw new Error('Workspace was not found.')
+  return structuredClone(workspace.detail)
+}
+function previewCodeTree(workspaceId: string, relativeDirectory: string | null): CodeFileTree {
+  const workspace = previewCodeWorkspaces.get(workspaceId)
+  if (!workspace) throw new Error('Workspace was not found.')
+  const directory = (relativeDirectory ?? '').replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  const prefix = directory ? `${directory}/` : ''
+  const entries = new Map<string, CodeFileNode>()
+  workspace.files.forEach((file) => {
+    if (!file.relative_path.startsWith(prefix)) return
+    const remainder = file.relative_path.slice(prefix.length)
+    const [name, ...rest] = remainder.split('/')
+    if (!name) return
+    if (rest.length) entries.set(name, { name, relative_path: `${prefix}${name}`, kind: 'directory', size: null, language: null, modified_at_unix_ms: null })
+    else entries.set(name, { name, relative_path: file.relative_path, kind: 'file', size: file.bytes, language: file.language, modified_at_unix_ms: null })
+  })
+  return { workspace_id: workspaceId, directory, entries: [...entries.values()].sort((a, b) => (a.kind === 'directory' ? -1 : 1) - (b.kind === 'directory' ? -1 : 1) || a.name.localeCompare(b.name)), truncated: false }
+}
+function previewCodeSummary(): CodeSnapshot {
+  return { workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary), active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null, adapters: [{ id: 'codex', display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] }] }
+}
 
 async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload): Promise<TResponse> {
   const result = await invoke<ResponseEnvelope<TResponse>>(name, { command: envelope(payload) })
@@ -94,6 +184,101 @@ export const agenticSuperAppClient = {
   subscribe(onEvent: (event: SharedEventEnvelope) => void): void { if (agenticSuperAppIsTauri) void invoke('agentic_super_app_stream_shared_events', { channel: new Channel<SharedEventEnvelope>(onEvent) }) },
   async testNotification(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_send_test_notification') },
   async restartRecovery(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_prepare_restart_recovery') },
+
+  async codeSnapshot(): Promise<CodeSnapshot> {
+    return agenticSuperAppIsTauri ? tauriQuery<CodeSnapshot>('agentic_super_app_query_code_snapshot') : previewCodeSummary()
+  },
+  async codeWorkspace(workspaceId: string): Promise<CodeWorkspaceDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeWorkspaceDetail>('agentic_super_app_query_code_workspace', { query: { workspace_id: workspaceId } })
+    return previewCodeDetail(workspaceId)
+  },
+  async openCodeWorkspace(path: string): Promise<CodeWorkspaceDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceOpenRequest, CodeWorkspaceDetail>('agentic_super_app_command_open_code_workspace', { path })
+    return previewCodeWorkspace(path).detail
+  },
+  async trustCodeWorkspace(workspaceId: string, grant: boolean): Promise<CodeWorkspaceDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceTrustRequest, CodeWorkspaceDetail>('agentic_super_app_command_trust_code_workspace', { workspace_id: workspaceId, grant })
+    const workspace = previewCodeWorkspaces.get(workspaceId)
+    if (!workspace) throw new Error('Workspace was not found.')
+    workspace.detail.summary.trust = grant ? 'trusted' : 'untrusted'
+    workspace.detail.summary.capabilities = grant ? ['read_files', 'write_files', 'execute_processes', 'read_git', 'open_preview'] : ['read_files']
+    return previewCodeDetail(workspaceId)
+  },
+  async codeFileTree(request: CodeFileTreeQuery): Promise<CodeFileTree> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeFileTree>('agentic_super_app_query_code_file_tree', { query: request })
+    return previewCodeTree(request.workspace_id, request.relative_path)
+  },
+  async readCodeFile(request: CodeReadFileRequest): Promise<CodeDocument> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeDocument>('agentic_super_app_query_code_file', { request })
+    const file = previewCodeWorkspaces.get(request.workspace_id)?.files.get(request.relative_path)
+    if (!file) throw new Error('File was not found.')
+    return structuredClone(file)
+  },
+  async saveCodeFile(request: CodeSaveFileRequest): Promise<CodeDocument> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeSaveFileRequest, CodeDocument>('agentic_super_app_command_save_code_file', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    const file = workspace?.files.get(request.relative_path)
+    if (!workspace || !file) throw new Error('File was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before saving files.')
+    if (request.expected_fingerprint && request.expected_fingerprint !== file.fingerprint) throw new Error('The file changed on disk. Reload it before saving.')
+    file.content = request.content
+    file.bytes = request.content.length
+    file.fingerprint = `preview-${previewNow()}-${Math.random().toString(16).slice(2)}`
+    return structuredClone(file)
+  },
+  async saveCodeLayout(request: CodeSaveLayoutRequest): Promise<CodePaneLayout> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeSaveLayoutRequest, CodePaneLayout>('agentic_super_app_command_save_code_layout', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    workspace.detail.layout = structuredClone(request.layout)
+    return structuredClone(request.layout)
+  },
+  async codeGitStatus(request: CodeGitStatusRequest): Promise<CodeGitStatus> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeGitStatus>('agentic_super_app_query_code_git_status', { request })
+    if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before reading Git status.')
+    return { workspace_id: request.workspace_id, branch: 'main', ahead: 0, behind: 0, files: [] }
+  },
+  async codeGitDiff(request: CodeGitDiffRequest): Promise<CodeGitDiff> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeGitDiff>('agentic_super_app_query_code_git_diff', { request })
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before reading Git diff.')
+    const file = request.relative_path ? workspace.files.get(request.relative_path) : null
+    return { workspace_id: request.workspace_id, relative_path: request.relative_path, content: file ? `diff --git a/${file.relative_path} b/${file.relative_path}\n--- a/${file.relative_path}\n+++ b/${file.relative_path}\n@@\n+${file.content}` : '', binary: false, truncated: false }
+  },
+  async startCodeTerminal(request: CodeTerminalStartRequest, onEvent: (event: CodeTerminalEvent) => void): Promise<CodeTerminalSummary> {
+    if (agenticSuperAppIsTauri) {
+      const channel = new Channel<CodeTerminalEvent>(onEvent)
+      const result = await invoke<ResponseEnvelope<CodeTerminalSummary>>('agentic_super_app_command_start_code_terminal', { command: envelope(request), channel })
+      return unwrap(result)
+    }
+    if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
+    const id = previewId('terminal')
+    const now = previewNow()
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (workspace) workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
+    onEvent({ terminal_id: id, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
+    setTimeout(() => onEvent({ terminal_id: id, kind: 'output', data_base64: btoa('Phase 4 preview terminal ready.\r\n'), exit_code: null, message: null, emitted_at_unix_ms: previewNow() }), 20)
+    return summary
+  },
+  async writeCodeTerminal(request: CodeTerminalInputRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalInputRequest, boolean>('agentic_super_app_command_write_code_terminal', request) : true },
+  async resizeCodeTerminal(request: CodeTerminalResizeRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalResizeRequest, boolean>('agentic_super_app_command_resize_code_terminal', request) : true },
+  async stopCodeTerminal(request: CodeTerminalStopRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalStopRequest, boolean>('agentic_super_app_command_stop_code_terminal', request) : true },
+  async openCodePreview(request: CodePreviewRequest): Promise<CodePreviewSummary> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodePreviewRequest, CodePreviewSummary>('agentic_super_app_command_open_code_preview', request)
+    if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before opening a preview.')
+    const url = new URL(request.url)
+    const preview: CodePreviewSummary = { id: previewId('preview'), workspace_id: request.workspace_id, url: url.toString(), origin: url.origin, state: 'open' }
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (workspace) workspace.detail.previews = [preview, ...workspace.detail.previews]
+    return preview
+  },
+  async chooseWorkspacePath(): Promise<string | null> {
+    if (!agenticSuperAppIsTauri) return '~/agentic-demo'
+    const selected = await openDialog({ multiple: false, directory: true, title: 'Open workspace folder' })
+    return typeof selected === 'string' ? selected : null
+  },
 
   async chatSidebar(query: { search?: string; archived: boolean; limit?: number }): Promise<ChatSidebarPage> {
     if (agenticSuperAppIsTauri) return tauriQuery<ChatSidebarPage>('agentic_super_app_query_chat_sidebar', { query: { search: query.search ?? null, archived: query.archived, limit: query.limit ?? 50 } })

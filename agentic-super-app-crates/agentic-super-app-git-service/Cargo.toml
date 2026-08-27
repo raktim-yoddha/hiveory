@@ -1,0 +1,12 @@
+[package]
+name = "agentic-super-app-git-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-code-domain = { path = "../agentic-super-app-code-domain" }
+agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+git2.workspace = true
+thiserror.workspace = true
+uuid.workspace = true

@@ -17,3 +17,14 @@ test('preview chat persists a turn and publishes replayable events', async () =>
   expect(events).toEqual(['assistant_text_appended', 'turn_completed'])
   await expect(agenticSuperAppClient.chatSidebar({ archived: false })).resolves.toMatchObject({ conversations: expect.arrayContaining([expect.objectContaining({ id: created.id, title: 'Preview acceptance' })]) })
 })
+
+test('preview Code enforces trust before saving and preserves the pane contract', async () => {
+  const detail = await agenticSuperAppClient.openCodeWorkspace('~/phase-four-demo')
+  const document = await agenticSuperAppClient.readCodeFile({ workspace_id: detail.summary.id, relative_path: 'README.md' })
+  await expect(agenticSuperAppClient.saveCodeFile({ workspace_id: detail.summary.id, relative_path: document.relative_path, content: 'blocked', expected_fingerprint: document.fingerprint })).rejects.toThrow()
+  const trusted = await agenticSuperAppClient.trustCodeWorkspace(detail.summary.id, true)
+  expect(trusted.summary.capabilities).toContain('execute_processes')
+  expect(trusted.layout.nodes.find((node) => node.pane_id === trusted.layout.root_id)?.children).toEqual(['editor', 'terminal'])
+  const saved = await agenticSuperAppClient.saveCodeFile({ workspace_id: detail.summary.id, relative_path: document.relative_path, content: '# Saved from preview\n', expected_fingerprint: document.fingerprint })
+  expect(saved.content).toContain('Saved from preview')
+})

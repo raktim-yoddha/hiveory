@@ -2,13 +2,13 @@
 
 ## Scope
 
-Phase 0–1 established the shell, Phase 2 added shared durable infrastructure, and Phase 3 adds the first complete product vertical slice: standalone Chat. Code and Agent remain separate future domains.
+Phase 0–1 established the shell, Phase 2 added shared durable infrastructure, Phase 3 added standalone Chat, and Phase 4 adds the first Code vertical slice. Agent orchestration and remote workspaces remain separate future domains.
 
 ## Runtime shape
 
 The single trusted local renderer is React and TypeScript. It renders state obtained through explicit Tauri commands. The Rust host is the authority for all state that may later affect files, processes, network access, credentials, or approval decisions. A selected workspace mode is presentation state, not permission.
 
-The host exposes namespaced, typed commands for shell state, diagnostics, and Chat. Global and Chat-specific Tauri channels carry observations; SQLite remains authoritative for durable state and the renderer resumes from persisted sequence cursors.
+The host exposes namespaced, typed commands for shell state, diagnostics, Chat, and Code. Global, Chat, and terminal-specific Tauri channels carry observations; SQLite remains authoritative for durable metadata and the renderer resumes from persisted sequence cursors.
 
 ## Phase 2 shared services
 
@@ -32,12 +32,24 @@ The Chat slice adds two original boundary crates and a host-owned orchestration 
 
 At startup, the host enables SQLite foreign keys and WAL mode, runs migrations, and marks incomplete jobs as `Interrupted`. Diagnostics provides the explicit recovery exercise for that behavior.
 
+## Phase 4 Code services
+
+Code is split into explicit host-side boundaries:
+
+- `agentic-super-app-code-domain`: pure trust capabilities, path validation, language mapping, and deterministic flat pane-tree invariants.
+- `agentic-super-app-workspace-service`: canonical workspace intake and `cap-std` directory capabilities for bounded tree reads, UTF-8 editor reads, optimistic-fingerprint saves, symlink rejection, and atomic replacement.
+- `agentic-super-app-code-runtime`: native PTY/ConPTY lifecycle, bounded dimensions, base64 terminal channels, process-group/job-tree termination, and the structured Codex CLI adapter probe/launch surface.
+- `agentic-super-app-git-service`: read-only Git status and working-tree diff through `git2`; no commits, worktree mutations, remotes, or credentials are exposed in Phase 4.
+- `agentic-super-app-persistence::code`: workspace trust, pane layouts, recent documents, terminal summaries, and preview metadata. Terminal bytes are not persisted by default.
+
+Opening a folder creates an `Untrusted` workspace. Only an explicit trust command grants write, process, Git-read, and preview capabilities. The main renderer has no filesystem or shell plugin permissions. Local previews use a separate capability-free auxiliary webview with credential-free URL validation and same-origin navigation filtering.
+
 ## Future boundaries
 
-Code and Agent product-domain crates remain deferred until their parity features have owners and acceptance tests. The Chat domain is intentionally isolated from workspace, Git, terminal, and shell capabilities.
+Agent orchestration and remote connection product-domain crates remain deferred until their parity features have owners and acceptance tests. Chat remains intentionally isolated from workspace, Git, terminal, and shell capabilities.
 
 One renderer/webview keeps desktop authorization simple. Future browser preview is an auxiliary, capability-free surface rather than a peer authority.
 
 ## Design system
 
-The shell and Phase 3 Chat use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Chat adds a responsive conversation/sidebar split, persistent title and branch metadata, explicit attachment chips, safe typed-part rendering, live streaming status, and reduced-motion behavior. The UI uses IBM Plex Sans with JetBrains Mono for token/diagnostic data. Visual tokens can evolve without changing the security model.
+The shell, Phase 3 Chat, and Phase 4 Code use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Code adds a workspace/file sidebar, visible trust state, deterministic pane-tree summary, Monaco editing, xterm terminal rendering, Git review cards, isolated preview launch, and reduced-motion behavior. The UI uses IBM Plex Sans with JetBrains Mono for source and terminal data. Visual tokens can evolve without changing the security model.
