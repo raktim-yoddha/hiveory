@@ -16,5 +16,9 @@ All renderer-to-host requests use original `agentic_super_app_*` command names. 
 | Code paths | File and Git paths are relative, normalized, and checked for parent traversal, prefixes, and symlink components before capability-scoped directory operations. |
 | Code streams | PTY/ConPTY output is emitted as bounded base64 chunks over a per-terminal Tauri channel. Terminal bytes are not written to SQLite; summaries and exit state are durable. |
 | Code layouts | Pane layouts are versioned flat trees with stable IDs, parent/child consistency, a single reachable root, and bounded split ratios. Invalid persisted layouts fall back to the deterministic default. |
+| Code orchestration | Runs, tasks, dependencies, dispatches, worktrees, checkpoints, reviews, questions, and events are durable host-owned records. SQLite is authoritative; the Runs renderer is a projection. |
+| Code worker leases | A dispatch lease generation fences stale worker events. Restarted active dispatches are marked interrupted while identifiers are retained; a retry/resume action obtains a fresh generation. |
+| Code worker boundary | Workers use structured `codex exec --json`/resume invocations in managed worktrees. Bounded HMAC-signed envelopes are verified by the host; ephemeral secrets are not persisted. |
+| Code fan-in and cleanup | Accepted dependency checkpoints can be merged non-interactively. Conflicts block the dependent task. Worktree cleanup requires exact confirmation and remains inside the managed local-data root. |
 
 Run `cargo run -p agentic-super-app-tooling` to refresh generated DTO definitions after protocol changes. CI must fail if generated output drifts.

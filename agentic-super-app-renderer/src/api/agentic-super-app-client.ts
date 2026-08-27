@@ -38,6 +38,28 @@ export type CodeGitStatus = { workspace_id: string; branch: string | null; ahead
 export type CodeGitDiff = { workspace_id: string; relative_path: string | null; content: string; binary: boolean; truncated: boolean }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
+export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+export type CodeTaskState = 'draft' | 'blocked' | 'ready' | 'preparing' | 'running' | 'awaiting_input' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled'
+export type CodeDispatchState = 'preparing' | 'running' | 'awaiting_input' | 'checkpointing' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted' | 'stale'
+export type CodeReviewPolicy = 'manual' | 'automatic'
+export type CodeReviewDecision = 'accept' | 'request_changes' | 'reject'
+export type CodeCheckpointKind = 'source' | 'result' | 'integration'
+export type CodeCheckpointState = 'creating' | 'ready' | 'failed'
+export type CodeManagedWorktreeState = 'provisioning' | 'ready' | 'cleanup_pending' | 'removed' | 'failed'
+export type CodeOrchestrationMessageKind = 'status' | 'heartbeat' | 'question' | 'answer' | 'escalation' | 'progress' | 'completion'
+export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
+export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeTaskDependency = { run_id: string; task_id: string; depends_on_task_id: string }
+export type CodeDispatch = { id: string; run_id: string; task_id: string; attempt: number; state: CodeDispatchState; lease_generation: number; session_id: string | null; pid: number | null; worktree_id: string | null; checkpoint_id: string | null; last_heartbeat_at_unix_ms: number | null; started_at_unix_ms: number; updated_at_unix_ms: number; error: string | null; result_summary: string | null }
+export type CodeManagedWorktree = { id: string; run_id: string; task_id: string; dispatch_id: string; path: string; branch: string; base_checkpoint_id: string | null; state: CodeManagedWorktreeState; dirty: boolean; locked: boolean; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeCheckpoint = { id: string; run_id: string; task_id: string | null; dispatch_id: string | null; kind: CodeCheckpointKind; state: CodeCheckpointState; ref_name: string; commit_oid: string | null; parent_checkpoint_id: string | null; summary: string; created_at_unix_ms: number }
+export type CodeReview = { id: string; run_id: string; task_id: string; checkpoint_id: string; decision: CodeReviewDecision; feedback: string | null; created_at_unix_ms: number }
+export type CodeQuestion = { id: string; run_id: string; task_id: string; dispatch_id: string; prompt: string; answer: string | null; answered: boolean; created_at_unix_ms: number }
+export type CodeOrchestrationMessage = { id: string; run_id: string; task_id: string | null; dispatch_id: string | null; kind: CodeOrchestrationMessageKind; question_id: string | null; payload: string; created_at_unix_ms: number }
+export type CodeOrchestrationEventEnvelope = { run_id: string; sequence: number; event_id: string; task_id: string | null; dispatch_id: string | null; lease_generation: number; kind: CodeOrchestrationMessageKind; payload: string; accepted: boolean; emitted_at_unix_ms: number }
+export type CodeDagProposalTask = { client_id: string; title: string; specification: string; depends_on: string[] }
+export type CodeDagProposal = { objective: string; tasks: CodeDagProposalTask[]; warnings: string[] }
+export type CodeRunDetail = { summary: CodeRunSummary; tasks: CodeTask[]; dependencies: CodeTaskDependency[]; dispatches: CodeDispatch[]; worktrees: CodeManagedWorktree[]; checkpoints: CodeCheckpoint[]; reviews: CodeReview[]; questions: CodeQuestion[]; messages: CodeOrchestrationMessage[]; events: CodeOrchestrationEventEnvelope[]; event_cursor: number; proposal: CodeDagProposal | null }
 
 export type ChatAttachmentSummary = { id: string; display_name: string; mime_type: string; bytes: number; sha256: string }
 export type ChatMessagePart =
@@ -86,6 +108,22 @@ type CodeTerminalInputRequest = { terminal_id: string; data: string }
 type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
 type CodeTerminalStopRequest = { terminal_id: string; force: boolean }
 type CodePreviewRequest = { workspace_id: string; url: string }
+export type CodeRunCreateRequest = { workspace_id: string; title: string; objective: string; review_policy: CodeReviewPolicy; concurrency_limit: number | null; model: string | null }
+export type CodeRunUpdateRequest = { run_id: string; title: string; objective: string; review_policy: CodeReviewPolicy; concurrency_limit: number | null }
+export type CodeTaskCreateRequest = { run_id: string; client_id: string | null; title: string; specification: string; depends_on: string[] }
+export type CodeTaskUpdateRequest = { run_id: string; task_id: string; title: string; specification: string; depends_on: string[] }
+export type CodeTaskDeleteRequest = { run_id: string; task_id: string }
+export type CodeDagProposalRequest = { workspace_id: string; objective: string; model: string | null }
+export type CodeDagProposalAcceptRequest = { run_id: string; proposal: CodeDagProposal }
+export type CodeRunRequest = { run_id: string }
+export type CodeQuestionAnswerRequest = { run_id: string; task_id: string; dispatch_id: string; lease_generation: number; answer: string }
+export type CodeTaskRetryRequest = { run_id: string; task_id: string; reason: string | null }
+export type CodeReviewRequest = { run_id: string; task_id: string; checkpoint_id: string; decision: CodeReviewDecision; feedback: string | null }
+export type CodeCleanupPreviewRequest = { run_id: string; worktree_id: string }
+export type CodeCleanupPreview = { worktree_id: string; path: string; branch: string; dirty_files: string[]; locked: boolean; can_remove: boolean; reason: string | null }
+export type CodeCleanupConfirmRequest = { run_id: string; worktree_id: string; confirmation: string; force: boolean }
+export type CodeOrchestrationEventsQuery = { run_id: string; after_sequence: number; limit: number | null }
+export type CodeCheckpointDiffRequest = { run_id: string; checkpoint_id: string; compare_to_checkpoint_id: string | null }
 
 const protocol: ProtocolVersion = { major: 1, minor: 0, patch: 0 }
 const agenticSuperAppIsTauri = '__TAURI_INTERNALS__' in window
@@ -93,6 +131,8 @@ const previewProvider: ProviderAccountSummary = { id: 'agentic-super-app-openai'
 const previewConversations = new Map<string, ChatConversationDetail>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
+const previewCodeRuns = new Map<string, CodeRunDetail>()
+const previewCodeSubscribers = new Set<(event: CodeOrchestrationEventEnvelope) => void>()
 
 function requestId() { return globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 function previewId(prefix: string) { return `${prefix}-${requestId()}` }
@@ -164,6 +204,59 @@ function previewCodeTree(workspaceId: string, relativeDirectory: string | null):
 }
 function previewCodeSummary(): CodeSnapshot {
   return { workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary), active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null, adapters: [{ id: 'codex', display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] }] }
+}
+function previewCodeRunDetail(runId: string): CodeRunDetail {
+  const detail = previewCodeRuns.get(runId)
+  if (!detail) throw new Error('Run was not found.')
+  return structuredClone(detail)
+}
+function previewCodeRunEvent(detail: CodeRunDetail, payload: string, taskId: string | null = null, dispatchId: string | null = null, kind: CodeOrchestrationMessageKind = 'status', accepted = true) {
+  detail.event_cursor += 1
+  const event: CodeOrchestrationEventEnvelope = { run_id: detail.summary.id, sequence: detail.event_cursor, event_id: previewId('event'), task_id: taskId, dispatch_id: dispatchId, lease_generation: 0, kind, payload, accepted, emitted_at_unix_ms: previewNow() }
+  detail.events.push(event)
+  detail.messages.unshift({ id: previewId('message'), run_id: detail.summary.id, task_id: taskId, dispatch_id: dispatchId, kind, question_id: null, payload, created_at_unix_ms: previewNow() })
+  previewCodeSubscribers.forEach((subscriber) => subscriber(event))
+}
+function previewCodeRunSummary(workspaceId: string, title: string, objective: string): CodeRunSummary {
+  const now = previewNow()
+  return { id: previewId('run'), workspace_id: workspaceId, title, objective, model: null, state: 'draft', review_policy: 'manual', concurrency_limit: 2, host_concurrency_cap: 4, task_count: 0, completed_tasks: 0, active_dispatches: 0, created_at_unix_ms: now, updated_at_unix_ms: now, error: null }
+}
+function previewRecountRun(detail: CodeRunDetail) {
+  detail.summary.task_count = detail.tasks.length
+  detail.summary.completed_tasks = detail.tasks.filter((task) => task.state === 'completed').length
+  detail.summary.active_dispatches = detail.dispatches.filter((dispatch) => ['preparing', 'running', 'awaiting_input', 'checkpointing'].includes(dispatch.state)).length
+  detail.summary.updated_at_unix_ms = previewNow()
+}
+function previewAdvanceRun(runId: string) {
+  const detail = previewCodeRuns.get(runId)
+  if (!detail || detail.summary.state !== 'running') return
+  const task = detail.tasks.find((candidate) => candidate.state === 'ready')
+  if (!task) {
+    if (detail.tasks.every((candidate) => candidate.state === 'completed')) detail.summary.state = 'completed'
+    previewRecountRun(detail)
+    return
+  }
+  task.state = 'running'
+  const dispatch: CodeDispatch = { id: previewId('dispatch'), run_id: runId, task_id: task.id, attempt: task.attempt + 1, state: 'running', lease_generation: 1, session_id: null, pid: null, worktree_id: null, checkpoint_id: null, last_heartbeat_at_unix_ms: previewNow(), started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow(), error: null, result_summary: null }
+  detail.dispatches.unshift(dispatch)
+  detail.summary.active_dispatches += 1
+  previewCodeRunEvent(detail, `Worker lane started: ${task.title}`, task.id, dispatch.id, 'progress')
+  setTimeout(() => {
+    const current = previewCodeRuns.get(runId)
+    const currentTask = current?.tasks.find((candidate) => candidate.id === task.id)
+    const currentDispatch = current?.dispatches.find((candidate) => candidate.id === dispatch.id)
+    if (!current || !currentTask || !currentDispatch || current.summary.state !== 'running') return
+    currentTask.state = current.summary.review_policy === 'manual' ? 'awaiting_review' : 'completed'
+    currentDispatch.state = 'succeeded'
+    currentDispatch.result_summary = 'Preview worker completed with a reviewable checkpoint.'
+    currentDispatch.updated_at_unix_ms = previewNow()
+    currentTask.latest_checkpoint_id = previewId('checkpoint')
+    if (current.summary.review_policy === 'manual') current.summary.state = 'blocked'
+    previewRecountRun(current)
+    previewCodeRunEvent(current, current.summary.review_policy === 'manual' ? 'Checkpoint ready for review' : 'Worker completed', currentTask.id, currentDispatch.id, 'completion')
+    if (current.summary.review_policy === 'automatic') setTimeout(() => previewAdvanceRun(runId), 250)
+  }, 650)
+  previewRecountRun(detail)
 }
 
 async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload): Promise<TResponse> {
@@ -273,6 +366,141 @@ export const agenticSuperAppClient = {
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.previews = [preview, ...workspace.detail.previews]
     return preview
+  },
+  async codeRuns(workspaceId?: string): Promise<CodeRunSummary[]> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeRunSummary[]>('agentic_super_app_query_code_runs', { workspaceId: workspaceId ?? null })
+    return [...previewCodeRuns.values()].filter((detail) => !workspaceId || detail.summary.workspace_id === workspaceId).map((detail) => structuredClone(detail.summary)).sort((a, b) => b.updated_at_unix_ms - a.updated_at_unix_ms)
+  },
+  async codeRun(runId: string): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeRunDetail>('agentic_super_app_query_code_run', { runId })
+    return previewCodeRunDetail(runId)
+  },
+  async createCodeRun(request: CodeRunCreateRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeRunCreateRequest, CodeRunDetail>('agentic_super_app_command_create_code_run', request)
+    if (!previewCodeWorkspaces.has(request.workspace_id)) throw new Error('Open a workspace before creating a run.')
+    const summary = { ...previewCodeRunSummary(request.workspace_id, request.title, request.objective), review_policy: request.review_policy, concurrency_limit: request.concurrency_limit ?? 2 }
+    const detail: CodeRunDetail = { summary, tasks: [], dependencies: [], dispatches: [], worktrees: [], checkpoints: [], reviews: [], questions: [], messages: [], events: [], event_cursor: 0, proposal: null }
+    previewCodeRuns.set(summary.id, detail)
+    previewCodeRunEvent(detail, 'Run created')
+    return structuredClone(detail)
+  },
+  async updateCodeRun(request: CodeRunUpdateRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeRunUpdateRequest, CodeRunDetail>('agentic_super_app_command_update_code_run', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    if (!detail) throw new Error('Run was not found.')
+    Object.assign(detail.summary, { title: request.title, objective: request.objective, review_policy: request.review_policy, concurrency_limit: request.concurrency_limit ?? detail.summary.concurrency_limit })
+    previewCodeRunEvent(detail, 'Run updated')
+    return structuredClone(detail)
+  },
+  async createCodeTask(request: CodeTaskCreateRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeTaskCreateRequest, CodeRunDetail>('agentic_super_app_command_create_code_task', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    if (!detail) throw new Error('Run was not found.')
+    const taskId = previewId('task')
+    const now = previewNow()
+    const task: CodeTask = { id: taskId, run_id: request.run_id, client_id: request.client_id?.trim() || taskId, title: request.title, specification: request.specification, state: 'draft', position: detail.tasks.length, active_dispatch_id: null, latest_checkpoint_id: null, base_checkpoint_id: null, attempt: 0, error: null, created_at_unix_ms: now, updated_at_unix_ms: now }
+    detail.tasks.push(task)
+    request.depends_on.forEach((dependency) => { const target = detail.tasks.find((candidate) => candidate.id === dependency || candidate.client_id === dependency); if (target && target.id !== task.id) detail.dependencies.push({ run_id: request.run_id, task_id: task.id, depends_on_task_id: target.id }) })
+    previewRecountRun(detail)
+    previewCodeRunEvent(detail, 'Task added', task.id)
+    return structuredClone(detail)
+  },
+  async updateCodeTask(request: CodeTaskUpdateRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeTaskUpdateRequest, CodeRunDetail>('agentic_super_app_command_update_code_task', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    const task = detail?.tasks.find((candidate) => candidate.id === request.task_id || candidate.client_id === request.task_id)
+    if (!detail || !task) throw new Error('Task was not found.')
+    task.title = request.title; task.specification = request.specification; task.state = 'draft'; task.updated_at_unix_ms = previewNow()
+    detail.dependencies = detail.dependencies.filter((dependency) => dependency.task_id !== task.id)
+    request.depends_on.forEach((dependency) => { const target = detail.tasks.find((candidate) => candidate.id === dependency || candidate.client_id === dependency); if (target && target.id !== task.id) detail.dependencies.push({ run_id: request.run_id, task_id: task.id, depends_on_task_id: target.id }) })
+    previewCodeRunEvent(detail, 'Task updated', task.id)
+    return structuredClone(detail)
+  },
+  async deleteCodeTask(request: CodeTaskDeleteRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeTaskDeleteRequest, CodeRunDetail>('agentic_super_app_command_delete_code_task', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    if (!detail) throw new Error('Run was not found.')
+    const task = detail.tasks.find((candidate) => candidate.id === request.task_id || candidate.client_id === request.task_id)
+    if (!task) throw new Error('Task was not found.')
+    detail.tasks = detail.tasks.filter((candidate) => candidate.id !== task.id)
+    detail.dependencies = detail.dependencies.filter((dependency) => dependency.task_id !== task.id && dependency.depends_on_task_id !== task.id)
+    previewRecountRun(detail); previewCodeRunEvent(detail, 'Task deleted', task.id)
+    return structuredClone(detail)
+  },
+  async proposeCodeDag(request: CodeDagProposalRequest): Promise<CodeDagProposal> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeDagProposalRequest, CodeDagProposal>('agentic_super_app_command_propose_code_dag', request)
+    return { objective: request.objective, tasks: [{ client_id: 'inspect', title: 'Inspect the repository', specification: 'Inspect the existing repository and identify the smallest safe implementation boundary.', depends_on: [] }, { client_id: 'implement', title: 'Implement the objective', specification: request.objective, depends_on: ['inspect'] }, { client_id: 'verify', title: 'Verify the change', specification: 'Run focused checks and report the result.', depends_on: ['implement'] }], warnings: ['Browser preview uses a deterministic proposal; the desktop host can ask Codex for a reviewed structured proposal.'] }
+  },
+  async acceptCodeDag(request: CodeDagProposalAcceptRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeDagProposalAcceptRequest, CodeRunDetail>('agentic_super_app_command_accept_code_dag', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    if (!detail) throw new Error('Run was not found.')
+    const ids = new Map(request.proposal.tasks.map((task) => [task.client_id, previewId('task')]))
+    const now = previewNow()
+    detail.tasks = request.proposal.tasks.map((proposalTask, position) => ({ id: ids.get(proposalTask.client_id)!, run_id: request.run_id, client_id: proposalTask.client_id, title: proposalTask.title, specification: proposalTask.specification, state: 'ready', position, active_dispatch_id: null, latest_checkpoint_id: null, base_checkpoint_id: null, attempt: 0, error: null, created_at_unix_ms: now, updated_at_unix_ms: now }))
+    detail.dependencies = request.proposal.tasks.flatMap((task) => task.depends_on.flatMap((dependency) => ids.has(dependency) ? [{ run_id: request.run_id, task_id: ids.get(task.client_id)!, depends_on_task_id: ids.get(dependency)! }] : []))
+    detail.proposal = structuredClone(request.proposal); detail.summary.state = 'ready'; previewRecountRun(detail); previewCodeRunEvent(detail, 'DAG proposal accepted')
+    return structuredClone(detail)
+  },
+  async startCodeRun(request: CodeRunRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeRunRequest, CodeRunDetail>('agentic_super_app_command_start_code_run', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    if (!detail) throw new Error('Run was not found.')
+    detail.tasks.forEach((task) => { if (task.state === 'draft' || task.state === 'blocked') task.state = 'ready' })
+    detail.summary.state = 'running'; previewCodeRunEvent(detail, 'Run started'); previewAdvanceRun(request.run_id)
+    return structuredClone(detail)
+  },
+  async pauseCodeRun(request: CodeRunRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeRunRequest, CodeRunDetail>('agentic_super_app_command_pause_code_run', request)
+    const detail = previewCodeRuns.get(request.run_id); if (!detail) throw new Error('Run was not found.')
+    detail.summary.state = 'paused'; previewCodeRunEvent(detail, 'Run paused'); return structuredClone(detail)
+  },
+  async cancelCodeRun(request: CodeRunRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeRunRequest, CodeRunDetail>('agentic_super_app_command_cancel_code_run', request)
+    const detail = previewCodeRuns.get(request.run_id); if (!detail) throw new Error('Run was not found.')
+    detail.summary.state = 'cancelled'; previewCodeRunEvent(detail, 'Run cancelled'); return structuredClone(detail)
+  },
+  async answerCodeQuestion(request: CodeQuestionAnswerRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeQuestionAnswerRequest, CodeRunDetail>('agentic_super_app_command_answer_code_question', request)
+    return previewCodeRunDetail(request.run_id)
+  },
+  async retryCodeTask(request: CodeTaskRetryRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeTaskRetryRequest, CodeRunDetail>('agentic_super_app_command_retry_code_task', request)
+    const detail = previewCodeRuns.get(request.run_id); const task = detail?.tasks.find((candidate) => candidate.id === request.task_id)
+    if (!detail || !task) throw new Error('Task was not found.')
+    task.state = 'ready'; detail.summary.state = 'running'; previewCodeRunEvent(detail, 'Task queued for retry', task.id); previewAdvanceRun(request.run_id); return structuredClone(detail)
+  },
+  async reviewCodeCheckpoint(request: CodeReviewRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeReviewRequest, CodeRunDetail>('agentic_super_app_command_review_code_checkpoint', request)
+    const detail = previewCodeRuns.get(request.run_id); const task = detail?.tasks.find((candidate) => candidate.id === request.task_id)
+    if (!detail || !task) throw new Error('Task was not found.')
+    task.state = request.decision === 'accept' ? 'completed' : request.decision === 'reject' ? 'failed' : 'ready'; detail.summary.state = request.decision === 'reject' ? 'failed' : 'running'; previewCodeRunEvent(detail, request.decision === 'accept' ? 'Checkpoint accepted' : request.decision === 'reject' ? 'Checkpoint rejected' : 'Changes requested', task.id); previewRecountRun(detail); if (request.decision !== 'reject') previewAdvanceRun(request.run_id); return structuredClone(detail)
+  },
+  async codeCleanupPreview(request: CodeCleanupPreviewRequest): Promise<CodeCleanupPreview> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeCleanupPreview>('agentic_super_app_query_code_cleanup_preview', { request })
+    const detail = previewCodeRunDetail(request.run_id); const worktree = detail.worktrees.find((candidate) => candidate.id === request.worktree_id)
+    if (!worktree) throw new Error('Worktree was not found.')
+    return { worktree_id: worktree.id, path: worktree.path, branch: worktree.branch, dirty_files: [], locked: worktree.locked, can_remove: !worktree.locked, reason: worktree.locked ? 'The preview worker lease still holds this worktree.' : null }
+  },
+  async codeCheckpointDiff(request: CodeCheckpointDiffRequest): Promise<CodeGitDiff> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeGitDiff>('agentic_super_app_query_code_checkpoint_diff', { request })
+    const detail = previewCodeRunDetail(request.run_id)
+    const checkpoint = detail.checkpoints.find((candidate) => candidate.id === request.checkpoint_id)
+    return { workspace_id: detail.summary.workspace_id, relative_path: null, content: checkpoint ? `# Preview checkpoint diff\n${checkpoint.summary}` : '', binary: false, truncated: false }
+  },
+  async confirmCodeCleanup(request: CodeCleanupConfirmRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeCleanupConfirmRequest, CodeRunDetail>('agentic_super_app_command_confirm_code_cleanup', request)
+    const detail = previewCodeRunDetail(request.run_id); const worktree = detail.worktrees.find((candidate) => candidate.id === request.worktree_id); if (!worktree) throw new Error('Worktree was not found.')
+    worktree.state = 'removed'; worktree.locked = false; previewCodeRunEvent(detail, 'Worktree removed', worktree.task_id); return structuredClone(detail)
+  },
+  subscribeCodeOrchestration(runId: string, onEvent: (event: CodeOrchestrationEventEnvelope) => void, afterSequence = 0): () => void {
+    if (agenticSuperAppIsTauri) {
+      const channel = new Channel<CodeOrchestrationEventEnvelope>(onEvent)
+      void invoke('agentic_super_app_stream_code_orchestration_events', { query: { run_id: runId, after_sequence: afterSequence, limit: 500 }, channel })
+      return () => undefined
+    }
+    const subscriber = (event: CodeOrchestrationEventEnvelope) => { if (event.run_id === runId && event.sequence > afterSequence) onEvent(event) }
+    previewCodeSubscribers.add(subscriber); return () => previewCodeSubscribers.delete(subscriber)
   },
   async chooseWorkspacePath(): Promise<string | null> {
     if (!agenticSuperAppIsTauri) return '~/agentic-demo'

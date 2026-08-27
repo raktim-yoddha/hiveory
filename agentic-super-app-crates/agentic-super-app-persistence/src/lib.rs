@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 pub mod chat;
 pub mod code;
+pub mod orchestration;
 
 pub const AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "agentic-super-app-openai";
 static AGENTIC_SUPER_APP_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");

@@ -5,6 +5,9 @@ use agentic_super_app_artifact_store::{
 };
 use agentic_super_app_chat_domain::{estimate_context_tokens, validate_send_request};
 use agentic_super_app_code_domain::{default_layout, validate_layout};
+use agentic_super_app_code_orchestration::{
+    AgenticSuperAppCodeOrchestration, AgenticSuperAppCodeOrchestrationError,
+};
 use agentic_super_app_code_runtime::{
     AgenticSuperAppCodeRuntime, AgenticSuperAppCodeRuntimeError, TerminalEventSink,
     CODEX_ADAPTER_ID,
@@ -27,14 +30,20 @@ use agentic_super_app_protocol::{
     ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
     ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
-    CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff, CodeGitDiffRequest, CodeGitStatus,
-    CodeGitStatusRequest, CodePaneLayout, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
-    CodeReadFileRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
-    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalResizeRequest,
-    CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSummary, CodeWorkspaceDetail,
-    CodeWorkspaceOpenRequest, CodeWorkspaceQuery, CodeWorkspaceTrust, CodeWorkspaceTrustRequest,
-    CommandEnvelope, DiagnosticSnapshot, JobState, ProviderDiagnosticRequest, ResponseEnvelope,
-    RetryClass, SetActiveModeCommand, SharedEventEnvelope, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+    CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
+    CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
+    CodeDagProposalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff,
+    CodeGitDiffRequest, CodeGitStatus, CodeGitStatusRequest, CodeOrchestrationEventEnvelope,
+    CodeOrchestrationEventsQuery, CodePaneLayout, CodePreviewRequest, CodePreviewState,
+    CodePreviewSummary, CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest,
+    CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest,
+    CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest,
+    CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent,
+    CodeTerminalInputRequest, CodeTerminalResizeRequest, CodeTerminalStartRequest,
+    CodeTerminalStopRequest, CodeTerminalSummary, CodeWorkspaceDetail, CodeWorkspaceOpenRequest,
+    CodeWorkspaceQuery, CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope,
+    DiagnosticSnapshot, JobState, ProviderDiagnosticRequest, ResponseEnvelope, RetryClass,
+    SetActiveModeCommand, SharedEventEnvelope, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
 };
 use agentic_super_app_secret_store::{
     AgenticSuperAppKeyringSecretStore, AgenticSuperAppSecretStoreHandle,
@@ -82,11 +91,16 @@ struct AgenticSuperAppFoundation {
     code_workspaces: AgenticSuperAppWorkspaceService,
     code_runtime: AgenticSuperAppCodeRuntime,
     code_git: AgenticSuperAppGitService,
+    code_orchestration: AgenticSuperAppCodeOrchestration,
     code_active_workspace_id: Arc<RwLock<Option<String>>>,
 }
 
 impl AgenticSuperAppFoundation {
-    async fn open(database_path: PathBuf, artifact_root: PathBuf) -> Result<Self, String> {
+    async fn open(
+        database_path: PathBuf,
+        artifact_root: PathBuf,
+        orchestration_root: PathBuf,
+    ) -> Result<Self, String> {
         let persistence = AgenticSuperAppPersistence::open(&database_path)
             .await
             .map_err(|error| error.to_string())?;
@@ -107,6 +121,15 @@ impl AgenticSuperAppFoundation {
                 .first()
                 .map(|summary| summary.id.clone()),
         ));
+        let code_orchestration = AgenticSuperAppCodeOrchestration::new(
+            persistence.clone(),
+            code_workspaces.clone(),
+            orchestration_root,
+        );
+        let interrupted_orchestration = code_orchestration
+            .recover()
+            .await
+            .map_err(|error| error.to_string())?;
         let interrupted = persistence
             .interrupt_active_jobs()
             .await
@@ -120,14 +143,15 @@ impl AgenticSuperAppFoundation {
             .interrupt_active_turns()
             .await
             .map_err(|error| error.to_string())?;
-        let recovery_message = if interrupted > 0 || interrupted_chats > 0 {
-            Some(format!(
-                "Recovered {} interrupted operation(s) after restart.",
-                interrupted + interrupted_chats
-            ))
-        } else {
-            None
-        };
+        let recovery_message =
+            if interrupted > 0 || interrupted_chats > 0 || interrupted_orchestration > 0 {
+                Some(format!(
+                    "Recovered {} interrupted operation(s) after restart.",
+                    interrupted + interrupted_chats + interrupted_orchestration
+                ))
+            } else {
+                None
+            };
         let jobs = AgenticSuperAppJobRuntime::new(persistence.clone());
         let secrets: AgenticSuperAppSecretStoreHandle = Arc::new(AgenticSuperAppKeyringSecretStore);
         let provider: Arc<dyn AgenticSuperAppModelProvider> =
@@ -151,6 +175,7 @@ impl AgenticSuperAppFoundation {
             code_workspaces,
             code_runtime: AgenticSuperAppCodeRuntime::new(),
             code_git: AgenticSuperAppGitService,
+            code_orchestration,
             code_active_workspace_id,
         })
     }
@@ -301,6 +326,310 @@ async fn agentic_super_app_query_code_workspace(
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| validation_error("A workspace is required."))?;
     foundation.code_detail(&workspace_id).await
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_runs(
+    workspace_id: Option<String>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<CodeRunSummary>, ApiError> {
+    foundation
+        .code_orchestration
+        .runs(workspace_id.as_deref())
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_run(
+    run_id: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeRunDetail, ApiError> {
+    foundation
+        .code_orchestration
+        .detail(&run_id)
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_orchestration_events(
+    query: CodeOrchestrationEventsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<CodeOrchestrationEventEnvelope>, ApiError> {
+    foundation
+        .persistence
+        .orchestration_events(
+            &query.run_id,
+            query.after_sequence,
+            query.limit.unwrap_or(500),
+        )
+        .await
+        .map_err(database_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_stream_code_orchestration_events(
+    query: CodeOrchestrationEventsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<CodeOrchestrationEventEnvelope>,
+) -> Result<(), ApiError> {
+    let mut receiver = foundation.code_orchestration.subscribe();
+    let backlog = foundation
+        .persistence
+        .orchestration_events(
+            &query.run_id,
+            query.after_sequence,
+            query.limit.unwrap_or(500),
+        )
+        .await
+        .map_err(database_error)?;
+    let mut cursor = query.after_sequence;
+    for event in backlog {
+        cursor = cursor.max(event.sequence);
+        if channel.send(event).is_err() {
+            return Ok(());
+        }
+    }
+    let run_id = query.run_id;
+    let after_sequence = cursor;
+    tauri::async_runtime::spawn(async move {
+        while let Ok(event) = receiver.recv().await {
+            if event.run_id != run_id || event.sequence <= after_sequence {
+                continue;
+            }
+            if channel.send(event).is_err() {
+                break;
+            }
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_code_run(
+    command: CommandEnvelope<CodeRunCreateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .create_run(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_update_code_run(
+    command: CommandEnvelope<CodeRunUpdateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .update_run(
+            &command.payload.run_id,
+            &command.payload.title,
+            &command.payload.objective,
+            command.payload.review_policy,
+            command.payload.concurrency_limit,
+        )
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_code_task(
+    command: CommandEnvelope<CodeTaskCreateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .create_task(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_update_code_task(
+    command: CommandEnvelope<CodeTaskUpdateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .update_task(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_delete_code_task(
+    command: CommandEnvelope<CodeTaskDeleteRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .delete_task(&command.payload.run_id, &command.payload.task_id)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_propose_code_dag(
+    command: CommandEnvelope<CodeDagProposalRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeDagProposal>, ApiError> {
+    validate_code_command(&command)?;
+    let proposal = foundation
+        .code_orchestration
+        .propose_dag(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, proposal))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_accept_code_dag(
+    command: CommandEnvelope<CodeDagProposalAcceptRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .accept_proposal(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_start_code_run(
+    command: CommandEnvelope<CodeRunRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .start_run(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_pause_code_run(
+    command: CommandEnvelope<CodeRunRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .pause_run(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_cancel_code_run(
+    command: CommandEnvelope<CodeRunRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .cancel_run(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_answer_code_question(
+    command: CommandEnvelope<CodeQuestionAnswerRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .answer_question(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_retry_code_task(
+    command: CommandEnvelope<CodeTaskRetryRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .retry_task(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_review_code_checkpoint(
+    command: CommandEnvelope<CodeReviewRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .review_checkpoint(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_cleanup_preview(
+    request: CodeCleanupPreviewRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeCleanupPreview, ApiError> {
+    foundation
+        .code_orchestration
+        .cleanup_preview(&request)
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_checkpoint_diff(
+    request: CodeCheckpointDiffRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeGitDiff, ApiError> {
+    foundation
+        .code_orchestration
+        .checkpoint_diff(&request)
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_confirm_code_cleanup(
+    command: CommandEnvelope<CodeCleanupConfirmRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .cleanup_confirm(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
 }
 
 #[tauri::command]
@@ -565,7 +894,7 @@ async fn agentic_super_app_command_start_code_terminal(
             != CODEX_ADAPTER_ID
     {
         return Err(validation_error(
-            "Only the configured Codex adapter is available in Phase 4.",
+            "Only the configured Codex adapter is available in Code mode.",
         ));
     }
     let root = foundation
@@ -1727,6 +2056,88 @@ fn git_error(error: AgenticSuperAppGitError) -> ApiError {
             "Git status or diff could not be read.",
             RetryClass::Safe,
         ),
+        AgenticSuperAppGitError::Io(_) => application_error(
+            "git_io_failed",
+            "The Git filesystem operation could not be completed.",
+            RetryClass::Safe,
+        ),
+        AgenticSuperAppGitError::InvalidWorktreeName => application_error(
+            "git_worktree_name_invalid",
+            "The managed worktree name is invalid.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::WorktreeOutsideManagedRoot => application_error(
+            "git_worktree_path_denied",
+            "The managed worktree path is outside the orchestration directory.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::WorktreeDirty(_) => application_error(
+            "git_worktree_dirty",
+            "The worktree has uncommitted files. Review it before cleanup.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::WorktreeLocked => application_error(
+            "git_worktree_locked",
+            "The worktree is still locked by its worker lease.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::MissingHead => application_error(
+            "git_missing_head",
+            "The repository has no commit to use as an orchestration base.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppGitError::MergeConflict(_) => application_error(
+            "git_orchestration_conflict",
+            "Dependency checkpoints conflict and were not integrated.",
+            RetryClass::AfterUserAction,
+        ),
+    }
+}
+
+fn orchestration_error(error: AgenticSuperAppCodeOrchestrationError) -> ApiError {
+    match error {
+        AgenticSuperAppCodeOrchestrationError::Database(_) => application_error(
+            "code_orchestration_database_failed",
+            "The durable Code run state could not be saved.",
+            RetryClass::Safe,
+        ),
+        AgenticSuperAppCodeOrchestrationError::Workspace(error) => workspace_error(error),
+        AgenticSuperAppCodeOrchestrationError::Git(error) => git_error(error),
+        AgenticSuperAppCodeOrchestrationError::Domain(error) => validation_error(error.to_string()),
+        AgenticSuperAppCodeOrchestrationError::Json(_) => application_error(
+            "code_orchestration_invalid_data",
+            "The orchestration payload was invalid.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppCodeOrchestrationError::Io(_) => application_error(
+            "code_orchestration_io_failed",
+            "The orchestration filesystem operation failed.",
+            RetryClass::Safe,
+        ),
+        AgenticSuperAppCodeOrchestrationError::NotFound => application_error(
+            "code_orchestration_not_found",
+            "The requested Code run no longer exists.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppCodeOrchestrationError::InvalidState(message) => validation_error(message),
+        AgenticSuperAppCodeOrchestrationError::WorkerUnavailable(_) => application_error(
+            "code_worker_unavailable",
+            "The configured coding agent is not available on this host.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppCodeOrchestrationError::WorkerFailed(_) => application_error(
+            "code_worker_failed",
+            "The coding-agent worker failed. Inspect the run and retry the task if appropriate.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppCodeOrchestrationError::InvalidWorkerEvent => application_error(
+            "code_worker_event_rejected",
+            "A worker event failed the orchestration authenticity check.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppCodeOrchestrationError::InvalidCleanupConfirmation => {
+            validation_error("Type the exact cleanup confirmation shown for this worktree.")
+        }
     }
 }
 
@@ -2116,9 +2527,11 @@ pub fn run() {
                 .map_err(|error| error.to_string())?;
             let database_path = app_data_dir.join("agentic-super-app.sqlite3");
             let artifact_root = app_data_dir.join("artifacts");
+            let orchestration_root = app_data_dir.join("orchestration");
             let foundation = tauri::async_runtime::block_on(AgenticSuperAppFoundation::open(
                 database_path,
                 artifact_root,
+                orchestration_root,
             ))
             .map_err(Box::<dyn std::error::Error>::from)?;
             app.manage(AgenticSuperAppShellState::default());
@@ -2132,8 +2545,28 @@ pub fn run() {
             agentic_super_app_query_diagnostic_snapshot,
             agentic_super_app_query_code_snapshot,
             agentic_super_app_query_code_workspace,
+            agentic_super_app_query_code_runs,
+            agentic_super_app_query_code_run,
+            agentic_super_app_query_code_orchestration_events,
+            agentic_super_app_stream_code_orchestration_events,
             agentic_super_app_command_open_code_workspace,
             agentic_super_app_command_trust_code_workspace,
+            agentic_super_app_command_create_code_run,
+            agentic_super_app_command_update_code_run,
+            agentic_super_app_command_create_code_task,
+            agentic_super_app_command_update_code_task,
+            agentic_super_app_command_delete_code_task,
+            agentic_super_app_command_propose_code_dag,
+            agentic_super_app_command_accept_code_dag,
+            agentic_super_app_command_start_code_run,
+            agentic_super_app_command_pause_code_run,
+            agentic_super_app_command_cancel_code_run,
+            agentic_super_app_command_answer_code_question,
+            agentic_super_app_command_retry_code_task,
+            agentic_super_app_command_review_code_checkpoint,
+            agentic_super_app_query_code_cleanup_preview,
+            agentic_super_app_query_code_checkpoint_diff,
+            agentic_super_app_command_confirm_code_cleanup,
             agentic_super_app_query_code_file_tree,
             agentic_super_app_query_code_file,
             agentic_super_app_command_save_code_file,

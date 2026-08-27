@@ -26,6 +26,7 @@ dependencies = [
  "agentic-super-app-artifact-store",
  "agentic-super-app-chat-domain",
  "agentic-super-app-code-domain",
+ "agentic-super-app-code-orchestration",
  "agentic-super-app-code-runtime",
  "agentic-super-app-git-service",
  "agentic-super-app-job-runtime",
@@ -79,6 +80,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentic-super-app-code-orchestration"
+version = "0.1.0"
+dependencies = [
+ "agentic-super-app-code-domain",
+ "agentic-super-app-git-service",
+ "agentic-super-app-persistence",
+ "agentic-super-app-protocol",
+ "agentic-super-app-workspace-service",
+ "hmac 0.12.1",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
 name = "agentic-super-app-code-runtime"
 version = "0.1.0"
 dependencies = [
@@ -86,6 +109,18 @@ dependencies = [
  "base64 0.22.1",
  "libc",
  "portable-pty",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "agentic-super-app-dispatch-bridge"
+version = "0.1.0"
+dependencies = [
+ "hmac 0.12.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.20",
  "uuid",
 ]
@@ -5247,6 +5282,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

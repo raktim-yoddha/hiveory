@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 0–1 established the shell, Phase 2 added shared durable infrastructure, Phase 3 added standalone Chat, and Phase 4 adds the first Code vertical slice. Agent orchestration and remote workspaces remain separate future domains.
+Phase 0–1 established the shell, Phase 2 added shared durable infrastructure, Phase 3 added standalone Chat, Phase 4 added the first Code vertical slice, and Phase 5 adds local Code orchestration. Remote workspaces and broader Agent product surfaces remain separate future domains.
 
 ## Runtime shape
 
@@ -44,6 +44,14 @@ Code is split into explicit host-side boundaries:
 
 Opening a folder creates an `Untrusted` workspace. Only an explicit trust command grants write, process, Git-read, and preview capabilities. The main renderer has no filesystem or shell plugin permissions. Local previews use a separate capability-free auxiliary webview with credential-free URL validation and same-origin navigation filtering.
 
+## Phase 5 Code orchestration
+
+Phase 5 adds `agentic-super-app-code-orchestration` as the transactional owner for Code runs. It consumes the Phase 4 workspace and Git capabilities but is not a Tauri or renderer dependency. The service persists a normalized run/task DAG, claims dispatches with lease generations, schedules only dependency-ready tasks, and publishes bounded per-run events. `agentic-super-app-dispatch-bridge` signs worker-originated envelopes with an ephemeral HMAC secret; the host verifies the envelope before accepting it.
+
+Each worker receives an application-local managed Git worktree. A successful structured Codex execution produces a result checkpoint. Manual review is the default policy; accepted checkpoints unblock dependents, and multiple accepted dependencies are merged through a non-interactive Git fan-in that blocks on conflicts. Cleanup is an explicit, exact-confirmation operation constrained to the managed worktree root. Active dispatches become interrupted during restart recovery while durable worktree and session identifiers remain available for a later retry/resume action.
+
+The Runs surface is a projection of SQLite and the host event stream: it shows the task DAG, worker lanes, lease/checkpoint state, questions, and review decisions. It never receives filesystem paths as capabilities and never launches a process directly.
+
 ## Future boundaries
 
 Agent orchestration and remote connection product-domain crates remain deferred until their parity features have owners and acceptance tests. Chat remains intentionally isolated from workspace, Git, terminal, and shell capabilities.
@@ -52,4 +60,4 @@ One renderer/webview keeps desktop authorization simple. Future browser preview 
 
 ## Design system
 
-The shell, Phase 3 Chat, and Phase 4 Code use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Code adds a workspace/file sidebar, visible trust state, deterministic pane-tree summary, Monaco editing, xterm terminal rendering, Git review cards, isolated preview launch, and reduced-motion behavior. The UI uses IBM Plex Sans with JetBrains Mono for source and terminal data. Visual tokens can evolve without changing the security model.
+The shell, Phase 3 Chat, Phase 4 Code, and Phase 5 Runs use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Code adds a workspace/file sidebar, visible trust state, deterministic pane-tree summary, Monaco editing, xterm terminal rendering, Git review cards, isolated preview launch, and reduced-motion behavior. Runs adds a dense but readable queue, DAG nodes with dependency labels, worker lanes, checkpoint/review inspection, and explicit action states. The UI uses IBM Plex Sans with JetBrains Mono for source and terminal data. Visual tokens can evolve without changing the security model.

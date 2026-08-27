@@ -858,6 +858,440 @@ pub struct CodePreviewSummary {
     pub state: CodePreviewState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeRunState {
+    Draft,
+    Ready,
+    Running,
+    Paused,
+    Blocked,
+    Completed,
+    Failed,
+    Cancelled,
+    Interrupted,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeTaskState {
+    Draft,
+    Blocked,
+    Ready,
+    Preparing,
+    Running,
+    AwaitingInput,
+    AwaitingReview,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeDispatchState {
+    Preparing,
+    Running,
+    AwaitingInput,
+    Checkpointing,
+    Succeeded,
+    Failed,
+    Cancelled,
+    Interrupted,
+    Stale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeReviewPolicy {
+    Manual,
+    Automatic,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeReviewDecision {
+    Accept,
+    RequestChanges,
+    Reject,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeCheckpointKind {
+    Source,
+    Result,
+    Integration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeCheckpointState {
+    Creating,
+    Ready,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeManagedWorktreeState {
+    Provisioning,
+    Ready,
+    CleanupPending,
+    Removed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeOrchestrationMessageKind {
+    Status,
+    Heartbeat,
+    Question,
+    Answer,
+    Escalation,
+    Progress,
+    Completion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRunSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub title: String,
+    pub objective: String,
+    pub model: Option<String>,
+    pub state: CodeRunState,
+    pub review_policy: CodeReviewPolicy,
+    pub concurrency_limit: u8,
+    pub host_concurrency_cap: u8,
+    pub task_count: u32,
+    pub completed_tasks: u32,
+    pub active_dispatches: u32,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTask {
+    pub id: String,
+    pub run_id: String,
+    pub client_id: String,
+    pub title: String,
+    pub specification: String,
+    pub state: CodeTaskState,
+    pub position: u32,
+    pub active_dispatch_id: Option<String>,
+    pub latest_checkpoint_id: Option<String>,
+    pub base_checkpoint_id: Option<String>,
+    pub attempt: u32,
+    pub error: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTaskDependency {
+    pub run_id: String,
+    pub task_id: String,
+    pub depends_on_task_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDispatch {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: String,
+    pub attempt: u32,
+    pub state: CodeDispatchState,
+    pub lease_generation: u64,
+    pub session_id: Option<String>,
+    pub pid: Option<u32>,
+    pub worktree_id: Option<String>,
+    pub checkpoint_id: Option<String>,
+    pub last_heartbeat_at_unix_ms: Option<i64>,
+    pub started_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+    pub error: Option<String>,
+    pub result_summary: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeManagedWorktree {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: String,
+    pub dispatch_id: String,
+    pub path: String,
+    pub branch: String,
+    pub base_checkpoint_id: Option<String>,
+    pub state: CodeManagedWorktreeState,
+    pub dirty: bool,
+    pub locked: bool,
+    pub error: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeCheckpoint {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: Option<String>,
+    pub dispatch_id: Option<String>,
+    pub kind: CodeCheckpointKind,
+    pub state: CodeCheckpointState,
+    pub ref_name: String,
+    pub commit_oid: Option<String>,
+    pub parent_checkpoint_id: Option<String>,
+    pub summary: String,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeReview {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: String,
+    pub checkpoint_id: String,
+    pub decision: CodeReviewDecision,
+    pub feedback: Option<String>,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeQuestion {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: String,
+    pub dispatch_id: String,
+    pub prompt: String,
+    pub answer: Option<String>,
+    pub answered: bool,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeOrchestrationMessage {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: Option<String>,
+    pub dispatch_id: Option<String>,
+    pub kind: CodeOrchestrationMessageKind,
+    pub question_id: Option<String>,
+    pub payload: String,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeOrchestrationEventEnvelope {
+    pub run_id: String,
+    pub sequence: u64,
+    pub event_id: String,
+    pub task_id: Option<String>,
+    pub dispatch_id: Option<String>,
+    pub lease_generation: u64,
+    pub kind: CodeOrchestrationMessageKind,
+    pub payload: String,
+    pub accepted: bool,
+    pub emitted_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDagProposalTask {
+    pub client_id: String,
+    pub title: String,
+    pub specification: String,
+    pub depends_on: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDagProposal {
+    pub objective: String,
+    pub tasks: Vec<CodeDagProposalTask>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRunDetail {
+    pub summary: CodeRunSummary,
+    pub tasks: Vec<CodeTask>,
+    pub dependencies: Vec<CodeTaskDependency>,
+    pub dispatches: Vec<CodeDispatch>,
+    pub worktrees: Vec<CodeManagedWorktree>,
+    pub checkpoints: Vec<CodeCheckpoint>,
+    pub reviews: Vec<CodeReview>,
+    pub questions: Vec<CodeQuestion>,
+    pub messages: Vec<CodeOrchestrationMessage>,
+    pub events: Vec<CodeOrchestrationEventEnvelope>,
+    pub event_cursor: u64,
+    pub proposal: Option<CodeDagProposal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRunCreateRequest {
+    pub workspace_id: String,
+    pub title: String,
+    pub objective: String,
+    pub review_policy: CodeReviewPolicy,
+    pub concurrency_limit: Option<u8>,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRunUpdateRequest {
+    pub run_id: String,
+    pub title: String,
+    pub objective: String,
+    pub review_policy: CodeReviewPolicy,
+    pub concurrency_limit: Option<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTaskCreateRequest {
+    pub run_id: String,
+    pub client_id: Option<String>,
+    pub title: String,
+    pub specification: String,
+    pub depends_on: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTaskUpdateRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub title: String,
+    pub specification: String,
+    pub depends_on: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTaskDeleteRequest {
+    pub run_id: String,
+    pub task_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDagProposalRequest {
+    pub workspace_id: String,
+    pub objective: String,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDagProposalAcceptRequest {
+    pub run_id: String,
+    pub proposal: CodeDagProposal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRunRequest {
+    pub run_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeQuestionAnswerRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub dispatch_id: String,
+    pub lease_generation: u64,
+    pub answer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTaskRetryRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeReviewRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub checkpoint_id: String,
+    pub decision: CodeReviewDecision,
+    pub feedback: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeCleanupPreviewRequest {
+    pub run_id: String,
+    pub worktree_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeCleanupPreview {
+    pub worktree_id: String,
+    pub path: String,
+    pub branch: String,
+    pub dirty_files: Vec<String>,
+    pub locked: bool,
+    pub can_remove: bool,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeCleanupConfirmRequest {
+    pub run_id: String,
+    pub worktree_id: String,
+    pub confirmation: String,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeOrchestrationEventsQuery {
+    pub run_id: String,
+    pub after_sequence: u64,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeCheckpointDiffRequest {
+    pub run_id: String,
+    pub checkpoint_id: String,
+    pub compare_to_checkpoint_id: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct BootstrapSnapshot {
@@ -982,6 +1416,44 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodePreviewState::export_all(&config)?;
     CodePreviewRequest::export_all(&config)?;
     CodePreviewSummary::export_all(&config)?;
+    CodeRunState::export_all(&config)?;
+    CodeTaskState::export_all(&config)?;
+    CodeDispatchState::export_all(&config)?;
+    CodeReviewPolicy::export_all(&config)?;
+    CodeReviewDecision::export_all(&config)?;
+    CodeCheckpointKind::export_all(&config)?;
+    CodeCheckpointState::export_all(&config)?;
+    CodeManagedWorktreeState::export_all(&config)?;
+    CodeOrchestrationMessageKind::export_all(&config)?;
+    CodeRunSummary::export_all(&config)?;
+    CodeTask::export_all(&config)?;
+    CodeTaskDependency::export_all(&config)?;
+    CodeDispatch::export_all(&config)?;
+    CodeManagedWorktree::export_all(&config)?;
+    CodeCheckpoint::export_all(&config)?;
+    CodeReview::export_all(&config)?;
+    CodeQuestion::export_all(&config)?;
+    CodeOrchestrationMessage::export_all(&config)?;
+    CodeOrchestrationEventEnvelope::export_all(&config)?;
+    CodeDagProposalTask::export_all(&config)?;
+    CodeDagProposal::export_all(&config)?;
+    CodeRunDetail::export_all(&config)?;
+    CodeRunCreateRequest::export_all(&config)?;
+    CodeRunUpdateRequest::export_all(&config)?;
+    CodeTaskCreateRequest::export_all(&config)?;
+    CodeTaskUpdateRequest::export_all(&config)?;
+    CodeTaskDeleteRequest::export_all(&config)?;
+    CodeDagProposalRequest::export_all(&config)?;
+    CodeDagProposalAcceptRequest::export_all(&config)?;
+    CodeRunRequest::export_all(&config)?;
+    CodeQuestionAnswerRequest::export_all(&config)?;
+    CodeTaskRetryRequest::export_all(&config)?;
+    CodeReviewRequest::export_all(&config)?;
+    CodeCleanupPreviewRequest::export_all(&config)?;
+    CodeCleanupPreview::export_all(&config)?;
+    CodeCleanupConfirmRequest::export_all(&config)?;
+    CodeOrchestrationEventsQuery::export_all(&config)?;
+    CodeCheckpointDiffRequest::export_all(&config)?;
     BootstrapSnapshot::export_all(&config)?;
     SetActiveModeCommand::export_all(&config)?;
     BuildInformation::export_all(&config)?;

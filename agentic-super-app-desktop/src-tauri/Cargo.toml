@@ -13,6 +13,7 @@ agentic-super-app-protocol = { path = "../../agentic-super-app-crates/agentic-su
 agentic-super-app-artifact-store = { path = "../../agentic-super-app-crates/agentic-super-app-artifact-store" }
 agentic-super-app-chat-domain = { path = "../../agentic-super-app-crates/agentic-super-app-chat-domain" }
 agentic-super-app-code-domain = { path = "../../agentic-super-app-crates/agentic-super-app-code-domain" }
+agentic-super-app-code-orchestration = { path = "../../agentic-super-app-crates/agentic-super-app-code-orchestration" }
 agentic-super-app-code-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-code-runtime" }
 agentic-super-app-git-service = { path = "../../agentic-super-app-crates/agentic-super-app-git-service" }
 agentic-super-app-job-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-job-runtime" }

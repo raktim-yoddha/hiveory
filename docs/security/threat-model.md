@@ -38,4 +38,12 @@ The renderer has non-privileged shell, diagnostics, and Chat presentation comman
 - Context overflow is rejected before the provider request; Chat does not silently trim history or summarize it.
 - Provider and secret failures return redacted user-facing diagnostics; credential values are never placed in Chat events or the database.
 
+## Phase 5 controls verified in code
+
+- Orchestration policy is host-owned and durable. The renderer can propose, accept, start, pause, review, and clean up through typed commands but cannot launch a worker or mutate Git directly.
+- Dispatches are claimed transactionally with a lease generation. Worker-originated HMAC envelopes include the dispatch, lease, sequence, and nonce; stale or unauthenticated envelopes are rejected.
+- Codex workers receive only an application-managed worktree. Worker output and event payloads are bounded, process arguments are structured, and parent workspace/remotes/PR operations are explicitly outside this phase.
+- Checkpoints are captured before review. Dependency fan-in is non-interactive and blocks on conflicts; cleanup validates exact confirmation and the managed-root containment invariant.
+- Restart recovery marks active orchestration dispatches interrupted while retaining durable worktree and session identifiers. Resumption is an explicit user action with a fresh lease generation.
+
 Security-sensitive implementation requires a new ADR and acceptance test before activation.
