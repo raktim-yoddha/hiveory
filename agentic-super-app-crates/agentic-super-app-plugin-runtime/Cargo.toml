@@ -1,5 +1,5 @@
 [package]
-name = "agentic-super-app-tool-runtime"
+name = "agentic-super-app-plugin-runtime"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,8 +7,13 @@ license.workspace = true
 [dependencies]
 agentic-super-app-persistence = { path = "../agentic-super-app-persistence" }
 agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+agentic-super-app-secret-store = { path = "../agentic-super-app-secret-store" }
+agentic-super-app-tool-runtime = { path = "../agentic-super-app-tool-runtime" }
 async-trait.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
-sqlx.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true

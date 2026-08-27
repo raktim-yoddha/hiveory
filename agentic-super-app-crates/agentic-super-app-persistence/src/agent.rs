@@ -514,7 +514,7 @@ impl AgenticSuperAppAgentStore {
                 .fetch_one(self.persistence.pool())
                 .await?
                 .get(0);
-        sqlx::query("INSERT INTO agentic_super_app_agent_runs (id, agent_id, agent_version, conversation_id, state, prompt, background, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)").bind(&id).bind(&request.agent_id).bind(version).bind(&conversation_id).bind(request.prompt.trim()).bind(if request.background { 1 } else { 0 }).bind(now).bind(now).execute(self.persistence.pool()).await?;
+        sqlx::query("INSERT INTO agentic_super_app_agent_runs (id, agent_id, agent_version, conversation_id, state, prompt, background, routine_execution_id, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?)").bind(&id).bind(&request.agent_id).bind(version).bind(&conversation_id).bind(request.prompt.trim()).bind(if request.background { 1 } else { 0 }).bind(&request.routine_execution_id).bind(now).bind(now).execute(self.persistence.pool()).await?;
         sqlx::query("INSERT INTO agentic_super_app_agent_messages (id, run_id, conversation_id, role, kind, content, created_at_unix_ms) VALUES (?, ?, ?, 'user', 'prompt', ?, ?)").bind(Uuid::now_v7().to_string()).bind(&id).bind(&conversation_id).bind(request.prompt.trim()).bind(now).execute(self.persistence.pool()).await?;
         sqlx::query(
             "UPDATE agentic_super_app_agent_conversations SET updated_at_unix_ms=? WHERE id=?",
@@ -533,6 +533,19 @@ impl AgenticSuperAppAgentStore {
         run_id: &str,
     ) -> Result<Option<AgentRunSummary>, AgenticSuperAppAgentStoreError> {
         Ok(sqlx::query("SELECT id, agent_id, agent_version, conversation_id, state, substr(prompt, 1, 160), background, step_count, tool_call_count, pending_approval_id, lease_generation, input_tokens, output_tokens, error, created_at_unix_ms, updated_at_unix_ms, completed_at_unix_ms FROM agentic_super_app_agent_runs WHERE id=?").bind(run_id).fetch_optional(self.persistence.pool()).await?.map(run_from_row))
+    }
+
+    pub async fn routine_execution_id(
+        &self,
+        run_id: &str,
+    ) -> Result<Option<String>, AgenticSuperAppAgentStoreError> {
+        Ok(
+            sqlx::query("SELECT routine_execution_id FROM agentic_super_app_agent_runs WHERE id=?")
+                .bind(run_id)
+                .fetch_optional(self.persistence.pool())
+                .await?
+                .and_then(|row| row.get(0)),
+        )
     }
 
     pub async fn runs(
@@ -1430,6 +1443,7 @@ mod tests {
                 conversation_id: None,
                 prompt: "Summarize the release state".to_owned(),
                 background: false,
+                routine_execution_id: None,
             })
             .await
             .expect("create run");

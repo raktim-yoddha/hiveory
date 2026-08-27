@@ -8,7 +8,7 @@ export type ChatTurnState = 'queued' | 'streaming' | 'cancel_requested' | 'cance
 export type ProviderAccountSummary = { id: string; display_name: string; default_model: string | null; secret_configured: boolean; enabled: boolean }
 export type JobSummary = { id: string; kind: string; state: JobState; created_at_unix_ms: number; updated_at_unix_ms: number; error_code: string | null }
 export type NotificationSummary = { id: string; title: string; body: string; severity: string; read: boolean; created_at_unix_ms: number }
-export type SharedEventEnvelope = { sequence: number; kind: string; job_id: string | null; message: string | null; text_delta: string | null }
+export type SharedEventEnvelope = { sequence: number; emitted_at_unix_ms: number; kind: string; job_id: string | null; message: string | null; text_delta: string | null; native_notification: boolean }
 export type DiagnosticSnapshot = { providers: ProviderAccountSummary[]; recent_jobs: JobSummary[]; notifications: NotificationSummary[]; recovery_message: string | null }
 export type BootstrapSnapshot = { protocol: { major: number }; active_mode: ApplicationMode; product_name: string }
 
@@ -46,7 +46,7 @@ export type AgentSkillConflictResolutionRequest = { agent_id: string; trigger: s
 export type AgentMemoryQuery = { agent_id: string; search: string | null; class: AgentMemoryClass | null; limit: number | null }
 export type AgentMemoryMutationRequest = { agent_id: string; memory_id: string | null; class: AgentMemoryClass; content: string; source_type: string; source_id: string | null; enabled: boolean }
 export type AgentMemoryDeleteRequest = { agent_id: string; memory_id: string }
-export type AgentRunStartRequest = { agent_id: string; conversation_id: string | null; prompt: string; background: boolean }
+export type AgentRunStartRequest = { agent_id: string; conversation_id: string | null; prompt: string; background: boolean; routine_execution_id?: string | null }
 export type AgentRunControlRequest = { run_id: string }
 export type AgentApprovalDecisionRequest = { run_id: string; approval_id: string; fingerprint: string; decision: AgentApprovalDecision; comment: string | null }
 export type AgentInputRequest = { run_id: string; answer: string }
@@ -59,6 +59,34 @@ export type AgentConversationSummary = { id: string; agent_id: string; title: st
 export type AgentConversationDetail = { id: string; agent_id: string; title: string; messages: AgentMessage[]; runs: AgentRunSummary[]; draft: string; updated_at_unix_ms: number }
 export type AgentConversationQuery = { agent_id: string; limit: number | null }
 export type AgentConversationCreateRequest = { agent_id: string; title: string | null }
+
+export type RoutineCatchUpPolicy = 'skip' | 'run_latest' | 'run_all_bounded'
+export type RoutineConcurrencyPolicy = 'skip' | 'queue_one' | 'parallel_bounded'
+export type RoutineSchedule = { expression: string; timezone: string }
+export type RoutineDeliveryDestination = 'in_app' | 'in_app_and_native'
+export type RoutineExecutionState = 'queued' | 'running' | 'awaiting_approval' | 'completed' | 'failed' | 'skipped' | 'interrupted' | 'unknown_outcome'
+export type RoutineSummary = { id: string; name: string; description: string; agent_id: string; agent_name: string; schedule: RoutineSchedule; enabled: boolean; archived: boolean; catch_up: RoutineCatchUpPolicy; concurrency: RoutineConcurrencyPolicy; delivery: RoutineDeliveryDestination; next_run_unix_ms: number | null; last_run_unix_ms: number | null; last_execution_state: RoutineExecutionState | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type RoutineExecution = { id: string; routine_id: string; run_id: string | null; occurrence_key: string; scheduled_for_unix_ms: number; state: RoutineExecutionState; folder_grant_ids: string[]; plugin_tool_names: string[]; error: string | null; report: string | null; created_at_unix_ms: number; updated_at_unix_ms: number; started_at_unix_ms: number | null; completed_at_unix_ms: number | null }
+export type RoutineDetail = { summary: RoutineSummary; prompt_template: string; folder_grant_ids: string[]; plugin_tool_names: string[]; max_duration_seconds: number; max_tool_calls: number; approval_timeout_seconds: number; executions: RoutineExecution[] }
+export type RoutineCreateRequest = { name: string; description: string; agent_id: string; prompt_template: string; schedule: RoutineSchedule; enabled: boolean; catch_up: RoutineCatchUpPolicy; concurrency: RoutineConcurrencyPolicy; delivery: RoutineDeliveryDestination; folder_grant_ids: string[]; plugin_tool_names: string[]; max_duration_seconds: number; max_tool_calls: number; approval_timeout_seconds: number }
+export type RoutineUpdateRequest = RoutineCreateRequest & { routine_id: string }
+export type RoutineQuery = { enabled: boolean | null; include_archived: boolean; limit: number | null }
+export type RoutineExecutionsQuery = { routine_id: string; limit: number | null }
+
+export type PluginAdapterKind = 'json_http_get' | 'json_http_post'
+export type PluginConnectionKind = 'none' | 'api_key_header'
+export type PluginPermission = { capability: string; explanation: string }
+export type PluginToolDefinition = { name: string; description: string; input_schema_json: string; output_schema_json: string; risk: AgentToolRisk }
+export type PluginManifest = { id: string; publisher: string; version: string; name: string; description: string; adapter: PluginAdapterKind; tools: PluginToolDefinition[]; permissions: PluginPermission[]; allowed_hosts: string[]; connection_kind: PluginConnectionKind; supports_dry_run: boolean; content_hash: string }
+export type PluginCatalogEntry = { manifest: PluginManifest; installed: boolean; enabled: boolean; connection_count: number; assigned_agent_count: number }
+export type PluginConnectionSummary = { id: string; plugin_id: string; name: string; origin: string; kind: PluginConnectionKind; api_key_header: string | null; secret_configured: boolean; validated_at_unix_ms: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type PluginInstallRequest = { plugin_id: string; enabled: boolean }
+export type PluginConnectionCreateRequest = { plugin_id: string; name: string; origin: string; kind: PluginConnectionKind; api_key_header: string | null; secret_value: string | null }
+export type PluginConnectionUpdateRequest = { connection_id: string; name: string; origin: string; api_key_header: string | null; secret_value: string | null }
+export type AgentPluginGrant = { agent_id: string; plugin_id: string; connection_id: string; tool_names: string[]; enabled: boolean }
+export type AgentPluginGrantRequest = AgentPluginGrant
+export type PluginDryRunRequest = { plugin_id: string; connection_id: string; tool_name: string; arguments_json: string }
+export type PluginInvocationSummary = { id: string; run_id: string | null; plugin_id: string; connection_id: string; tool_name: string; state: string; target: string; request_preview: string; response_preview: string | null; error: string | null; created_at_unix_ms: number; completed_at_unix_ms: number | null }
 
 export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
 export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'open_preview'
@@ -191,6 +219,11 @@ const previewAgentSummary: AgentSummary = { id: 'local-operator', name: 'Local o
 const previewAgentRuns = new Map<string, AgentRunDetail>()
 const previewAgentSkills: AgentSkillSummary[] = [{ id: 'folder-brief', name: 'Folder brief', version: '1.0.0', description: 'Summarize an explicitly granted folder without changing it.', origin: 'builtin', source_path: 'builtin/folder-brief/SKILL.md', triggers: ['brief', 'summarize folder'], permissions: ['folder.list', 'folder.read_text'], enabled: true, valid: true, validation_message: null }, { id: 'decision-log', name: 'Decision log', version: '1.0.0', description: 'Capture an explicit decision in durable Agent memory.', origin: 'builtin', source_path: 'builtin/decision-log/SKILL.md', triggers: ['decision'], permissions: ['memory.remember'], enabled: false, valid: true, validation_message: null }]
 const previewAgentTools: AgentToolDefinition[] = [{ name: 'folder.list', description: 'List entries in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.read_text', description: 'Read a UTF-8 file in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.write_text', description: 'Write a UTF-8 file in an explicitly writable folder.', input_schema_json: '{}', risk: 'filesystem_mutation' }, { name: 'memory.search', description: 'Search inspectable durable memory.', input_schema_json: '{}', risk: 'read_only' }, { name: 'memory.remember', description: 'Store an explicit non-sensitive memory.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'artifact.create_text', description: 'Create a private text artifact.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'user.request_input', description: 'Pause and ask the user for missing information.', input_schema_json: '{}', risk: 'read_only' }, { name: 'delegate_task', description: 'Start a bounded child run with inherited permissions.', input_schema_json: '{}', risk: 'externally_visible' }]
+const previewRoutineExecution: RoutineExecution = { id: 'preview-execution-1', routine_id: 'preview-routine-1', run_id: null, occurrence_key: 'preview@UTC', scheduled_for_unix_ms: Date.now() - 86_400_000, state: 'completed', folder_grant_ids: [], plugin_tool_names: [], error: null, report: 'Completed with a local preview result.', created_at_unix_ms: Date.now() - 86_400_000, updated_at_unix_ms: Date.now() - 86_400_000, started_at_unix_ms: Date.now() - 86_400_000, completed_at_unix_ms: Date.now() - 86_400_000 }
+const previewRoutines: RoutineDetail[] = [{ summary: { id: 'preview-routine-1', name: 'Morning brief', description: 'A bounded weekday briefing for the local operator.', agent_id: previewAgentSummary.id, agent_name: previewAgentSummary.name, schedule: { expression: '0 9 * * 1-5', timezone: 'Asia/Kolkata' }, enabled: true, archived: false, catch_up: 'run_latest', concurrency: 'skip', delivery: 'in_app_and_native', next_run_unix_ms: Date.now() + 3_600_000, last_run_unix_ms: Date.now() - 86_400_000, last_execution_state: 'completed', created_at_unix_ms: Date.now() - 172_800_000, updated_at_unix_ms: Date.now() - 86_400_000 }, prompt_template: 'Summarize the most important updates for me in five bullets.', folder_grant_ids: [], plugin_tool_names: [], max_duration_seconds: 600, max_tool_calls: 12, approval_timeout_seconds: 300, executions: [previewRoutineExecution] }]
+const previewPluginCatalog: PluginCatalogEntry[] = [{ manifest: { id: 'web-json-reader', publisher: 'Agentic Super App', version: '1.0.0', name: 'Web JSON Reader', description: 'Read bounded JSON from an explicitly allow-listed HTTPS API.', adapter: 'json_http_get', tools: [{ name: 'get_json', description: 'Fetch a JSON document from the configured origin.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"query":{"type":"string"}},"required":["path"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'read_only' }], permissions: [{ capability: 'network.read', explanation: 'Reads JSON only from manifest-approved HTTPS hosts.' }], allowed_hosts: ['api.github.com', 'jsonplaceholder.typicode.com'], connection_kind: 'none', supports_dry_run: false, content_hash: 'preview-hash-reader' }, installed: true, enabled: true, connection_count: 1, assigned_agent_count: 1 }, { manifest: { id: 'webhook-delivery', publisher: 'Agentic Super App', version: '1.0.0', name: 'Webhook Delivery', description: 'Deliver JSON to a configured HTTPS webhook after approval.', adapter: 'json_http_post', tools: [{ name: 'post_json', description: 'Send a JSON payload to the configured webhook path.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"body":{"type":"object"}},"required":["path","body"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'externally_visible' }], permissions: [{ capability: 'network.write', explanation: 'Sends JSON to a configured HTTPS webhook.' }], allowed_hosts: ['hooks.example.com', 'webhook.site'], connection_kind: 'api_key_header', supports_dry_run: true, content_hash: 'preview-hash-webhook' }, installed: true, enabled: false, connection_count: 0, assigned_agent_count: 0 }]
+const previewPluginConnections: PluginConnectionSummary[] = [{ id: 'preview-connection-reader', plugin_id: 'web-json-reader', name: 'GitHub API', origin: 'https://api.github.com', kind: 'none', api_key_header: null, secret_configured: false, validated_at_unix_ms: Date.now() - 86_400_000, created_at_unix_ms: Date.now() - 172_800_000, updated_at_unix_ms: Date.now() - 86_400_000 }]
+const previewAgentGrants: AgentPluginGrant[] = [{ agent_id: previewAgentSummary.id, plugin_id: 'web-json-reader', connection_id: 'preview-connection-reader', tool_names: ['get_json'], enabled: true }]
 
 function requestId() { return globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 function previewId(prefix: string) { return `${prefix}-${requestId()}` }
@@ -320,6 +353,11 @@ function previewAdvanceRun(runId: string) {
 function previewAgentDetail(): AgentDetail {
   return { summary: structuredClone(previewAgentSummary), operating_brief: 'Work only inside folders the user explicitly grants. Explain planned mutations before they happen.', system_instructions: 'You are a careful local-first assistant. Keep actions inspectable and ask before mutations.', approval_policy: 'ask_for_mutations', memory_policy: 'explicit_only', runtime_limits: { max_steps: 24, max_tool_calls: 32, max_duration_seconds: 1800, max_context_tokens: 128000, max_subagent_depth: 2, max_concurrent_subagents: 2 }, folders: [], tools: structuredClone(previewAgentTools), skills: structuredClone(previewAgentSkills), conflicts: [], recent_runs: [...previewAgentRuns.values()].map((run) => run.summary).slice(0, 12) }
 }
+function previewRoutineSummary(detail: RoutineDetail): RoutineSummary { return structuredClone(detail.summary) }
+function previewCreateExecution(routine: RoutineDetail): RoutineExecution {
+  const now = previewNow()
+  return { id: previewId('routine-execution'), routine_id: routine.summary.id, run_id: null, occurrence_key: `manual:${now}`, scheduled_for_unix_ms: now, state: 'completed', folder_grant_ids: structuredClone(routine.folder_grant_ids), plugin_tool_names: structuredClone(routine.plugin_tool_names), error: null, report: 'Preview execution completed. The desktop host launches a durable Agent run here.', created_at_unix_ms: now, updated_at_unix_ms: now, started_at_unix_ms: now, completed_at_unix_ms: now }
+}
 function previewAgentDashboard(): AgentDashboard {
   return { agents: [structuredClone(previewAgentSummary)], active_runs: [...previewAgentRuns.values()].map((run) => run.summary).filter((run) => ['queued', 'preparing', 'running', 'awaiting_approval', 'awaiting_input', 'interrupted'].includes(run.state)), pending_approvals: [], recent_runs: [...previewAgentRuns.values()].map((run) => run.summary).slice(0, 20) }
 }
@@ -398,6 +436,73 @@ export const agenticSuperAppClient = {
     const subscriber = (event: AgentEventEnvelope) => { if (event.run_id === runId && event.sequence > afterSequence) onEvent(event) }; previewAgentSubscribers.add(subscriber); return () => previewAgentSubscribers.delete(subscriber)
   },
   async exportAgent(request: AgentExportRequest): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_export_agent', { request }) },
+
+  async routines(query: RoutineQuery = { enabled: null, include_archived: false, limit: 100 }): Promise<RoutineSummary[]> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineSummary[]>('agentic_super_app_query_routines', { query })
+    return previewRoutines.map(previewRoutineSummary).filter((routine) => query.include_archived || !routine.archived).filter((routine) => query.enabled === null || routine.enabled === query.enabled)
+  },
+  async routine(routineId: string): Promise<RoutineDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineDetail>('agentic_super_app_query_routine', { request: { routine_id: routineId } })
+    const routine = previewRoutines.find((item) => item.summary.id === routineId)
+    if (!routine) throw new Error('Routine was not found.')
+    return structuredClone(routine)
+  },
+  async createRoutine(request: RoutineCreateRequest): Promise<RoutineDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineDetail>('agentic_super_app_command_create_routine', { request })
+    const now = previewNow()
+    const detail: RoutineDetail = { summary: { id: previewId('routine'), name: request.name, description: request.description, agent_id: request.agent_id, agent_name: previewAgentSummary.name, schedule: structuredClone(request.schedule), enabled: request.enabled, archived: false, catch_up: request.catch_up, concurrency: request.concurrency, delivery: request.delivery, next_run_unix_ms: request.enabled ? now + 3_600_000 : null, last_run_unix_ms: null, last_execution_state: null, created_at_unix_ms: now, updated_at_unix_ms: now }, prompt_template: request.prompt_template, folder_grant_ids: structuredClone(request.folder_grant_ids), plugin_tool_names: structuredClone(request.plugin_tool_names), max_duration_seconds: request.max_duration_seconds, max_tool_calls: request.max_tool_calls, approval_timeout_seconds: request.approval_timeout_seconds, executions: [] }
+    previewRoutines.unshift(detail)
+    return structuredClone(detail)
+  },
+  async updateRoutine(request: RoutineUpdateRequest): Promise<RoutineDetail> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineDetail>('agentic_super_app_command_update_routine', { request })
+    const detail = previewRoutines.find((item) => item.summary.id === request.routine_id)
+    if (!detail) throw new Error('Routine was not found.')
+    Object.assign(detail.summary, { name: request.name, description: request.description, agent_id: request.agent_id, schedule: structuredClone(request.schedule), enabled: request.enabled, catch_up: request.catch_up, concurrency: request.concurrency, delivery: request.delivery, next_run_unix_ms: request.enabled ? previewNow() + 3_600_000 : null, updated_at_unix_ms: previewNow() })
+    Object.assign(detail, { prompt_template: request.prompt_template, folder_grant_ids: structuredClone(request.folder_grant_ids), plugin_tool_names: structuredClone(request.plugin_tool_names), max_duration_seconds: request.max_duration_seconds, max_tool_calls: request.max_tool_calls, approval_timeout_seconds: request.approval_timeout_seconds })
+    return structuredClone(detail)
+  },
+  async archiveRoutine(routineId: string): Promise<void> {
+    if (agenticSuperAppIsTauri) { await invoke('agentic_super_app_command_archive_routine', { request: { routine_id: routineId } }); return }
+    const detail = previewRoutines.find((item) => item.summary.id === routineId)
+    if (detail) { detail.summary.archived = true; detail.summary.enabled = false }
+  },
+  async runRoutineNow(routineId: string): Promise<RoutineExecution> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineExecution>('agentic_super_app_command_run_routine_now', { request: { routine_id: routineId } })
+    const detail = previewRoutines.find((item) => item.summary.id === routineId)
+    if (!detail) throw new Error('Routine was not found.')
+    const execution = previewCreateExecution(detail)
+    detail.executions.unshift(execution); detail.summary.last_run_unix_ms = execution.scheduled_for_unix_ms; detail.summary.last_execution_state = execution.state; detail.summary.updated_at_unix_ms = execution.updated_at_unix_ms
+    return structuredClone(execution)
+  },
+  async routineExecutions(query: RoutineExecutionsQuery): Promise<RoutineExecution[]> {
+    if (agenticSuperAppIsTauri) return tauriQuery<RoutineExecution[]>('agentic_super_app_query_routine_executions', { query })
+    return structuredClone(previewRoutines.find((item) => item.summary.id === query.routine_id)?.executions.slice(0, query.limit ?? 50) ?? [])
+  },
+  async pluginCatalog(): Promise<PluginCatalogEntry[]> { return agenticSuperAppIsTauri ? tauriQuery<PluginCatalogEntry[]>('agentic_super_app_query_plugin_catalog') : structuredClone(previewPluginCatalog) },
+  async pluginConnections(pluginId?: string): Promise<PluginConnectionSummary[]> { return agenticSuperAppIsTauri ? tauriQuery<PluginConnectionSummary[]>('agentic_super_app_query_plugin_connections', { pluginId: pluginId ?? null }) : structuredClone(previewPluginConnections.filter((item) => !pluginId || item.plugin_id === pluginId)) },
+  async installPlugin(request: PluginInstallRequest): Promise<void> {
+    if (agenticSuperAppIsTauri) { await invoke('agentic_super_app_command_install_plugin', { request }); return }
+    const entry = previewPluginCatalog.find((item) => item.manifest.id === request.plugin_id); if (entry) { entry.installed = request.enabled; entry.enabled = request.enabled }
+  },
+  async createPluginConnection(request: PluginConnectionCreateRequest): Promise<PluginConnectionSummary> {
+    if (agenticSuperAppIsTauri) return tauriQuery<PluginConnectionSummary>('agentic_super_app_command_create_plugin_connection', { request })
+    const now = previewNow(); const connection: PluginConnectionSummary = { id: previewId('connection'), plugin_id: request.plugin_id, name: request.name, origin: request.origin, kind: request.kind, api_key_header: request.api_key_header, secret_configured: Boolean(request.secret_value), validated_at_unix_ms: null, created_at_unix_ms: now, updated_at_unix_ms: now }; previewPluginConnections.push(connection); return structuredClone(connection)
+  },
+  async updatePluginConnection(request: PluginConnectionUpdateRequest): Promise<PluginConnectionSummary> {
+    if (agenticSuperAppIsTauri) return tauriQuery<PluginConnectionSummary>('agentic_super_app_command_update_plugin_connection', { request })
+    const connection = previewPluginConnections.find((item) => item.id === request.connection_id); if (!connection) throw new Error('Plugin connection was not found.')
+    Object.assign(connection, { name: request.name, origin: request.origin, api_key_header: request.api_key_header, secret_configured: request.secret_value ? true : connection.secret_configured, validated_at_unix_ms: null, updated_at_unix_ms: previewNow() }); return structuredClone(connection)
+  },
+  async deletePluginConnection(connectionId: string): Promise<void> { if (agenticSuperAppIsTauri) { await invoke('agentic_super_app_command_delete_plugin_connection', { request: { connection_id: connectionId } }); return } const index = previewPluginConnections.findIndex((item) => item.id === connectionId); if (index >= 0) previewPluginConnections.splice(index, 1) },
+  async testPluginConnection(connectionId: string): Promise<PluginConnectionSummary> { if (agenticSuperAppIsTauri) return tauriQuery<PluginConnectionSummary>('agentic_super_app_command_test_plugin_connection', { request: { connection_id: connectionId } }); const connection = previewPluginConnections.find((item) => item.id === connectionId); if (!connection) throw new Error('Plugin connection was not found.'); connection.validated_at_unix_ms = previewNow(); return structuredClone(connection) },
+  async agentPluginGrants(agentId: string): Promise<AgentPluginGrant[]> { return agenticSuperAppIsTauri ? tauriQuery<AgentPluginGrant[]>('agentic_super_app_query_agent_plugin_grants', { request: { agent_id: agentId } }) : structuredClone(previewAgentGrants.filter((grant) => grant.agent_id === agentId)) },
+  async setAgentPluginGrant(request: AgentPluginGrantRequest): Promise<AgentPluginGrant> {
+    if (agenticSuperAppIsTauri) return tauriQuery<AgentPluginGrant>('agentic_super_app_command_set_agent_plugin_grant', { request })
+    const existing = previewAgentGrants.find((grant) => grant.agent_id === request.agent_id && grant.plugin_id === request.plugin_id && grant.connection_id === request.connection_id); if (existing) Object.assign(existing, request); else previewAgentGrants.push(structuredClone(request)); return structuredClone(request)
+  },
+  async dryRunPlugin(request: PluginDryRunRequest): Promise<string> { return agenticSuperAppIsTauri ? tauriQuery<string>('agentic_super_app_command_dry_run_plugin', { request }) : JSON.stringify({ dry_run: true, target: 'https://hooks.example.com' + JSON.parse(request.arguments_json).path, message: 'No network request was sent.' }) },
+  async pluginInvocations(runId: string): Promise<PluginInvocationSummary[]> { return agenticSuperAppIsTauri ? tauriQuery<PluginInvocationSummary[]>('agentic_super_app_query_plugin_invocations', { runId }) : [] },
 
   async codeSnapshot(): Promise<CodeSnapshot> {
     return agenticSuperAppIsTauri ? tauriQuery<CodeSnapshot>('agentic_super_app_query_code_snapshot') : previewCodeSummary()

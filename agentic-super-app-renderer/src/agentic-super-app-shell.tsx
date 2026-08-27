@@ -3,13 +3,15 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification'
 import { agenticSuperAppClient, type ApplicationMode, type DiagnosticSnapshot, type SharedEventEnvelope } from './api/agentic-super-app-client'
 import { AgenticSuperAppChat } from './chat/agentic-super-app-chat'
+import { AgenticSuperAppPlugins } from './automation/agentic-super-app-plugins'
+import { AgenticSuperAppRoutines } from './automation/agentic-super-app-routines'
 const AgenticSuperAppCode = lazy(() => import('./code/agentic-super-app-code').then((module) => ({ default: module.AgenticSuperAppCode })))
 const AgenticSuperAppCodeRuns = lazy(() => import('./code/agentic-super-app-code-runs').then((module) => ({ default: module.AgenticSuperAppCodeRuns })))
 const AgenticSuperAppAgent = lazy(() => import('./agent/agentic-super-app-agent').then((module) => ({ default: module.AgenticSuperAppAgent })))
 
 type ModeDefinition = { mode: ApplicationMode; label: string; description: string; icon: typeof Bot; navigation: string[] }
 const modes: ModeDefinition[] = [
-  { mode: 'agent', label: 'Agent', description: 'Named assistants, explicit tools, durable runs, and inspectable memory.', icon: Bot, navigation: ['Workspace', 'Runs', 'Skills'] },
+  { mode: 'agent', label: 'Agent', description: 'Named assistants, explicit tools, durable runs, and inspectable memory.', icon: Bot, navigation: ['Workspace', 'Runs', 'Routines', 'Plugins', 'Skills'] },
   { mode: 'code', label: 'Code', description: 'Projects, worker lanes, checkpoints, and reviewable runs live here.', icon: Code2, navigation: ['Workbench', 'Runs'] },
   { mode: 'chat', label: 'Chat', description: 'Focused conversations and artifacts will appear here.', icon: MessageSquare, navigation: ['Conversations', 'Artifacts', 'Archive'] },
 ]
@@ -18,6 +20,7 @@ const previewSnapshot: DiagnosticSnapshot = { providers: [], recent_jobs: [], no
 export function AgenticSuperAppShell() {
   const [activeMode, setActiveMode] = useState<ApplicationMode>('agent')
   const [codeScreen, setCodeScreen] = useState<'workbench' | 'runs'>('workbench')
+  const [agentScreen, setAgentScreen] = useState<'workspace' | 'runs' | 'routines' | 'plugins' | 'skills'>('workspace')
   const [screen, setScreen] = useState<'workspace' | 'diagnostics'>('workspace')
   const [connected, setConnected] = useState(false)
   const [snapshot, setSnapshot] = useState<DiagnosticSnapshot>(previewSnapshot)
@@ -26,7 +29,9 @@ export function AgenticSuperAppShell() {
   const refresh = () => void agenticSuperAppClient.diagnostics().then(setSnapshot).catch(() => undefined)
 
   useEffect(() => { void agenticSuperAppClient.bootstrap().then((item) => { setActiveMode(item.active_mode); setConnected(true) }).catch(() => setConnected(false)); refresh(); agenticSuperAppClient.subscribe((event) => { setEvents((items) => [event, ...items].slice(0, 30)); refresh() }) }, [])
-  const selectMode = (mode: ApplicationMode) => { setScreen('workspace'); if (mode === 'code') setCodeScreen('workbench'); setActiveMode(mode); void agenticSuperAppClient.setActiveMode(mode).then((item) => setActiveMode(item.active_mode)).catch(() => undefined) }
+  const selectMode = (mode: ApplicationMode) => { setScreen('workspace'); if (mode === 'code') setCodeScreen('workbench'); if (mode === 'agent') setAgentScreen('workspace'); setActiveMode(mode); void agenticSuperAppClient.setActiveMode(mode).then((item) => setActiveMode(item.active_mode)).catch(() => undefined) }
+  const selectAgentScreen = (item: string) => { if (item === 'Runs' || item === 'Routines' || item === 'Plugins' || item === 'Skills') setAgentScreen(item.toLowerCase() as 'runs' | 'routines' | 'plugins' | 'skills'); else setAgentScreen('workspace') }
+  const agentPanel = agentScreen === 'runs' ? 'runs' : agentScreen === 'skills' ? 'skills' : 'overview'
   return <main className="agentic-super-app-shell">
     <header className="agentic-super-app-titlebar">
       <div className="agentic-super-app-brand"><PanelLeft size={16} aria-hidden="true" /><span>Agentic Super App</span></div>
@@ -35,10 +40,10 @@ export function AgenticSuperAppShell() {
     </header>
     <section className={`agentic-super-app-workspace ${screen === 'workspace' && activeMode === 'chat' ? 'is-chat-mode' : ''} ${screen === 'workspace' && activeMode === 'code' ? 'is-code-mode' : ''}`}>
       <aside className="agentic-super-app-rail" aria-label={screen === 'diagnostics' ? 'Global navigation' : `${definition.label} navigation`}>
-        {screen === 'diagnostics' ? <><div className="agentic-super-app-rail-heading">System</div><button className="is-selected"><Activity size={15} />Diagnostics</button><button onClick={() => setScreen('workspace')}><PanelLeft size={15} />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.map((item) => <button key={item} className={activeMode === 'code' && ((item === 'Runs' && codeScreen === 'runs') || (item === 'Workbench' && codeScreen === 'workbench')) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'code') setCodeScreen(item === 'Runs' ? 'runs' : 'workbench') }}>{item}</button>)}</>}
-        <div className="agentic-super-app-rail-footer">Phase 6 agent slice</div>
+        {screen === 'diagnostics' ? <><div className="agentic-super-app-rail-heading">System</div><button className="is-selected"><Activity size={15} />Diagnostics</button><button onClick={() => setScreen('workspace')}><PanelLeft size={15} />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.map((item) => <button key={item} className={activeMode === 'code' && ((item === 'Runs' && codeScreen === 'runs') || (item === 'Workbench' && codeScreen === 'workbench')) || activeMode === 'agent' && ((item === 'Workspace' && agentScreen === 'workspace') || item.toLowerCase() === agentScreen) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'code') setCodeScreen(item === 'Runs' ? 'runs' : 'workbench'); if (activeMode === 'agent') selectAgentScreen(item) }}>{item}</button>)}</>}
+        <div className="agentic-super-app-rail-footer">Phase 7 automations</div>
       </aside>
-      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Agent workspace…</section>}><AgenticSuperAppAgent /></Suspense>}
+      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : agentScreen === 'routines' ? <AgenticSuperAppRoutines /> : agentScreen === 'plugins' ? <AgenticSuperAppPlugins /> : <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Agent workspace…</section>}><AgenticSuperAppAgent initialPanel={agentPanel} /></Suspense>}
     </section>
   </main>
 }

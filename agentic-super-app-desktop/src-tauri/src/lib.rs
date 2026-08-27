@@ -24,20 +24,24 @@ use agentic_super_app_persistence::{
     chat::{AgenticSuperAppChatStore, AgenticSuperAppChatStoreError},
     AgenticSuperAppPersistence, AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID,
 };
+use agentic_super_app_plugin_runtime::{
+    AgenticSuperAppPluginRuntime, AgenticSuperAppPluginRuntimeError,
+};
 use agentic_super_app_protocol::{
     current_protocol_version, AgentApprovalDecisionRequest, AgentConversationCreateRequest,
     AgentConversationDetail, AgentConversationQuery, AgentConversationSummary, AgentCreateRequest,
     AgentDashboard, AgentDetail, AgentEventEnvelope, AgentEventsQuery, AgentExportRequest,
     AgentFolderGrant, AgentFolderGrantDeleteRequest, AgentFolderGrantRequest, AgentIdRequest,
     AgentInputRequest, AgentMemoryDeleteRequest, AgentMemoryMutationRequest, AgentMemoryQuery,
-    AgentMemorySummary, AgentRunControlRequest, AgentRunDetail, AgentRunStartRequest,
-    AgentRunSummary, AgentRunsQuery, AgentSkillCatalog, AgentSkillConflictResolutionRequest,
-    AgentSkillToggleRequest, AgentUpdateRequest, ApiError, ApplicationMode, BootstrapSnapshot,
-    BuildInformation, ChatAttachmentImportRequest, ChatBranchRequest, ChatConversationDetail,
-    ChatCreateRequest, ChatDeleteRequest, ChatDraftRequest, ChatEditRequest, ChatEventEnvelope,
-    ChatEventsQuery, ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
-    ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
-    ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
+    AgentMemorySummary, AgentPluginGrant, AgentPluginGrantRequest, AgentRunControlRequest,
+    AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
+    AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest, ApiError,
+    ApplicationMode, BootstrapSnapshot, BuildInformation, ChatAttachmentImportRequest,
+    ChatBranchRequest, ChatConversationDetail, ChatCreateRequest, ChatDeleteRequest,
+    ChatDraftRequest, ChatEditRequest, ChatEventEnvelope, ChatEventsQuery, ChatExportRequest,
+    ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest, ChatProviderMessage,
+    ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort, ChatSendRequest,
+    ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
     CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
@@ -51,8 +55,15 @@ use agentic_super_app_protocol::{
     CodeTerminalInputRequest, CodeTerminalResizeRequest, CodeTerminalStartRequest,
     CodeTerminalStopRequest, CodeTerminalSummary, CodeWorkspaceDetail, CodeWorkspaceOpenRequest,
     CodeWorkspaceQuery, CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope,
-    DiagnosticSnapshot, JobState, ProviderDiagnosticRequest, ResponseEnvelope, RetryClass,
-    SetActiveModeCommand, SharedEventEnvelope, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+    DiagnosticSnapshot, JobState, PluginCatalogEntry, PluginConnectionCreateRequest,
+    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
+    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
+    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
+    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+};
+use agentic_super_app_routine_scheduler::{
+    AgenticSuperAppRoutineScheduler, AgenticSuperAppRoutineSchedulerError,
 };
 use agentic_super_app_secret_store::{
     AgenticSuperAppKeyringSecretStore, AgenticSuperAppSecretStoreHandle,
@@ -69,6 +80,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{ipc::Channel, Manager, State};
+#[cfg(desktop)]
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+};
 use tauri_plugin_notification::NotificationExt;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
@@ -95,6 +111,8 @@ struct AgenticSuperAppFoundation {
     chat: AgenticSuperAppChatStore,
     artifacts: AgenticSuperAppArtifactStore,
     agent_runtime: AgenticSuperAppAgentRuntime,
+    plugin_runtime: AgenticSuperAppPluginRuntime,
+    routine_scheduler: AgenticSuperAppRoutineScheduler,
     chat_events: broadcast::Sender<ChatEventEnvelope>,
     chat_cancellations: Arc<std::sync::Mutex<HashMap<String, CancellationToken>>>,
     recovery_message: Arc<RwLock<Option<String>>>,
@@ -160,6 +178,13 @@ impl AgenticSuperAppFoundation {
         let notifications =
             AgenticSuperAppNotificationService::new(persistence.clone(), jobs.clone());
         let audit = AgenticSuperAppAuditLog::new(persistence.clone());
+        let plugin_runtime =
+            AgenticSuperAppPluginRuntime::new(persistence.clone(), secrets.clone(), audit.clone())
+                .map_err(|error| error.to_string())?;
+        plugin_runtime
+            .initialize()
+            .await
+            .map_err(|error| error.to_string())?;
         let artifacts = AgenticSuperAppArtifactStore::new(artifact_root.clone());
         let agent_runtime = AgenticSuperAppAgentRuntime::new(
             agentic_super_app_persistence::agent::AgenticSuperAppAgentStore::new(
@@ -169,6 +194,12 @@ impl AgenticSuperAppFoundation {
             artifacts.clone(),
             audit.clone(),
             artifact_root.join("skills"),
+        );
+        agent_runtime.set_external_tool_provider(Arc::new(plugin_runtime.clone()));
+        let routine_scheduler = AgenticSuperAppRoutineScheduler::new(
+            persistence.clone(),
+            notifications.clone(),
+            Arc::new(agent_runtime.clone()),
         );
         let interrupted_agents = agent_runtime
             .recover()
@@ -199,6 +230,8 @@ impl AgenticSuperAppFoundation {
             chat,
             artifacts,
             agent_runtime,
+            plugin_runtime,
+            routine_scheduler,
             chat_events,
             chat_cancellations: Arc::new(std::sync::Mutex::new(HashMap::new())),
             recovery_message: Arc::new(RwLock::new(recovery_message)),
@@ -694,6 +727,221 @@ async fn agentic_super_app_command_export_agent(
         .export_agent(&request)
         .await
         .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_routines(
+    query: RoutineQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<RoutineSummary>, ApiError> {
+    foundation
+        .routine_scheduler
+        .list(&query)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_routine(
+    request: RoutineIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<RoutineDetail, ApiError> {
+    foundation
+        .routine_scheduler
+        .detail(&request.routine_id)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_routine(
+    request: RoutineCreateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<RoutineDetail, ApiError> {
+    foundation
+        .routine_scheduler
+        .create(&request)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_update_routine(
+    request: RoutineUpdateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<RoutineDetail, ApiError> {
+    foundation
+        .routine_scheduler
+        .update(&request)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_archive_routine(
+    request: RoutineIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .routine_scheduler
+        .archive(&request)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_run_routine_now(
+    request: RoutineIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<RoutineExecution, ApiError> {
+    foundation
+        .routine_scheduler
+        .run_now(&request.routine_id)
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_routine_executions(
+    query: RoutineExecutionsQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<RoutineExecution>, ApiError> {
+    foundation
+        .routine_scheduler
+        .executions(&query.routine_id, query.limit.unwrap_or(50))
+        .await
+        .map_err(routine_scheduler_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_plugin_catalog(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<PluginCatalogEntry>, ApiError> {
+    foundation
+        .plugin_runtime
+        .catalog()
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_plugin_connections(
+    plugin_id: Option<String>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<PluginConnectionSummary>, ApiError> {
+    foundation
+        .plugin_runtime
+        .connections(plugin_id.as_deref())
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_install_plugin(
+    request: PluginInstallRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .plugin_runtime
+        .install(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_plugin_connection(
+    request: PluginConnectionCreateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<PluginConnectionSummary, ApiError> {
+    foundation
+        .plugin_runtime
+        .create_connection(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_update_plugin_connection(
+    request: PluginConnectionUpdateRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<PluginConnectionSummary, ApiError> {
+    foundation
+        .plugin_runtime
+        .update_connection(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_delete_plugin_connection(
+    request: PluginConnectionIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .plugin_runtime
+        .delete_connection(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_test_plugin_connection(
+    request: PluginConnectionIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<PluginConnectionSummary, ApiError> {
+    foundation
+        .plugin_runtime
+        .test_connection(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_agent_plugin_grants(
+    request: AgentIdRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<AgentPluginGrant>, ApiError> {
+    foundation
+        .plugin_runtime
+        .agent_grants(&request.agent_id)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_set_agent_plugin_grant(
+    request: AgentPluginGrantRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<AgentPluginGrant, ApiError> {
+    foundation
+        .plugin_runtime
+        .set_agent_grant(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_dry_run_plugin(
+    request: PluginDryRunRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<String, ApiError> {
+    foundation
+        .plugin_runtime
+        .dry_run(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_plugin_invocations(
+    run_id: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<PluginInvocationSummary>, ApiError> {
+    foundation
+        .plugin_runtime
+        .invocations_for_run(&run_id)
+        .await
+        .map_err(plugin_runtime_error)
 }
 
 #[tauri::command]
@@ -2742,6 +2990,113 @@ fn chat_error(error: AgenticSuperAppChatStoreError) -> ApiError {
     }
 }
 
+fn routine_scheduler_error(error: AgenticSuperAppRoutineSchedulerError) -> ApiError {
+    match error {
+        AgenticSuperAppRoutineSchedulerError::InvalidSchedule(message) => {
+            validation_error(message)
+        }
+        AgenticSuperAppRoutineSchedulerError::Launcher(message) => application_error(
+            "routine_launcher_failed",
+            message,
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppRoutineSchedulerError::Store(error) => match error {
+            agentic_super_app_persistence::routine::AgenticSuperAppRoutineStoreError::InvalidInput(
+                message,
+            ) => validation_error(message),
+            agentic_super_app_persistence::routine::AgenticSuperAppRoutineStoreError::NotFound => {
+                application_error(
+                    "routine_not_found",
+                    "The routine is no longer available.",
+                    RetryClass::AfterUserAction,
+                )
+            }
+            agentic_super_app_persistence::routine::AgenticSuperAppRoutineStoreError::Conflict => {
+                application_error(
+                    "routine_conflict",
+                    "The routine changed or conflicts with existing state.",
+                    RetryClass::AfterUserAction,
+                )
+            }
+            agentic_super_app_persistence::routine::AgenticSuperAppRoutineStoreError::Database(
+                error,
+            ) => database_error(error),
+            agentic_super_app_persistence::routine::AgenticSuperAppRoutineStoreError::Serialization(
+                _,
+            ) => application_error(
+                "routine_serialization_failed",
+                "The routine data could not be encoded.",
+                RetryClass::Safe,
+            ),
+        },
+    }
+}
+
+fn plugin_runtime_error(error: AgenticSuperAppPluginRuntimeError) -> ApiError {
+    match error {
+        AgenticSuperAppPluginRuntimeError::InvalidInput(message) => validation_error(message),
+        AgenticSuperAppPluginRuntimeError::NotFound(item) => application_error(
+            "plugin_not_found",
+            format!("The plugin resource '{item}' is no longer available."),
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppPluginRuntimeError::Secret(_) => application_error(
+            "secret_store_unavailable",
+            "The operating system credential store is unavailable.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppPluginRuntimeError::Request(_) => application_error(
+            "plugin_request_failed",
+            "The plugin request failed. Check the connection and try again.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppPluginRuntimeError::InvalidResponse => application_error(
+            "plugin_invalid_response",
+            "The plugin returned an invalid or oversized JSON response.",
+            RetryClass::AfterUserAction,
+        ),
+        AgenticSuperAppPluginRuntimeError::Serialization(_) => application_error(
+            "plugin_serialization_failed",
+            "The plugin data could not be encoded.",
+            RetryClass::Safe,
+        ),
+        AgenticSuperAppPluginRuntimeError::Store(error) => match error {
+            agentic_super_app_persistence::plugin::AgenticSuperAppPluginStoreError::InvalidInput(
+                message,
+            ) => validation_error(message),
+            agentic_super_app_persistence::plugin::AgenticSuperAppPluginStoreError::NotFound => {
+                application_error(
+                    "plugin_not_found",
+                    "The plugin resource is no longer available.",
+                    RetryClass::AfterUserAction,
+                )
+            }
+            agentic_super_app_persistence::plugin::AgenticSuperAppPluginStoreError::Conflict => {
+                application_error(
+                    "plugin_conflict",
+                    "The plugin connection or grant conflicts with existing state.",
+                    RetryClass::AfterUserAction,
+                )
+            }
+            agentic_super_app_persistence::plugin::AgenticSuperAppPluginStoreError::Database(
+                error,
+            ) => database_error(error),
+            agentic_super_app_persistence::plugin::AgenticSuperAppPluginStoreError::Serialization(
+                _,
+            ) => application_error(
+                "plugin_serialization_failed",
+                "The plugin data could not be encoded.",
+                RetryClass::Safe,
+            ),
+        },
+        AgenticSuperAppPluginRuntimeError::RoutineStore(_) => application_error(
+            "persistence_unavailable",
+            "Routine execution state is unavailable.",
+            RetryClass::Safe,
+        ),
+    }
+}
+
 #[tauri::command]
 async fn agentic_super_app_command_configure_openai_provider(
     model: String,
@@ -2998,6 +3353,65 @@ async fn agentic_super_app_command_send_test_notification(
         .show();
     Ok(())
 }
+
+fn start_native_notification_bridge(app: tauri::AppHandle, jobs: AgenticSuperAppJobRuntime) {
+    let mut receiver = jobs.subscribe();
+    tauri::async_runtime::spawn(async move {
+        while let Ok(event) = receiver.recv().await {
+            if event.kind != SharedEventKind::NotificationCreated || !event.native_notification {
+                continue;
+            }
+            let Some(title) = event.message else {
+                continue;
+            };
+            let body = event
+                .text_delta
+                .unwrap_or_else(|| "A new notification is available.".to_owned());
+            let _ = app.notification().builder().title(title).body(body).show();
+        }
+    });
+}
+
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+#[cfg(desktop)]
+fn install_tray(app: &mut tauri::App) -> Result<(), tauri::Error> {
+    let open = MenuItem::with_id(app, "open", "Open Agentic Super App", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+    TrayIconBuilder::with_id("main")
+        .icon(tauri::image::Image::from_bytes(include_bytes!(
+            "../icons/32x32.png"
+        ))?)
+        .menu(&menu)
+        .tooltip("Agentic Super App")
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => show_main_window(app),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
+}
+
 #[tauri::command]
 async fn agentic_super_app_command_prepare_restart_recovery(
     app: tauri::AppHandle,
@@ -3035,6 +3449,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            #[cfg(desktop)]
+            install_tray(app).map_err(Box::<dyn std::error::Error>::from)?;
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -3049,6 +3465,8 @@ pub fn run() {
             ))
             .map_err(Box::<dyn std::error::Error>::from)?;
             app.manage(AgenticSuperAppShellState::default());
+            foundation.routine_scheduler.start();
+            start_native_notification_bridge(app.handle().clone(), foundation.jobs.clone());
             app.manage(foundation);
             Ok(())
         })
@@ -3085,6 +3503,24 @@ pub fn run() {
             agentic_super_app_command_decide_agent_approval,
             agentic_super_app_command_submit_agent_input,
             agentic_super_app_command_export_agent,
+            agentic_super_app_query_routines,
+            agentic_super_app_query_routine,
+            agentic_super_app_command_create_routine,
+            agentic_super_app_command_update_routine,
+            agentic_super_app_command_archive_routine,
+            agentic_super_app_command_run_routine_now,
+            agentic_super_app_query_routine_executions,
+            agentic_super_app_query_plugin_catalog,
+            agentic_super_app_query_plugin_connections,
+            agentic_super_app_command_install_plugin,
+            agentic_super_app_command_create_plugin_connection,
+            agentic_super_app_command_update_plugin_connection,
+            agentic_super_app_command_delete_plugin_connection,
+            agentic_super_app_command_test_plugin_connection,
+            agentic_super_app_query_agent_plugin_grants,
+            agentic_super_app_command_set_agent_plugin_grant,
+            agentic_super_app_command_dry_run_plugin,
+            agentic_super_app_query_plugin_invocations,
             agentic_super_app_query_code_snapshot,
             agentic_super_app_query_code_workspace,
             agentic_super_app_query_code_runs,

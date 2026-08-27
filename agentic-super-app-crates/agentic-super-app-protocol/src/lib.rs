@@ -129,6 +129,8 @@ pub struct SharedEventEnvelope {
     pub job_id: Option<String>,
     pub message: Option<String>,
     pub text_delta: Option<String>,
+    #[serde(default)]
+    pub native_notification: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1768,6 +1770,8 @@ pub struct AgentRunStartRequest {
     pub conversation_id: Option<String>,
     pub prompt: String,
     pub background: bool,
+    #[serde(default)]
+    pub routine_execution_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1924,6 +1928,323 @@ pub struct AgentProviderStreamEvent {
 pub struct AgentProviderToolOutput {
     pub call_id: String,
     pub output_json: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineCatchUpPolicy {
+    Skip,
+    RunLatest,
+    RunAllBounded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineConcurrencyPolicy {
+    Skip,
+    QueueOne,
+    ParallelBounded,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineSchedule {
+    pub expression: String,
+    pub timezone: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineDeliveryDestination {
+    InApp,
+    InAppAndNative,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum RoutineExecutionState {
+    Queued,
+    Running,
+    AwaitingApproval,
+    Completed,
+    Failed,
+    Skipped,
+    Interrupted,
+    UnknownOutcome,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineSummary {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub agent_id: String,
+    pub agent_name: String,
+    pub schedule: RoutineSchedule,
+    pub enabled: bool,
+    pub archived: bool,
+    pub catch_up: RoutineCatchUpPolicy,
+    pub concurrency: RoutineConcurrencyPolicy,
+    pub delivery: RoutineDeliveryDestination,
+    pub next_run_unix_ms: Option<i64>,
+    pub last_run_unix_ms: Option<i64>,
+    pub last_execution_state: Option<RoutineExecutionState>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineExecution {
+    pub id: String,
+    pub routine_id: String,
+    pub run_id: Option<String>,
+    pub occurrence_key: String,
+    pub scheduled_for_unix_ms: i64,
+    pub state: RoutineExecutionState,
+    pub folder_grant_ids: Vec<String>,
+    pub plugin_tool_names: Vec<String>,
+    pub error: Option<String>,
+    pub report: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+    pub started_at_unix_ms: Option<i64>,
+    pub completed_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineDetail {
+    pub summary: RoutineSummary,
+    pub prompt_template: String,
+    pub folder_grant_ids: Vec<String>,
+    pub plugin_tool_names: Vec<String>,
+    pub max_duration_seconds: u32,
+    pub max_tool_calls: u32,
+    pub approval_timeout_seconds: u32,
+    pub executions: Vec<RoutineExecution>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineCreateRequest {
+    pub name: String,
+    pub description: String,
+    pub agent_id: String,
+    pub prompt_template: String,
+    pub schedule: RoutineSchedule,
+    pub enabled: bool,
+    pub catch_up: RoutineCatchUpPolicy,
+    pub concurrency: RoutineConcurrencyPolicy,
+    pub delivery: RoutineDeliveryDestination,
+    pub folder_grant_ids: Vec<String>,
+    pub plugin_tool_names: Vec<String>,
+    pub max_duration_seconds: u32,
+    pub max_tool_calls: u32,
+    pub approval_timeout_seconds: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineUpdateRequest {
+    pub routine_id: String,
+    pub name: String,
+    pub description: String,
+    pub agent_id: String,
+    pub prompt_template: String,
+    pub schedule: RoutineSchedule,
+    pub enabled: bool,
+    pub catch_up: RoutineCatchUpPolicy,
+    pub concurrency: RoutineConcurrencyPolicy,
+    pub delivery: RoutineDeliveryDestination,
+    pub folder_grant_ids: Vec<String>,
+    pub plugin_tool_names: Vec<String>,
+    pub max_duration_seconds: u32,
+    pub max_tool_calls: u32,
+    pub approval_timeout_seconds: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineQuery {
+    pub enabled: Option<bool>,
+    pub include_archived: bool,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineIdRequest {
+    pub routine_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct RoutineExecutionsQuery {
+    pub routine_id: String,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginAdapterKind {
+    JsonHttpGet,
+    JsonHttpPost,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginConnectionKind {
+    None,
+    ApiKeyHeader,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginPermission {
+    pub capability: String,
+    pub explanation: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginToolDefinition {
+    pub name: String,
+    pub description: String,
+    pub input_schema_json: String,
+    pub output_schema_json: String,
+    pub risk: AgentToolRisk,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginManifest {
+    pub id: String,
+    pub publisher: String,
+    pub version: String,
+    pub name: String,
+    pub description: String,
+    pub adapter: PluginAdapterKind,
+    pub tools: Vec<PluginToolDefinition>,
+    pub permissions: Vec<PluginPermission>,
+    pub allowed_hosts: Vec<String>,
+    pub connection_kind: PluginConnectionKind,
+    pub supports_dry_run: bool,
+    pub content_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginCatalogEntry {
+    pub manifest: PluginManifest,
+    pub installed: bool,
+    pub enabled: bool,
+    pub connection_count: u32,
+    pub assigned_agent_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConnectionSummary {
+    pub id: String,
+    pub plugin_id: String,
+    pub name: String,
+    pub origin: String,
+    pub kind: PluginConnectionKind,
+    pub api_key_header: Option<String>,
+    pub secret_configured: bool,
+    pub validated_at_unix_ms: Option<i64>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginInstallRequest {
+    pub plugin_id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConnectionCreateRequest {
+    pub plugin_id: String,
+    pub name: String,
+    pub origin: String,
+    pub kind: PluginConnectionKind,
+    pub api_key_header: Option<String>,
+    /// Accepted only on input and never returned by any query.
+    pub secret_value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConnectionUpdateRequest {
+    pub connection_id: String,
+    pub name: String,
+    pub origin: String,
+    pub api_key_header: Option<String>,
+    /// Accepted only on input and never returned by any query.
+    pub secret_value: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConnectionIdRequest {
+    pub connection_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentPluginGrant {
+    pub agent_id: String,
+    pub plugin_id: String,
+    pub connection_id: String,
+    pub tool_names: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentPluginGrantRequest {
+    pub agent_id: String,
+    pub plugin_id: String,
+    pub connection_id: String,
+    pub tool_names: Vec<String>,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginDryRunRequest {
+    pub plugin_id: String,
+    pub connection_id: String,
+    pub tool_name: String,
+    pub arguments_json: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginInvocationSummary {
+    pub id: String,
+    pub run_id: Option<String>,
+    pub plugin_id: String,
+    pub connection_id: String,
+    pub tool_name: String,
+    pub state: String,
+    pub target: String,
+    pub request_preview: String,
+    pub response_preview: Option<String>,
+    pub error: Option<String>,
+    pub created_at_unix_ms: i64,
+    pub completed_at_unix_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2145,6 +2466,34 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     AgentProviderStreamEventKind::export_all(&config)?;
     AgentProviderStreamEvent::export_all(&config)?;
     AgentProviderToolOutput::export_all(&config)?;
+    RoutineCatchUpPolicy::export_all(&config)?;
+    RoutineConcurrencyPolicy::export_all(&config)?;
+    RoutineSchedule::export_all(&config)?;
+    RoutineDeliveryDestination::export_all(&config)?;
+    RoutineExecutionState::export_all(&config)?;
+    RoutineSummary::export_all(&config)?;
+    RoutineExecution::export_all(&config)?;
+    RoutineDetail::export_all(&config)?;
+    RoutineCreateRequest::export_all(&config)?;
+    RoutineUpdateRequest::export_all(&config)?;
+    RoutineQuery::export_all(&config)?;
+    RoutineIdRequest::export_all(&config)?;
+    RoutineExecutionsQuery::export_all(&config)?;
+    PluginAdapterKind::export_all(&config)?;
+    PluginConnectionKind::export_all(&config)?;
+    PluginPermission::export_all(&config)?;
+    PluginToolDefinition::export_all(&config)?;
+    PluginManifest::export_all(&config)?;
+    PluginCatalogEntry::export_all(&config)?;
+    PluginConnectionSummary::export_all(&config)?;
+    PluginInstallRequest::export_all(&config)?;
+    PluginConnectionCreateRequest::export_all(&config)?;
+    PluginConnectionUpdateRequest::export_all(&config)?;
+    PluginConnectionIdRequest::export_all(&config)?;
+    AgentPluginGrant::export_all(&config)?;
+    AgentPluginGrantRequest::export_all(&config)?;
+    PluginDryRunRequest::export_all(&config)?;
+    PluginInvocationSummary::export_all(&config)?;
     BootstrapSnapshot::export_all(&config)?;
     SetActiveModeCommand::export_all(&config)?;
     BuildInformation::export_all(&config)?;

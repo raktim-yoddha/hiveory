@@ -89,6 +89,31 @@ impl AgenticSuperAppJobRuntime {
         message: Option<String>,
         text_delta: Option<String>,
     ) {
+        self.emit_with_native_notification(kind, job_id, message, text_delta, false);
+    }
+    pub fn emit_notification(
+        &self,
+        notification_id: String,
+        title: String,
+        body: String,
+        native: bool,
+    ) {
+        self.emit_with_native_notification(
+            SharedEventKind::NotificationCreated,
+            Some(notification_id),
+            Some(title),
+            Some(body),
+            native,
+        );
+    }
+    fn emit_with_native_notification(
+        &self,
+        kind: SharedEventKind,
+        job_id: Option<String>,
+        message: Option<String>,
+        text_delta: Option<String>,
+        native_notification: bool,
+    ) {
         let mut sequence = self.sequence.lock().expect("event sequence lock");
         *sequence += 1;
         let _ = self.events.send(SharedEventEnvelope {
@@ -98,6 +123,7 @@ impl AgenticSuperAppJobRuntime {
             job_id,
             message,
             text_delta,
+            native_notification,
         });
     }
     pub async fn checkpoint(

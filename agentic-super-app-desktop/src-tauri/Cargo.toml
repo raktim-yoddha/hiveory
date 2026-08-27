@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 agentic-super-app-protocol = { path = "../../agentic-super-app-crates/agentic-super-app-protocol" }
 agentic-super-app-artifact-store = { path = "../../agentic-super-app-crates/agentic-super-app-artifact-store" }
 agentic-super-app-agent-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-agent-runtime" }
+agentic-super-app-plugin-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-plugin-runtime" }
 agentic-super-app-chat-domain = { path = "../../agentic-super-app-crates/agentic-super-app-chat-domain" }
 agentic-super-app-code-domain = { path = "../../agentic-super-app-crates/agentic-super-app-code-domain" }
 agentic-super-app-code-orchestration = { path = "../../agentic-super-app-crates/agentic-super-app-code-orchestration" }
@@ -23,11 +24,12 @@ agentic-super-app-notification-service = { path = "../../agentic-super-app-crate
 agentic-super-app-persistence = { path = "../../agentic-super-app-crates/agentic-super-app-persistence" }
 agentic-super-app-secret-store = { path = "../../agentic-super-app-crates/agentic-super-app-secret-store" }
 agentic-super-app-tool-runtime = { path = "../../agentic-super-app-crates/agentic-super-app-tool-runtime" }
+agentic-super-app-routine-scheduler = { path = "../../agentic-super-app-crates/agentic-super-app-routine-scheduler" }
 agentic-super-app-workspace-service = { path = "../../agentic-super-app-crates/agentic-super-app-workspace-service" }
 serde.workspace = true
 serde_json.workspace = true
 base64.workspace = true
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 sqlx.workspace = true

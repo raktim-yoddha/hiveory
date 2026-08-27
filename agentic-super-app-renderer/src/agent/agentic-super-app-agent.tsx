@@ -8,7 +8,7 @@ const stateLabels: Record<string, string> = {
   queued: 'Queued', preparing: 'Preparing', running: 'Running', awaiting_approval: 'Approval needed', awaiting_input: 'Waiting for you', interrupted: 'Interrupted', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled',
 }
 
-export function AgenticSuperAppAgent() {
+export function AgenticSuperAppAgent({ initialPanel = 'overview' }: { initialPanel?: AgentPanel }) {
   const [dashboard, setDashboard] = useState<AgentDashboard | null>(null)
   const [detail, setDetail] = useState<AgentDetail | null>(null)
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
@@ -20,6 +20,8 @@ export function AgenticSuperAppAgent() {
   const [feedback, setFeedback] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => { setPanel(initialPanel) }, [initialPanel])
 
   const refresh = useCallback(async () => {
     try {

@@ -14,6 +14,7 @@ use agentic_super_app_model_gateway::{AgenticSuperAppModelProvider, AgenticSuper
 use agentic_super_app_persistence::agent::{
     AgenticSuperAppAgentStore, AgenticSuperAppAgentStoreError,
 };
+use agentic_super_app_persistence::routine::AgenticSuperAppRoutineStore;
 use agentic_super_app_protocol::{
     AgentApprovalDecision, AgentApprovalDecisionRequest, AgentApprovalPolicy, AgentArtifactKind,
     AgentArtifactSummary, AgentConversationCreateRequest, AgentConversationDetail,
@@ -28,10 +29,11 @@ use agentic_super_app_protocol::{
 };
 use agentic_super_app_tool_runtime::{
     agentic_super_app_approval_fingerprint, AgenticSuperAppAuditLog,
+    AgenticSuperAppExternalToolProvider,
 };
 use serde_json::{json, Value};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -83,6 +85,7 @@ pub struct AgenticSuperAppAgentRuntime {
     skill_root: PathBuf,
     cancellations: Arc<Mutex<HashMap<String, CancellationToken>>>,
     events: broadcast::Sender<AgentEventEnvelope>,
+    external_tools: Arc<Mutex<Option<Arc<dyn AgenticSuperAppExternalToolProvider>>>>,
 }
 
 impl AgenticSuperAppAgentRuntime {
@@ -102,7 +105,18 @@ impl AgenticSuperAppAgentRuntime {
             skill_root,
             cancellations: Arc::new(Mutex::new(HashMap::new())),
             events,
+            external_tools: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn set_external_tool_provider(
+        &self,
+        provider: Arc<dyn AgenticSuperAppExternalToolProvider>,
+    ) {
+        *self
+            .external_tools
+            .lock()
+            .expect("agent external tool provider lock") = Some(provider);
     }
 
     pub fn store(&self) -> &AgenticSuperAppAgentStore {
@@ -172,6 +186,19 @@ impl AgenticSuperAppAgentRuntime {
             .into_iter()
             .filter(|tool| enabled.is_empty() || enabled.iter().any(|name| name == &tool.name))
             .collect();
+        let external_provider = self
+            .external_tools
+            .lock()
+            .expect("agent external tool provider lock")
+            .clone();
+        if let Some(provider) = external_provider {
+            detail.tools.extend(
+                provider
+                    .definitions(agent_id)
+                    .await
+                    .map_err(AgenticSuperAppAgentRuntimeError::InvalidInput)?,
+            );
+        }
         Ok(detail)
     }
 
@@ -445,7 +472,9 @@ impl AgenticSuperAppAgentRuntime {
         let run = self.store.run(&approval.run_id).await?.ok_or_else(|| {
             AgenticSuperAppAgentRuntimeError::InvalidInput("run was not found".to_owned())
         })?;
-        let detail = self.agent_detail(&run.agent_id).await?;
+        let detail = self
+            .scoped_detail_for_run(&run.id, self.agent_detail(&run.agent_id).await?)
+            .await?;
         let (mut input_items, _) = self
             .store
             .load_continuation(&approval.run_id)
@@ -1230,8 +1259,25 @@ impl AgenticSuperAppAgentRuntime {
         name: &str,
         arguments_json: &str,
     ) -> Result<ToolExecution, String> {
+        let scoped_detail = self
+            .scoped_detail_for_run(run_id, (*detail).clone())
+            .await
+            .map_err(|error| error.to_string())?;
+        let detail = &scoped_detail;
         let args: Value = serde_json::from_str(arguments_json)
             .map_err(|_| "tool arguments are not valid JSON".to_owned())?;
+        if name.starts_with("plugin.") {
+            let external_provider = self
+                .external_tools
+                .lock()
+                .expect("agent external tool provider lock")
+                .clone()
+                .ok_or_else(|| "plugin runtime is unavailable".to_owned())?;
+            let output = external_provider
+                .execute(run_id, &detail.summary.id, name, &args.to_string())
+                .await?;
+            return Ok(ToolExecution::Result(output));
+        }
         match name {
             "folder.list" => {
                 let path = granted_path(detail, &args, false)?;
@@ -1420,6 +1466,7 @@ impl AgenticSuperAppAgentRuntime {
                         conversation_id: None,
                         prompt: prompt.to_owned(),
                         background: true,
+                        routine_execution_id: None,
                     })
                     .await
                     .map_err(|error| error.to_string())?;
@@ -1451,6 +1498,48 @@ impl AgenticSuperAppAgentRuntime {
             }
             _ => Err("tool is not available".to_owned()),
         }
+    }
+
+    async fn scoped_detail_for_run(
+        &self,
+        run_id: &str,
+        mut detail: AgentDetail,
+    ) -> Result<AgentDetail, AgenticSuperAppAgentRuntimeError> {
+        let Some(execution_id) = self.store.routine_execution_id(run_id).await? else {
+            return Ok(detail);
+        };
+        let routine_store = AgenticSuperAppRoutineStore::new(self.store.persistence().clone());
+        let execution = routine_store
+            .execution_by_id(&execution_id)
+            .await
+            .map_err(|error| AgenticSuperAppAgentRuntimeError::InvalidInput(error.to_string()))?
+            .ok_or_else(|| {
+                AgenticSuperAppAgentRuntimeError::InvalidInput(
+                    "routine execution was not found".to_owned(),
+                )
+            })?;
+        let folder_grant_ids = execution
+            .folder_grant_ids
+            .into_iter()
+            .collect::<HashSet<_>>();
+        detail
+            .folders
+            .retain(|folder| folder_grant_ids.contains(&folder.id));
+        let has_folder_grants = !detail.folders.is_empty();
+        let plugin_tool_names = execution.plugin_tool_names;
+        detail.tools.retain(|tool| {
+            if tool.name.starts_with("folder.") {
+                return has_folder_grants;
+            }
+            if let Some(tool_name) = tool.name.strip_prefix("plugin.") {
+                let leaf = tool_name.rsplit('.').next().unwrap_or(tool_name);
+                return plugin_tool_names
+                    .iter()
+                    .any(|allowed| allowed == &tool.name || allowed == leaf);
+            }
+            true
+        });
+        Ok(detail)
     }
 
     async fn retrieve_memory(

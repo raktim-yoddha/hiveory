@@ -1,4 +1,6 @@
 use agentic_super_app_persistence::AgenticSuperAppPersistence;
+use agentic_super_app_protocol::AgentToolDefinition;
+use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +20,23 @@ pub fn agentic_super_app_approval_fingerprint(
         "{:x}",
         Sha256::digest(format!("{action}\n{target}\n{arguments}"))
     )
+}
+
+/// Extension point used by the Agent loop for capabilities that are not
+/// implemented by the built-in local tools. The provider owns its own
+/// permission and secret boundary; the Agent runtime only sees tool schemas
+/// and redacted results.
+#[async_trait]
+pub trait AgenticSuperAppExternalToolProvider: Send + Sync {
+    async fn definitions(&self, agent_id: &str) -> Result<Vec<AgentToolDefinition>, String>;
+
+    async fn execute(
+        &self,
+        run_id: &str,
+        agent_id: &str,
+        name: &str,
+        arguments_json: &str,
+    ) -> Result<String, String>;
 }
 
 #[derive(Clone)]

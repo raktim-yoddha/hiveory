@@ -17,6 +17,8 @@ members = [
   "agentic-super-app-crates/agentic-super-app-code-orchestration",
   "agentic-super-app-crates/agentic-super-app-agent-domain",
   "agentic-super-app-crates/agentic-super-app-agent-runtime",
+  "agentic-super-app-crates/agentic-super-app-plugin-runtime",
+  "agentic-super-app-crates/agentic-super-app-routine-scheduler",
   "agentic-super-app-crates/agentic-super-app-dispatch-bridge",
   "agentic-super-app-crates/agentic-super-app-git-service",
   "agentic-super-app-crates/agentic-super-app-workspace-service",
@@ -36,6 +38,8 @@ serde_json = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["serde", "v7"] }
 async-trait = "0.1"
+chrono = { version = "0.4", features = ["clock"] }
+chrono-tz = "0.10"
 base64 = "0.22"
 cap-std = "4"
 futures-util = "0.3"
