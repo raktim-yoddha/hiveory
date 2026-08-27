@@ -82,19 +82,16 @@ impl AgenticSuperAppRoutineScheduler {
         }
     }
 
-    pub fn start(&self) {
-        let scheduler = self.clone();
-        tokio::spawn(async move {
-            scheduler.reconcile().await;
-            let mut interval = tokio::time::interval(RECONCILE_INTERVAL);
-            interval.tick().await;
-            loop {
-                tokio::select! {
-                    _ = scheduler.shutdown.cancelled() => break,
-                    _ = interval.tick() => scheduler.reconcile().await,
-                }
+    pub async fn run(&self) {
+        self.reconcile().await;
+        let mut interval = tokio::time::interval(RECONCILE_INTERVAL);
+        interval.tick().await;
+        loop {
+            tokio::select! {
+                _ = self.shutdown.cancelled() => break,
+                _ = interval.tick() => self.reconcile().await,
             }
-        });
+        }
     }
 
     pub fn stop(&self) {
@@ -663,7 +660,7 @@ where
     }
     let dom_match = cron.day_of_month.contains(&dom);
     let dow_match = cron.day_of_week.contains(&dow);
-    let day_match = if cron.dom_any && cron.dow_any {
+    if cron.dom_any && cron.dow_any {
         true
     } else if cron.dom_any {
         dow_match
@@ -671,8 +668,7 @@ where
         dom_match
     } else {
         dom_match || dow_match
-    };
-    day_match
+    }
 }
 
 fn execution_state_label(state: RoutineExecutionState) -> &'static str {

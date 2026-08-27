@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use ts_rs::{Config, TS};
 
-pub const AGENTIC_SUPER_APP_PROTOCOL_VERSION: u16 = 1;
+pub const AGENTIC_SUPER_APP_PROTOCOL_VERSION: u16 = 2;
 pub const CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID: &str = "local-coordinator";
 pub const CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID: &str = "codex-cli";
 
@@ -2271,6 +2271,27 @@ pub struct BuildInformation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct UpdateSnapshot {
+    pub configured: bool,
+    pub current_version: String,
+    pub available_version: Option<String>,
+    pub notes: Option<String>,
+    pub published_at: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct BackupSummary {
+    pub path: String,
+    pub bytes: u64,
+    pub created_at_unix_ms: i64,
+    pub includes_database: bool,
+    pub artifact_count: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ShellEvent {
     pub sequence: u64,
     pub active_mode: ApplicationMode,
@@ -2497,6 +2518,8 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     BootstrapSnapshot::export_all(&config)?;
     SetActiveModeCommand::export_all(&config)?;
     BuildInformation::export_all(&config)?;
+    UpdateSnapshot::export_all(&config)?;
+    BackupSummary::export_all(&config)?;
     ShellEvent::export_all(&config)?;
     Ok(())
 }
@@ -2507,6 +2530,6 @@ mod tests {
 
     #[test]
     fn protocol_version_is_stable() {
-        assert_eq!(current_protocol_version().major, 1);
+        assert_eq!(current_protocol_version().major, 2);
     }
 }

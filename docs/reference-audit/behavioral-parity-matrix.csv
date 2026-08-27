@@ -12,3 +12,19 @@ chat-typed-parts,Typed transcript parts and safe reasoning/status rendering,agen
 chat-attachments,Explicit bounded attachment import and portable export,agentic-super-app-artifact-store,3,selected,Attachment policy and export test
 browser-preview,Auxiliary untrusted browser preview,code-domain,4,selected,Preview has no host capability test
 remote-connection,Remote workspace connectivity,code-runtime,5,deferred,Remote lifecycle recovery test
+named-agents,Create edit archive export and delete persistent named agents,agentic-super-app-agent-runtime,6,implemented,Named agent lifecycle integration test
+agent-stream-loop,Multi-turn streaming loop with cancellation and durable events,agentic-super-app-agent-runtime,6,implemented,Agent stream replay and cancellation test
+agent-skills,Scoped manifest discovery validation toggles and conflicts,agentic-super-app-agent-runtime,6,implemented,Skill permission and conflict test
+agent-memory,Inspectable scoped memory with edit disable delete and retrieval,agentic-super-app-agent-runtime,6,implemented,Memory scope and deletion test
+agent-background-recovery,Background runs with restart recovery and artifacts,agentic-super-app-agent-runtime,6,implemented,Interrupted background run recovery test
+routine-scheduler,Persistent timezone-aware routines with catch-up and concurrency policies,agentic-super-app-routine-scheduler,7,implemented,Scheduler occurrence and duplicate suppression test
+plugin-catalog,Manifest catalog connections grants dry-run and invocation audit,agentic-super-app-plugin-runtime,7,implemented,Plugin least-privilege invocation test
+notification-routing,In-app and optional native notification delivery,agentic-super-app-notification-service,7,implemented,Notification persistence and delivery test
+shared-mode-shell,Persistent Agent Code Chat shell with independent navigation,agentic-super-app-app-host + renderer,8,implemented,Native mode switch continuity smoke test
+shell-command-palette,Keyboard command palette with accessible focus and mode shortcuts,renderer shell,8,implemented,Command palette keyboard interaction test
+shell-preferences,Scale density reduced motion and window geometry restoration,app-host + renderer,8,implemented,Preference and geometry restart test
+backup-restore,Versioned database and artifact backup with staged restore,agentic-super-app-app-host + persistence,8,implemented,Backup archive and restore migration test
+update-channel,Optional HTTPS signature-verified update check and installation,agentic-super-app-app-host,8,implemented,Configured updater package smoke test
+release-diagnostics,Crash markers recovery projection and diagnostic activity center,app-host + notification-service,8,implemented,Unexpected exit diagnostics test
+mobile-control,Mobile companion control surface,local-first release,8,deferred,Post-release remote control design review
+remote-hosts,SSH and remote execution hosts,code-runtime,8,deferred,Post-release remote host recovery test

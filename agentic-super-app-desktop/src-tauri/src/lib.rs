@@ -1,5 +1,7 @@
 #![allow(clippy::result_large_err)]
 
+mod release;
+
 use agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntime;
 use agentic_super_app_artifact_store::{
     AgenticSuperAppArtifactError, AgenticSuperAppArtifactStore, AgenticSuperAppStoredAttachment,
@@ -36,12 +38,12 @@ use agentic_super_app_protocol::{
     AgentMemorySummary, AgentPluginGrant, AgentPluginGrantRequest, AgentRunControlRequest,
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
     AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest, ApiError,
-    ApplicationMode, BootstrapSnapshot, BuildInformation, ChatAttachmentImportRequest,
-    ChatBranchRequest, ChatConversationDetail, ChatCreateRequest, ChatDeleteRequest,
-    ChatDraftRequest, ChatEditRequest, ChatEventEnvelope, ChatEventsQuery, ChatExportRequest,
-    ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest, ChatProviderMessage,
-    ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort, ChatSendRequest,
-    ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
+    ApplicationMode, BackupSummary, BootstrapSnapshot, BuildInformation,
+    ChatAttachmentImportRequest, ChatBranchRequest, ChatConversationDetail, ChatCreateRequest,
+    ChatDeleteRequest, ChatDraftRequest, ChatEditRequest, ChatEventEnvelope, ChatEventsQuery,
+    ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
+    ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
+    ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
     CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
@@ -60,7 +62,8 @@ use agentic_super_app_protocol::{
     PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
     ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
     RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
-    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
+    AGENTIC_SUPER_APP_PROTOCOL_VERSION,
 };
 use agentic_super_app_routine_scheduler::{
     AgenticSuperAppRoutineScheduler, AgenticSuperAppRoutineSchedulerError,
@@ -73,19 +76,21 @@ use agentic_super_app_workspace_service::{
     AgenticSuperAppWorkspaceError, AgenticSuperAppWorkspaceService,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::{ipc::Channel, Manager, State};
+use tauri::{ipc::Channel, Emitter, Manager, State};
 #[cfg(desktop)]
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
@@ -98,6 +103,27 @@ impl Default for AgenticSuperAppShellState {
             active_mode: RwLock::new(ApplicationMode::Agent),
         }
     }
+}
+
+struct AgenticSuperAppUpdateState {
+    pending: std::sync::Mutex<Option<tauri_plugin_updater::Update>>,
+}
+
+impl Default for AgenticSuperAppUpdateState {
+    fn default() -> Self {
+        Self {
+            pending: std::sync::Mutex::new(None),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AgenticSuperAppWindowState {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    maximized: bool,
 }
 
 #[derive(Clone)]
@@ -130,6 +156,10 @@ impl AgenticSuperAppFoundation {
         orchestration_root: PathBuf,
     ) -> Result<Self, String> {
         let persistence = AgenticSuperAppPersistence::open(&database_path)
+            .await
+            .map_err(|error| error.to_string())?;
+        let previous_shutdown_was_clean = persistence
+            .previous_shutdown_was_clean()
             .await
             .map_err(|error| error.to_string())?;
         let code_workspaces = AgenticSuperAppWorkspaceService::new();
@@ -216,6 +246,11 @@ impl AgenticSuperAppFoundation {
                 "Recovered {} interrupted operation(s) after restart.",
                 recovered_operations
             ))
+        } else if previous_shutdown_was_clean == Some(false) {
+            Some(
+                "The previous session ended unexpectedly. Review active runs and terminals before continuing."
+                    .to_owned(),
+            )
         } else {
             None
         };
@@ -345,15 +380,27 @@ fn agentic_super_app_query_bootstrap(
     })
 }
 #[tauri::command]
-fn agentic_super_app_command_set_active_mode(
+async fn agentic_super_app_command_set_active_mode(
     command: SetActiveModeCommand,
     state: State<'_, AgenticSuperAppShellState>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<BootstrapSnapshot, ApiError> {
-    let mut active_mode = state.active_mode.write().map_err(|_| unavailable_error())?;
-    *active_mode = command.mode;
+    let mode = command.mode;
+    {
+        let mut active_mode = state.active_mode.write().map_err(|_| unavailable_error())?;
+        *active_mode = mode;
+    }
+    let mode_json = serde_json::to_string(&mode).map_err(|error| {
+        application_error("settings_unavailable", error.to_string(), RetryClass::Safe)
+    })?;
+    foundation
+        .persistence
+        .set_setting("shell.active_mode", &mode_json)
+        .await
+        .map_err(database_error)?;
     Ok(BootstrapSnapshot {
         protocol: current_protocol_version(),
-        active_mode: *active_mode,
+        active_mode: mode,
         product_name: "Agentic Super App".to_owned(),
     })
 }
@@ -370,6 +417,134 @@ async fn agentic_super_app_query_diagnostic_snapshot(
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<DiagnosticSnapshot, ApiError> {
     foundation.diagnostic_snapshot().await
+}
+
+fn update_configuration() -> Result<Option<(url::Url, String)>, ApiError> {
+    let endpoint = match std::env::var("AGENTIC_SUPER_APP_UPDATER_ENDPOINT") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return Ok(None),
+    };
+    let public_key = match std::env::var("AGENTIC_SUPER_APP_UPDATER_PUBKEY") {
+        Ok(value) if !value.trim().is_empty() => value,
+        _ => return Ok(None),
+    };
+    let endpoint = url::Url::parse(endpoint.trim())
+        .map_err(|error| updater_error(format!("Invalid updater endpoint: {error}")))?;
+    if endpoint.scheme() != "https" {
+        return Err(updater_error(
+            "Updater endpoints must use HTTPS for signed release metadata.",
+        ));
+    }
+    Ok(Some((endpoint, public_key)))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_update(
+    app: tauri::AppHandle,
+    state: State<'_, AgenticSuperAppUpdateState>,
+) -> Result<UpdateSnapshot, ApiError> {
+    let current_version = env!("CARGO_PKG_VERSION").to_owned();
+    let Some((endpoint, public_key)) = update_configuration()? else {
+        return Ok(UpdateSnapshot {
+            configured: false,
+            current_version,
+            available_version: None,
+            notes: None,
+            published_at: None,
+            status: "not_configured".to_owned(),
+        });
+    };
+    let updater = app
+        .updater_builder()
+        .endpoints(vec![endpoint])
+        .map_err(updater_error)?
+        .pubkey(public_key)
+        .build()
+        .map_err(updater_error)?;
+    let update = updater.check().await.map_err(updater_error)?;
+    let mut pending = state.pending.lock().map_err(|_| unavailable_error())?;
+    let Some(update) = update else {
+        *pending = None;
+        return Ok(UpdateSnapshot {
+            configured: true,
+            current_version,
+            available_version: None,
+            notes: None,
+            published_at: None,
+            status: "up_to_date".to_owned(),
+        });
+    };
+    let snapshot = UpdateSnapshot {
+        configured: true,
+        current_version,
+        available_version: Some(update.version.clone()),
+        notes: update.body.clone(),
+        published_at: update.date.map(|value| value.to_string()),
+        status: "available".to_owned(),
+    };
+    *pending = Some(update);
+    Ok(snapshot)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_install_update(
+    state: State<'_, AgenticSuperAppUpdateState>,
+) -> Result<(), ApiError> {
+    let update = state
+        .pending
+        .lock()
+        .map_err(|_| unavailable_error())?
+        .take()
+        .ok_or_else(|| {
+            application_error(
+                "update_not_available",
+                "Check for an update before installing one.",
+                RetryClass::AfterUserAction,
+            )
+        })?;
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(updater_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_backup(
+    app: tauri::AppHandle,
+    destination: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<BackupSummary, ApiError> {
+    let destination = PathBuf::from(destination.trim());
+    if destination.as_os_str().is_empty() {
+        return Err(validation_error("A backup destination is required."));
+    }
+    let summary = release::create_backup(
+        &foundation.persistence,
+        &foundation.artifacts,
+        &destination,
+        env!("CARGO_PKG_VERSION"),
+        current_protocol_version().major,
+    )
+    .await
+    .map_err(release_error)?;
+    let _ = app.emit("agentic-super-app://backup-created", summary.clone());
+    Ok(summary)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_prepare_restore(
+    app: tauri::AppHandle,
+    source: String,
+) -> Result<(), ApiError> {
+    let app_data_dir = app.path().app_data_dir().map_err(|error| {
+        application_error("storage_unavailable", error.to_string(), RetryClass::Safe)
+    })?;
+    release::prepare_restore(Path::new(source.trim()), &app_data_dir).map_err(release_error)?;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        app.request_restart();
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -3354,6 +3529,29 @@ async fn agentic_super_app_command_send_test_notification(
     Ok(())
 }
 
+#[tauri::command]
+async fn agentic_super_app_command_mark_notification_read(
+    notification_id: String,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<bool, ApiError> {
+    foundation
+        .persistence
+        .mark_notification_read(notification_id.trim())
+        .await
+        .map_err(database_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_mark_all_notifications_read(
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<u64, ApiError> {
+    foundation
+        .persistence
+        .mark_all_notifications_read()
+        .await
+        .map_err(database_error)
+}
+
 fn start_native_notification_bridge(app: tauri::AppHandle, jobs: AgenticSuperAppJobRuntime) {
     let mut receiver = jobs.subscribe();
     tauri::async_runtime::spawn(async move {
@@ -3448,6 +3646,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(desktop)]
             install_tray(app).map_err(Box::<dyn std::error::Error>::from)?;
@@ -3458,23 +3657,100 @@ pub fn run() {
             let database_path = app_data_dir.join("agentic-super-app.sqlite3");
             let artifact_root = app_data_dir.join("artifacts");
             let orchestration_root = app_data_dir.join("orchestration");
+            release::apply_pending_restore(&app_data_dir, &database_path, &artifact_root)
+                .map_err(|error| Box::<dyn std::error::Error>::from(error.to_string()))?;
             let foundation = tauri::async_runtime::block_on(AgenticSuperAppFoundation::open(
                 database_path,
                 artifact_root,
                 orchestration_root,
             ))
             .map_err(Box::<dyn std::error::Error>::from)?;
-            app.manage(AgenticSuperAppShellState::default());
-            foundation.routine_scheduler.start();
+            tauri::async_runtime::block_on(
+                foundation
+                    .persistence
+                    .record_startup(env!("CARGO_PKG_VERSION"), current_protocol_version().major),
+            )
+            .map_err(|error| Box::<dyn std::error::Error>::from(error.to_string()))?;
+            let active_mode = tauri::async_runtime::block_on(
+                foundation.persistence.get_setting("shell.active_mode"),
+            )
+            .ok()
+            .flatten()
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or(ApplicationMode::Agent);
+            if let Some(window) = app.get_webview_window("main") {
+                let saved_window = tauri::async_runtime::block_on(
+                    foundation.persistence.get_setting("shell.window_state"),
+                )
+                .ok()
+                .flatten()
+                .and_then(|value| serde_json::from_str::<AgenticSuperAppWindowState>(&value).ok());
+                if let Some(saved_window) = saved_window {
+                    if saved_window.width >= 900 && saved_window.height >= 620 {
+                        let _ = window.set_size(tauri::Size::Physical(tauri::PhysicalSize::new(
+                            saved_window.width,
+                            saved_window.height,
+                        )));
+                    }
+                    let _ = window.set_position(tauri::Position::Physical(
+                        tauri::PhysicalPosition::new(saved_window.x, saved_window.y),
+                    ));
+                    if saved_window.maximized {
+                        let _ = window.maximize();
+                    }
+                }
+            }
+            app.manage(AgenticSuperAppShellState {
+                active_mode: RwLock::new(active_mode),
+            });
+            app.manage(AgenticSuperAppUpdateState::default());
+            let routine_scheduler = foundation.routine_scheduler.clone();
+            tauri::async_runtime::spawn(async move {
+                routine_scheduler.run().await;
+            });
             start_native_notification_bridge(app.handle().clone(), foundation.jobs.clone());
             app.manage(foundation);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                if let Some(foundation) =
+                    window.app_handle().try_state::<AgenticSuperAppFoundation>()
+                {
+                    if let (Ok(position), Ok(size), Ok(maximized)) = (
+                        window.outer_position(),
+                        window.outer_size(),
+                        window.is_maximized(),
+                    ) {
+                        if let Ok(value) = serde_json::to_string(&AgenticSuperAppWindowState {
+                            x: position.x,
+                            y: position.y,
+                            width: size.width,
+                            height: size.height,
+                            maximized,
+                        }) {
+                            let _ = tauri::async_runtime::block_on(
+                                foundation
+                                    .persistence
+                                    .set_setting("shell.window_state", &value),
+                            );
+                        }
+                    }
+                    let _ = tauri::async_runtime::block_on(
+                        foundation.persistence.record_clean_shutdown(),
+                    );
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             agentic_super_app_query_bootstrap,
             agentic_super_app_command_set_active_mode,
             agentic_super_app_query_build_information,
             agentic_super_app_query_diagnostic_snapshot,
+            agentic_super_app_query_update,
+            agentic_super_app_command_install_update,
+            agentic_super_app_command_create_backup,
+            agentic_super_app_command_prepare_restore,
             agentic_super_app_query_agent_dashboard,
             agentic_super_app_query_agents,
             agentic_super_app_query_agent,
@@ -3582,6 +3858,8 @@ pub fn run() {
             agentic_super_app_command_cancel_job,
             agentic_super_app_stream_shared_events,
             agentic_super_app_command_send_test_notification,
+            agentic_super_app_command_mark_notification_read,
+            agentic_super_app_command_mark_all_notifications_read,
             agentic_super_app_command_prepare_restart_recovery
         ])
         .run(tauri::generate_context!())
@@ -3662,6 +3940,18 @@ fn unavailable_error() -> ApiError {
     application_error(
         "state_unavailable",
         "Application state is unavailable.",
+        RetryClass::Safe,
+    )
+}
+
+fn updater_error(error: impl ToString) -> ApiError {
+    application_error("update_unavailable", error.to_string(), RetryClass::Safe)
+}
+
+fn release_error(error: release::AgenticSuperAppReleaseError) -> ApiError {
+    application_error(
+        "release_operation_failed",
+        error.to_string(),
         RetryClass::Safe,
     )
 }

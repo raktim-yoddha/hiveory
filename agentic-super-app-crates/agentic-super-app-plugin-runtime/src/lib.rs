@@ -213,14 +213,12 @@ impl AgenticSuperAppPluginRuntime {
         &self,
         request: &PluginConnectionIdRequest,
     ) -> Result<(), AgenticSuperAppPluginRuntimeError> {
-        if let Some((_, secret_ref)) = self
+        if let Some((_, Some(secret_ref))) = self
             .store
             .connection_with_secret(&request.connection_id)
             .await?
         {
-            if let Some(secret_ref) = secret_ref {
-                let _ = self.secrets.delete(&secret_ref);
-            }
+            let _ = self.secrets.delete(&secret_ref);
         }
         self.store.delete_connection(&request.connection_id).await?;
         Ok(())
@@ -280,11 +278,11 @@ impl AgenticSuperAppPluginRuntime {
         self.store
             .mark_connection_validated(&request.connection_id)
             .await?;
-        Ok(self.store.connection(&request.connection_id).await?.ok_or(
+        self.store.connection(&request.connection_id).await?.ok_or(
             AgenticSuperAppPluginRuntimeError::InvalidInput(
                 "connection disappeared during test".to_owned(),
             ),
-        )?)
+        )
     }
 
     pub async fn dry_run(

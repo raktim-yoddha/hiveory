@@ -32,12 +32,14 @@ base64.workspace = true
 tauri = { version = "2", features = ["image-png", "tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
 sqlx.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 uuid.workspace = true
 url.workspace = true
+zip.workspace = true
 
 [lib]
 name = "agentic_super_app_app_host"

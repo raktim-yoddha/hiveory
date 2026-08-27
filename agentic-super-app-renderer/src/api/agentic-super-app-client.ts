@@ -11,6 +11,9 @@ export type NotificationSummary = { id: string; title: string; body: string; sev
 export type SharedEventEnvelope = { sequence: number; emitted_at_unix_ms: number; kind: string; job_id: string | null; message: string | null; text_delta: string | null; native_notification: boolean }
 export type DiagnosticSnapshot = { providers: ProviderAccountSummary[]; recent_jobs: JobSummary[]; notifications: NotificationSummary[]; recovery_message: string | null }
 export type BootstrapSnapshot = { protocol: { major: number }; active_mode: ApplicationMode; product_name: string }
+export type UpdateSnapshot = { configured: boolean; current_version: string; available_version: string | null; notes: string | null; published_at: string | null; status: string }
+export type BackupSummary = { path: string; bytes: number; created_at_unix_ms: number; includes_database: boolean; artifact_count: number }
+export type BuildInformation = { product_name: string; version: string; protocol: { major: number } }
 
 export type AgentApprovalPolicy = 'always_ask' | 'ask_for_mutations' | 'allow_within_scope' | 'deny'
 export type AgentMemoryPolicy = 'disabled' | 'explicit_only' | 'include_summaries'
@@ -206,7 +209,7 @@ export type CodeCleanupConfirmRequest = { run_id: string; worktree_id: string; c
 export type CodeOrchestrationEventsQuery = { run_id: string; after_sequence: number; limit: number | null }
 export type CodeCheckpointDiffRequest = { run_id: string; checkpoint_id: string; compare_to_checkpoint_id: string | null }
 
-const protocol: ProtocolVersion = { major: 1, minor: 0, patch: 0 }
+const protocol: ProtocolVersion = { major: 2, minor: 0, patch: 0 }
 const agenticSuperAppIsTauri = '__TAURI_INTERNALS__' in window
 const previewProvider: ProviderAccountSummary = { id: 'agentic-super-app-openai', display_name: 'OpenAI Responses', default_model: 'gpt-5.6-mini', secret_configured: false, enabled: true }
 const previewConversations = new Map<string, ChatConversationDetail>()
@@ -390,7 +393,12 @@ async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Prom
 export const agenticSuperAppClient = {
   async bootstrap(): Promise<BootstrapSnapshot> { return agenticSuperAppIsTauri ? tauriQuery<BootstrapSnapshot>('agentic_super_app_query_bootstrap') : { protocol, active_mode: 'agent', product_name: 'Agentic Super App' } },
   async setActiveMode(mode: ApplicationMode): Promise<BootstrapSnapshot> { return agenticSuperAppIsTauri ? invoke<BootstrapSnapshot>('agentic_super_app_command_set_active_mode', { command: { mode } }) : { protocol, active_mode: mode, product_name: 'Agentic Super App' } },
+  async buildInformation(): Promise<BuildInformation> { return agenticSuperAppIsTauri ? tauriQuery<BuildInformation>('agentic_super_app_query_build_information') : { product_name: 'Agentic Super App', version: '1.0.0', protocol: { major: 2 } } },
   async diagnostics(): Promise<DiagnosticSnapshot> { return agenticSuperAppIsTauri ? tauriQuery<DiagnosticSnapshot>('agentic_super_app_query_diagnostic_snapshot') : { providers: [previewProvider], recent_jobs: [], notifications: [], recovery_message: null } },
+  async checkForUpdate(): Promise<UpdateSnapshot> { return agenticSuperAppIsTauri ? tauriQuery<UpdateSnapshot>('agentic_super_app_query_update') : { configured: false, current_version: '1.0.0', available_version: null, notes: null, published_at: null, status: 'not_configured' } },
+  async installUpdate(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_install_update') },
+  async createBackup(destination: string): Promise<BackupSummary> { return agenticSuperAppIsTauri ? invoke<BackupSummary>('agentic_super_app_command_create_backup', { destination }) : { path: destination, bytes: 0, created_at_unix_ms: Date.now(), includes_database: true, artifact_count: 0 } },
+  async prepareRestore(source: string): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_prepare_restore', { source }) },
   async configureModel(model: string): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_configure_openai_provider', { model }) },
   async setSecret(secret: string): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_set_openai_secret', { secret }) },
   async validateProvider(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_validate_openai_provider') },
@@ -398,6 +406,8 @@ export const agenticSuperAppClient = {
   async cancelJob(jobId: string): Promise<boolean> { return agenticSuperAppIsTauri ? invoke('agentic_super_app_command_cancel_job', { jobId }) : true },
   subscribe(onEvent: (event: SharedEventEnvelope) => void): void { if (agenticSuperAppIsTauri) void invoke('agentic_super_app_stream_shared_events', { channel: new Channel<SharedEventEnvelope>(onEvent) }) },
   async testNotification(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_send_test_notification') },
+  async markNotificationRead(notificationId: string): Promise<boolean> { return agenticSuperAppIsTauri ? invoke<boolean>('agentic_super_app_command_mark_notification_read', { notificationId }) : true },
+  async markAllNotificationsRead(): Promise<number> { return agenticSuperAppIsTauri ? invoke<number>('agentic_super_app_command_mark_all_notifications_read') : 0 },
   async restartRecovery(): Promise<void> { if (agenticSuperAppIsTauri) await invoke('agentic_super_app_command_prepare_restart_recovery') },
 
   async agentDashboard(): Promise<AgentDashboard> { return agenticSuperAppIsTauri ? tauriQuery<AgentDashboard>('agentic_super_app_query_agent_dashboard') : previewAgentDashboard() },
@@ -838,6 +848,15 @@ export const agenticSuperAppClient = {
   async chooseExportDestination(suggestedName = 'chat-export.zip'): Promise<string | null> {
     if (!agenticSuperAppIsTauri) return `${suggestedName}`
     return saveDialog({ defaultPath: suggestedName, filters: [{ name: 'Chat export', extensions: ['zip'] }] })
+  },
+  async chooseBackupDestination(suggestedName = 'agentic-super-app-backup.zip'): Promise<string | null> {
+    if (!agenticSuperAppIsTauri) return suggestedName
+    return saveDialog({ defaultPath: suggestedName, filters: [{ name: 'Application backup', extensions: ['zip'] }] })
+  },
+  async chooseBackupSource(): Promise<string | null> {
+    if (!agenticSuperAppIsTauri) return null
+    const selected = await openDialog({ multiple: false, directory: false, title: 'Choose an application backup', filters: [{ name: 'Application backup', extensions: ['zip'] }] })
+    return typeof selected === 'string' ? selected : null
   },
   isTauri: agenticSuperAppIsTauri,
 }

@@ -51,6 +51,11 @@ impl AgenticSuperAppPersistence {
         Ok(Self { pool })
     }
 
+    /// Close all connections before a database is moved or replaced.
+    pub async fn close(self) {
+        self.pool.close().await;
+    }
+
     pub async fn set_setting(&self, key: &str, value_json: &str) -> Result<(), sqlx::Error> {
         sqlx::query("INSERT INTO agentic_super_app_settings (key, value_json, updated_at_unix_ms) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_at_unix_ms=excluded.updated_at_unix_ms")
             .bind(key).bind(value_json).bind(now_ms()).execute(&self.pool).await?;
@@ -64,6 +69,70 @@ impl AgenticSuperAppPersistence {
                 .await?
                 .map(|row| row.get(0)),
         )
+    }
+
+    /// Create a consistent SQLite snapshot without copying an active WAL file.
+    /// The caller owns the destination path and is responsible for packaging it.
+    pub async fn backup_sqlite(&self, destination: &Path) -> Result<(), sqlx::Error> {
+        if destination.exists() {
+            return Err(sqlx::Error::Protocol(
+                "backup destination already exists".to_owned(),
+            ));
+        }
+        if let Some(parent) = destination.parent() {
+            std::fs::create_dir_all(parent).map_err(sqlx::Error::Io)?;
+        }
+        let destination = destination.to_string_lossy().into_owned();
+        sqlx::query("VACUUM INTO ?")
+            .bind(destination)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn record_startup(
+        &self,
+        product_version: &str,
+        protocol_major: u16,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO agentic_super_app_release_metadata (id, product_version, protocol_major, last_started_at_unix_ms, last_clean_shutdown_at_unix_ms, last_backup_at_unix_ms) VALUES (1, ?, ?, ?, NULL, NULL) ON CONFLICT(id) DO UPDATE SET product_version=excluded.product_version, protocol_major=excluded.protocol_major, last_started_at_unix_ms=excluded.last_started_at_unix_ms, last_clean_shutdown_at_unix_ms=NULL",
+        )
+        .bind(product_version)
+        .bind(i64::from(protocol_major))
+        .bind(now_ms())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn previous_shutdown_was_clean(&self) -> Result<Option<bool>, sqlx::Error> {
+        Ok(sqlx::query(
+            "SELECT last_clean_shutdown_at_unix_ms FROM agentic_super_app_release_metadata WHERE id=1",
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .map(|row| row.get::<Option<i64>, _>(0).is_some()))
+    }
+
+    pub async fn record_clean_shutdown(&self) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE agentic_super_app_release_metadata SET last_clean_shutdown_at_unix_ms=? WHERE id=1",
+        )
+        .bind(now_ms())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn record_backup(&self) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE agentic_super_app_release_metadata SET last_backup_at_unix_ms=? WHERE id=1",
+        )
+        .bind(now_ms())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
     pub async fn provider_accounts(&self) -> Result<Vec<ProviderAccountSummary>, sqlx::Error> {
         let rows = sqlx::query("SELECT id, display_name, default_model, secret_ref, enabled FROM agentic_super_app_provider_accounts ORDER BY created_at_unix_ms").fetch_all(&self.pool).await?;
@@ -178,6 +247,28 @@ impl AgenticSuperAppPersistence {
                 created_at_unix_ms: row.get(5),
             })
             .collect())
+    }
+
+    pub async fn mark_notification_read(&self, id: &str) -> Result<bool, sqlx::Error> {
+        Ok(sqlx::query(
+            "UPDATE agentic_super_app_notifications SET read_at_unix_ms=? WHERE id=? AND read_at_unix_ms IS NULL",
+        )
+        .bind(now_ms())
+        .bind(id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            > 0)
+    }
+
+    pub async fn mark_all_notifications_read(&self) -> Result<u64, sqlx::Error> {
+        Ok(sqlx::query(
+            "UPDATE agentic_super_app_notifications SET read_at_unix_ms=? WHERE read_at_unix_ms IS NULL",
+        )
+        .bind(now_ms())
+        .execute(&self.pool)
+        .await?
+        .rows_affected())
     }
 }
 

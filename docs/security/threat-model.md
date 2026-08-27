@@ -46,4 +46,12 @@ The renderer has non-privileged shell, diagnostics, and Chat presentation comman
 - Checkpoints are captured before review. Dependency fan-in is non-interactive and blocks on conflicts; cleanup validates exact confirmation and the managed-root containment invariant.
 - Restart recovery marks active orchestration dispatches interrupted while retaining durable worktree and session identifiers. Resumption is an explicit user action with a fresh lease generation.
 
+## Phase 8 controls verified in code
+
+- The updater is host-owned and inert without an explicit endpoint and public key. Configured endpoints are parsed and validated by the updater library; the renderer receives only typed release metadata.
+- Backup creation uses SQLite `VACUUM INTO` instead of copying a live database file. The archive contains a versioned manifest, the database, and only application-managed artifacts. Entry count, total size, symlinks, traversal components, and unexpected top-level entries are rejected.
+- Restore is staged in private application data and applied before the database pool opens after an explicit restart. Existing SQLite WAL/SHM sidecars and artifact directories are retained as pre-restore copies so an interrupted restore can be diagnosed.
+- Startup and clean-shutdown markers distinguish an unexpected exit from a clean close. Active work is recovered as interrupted/reconciliation-required and surfaced in Diagnostics; no ambiguous operation is reported as completed.
+- Shell settings persist only visual preferences in renderer local storage. Active mode, window geometry, secrets, jobs, and domain state remain host-owned. The command palette and notification center do not add privileged renderer capabilities.
+
 Security-sensitive implementation requires a new ADR and acceptance test before activation.

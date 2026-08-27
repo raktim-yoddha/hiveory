@@ -1,11 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Agentic Super App",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "identifier": "com.agenticsuperapp.desktop",
   "build": {
-    "beforeDevCommand": "pnpm --dir ../../agentic-super-app-renderer dev",
-    "beforeBuildCommand": "pnpm --dir ../../agentic-super-app-renderer build",
+    "beforeDevCommand": "pnpm --dir agentic-super-app-renderer dev",
+    "beforeBuildCommand": "pnpm --dir agentic-super-app-renderer build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../../agentic-super-app-renderer/dist"
   },
@@ -26,6 +26,20 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    }
   }
 }

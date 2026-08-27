@@ -280,11 +280,10 @@ impl AgenticSuperAppRoutineStore {
             .fetch_one(&mut *transaction)
             .await?
             .get(0);
-        let state = if concurrency == "skip" && active > 0 {
-            RoutineExecutionState::Skipped
-        } else if concurrency == "queue_one" && (active >= 2 || queued > 0) {
-            RoutineExecutionState::Skipped
-        } else if concurrency == "parallel_bounded" && active >= 4 {
+        let should_skip = (concurrency == "skip" && active > 0)
+            || (concurrency == "queue_one" && (active >= 2 || queued > 0))
+            || (concurrency == "parallel_bounded" && active >= 4);
+        let state = if should_skip {
             RoutineExecutionState::Skipped
         } else {
             RoutineExecutionState::Queued

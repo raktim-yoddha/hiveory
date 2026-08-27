@@ -126,13 +126,13 @@ impl AgenticSuperAppPluginStore {
         &self,
         connection_id: &str,
     ) -> Result<Option<PluginConnectionSummary>, AgenticSuperAppPluginStoreError> {
-        Ok(sqlx::query("SELECT id, plugin_id, name, origin, kind, api_key_header, secret_ref, validated_at_unix_ms, created_at_unix_ms, updated_at_unix_ms FROM agentic_super_app_plugin_connections WHERE id=?")
+        sqlx::query("SELECT id, plugin_id, name, origin, kind, api_key_header, secret_ref, validated_at_unix_ms, created_at_unix_ms, updated_at_unix_ms FROM agentic_super_app_plugin_connections WHERE id=?")
             .bind(connection_id)
             .fetch_optional(self.persistence.pool())
             .await?
             .as_ref()
             .map(connection_from_row)
-            .transpose()?)
+            .transpose()
     }
 
     pub async fn connection_with_secret(

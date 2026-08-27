@@ -2,7 +2,9 @@
 
 ## Scope
 
-Phase 0–1 established the shell, Phase 2 added shared durable infrastructure, Phase 3 added standalone Chat, Phase 4 added the first Code vertical slice, and Phase 5 adds local Code orchestration. Remote workspaces and broader Agent product surfaces remain separate future domains.
+Phase 8 is the local-first desktop release boundary. Phases 0–1 established the shell, Phase 2 added shared durable infrastructure, Phase 3 added standalone Chat, Phase 4 added the Code workbench, Phase 5 added local Code orchestration, Phase 6 added the Agent vertical slice, and Phase 7 added bounded routines/plugins. Phase 8 closes the shared shell, release, recovery, diagnostics, backup, and update lifecycle around those vertical slices.
+
+The release intentionally targets the useful local subset of the reference products: a single-user desktop host with explicit permissions, durable state, local workspaces, bounded provider access, and reviewable automation. Remote hosts, mobile control, messaging gateways, voice/TTS, computer-use, hosted sync, and arbitrary native extensions are outside this product boundary.
 
 ## Runtime shape
 
@@ -52,12 +54,43 @@ Each worker receives an application-local managed Git worktree. A successful str
 
 The Runs surface is a projection of SQLite and the host event stream: it shows the task DAG, worker lanes, lease/checkpoint state, questions, and review decisions. It never receives filesystem paths as capabilities and never launches a process directly.
 
+## Phase 6 Agent services
+
+Agent owns named assistants and their explicit runtime boundary:
+
+- `agentic-super-app-agent-domain`: validates agent definitions, folder grants, tools, skills, memory, artifacts, and bounded child-run requests.
+- `agentic-super-app-agent-runtime`: executes a durable run loop with typed tool calls, approval gates, cancellation, checkpointed events, bounded delegation, and restart recovery.
+- `agentic-super-app-persistence::agent`: stores agent definitions, grants, skills, memories, artifacts, runs, tool calls, approvals, and ordered events.
+
+The Agent surface can inspect and retry durable runs, enable validated skills, search scoped memory, create artifacts, and delegate bounded work. Folder access is capability-scoped; tool execution remains in the host and every mutating or externally visible action is explicit or approval-gated.
+
+## Phase 7 automation and integrations
+
+Routines and plugins extend Agent without becoming a second authority:
+
+- `agentic-super-app-routine-scheduler` evaluates bounded local schedules, applies catch-up/concurrency policy, and persists execution state.
+- `agentic-super-app-plugin-runtime` validates a small manifest/adapter surface, enforces host allow-lists, and keeps connection secrets in the OS-backed secret store.
+- Notifications are retained in SQLite and optionally bridged to platform-native delivery after permission.
+
+Routines inherit the selected Agent's grants and limits. Plugins are manifest-defined adapters rather than arbitrary executable modules; the renderer receives summaries and events only.
+
+## Phase 8 release services
+
+Phase 8 adds the final lifecycle controls around the existing domains:
+
+- The shared shell persists active mode, window geometry, accessibility preferences, diagnostics, notifications, and keyboard-driven navigation.
+- `agentic-super-app-desktop/src-tauri/src/release.rs` owns bounded portable backup/restore. A backup contains a versioned manifest, a consistent database snapshot, and only application-managed artifacts. Restore validates the archive, retains pre-restore database files, and restarts through a staged pending-restore marker.
+- Startup and close markers distinguish a clean shutdown from an interrupted session. Existing active jobs and dispatches remain recoverable through the domain recovery paths.
+- The Tauri host owns update configuration, discovery, and installation. No update network request is made until the endpoint and public key are configured at runtime.
+
+The renderer remains a projection of host state in Phase 8. It can request a backup destination, restore source, update check, or update installation, but it never reads the database, opens arbitrary paths, or manages updater keys directly.
+
 ## Future boundaries
 
-Agent orchestration and remote connection product-domain crates remain deferred until their parity features have owners and acceptance tests. Chat remains intentionally isolated from workspace, Git, terminal, and shell capabilities.
+Remote connection product domains, mobile control, messaging/voice channels, hosted synchronization, arbitrary native plugin execution, and upstream-specific training/datagen/computer-use surfaces remain deferred. They require separate threat models, product contracts, and acceptance tests. Chat remains intentionally isolated from workspace, Git, terminal, and shell capabilities.
 
 One renderer/webview keeps desktop authorization simple. Future browser preview is an auxiliary, capability-free surface rather than a peer authority.
 
 ## Design system
 
-The shell, Phase 3 Chat, Phase 4 Code, and Phase 5 Runs use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Code adds a workspace/file sidebar, visible trust state, deterministic pane-tree summary, Monaco editing, xterm terminal rendering, Git review cards, isolated preview launch, and reduced-motion behavior. Runs adds a dense but readable queue, DAG nodes with dependency labels, worker lanes, checkpoint/review inspection, and explicit action states. The UI uses IBM Plex Sans with JetBrains Mono for source and terminal data. Visual tokens can evolve without changing the security model.
+The shell and all product modes use a restrained graphite dark palette, blue keyboard focus, green local-host status, flat panels, and compact navigation. Code adds a workspace/file sidebar, visible trust state, deterministic pane-tree summary, Monaco editing, xterm terminal rendering, Git review cards, isolated preview launch, and reduced-motion behavior. Runs adds a dense but readable queue, DAG nodes with dependency labels, worker lanes, checkpoint/review inspection, and explicit action states. Agent adds named-assistant, run, approval, skill, memory, artifact, routine, and plugin cards. Chat adds durable conversation, typed-part, attachment, streaming, retry, branch, and export states. The shared shell adds a keyboard command palette, notification center, settings, recovery indicators, and release actions. The UI uses IBM Plex Sans with JetBrains Mono for source and terminal data. Visual tokens can evolve without changing the security model.
