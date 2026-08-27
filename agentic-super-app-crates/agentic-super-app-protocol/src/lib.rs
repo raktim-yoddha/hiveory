@@ -5,6 +5,8 @@ use std::path::Path;
 use ts_rs::{Config, TS};
 
 pub const AGENTIC_SUPER_APP_PROTOCOL_VERSION: u16 = 1;
+pub const CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID: &str = "local-coordinator";
+pub const CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID: &str = "codex-cli";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -963,6 +965,14 @@ pub enum CodeOrchestrationMessageKind {
     Completion,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeOrchestrationEventOrigin {
+    Host,
+    Worker,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeRunSummary {
@@ -971,6 +981,8 @@ pub struct CodeRunSummary {
     pub title: String,
     pub objective: String,
     pub model: Option<String>,
+    pub coordinator_id: String,
+    pub adapter_id: String,
     pub state: CodeRunState,
     pub review_policy: CodeReviewPolicy,
     pub concurrency_limit: u8,
@@ -1018,12 +1030,15 @@ pub struct CodeDispatch {
     pub task_id: String,
     pub attempt: u32,
     pub state: CodeDispatchState,
+    pub adapter_id: String,
     pub lease_generation: u64,
     pub session_id: Option<String>,
     pub pid: Option<u32>,
     pub worktree_id: Option<String>,
     pub checkpoint_id: Option<String>,
     pub last_heartbeat_at_unix_ms: Option<i64>,
+    pub terminal_id: Option<String>,
+    pub cancel_requested_at_unix_ms: Option<i64>,
     pub started_at_unix_ms: i64,
     pub updated_at_unix_ms: i64,
     pub error: Option<String>,
@@ -1114,6 +1129,9 @@ pub struct CodeOrchestrationEventEnvelope {
     pub kind: CodeOrchestrationMessageKind,
     pub payload: String,
     pub accepted: bool,
+    pub origin: CodeOrchestrationEventOrigin,
+    pub worker_sequence: Option<u64>,
+    pub nonce: Option<String>,
     pub emitted_at_unix_ms: i64,
 }
 
@@ -1160,6 +1178,10 @@ pub struct CodeRunCreateRequest {
     pub review_policy: CodeReviewPolicy,
     pub concurrency_limit: Option<u8>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub coordinator_id: Option<String>,
+    #[serde(default)]
+    pub adapter_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1218,6 +1240,33 @@ pub struct CodeDagProposalAcceptRequest {
 #[ts(export)]
 pub struct CodeRunRequest {
     pub run_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDispatchResumeRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub dispatch_id: String,
+    pub lease_generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDispatchCancelRequest {
+    pub run_id: String,
+    pub task_id: String,
+    pub dispatch_id: String,
+    pub lease_generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDispatchTerminalRequest {
+    pub run_id: String,
+    pub dispatch_id: String,
+    pub cols: u16,
+    pub rows: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1425,6 +1474,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeCheckpointState::export_all(&config)?;
     CodeManagedWorktreeState::export_all(&config)?;
     CodeOrchestrationMessageKind::export_all(&config)?;
+    CodeOrchestrationEventOrigin::export_all(&config)?;
     CodeRunSummary::export_all(&config)?;
     CodeTask::export_all(&config)?;
     CodeTaskDependency::export_all(&config)?;
@@ -1446,6 +1496,9 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeDagProposalRequest::export_all(&config)?;
     CodeDagProposalAcceptRequest::export_all(&config)?;
     CodeRunRequest::export_all(&config)?;
+    CodeDispatchResumeRequest::export_all(&config)?;
+    CodeDispatchCancelRequest::export_all(&config)?;
+    CodeDispatchTerminalRequest::export_all(&config)?;
     CodeQuestionAnswerRequest::export_all(&config)?;
     CodeTaskRetryRequest::export_all(&config)?;
     CodeReviewRequest::export_all(&config)?;

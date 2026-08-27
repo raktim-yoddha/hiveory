@@ -165,3 +165,24 @@
 .agentic-super-app-run-question { display: grid; gap: 10px; margin: 12px 22px 0; border-color: #80613e; padding: 12px; background: #2a2118; }.agentic-super-app-run-question > div:first-child { display: flex; gap: 9px; color: #eac08b; }.agentic-super-app-run-question h3 { margin: 0 0 4px; color: #f1d2a8; font-size: 12px; }.agentic-super-app-run-question p { margin: 0; color: #c8a878; font-size: 11px; line-height: 1.5; }.agentic-super-app-run-question-form { display: flex; gap: 7px; }.agentic-super-app-run-question-form input { flex: 1; }
 @media (max-width: 1050px) { .agentic-super-app-runs-content-grid { grid-template-columns: minmax(0, 1.35fr) minmax(220px, .8fr); }.agentic-super-app-add-task-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.agentic-super-app-add-task-grid button { width: fit-content; } }
 @media (max-width: 760px) { .agentic-super-app-runs-header { align-items: flex-start; flex-direction: column; padding: 14px; }.agentic-super-app-runs-header-actions { width: 100%; justify-content: space-between; }.agentic-super-app-runs-layout { display: block; }.agentic-super-app-runs-sidebar { max-height: 390px; border-right: 0; border-bottom: 1px solid #29323c; }.agentic-super-app-runs-toolbar { align-items: flex-start; flex-direction: column; padding: 15px 14px; }.agentic-super-app-runs-toolbar-actions { justify-content: flex-start; }.agentic-super-app-runs-content-grid { display: block; margin-left: 12px; margin-right: 12px; }.agentic-super-app-run-inspector { margin-top: 12px; }.agentic-super-app-worker-lanes, .agentic-super-app-add-task, .agentic-super-app-run-question { margin-left: 12px; margin-right: 12px; }.agentic-super-app-add-task-grid { grid-template-columns: 1fr; }.agentic-super-app-run-question-form { flex-direction: column; } }
+
+.agentic-super-app-run-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; color: #8295a8; font-size: 10px; }
+.agentic-super-app-run-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.agentic-super-app-run-meta code, .agentic-super-app-worker-lane-meta code { color: #b8cce0; font: inherit; }
+.agentic-super-app-worker-lane-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.agentic-super-app-worker-lane-actions button { min-height: 28px !important; padding: 5px 7px !important; font-size: 10px; }
+.agentic-super-app-checkpoint { display: grid; gap: 7px; border-top: 1px solid #293945; padding-top: 9px; }
+.agentic-super-app-checkpoint > div { display: flex; justify-content: space-between; gap: 8px; color: #8fa8be; font-size: 10px; }
+.agentic-super-app-checkpoint code { color: #c0d2e3; font: 10px "JetBrains Mono", Consolas, monospace; }
+.agentic-super-app-checkpoint pre { max-height: 220px; overflow: auto; margin: 0; border: 1px solid #2a3a49; border-radius: 5px; padding: 8px; color: #b9d1e5; background: #0d141b; font: 10px/1.45 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; }
+.agentic-super-app-run-terminal, .agentic-super-app-run-events { margin: 12px 22px 0; border: 1px solid #2c3946; border-radius: 8px; padding: 12px; background: #151e27; }
+.agentic-super-app-run-terminal pre { max-height: 280px; overflow: auto; margin: 10px 0 0; border: 1px solid #263746; border-radius: 6px; padding: 10px; color: #b9d5e9; background: #0a1016; font: 11px/1.45 "JetBrains Mono", Consolas, monospace; white-space: pre-wrap; }
+.agentic-super-app-run-event-list { display: grid; gap: 5px; max-height: 245px; overflow: auto; margin-top: 10px; }
+.agentic-super-app-run-event-list > div { display: grid; grid-template-columns: 52px 40px minmax(0, 1fr) auto; align-items: baseline; gap: 7px; border-bottom: 1px solid #24303b; padding: 6px 2px; color: #b8c7d5; font-size: 10px; }
+.agentic-super-app-run-event-list code { color: #7f9ab1; font: 10px "JetBrains Mono", Consolas, monospace; }
+.agentic-super-app-run-event-list small { color: #788d9f; text-transform: capitalize; }
+.agentic-super-app-event-origin { border: 1px solid #3d566b; border-radius: 99px; padding: 2px 5px; color: #a7c8e5; text-align: center; text-transform: capitalize; }
+.agentic-super-app-event-origin.worker { border-color: #5d527c; color: #c9b8ec; }
+.agentic-super-app-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (pointer: coarse) { .agentic-super-app-runs button, .agentic-super-app-runs input, .agentic-super-app-runs select { min-height: 44px; } .agentic-super-app-runs button { padding-top: 10px; padding-bottom: 10px; } }
+@media (max-width: 760px) { .agentic-super-app-run-terminal, .agentic-super-app-run-events { margin-left: 12px; margin-right: 12px; }.agentic-super-app-run-event-list > div { grid-template-columns: 48px 35px minmax(0, 1fr); }.agentic-super-app-run-event-list small { grid-column: 3; } }

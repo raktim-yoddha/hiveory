@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Monaco from 'monaco-editor'
 import {
   agenticSuperAppClient,
+  CODEX_ADAPTER_ID,
   type CodeAdapterSummary,
   type CodeDocument,
   type CodeFileNode,
@@ -78,7 +79,7 @@ export function AgenticSuperAppCode() {
 
   const selectedWorkspace = detail?.summary
   const activeTerminal = detail?.terminals.find((terminal) => terminal.id === activeTerminalId) ?? null
-  const adapter = adapters.find((item) => item.id === 'codex')
+  const adapter = adapters.find((item) => item.id === CODEX_ADAPTER_ID)
   const trusted = selectedWorkspace?.trust === 'trusted'
 
   const openWorkspace = async () => {
@@ -200,7 +201,7 @@ export function AgenticSuperAppCode() {
     setBusy(kind)
     setTerminalOutput('')
     try {
-      const terminal = await agenticSuperAppClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? 'codex' : null, model: null, resume_session_id: null }, handleTerminalEvent)
+      const terminal = await agenticSuperAppClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? CODEX_ADAPTER_ID : null, model: null, resume_session_id: null }, handleTerminalEvent)
       setDetail((current) => current ? { ...current, terminals: [terminal, ...current.terminals.filter((item) => item.id !== terminal.id)] } : current)
       setActiveTerminalId(terminal.id)
       setFeedback(kind === 'coding_agent' ? 'Coding-agent terminal started with workspace-write and on-request approvals.' : 'Workspace shell started.')

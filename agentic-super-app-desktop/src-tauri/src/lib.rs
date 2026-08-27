@@ -32,7 +32,8 @@ use agentic_super_app_protocol::{
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
     CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
-    CodeDagProposalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff,
+    CodeDagProposalRequest, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
+    CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff,
     CodeGitDiffRequest, CodeGitStatus, CodeGitStatusRequest, CodeOrchestrationEventEnvelope,
     CodeOrchestrationEventsQuery, CodePaneLayout, CodePreviewRequest, CodePreviewState,
     CodePreviewSummary, CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest,
@@ -553,6 +554,112 @@ async fn agentic_super_app_command_cancel_code_run(
 }
 
 #[tauri::command]
+async fn agentic_super_app_command_resume_code_dispatch(
+    command: CommandEnvelope<CodeDispatchResumeRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .resume_dispatch(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_cancel_code_dispatch(
+    command: CommandEnvelope<CodeDispatchCancelRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let detail = foundation
+        .code_orchestration
+        .cancel_dispatch(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_open_code_dispatch_terminal(
+    command: CommandEnvelope<CodeDispatchTerminalRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<CodeTerminalEvent>,
+) -> Result<ResponseEnvelope<CodeTerminalSummary>, ApiError> {
+    validate_code_command(&command)?;
+    let context = foundation
+        .code_orchestration
+        .dispatch_terminal_context(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    let persistence = foundation.persistence.clone();
+    let coding_agent = context.resume_session_id.is_some();
+    let sink: TerminalEventSink = Arc::new(move |event| {
+        let _ = channel.send(event.clone());
+        if matches!(
+            event.kind,
+            agentic_super_app_protocol::CodeTerminalEventKind::Exited
+        ) {
+            let persistence = persistence.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = persistence
+                    .finish_code_terminal(
+                        &event.terminal_id,
+                        agentic_super_app_protocol::CodeTerminalState::Exited,
+                        event.exit_code,
+                    )
+                    .await;
+            });
+        }
+    });
+    let summary = foundation
+        .code_runtime
+        .start_at_root(
+            &CodeTerminalStartRequest {
+                workspace_id: context.workspace_id,
+                kind: if coding_agent {
+                    agentic_super_app_protocol::CodeTerminalKind::CodingAgent
+                } else {
+                    agentic_super_app_protocol::CodeTerminalKind::Shell
+                },
+                cols: command.payload.cols,
+                rows: command.payload.rows,
+                adapter_id: coding_agent.then_some(context.adapter_id),
+                model: coding_agent.then_some(context.model).flatten(),
+                resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
+            },
+            &context.worktree_path,
+            sink,
+        )
+        .map_err(runtime_error)?;
+    let attached = foundation
+        .persistence
+        .attach_orchestration_terminal(
+            &command.payload.dispatch_id,
+            context.lease_generation,
+            &summary.id,
+        )
+        .await
+        .map_err(database_error)?;
+    if !attached {
+        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
+            terminal_id: summary.id.clone(),
+            force: true,
+        });
+        return Err(validation_error(
+            "The dispatch lease changed before the terminal could be attached.",
+        ));
+    }
+    foundation
+        .persistence
+        .save_code_terminal(&summary)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, summary))
+}
+
+#[tauri::command]
 async fn agentic_super_app_command_answer_code_question(
     command: CommandEnvelope<CodeQuestionAnswerRequest>,
     foundation: State<'_, AgenticSuperAppFoundation>,
@@ -624,6 +731,27 @@ async fn agentic_super_app_command_confirm_code_cleanup(
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<ResponseEnvelope<CodeRunDetail>, ApiError> {
     validate_code_command(&command)?;
+    if command.payload.force {
+        if let Ok(detail) = foundation
+            .code_orchestration
+            .detail(&command.payload.run_id)
+            .await
+        {
+            for dispatch in detail.dispatches.iter().filter(|dispatch| {
+                detail.worktrees.iter().any(|worktree| {
+                    worktree.id == command.payload.worktree_id
+                        && worktree.dispatch_id == dispatch.id
+                })
+            }) {
+                if let Some(terminal_id) = dispatch.terminal_id.as_deref() {
+                    let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
+                        terminal_id: terminal_id.to_owned(),
+                        force: true,
+                    });
+                }
+            }
+        }
+    }
     let detail = foundation
         .code_orchestration
         .cleanup_confirm(&command.payload)
@@ -2561,6 +2689,9 @@ pub fn run() {
             agentic_super_app_command_start_code_run,
             agentic_super_app_command_pause_code_run,
             agentic_super_app_command_cancel_code_run,
+            agentic_super_app_command_resume_code_dispatch,
+            agentic_super_app_command_cancel_code_dispatch,
+            agentic_super_app_command_open_code_dispatch_terminal,
             agentic_super_app_command_answer_code_question,
             agentic_super_app_command_retry_code_task,
             agentic_super_app_command_review_code_checkpoint,

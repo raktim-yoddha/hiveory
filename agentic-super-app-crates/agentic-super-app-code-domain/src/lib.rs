@@ -152,7 +152,7 @@ pub fn ready_orchestration_task_ids(
         })
         .map(|task| (task.position, task.id.clone()))
         .collect::<Vec<_>>();
-    ready.sort_by(|left, right| left.cmp(right));
+    ready.sort();
     ready.into_iter().map(|(_, id)| id).collect()
 }
 

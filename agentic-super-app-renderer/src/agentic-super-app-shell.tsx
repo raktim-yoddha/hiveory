@@ -1,10 +1,10 @@
 import { Activity, Bell, Bot, Code2, KeyRound, MessageSquare, PanelLeft, Play, RotateCcw, Settings2, ShieldCheck, Square, Wifi } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification'
 import { agenticSuperAppClient, type ApplicationMode, type DiagnosticSnapshot, type SharedEventEnvelope } from './api/agentic-super-app-client'
 import { AgenticSuperAppChat } from './chat/agentic-super-app-chat'
-import { AgenticSuperAppCode } from './code/agentic-super-app-code'
-import { AgenticSuperAppCodeRuns } from './code/agentic-super-app-code-runs'
+const AgenticSuperAppCode = lazy(() => import('./code/agentic-super-app-code').then((module) => ({ default: module.AgenticSuperAppCode })))
+const AgenticSuperAppCodeRuns = lazy(() => import('./code/agentic-super-app-code-runs').then((module) => ({ default: module.AgenticSuperAppCodeRuns })))
 
 type ModeDefinition = { mode: ApplicationMode; label: string; description: string; icon: typeof Bot; navigation: string[] }
 const modes: ModeDefinition[] = [
@@ -38,7 +38,7 @@ export function AgenticSuperAppShell() {
         {screen === 'diagnostics' ? <><div className="agentic-super-app-rail-heading">System</div><button className="is-selected"><Activity size={15} />Diagnostics</button><button onClick={() => setScreen('workspace')}><PanelLeft size={15} />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.map((item) => <button key={item} className={activeMode === 'code' && ((item === 'Runs' && codeScreen === 'runs') || (item === 'Workbench' && codeScreen === 'workbench')) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'code') setCodeScreen(item === 'Runs' ? 'runs' : 'workbench') }}>{item}</button>)}</>}
         <div className="agentic-super-app-rail-footer">Phase 5 orchestration slice</div>
       </aside>
-      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode /> : <section className="agentic-super-app-content" aria-labelledby="agentic-super-app-page-title"><div className="agentic-super-app-content-header"><ModeIcon size={22} aria-hidden="true" /><div><p className="agentic-super-app-eyebrow">{definition.label} workspace</p><h1 id="agentic-super-app-page-title">Ready for the next layer</h1></div></div><p className="agentic-super-app-description">{definition.description}</p><div className="agentic-super-app-empty-state"><div className="agentic-super-app-empty-mark"><ModeIcon size={28} aria-hidden="true" /></div><h2>Shared foundation online</h2><p>Open Diagnostics to configure an opt-in provider test, inspect durable jobs, and verify recovery.</p></div></section>}
+      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : <section className="agentic-super-app-content" aria-labelledby="agentic-super-app-page-title"><div className="agentic-super-app-content-header"><ModeIcon size={22} aria-hidden="true" /><div><p className="agentic-super-app-eyebrow">{definition.label} workspace</p><h1 id="agentic-super-app-page-title">Ready for the next layer</h1></div></div><p className="agentic-super-app-description">{definition.description}</p><div className="agentic-super-app-empty-state"><div className="agentic-super-app-empty-mark"><ModeIcon size={28} aria-hidden="true" /></div><h2>Shared foundation online</h2><p>Open Diagnostics to configure an opt-in provider test, inspect durable jobs, and verify recovery.</p></div></section>}
     </section>
   </main>
 }

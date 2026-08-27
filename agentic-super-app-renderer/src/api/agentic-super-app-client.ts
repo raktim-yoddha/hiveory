@@ -47,16 +47,18 @@ export type CodeCheckpointKind = 'source' | 'result' | 'integration'
 export type CodeCheckpointState = 'creating' | 'ready' | 'failed'
 export type CodeManagedWorktreeState = 'provisioning' | 'ready' | 'cleanup_pending' | 'removed' | 'failed'
 export type CodeOrchestrationMessageKind = 'status' | 'heartbeat' | 'question' | 'answer' | 'escalation' | 'progress' | 'completion'
-export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
+export type CodeOrchestrationEventOrigin = 'host' | 'worker'
+export const CODEX_ADAPTER_ID = 'codex-cli'
+export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; coordinator_id: string; adapter_id: string; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
 export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTaskDependency = { run_id: string; task_id: string; depends_on_task_id: string }
-export type CodeDispatch = { id: string; run_id: string; task_id: string; attempt: number; state: CodeDispatchState; lease_generation: number; session_id: string | null; pid: number | null; worktree_id: string | null; checkpoint_id: string | null; last_heartbeat_at_unix_ms: number | null; started_at_unix_ms: number; updated_at_unix_ms: number; error: string | null; result_summary: string | null }
+export type CodeDispatch = { id: string; run_id: string; task_id: string; attempt: number; state: CodeDispatchState; adapter_id: string; lease_generation: number; session_id: string | null; pid: number | null; worktree_id: string | null; checkpoint_id: string | null; last_heartbeat_at_unix_ms: number | null; terminal_id: string | null; cancel_requested_at_unix_ms: number | null; started_at_unix_ms: number; updated_at_unix_ms: number; error: string | null; result_summary: string | null }
 export type CodeManagedWorktree = { id: string; run_id: string; task_id: string; dispatch_id: string; path: string; branch: string; base_checkpoint_id: string | null; state: CodeManagedWorktreeState; dirty: boolean; locked: boolean; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeCheckpoint = { id: string; run_id: string; task_id: string | null; dispatch_id: string | null; kind: CodeCheckpointKind; state: CodeCheckpointState; ref_name: string; commit_oid: string | null; parent_checkpoint_id: string | null; summary: string; created_at_unix_ms: number }
 export type CodeReview = { id: string; run_id: string; task_id: string; checkpoint_id: string; decision: CodeReviewDecision; feedback: string | null; created_at_unix_ms: number }
 export type CodeQuestion = { id: string; run_id: string; task_id: string; dispatch_id: string; prompt: string; answer: string | null; answered: boolean; created_at_unix_ms: number }
 export type CodeOrchestrationMessage = { id: string; run_id: string; task_id: string | null; dispatch_id: string | null; kind: CodeOrchestrationMessageKind; question_id: string | null; payload: string; created_at_unix_ms: number }
-export type CodeOrchestrationEventEnvelope = { run_id: string; sequence: number; event_id: string; task_id: string | null; dispatch_id: string | null; lease_generation: number; kind: CodeOrchestrationMessageKind; payload: string; accepted: boolean; emitted_at_unix_ms: number }
+export type CodeOrchestrationEventEnvelope = { run_id: string; sequence: number; event_id: string; task_id: string | null; dispatch_id: string | null; lease_generation: number; kind: CodeOrchestrationMessageKind; payload: string; accepted: boolean; origin: CodeOrchestrationEventOrigin; worker_sequence: number | null; nonce: string | null; emitted_at_unix_ms: number }
 export type CodeDagProposalTask = { client_id: string; title: string; specification: string; depends_on: string[] }
 export type CodeDagProposal = { objective: string; tasks: CodeDagProposalTask[]; warnings: string[] }
 export type CodeRunDetail = { summary: CodeRunSummary; tasks: CodeTask[]; dependencies: CodeTaskDependency[]; dispatches: CodeDispatch[]; worktrees: CodeManagedWorktree[]; checkpoints: CodeCheckpoint[]; reviews: CodeReview[]; questions: CodeQuestion[]; messages: CodeOrchestrationMessage[]; events: CodeOrchestrationEventEnvelope[]; event_cursor: number; proposal: CodeDagProposal | null }
@@ -108,7 +110,10 @@ type CodeTerminalInputRequest = { terminal_id: string; data: string }
 type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
 type CodeTerminalStopRequest = { terminal_id: string; force: boolean }
 type CodePreviewRequest = { workspace_id: string; url: string }
-export type CodeRunCreateRequest = { workspace_id: string; title: string; objective: string; review_policy: CodeReviewPolicy; concurrency_limit: number | null; model: string | null }
+export type CodeRunCreateRequest = { workspace_id: string; title: string; objective: string; review_policy: CodeReviewPolicy; concurrency_limit: number | null; model: string | null; coordinator_id?: string | null; adapter_id?: string | null }
+export type CodeDispatchResumeRequest = { run_id: string; task_id: string; dispatch_id: string; lease_generation: number }
+export type CodeDispatchCancelRequest = { run_id: string; task_id: string; dispatch_id: string; lease_generation: number }
+export type CodeDispatchTerminalRequest = { run_id: string; dispatch_id: string; cols: number; rows: number }
 export type CodeRunUpdateRequest = { run_id: string; title: string; objective: string; review_policy: CodeReviewPolicy; concurrency_limit: number | null }
 export type CodeTaskCreateRequest = { run_id: string; client_id: string | null; title: string; specification: string; depends_on: string[] }
 export type CodeTaskUpdateRequest = { run_id: string; task_id: string; title: string; specification: string; depends_on: string[] }
@@ -203,7 +208,7 @@ function previewCodeTree(workspaceId: string, relativeDirectory: string | null):
   return { workspace_id: workspaceId, directory, entries: [...entries.values()].sort((a, b) => (a.kind === 'directory' ? -1 : 1) - (b.kind === 'directory' ? -1 : 1) || a.name.localeCompare(b.name)), truncated: false }
 }
 function previewCodeSummary(): CodeSnapshot {
-  return { workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary), active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null, adapters: [{ id: 'codex', display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] }] }
+  return { workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary), active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null, adapters: [{ id: CODEX_ADAPTER_ID, display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] }] }
 }
 function previewCodeRunDetail(runId: string): CodeRunDetail {
   const detail = previewCodeRuns.get(runId)
@@ -212,14 +217,14 @@ function previewCodeRunDetail(runId: string): CodeRunDetail {
 }
 function previewCodeRunEvent(detail: CodeRunDetail, payload: string, taskId: string | null = null, dispatchId: string | null = null, kind: CodeOrchestrationMessageKind = 'status', accepted = true) {
   detail.event_cursor += 1
-  const event: CodeOrchestrationEventEnvelope = { run_id: detail.summary.id, sequence: detail.event_cursor, event_id: previewId('event'), task_id: taskId, dispatch_id: dispatchId, lease_generation: 0, kind, payload, accepted, emitted_at_unix_ms: previewNow() }
+  const event: CodeOrchestrationEventEnvelope = { run_id: detail.summary.id, sequence: detail.event_cursor, event_id: previewId('event'), task_id: taskId, dispatch_id: dispatchId, lease_generation: 0, kind, payload, accepted, origin: 'host', worker_sequence: null, nonce: null, emitted_at_unix_ms: previewNow() }
   detail.events.push(event)
   detail.messages.unshift({ id: previewId('message'), run_id: detail.summary.id, task_id: taskId, dispatch_id: dispatchId, kind, question_id: null, payload, created_at_unix_ms: previewNow() })
   previewCodeSubscribers.forEach((subscriber) => subscriber(event))
 }
 function previewCodeRunSummary(workspaceId: string, title: string, objective: string): CodeRunSummary {
   const now = previewNow()
-  return { id: previewId('run'), workspace_id: workspaceId, title, objective, model: null, state: 'draft', review_policy: 'manual', concurrency_limit: 2, host_concurrency_cap: 4, task_count: 0, completed_tasks: 0, active_dispatches: 0, created_at_unix_ms: now, updated_at_unix_ms: now, error: null }
+  return { id: previewId('run'), workspace_id: workspaceId, title, objective, model: null, coordinator_id: 'browser-preview', adapter_id: CODEX_ADAPTER_ID, state: 'draft', review_policy: 'manual', concurrency_limit: 2, host_concurrency_cap: 4, task_count: 0, completed_tasks: 0, active_dispatches: 0, created_at_unix_ms: now, updated_at_unix_ms: now, error: null }
 }
 function previewRecountRun(detail: CodeRunDetail) {
   detail.summary.task_count = detail.tasks.length
@@ -237,7 +242,7 @@ function previewAdvanceRun(runId: string) {
     return
   }
   task.state = 'running'
-  const dispatch: CodeDispatch = { id: previewId('dispatch'), run_id: runId, task_id: task.id, attempt: task.attempt + 1, state: 'running', lease_generation: 1, session_id: null, pid: null, worktree_id: null, checkpoint_id: null, last_heartbeat_at_unix_ms: previewNow(), started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow(), error: null, result_summary: null }
+  const dispatch: CodeDispatch = { id: previewId('dispatch'), run_id: runId, task_id: task.id, attempt: task.attempt + 1, state: 'running', adapter_id: CODEX_ADAPTER_ID, lease_generation: 1, session_id: null, pid: null, worktree_id: null, checkpoint_id: null, last_heartbeat_at_unix_ms: previewNow(), terminal_id: null, cancel_requested_at_unix_ms: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow(), error: null, result_summary: null }
   detail.dispatches.unshift(dispatch)
   detail.summary.active_dispatches += 1
   previewCodeRunEvent(detail, `Worker lane started: ${task.title}`, task.id, dispatch.id, 'progress')
@@ -459,6 +464,33 @@ export const agenticSuperAppClient = {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeRunRequest, CodeRunDetail>('agentic_super_app_command_cancel_code_run', request)
     const detail = previewCodeRuns.get(request.run_id); if (!detail) throw new Error('Run was not found.')
     detail.summary.state = 'cancelled'; previewCodeRunEvent(detail, 'Run cancelled'); return structuredClone(detail)
+  },
+  async resumeCodeDispatch(request: CodeDispatchResumeRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeDispatchResumeRequest, CodeRunDetail>('agentic_super_app_command_resume_code_dispatch', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    const dispatch = detail?.dispatches.find((candidate) => candidate.id === request.dispatch_id)
+    const task = detail?.tasks.find((candidate) => candidate.id === request.task_id)
+    if (!detail || !dispatch || !task || dispatch.state !== 'interrupted' || dispatch.lease_generation !== request.lease_generation) throw new Error('The interrupted dispatch lease is stale.')
+    dispatch.state = 'running'; dispatch.lease_generation += 1; task.state = 'running'; detail.summary.state = 'running'; previewCodeRunEvent(detail, 'Interrupted worker resumed', task.id, dispatch.id, 'status'); previewRecountRun(detail); return structuredClone(detail)
+  },
+  async cancelCodeDispatch(request: CodeDispatchCancelRequest): Promise<CodeRunDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeDispatchCancelRequest, CodeRunDetail>('agentic_super_app_command_cancel_code_dispatch', request)
+    const detail = previewCodeRuns.get(request.run_id)
+    const dispatch = detail?.dispatches.find((candidate) => candidate.id === request.dispatch_id)
+    const task = detail?.tasks.find((candidate) => candidate.id === request.task_id)
+    if (!detail || !dispatch || !task || dispatch.lease_generation !== request.lease_generation || !['preparing', 'running', 'awaiting_input', 'checkpointing'].includes(dispatch.state)) throw new Error('The dispatch lease is stale.')
+    dispatch.state = 'cancelled'; dispatch.cancel_requested_at_unix_ms = previewNow(); task.state = 'cancelled'; task.active_dispatch_id = null; detail.summary.state = 'blocked'; previewCodeRunEvent(detail, 'Dispatch cancelled', task.id, dispatch.id); previewRecountRun(detail); return structuredClone(detail)
+  },
+  async openCodeDispatchTerminal(request: CodeDispatchTerminalRequest, onEvent: (event: CodeTerminalEvent) => void): Promise<CodeTerminalSummary> {
+    if (agenticSuperAppIsTauri) {
+      const channel = new Channel<CodeTerminalEvent>(onEvent)
+      const result = await invoke<ResponseEnvelope<CodeTerminalSummary>>('agentic_super_app_command_open_code_dispatch_terminal', { command: envelope(request), channel })
+      return unwrap(result)
+    }
+    const detail = previewCodeRunDetail(request.run_id)
+    const dispatch = detail.dispatches.find((candidate) => candidate.id === request.dispatch_id)
+    if (!dispatch) throw new Error('The dispatch was not found.')
+    return this.startCodeTerminal({ workspace_id: detail.summary.workspace_id, kind: 'coding_agent', cols: request.cols, rows: request.rows, adapter_id: dispatch.adapter_id, model: detail.summary.model, resume_session_id: dispatch.session_id }, onEvent)
   },
   async answerCodeQuestion(request: CodeQuestionAnswerRequest): Promise<CodeRunDetail> {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeQuestionAnswerRequest, CodeRunDetail>('agentic_super_app_command_answer_code_question', request)

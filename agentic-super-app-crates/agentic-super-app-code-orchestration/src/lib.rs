@@ -16,12 +16,13 @@ use agentic_super_app_protocol::{
     CodeCheckpoint, CodeCheckpointDiffRequest, CodeCheckpointKind, CodeCheckpointState,
     CodeCleanupConfirmRequest, CodeCleanupPreview, CodeCleanupPreviewRequest, CodeDagProposal,
     CodeDagProposalAcceptRequest, CodeDagProposalRequest, CodeDagProposalTask, CodeDispatch,
-    CodeDispatchState, CodeManagedWorktree, CodeManagedWorktreeState,
-    CodeOrchestrationEventEnvelope, CodeOrchestrationMessage, CodeOrchestrationMessageKind,
-    CodeQuestionAnswerRequest, CodeReview, CodeReviewDecision, CodeReviewPolicy, CodeReviewRequest,
-    CodeRunCreateRequest, CodeRunRequest, CodeRunState, CodeRunSummary, CodeTask,
-    CodeTaskCreateRequest, CodeTaskDependency, CodeTaskRetryRequest, CodeTaskState,
-    CodeTaskUpdateRequest,
+    CodeDispatchCancelRequest, CodeDispatchResumeRequest, CodeDispatchState,
+    CodeDispatchTerminalRequest, CodeManagedWorktree, CodeManagedWorktreeState,
+    CodeOrchestrationEventEnvelope, CodeOrchestrationEventOrigin, CodeOrchestrationMessage,
+    CodeOrchestrationMessageKind, CodeQuestionAnswerRequest, CodeReview, CodeReviewDecision,
+    CodeReviewPolicy, CodeReviewRequest, CodeRunCreateRequest, CodeRunRequest, CodeRunState,
+    CodeRunSummary, CodeTask, CodeTaskCreateRequest, CodeTaskDependency, CodeTaskRetryRequest,
+    CodeTaskState, CodeTaskUpdateRequest, CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID,
 };
 use agentic_super_app_workspace_service::{
     AgenticSuperAppWorkspaceError, AgenticSuperAppWorkspaceService,
@@ -39,11 +40,12 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    io::AsyncWriteExt,
-    process::Command,
-    sync::{broadcast, Mutex},
-    time::{sleep, Duration},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    process::{ChildStderr, ChildStdout, Command},
+    sync::{broadcast, mpsc, Mutex},
+    time::{sleep, timeout, Duration},
 };
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -54,6 +56,82 @@ const MAX_EVENT_PAYLOAD_BYTES: usize = 64 * 1024;
 const EVENT_CHANNEL_CAPACITY: usize = 512;
 const WORKER_POLL_INTERVAL_MS: u64 = 250;
 const DEFAULT_CONCURRENCY: u8 = 2;
+const WORKER_STALE_AFTER_MS: i64 = 20_000;
+const WORKER_CANCEL_GRACE_MS: u64 = 5_000;
+const WORKER_ENVIRONMENT_ALLOWLIST: &[&str] = &[
+    "PATH",
+    "PATHEXT",
+    "HOME",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "CODEX_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_CACHE_HOME",
+    "CARGO_HOME",
+    "RUSTUP_HOME",
+    "TMP",
+    "TEMP",
+    "TMPDIR",
+    "SYSTEMROOT",
+    "WINDIR",
+    "COMSPEC",
+    "LANG",
+    "LC_ALL",
+    "TERM",
+    "COLORTERM",
+];
+
+trait CodeWorkerAdapter: Send + Sync {
+    fn id(&self) -> &'static str;
+    fn command(
+        &self,
+        worktree: &Path,
+        model: Option<&str>,
+        resume_session_id: Option<&str>,
+    ) -> Command;
+}
+
+#[derive(Debug, Default)]
+struct CodexCliWorkerAdapter;
+
+impl CodeWorkerAdapter for CodexCliWorkerAdapter {
+    fn id(&self) -> &'static str {
+        CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID
+    }
+
+    fn command(
+        &self,
+        worktree: &Path,
+        model: Option<&str>,
+        resume_session_id: Option<&str>,
+    ) -> Command {
+        let mut command = Command::new("codex");
+        command
+            .arg("exec")
+            .arg("--json")
+            .arg("--cd")
+            .arg(worktree)
+            .arg("--approve-for-me");
+        if resume_session_id.is_none() {
+            command.arg("--sandbox").arg("workspace-write");
+        }
+        if let Some(model) = model.filter(|value| !value.trim().is_empty()) {
+            command.arg("--model").arg(model);
+        }
+        if let Some(session_id) = resume_session_id {
+            command.arg("resume").arg(session_id);
+        }
+        command
+    }
+}
+
+#[derive(Clone)]
+struct WorkerControl {
+    run_id: String,
+    cancellation: CancellationToken,
+}
 
 #[derive(Debug, Error)]
 pub enum AgenticSuperAppCodeOrchestrationError {
@@ -85,6 +163,16 @@ pub enum AgenticSuperAppCodeOrchestrationError {
 
 pub type AgenticSuperAppCodeOrchestrationResult<T> =
     Result<T, AgenticSuperAppCodeOrchestrationError>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeDispatchTerminalContext {
+    pub workspace_id: String,
+    pub worktree_path: PathBuf,
+    pub adapter_id: String,
+    pub model: Option<String>,
+    pub resume_session_id: Option<String>,
+    pub lease_generation: u64,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedWorkerEvent {
@@ -124,6 +212,8 @@ pub struct AgenticSuperAppCodeOrchestration {
     events: broadcast::Sender<CodeOrchestrationEventEnvelope>,
     scheduled_runs: Arc<Mutex<HashMap<String, tokio::task::JoinHandle<()>>>>,
     event_lock: Arc<Mutex<()>>,
+    worker_adapter: Arc<dyn CodeWorkerAdapter>,
+    worker_controls: Arc<Mutex<HashMap<String, WorkerControl>>>,
 }
 
 impl AgenticSuperAppCodeOrchestration {
@@ -141,6 +231,8 @@ impl AgenticSuperAppCodeOrchestration {
             events,
             scheduled_runs: Arc::new(Mutex::new(HashMap::new())),
             event_lock: Arc::new(Mutex::new(())),
+            worker_adapter: Arc::new(CodexCliWorkerAdapter),
+            worker_controls: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -176,6 +268,23 @@ impl AgenticSuperAppCodeOrchestration {
         validate_orchestration_text(&request.title)?;
         validate_orchestration_text(&request.objective)?;
         self.workspaces.summary(&request.workspace_id)?;
+        let adapter_id = request
+            .adapter_id
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or(self.worker_adapter.id());
+        if adapter_id != self.worker_adapter.id() {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                format!("worker adapter {adapter_id} is not installed"),
+            ));
+        }
+        if let Some(coordinator_id) = request
+            .coordinator_id
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            validate_orchestration_text(coordinator_id)?;
+        }
         let host_cap = adaptive_concurrency_cap(
             std::thread::available_parallelism()
                 .map(|value| value.get())
@@ -547,6 +656,7 @@ impl AgenticSuperAppCodeOrchestration {
         self.persistence
             .cancel_active_orchestration(&request.run_id, "Cancelled by the user")
             .await?;
+        self.cancel_workers_for_run(&request.run_id).await;
         self.persistence
             .set_orchestration_run_state(
                 &request.run_id,
@@ -557,6 +667,155 @@ impl AgenticSuperAppCodeOrchestration {
         self.emit_status(&request.run_id, None, None, "Run cancelled", true)
             .await?;
         self.detail(&request.run_id).await
+    }
+
+    pub async fn cancel_dispatch(
+        &self,
+        request: &CodeDispatchCancelRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<agentic_super_app_protocol::CodeRunDetail> {
+        let changed = self
+            .persistence
+            .cancel_orchestration_dispatch(
+                &request.run_id,
+                &request.task_id,
+                &request.dispatch_id,
+                request.lease_generation,
+                "Cancelled by the user",
+            )
+            .await?;
+        if !changed {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "the dispatch lease is stale or already terminal".to_owned(),
+            ));
+        }
+        self.cancel_worker(&request.dispatch_id).await;
+        self.emit_status(
+            &request.run_id,
+            Some(&request.task_id),
+            Some(&request.dispatch_id),
+            "Dispatch cancelled",
+            true,
+        )
+        .await?;
+        self.reconcile_run(&request.run_id).await?;
+        self.detail(&request.run_id).await
+    }
+
+    pub async fn resume_dispatch(
+        &self,
+        request: &CodeDispatchResumeRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<agentic_super_app_protocol::CodeRunDetail> {
+        let detail = self.detail(&request.run_id).await?;
+        self.require_worker_capabilities(&detail.summary.workspace_id)?;
+        let dispatch = detail
+            .dispatches
+            .iter()
+            .find(|dispatch| {
+                dispatch.id == request.dispatch_id
+                    && dispatch.task_id == request.task_id
+                    && dispatch.state == CodeDispatchState::Interrupted
+                    && dispatch.lease_generation == request.lease_generation
+            })
+            .cloned()
+            .ok_or(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "the interrupted dispatch lease is stale or unavailable".to_owned(),
+            ))?;
+        let task = find_task(&detail.tasks, &request.task_id)
+            .cloned()
+            .ok_or(AgenticSuperAppCodeOrchestrationError::NotFound)?;
+        let worktree = detail
+            .worktrees
+            .iter()
+            .find(|worktree| worktree.dispatch_id == dispatch.id)
+            .cloned()
+            .ok_or(AgenticSuperAppCodeOrchestrationError::NotFound)?;
+        let Some(new_generation) = self
+            .persistence
+            .resume_interrupted_orchestration_dispatch(
+                &request.run_id,
+                &request.task_id,
+                &request.dispatch_id,
+                request.lease_generation,
+            )
+            .await?
+        else {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "the interrupted dispatch lease is stale".to_owned(),
+            ));
+        };
+        self.persistence
+            .set_orchestration_run_state(&request.run_id, CodeRunState::Running, None)
+            .await?;
+        self.emit_status(
+            &request.run_id,
+            Some(&request.task_id),
+            Some(&request.dispatch_id),
+            "Interrupted worker resumed",
+            true,
+        )
+        .await?;
+        self.spawn_worker(WorkerLaunch {
+            dispatch: CodeDispatch {
+                lease_generation: new_generation,
+                state: CodeDispatchState::Running,
+                ..dispatch.clone()
+            },
+            worktree,
+            task,
+            model: detail.summary.model.clone(),
+            secret: dispatch_secret(&dispatch.id, new_generation),
+            resume_session_id: dispatch.session_id,
+            answer: None,
+        })
+        .await;
+        self.ensure_scheduler(&request.run_id).await;
+        self.detail(&request.run_id).await
+    }
+
+    pub async fn dispatch_terminal_context(
+        &self,
+        request: &CodeDispatchTerminalRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<CodeDispatchTerminalContext> {
+        let detail = self.detail(&request.run_id).await?;
+        self.require_worker_capabilities(&detail.summary.workspace_id)?;
+        let dispatch = detail
+            .dispatches
+            .iter()
+            .find(|dispatch| dispatch.id == request.dispatch_id)
+            .cloned()
+            .ok_or(AgenticSuperAppCodeOrchestrationError::NotFound)?;
+        if !matches!(
+            dispatch.state,
+            CodeDispatchState::Preparing
+                | CodeDispatchState::Running
+                | CodeDispatchState::AwaitingInput
+                | CodeDispatchState::Checkpointing
+                | CodeDispatchState::Interrupted
+        ) {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "a terminal can only be opened for a live or interrupted dispatch".to_owned(),
+            ));
+        }
+        let worktree = detail
+            .worktrees
+            .iter()
+            .find(|worktree| worktree.dispatch_id == dispatch.id)
+            .ok_or(AgenticSuperAppCodeOrchestrationError::NotFound)?;
+        let worktree_path = fs::canonicalize(&worktree.path)?;
+        let managed_root = fs::canonicalize(self.data_root.join("worktrees"))?;
+        if !worktree_path.starts_with(&managed_root) {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "dispatch worktree is outside the managed orchestration root".to_owned(),
+            ));
+        }
+        Ok(CodeDispatchTerminalContext {
+            workspace_id: detail.summary.workspace_id,
+            worktree_path,
+            adapter_id: dispatch.adapter_id,
+            model: detail.summary.model,
+            resume_session_id: dispatch.session_id,
+            lease_generation: dispatch.lease_generation,
+        })
     }
 
     pub async fn answer_question(
@@ -698,6 +957,14 @@ impl AgenticSuperAppCodeOrchestration {
                 "checkpoint does not belong to the requested task".to_owned(),
             ));
         }
+        let review_dispatch = detail
+            .dispatches
+            .iter()
+            .find(|dispatch| task.active_dispatch_id.as_deref() == Some(dispatch.id.as_str()))
+            .cloned()
+            .ok_or(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "checkpoint has no active dispatch lease".to_owned(),
+            ))?;
         let review = CodeReview {
             id: format!("review-{}", Uuid::now_v7()),
             run_id: request.run_id.clone(),
@@ -716,7 +983,8 @@ impl AgenticSuperAppCodeOrchestration {
                     .set_orchestration_task_result(
                         &request.run_id,
                         &task.id,
-                        task.active_dispatch_id.as_deref().unwrap_or_default(),
+                        &review_dispatch.id,
+                        review_dispatch.lease_generation,
                         CodeTaskState::Completed,
                         Some(&request.checkpoint_id),
                         None,
@@ -748,7 +1016,8 @@ impl AgenticSuperAppCodeOrchestration {
                     .set_orchestration_task_result(
                         &request.run_id,
                         &task.id,
-                        task.active_dispatch_id.as_deref().unwrap_or_default(),
+                        &review_dispatch.id,
+                        review_dispatch.lease_generation,
                         CodeTaskState::Failed,
                         Some(&request.checkpoint_id),
                         request.feedback.as_deref().or(Some("Checkpoint rejected")),
@@ -800,10 +1069,11 @@ impl AgenticSuperAppCodeOrchestration {
         let can_remove = !inspection.locked && inspection.dirty_files.is_empty();
         let reason = if inspection.locked {
             Some("The worker lease still holds this worktree".to_owned())
-        } else if let Some(path) = inspection.dirty_files.first() {
-            Some(format!("Uncommitted file: {path}"))
         } else {
-            None
+            inspection
+                .dirty_files
+                .first()
+                .map(|path| format!("Uncommitted file: {path}"))
         };
         Ok(CodeCleanupPreview {
             worktree_id: worktree.id.clone(),
@@ -879,6 +1149,33 @@ impl AgenticSuperAppCodeOrchestration {
         if request.confirmation.trim() != expected {
             return Err(AgenticSuperAppCodeOrchestrationError::InvalidCleanupConfirmation);
         }
+        if request.force {
+            if let Some(dispatch) = detail
+                .dispatches
+                .iter()
+                .find(|dispatch| dispatch.id == worktree.dispatch_id)
+            {
+                if matches!(
+                    dispatch.state,
+                    CodeDispatchState::Preparing
+                        | CodeDispatchState::Running
+                        | CodeDispatchState::AwaitingInput
+                        | CodeDispatchState::Checkpointing
+                ) {
+                    let _ = self
+                        .persistence
+                        .cancel_orchestration_dispatch(
+                            &request.run_id,
+                            &worktree.task_id,
+                            &dispatch.id,
+                            dispatch.lease_generation,
+                            "Cancelled before forced worktree cleanup",
+                        )
+                        .await?;
+                    self.cancel_worker(&dispatch.id).await;
+                }
+            }
+        }
         let root = self.workspaces.root_path(&detail.summary.workspace_id)?;
         self.git.remove_worktree(
             &root,
@@ -911,10 +1208,13 @@ impl AgenticSuperAppCodeOrchestration {
         event_json: &str,
     ) -> AgenticSuperAppCodeOrchestrationResult<VerifiedWorkerEvent> {
         let event: BridgeEvent = serde_json::from_str(event_json)?;
-        if event.dispatch_id.len() > 128
+        if event.dispatch_id.is_empty()
+            || event.dispatch_id.len() > 128
             || event.kind.len() > 64
             || event.payload.len() > MAX_EVENT_PAYLOAD_BYTES
+            || event.nonce.is_empty()
             || event.nonce.len() > 128
+            || event.mac.len() > 128
         {
             return Err(AgenticSuperAppCodeOrchestrationError::InvalidWorkerEvent);
         }
@@ -978,6 +1278,7 @@ impl AgenticSuperAppCodeOrchestration {
             "Plan this coding objective as a small deterministic DAG. Do not edit files.\n\nObjective:\n{objective}\n\nReturn only the requested structured proposal. Keep task specifications actionable, bounded, and independent where possible."
         );
         let mut command = Command::new("codex");
+        configure_worker_environment(&mut command);
         command
             .arg("exec")
             .arg("--json")
@@ -1089,15 +1390,26 @@ impl AgenticSuperAppCodeOrchestration {
     }
 
     async fn scheduler_loop(&self, run_id: String) {
-        loop {
-            match self.schedule_once(&run_id).await {
-                Ok(true) => sleep(Duration::from_millis(WORKER_POLL_INTERVAL_MS)).await,
-                Ok(false) | Err(_) => break,
-            }
+        while let Ok(true) = self.schedule_once(&run_id).await {
+            sleep(Duration::from_millis(WORKER_POLL_INTERVAL_MS)).await;
         }
     }
 
     async fn schedule_once(&self, run_id: &str) -> AgenticSuperAppCodeOrchestrationResult<bool> {
+        let stale_dispatches = self
+            .persistence
+            .mark_stale_orchestration_dispatches(run_id, now_ms() - WORKER_STALE_AFTER_MS)
+            .await?;
+        for dispatch_id in stale_dispatches {
+            self.emit_status(
+                run_id,
+                None,
+                Some(&dispatch_id),
+                "Worker heartbeat expired; dispatch marked stale",
+                false,
+            )
+            .await?;
+        }
         let detail = self.detail(run_id).await?;
         if detail.summary.state != CodeRunState::Running {
             return Ok(false);
@@ -1157,12 +1469,15 @@ impl AgenticSuperAppCodeOrchestration {
             task_id: task.id.clone(),
             attempt,
             state: CodeDispatchState::Preparing,
+            adapter_id: detail.summary.adapter_id.clone(),
             lease_generation: 1,
             session_id: None,
             pid: None,
             worktree_id: None,
             checkpoint_id: None,
             last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
             started_at_unix_ms: now_ms(),
             updated_at_unix_ms: now_ms(),
             error: None,
@@ -1420,7 +1735,20 @@ impl AgenticSuperAppCodeOrchestration {
         task: &CodeTask,
         error: &str,
     ) -> AgenticSuperAppCodeOrchestrationResult<()> {
-        self.persistence
+        let task_updated = self
+            .persistence
+            .set_orchestration_task_result(
+                &dispatch.run_id,
+                &task.id,
+                &dispatch.id,
+                dispatch.lease_generation,
+                CodeTaskState::Failed,
+                None,
+                Some(error),
+            )
+            .await?;
+        let dispatch_updated = self
+            .persistence
             .update_orchestration_dispatch(
                 &dispatch.id,
                 dispatch.lease_generation,
@@ -1434,19 +1762,11 @@ impl AgenticSuperAppCodeOrchestration {
                 None,
             )
             .await?;
-        self.persistence
-            .set_orchestration_task_result(
-                &dispatch.run_id,
-                &task.id,
-                &dispatch.id,
-                CodeTaskState::Failed,
-                None,
-                Some(error),
-            )
-            .await?;
-        self.persistence
-            .set_orchestration_run_state(&dispatch.run_id, CodeRunState::Failed, Some(error))
-            .await?;
+        if dispatch_updated && task_updated {
+            self.persistence
+                .set_orchestration_run_state(&dispatch.run_id, CodeRunState::Failed, Some(error))
+                .await?;
+        }
         Ok(())
     }
 
@@ -1456,7 +1776,8 @@ impl AgenticSuperAppCodeOrchestration {
         task: &CodeTask,
         error: &str,
     ) -> AgenticSuperAppCodeOrchestrationResult<()> {
-        self.persistence
+        let dispatch_updated = self
+            .persistence
             .update_orchestration_dispatch(
                 &dispatch.id,
                 dispatch.lease_generation,
@@ -1470,6 +1791,9 @@ impl AgenticSuperAppCodeOrchestration {
                 None,
             )
             .await?;
+        if !dispatch_updated {
+            return Ok(());
+        }
         self.persistence
             .set_orchestration_task_state(
                 &dispatch.run_id,
@@ -1516,9 +1840,22 @@ impl AgenticSuperAppCodeOrchestration {
     }
 
     async fn spawn_worker(&self, launch: WorkerLaunch) {
+        let cancellation = CancellationToken::new();
+        self.worker_controls.lock().await.insert(
+            launch.dispatch.id.clone(),
+            WorkerControl {
+                run_id: launch.dispatch.run_id.clone(),
+                cancellation: cancellation.clone(),
+            },
+        );
         let service = self.clone();
         tokio::spawn(async move {
-            let result = service.run_codex_worker(&launch).await;
+            let result = service.run_codex_worker(&launch, cancellation).await;
+            service
+                .worker_controls
+                .lock()
+                .await
+                .remove(&launch.dispatch.id);
             match result {
                 Ok(result) => {
                     let _ = service.finish_worker(&launch, result).await;
@@ -1541,27 +1878,39 @@ impl AgenticSuperAppCodeOrchestration {
         });
     }
 
+    async fn cancel_worker(&self, dispatch_id: &str) {
+        if let Some(control) = self.worker_controls.lock().await.get(dispatch_id) {
+            control.cancellation.cancel();
+        }
+    }
+
+    async fn cancel_workers_for_run(&self, run_id: &str) {
+        let cancellations = self
+            .worker_controls
+            .lock()
+            .await
+            .values()
+            .filter(|control| control.run_id == run_id)
+            .map(|control| control.cancellation.clone())
+            .collect::<Vec<_>>();
+        for cancellation in cancellations {
+            cancellation.cancel();
+        }
+    }
+
     async fn run_codex_worker(
         &self,
         launch: &WorkerLaunch,
+        cancellation: CancellationToken,
     ) -> AgenticSuperAppCodeOrchestrationResult<WorkerResult> {
         let prompt = worker_prompt(&launch.task, launch.answer.as_deref());
-        let mut command = Command::new("codex");
-        command.arg("exec");
-        if let Some(session_id) = launch.resume_session_id.as_deref() {
-            command.arg("resume").arg(session_id);
-        }
-        command.arg("--json").arg("--cd").arg(&launch.worktree.path);
-        if launch.resume_session_id.is_none() {
-            command.arg("--sandbox").arg("workspace-write");
-        }
-        if let Some(model) = launch
-            .model
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            command.arg("--model").arg(model);
-        }
+        let mut command = self.worker_adapter.command(
+            Path::new(&launch.worktree.path),
+            launch.model.as_deref(),
+            launch.resume_session_id.as_deref(),
+        );
+        configure_worker_process(&mut command);
+        configure_worker_environment(&mut command);
         command
             .arg("-")
             .env(
@@ -1576,7 +1925,7 @@ impl AgenticSuperAppCodeOrchestration {
             .env("AGENTIC_SUPER_APP_DISPATCH_SEQUENCE", "0")
             .env(
                 "AGENTIC_SUPER_APP_DISPATCH_BRIDGE",
-                "agentic-super-app-dispatch-bridge",
+                dispatch_bridge_program(),
             )
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -1604,6 +1953,19 @@ impl AgenticSuperAppCodeOrchestration {
             stdin.write_all(prompt.as_bytes()).await?;
             stdin.shutdown().await?;
         }
+        let stdout = child.stdout.take().ok_or_else(|| {
+            AgenticSuperAppCodeOrchestrationError::WorkerFailed(
+                "Codex worker did not expose stdout".to_owned(),
+            )
+        })?;
+        let stderr = child.stderr.take().ok_or_else(|| {
+            AgenticSuperAppCodeOrchestrationError::WorkerFailed(
+                "Codex worker did not expose stderr".to_owned(),
+            )
+        })?;
+        let (line_sender, mut line_receiver) = mpsc::channel(64);
+        let stdout_reader = tokio::spawn(stream_worker_stdout(stdout, line_sender));
+        let stderr_reader = tokio::spawn(read_bounded_worker_stderr(stderr));
         let heartbeat_service = self.clone();
         let heartbeat_dispatch_id = launch.dispatch.id.clone();
         let heartbeat_generation = launch.dispatch.lease_generation;
@@ -1634,16 +1996,107 @@ impl AgenticSuperAppCodeOrchestration {
                 }
             }
         });
-        let output = child.wait_with_output().await?;
-        heartbeat.abort();
-        let stdout = limit_text(&output.stdout, MAX_WORKER_OUTPUT_BYTES);
-        let stderr = limit_text(&output.stderr, 32 * 1024);
-        for line in stdout.lines() {
-            if let Some(event_json) = line.strip_prefix("AGENTIC_SUPER_APP_EVENT ") {
-                self.accept_worker_event(launch, event_json).await?;
+        let mut stdout_text = String::new();
+        let mut exit_status = None;
+        let mut stream_error = None;
+        let mut cancelled = false;
+        loop {
+            tokio::select! {
+                line = line_receiver.recv() => {
+                    match line {
+                        Some(WorkerOutputLine::Text(line)) => {
+                            if stdout_text.len().saturating_add(line.len()) > MAX_WORKER_OUTPUT_BYTES {
+                                stream_error = Some("Codex worker stdout exceeded the supported size".to_owned());
+                                force_terminate_worker_process(pid);
+                                let _ = child.start_kill();
+                                let _ = child.wait().await;
+                                break;
+                            }
+                            stdout_text.push_str(&line);
+                            if let Some(event_json) = line.strip_prefix("AGENTIC_SUPER_APP_EVENT ") {
+                                if let Err(error) = self.accept_worker_event(launch, event_json.trim()).await {
+                                    stream_error = Some(error.to_string());
+                                    force_terminate_worker_process(pid);
+                                    let _ = child.start_kill();
+                                    let _ = child.wait().await;
+                                    break;
+                                }
+                            }
+                        }
+                        Some(WorkerOutputLine::Error(error)) => {
+                            stream_error = Some(error);
+                            force_terminate_worker_process(pid);
+                            let _ = child.start_kill();
+                            let _ = child.wait().await;
+                            break;
+                        }
+                        None => {
+                            if exit_status.is_some() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                status = child.wait(), if exit_status.is_none() => {
+                    exit_status = Some(status?);
+                    while let Some(line) = line_receiver.recv().await {
+                        match line {
+                            WorkerOutputLine::Text(line) => {
+                                if stdout_text.len().saturating_add(line.len()) <= MAX_WORKER_OUTPUT_BYTES {
+                                    stdout_text.push_str(&line);
+                                    if let Some(event_json) = line.strip_prefix("AGENTIC_SUPER_APP_EVENT ") {
+                                        if let Err(error) = self.accept_worker_event(launch, event_json.trim()).await {
+                                            stream_error = Some(error.to_string());
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            WorkerOutputLine::Error(error) => stream_error = Some(error),
+                        }
+                    }
+                    break;
+                }
+                _ = cancellation.cancelled() => {
+                    cancelled = true;
+                    request_worker_stop(pid);
+                    if timeout(Duration::from_millis(WORKER_CANCEL_GRACE_MS), child.wait()).await.is_err() {
+                        force_terminate_worker_process(pid);
+                        let _ = child.start_kill();
+                        let _ = child.wait().await;
+                    }
+                    break;
+                }
             }
         }
-        let parsed = parse_worker_output(&stdout, &stderr, output.status.success());
+        heartbeat.abort();
+        if cancelled {
+            let _ = stdout_reader.await;
+            let _ = stderr_reader.await;
+            return Ok(WorkerResult {
+                success: false,
+                session_id: None,
+                summary: "Worker cancelled".to_owned(),
+                question: None,
+            });
+        }
+        let _ = stdout_reader.await;
+        let stderr = stderr_reader.await.map_err(|error| {
+            AgenticSuperAppCodeOrchestrationError::WorkerFailed(error.to_string())
+        })??;
+        if let Some(error) = stream_error {
+            return Err(AgenticSuperAppCodeOrchestrationError::WorkerFailed(error));
+        }
+        let status = exit_status.ok_or_else(|| {
+            AgenticSuperAppCodeOrchestrationError::WorkerFailed(
+                "Codex worker exited without a status".to_owned(),
+            )
+        })?;
+        let parsed = parse_worker_output(
+            &limit_text(stdout_text.as_bytes(), MAX_WORKER_OUTPUT_BYTES),
+            &limit_text(&stderr, 32 * 1024),
+            status.success(),
+        );
         Ok(parsed)
     }
 
@@ -1661,20 +2114,26 @@ impl AgenticSuperAppCodeOrchestration {
         }
         let kind = parse_message_kind(&event.kind)
             .ok_or(AgenticSuperAppCodeOrchestrationError::InvalidWorkerEvent)?;
+        let event_id = format!("event-{}", Uuid::now_v7());
         let persisted = self
             .persistence
             .insert_orchestration_event(
                 &launch.dispatch.run_id,
-                &format!("event-{}", Uuid::now_v7()),
+                &event_id,
                 Some(&launch.task.id),
                 Some(&launch.dispatch.id),
                 event.lease_generation,
                 kind,
                 &event.payload,
                 true,
+                CodeOrchestrationEventOrigin::Worker,
+                Some(event.sequence),
+                Some(&event.nonce),
             )
             .await?;
-        let _ = self.events.send(persisted);
+        if persisted.event_id == event_id {
+            let _ = self.events.send(persisted);
+        }
         Ok(())
     }
 
@@ -1687,6 +2146,24 @@ impl AgenticSuperAppCodeOrchestration {
             return Ok(());
         }
         if let Some(question) = result.question {
+            let dispatch_updated = self
+                .persistence
+                .update_orchestration_dispatch(
+                    &launch.dispatch.id,
+                    launch.dispatch.lease_generation,
+                    CodeDispatchState::AwaitingInput,
+                    result.session_id.as_deref(),
+                    None,
+                    Some(&launch.worktree.id),
+                    None,
+                    Some(now_ms()),
+                    None,
+                    Some(&result.summary),
+                )
+                .await?;
+            if !dispatch_updated {
+                return Ok(());
+            }
             let question_row = agentic_super_app_protocol::CodeQuestion {
                 id: format!("question-{}", Uuid::now_v7()),
                 run_id: launch.dispatch.run_id.clone(),
@@ -1711,20 +2188,6 @@ impl AgenticSuperAppCodeOrchestration {
                     payload: question,
                     created_at_unix_ms: now_ms(),
                 })
-                .await?;
-            self.persistence
-                .update_orchestration_dispatch(
-                    &launch.dispatch.id,
-                    launch.dispatch.lease_generation,
-                    CodeDispatchState::AwaitingInput,
-                    result.session_id.as_deref(),
-                    None,
-                    Some(&launch.worktree.id),
-                    None,
-                    Some(now_ms()),
-                    None,
-                    Some(&result.summary),
-                )
                 .await?;
             self.persistence
                 .set_orchestration_task_state(
@@ -1766,6 +2229,9 @@ impl AgenticSuperAppCodeOrchestration {
                 false,
             )
             .await?;
+            return Ok(());
+        }
+        if !self.worker_lease_is_current(launch).await? {
             return Ok(());
         }
         let run_detail = self.detail(&launch.dispatch.run_id).await?;
@@ -1814,6 +2280,12 @@ impl AgenticSuperAppCodeOrchestration {
             summary: result.summary.clone(),
             created_at_unix_ms: now_ms(),
         };
+        if !self.worker_lease_is_current(launch).await? {
+            let _ = self
+                .git
+                .unlock_worktree(&root, &worktree_name(&launch.worktree.path));
+            return Ok(());
+        }
         self.persistence
             .insert_orchestration_checkpoint(&persisted_checkpoint)
             .await?;
@@ -1833,7 +2305,8 @@ impl AgenticSuperAppCodeOrchestration {
                 None,
             )
             .await?;
-        self.persistence
+        let dispatch_updated = self
+            .persistence
             .update_orchestration_dispatch(
                 &launch.dispatch.id,
                 launch.dispatch.lease_generation,
@@ -1847,6 +2320,9 @@ impl AgenticSuperAppCodeOrchestration {
                 Some(&result.summary),
             )
             .await?;
+        if !dispatch_updated {
+            return Ok(());
+        }
         let task_state = if self
             .detail(&launch.dispatch.run_id)
             .await?
@@ -1858,16 +2334,21 @@ impl AgenticSuperAppCodeOrchestration {
         } else {
             CodeTaskState::Completed
         };
-        self.persistence
+        let task_updated = self
+            .persistence
             .set_orchestration_task_result(
                 &launch.dispatch.run_id,
                 &launch.task.id,
                 &launch.dispatch.id,
+                launch.dispatch.lease_generation,
                 task_state,
                 Some(&persisted_checkpoint.id),
                 None,
             )
             .await?;
+        if !task_updated {
+            return Ok(());
+        }
         self.emit_status(
             &launch.dispatch.run_id,
             Some(&launch.task.id),
@@ -1989,6 +2470,9 @@ impl AgenticSuperAppCodeOrchestration {
                 CodeOrchestrationMessageKind::Status,
                 &payload,
                 accepted,
+                CodeOrchestrationEventOrigin::Host,
+                None,
+                None,
             )
             .await?;
         let _ = self.events.send(event.clone());
@@ -2018,6 +2502,146 @@ struct BridgeEvent {
     payload: String,
     nonce: String,
     mac: String,
+}
+
+enum WorkerOutputLine {
+    Text(String),
+    Error(String),
+}
+
+async fn stream_worker_stdout(
+    stdout: ChildStdout,
+    sender: mpsc::Sender<WorkerOutputLine>,
+) -> Result<(), std::io::Error> {
+    let mut reader = BufReader::new(stdout);
+    let mut line = String::new();
+    let mut total = 0_usize;
+    loop {
+        line.clear();
+        let bytes_read = reader.read_line(&mut line).await?;
+        if bytes_read == 0 {
+            break;
+        }
+        total = total.saturating_add(bytes_read);
+        if total > MAX_WORKER_OUTPUT_BYTES {
+            let _ = sender
+                .send(WorkerOutputLine::Error(
+                    "Codex worker stdout exceeded the supported size".to_owned(),
+                ))
+                .await;
+            break;
+        }
+        if sender
+            .send(WorkerOutputLine::Text(line.clone()))
+            .await
+            .is_err()
+        {
+            break;
+        }
+    }
+    Ok(())
+}
+
+async fn read_bounded_worker_stderr(mut stderr: ChildStderr) -> Result<Vec<u8>, std::io::Error> {
+    let mut output = Vec::new();
+    let mut buffer = [0_u8; 8 * 1024];
+    loop {
+        let bytes_read = stderr.read(&mut buffer).await?;
+        if bytes_read == 0 {
+            break;
+        }
+        let remaining = (32_usize * 1024).saturating_sub(output.len());
+        if remaining > 0 {
+            output.extend_from_slice(&buffer[..bytes_read.min(remaining)]);
+        }
+    }
+    Ok(output)
+}
+
+fn dispatch_bridge_program() -> String {
+    let executable_name = if cfg!(windows) {
+        "agentic-super-app-dispatch-bridge.exe"
+    } else {
+        "agentic-super-app-dispatch-bridge"
+    };
+    if let Ok(current_executable) = std::env::current_exe() {
+        if let Some(parent) = current_executable.parent() {
+            let mut candidates = vec![
+                parent.join(executable_name),
+                parent.join("binaries").join(executable_name),
+            ];
+            if let Some(grandparent) = parent.parent() {
+                candidates.push(grandparent.join(executable_name));
+                candidates.push(grandparent.join("binaries").join(executable_name));
+            }
+            if let Some(path) = candidates.into_iter().find(|path| path.is_file()) {
+                return path.to_string_lossy().into_owned();
+            }
+        }
+    }
+    executable_name.to_owned()
+}
+
+fn configure_worker_process(command: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            command.as_std_mut().pre_exec(|| {
+                if libc::setpgid(0, 0) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = command;
+}
+
+fn configure_worker_environment(command: &mut Command) {
+    let inherited = WORKER_ENVIRONMENT_ALLOWLIST
+        .iter()
+        .filter_map(|name| std::env::var_os(name).map(|value| (*name, value)))
+        .collect::<Vec<_>>();
+    command.env_clear();
+    for (name, value) in inherited {
+        command.env(name, value);
+    }
+}
+
+fn request_worker_stop(pid: Option<u32>) {
+    let Some(pid) = pid else { return };
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    #[cfg(unix)]
+    unsafe {
+        let _ = libc::kill(-(pid as i32), libc::SIGTERM);
+        let _ = libc::kill(pid as i32, libc::SIGTERM);
+    }
+}
+
+fn force_terminate_worker_process(pid: Option<u32>) {
+    let Some(pid) = pid else { return };
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    #[cfg(unix)]
+    unsafe {
+        let _ = libc::kill(-(pid as i32), libc::SIGKILL);
+        let _ = libc::kill(pid as i32, libc::SIGKILL);
+    }
 }
 
 fn ensure_editable_run(state: &CodeRunState) -> AgenticSuperAppCodeOrchestrationResult<()> {
@@ -2215,13 +2839,13 @@ fn worker_prompt(task: &CodeTask, answer: Option<&str>) -> String {
         .map(|answer| format!("\nThe user answered your previous question:\n{answer}\n"))
         .unwrap_or_default();
     format!(
-        "You are a bounded implementation worker inside an Agentic Super App run. Work only in the provided Git worktree. Do not modify the parent workspace, change remotes, or create pull requests. Inspect the repository, implement the task, and validate it with focused tests when practical. If a decision is required, stop and print exactly `AGENTIC_SUPER_APP_QUESTION: <question>` rather than guessing.\n\nTask: {}\n\nSpecification:\n{}\n{}\nAt the end, report a concise summary of changes and validation.",
+        "You are a bounded implementation worker inside an Agentic Super App run. Work only in the provided Git worktree. Do not modify the parent workspace, change remotes, or create pull requests. Inspect the repository, implement the task, and validate it with focused tests when practical. If a decision is required, stop and print exactly `AGENTIC_SUPER_APP_QUESTION: <question>` rather than guessing. For progress or escalation messages, you may invoke the executable in `$AGENTIC_SUPER_APP_DISPATCH_BRIDGE` with `<kind> <payload> <sequence>`; never print or expose the dispatch secret, and continue if the bridge is unavailable.\n\nTask: {}\n\nSpecification:\n{}\n{}\nAt the end, report a concise summary of changes and validation.",
         task.title, task.specification, answer
     )
 }
 
 fn hex_decode(value: &str) -> AgenticSuperAppCodeOrchestrationResult<Vec<u8>> {
-    if value.len() % 2 != 0 || value.len() > 128 {
+    if !value.len().is_multiple_of(2) || value.len() > 128 {
         return Err(AgenticSuperAppCodeOrchestrationError::InvalidWorkerEvent);
     }
     let bytes = value.as_bytes();
@@ -2240,12 +2864,11 @@ fn hex_encode(value: &[u8]) -> String {
     value.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-fn dispatch_secret(dispatch_id: &str, lease_generation: u64) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(Uuid::now_v7().as_bytes());
-    hasher.update(dispatch_id.as_bytes());
-    hasher.update(lease_generation.to_le_bytes());
-    hasher.finalize().to_vec()
+fn dispatch_secret(_dispatch_id: &str, _lease_generation: u64) -> Vec<u8> {
+    let mut secret = Vec::with_capacity(32);
+    secret.extend_from_slice(Uuid::now_v7().as_bytes());
+    secret.extend_from_slice(Uuid::now_v7().as_bytes());
+    secret
 }
 
 fn parse_message_kind(value: &str) -> Option<CodeOrchestrationMessageKind> {
@@ -2372,7 +2995,8 @@ fn limit_text(bytes: &[u8], limit: usize) -> String {
 mod tests {
     use super::*;
     use agentic_super_app_protocol::{
-        CodeDagProposalAcceptRequest, CodeReviewPolicy, CodeRunCreateRequest,
+        CodeDagProposalAcceptRequest, CodeDispatch, CodeOrchestrationEventOrigin,
+        CodeOrchestrationMessageKind, CodeReviewPolicy, CodeRunCreateRequest,
     };
 
     #[test]
@@ -2456,6 +3080,8 @@ mod tests {
                 review_policy: CodeReviewPolicy::Manual,
                 concurrency_limit: Some(2),
                 model: None,
+                coordinator_id: None,
+                adapter_id: None,
             })
             .await
             .unwrap();
@@ -2526,5 +3152,198 @@ mod tests {
                 )
             ))
         ));
+    }
+
+    #[tokio::test]
+    async fn worker_failure_closes_the_dispatch_and_task_lease() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let persistence = AgenticSuperAppPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = AgenticSuperAppWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                agentic_super_app_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = AgenticSuperAppCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Failure test".to_owned(),
+                objective: "Close failed worker leases".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(1),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Close failed worker leases".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "worker".to_owned(),
+                        title: "Worker".to_owned(),
+                        specification: "Run the worker".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let task = run.tasks[0].clone();
+        let dispatch = CodeDispatch {
+            id: "dispatch-failure".to_owned(),
+            run_id: run.summary.id.clone(),
+            task_id: task.id.clone(),
+            attempt: 1,
+            state: CodeDispatchState::Preparing,
+            adapter_id: CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned(),
+            lease_generation: 1,
+            session_id: None,
+            pid: None,
+            worktree_id: None,
+            checkpoint_id: None,
+            last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
+            started_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+            error: None,
+            result_summary: None,
+        };
+        assert!(persistence
+            .claim_orchestration_dispatch(&dispatch)
+            .await
+            .unwrap());
+        service
+            .fail_dispatch(&dispatch, &task, "worker unavailable")
+            .await
+            .unwrap();
+        let detail = service.detail(&run.summary.id).await.unwrap();
+        assert_eq!(detail.summary.state, CodeRunState::Failed);
+        assert_eq!(detail.tasks[0].state, CodeTaskState::Failed);
+        assert_eq!(detail.dispatches[0].state, CodeDispatchState::Failed);
+    }
+
+    #[tokio::test]
+    async fn event_cursor_is_atomic_and_worker_nonce_replays_are_idempotent() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let persistence = AgenticSuperAppPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = AgenticSuperAppWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                agentic_super_app_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = AgenticSuperAppCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Event test".to_owned(),
+                objective: "Validate event ordering".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(1),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run_id = run.summary.id;
+        let (left, right) = tokio::join!(
+            persistence.insert_orchestration_event(
+                &run_id,
+                "event-concurrent-a",
+                None,
+                None,
+                0,
+                CodeOrchestrationMessageKind::Status,
+                "a",
+                true,
+                CodeOrchestrationEventOrigin::Host,
+                None,
+                None,
+            ),
+            persistence.insert_orchestration_event(
+                &run_id,
+                "event-concurrent-b",
+                None,
+                None,
+                0,
+                CodeOrchestrationMessageKind::Status,
+                "b",
+                true,
+                CodeOrchestrationEventOrigin::Host,
+                None,
+                None,
+            )
+        );
+        let left = left.unwrap();
+        let right = right.unwrap();
+        assert_ne!(left.sequence, right.sequence);
+        assert_eq!(right.sequence.abs_diff(left.sequence), 1);
+
+        let first = persistence
+            .insert_orchestration_event(
+                &run_id,
+                "event-worker-first",
+                Some("task-1"),
+                Some("dispatch-1"),
+                1,
+                CodeOrchestrationMessageKind::Progress,
+                "working",
+                true,
+                CodeOrchestrationEventOrigin::Worker,
+                Some(7),
+                Some("nonce-1"),
+            )
+            .await
+            .unwrap();
+        let replay = persistence
+            .insert_orchestration_event(
+                &run_id,
+                "event-worker-replay",
+                Some("task-1"),
+                Some("dispatch-1"),
+                1,
+                CodeOrchestrationMessageKind::Progress,
+                "working again",
+                true,
+                CodeOrchestrationEventOrigin::Worker,
+                Some(7),
+                Some("nonce-1"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(replay.event_id, first.event_id);
+        assert_eq!(replay.sequence, first.sequence);
+        assert_eq!(first.origin, CodeOrchestrationEventOrigin::Worker);
+        assert_eq!(first.worker_sequence, Some(7));
     }
 }

@@ -2,4 +2,4 @@
 import type { CodeReviewPolicy } from "./CodeReviewPolicy";
 import type { CodeRunState } from "./CodeRunState";
 
-export type CodeRunSummary = { id: string, workspace_id: string, title: string, objective: string, model: string | null, state: CodeRunState, review_policy: CodeReviewPolicy, concurrency_limit: number, host_concurrency_cap: number, task_count: number, completed_tasks: number, active_dispatches: number, created_at_unix_ms: bigint, updated_at_unix_ms: bigint, error: string | null, };
+export type CodeRunSummary = { id: string, workspace_id: string, title: string, objective: string, model: string | null, coordinator_id: string, adapter_id: string, state: CodeRunState, review_policy: CodeReviewPolicy, concurrency_limit: number, host_concurrency_cap: number, task_count: number, completed_tasks: number, active_dispatches: number, created_at_unix_ms: bigint, updated_at_unix_ms: bigint, error: string | null, };

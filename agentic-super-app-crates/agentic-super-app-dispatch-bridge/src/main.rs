@@ -18,7 +18,7 @@ struct BridgeEvent<'a> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let secret = env::var("AGENTIC_SUPER_APP_DISPATCH_SECRET")?;
+    let secret = hex_decode(&env::var("AGENTIC_SUPER_APP_DISPATCH_SECRET")?)?;
     let dispatch_id = env::var("AGENTIC_SUPER_APP_DISPATCH_ID")?;
     let lease_generation = env::var("AGENTIC_SUPER_APP_DISPATCH_LEASE")?.parse::<u64>()?;
     let kind = env::args().nth(1).unwrap_or_else(|| "status".to_owned());
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let nonce = uuid::Uuid::now_v7().to_string();
     let canonical =
         format!("{dispatch_id}\n{lease_generation}\n{sequence}\n{kind}\n{payload}\n{nonce}");
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())?;
+    let mut mac = HmacSha256::new_from_slice(&secret)?;
     mac.update(canonical.as_bytes());
     let signature = mac.finalize().into_bytes();
     let mac_hex = signature
@@ -60,4 +60,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     writeln!(stdout, "AGENTIC_SUPER_APP_EVENT {output}")?;
     stdout.flush()?;
     Ok(())
+}
+
+fn hex_decode(value: &str) -> Result<Vec<u8>, &'static str> {
+    if value.is_empty() || value.len() > 128 || !value.len().is_multiple_of(2) {
+        return Err("dispatch secret is not valid hexadecimal");
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|chunk| {
+            let high = hex_value(chunk[0])?;
+            let low = hex_value(chunk[1])?;
+            Ok((high << 4) | low)
+        })
+        .collect()
+}
+
+fn hex_value(value: u8) -> Result<u8, &'static str> {
+    match value {
+        b'0'..=b'9' => Ok(value - b'0'),
+        b'a'..=b'f' => Ok(value - b'a' + 10),
+        b'A'..=b'F' => Ok(value - b'A' + 10),
+        _ => Err("dispatch secret is not valid hexadecimal"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hex_decode;
+
+    #[test]
+    fn decodes_only_bounded_hex_secrets() {
+        assert_eq!(hex_decode("00ff10").unwrap(), vec![0, 255, 16]);
+        assert!(hex_decode("").is_err());
+        assert!(hex_decode("xyz1").is_err());
+        assert!(hex_decode("0").is_err());
+    }
 }

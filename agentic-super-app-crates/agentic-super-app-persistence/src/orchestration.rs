@@ -7,10 +7,11 @@ use super::{now_ms, AgenticSuperAppPersistence};
 use agentic_super_app_protocol::{
     CodeCheckpoint, CodeCheckpointKind, CodeCheckpointState, CodeCleanupPreview, CodeDagProposal,
     CodeDispatch, CodeDispatchState, CodeManagedWorktree, CodeManagedWorktreeState,
-    CodeOrchestrationEventEnvelope, CodeOrchestrationMessage, CodeOrchestrationMessageKind,
-    CodeQuestion, CodeReview, CodeReviewDecision, CodeReviewPolicy, CodeRunCreateRequest,
-    CodeRunDetail, CodeRunState, CodeRunSummary, CodeTask, CodeTaskCreateRequest,
-    CodeTaskDependency, CodeTaskState,
+    CodeOrchestrationEventEnvelope, CodeOrchestrationEventOrigin, CodeOrchestrationMessage,
+    CodeOrchestrationMessageKind, CodeQuestion, CodeReview, CodeReviewDecision, CodeReviewPolicy,
+    CodeRunCreateRequest, CodeRunDetail, CodeRunState, CodeRunSummary, CodeTask,
+    CodeTaskCreateRequest, CodeTaskDependency, CodeTaskState,
+    CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID, CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID,
 };
 use serde_json::Value;
 use sqlx::Row;
@@ -25,14 +26,14 @@ impl AgenticSuperAppPersistence {
     ) -> Result<Vec<CodeRunSummary>, sqlx::Error> {
         let rows = if let Some(workspace_id) = workspace_id {
             sqlx::query(
-                "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error FROM agentic_super_app_code_runs WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC",
+                "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error, coordinator_id, adapter_id FROM agentic_super_app_code_runs WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC",
             )
             .bind(workspace_id)
             .fetch_all(self.pool())
             .await?
         } else {
             sqlx::query(
-                "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error FROM agentic_super_app_code_runs ORDER BY updated_at_unix_ms DESC",
+                "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error, coordinator_id, adapter_id FROM agentic_super_app_code_runs ORDER BY updated_at_unix_ms DESC",
             )
             .fetch_all(self.pool())
             .await?
@@ -49,7 +50,7 @@ impl AgenticSuperAppPersistence {
         run_id: &str,
     ) -> Result<Option<CodeRunSummary>, sqlx::Error> {
         let Some(row) = sqlx::query(
-            "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error FROM agentic_super_app_code_runs WHERE id=?",
+            "SELECT id, workspace_id, title, objective, model, state, review_policy, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, error, coordinator_id, adapter_id FROM agentic_super_app_code_runs WHERE id=?",
         )
         .bind(run_id)
         .fetch_optional(self.pool())
@@ -90,7 +91,7 @@ impl AgenticSuperAppPersistence {
         })
         .collect::<Vec<_>>();
         let dispatches = sqlx::query(
-            "SELECT id, run_id, task_id, attempt, state, lease_generation, session_id, pid, worktree_id, checkpoint_id, last_heartbeat_at_unix_ms, started_at_unix_ms, updated_at_unix_ms, error, result_summary FROM agentic_super_app_code_dispatches WHERE run_id=? ORDER BY updated_at_unix_ms DESC",
+            "SELECT id, run_id, task_id, attempt, state, lease_generation, session_id, pid, worktree_id, checkpoint_id, last_heartbeat_at_unix_ms, started_at_unix_ms, updated_at_unix_ms, error, result_summary, adapter_id, terminal_id, cancel_requested_at_unix_ms FROM agentic_super_app_code_dispatches WHERE run_id=? ORDER BY updated_at_unix_ms DESC",
         )
         .bind(run_id)
         .fetch_all(self.pool())
@@ -177,7 +178,7 @@ impl AgenticSuperAppPersistence {
     ) -> Result<(), sqlx::Error> {
         let now = now_ms();
         sqlx::query(
-            "INSERT INTO agentic_super_app_code_runs (id, workspace_id, title, objective, state, review_policy, model, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agentic_super_app_code_runs (id, workspace_id, title, objective, state, review_policy, model, concurrency_limit, host_concurrency_cap, created_at_unix_ms, updated_at_unix_ms, coordinator_id, adapter_id, next_event_sequence) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, 1)",
         )
         .bind(run_id)
         .bind(&request.workspace_id)
@@ -189,6 +190,20 @@ impl AgenticSuperAppPersistence {
         .bind(i64::from(host_cap))
         .bind(now)
         .bind(now)
+        .bind(
+            request
+                .coordinator_id
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or(CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID),
+        )
+        .bind(
+            request
+                .adapter_id
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or(CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID),
+        )
         .execute(self.pool())
         .await?;
         Ok(())
@@ -250,6 +265,7 @@ impl AgenticSuperAppPersistence {
         Ok(result.rows_affected() == 1)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_orchestration_task_state(
         &self,
         run_id: &str,
@@ -304,9 +320,10 @@ impl AgenticSuperAppPersistence {
         let mut tx = self.pool().begin().await?;
         let now = now_ms();
         sqlx::query(
-            "UPDATE agentic_super_app_code_dispatches SET state='cancelled', error=?, updated_at_unix_ms=? WHERE run_id=? AND state IN ('preparing','running','awaiting_input','checkpointing')",
+            "UPDATE agentic_super_app_code_dispatches SET state='cancelled', error=?, cancel_requested_at_unix_ms=?, updated_at_unix_ms=? WHERE run_id=? AND state IN ('preparing','running','awaiting_input','checkpointing')",
         )
         .bind(reason)
+        .bind(now)
         .bind(now)
         .bind(run_id)
         .execute(&mut *tx)
@@ -321,6 +338,110 @@ impl AgenticSuperAppPersistence {
         .await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn cancel_orchestration_dispatch(
+        &self,
+        run_id: &str,
+        task_id: &str,
+        dispatch_id: &str,
+        expected_lease_generation: u64,
+        reason: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let mut tx = self.pool().begin().await?;
+        let now = now_ms();
+        let result = sqlx::query(
+            "UPDATE agentic_super_app_code_dispatches SET state='cancelled', error=?, cancel_requested_at_unix_ms=?, updated_at_unix_ms=? WHERE id=? AND run_id=? AND task_id=? AND lease_generation=? AND state IN ('preparing','running','awaiting_input','checkpointing')",
+        )
+        .bind(reason)
+        .bind(now)
+        .bind(now)
+        .bind(dispatch_id)
+        .bind(run_id)
+        .bind(task_id)
+        .bind(i64::try_from(expected_lease_generation).unwrap_or(i64::MAX))
+        .execute(&mut *tx)
+        .await?;
+        if result.rows_affected() == 1 {
+            sqlx::query(
+                "UPDATE agentic_super_app_code_tasks SET state='cancelled', active_dispatch_id=NULL, error=?, updated_at_unix_ms=? WHERE id=? AND run_id=? AND active_dispatch_id=?",
+            )
+            .bind(reason)
+            .bind(now)
+            .bind(task_id)
+            .bind(run_id)
+            .bind(dispatch_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn attach_orchestration_terminal(
+        &self,
+        dispatch_id: &str,
+        expected_lease_generation: u64,
+        terminal_id: &str,
+    ) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query(
+            "UPDATE agentic_super_app_code_dispatches SET terminal_id=?, updated_at_unix_ms=? WHERE id=? AND lease_generation=? AND state NOT IN ('succeeded','failed','cancelled','stale')",
+        )
+        .bind(terminal_id)
+        .bind(now_ms())
+        .bind(dispatch_id)
+        .bind(i64::try_from(expected_lease_generation).unwrap_or(i64::MAX))
+        .execute(self.pool())
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn mark_stale_orchestration_dispatches(
+        &self,
+        run_id: &str,
+        stale_before_unix_ms: i64,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        let mut tx = self.pool().begin().await?;
+        let rows = sqlx::query(
+            "SELECT id, run_id, task_id FROM agentic_super_app_code_dispatches WHERE run_id=? AND state IN ('preparing','running','checkpointing') AND last_heartbeat_at_unix_ms IS NOT NULL AND last_heartbeat_at_unix_ms < ?",
+        )
+        .bind(run_id)
+        .bind(stale_before_unix_ms)
+        .fetch_all(&mut *tx)
+        .await?;
+        let mut dispatch_ids = Vec::with_capacity(rows.len());
+        let now = now_ms();
+        for row in rows {
+            let dispatch_id: String = row.get(0);
+            let run_id: String = row.get(1);
+            let task_id: String = row.get(2);
+            sqlx::query(
+                "UPDATE agentic_super_app_code_dispatches SET state='stale', error='Worker heartbeat expired', updated_at_unix_ms=? WHERE id=? AND state IN ('preparing','running','checkpointing')",
+            )
+            .bind(now)
+            .bind(&dispatch_id)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                "UPDATE agentic_super_app_code_tasks SET state='failed', active_dispatch_id=NULL, error='Worker heartbeat expired', updated_at_unix_ms=? WHERE id=? AND run_id=? AND active_dispatch_id=?",
+            )
+            .bind(now)
+            .bind(&task_id)
+            .bind(&run_id)
+            .bind(&dispatch_id)
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query(
+                "UPDATE agentic_super_app_code_runs SET state='failed', error='A worker heartbeat expired', updated_at_unix_ms=? WHERE id=? AND state='running'",
+            )
+            .bind(now)
+            .bind(&run_id)
+            .execute(&mut *tx)
+            .await?;
+            dispatch_ids.push(dispatch_id);
+        }
+        tx.commit().await?;
+        Ok(dispatch_ids)
     }
 
     pub async fn insert_orchestration_task(
@@ -443,19 +564,22 @@ impl AgenticSuperAppPersistence {
             return Ok(false);
         }
         sqlx::query(
-            "INSERT INTO agentic_super_app_code_dispatches (id, run_id, task_id, attempt, state, lease_generation, session_id, pid, worktree_id, checkpoint_id, last_heartbeat_at_unix_ms, started_at_unix_ms, updated_at_unix_ms, error, result_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO agentic_super_app_code_dispatches (id, run_id, task_id, attempt, state, adapter_id, lease_generation, session_id, pid, worktree_id, checkpoint_id, last_heartbeat_at_unix_ms, terminal_id, cancel_requested_at_unix_ms, started_at_unix_ms, updated_at_unix_ms, error, result_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&dispatch.id)
         .bind(&dispatch.run_id)
         .bind(&dispatch.task_id)
         .bind(i64::from(dispatch.attempt))
         .bind(dispatch_state_value(dispatch.state))
+        .bind(&dispatch.adapter_id)
         .bind(i64::try_from(dispatch.lease_generation).unwrap_or(i64::MAX))
         .bind(&dispatch.session_id)
         .bind(dispatch.pid.map(i64::from))
         .bind(&dispatch.worktree_id)
         .bind(&dispatch.checkpoint_id)
         .bind(dispatch.last_heartbeat_at_unix_ms)
+        .bind(&dispatch.terminal_id)
+        .bind(dispatch.cancel_requested_at_unix_ms)
         .bind(dispatch.started_at_unix_ms)
         .bind(dispatch.updated_at_unix_ms)
         .bind(&dispatch.error)
@@ -466,6 +590,7 @@ impl AgenticSuperAppPersistence {
         Ok(true)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_orchestration_dispatch(
         &self,
         dispatch_id: &str,
@@ -480,7 +605,7 @@ impl AgenticSuperAppPersistence {
         result_summary: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "UPDATE agentic_super_app_code_dispatches SET state=?, session_id=?, pid=?, worktree_id=?, checkpoint_id=?, last_heartbeat_at_unix_ms=?, updated_at_unix_ms=?, error=?, result_summary=? WHERE id=? AND lease_generation=? AND state NOT IN ('succeeded','cancelled','stale')",
+            "UPDATE agentic_super_app_code_dispatches SET state=?, session_id=COALESCE(?, session_id), pid=COALESCE(?, pid), worktree_id=COALESCE(?, worktree_id), checkpoint_id=COALESCE(?, checkpoint_id), last_heartbeat_at_unix_ms=COALESCE(?, last_heartbeat_at_unix_ms), updated_at_unix_ms=?, error=?, result_summary=COALESCE(?, result_summary) WHERE id=? AND lease_generation=? AND state NOT IN ('succeeded','cancelled','stale')",
         )
         .bind(dispatch_state_value(state))
         .bind(session_id)
@@ -498,17 +623,19 @@ impl AgenticSuperAppPersistence {
         Ok(result.rows_affected() == 1)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_orchestration_task_result(
         &self,
         run_id: &str,
         task_id: &str,
         dispatch_id: &str,
+        expected_lease_generation: u64,
         state: CodeTaskState,
         checkpoint_id: Option<&str>,
         error: Option<&str>,
     ) -> Result<bool, sqlx::Error> {
         let result = sqlx::query(
-            "UPDATE agentic_super_app_code_tasks SET state=?, latest_checkpoint_id=?, error=?, updated_at_unix_ms=? WHERE run_id=? AND id=? AND active_dispatch_id=?",
+            "UPDATE agentic_super_app_code_tasks SET state=?, latest_checkpoint_id=COALESCE(?, latest_checkpoint_id), error=?, updated_at_unix_ms=? WHERE run_id=? AND id=? AND active_dispatch_id=? AND state IN ('preparing','running','awaiting_input','awaiting_review','checkpointing') AND EXISTS (SELECT 1 FROM agentic_super_app_code_dispatches WHERE id=? AND run_id=? AND task_id=? AND lease_generation=? AND state IN ('preparing','running','awaiting_input','checkpointing','succeeded'))",
         )
         .bind(task_state_value(state))
         .bind(checkpoint_id)
@@ -517,6 +644,10 @@ impl AgenticSuperAppPersistence {
         .bind(run_id)
         .bind(task_id)
         .bind(dispatch_id)
+        .bind(dispatch_id)
+        .bind(run_id)
+        .bind(task_id)
+        .bind(i64::try_from(expected_lease_generation).unwrap_or(i64::MAX))
         .execute(self.pool())
         .await?;
         Ok(result.rows_affected() == 1)
@@ -730,6 +861,7 @@ impl AgenticSuperAppPersistence {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert_orchestration_event(
         &self,
         run_id: &str,
@@ -740,10 +872,35 @@ impl AgenticSuperAppPersistence {
         kind: CodeOrchestrationMessageKind,
         payload: &str,
         accepted: bool,
+        origin: CodeOrchestrationEventOrigin,
+        worker_sequence: Option<u64>,
+        nonce: Option<&str>,
     ) -> Result<CodeOrchestrationEventEnvelope, sqlx::Error> {
         let mut tx = self.pool().begin().await?;
+        if let Some(nonce) = nonce {
+            if let Some(row) = sqlx::query(
+                "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, origin, worker_sequence, nonce, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE nonce=?",
+            )
+            .bind(nonce)
+            .fetch_optional(&mut *tx)
+            .await?
+            {
+                tx.commit().await?;
+                return Ok(event_from_row(row));
+            }
+        }
+        let allocated = sqlx::query(
+            "UPDATE agentic_super_app_code_runs SET next_event_sequence=next_event_sequence+1 WHERE id=?",
+        )
+        .bind(run_id)
+        .execute(&mut *tx)
+        .await?;
+        if allocated.rows_affected() != 1 {
+            tx.rollback().await?;
+            return Err(sqlx::Error::RowNotFound);
+        }
         let sequence: i64 = sqlx::query(
-            "SELECT COALESCE(MAX(sequence), 0) + 1 FROM agentic_super_app_code_events WHERE run_id=?",
+            "SELECT next_event_sequence - 1 FROM agentic_super_app_code_runs WHERE id=?",
         )
         .bind(run_id)
         .fetch_one(&mut *tx)
@@ -751,7 +908,7 @@ impl AgenticSuperAppPersistence {
         .get(0);
         let emitted_at = now_ms();
         sqlx::query(
-            "INSERT OR IGNORE INTO agentic_super_app_code_events (run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, emitted_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO agentic_super_app_code_events (run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, origin, worker_sequence, nonce, emitted_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(run_id)
         .bind(sequence)
@@ -762,16 +919,30 @@ impl AgenticSuperAppPersistence {
         .bind(message_kind_value(kind))
         .bind(payload)
         .bind(accepted as i64)
+        .bind(event_origin_value(origin))
+        .bind(worker_sequence.map(|value| i64::try_from(value).unwrap_or(i64::MAX)))
+        .bind(nonce)
         .bind(emitted_at)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
-        let row = sqlx::query(
-            "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE event_id=?",
-        )
-        .bind(event_id)
-        .fetch_one(self.pool())
-        .await?;
+        let row = if let Some(nonce) = nonce {
+            sqlx::query(
+                "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, origin, worker_sequence, nonce, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE event_id=? OR nonce=? ORDER BY CASE WHEN event_id=? THEN 0 ELSE 1 END LIMIT 1",
+            )
+            .bind(event_id)
+            .bind(nonce)
+            .bind(event_id)
+            .fetch_one(self.pool())
+            .await?
+        } else {
+            sqlx::query(
+                "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, origin, worker_sequence, nonce, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE event_id=?",
+            )
+            .bind(event_id)
+            .fetch_one(self.pool())
+            .await?
+        };
         Ok(event_from_row(row))
     }
 
@@ -783,7 +954,7 @@ impl AgenticSuperAppPersistence {
     ) -> Result<Vec<CodeOrchestrationEventEnvelope>, sqlx::Error> {
         let limit = i64::from(limit.clamp(1, EVENT_LIMIT));
         Ok(sqlx::query(
-            "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?",
+            "SELECT run_id, sequence, event_id, task_id, dispatch_id, lease_generation, kind, payload, accepted, origin, worker_sequence, nonce, emitted_at_unix_ms FROM agentic_super_app_code_events WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?",
         )
         .bind(run_id)
         .bind(i64::try_from(after_sequence).unwrap_or(i64::MAX))
@@ -850,6 +1021,14 @@ impl AgenticSuperAppPersistence {
             title: row.get(2),
             objective: row.get(3),
             model: row.get(4),
+            coordinator_id: row
+                .get::<Option<String>, _>(12)
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID.to_owned()),
+            adapter_id: row
+                .get::<Option<String>, _>(13)
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned()),
             state: parse_run_state(row.get::<String, _>(5).as_str()),
             review_policy: parse_review_policy(row.get::<String, _>(6).as_str()),
             concurrency_limit: row.get::<i64, _>(7).clamp(1, 8) as u8,
@@ -890,6 +1069,10 @@ fn dispatch_from_row(row: sqlx::sqlite::SqliteRow) -> CodeDispatch {
         task_id: row.get(2),
         attempt: row.get::<i64, _>(3).max(0) as u32,
         state: parse_dispatch_state(row.get::<String, _>(4).as_str()),
+        adapter_id: row
+            .get::<Option<String>, _>(15)
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned()),
         lease_generation: row.get::<i64, _>(5).max(0) as u64,
         session_id: row.get(6),
         pid: row
@@ -898,6 +1081,8 @@ fn dispatch_from_row(row: sqlx::sqlite::SqliteRow) -> CodeDispatch {
         worktree_id: row.get(8),
         checkpoint_id: row.get(9),
         last_heartbeat_at_unix_ms: row.get(10),
+        terminal_id: row.get(16),
+        cancel_requested_at_unix_ms: row.get(17),
         started_at_unix_ms: row.get(11),
         updated_at_unix_ms: row.get(12),
         error: row.get(13),
@@ -988,7 +1173,12 @@ fn event_from_row(row: sqlx::sqlite::SqliteRow) -> CodeOrchestrationEventEnvelop
         kind: parse_message_kind(row.get::<String, _>(6).as_str()),
         payload: row.get(7),
         accepted: row.get::<i64, _>(8) != 0,
-        emitted_at_unix_ms: row.get(9),
+        origin: parse_event_origin(row.get::<String, _>(9).as_str()),
+        worker_sequence: row
+            .get::<Option<i64>, _>(10)
+            .map(|value| value.max(0) as u64),
+        nonce: row.get(11),
+        emitted_at_unix_ms: row.get(12),
     }
 }
 
@@ -1046,6 +1236,21 @@ fn parse_task_state(value: &str) -> CodeTaskState {
         _ => CodeTaskState::Draft,
     }
 }
+
+fn event_origin_value(origin: CodeOrchestrationEventOrigin) -> &'static str {
+    match origin {
+        CodeOrchestrationEventOrigin::Host => "host",
+        CodeOrchestrationEventOrigin::Worker => "worker",
+    }
+}
+
+fn parse_event_origin(value: &str) -> CodeOrchestrationEventOrigin {
+    match value {
+        "worker" => CodeOrchestrationEventOrigin::Worker,
+        _ => CodeOrchestrationEventOrigin::Host,
+    }
+}
+
 fn dispatch_state_value(state: CodeDispatchState) -> &'static str {
     match state {
         CodeDispatchState::Preparing => "preparing",

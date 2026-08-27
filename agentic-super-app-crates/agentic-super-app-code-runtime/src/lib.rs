@@ -21,7 +21,8 @@ use std::{
 };
 use thiserror::Error;
 
-pub const CODEX_ADAPTER_ID: &str = "codex";
+pub const CODEX_ADAPTER_ID: &str = "codex-cli";
+pub const CODEX_EXECUTABLE: &str = "codex";
 pub type TerminalEventSink = Arc<dyn Fn(CodeTerminalEvent) + Send + Sync + 'static>;
 
 #[derive(Debug, Error)]
@@ -55,7 +56,7 @@ impl AgenticSuperAppCodeRuntime {
     }
 
     pub fn adapters(&self) -> Vec<CodeAdapterSummary> {
-        let detected = Command::new(CODEX_ADAPTER_ID)
+        let detected = Command::new(CODEX_EXECUTABLE)
             .arg("--version")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -63,7 +64,7 @@ impl AgenticSuperAppCodeRuntime {
             .map(|output| output.status.success())
             .unwrap_or(false);
         let authenticated = detected
-            && Command::new(CODEX_ADAPTER_ID)
+            && Command::new(CODEX_EXECUTABLE)
                 .args(["login", "status"])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -73,7 +74,7 @@ impl AgenticSuperAppCodeRuntime {
         vec![CodeAdapterSummary {
             id: CODEX_ADAPTER_ID.to_owned(),
             display_name: "Codex CLI".to_owned(),
-            executable: CODEX_ADAPTER_ID.to_owned(),
+            executable: CODEX_EXECUTABLE.to_owned(),
             detected,
             authenticated,
             capabilities: vec![
@@ -98,6 +99,17 @@ impl AgenticSuperAppCodeRuntime {
     }
 
     pub fn start(
+        &self,
+        request: &CodeTerminalStartRequest,
+        workspace_root: &Path,
+        sink: TerminalEventSink,
+    ) -> Result<CodeTerminalSummary, AgenticSuperAppCodeRuntimeError> {
+        self.start_at_root(request, workspace_root, sink)
+    }
+
+    /// Starts a terminal in a host-validated directory. The caller must keep
+    /// the path inside an approved workspace or managed orchestration root.
+    pub fn start_at_root(
         &self,
         request: &CodeTerminalStartRequest,
         workspace_root: &Path,
@@ -373,10 +385,10 @@ fn command_for(
             if request.adapter_id.as_deref().unwrap_or(CODEX_ADAPTER_ID) != CODEX_ADAPTER_ID {
                 return Err(AgenticSuperAppCodeRuntimeError::UnsupportedAdapter);
             }
-            let mut command = CommandBuilder::new(CODEX_ADAPTER_ID);
-            if let Some(session_id) = &request.resume_session_id {
+            let mut command = CommandBuilder::new(CODEX_EXECUTABLE);
+            let resume_session_id = request.resume_session_id.as_deref();
+            if resume_session_id.is_some() {
                 command.arg("resume");
-                command.arg(session_id);
             }
             command.args([
                 "--sandbox",
@@ -393,6 +405,9 @@ fn command_for(
             {
                 command.arg("--model");
                 command.arg(model);
+            }
+            if let Some(session_id) = &request.resume_session_id {
+                command.arg(session_id);
             }
             Ok(command)
         }
@@ -460,7 +475,7 @@ mod tests {
     fn discovers_a_structured_codex_adapter_without_exposing_probe_output() {
         let adapters = AgenticSuperAppCodeRuntime::new().adapters();
         assert_eq!(adapters[0].id, CODEX_ADAPTER_ID);
-        assert_eq!(adapters[0].executable, CODEX_ADAPTER_ID);
+        assert_eq!(adapters[0].executable, CODEX_EXECUTABLE);
     }
 
     #[test]
