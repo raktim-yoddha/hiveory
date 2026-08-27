@@ -6,6 +6,9 @@ terminal-lifecycle,Host-managed terminal session lifecycle,agentic-super-app-cod
 provider-adapter,Host-owned model provider adapter,agentic-super-app-model-gateway,2,selected,Adapter contract conformance test
 command-receipt,Idempotent command receipt,persistence,2,selected,Duplicate command returns one durable result test
 event-projection,Renderer consumes cached host projection,shared-runtime,2,selected,Replay projection equivalence test
-subscription-cursor,Resumable monotonic stream cursor,shared-protocol,2,deferred,Cursor recovery test
+subscription-cursor,Resumable monotonic stream cursor,chat event channel,3,selected,Chat cursor recovery test
+chat-conversation-lifecycle,Standalone create/stream/stop/retry/branch/archive/export/delete,agentic-super-app-chat-domain + persistence,3,selected,Chat vertical slice acceptance test
+chat-typed-parts,Typed transcript parts and safe reasoning/status rendering,agentic-super-app-chat-domain + renderer,3,selected,Typed part replay test
+chat-attachments,Explicit bounded attachment import and portable export,agentic-super-app-artifact-store,3,selected,Attachment policy and export test
 browser-preview,Auxiliary untrusted browser preview,code-domain,4,deferred,Preview has no host capability test
 remote-connection,Remote workspace connectivity,code-runtime,5,deferred,Remote lifecycle recovery test

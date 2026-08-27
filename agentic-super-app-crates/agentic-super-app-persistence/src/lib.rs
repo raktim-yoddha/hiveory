@@ -12,6 +12,8 @@ use std::{
 };
 use uuid::Uuid;
 
+pub mod chat;
+
 pub const AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "agentic-super-app-openai";
 static AGENTIC_SUPER_APP_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
@@ -21,6 +23,10 @@ pub struct AgenticSuperAppPersistence {
 }
 
 impl AgenticSuperAppPersistence {
+    pub(crate) fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     pub async fn open(path: &Path) -> Result<Self, sqlx::Error> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(sqlx::Error::Io)?;

@@ -5,6 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "dialog:default",
     "notification:allow-is-permission-granted",
     "notification:allow-request-permission"
   ]

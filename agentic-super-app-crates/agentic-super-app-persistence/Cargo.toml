@@ -11,3 +11,4 @@ serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+tokio.workspace = true

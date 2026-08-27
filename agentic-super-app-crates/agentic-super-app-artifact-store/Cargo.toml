@@ -1,0 +1,12 @@
+[package]
+name = "agentic-super-app-artifact-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
+sha2 = "0.10"
+thiserror.workspace = true
+uuid.workspace = true
+zip.workspace = true
