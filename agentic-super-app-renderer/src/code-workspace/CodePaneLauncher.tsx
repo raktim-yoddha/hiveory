@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Bot, Globe, MessageSquare, Terminal, X } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Globe, MessageSquare, Terminal, X } from 'lucide-react'
 import { agenticSuperAppClient, type CodeAdapterSummary } from '../api/agentic-super-app-client'
+import { CliBrandIcon } from './CliIcons'
 
 interface CodePaneLauncherProps {
   paneId: string
@@ -17,6 +18,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   onCreateThread,
 }) => {
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
+  const [showCliModal, setShowCliModal] = useState(false)
   const [selectedAdapter, setSelectedAdapter] = useState<CodeAdapterSummary | null>(null)
   const [model, setModel] = useState('default')
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000')
@@ -25,12 +27,29 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   useEffect(() => {
     let mounted = true
     void agenticSuperAppClient.codeSnapshot().then((snapshot) => {
-      if (mounted) setAdapters(snapshot.adapters)
+      if (mounted) {
+        setAdapters(snapshot.adapters)
+        const firstDetected = snapshot.adapters.find((a) => a.detected) || snapshot.adapters[0] || null
+        setSelectedAdapter(firstDetected)
+      }
     })
     return () => {
       mounted = false
     }
   }, [])
+
+  const handleSelectAndLaunch = (adapter: CodeAdapterSummary) => {
+    setSelectedAdapter(adapter)
+  }
+
+  const handleConfirmLaunch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedAdapter) return
+    onLaunchAgent(selectedAdapter.id, model.trim() === 'default' ? null : model.trim() || null)
+    setShowCliModal(false)
+  }
+
+  const detectedCount = adapters.filter((a) => a.detected).length
 
   return (
     <div className="code-empty-pane">
@@ -41,46 +60,170 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
         </div>
 
         <div className="code-launcher-grid">
+          {/* 1. Terminal */}
           <button type="button" className="code-launcher-card" onClick={onLaunchShell}>
             <span className="code-launcher-icon"><Terminal size={17} aria-hidden="true" /></span>
-            <span><span className="code-launcher-card-title">Terminal</span><span className="code-launcher-card-desc">Interactive local shell</span></span>
+            <span>
+              <span className="code-launcher-card-title">Terminal</span>
+              <span className="code-launcher-card-desc">Interactive local shell</span>
+            </span>
           </button>
 
+          {/* 2. Coding Agent / CLI */}
+          <button
+            type="button"
+            className="code-launcher-card"
+            onClick={() => setShowCliModal(true)}
+          >
+            <span className="code-launcher-icon" style={{ color: '#f59e0b' }}>
+              <span style={{ fontSize: 16, fontWeight: 700 }}>✳</span>
+            </span>
+            <span>
+              <span className="code-launcher-card-title">CLI Agent</span>
+              <span className="code-launcher-card-desc">
+                {detectedCount > 0 ? `${detectedCount} agent${detectedCount > 1 ? 's' : ''} available` : 'Launch coding CLI'}
+              </span>
+            </span>
+          </button>
+
+          {/* 3. Thread */}
           <button type="button" className="code-launcher-card" onClick={onCreateThread}>
             <span className="code-launcher-icon"><MessageSquare size={17} aria-hidden="true" /></span>
-            <span><span className="code-launcher-card-title">Thread</span><span className="code-launcher-card-desc">Docked workspace conversation</span></span>
+            <span>
+              <span className="code-launcher-card-title">Thread</span>
+              <span className="code-launcher-card-desc">Docked workspace conversation</span>
+            </span>
           </button>
 
+          {/* 4. Preview */}
           {showUrlInput ? (
-            <form className="code-launcher-card code-launcher-url-card" onSubmit={(event) => { event.preventDefault(); onOpenPreview(previewUrl) }}>
+            <form
+              className="code-launcher-card code-launcher-url-card"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onOpenPreview(previewUrl)
+              }}
+            >
               <span className="code-launcher-icon"><Globe size={17} aria-hidden="true" /></span>
-              <input className="code-preview-url-input" value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} placeholder="http://localhost:3000" aria-label="Preview URL" autoFocus />
+              <input
+                className="code-preview-url-input"
+                value={previewUrl}
+                onChange={(event) => setPreviewUrl(event.target.value)}
+                placeholder="http://localhost:3000"
+                aria-label="Preview URL"
+                autoFocus
+              />
               <button type="submit" className="code-primary-button">Open</button>
             </form>
           ) : (
             <button type="button" className="code-launcher-card" onClick={() => setShowUrlInput(true)}>
               <span className="code-launcher-icon"><Globe size={17} aria-hidden="true" /></span>
-              <span><span className="code-launcher-card-title">Preview</span><span className="code-launcher-card-desc">Open a local web app</span></span>
+              <span>
+                <span className="code-launcher-card-title">Preview</span>
+                <span className="code-launcher-card-desc">Open a local web app</span>
+              </span>
             </button>
           )}
-
-          {adapters.map((adapter) => (
-            <button type="button" key={adapter.id} className="code-launcher-card" disabled={!adapter.detected} onClick={() => setSelectedAdapter(adapter)}>
-              <span className="code-launcher-icon"><Bot size={17} aria-hidden="true" /></span>
-              <span><span className="code-launcher-card-title">{adapter.display_name}</span><span className="code-launcher-card-desc">{adapter.detected ? 'Installed command-line agent' : 'Not detected on PATH'}</span></span>
-            </button>
-          ))}
         </div>
       </div>
 
-      {selectedAdapter && (
-        <div className="code-launch-dialog-backdrop" role="presentation" onMouseDown={() => setSelectedAdapter(null)}>
-          <form className="code-launch-dialog" role="dialog" aria-modal="true" aria-labelledby="code-launch-dialog-title" onSubmit={(event) => { event.preventDefault(); onLaunchAgent(selectedAdapter.id, model.trim() || null); setSelectedAdapter(null) }} onMouseDown={(event) => event.stopPropagation()}>
-            <div className="code-launch-dialog-heading"><div><span className="code-dialog-eyebrow">Coding agent</span><h3 id="code-launch-dialog-title">Launch {selectedAdapter.display_name}</h3></div><button type="button" className="code-pane-btn" onClick={() => setSelectedAdapter(null)} aria-label="Close launch dialog"><X size={15} aria-hidden="true" /></button></div>
-            <label className="code-dialog-field"><span>Model</span><input value={model} onChange={(event) => setModel(event.target.value)} placeholder="default" autoFocus /></label>
-            <p className="code-dialog-hint">The agent starts in the selected workspace. Leave the model as “default” to use the CLI’s configured model.</p>
-            <div className="code-dialog-actions"><button type="button" className="code-secondary-button" onClick={() => setSelectedAdapter(null)}>Cancel</button><button type="submit" className="code-primary-button"><Bot size={14} aria-hidden="true" />Launch agent</button></div>
-          </form>
+      {/* CLI Agent Selection Modal */}
+      {showCliModal && (
+        <div
+          className="code-launch-dialog-backdrop"
+          role="presentation"
+          onMouseDown={() => setShowCliModal(false)}
+        >
+          <div
+            className="code-cli-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="code-cli-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="code-cli-dialog-header">
+              <div>
+                <span className="code-dialog-eyebrow">Command-line Agents</span>
+                <h3 id="code-cli-dialog-title">Select Coding Agent</h3>
+              </div>
+              <button
+                type="button"
+                className="code-pane-action-btn"
+                onClick={() => setShowCliModal(false)}
+                aria-label="Close"
+              >
+                <X size={15} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="code-cli-list">
+              {adapters.map((adapter) => {
+                const isSelected = selectedAdapter?.id === adapter.id
+                return (
+                  <button
+                    type="button"
+                    key={adapter.id}
+                    className={`code-cli-list-item ${isSelected ? 'is-selected' : ''} ${!adapter.detected ? 'is-disabled' : ''}`}
+                    disabled={!adapter.detected}
+                    onClick={() => handleSelectAndLaunch(adapter)}
+                  >
+                    <div className="code-cli-item-left">
+                      <span className="code-cli-icon">
+                        <CliBrandIcon identifier={adapter.id} size={16} />
+                      </span>
+                      <div className="code-cli-info">
+                        <span className="code-cli-name">{adapter.display_name}</span>
+                        <span className="code-cli-desc">
+                          {adapter.detected ? 'Installed on PATH' : 'Not detected'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="code-cli-item-right">
+                      {adapter.detected ? (
+                        <span className="code-cli-status-badge ready">
+                          <CheckCircle2 size={12} /> Ready
+                        </span>
+                      ) : (
+                        <span className="code-cli-status-badge missing">Not installed</span>
+                      )}
+                      <ChevronRight size={14} className="code-cli-arrow" />
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {selectedAdapter && (
+              <form onSubmit={handleConfirmLaunch} className="code-cli-launch-form">
+                <div className="code-cli-model-row">
+                  <label htmlFor="code-cli-model-input">Model / Arguments:</label>
+                  <input
+                    id="code-cli-model-input"
+                    className="code-cli-model-input"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    placeholder="default"
+                  />
+                </div>
+                <div className="code-cli-dialog-footer">
+                  <button
+                    type="button"
+                    className="code-secondary-button"
+                    onClick={() => setShowCliModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="code-primary-button"
+                    disabled={!selectedAdapter.detected}
+                  >
+                    Launch {selectedAdapter.display_name}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

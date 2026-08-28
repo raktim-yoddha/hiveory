@@ -1147,11 +1147,18 @@ pub fn apply_layout_preset(
         return Ok(default_layout(&layout.workspace_id));
     }
 
-    let leaf_nodes: Vec<CodePaneNode> = leaves_order
+    let mut leaf_nodes: Vec<CodePaneNode> = leaves_order
         .iter()
         .filter_map(|id| layout.nodes.iter().find(|n| &n.pane_id == id))
         .cloned()
         .collect();
+
+    if let Some(focused_id) = &layout.focused_pane_id {
+        if let Some(pos) = leaf_nodes.iter().position(|n| &n.pane_id == focused_id) {
+            let focused_node = leaf_nodes.remove(pos);
+            leaf_nodes.insert(0, focused_node);
+        }
+    }
 
     if leaf_nodes.len() == 1 {
         let mut single = leaf_nodes[0].clone();

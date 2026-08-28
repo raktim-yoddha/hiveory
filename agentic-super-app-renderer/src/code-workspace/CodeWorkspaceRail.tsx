@@ -1,20 +1,17 @@
 import React from 'react'
 import {
   ChevronDown,
-  ChevronRight,
   Globe,
-  MessageSquare,
   Plus,
-  Terminal,
-  Sparkles,
   Moon,
   Settings,
 } from 'lucide-react'
 import type {
-  CodePaneKind,
+  CodePaneNode,
   CodeWorkspaceSummary,
 } from '../api/agentic-super-app-client'
 import type { CodeWorkspaceController } from './state/use-code-workspace-controller'
+import { CliBrandIcon } from './CliIcons'
 
 interface CodeWorkspaceRailProps {
   controller: CodeWorkspaceController
@@ -27,18 +24,18 @@ interface CodeWorkspaceRailProps {
   onTrustWorkspace?: () => void
 }
 
-function resourceIcon(kind: CodePaneKind) {
-  switch (kind) {
+function renderPaneRailIcon(node: CodePaneNode) {
+  switch (node.kind) {
     case 'coding_agent':
-      return <span style={{ color: '#f59e0b', fontSize: 13, fontWeight: 700 }}>✳</span>
+      return <CliBrandIcon identifier={node.title} size={13} />
     case 'preview':
       return <Globe size={13} style={{ color: '#60a5fa' }} />
     case 'thread':
-      return <MessageSquare size={13} style={{ color: '#9ca3af' }} />
+      return <span style={{ color: '#9ca3af', fontSize: 13 }}>⚙</span>
     case 'terminal':
-      return <Terminal size={13} style={{ color: '#9ca3af' }} />
+      return <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600 }}>🔲</span>
     default:
-      return <Sparkles size={13} />
+      return <span style={{ color: '#9ca3af', fontSize: 13 }}>✳</span>
   }
 }
 
@@ -60,8 +57,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     { id: 'plugins', label: 'Plugins' },
     { id: 'skills', label: 'Skills' },
   ]
-
-  const inactiveList = ['agentic-super-app-api', 'bridgespace-desktop', 'agentic-super-app-ui', 'database']
 
   return (
     <aside className="code-workspace-rail" aria-label="Code workspace">
@@ -96,27 +91,27 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         </button>
       </div>
 
-      {/* Workspaces & Docked Panes Tree */}
+      {/* Workspaces & Docked Panes Tree (Stable Order Preserved) */}
       <div className="code-rail-workspaces-list">
         {workspaces.map((workspace) => {
           const isActive = workspace.id === activeWorkspaceId
-          const isWorkspaceView = activeGlobalSection === 'workspace' && isActive
+          const isWorkspaceView = activeGlobalSection === 'workspace'
 
-          return (
-            <div key={workspace.id} className="code-rail-workspace-group">
-              <button
-                type="button"
-                className={`code-rail-workspace-row ${isWorkspaceView ? 'is-active' : ''}`}
-                onClick={() => {
-                  onSelectWorkspace(workspace.id)
-                  onSelectGlobalSection?.('workspace')
-                }}
-              >
-                {isActive ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                <span>{workspace.display_name}</span>
-              </button>
+          if (isActive) {
+            return (
+              <div key={workspace.id} className="code-rail-workspace-group">
+                <button
+                  type="button"
+                  className={`code-rail-workspace-row ${isWorkspaceView ? 'is-active' : ''}`}
+                  onClick={() => {
+                    onSelectWorkspace(workspace.id)
+                    onSelectGlobalSection?.('workspace')
+                  }}
+                >
+                  <ChevronDown size={13} style={{ color: '#8a8f98' }} />
+                  <span>{workspace.display_name}</span>
+                </button>
 
-              {isActive && (
                 <div className="code-rail-pane-tree">
                   {leaves.map((leaf) => {
                     const isFocused = isWorkspaceView && leaf.pane_id === state.focusedPaneId
@@ -130,28 +125,30 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                           void focusPane(leaf.pane_id)
                         }}
                       >
-                        {resourceIcon(leaf.kind)}
+                        {renderPaneRailIcon(leaf)}
                         <span>{leaf.title || (leaf.kind === 'empty' ? 'New pane' : leaf.kind)}</span>
                       </button>
                     )
                   })}
                 </div>
-              )}
-            </div>
+              </div>
+            )
+          }
+
+          return (
+            <button
+              key={workspace.id}
+              type="button"
+              className="code-rail-inactive-ws"
+              onClick={() => {
+                onSelectWorkspace(workspace.id)
+                onSelectGlobalSection?.('workspace')
+              }}
+            >
+              {workspace.display_name}
+            </button>
           )
         })}
-
-        {/* Inactive workspaces in list */}
-        {inactiveList.map((name) => (
-          <button
-            key={name}
-            type="button"
-            className="code-rail-inactive-ws"
-            onClick={onOpenFolder}
-          >
-            {name}
-          </button>
-        ))}
       </div>
 
       {/* Bottom Sidebar Footer */}

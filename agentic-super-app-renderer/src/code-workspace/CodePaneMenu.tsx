@@ -2,8 +2,6 @@ import React, { useEffect, useRef } from 'react'
 import {
   Maximize2,
   Minimize2,
-  Columns,
-  Rows,
   Edit2,
   Trash2,
   Terminal,
@@ -16,8 +14,6 @@ interface CodePaneMenuProps {
   isMaximized: boolean
   onClose: () => void
   onRename: () => void
-  onSplitRight: () => void
-  onSplitDown: () => void
   onToggleMaximize: () => void
   onRelaunch?: () => void
   onOpenShellInstead?: () => void
@@ -29,8 +25,6 @@ export const CodePaneMenu: React.FC<CodePaneMenuProps> = ({
   isMaximized,
   onClose,
   onRename,
-  onSplitRight,
-  onSplitDown,
   onToggleMaximize,
   onRelaunch,
   onOpenShellInstead,
@@ -81,28 +75,6 @@ export const CodePaneMenu: React.FC<CodePaneMenuProps> = ({
       )}
 
       {isTerminalOrAgent && <div className="code-dropdown-divider" />}
-
-      <button
-        className="code-dropdown-item"
-        onClick={() => {
-          onSplitRight()
-          onClose()
-        }}
-      >
-        <Columns size={13} />
-        <span>Split Right</span>
-      </button>
-
-      <button
-        className="code-dropdown-item"
-        onClick={() => {
-          onSplitDown()
-          onClose()
-        }}
-      >
-        <Rows size={13} />
-        <span>Split Down</span>
-      </button>
 
       <button
         className="code-dropdown-item"

@@ -16,6 +16,14 @@ export interface CodeWorkspaceController {
   state: CodeWorkspaceState
   loadWorkspace: (workspaceId: string) => Promise<void>
   splitPane: (paneId: string, placement?: CodePanePlacement) => Promise<void>
+  splitAndLaunch: (
+    paneId: string,
+    placement: CodePanePlacement,
+    kind: 'shell' | 'coding_agent' | 'thread' | 'preview',
+    adapterId?: string | null,
+    model?: string | null,
+    url?: string
+  ) => Promise<void>
   renamePane: (paneId: string, title: string) => Promise<void>
   movePane: (paneId: string, targetPaneId: string, placement: CodePanePlacement) => Promise<void>
   resizeSplit: (splitId: string, ratioPercent: number) => Promise<void>
@@ -30,6 +38,23 @@ export interface CodeWorkspaceController {
   dismissConfirmClose: () => void
   dismissError: () => void
   setError: (error: string | null) => void
+}
+
+function formatError(err: unknown): string {
+  if (!err) return 'Unknown error'
+  if (typeof err === 'string') return err
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object') {
+    const obj = err as Record<string, unknown>
+    if (typeof obj.message === 'string') return obj.message
+    if (typeof obj.error === 'string') return obj.error
+    try {
+      return JSON.stringify(err)
+    } catch {
+      return String(err)
+    }
+  }
+  return String(err)
 }
 
 export function useCodeWorkspaceController(initialWorkspaceId?: string | null): CodeWorkspaceController {
@@ -49,8 +74,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         previews: snapshot.previews,
       })
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
-      dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${msg}` })
+      dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${formatError(err)}` })
     } finally {
       dispatch({ type: 'SET_MUTATING', isMutating: false })
     }
@@ -74,9 +98,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       })
       dispatch({ type: 'SET_LAYOUT', layout: res.layout })
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = formatError(err)
       if (msg.includes('layout_conflict')) {
-        // Reload layout on concurrency conflict
         void loadWorkspace(workspaceId)
       } else {
         dispatch({ type: 'SET_ERROR', error: msg })
@@ -91,6 +114,93 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       await applyMutation({ type: 'split', pane_id: paneId, placement })
     },
     [applyMutation]
+  )
+
+  const splitAndLaunch = useCallback(
+    async (
+      paneId: string,
+      placement: CodePanePlacement,
+      kind: 'shell' | 'coding_agent' | 'thread' | 'preview',
+      adapterId?: string | null,
+      model?: string | null,
+      url?: string
+    ) => {
+      const { workspaceId, revision } = stateRef.current
+      if (!workspaceId) return
+      try {
+        dispatch({ type: 'SET_MUTATING', isMutating: true })
+        const res = await agenticSuperAppClient.applyCodePaneMutation({
+          workspace_id: workspaceId,
+          expected_revision: revision,
+          mutation: { type: 'split', pane_id: paneId, placement },
+        })
+        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+
+        const newPaneId = res.layout.focused_pane_id
+        if (!newPaneId) return
+
+        let curRev = res.layout.revision ?? 0
+
+        if (kind === 'shell' || kind === 'coding_agent') {
+          try {
+            const termRes = await agenticSuperAppClient.launchCodePaneTerminal({
+              workspace_id: workspaceId,
+              pane_id: newPaneId,
+              expected_revision: curRev,
+              kind,
+              adapter_id: adapterId ?? null,
+              model: model ?? null,
+              cols: 80,
+              rows: 24,
+            })
+            dispatch({ type: 'SET_TERMINAL', terminal: termRes.terminal })
+            dispatch({ type: 'SET_LAYOUT', layout: termRes.layout })
+          } catch (termErr: unknown) {
+            const innerMsg = formatError(termErr)
+            if (innerMsg.toLowerCase().includes('trust')) {
+              await agenticSuperAppClient.trustCodeWorkspace(workspaceId, true)
+              const detail = await agenticSuperAppClient.codeWorkspace(workspaceId)
+              curRev = detail.layout.revision ?? 0
+              const termRes = await agenticSuperAppClient.launchCodePaneTerminal({
+                workspace_id: workspaceId,
+                pane_id: newPaneId,
+                expected_revision: curRev,
+                kind,
+                adapter_id: adapterId ?? null,
+                model: model ?? null,
+                cols: 80,
+                rows: 24,
+              })
+              dispatch({ type: 'SET_TERMINAL', terminal: termRes.terminal })
+              dispatch({ type: 'SET_LAYOUT', layout: termRes.layout })
+            } else {
+              throw termErr
+            }
+          }
+        } else if (kind === 'preview') {
+          const prevRes = await agenticSuperAppClient.openCodePanePreview({
+            workspace_id: workspaceId,
+            pane_id: newPaneId,
+            expected_revision: curRev,
+            url: url || 'http://localhost:3000',
+          })
+          dispatch({ type: 'SET_PREVIEW', preview: prevRes.preview })
+          dispatch({ type: 'SET_LAYOUT', layout: prevRes.layout })
+        } else if (kind === 'thread') {
+          const threadRes = await agenticSuperAppClient.createCodePaneThread({
+            workspace_id: workspaceId,
+            pane_id: newPaneId,
+            expected_revision: curRev,
+          })
+          dispatch({ type: 'SET_LAYOUT', layout: threadRes.layout })
+        }
+      } catch (err: unknown) {
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
+      } finally {
+        dispatch({ type: 'SET_MUTATING', isMutating: false })
+      }
+    },
+    []
   )
 
   const renamePane = useCallback(
@@ -118,7 +228,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
 
   const focusPane = useCallback(
     async (paneId: string) => {
-      dispatch({ type: 'SET_FOCUSED_PANE', paneId })
+      const { layout } = stateRef.current
+      if (!layout || layout.focused_pane_id === paneId) return
       await applyMutation({ type: 'focus', pane_id: paneId })
     },
     [applyMutation]
@@ -126,10 +237,12 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
 
   const toggleMaximize = useCallback(
     async (paneId?: string | null) => {
-      const currentMax = stateRef.current.maximizedPaneId
-      const target = paneId !== undefined ? paneId : currentMax ? null : stateRef.current.focusedPaneId
-      dispatch({ type: 'SET_MAXIMIZED_PANE', paneId: target })
-      await applyMutation({ type: 'maximize', pane_id: target })
+      const { layout, focusedPaneId, maximizedPaneId } = stateRef.current
+      if (!layout) return
+      const target = paneId ?? focusedPaneId
+      if (!target) return
+      const isCurrentlyMaximized = maximizedPaneId === target
+      await applyMutation({ type: 'maximize', pane_id: isCurrentlyMaximized ? null : target })
     },
     [applyMutation]
   )
@@ -147,21 +260,45 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await agenticSuperAppClient.launchCodePaneTerminal({
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          expected_revision: revision,
-          kind,
-          adapter_id: adapterId ?? null,
-          model: model ?? null,
-          cols: 80,
-          rows: 24,
-        })
-        dispatch({ type: 'SET_TERMINAL', terminal: res.terminal })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+        let curRev = revision
+        try {
+          const res = await agenticSuperAppClient.launchCodePaneTerminal({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: curRev,
+            kind,
+            adapter_id: adapterId ?? null,
+            model: model ?? null,
+            cols: 80,
+            rows: 24,
+          })
+          dispatch({ type: 'SET_TERMINAL', terminal: res.terminal })
+          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          return
+        } catch (innerErr: unknown) {
+          const innerMsg = formatError(innerErr)
+          if (innerMsg.toLowerCase().includes('trust')) {
+            await agenticSuperAppClient.trustCodeWorkspace(workspaceId, true)
+            const detail = await agenticSuperAppClient.codeWorkspace(workspaceId)
+            curRev = detail.layout.revision ?? 0
+            const res = await agenticSuperAppClient.launchCodePaneTerminal({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: curRev,
+              kind,
+              adapter_id: adapterId ?? null,
+              model: model ?? null,
+              cols: 80,
+              rows: 24,
+            })
+            dispatch({ type: 'SET_TERMINAL', terminal: res.terminal })
+            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            return
+          }
+          throw innerErr
+        }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
@@ -175,17 +312,37 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await agenticSuperAppClient.openCodePanePreview({
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          expected_revision: revision,
-          url,
-        })
-        dispatch({ type: 'SET_PREVIEW', preview: res.preview })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+        let curRev = revision
+        try {
+          const res = await agenticSuperAppClient.openCodePanePreview({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: curRev,
+            url,
+          })
+          dispatch({ type: 'SET_PREVIEW', preview: res.preview })
+          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          return
+        } catch (innerErr: unknown) {
+          const innerMsg = formatError(innerErr)
+          if (innerMsg.toLowerCase().includes('trust')) {
+            await agenticSuperAppClient.trustCodeWorkspace(workspaceId, true)
+            const detail = await agenticSuperAppClient.codeWorkspace(workspaceId)
+            curRev = detail.layout.revision ?? 0
+            const res = await agenticSuperAppClient.openCodePanePreview({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: curRev,
+              url,
+            })
+            dispatch({ type: 'SET_PREVIEW', preview: res.preview })
+            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            return
+          }
+          throw innerErr
+        }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
@@ -199,15 +356,33 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await agenticSuperAppClient.createCodePaneThread({
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          expected_revision: revision,
-        })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+        let curRev = revision
+        try {
+          const res = await agenticSuperAppClient.createCodePaneThread({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: curRev,
+          })
+          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          return
+        } catch (innerErr: unknown) {
+          const innerMsg = formatError(innerErr)
+          if (innerMsg.toLowerCase().includes('trust')) {
+            await agenticSuperAppClient.trustCodeWorkspace(workspaceId, true)
+            const detail = await agenticSuperAppClient.codeWorkspace(workspaceId)
+            curRev = detail.layout.revision ?? 0
+            const res = await agenticSuperAppClient.createCodePaneThread({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: curRev,
+            })
+            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            return
+          }
+          throw innerErr
+        }
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
@@ -244,7 +419,6 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         return
       }
 
-      // Safe to close directly
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
         const res = await agenticSuperAppClient.closeCodePane({
@@ -255,8 +429,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         })
         dispatch({ type: 'SET_LAYOUT', layout: res.layout })
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
@@ -279,8 +452,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         })
         dispatch({ type: 'SET_LAYOUT', layout: res.layout })
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        dispatch({ type: 'SET_ERROR', error: msg })
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
@@ -304,6 +476,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     state,
     loadWorkspace,
     splitPane,
+    splitAndLaunch,
     renamePane,
     movePane,
     resizeSplit,
