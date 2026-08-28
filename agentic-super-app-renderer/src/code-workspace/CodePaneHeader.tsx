@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useDraggable } from '@dnd-kit/core'
 import {
   Globe,
   Plus,
@@ -10,6 +11,8 @@ import {
   Rows,
   Terminal,
   MessageSquare,
+  Settings2,
+  LayoutTemplate,
 } from 'lucide-react'
 import {
   agenticSuperAppClient,
@@ -39,8 +42,6 @@ interface CodePaneHeaderProps {
   onClose: () => void
   onRelaunch?: () => void
   onOpenShellInstead?: () => void
-  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragEnd?: () => void
 }
 
 export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
@@ -54,8 +55,6 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   onClose,
   onRelaunch,
   onOpenShellInstead,
-  onDragStart,
-  onDragEnd,
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(node.title || '')
@@ -64,6 +63,10 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   const [splitSide, setSplitSide] = useState<CodePanePlacement>('right')
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `pane:${node.pane_id}`,
+    data: { paneId: node.pane_id },
+  })
 
   useEffect(() => {
     setTitleValue(node.title || '')
@@ -118,13 +121,13 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       case 'coding_agent':
         return <CliBrandIcon identifier={node.title} size={13} />
       case 'terminal':
-        return <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 600 }}>🔲</span>
+        return <Terminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       case 'preview':
         return <Globe size={13} style={{ color: '#60a5fa' }} />
       case 'thread':
-        return <span style={{ color: '#9ca3af', fontSize: 12 }}>⚙</span>
+        return <Settings2 size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       default:
-        return <span style={{ color: '#9ca3af', fontSize: 12 }}>✳</span>
+        return <LayoutTemplate size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     }
   }
 
@@ -148,11 +151,15 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       <div
         className={`code-pane-header ${isFocused ? 'focused' : ''}`}
         onClick={onFocus}
-        draggable
-        onDragStart={onDragStart}
-        onDragEnd={onDragEnd}
       >
-        <div className="code-pane-header-left">
+        <div
+          ref={setNodeRef}
+          {...attributes}
+          {...listeners}
+          className={`code-pane-header-left code-pane-drag-handle ${isDragging ? 'is-dragging' : ''}`}
+          data-dragging={isDragging ? 'true' : 'false'}
+          title="Drag to move pane"
+        >
           <span className="code-live-dot" />
           <span className="code-pane-header-icon">{getPaneIcon()}</span>
 
@@ -165,6 +172,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               onChange={(e) => setTitleValue(e.target.value)}
               onBlur={handleCommitRename}
               onKeyDown={handleKeyDown}
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
@@ -181,7 +189,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
           )}
         </div>
 
-        <div className="code-pane-header-actions" onClick={(e) => e.stopPropagation()}>
+        <div className="code-pane-header-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           {/* More Options Menu */}
           <div style={{ position: 'relative' }}>
             <button

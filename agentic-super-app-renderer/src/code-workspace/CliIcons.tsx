@@ -1,4 +1,6 @@
 import React from 'react'
+import { Terminal } from 'lucide-react'
+import antigravityIconUrl from './assets/antigravity-icon.svg'
 
 export interface CliIconProps {
   size?: number
@@ -6,204 +8,106 @@ export interface CliIconProps {
   style?: React.CSSProperties
 }
 
-/** Anthropic Claude Code — terracotta sunburst asterisk */
-export const ClaudeCodeIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#d97706', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M4.93 19.07l14.14-14.14"
-      stroke="currentColor"
-      strokeWidth="3.2"
-      strokeLinecap="round"
-    />
-  </svg>
-)
-
-/** OpenAI Codex CLI — authentic OpenAI 6-fold spiral rosette */
-export const CodexIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#10a37f', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M21.5 9.7a6.2 6.2 0 0 0-.5-4.9 6.3 6.3 0 0 0-5.7-3.4 6.2 6.2 0 0 0-3.3 1 6.3 6.3 0 0 0-4.8 2.3 6.3 6.3 0 0 0-1.5 5.6 6.2 6.2 0 0 0-1.9 4.5 6.3 6.3 0 0 0 2.7 5.1 6.3 6.3 0 0 0 5.7 3.4 6.2 6.2 0 0 0 3.3-1 6.3 6.3 0 0 0 4.8-2.3 6.3 6.3 0 0 0 1.5-5.6 6.2 6.2 0 0 0 1.9-4.5 6.3 6.3 0 0 0-2.2-0.2zm-7.6 11.2a4.4 4.4 0 0 1-2.4.7 4.5 4.5 0 0 1-4.1-2.4l.1-.1 3.7-2.1a1 1 0 0 0 .5-.9v-5.2l1.6.9a1 1 0 0 0 .5.1v5a4.4 4.4 0 0 1 .1 3.9zm-8-3.4a4.4 4.4 0 0 1-.6-2.4 4.5 4.5 0 0 1 1.7-3.5l.1.1 3.7 2.1a1 1 0 0 0 1 0l4.5-2.6v1.8a1 1 0 0 0 .5.9l-4.3 2.5a4.4 4.4 0 0 1-3.6 1.1zm-1.8-8.8a4.4 4.4 0 0 1 1.8-1.7 4.5 4.5 0 0 1 4.5.1l-.1.1-3.7 2.1a1 1 0 0 0-.5.9v5.2l-1.6-.9a1 1 0 0 0-.5-.1v-5a4.4 4.4 0 0 1 .1-.7zm14.3 2.7l-4.5 2.6v-1.8a1 1 0 0 0-.5-.9l4.3-2.5a4.4 4.4 0 0 1 3.6-1.1 4.4 4.4 0 0 1 .6 2.4 4.5 4.5 0 0 1-1.7 3.5l-.1-.1-3.7-2.1a1 1 0 0 0-1 0zm2.4-3.8a4.4 4.4 0 0 1-1.8 1.7 4.5 4.5 0 0 1-4.5-.1l.1-.1 3.7-2.1a1 1 0 0 0 .5-.9v-5.2l1.6.9a1 1 0 0 0 .5.1v5a4.4 4.4 0 0 1-.1.7z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** Google Antigravity — authentic refractive delta / prism spark */
-export const AntigravityIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#a855f7', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M12 2.5L21.5 19H2.5L12 2.5Z"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M12 7.5L17.5 17H6.5L12 7.5Z"
-      fill="currentColor"
-      opacity="0.35"
-    />
-    <circle cx="12" cy="13.5" r="2" fill="currentColor" />
-  </svg>
-)
-
-/** OpenCode — authentic OpenCode terminal square prompt */
-export const OpenCodeIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#22c55e', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <rect
-      x="3"
-      y="3"
-      width="18"
-      height="18"
-      rx="5"
-      stroke="currentColor"
-      strokeWidth="2.2"
-    />
-    <path
-      d="M7.5 9L11.5 12L7.5 15"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M13.5 15H16.5"
-      stroke="currentColor"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    />
-  </svg>
-)
-
-/** Google Gemini — authentic dual-spark four-point star */
-export const GeminiIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#38bdf8', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M12 2C12 7.523 7.523 12 2 12C7.523 12 12 16.477 12 22C12 16.477 16.477 12 22 12C16.477 12 12 7.523 12 2Z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** GitHub Copilot — authentic pilot robot */
-export const CopilotIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#818cf8', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M12 3C7 3 3 7 3 12v3a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4v-3c0-5-4-9-9-9zM9 13.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"
-      fill="currentColor"
-    />
-  </svg>
-)
-
-/** Cursor CLI — authentic 3D box arrow */
-export const CursorIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-    style={{ color: '#60a5fa', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      d="M12 2L21 7.2V17.6L12 22.8L3 17.6V7.2L12 2Z"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M12 2V22.8M21 7.2L3 17.6M3 7.2L21 17.6"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    />
-  </svg>
-)
-
-export interface CliBrandIconProps {
-  identifier?: string | null
-  size?: number
+interface BrandSvgProps extends CliIconProps {
+  viewBox?: string
+  color: string
+  children: React.ReactNode
 }
 
-/** Renders the matching brand icon for any adapter ID or title */
-export const CliBrandIcon: React.FC<CliBrandIconProps> = ({ identifier, size = 14 }) => {
-  const id = (identifier || '').toLowerCase()
+function BrandSvg({ size = 14, className, style, viewBox = '0 0 24 24', color, children }: BrandSvgProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox={viewBox}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      style={{ color, flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      {children}
+    </svg>
+  )
+}
 
-  if (id.includes('claude')) {
-    return <ClaudeCodeIcon size={size} />
-  }
-  if (id.includes('codex') || id.includes('openai')) {
-    return <CodexIcon size={size} />
-  }
-  if (id.includes('antigravity') || id.includes('agy')) {
-    return <AntigravityIcon size={size} />
-  }
-  if (id.includes('opencode') || id.includes('open-code')) {
-    return <OpenCodeIcon size={size} />
-  }
-  if (id.includes('gemini')) {
-    return <GeminiIcon size={size} />
-  }
-  if (id.includes('copilot')) {
-    return <CopilotIcon size={size} />
-  }
-  if (id.includes('cursor')) {
-    return <CursorIcon size={size} />
-  }
+/** Claude's official product mark. */
+export const ClaudeCodeIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#D97757">
+    <path
+      d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"
+      fill="currentColor"
+    />
+  </BrandSvg>
+)
 
-  return <ClaudeCodeIcon size={size} />
+/** OpenAI's official monochrome blossom mark, used for the Codex adapter. */
+export const CodexIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} viewBox="0 0 721 721" color="#F5F7FA">
+    <path
+      d="M304.246 295.411V249.828C304.246 245.989 305.687 243.109 309.044 241.191L400.692 188.412C413.167 181.215 428.042 177.858 443.394 177.858C500.971 177.858 537.44 222.482 537.44 269.982C537.44 273.34 537.44 277.179 536.959 281.018L441.954 225.358C436.197 222 430.437 222 424.68 225.358L304.246 295.411ZM518.245 472.945V364.024C518.245 357.304 515.364 352.507 509.608 349.149L389.174 279.096L428.519 256.543C431.877 254.626 434.757 254.626 438.115 256.543L529.762 309.323C556.154 324.679 573.905 357.304 573.905 388.971C573.905 425.436 552.315 459.024 518.245 472.941V472.945ZM275.937 376.982L236.592 353.952C233.235 352.034 231.794 349.154 231.794 345.315V239.756C231.794 188.416 271.139 149.548 324.4 149.548C344.555 149.548 363.264 156.268 379.102 168.262L284.578 222.964C278.822 226.321 275.942 231.119 275.942 237.838V376.986L275.937 376.982ZM360.626 425.922L304.246 394.255V327.083L360.626 295.416L417.002 327.083V394.255L360.626 425.922ZM396.852 571.789C376.698 571.789 357.989 565.07 342.151 553.075L436.674 498.374C442.431 495.017 445.311 490.219 445.311 483.499V344.352L485.138 367.382C488.495 369.299 489.936 372.179 489.936 376.018V481.577C489.936 532.917 450.109 571.785 396.852 571.785V571.789ZM283.134 464.79L191.486 412.01C165.094 396.654 147.343 364.029 147.343 332.362C147.343 295.416 169.415 262.309 203.48 248.393V357.791C203.48 364.51 206.361 369.308 212.117 372.665L332.074 442.237L292.729 464.79C289.372 466.707 286.491 466.707 283.134 464.79ZM277.859 543.48C223.639 543.48 183.813 502.695 183.813 452.314C183.813 448.475 184.294 444.636 184.771 440.797L279.295 495.498C285.051 498.856 290.812 498.856 296.568 495.498L417.002 425.927V471.509C417.002 475.349 415.562 478.229 412.204 480.146L320.557 532.926C308.081 540.122 293.206 543.48 277.854 543.48H277.859ZM396.852 600.576C454.911 600.576 503.37 559.313 514.41 504.612C568.149 490.696 602.696 440.315 602.696 388.976C602.696 355.387 588.303 322.762 562.392 299.25C564.791 289.173 566.231 279.096 566.231 269.024C566.231 200.411 510.571 149.067 446.274 149.067C433.322 149.067 420.846 150.984 408.37 155.305C386.775 134.192 357.026 120.758 324.4 120.758C266.342 120.758 217.883 162.02 206.843 216.721C153.104 230.637 118.557 281.018 118.557 332.357C118.557 365.946 132.95 398.571 158.861 422.083C156.462 432.16 155.022 442.237 155.022 452.309C155.022 520.922 210.682 572.266 274.978 572.266C287.931 572.266 300.407 570.349 312.883 566.028C334.473 587.141 364.222 600.576 396.852 600.576Z"
+      fill="currentColor"
+    />
+  </BrandSvg>
+)
+
+/** Official full-color Antigravity press icon bundled locally for offline use. */
+export const AntigravityIcon: React.FC<CliIconProps> = ({ size = 14, className, style }) => (
+  <img
+    src={antigravityIconUrl}
+    width={size}
+    height={size}
+    className={className}
+    style={{ display: 'block', flexShrink: 0, objectFit: 'contain', ...style }}
+    alt=""
+    aria-hidden="true"
+    draggable={false}
+  />
+)
+
+/** Official OpenCode mark. */
+export const OpenCodeIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#F0F2F5">
+    <path d="M22 24H2V0h20zM17 4.8H7v14.4h10z" fill="currentColor" />
+  </BrandSvg>
+)
+
+/** Official Google Gemini mark. */
+export const GeminiIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#8E75B2">
+    <path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" fill="currentColor" />
+  </BrandSvg>
+)
+
+/** Official GitHub Copilot mark. */
+export const CopilotIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#F0F2F5">
+    <path d="M23.922 16.997C23.061 18.492 18.063 22.02 12 22.02 5.937 22.02.939 18.492.078 16.997A.641.641 0 0 1 0 16.741v-2.869a.883.883 0 0 1 .053-.22c.372-.935 1.347-2.292 2.605-2.656.167-.429.414-1.055.644-1.517a10.098 10.098 0 0 1-.052-1.086c0-1.331.282-2.499 1.132-3.368.397-.406.89-.717 1.474-.952C7.255 2.937 9.248 1.98 11.978 1.98c2.731 0 4.767.957 6.166 2.093.584.235 1.077.546 1.474.952.85.869 1.132 2.037 1.132 3.368 0 .368-.014.733-.052 1.086.23.462.477 1.088.644 1.517 1.258.364 2.233 1.721 2.605 2.656a.841.841 0 0 1 .053.22v2.869a.641.641 0 0 1-.078.256Zm-11.75-5.992h-.344a4.359 4.359 0 0 1-.355.508c-.77.947-1.918 1.492-3.508 1.492-1.725 0-2.989-.359-3.782-1.259a2.137 2.137 0 0 1-.085-.104L4 11.746v6.585c1.435.779 4.514 2.179 8 2.179 3.486 0 6.565-1.4 8-2.179v-6.585l-.098-.104s-.033.045-.085.104c-.793.9-2.057 1.259-3.782 1.259-1.59 0-2.738-.545-3.508-1.492a4.359 4.359 0 0 1-.355-.508Zm2.328 3.25c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm-5 0c.549 0 1 .451 1 1v2c0 .549-.451 1-1 1-.549 0-1-.451-1-1v-2c0-.549.451-1 1-1Zm3.313-6.185c.136 1.057.403 1.913.878 2.497.442.544 1.134.938 2.344.938 1.573 0 2.292-.337 2.657-.751.384-.435.558-1.15.558-2.361 0-1.14-.243-1.847-.705-2.319-.477-.488-1.319-.862-2.824-1.025-1.487-.161-2.192.138-2.533.529-.269.307-.437.808-.438 1.578v.021c0 .265.021.562.063.893Zm-1.626 0c.042-.331.063-.628.063-.894v-.02c-.001-.77-.169-1.271-.438-1.578-.341-.391-1.046-.69-2.533-.529-1.505.163-2.347.537-2.824 1.025-.462.472-.705 1.179-.705 2.319 0 1.211.175 1.926.558 2.361.365.414 1.084.751 2.657.751 1.21 0 1.902-.394 2.344-.938.475-.584.742-1.44.878-2.497Z" fill="currentColor" />
+  </BrandSvg>
+)
+
+/** Official Cursor mark. */
+export const CursorIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#F0F2F5">
+    <path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23" fill="currentColor" />
+  </BrandSvg>
+)
+
+export interface CliBrandIconProps extends CliIconProps {
+  identifier?: string | null
+}
+
+/** Resolve every known adapter through one canonical brand registry. */
+export const CliBrandIcon: React.FC<CliBrandIconProps> = ({ identifier, ...props }) => {
+  const id = (identifier || '').trim().toLowerCase().replace(/[\s_]+/g, '-')
+
+  if (id.includes('claude')) return <ClaudeCodeIcon {...props} />
+  if (id.includes('codex') || id.includes('openai')) return <CodexIcon {...props} />
+  if (id.includes('antigravity') || id.includes('agy')) return <AntigravityIcon {...props} />
+  if (id.includes('opencode') || id.includes('open-code')) return <OpenCodeIcon {...props} />
+  if (id.includes('gemini')) return <GeminiIcon {...props} />
+  if (id.includes('copilot')) return <CopilotIcon {...props} />
+  if (id.includes('cursor')) return <CursorIcon {...props} />
+
+  return <Terminal size={props.size ?? 14} className={props.className} style={{ color: '#AEB7C2', flexShrink: 0, ...props.style }} aria-hidden="true" />
 }

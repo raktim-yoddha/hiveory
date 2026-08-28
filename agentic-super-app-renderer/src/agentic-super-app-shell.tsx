@@ -4,14 +4,18 @@ import {
   Bot,
   CheckCircle2,
   Code2,
+  Columns2,
   Command,
   Download,
   FolderArchive,
+  Grid2X2,
   KeyRound,
   Keyboard,
+  LayoutTemplate,
   MessageSquare,
   Minus,
   PanelLeft,
+  Rows2,
   Settings2,
   Sparkles,
   X,
@@ -22,6 +26,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   agenticSuperAppClient,
   type ApplicationMode,
+  type CodePanePreset,
   type DiagnosticSnapshot,
   type UpdateSnapshot,
 } from './api/agentic-super-app-client'
@@ -81,6 +86,19 @@ type CommandAction = {
 
 const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false }
 
+const codeLayoutOptions: Array<{
+  id: CodePanePreset
+  label: string
+  description: string
+  Icon: typeof LayoutTemplate
+}> = [
+  { id: 'main_left', label: 'Focus grid', description: 'Main pane left, supporting panes stacked right', Icon: LayoutTemplate },
+  { id: 'equal_columns', label: 'Dual grid', description: 'Equal side-by-side columns', Icon: Columns2 },
+  { id: 'equal_rows', label: 'Stack grid', description: 'Equal stacked horizontal rows', Icon: Rows2 },
+  { id: 'grid', label: 'Quad grid', description: 'Balanced 2 × 2 workspace', Icon: Grid2X2 },
+  { id: 'tidy', label: 'Tidy', description: 'Automatically balance the workspace', Icon: Sparkles },
+]
+
 function readPreferences(): ShellPreferences {
   if (typeof window === 'undefined') return defaultPreferences
   try {
@@ -108,6 +126,7 @@ export function AgenticSuperAppShell() {
   const [preferences, setPreferences] = useState<ShellPreferences>(readPreferences)
   const [commandOpen, setCommandOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [codeLayoutMenuOpen, setCodeLayoutMenuOpen] = useState(false)
 
   const refresh = async () => {
     try {
@@ -144,6 +163,7 @@ export function AgenticSuperAppShell() {
   const selectMode = (mode: ApplicationMode) => {
     setScreen('workspace')
     setNotificationsOpen(false)
+    setCodeLayoutMenuOpen(false)
     setActiveMode(mode)
     void agenticSuperAppClient
       .setActiveMode(mode)
@@ -225,6 +245,14 @@ export function AgenticSuperAppShell() {
   ]
 
   useEffect(() => {
+    const openCodeLayoutMenu = () => {
+      if (activeMode === 'code' && screen === 'workspace') setCodeLayoutMenuOpen(true)
+    }
+    window.addEventListener('agentic-super-app-open-code-layout-menu', openCodeLayoutMenu)
+    return () => window.removeEventListener('agentic-super-app-open-code-layout-menu', openCodeLayoutMenu)
+  }, [activeMode, screen])
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey
       if (modifier && event.key.toLowerCase() === 'k') {
@@ -263,6 +291,7 @@ export function AgenticSuperAppShell() {
       if (event.key === 'Escape') {
         setCommandOpen(false)
         setNotificationsOpen(false)
+        setCodeLayoutMenuOpen(false)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -306,14 +335,41 @@ export function AgenticSuperAppShell() {
 
           <div className="agentic-super-app-title-actions">
             {screen === 'workspace' && activeMode === 'code' && (
-              <button
-                type="button"
-                className="agentic-super-app-title-action"
-                onClick={() => window.dispatchEvent(new Event('agentic-super-app-tidy-code-layout'))}
-              >
-                <Sparkles size={13} aria-hidden="true" />
-                Tidy
-              </button>
+              <div className="agentic-super-app-layout-menu">
+                <button
+                  type="button"
+                  className="agentic-super-app-title-action"
+                  aria-haspopup="menu"
+                  aria-expanded={codeLayoutMenuOpen}
+                  onClick={() => setCodeLayoutMenuOpen((value) => !value)}
+                >
+                  <Sparkles size={13} aria-hidden="true" />
+                  Tidy
+                  <span className="agentic-super-app-layout-chevron" aria-hidden="true">⌄</span>
+                </button>
+                {codeLayoutMenuOpen && (
+                  <div className="agentic-super-app-layout-dropdown" role="menu" aria-label="Workspace layout">
+                    {codeLayoutOptions.map(({ id, label, description, Icon }) => (
+                      <button
+                        type="button"
+                        key={id}
+                        role="menuitem"
+                        className="agentic-super-app-layout-option"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('agentic-super-app-apply-code-layout-preset', { detail: { preset: id } }))
+                          setCodeLayoutMenuOpen(false)
+                        }}
+                      >
+                        <span className="agentic-super-app-layout-option-icon"><Icon size={14} aria-hidden="true" /></span>
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{description}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             <button

@@ -1142,6 +1142,17 @@ pub fn apply_layout_preset(
     layout: &CodePaneLayout,
     preset: CodePanePreset,
 ) -> Result<CodePaneLayout, CodeDomainError> {
+    apply_layout_preset_with_primary(layout, preset, None)
+}
+
+/// Applies a layout preset while optionally making a specific leaf the primary pane.
+/// The primary pane is selected atomically with the topology change so callers do not
+/// need to race a separate focus mutation against the preset mutation.
+pub fn apply_layout_preset_with_primary(
+    layout: &CodePaneLayout,
+    preset: CodePanePreset,
+    primary_pane_id: Option<&str>,
+) -> Result<CodePaneLayout, CodeDomainError> {
     let leaves_order = visual_leaf_order(layout);
     if leaves_order.is_empty() {
         return Ok(default_layout(&layout.workspace_id));
@@ -1153,8 +1164,9 @@ pub fn apply_layout_preset(
         .cloned()
         .collect();
 
-    if let Some(focused_id) = &layout.focused_pane_id {
-        if let Some(pos) = leaf_nodes.iter().position(|n| &n.pane_id == focused_id) {
+    let preferred_primary = primary_pane_id.or(layout.focused_pane_id.as_deref());
+    if let Some(focused_id) = preferred_primary {
+        if let Some(pos) = leaf_nodes.iter().position(|n| n.pane_id == focused_id) {
             let focused_node = leaf_nodes.remove(pos);
             leaf_nodes.insert(0, focused_node);
         }
@@ -1581,9 +1593,8 @@ pub fn apply_layout_preset(
         },
     };
 
-    let focused = layout
-        .focused_pane_id
-        .clone()
+    let focused = preferred_primary
+        .map(ToOwned::to_owned)
         .filter(|id| leaf_nodes.iter().any(|l| &l.pane_id == id))
         .or_else(|| leaf_nodes.first().map(|l| l.pane_id.clone()));
 
@@ -1951,6 +1962,20 @@ mod tests {
                 layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn preset_drop_keeps_the_dragged_pane_primary() {
+        let layout = default_layout("ws_1");
+        let split = split_pane(&layout, "root", CodePanePlacement::Right).unwrap();
+        let leaves = visual_leaf_order(&split);
+        let applied =
+            apply_layout_preset_with_primary(&split, CodePanePreset::MainLeft, Some(&leaves[1]))
+                .unwrap();
+
+        assert_eq!(applied.focused_pane_id.as_deref(), Some(leaves[1].as_str()));
+        assert_eq!(visual_leaf_order(&applied).first(), Some(&leaves[1]));
+        validate_layout(&applied).unwrap();
     }
 
     #[test]

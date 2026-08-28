@@ -6,7 +6,6 @@ import {
 import { useCodeWorkspaceController } from './state/use-code-workspace-controller'
 import { CodeWorkspaceRail } from './CodeWorkspaceRail'
 import { CodePaneCanvas } from './CodePaneCanvas'
-import { CodeLayoutPresets } from './CodeLayoutPresets'
 import { AgenticSuperAppCodeDashboard } from './AgenticSuperAppCodeDashboard'
 import { AgenticSuperAppCodeRoutines } from './AgenticSuperAppCodeRoutines'
 import { AgenticSuperAppCodePlugins } from './AgenticSuperAppCodePlugins'
@@ -26,7 +25,6 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(initialWorkspaceId ?? null)
   const [activeSection, setActiveSection] = useState<'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'>(initialSection)
-  const [showPresetsModal, setShowPresetsModal] = useState(false)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
@@ -73,7 +71,14 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   // Keyboard shortcut listener
   useEffect(() => {
     const onTidy = () => void applyPreset('tidy')
+    const onApplyPreset = (event: Event) => {
+      const preset = (event as CustomEvent<{ preset?: string }>).detail?.preset
+      if (preset === 'main_left' || preset === 'equal_columns' || preset === 'equal_rows' || preset === 'grid' || preset === 'tidy') {
+        void applyPreset(preset)
+      }
+    }
     window.addEventListener('agentic-super-app-tidy-code-layout', onTidy)
+    window.addEventListener('agentic-super-app-apply-code-layout-preset', onApplyPreset)
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null
@@ -87,10 +92,10 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         return
       }
 
-      // Ctrl+Shift+P -> Presets Modal
+      // Ctrl+Shift+P -> Layout menu
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault()
-        setShowPresetsModal((prev) => !prev)
+        window.dispatchEvent(new Event('agentic-super-app-open-code-layout-menu'))
         return
       }
 
@@ -145,6 +150,7 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
     window.addEventListener('keydown', handleKeyDown)
     return () => {
       window.removeEventListener('agentic-super-app-tidy-code-layout', onTidy)
+      window.removeEventListener('agentic-super-app-apply-code-layout-preset', onApplyPreset)
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [applyPreset, focusPane, requestClosePane, setError, state.focusedPaneId, toggleMaximize])
@@ -171,12 +177,6 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         )}
       </main>
 
-      {showPresetsModal && (
-        <CodeLayoutPresets
-          onSelectPreset={(preset) => void applyPreset(preset)}
-          onClose={() => setShowPresetsModal(false)}
-        />
-      )}
     </div>
   )
 }

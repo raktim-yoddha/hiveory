@@ -196,7 +196,7 @@ impl AgenticSuperAppFoundation {
             .await
             .map_err(|error| error.to_string())?;
         persistence
-            .interrupt_active_code_terminals()
+            .mark_active_code_terminals_dormant()
             .await
             .map_err(|error| error.to_string())?;
         let chat = AgenticSuperAppChatStore::new(persistence.clone());
@@ -1896,11 +1896,11 @@ async fn agentic_super_app_command_resize_code_terminal(
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    foundation
+    let resized = foundation
         .code_runtime
         .resize(&command.payload)
         .map_err(runtime_error)?;
-    Ok(response(&command.request_id, true))
+    Ok(response(&command.request_id, resized))
 }
 
 #[tauri::command]
@@ -2031,10 +2031,15 @@ async fn agentic_super_app_command_apply_code_pane_mutation(
             agentic_super_app_code_domain::set_maximized_pane(&current_layout, pane_id.as_deref())
                 .map_err(|e| validation_error(e.to_string()))?
         }
-        CodePaneMutation::ApplyPreset { preset } => {
-            agentic_super_app_code_domain::apply_layout_preset(&current_layout, *preset)
-                .map_err(|e| validation_error(e.to_string()))?
-        }
+        CodePaneMutation::ApplyPreset {
+            preset,
+            primary_pane_id,
+        } => agentic_super_app_code_domain::apply_layout_preset_with_primary(
+            &current_layout,
+            *preset,
+            primary_pane_id.as_deref(),
+        )
+        .map_err(|e| validation_error(e.to_string()))?,
     };
 
     let saved_layout = foundation

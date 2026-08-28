@@ -29,7 +29,7 @@ export interface CodeWorkspaceController {
   resizeSplit: (splitId: string, ratioPercent: number) => Promise<void>
   focusPane: (paneId: string) => Promise<void>
   toggleMaximize: (paneId?: string | null) => Promise<void>
-  applyPreset: (preset: CodePanePreset) => Promise<void>
+  applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   createThread: (paneId: string) => Promise<void>
@@ -60,6 +60,7 @@ function formatError(err: unknown): string {
 export function useCodeWorkspaceController(initialWorkspaceId?: string | null): CodeWorkspaceController {
   const [state, dispatch] = useReducer(codeWorkspaceReducer, initialCodeWorkspaceState)
   const stateRef = useRef(state)
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   stateRef.current = state
 
   const loadWorkspace = useCallback(async (workspaceId: string) => {
@@ -73,6 +74,14 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         terminals: snapshot.terminals,
         previews: snapshot.previews,
       })
+      stateRef.current = {
+        ...stateRef.current,
+        workspaceId,
+        layout: snapshot.layout,
+        revision: snapshot.layout.revision ?? 0,
+        focusedPaneId: snapshot.layout.focused_pane_id ?? null,
+        maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
+      }
     } catch (err: unknown) {
       dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${formatError(err)}` })
     } finally {
@@ -86,27 +95,38 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     }
   }, [initialWorkspaceId, loadWorkspace, state.workspaceId])
 
-  const applyMutation = useCallback(async (mutation: CodePaneMutation) => {
-    const { workspaceId, revision } = stateRef.current
-    if (!workspaceId) return
-    try {
-      dispatch({ type: 'SET_MUTATING', isMutating: true })
-      const res = await agenticSuperAppClient.applyCodePaneMutation({
-        workspace_id: workspaceId,
-        expected_revision: revision,
-        mutation,
-      })
-      dispatch({ type: 'SET_LAYOUT', layout: res.layout })
-    } catch (err: unknown) {
-      const msg = formatError(err)
-      if (msg.includes('layout_conflict')) {
-        void loadWorkspace(workspaceId)
-      } else {
-        dispatch({ type: 'SET_ERROR', error: msg })
+  const applyMutation = useCallback((mutation: CodePaneMutation) => {
+    const run = mutationQueueRef.current.then(async () => {
+      const { workspaceId, revision } = stateRef.current
+      if (!workspaceId) return
+      try {
+        dispatch({ type: 'SET_MUTATING', isMutating: true })
+        const res = await agenticSuperAppClient.applyCodePaneMutation({
+          workspace_id: workspaceId,
+          expected_revision: revision,
+          mutation,
+        })
+        stateRef.current = {
+          ...stateRef.current,
+          layout: res.layout,
+          revision: res.layout.revision ?? revision + 1,
+          focusedPaneId: res.layout.focused_pane_id ?? stateRef.current.focusedPaneId,
+          maximizedPaneId: res.layout.maximized_pane_id ?? null,
+        }
+        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+      } catch (err: unknown) {
+        const msg = formatError(err)
+        if (msg.includes('layout_conflict')) {
+          await loadWorkspace(workspaceId)
+        } else {
+          dispatch({ type: 'SET_ERROR', error: msg })
+        }
+      } finally {
+        dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
-    } finally {
-      dispatch({ type: 'SET_MUTATING', isMutating: false })
-    }
+    })
+    mutationQueueRef.current = run.catch(() => undefined)
+    return run
   }, [loadWorkspace])
 
   const splitPane = useCallback(
@@ -248,8 +268,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   )
 
   const applyPreset = useCallback(
-    async (preset: CodePanePreset) => {
-      await applyMutation({ type: 'apply_preset', preset })
+    async (preset: CodePanePreset, primaryPaneId?: string | null) => {
+      await applyMutation({ type: 'apply_preset', preset, primary_pane_id: primaryPaneId ?? null })
     },
     [applyMutation]
   )

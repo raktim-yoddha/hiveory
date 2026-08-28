@@ -13,7 +13,7 @@ import {
   Hammer,
   Plus,
 } from 'lucide-react'
-import { ClaudeCodeIcon } from '../code-workspace/CliIcons'
+import { CliBrandIcon } from '../code-workspace/CliIcons'
 
 interface AgentMessage {
   id: string
@@ -228,7 +228,7 @@ export function AgenticSuperAppAgent() {
           <div className="agent-content-header">
             <div className="agent-info-left">
               <div className="agent-icon-box">
-                <ClaudeCodeIcon size={16} />
+                <CliBrandIcon identifier="claude-code" size={16} />
               </div>
               <div className="agent-heading-text">
                 <h2>{selectedAgent.name}</h2>
@@ -333,7 +333,7 @@ export function AgenticSuperAppAgent() {
               <div className="agent-composer-bottom-bar">
                 <div className="agent-composer-pills-left">
                   <button type="button" className="agent-composer-pill">
-                    <ClaudeCodeIcon size={13} />
+                    <CliBrandIcon identifier="claude-code" size={13} />
                     <span>Automatic · Sonnet 5</span>
                     <ChevronDown size={11} />
                   </button>

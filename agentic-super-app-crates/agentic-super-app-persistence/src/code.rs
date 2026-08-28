@@ -202,7 +202,7 @@ impl AgenticSuperAppPersistence {
         terminal: &CodeTerminalSummary,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO agentic_super_app_code_terminals (id, workspace_id, kind, state, pid, adapter_id, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, session_id=excluded.session_id, exit_code=excluded.exit_code, updated_at_unix_ms=excluded.updated_at_unix_ms",
+            "INSERT INTO agentic_super_app_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, session_id=excluded.session_id, exit_code=excluded.exit_code, updated_at_unix_ms=excluded.updated_at_unix_ms",
         )
         .bind(&terminal.id)
         .bind(&terminal.workspace_id)
@@ -210,6 +210,7 @@ impl AgenticSuperAppPersistence {
         .bind(terminal_state_value(terminal.state))
         .bind(terminal.pid.map(|pid| pid as i64))
         .bind(&terminal.adapter_id)
+        .bind(&terminal.model)
         .bind(&terminal.session_id)
         .bind(terminal.exit_code)
         .bind(terminal.started_at_unix_ms)
@@ -224,7 +225,7 @@ impl AgenticSuperAppPersistence {
         workspace_id: &str,
     ) -> Result<Vec<CodeTerminalSummary>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, workspace_id, kind, state, pid, adapter_id, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms FROM agentic_super_app_code_terminals WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC LIMIT 50",
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms FROM agentic_super_app_code_terminals WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC LIMIT 50",
         )
         .bind(workspace_id)
         .fetch_all(&self.pool)
@@ -232,9 +233,9 @@ impl AgenticSuperAppPersistence {
         Ok(rows.into_iter().map(terminal_from_row).collect())
     }
 
-    pub async fn interrupt_active_code_terminals(&self) -> Result<usize, sqlx::Error> {
+    pub async fn mark_active_code_terminals_dormant(&self) -> Result<usize, sqlx::Error> {
         Ok(sqlx::query(
-            "UPDATE agentic_super_app_code_terminals SET state='interrupted', updated_at_unix_ms=? WHERE state IN ('starting','running')",
+            "UPDATE agentic_super_app_code_terminals SET state='dormant', updated_at_unix_ms=? WHERE state IN ('starting','running')",
         )
         .bind(now_ms())
         .execute(&self.pool)
@@ -327,14 +328,16 @@ fn terminal_from_row(row: sqlx::sqlite::SqliteRow) -> CodeTerminalSummary {
             "running" => CodeTerminalState::Running,
             "exited" => CodeTerminalState::Exited,
             "failed" => CodeTerminalState::Failed,
+            "dormant" => CodeTerminalState::Dormant,
             _ => CodeTerminalState::Interrupted,
         },
         pid: row.get::<Option<i64>, _>(4).map(|pid| pid as u32),
         adapter_id: row.get(5),
-        session_id: row.get(6),
-        exit_code: row.get(7),
-        started_at_unix_ms: row.get(8),
-        updated_at_unix_ms: row.get(9),
+        model: row.get(6),
+        session_id: row.get(7),
+        exit_code: row.get(8),
+        started_at_unix_ms: row.get(9),
+        updated_at_unix_ms: row.get(10),
     }
 }
 
@@ -366,6 +369,7 @@ fn terminal_state_value(state: CodeTerminalState) -> &'static str {
         CodeTerminalState::Exited => "exited",
         CodeTerminalState::Failed => "failed",
         CodeTerminalState::Interrupted => "interrupted",
+        CodeTerminalState::Dormant => "dormant",
     }
 }
 

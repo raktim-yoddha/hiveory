@@ -9,7 +9,7 @@ import {
   Zap,
   Hammer,
 } from 'lucide-react'
-import { ClaudeCodeIcon } from '../code-workspace/CliIcons'
+import { CliBrandIcon } from '../code-workspace/CliIcons'
 
 interface ChatMessageItem {
   id: string
@@ -197,12 +197,12 @@ export function AgenticSuperAppChat() {
               <div className="agent-composer-bottom-bar">
                 <div className="agent-composer-pills-left">
                   <button type="button" className="agent-composer-pill">
-                    <ClaudeCodeIcon size={13} />
+                    <CliBrandIcon identifier="claude-code" size={13} />
                     <span>Claude Code</span>
                     <ChevronDown size={11} />
                   </button>
                   <button type="button" className="agent-composer-pill">
-                    <ClaudeCodeIcon size={13} />
+                    <CliBrandIcon identifier="claude-code" size={13} />
                     <span>Automatic · Sonnet 5</span>
                     <ChevronDown size={11} />
                   </button>

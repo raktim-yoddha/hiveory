@@ -39,6 +39,20 @@ pub const OPENCODE_ADAPTER_ID: &str = "opencode";
 pub const OPENCODE_EXECUTABLE: &str = "opencode";
 pub type TerminalEventSink = Arc<dyn Fn(CodeTerminalEvent) + Send + Sync + 'static>;
 
+fn process_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let value = path.to_string_lossy();
+        if let Some(unc_path) = value.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{unc_path}"));
+        }
+        if let Some(local_path) = value.strip_prefix(r"\\?\") {
+            return PathBuf::from(local_path);
+        }
+    }
+    path.to_path_buf()
+}
+
 #[derive(Debug, Error)]
 pub enum AgenticSuperAppCodeRuntimeError {
     #[error("terminal dimensions are invalid")]
@@ -291,8 +305,9 @@ impl AgenticSuperAppCodeRuntime {
         }
         let id = format!("terminal-{}", uuid::Uuid::now_v7());
         let started_at_unix_ms = now_ms();
-        let mut command = command_for(request, workspace_root)?;
-        command.cwd(workspace_root.as_os_str());
+        let process_root = process_path(workspace_root);
+        let mut command = command_for(request, &process_root)?;
+        command.cwd(process_root.as_os_str());
         command.env("TERM", "xterm-256color");
         command.env("COLORTERM", "truecolor");
 
@@ -338,6 +353,7 @@ impl AgenticSuperAppCodeRuntime {
             state: CodeTerminalState::Running,
             pid,
             adapter_id: request.adapter_id.clone(),
+            model: request.model.clone(),
             session_id: request.resume_session_id.clone(),
             exit_code: None,
             started_at_unix_ms,
@@ -521,11 +537,27 @@ impl AgenticSuperAppCodeRuntime {
     pub fn resize(
         &self,
         request: &CodeTerminalResizeRequest,
-    ) -> Result<(), AgenticSuperAppCodeRuntimeError> {
+    ) -> Result<bool, AgenticSuperAppCodeRuntimeError> {
         if request.cols == 0 || request.rows == 0 || request.cols > 500 || request.rows > 500 {
             return Err(AgenticSuperAppCodeRuntimeError::InvalidDimensions);
         }
         let session = self.session(&request.terminal_id)?;
+        let state = session
+            .summary
+            .lock()
+            .map_err(|_| {
+                AgenticSuperAppCodeRuntimeError::Operation("terminal lock poisoned".to_owned())
+            })?
+            .state;
+        if matches!(
+            state,
+            CodeTerminalState::Exited
+                | CodeTerminalState::Failed
+                | CodeTerminalState::Interrupted
+                | CodeTerminalState::Dormant
+        ) {
+            return Ok(false);
+        }
         if let Ok(mut dims) = session.dimensions.lock() {
             *dims = (request.cols, request.rows);
         }
@@ -544,7 +576,13 @@ impl AgenticSuperAppCodeRuntime {
                 pixel_height: 0,
             })
             .map_err(|error| AgenticSuperAppCodeRuntimeError::Operation(error.to_string()));
-        result
+        match result {
+            Ok(()) => Ok(true),
+            // A resize can race the child exiting. The terminal is already
+            // unusable in that case, so report a clean no-op to the renderer
+            // instead of surfacing an OS-specific handle error.
+            Err(_) => Ok(false),
+        }
     }
 
     pub fn stop(
@@ -561,7 +599,10 @@ impl AgenticSuperAppCodeRuntime {
             .state;
         if matches!(
             state,
-            CodeTerminalState::Exited | CodeTerminalState::Interrupted
+            CodeTerminalState::Exited
+                | CodeTerminalState::Failed
+                | CodeTerminalState::Interrupted
+                | CodeTerminalState::Dormant
         ) {
             return Ok(false);
         }
@@ -644,7 +685,7 @@ fn command_for(
                         "on-request",
                     ]);
                     command.arg("--cd");
-                    command.arg(workspace_root.as_os_str());
+                    command.arg(process_path(workspace_root).as_os_str());
                     if let Some(session_id) = resume_session_id {
                         command.arg(session_id);
                     }

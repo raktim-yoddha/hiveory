@@ -2,4 +2,4 @@
 import type { CodeTerminalKind } from "./CodeTerminalKind";
 import type { CodeTerminalState } from "./CodeTerminalState";
 
-export type CodeTerminalSummary = { id: string, workspace_id: string, kind: CodeTerminalKind, state: CodeTerminalState, pid: number | null, adapter_id: string | null, session_id: string | null, exit_code: number | null, started_at_unix_ms: bigint, updated_at_unix_ms: bigint, };
+export type CodeTerminalSummary = { id: string, workspace_id: string, kind: CodeTerminalKind, state: CodeTerminalState, pid: number | null, adapter_id: string | null, model: string | null, session_id: string | null, exit_code: number | null, started_at_unix_ms: bigint, updated_at_unix_ms: bigint, };

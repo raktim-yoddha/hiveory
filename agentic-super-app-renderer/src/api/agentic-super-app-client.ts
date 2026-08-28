@@ -112,7 +112,7 @@ export type CodePaneMutation =
   | { type: 'resize'; split_id: string; ratio_percent: number }
   | { type: 'focus'; pane_id: string }
   | { type: 'maximize'; pane_id: string | null }
-  | { type: 'apply_preset'; preset: CodePanePreset }
+  | { type: 'apply_preset'; preset: CodePanePreset; primary_pane_id?: string | null }
 
 export type CodePaneMutationRequest = { workspace_id: string; expected_revision: number; mutation: CodePaneMutation }
 export type CodePaneMutationResult = { layout: CodePaneLayout }
@@ -128,8 +128,8 @@ export type CodeTerminalSnapshot = { summary: CodeTerminalSummary; cols: number;
 export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: CodePaneKind; orientation: CodePaneOrientation | null; ratio_percent: number | null; children: string[]; resource_id: string | null; title?: string | null }
 export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[]; revision?: number; focused_pane_id?: string | null; maximized_pane_id?: string | null }
 export type CodeTerminalKind = 'shell' | 'coding_agent'
-export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted'
-export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted' | 'dormant'
+export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; model: string | null; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
 export type CodeTerminalEvent = { terminal_id: string; sequence: number; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
 export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
@@ -775,6 +775,10 @@ export const agenticSuperAppClient = {
           // The preview keeps the existing tree but still records the action;
           // native hosts apply the full deterministic preset topology.
           next.maximized_pane_id = null
+          if (request.mutation.primary_pane_id) {
+            previewFindPane(next, request.mutation.primary_pane_id)
+            next.focused_pane_id = request.mutation.primary_pane_id
+          }
           break
       }
     })
@@ -791,7 +795,7 @@ export const agenticSuperAppClient = {
     if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, request.kind === 'coding_agent' ? 'coding_agent' : 'terminal', id, request.kind === 'coding_agent' ? (request.adapter_id ?? 'Coding Agent') : 'Terminal'))
     onEvent?.({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
@@ -839,7 +843,7 @@ export const agenticSuperAppClient = {
     if (agenticSuperAppIsTauri) return tauriQuery<CodeTerminalSnapshot>('agentic_super_app_query_code_terminal_snapshot', { query: { terminal_id: terminalId } })
     const previewTerminal = [...previewCodeWorkspaces.values()].flatMap((item) => item.detail.terminals).find((terminal) => terminal.id === terminalId)
     return {
-      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
+      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, model: null, session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
       cols: 80,
       rows: 24,
       output_base64: btoa('Preview terminal snapshot\r\n'),
@@ -849,7 +853,7 @@ export const agenticSuperAppClient = {
   subscribeCodeTerminalEvents(terminalId: string, afterSequence: number, onEvent: (event: CodeTerminalEvent) => void): () => void {
     if (agenticSuperAppIsTauri) {
       const channel = new Channel<CodeTerminalEvent>(onEvent)
-      void invoke('agentic_super_app_stream_code_terminal_events', { request: { terminal_id: terminalId, after_sequence: afterSequence }, channel })
+      void invoke('agentic_super_app_stream_code_terminal_events', { request: { terminal_id: terminalId, after_sequence: afterSequence }, channel }).catch(() => undefined)
       return () => undefined
     }
     return () => undefined
@@ -876,7 +880,7 @@ export const agenticSuperAppClient = {
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     onEvent({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })

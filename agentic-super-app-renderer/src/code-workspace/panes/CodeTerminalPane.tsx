@@ -20,6 +20,27 @@ function decodeBase64(value: string): Uint8Array {
   return Uint8Array.from(binary, (character) => character.charCodeAt(0))
 }
 
+function formatTerminalError(error: unknown): string {
+  if (typeof error === 'string') return error
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    for (const key of ['message', 'error', 'detail']) {
+      if (typeof value[key] === 'string') return value[key] as string
+    }
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+  return String(error)
+}
+
+function isExpectedInactiveError(error: unknown): boolean {
+  return /terminal (was )?not found|no such process|session (is )?(closed|inactive)|invalid handle|already exited/i.test(formatTerminalError(error))
+}
+
 export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
   terminalId,
   summary,
@@ -28,14 +49,16 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const summaryRef = useRef(summary)
+  summaryRef.current = summary
   const [isInterrupted, setIsInterrupted] = useState(
-    summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited',
+    summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited' || summary?.state === 'dormant',
   )
   const [transportError, setTransportError] = useState<string | null>(null)
 
   useEffect(() => {
     setIsInterrupted(
-      summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited',
+      summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited' || summary?.state === 'dormant',
     )
   }, [summary?.state])
 
@@ -48,6 +71,8 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     let lastSequence = 0
     let resyncPromise: Promise<void> | null = null
     let pendingEvents: CodeTerminalEvent[] = []
+    let sessionActive = !summaryRef.current || summaryRef.current.state === 'starting' || summaryRef.current.state === 'running'
+    const canAttach = !summaryRef.current || summaryRef.current.state === 'starting' || summaryRef.current.state === 'running'
 
     const term = new XTerm({
       cursorBlink: true,
@@ -129,8 +154,9 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
               queued.sort((left, right) => left.sequence - right.sequence).forEach(handleEvent)
             })
             .catch((error: unknown) => {
-              const message = error instanceof Error ? error.message : String(error)
-              setTransportError(`Terminal resync failed: ${message}`)
+              if (!isExpectedInactiveError(error)) {
+                setTransportError(`Terminal resync failed: ${formatTerminalError(error)}`)
+              }
             })
             .finally(() => {
               resyncPromise = null
@@ -145,66 +171,92 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         setTransportError(event.message || 'The terminal reported an error.')
       }
       if (event.kind === 'exited') {
+        sessionActive = false
         setIsInterrupted(true)
         term.writeln(`\r\n\x1b[90m[process exited with code ${event.exit_code ?? 0}]\x1b[0m\r\n`)
       }
     }
 
-    const unsubscribe = agenticSuperAppClient.subscribeCodeTerminalEvents(
-      terminalId,
-      0,
-      (event) => {
-        if (!snapshotReady || resyncPromise) {
-          pendingEvents.push(event)
-          return
-        }
-        handleEvent(event)
-      },
-    )
+    const unsubscribe = canAttach
+      ? agenticSuperAppClient.subscribeCodeTerminalEvents(
+          terminalId,
+          0,
+          (event) => {
+            if (!snapshotReady || resyncPromise) {
+              pendingEvents.push(event)
+              return
+            }
+            handleEvent(event)
+          },
+        )
+      : () => undefined
 
-    void agenticSuperAppClient.getCodeTerminalSnapshot(terminalId)
-      .then((snapshot) => {
-        if (disposed) return
-        writeSnapshot(snapshot.output_base64)
-        lastSequence = snapshot.sequence
-        snapshotReady = true
-        const queued = pendingEvents
-        pendingEvents = []
-        queued.sort((left, right) => left.sequence - right.sequence).forEach(handleEvent)
-        fit()
-      })
-      .catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        setTransportError(`Unable to attach to terminal: ${message}`)
-      })
+    if (canAttach) {
+      void agenticSuperAppClient.getCodeTerminalSnapshot(terminalId)
+        .then((snapshot) => {
+          if (disposed) return
+          writeSnapshot(snapshot.output_base64)
+          lastSequence = snapshot.sequence
+          snapshotReady = true
+          const queued = pendingEvents
+          pendingEvents = []
+          queued.sort((left, right) => left.sequence - right.sequence).forEach(handleEvent)
+          fit()
+        })
+        .catch((error: unknown) => {
+          snapshotReady = true
+          if (!isExpectedInactiveError(error)) {
+            setTransportError(`Unable to attach to terminal: ${formatTerminalError(error)}`)
+          }
+        })
+    } else {
+      snapshotReady = true
+    }
 
     const dataListener = term.onData((data) => {
+      if (!sessionActive) return
       void agenticSuperAppClient.writeCodeTerminal({ terminal_id: terminalId, data })
         .then(() => setTransportError(null))
         .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error)
-          setTransportError(`Input was not sent: ${message}`)
+          if (!isExpectedInactiveError(error)) {
+            setTransportError(`Input was not sent: ${formatTerminalError(error)}`)
+          }
         })
     })
 
     const resize = () => {
       fit()
-      if (!termRef.current) return
+      if (!sessionActive || !termRef.current || disposed) return
+      const bounds = container.getBoundingClientRect()
+      if (bounds.width < 4 || bounds.height < 4) return
+      const cols = Math.max(1, Math.min(500, termRef.current.cols))
+      const rows = Math.max(1, Math.min(500, termRef.current.rows))
+      const dimensions = `${cols}x${rows}`
+      if (dimensions === lastDimensions) return
+      lastDimensions = dimensions
       void agenticSuperAppClient.resizeCodeTerminal({
         terminal_id: terminalId,
-        cols: termRef.current.cols,
-        rows: termRef.current.rows,
+        cols,
+        rows,
+      }).then((resized) => {
+        if (!resized) {
+          sessionActive = false
+          setIsInterrupted(true)
+        }
       }).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error)
-        setTransportError(`Terminal resize failed: ${message}`)
+        if (!isExpectedInactiveError(error)) {
+          setTransportError(`Terminal resize failed: ${formatTerminalError(error)}`)
+        }
       })
     }
+    let lastDimensions: string | null = null
     let resizeTimer: number | null = null
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
       if (resizeTimer !== null) window.clearTimeout(resizeTimer)
-      resizeTimer = window.setTimeout(resize, 50)
+      resizeTimer = window.setTimeout(resize, 120)
     })
     resizeObserver?.observe(container)
+    window.requestAnimationFrame(resize)
 
     return () => {
       disposed = true
@@ -224,7 +276,13 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       {isInterrupted && (
         <div className="code-terminal-notice" role="status">
           <AlertTriangle size={13} aria-hidden="true" />
-          <span>{summary?.state === 'exited' ? 'Session ended' : 'Session interrupted'}</span>
+          <span>
+            {summary?.state === 'dormant'
+              ? 'Session ended when the app closed'
+              : summary?.state === 'exited'
+                ? 'Session ended'
+                : 'Session ended or interrupted'}
+          </span>
           {onRelaunch && (
             <button type="button" onClick={onRelaunch}>
               <RotateCw size={11} aria-hidden="true" />

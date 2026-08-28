@@ -2,4 +2,4 @@
 import type { CodePanePlacement } from "./CodePanePlacement";
 import type { CodePanePreset } from "./CodePanePreset";
 
-export type CodePaneMutation = { "type": "split", pane_id: string, placement: CodePanePlacement, } | { "type": "rename", pane_id: string, title: string, } | { "type": "move", pane_id: string, target_pane_id: string, placement: CodePanePlacement, } | { "type": "resize", split_id: string, ratio_percent: number, } | { "type": "focus", pane_id: string, } | { "type": "maximize", pane_id: string | null, } | { "type": "apply_preset", preset: CodePanePreset, };
+export type CodePaneMutation = { "type": "split", pane_id: string, placement: CodePanePlacement, } | { "type": "rename", pane_id: string, title: string, } | { "type": "move", pane_id: string, target_pane_id: string, placement: CodePanePlacement, } | { "type": "resize", split_id: string, ratio_percent: number, } | { "type": "focus", pane_id: string, } | { "type": "maximize", pane_id: string | null, } | { "type": "apply_preset", preset: CodePanePreset, primary_pane_id: string | null, };

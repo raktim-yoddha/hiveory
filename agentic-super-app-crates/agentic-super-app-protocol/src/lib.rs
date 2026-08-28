@@ -745,6 +745,8 @@ pub enum CodePaneMutation {
     },
     ApplyPreset {
         preset: CodePanePreset,
+        #[serde(default)]
+        primary_pane_id: Option<String>,
     },
 }
 
@@ -862,6 +864,7 @@ pub enum CodeTerminalState {
     Exited,
     Failed,
     Interrupted,
+    Dormant,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -873,6 +876,8 @@ pub struct CodeTerminalSummary {
     pub state: CodeTerminalState,
     pub pid: Option<u32>,
     pub adapter_id: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
     pub session_id: Option<String>,
     pub exit_code: Option<i32>,
     pub started_at_unix_ms: i64,

@@ -803,55 +803,6 @@
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15), 0 4px 20px rgba(0, 0, 0, 0.6);
 }
 
-.code-pane-leaf.is-dragging {
-  opacity: 0.55;
-}
-
-/* Drop Overlay & Swap Indicator */
-.code-pane-drop-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(37, 99, 235, 0.16);
-  border: 2px dashed #3b82f6;
-  border-radius: 10px;
-  z-index: 80;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.code-pane-drop-overlay.drop-left {
-  right: 50%;
-  border-right: none;
-}
-
-.code-pane-drop-overlay.drop-right {
-  left: 50%;
-  border-left: none;
-}
-
-.code-pane-drop-overlay.drop-top {
-  bottom: 50%;
-  border-bottom: none;
-}
-
-.code-pane-drop-overlay.drop-bottom {
-  top: 50%;
-  border-top: none;
-}
-
-.code-drop-badge {
-  background: #1e293b;
-  border: 1px solid #3b82f6;
-  color: #93c5fd;
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-}
-
 /* 32px Compact Pane Header */
 .code-pane-header {
   height: 32px;
@@ -876,9 +827,27 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   font-weight: 500;
   color: #e5e7eb;
+}
+
+.code-pane-drag-handle {
+  min-height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.code-pane-drag-handle.is-dragging {
+  cursor: grabbing;
+}
+
+.code-pane-drag-handle:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #66a9ff;
+  outline-offset: 2px;
 }
 
 .code-pane-title {
@@ -933,6 +902,75 @@
   background-color: #0c0d0f;
   display: flex;
   flex-direction: column;
+}
+
+/* dnd-kit drop targets are rendered as a stable five-zone overlay. Keeping
+   the zones mounted prevents layout measurement from racing the pointer. */
+.code-pane-drop-zones {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.code-pane-drop-zones.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.code-pane-drop-zone {
+  position: absolute;
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.code-pane-drop-zone.placement-center {
+  inset: 22%;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+.code-pane-drop-zone.placement-left {
+  inset: 0 auto 0 0;
+  width: 22%;
+}
+
+.code-pane-drop-zone.placement-right {
+  inset: 0 0 0 auto;
+  width: 22%;
+}
+
+.code-pane-drop-zone.placement-top {
+  inset: 0 22% auto;
+  height: 22%;
+}
+
+.code-pane-drop-zone.placement-bottom {
+  inset: auto 22% 0;
+  height: 22%;
+}
+
+.code-pane-drop-zone.is-over {
+  border-color: rgba(91, 151, 255, 0.92);
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.code-pane-drop-zone.placement-center.is-over::after {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  content: 'Swap panes';
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(126, 178, 255, 0.8);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.92);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 /* Resizer Handle */
@@ -994,6 +1032,7 @@
 }
 
 .code-grid-drop-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1003,6 +1042,8 @@
   border-radius: 8px;
   color: #e5e7eb;
   cursor: pointer;
+  text-align: left;
+  font: inherit;
   transition: all 0.12s ease;
 }
 
@@ -1011,8 +1052,39 @@
   background: #1e2538;
   border-color: #3b82f6;
   color: #ffffff;
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.code-grid-drop-target {
+  position: absolute;
+  inset: -1px;
+  z-index: 3;
+  display: block;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+.code-grid-drop-target.is-over {
+  border-color: #69a2ff;
+  background: rgba(37, 99, 235, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(162, 199, 255, 0.16);
+}
+
+.code-pane-drag-overlay {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  border: 1px solid #517cbd;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #f8fbff;
+  background: rgba(20, 27, 40, 0.96);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  font-weight: 650;
+  pointer-events: none;
 }
 
 .code-grid-drop-icon {
@@ -1622,15 +1694,6 @@
 /* Pane Context Menu & Dropdowns */
 .code-pane-menu-wrap {
   position: relative;
-}
-
-/* Dragging overlay pointer-events protection */
-body.is-dragging-pane .code-pane-body,
-body.is-dragging-pane iframe,
-body.is-dragging-pane .code-terminal-container,
-body.is-dragging-pane .xterm,
-body.is-dragging-pane .xterm-screen {
-  pointer-events: none !important;
 }
 
 .code-dropdown-menu,
@@ -2374,4 +2437,3 @@ body.is-dragging-pane .xterm-screen {
   background: #e11d48;
   color: #ffffff;
 }
-

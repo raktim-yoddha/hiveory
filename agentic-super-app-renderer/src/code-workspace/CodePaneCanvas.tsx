@@ -1,4 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
+import {
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
 import {
   AlertCircle,
   AlertTriangle,
@@ -11,10 +22,11 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
-import type { CodePanePreset } from '../api/agentic-super-app-client'
+import type { CodePanePlacement, CodePanePreset } from '../api/agentic-super-app-client'
 import type { CodeWorkspaceController } from './state/use-code-workspace-controller'
 import { CodePaneTree } from './CodePaneTree'
 import { CodePaneLeaf } from './CodePaneLeaf'
+import { GridPresetDropTarget } from './CodePaneDropTargets'
 
 interface CodePaneCanvasProps {
   controller: CodeWorkspaceController
@@ -64,32 +76,51 @@ const GRID_OPTIONS: GridPresetOption[] = [
 export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOpenFolder }) => {
   const { state, confirmClose, dismissConfirmClose, dismissError, applyPreset } = controller
   const { layout, maximizedPaneId, error, confirmClosePane } = state
-  const [isDragging, setIsDragging] = useState(false)
-  const [activeDropPreset, setActiveDropPreset] = useState<CodePanePreset | null>(null)
+  const [activePaneId, setActivePaneId] = useState<string | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  )
 
-  useEffect(() => {
-    const handleDragStart = () => {
-      setIsDragging(true)
-      document.body.classList.add('is-dragging-pane')
-    }
-    const handleDragEnd = () => {
-      setIsDragging(false)
-      setActiveDropPreset(null)
-      document.body.classList.remove('is-dragging-pane')
+  const activePane = useMemo(
+    () => layout?.nodes.find((node) => node.pane_id === activePaneId),
+    [activePaneId, layout?.nodes],
+  )
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const paneId = active.data.current?.paneId
+    setActivePaneId(typeof paneId === 'string' ? paneId : null)
+  }
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActivePaneId(null)
+    if (!over) return
+
+    const sourcePaneId = active.data.current?.paneId
+    const target = over.data.current as {
+      type?: string
+      paneId?: string
+      placement?: CodePanePlacement
+      preset?: CodePanePreset
+    } | undefined
+    if (typeof sourcePaneId !== 'string' || !target?.type) return
+
+    if (target.type === 'preset' && target.preset) {
+      void applyPreset(target.preset, sourcePaneId)
+      return
     }
 
-    window.addEventListener('agentic-super-app-pane-drag-start', handleDragStart)
-    window.addEventListener('agentic-super-app-pane-drag-end', handleDragEnd)
-    window.addEventListener('dragend', handleDragEnd)
-    window.addEventListener('mouseup', handleDragEnd)
-
-    return () => {
-      window.removeEventListener('agentic-super-app-pane-drag-start', handleDragStart)
-      window.removeEventListener('agentic-super-app-pane-drag-end', handleDragEnd)
-      window.removeEventListener('dragend', handleDragEnd)
-      window.removeEventListener('mouseup', handleDragEnd)
+    if (
+      target.type === 'pane' &&
+      typeof target.paneId === 'string' &&
+      target.paneId !== sourcePaneId &&
+      target.placement
+    ) {
+      void controller.movePane(sourcePaneId, target.paneId, target.placement)
     }
-  }, [])
+  }
+
+  const handleDragCancel = () => setActivePaneId(null)
 
   if (!layout) {
     return (
@@ -115,65 +146,56 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
         </div>
       )}
 
-      {/* Floating Top Drag Grid Layout Dropzone Bar */}
-      {isDragging && (
-        <div
-          className="code-canvas-grid-bar"
-          onDragOver={(e) => {
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'move'
-          }}
-        >
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+      >
+        {/* Floating Top Drag Grid Layout Dropzone Bar */}
+        {activePaneId && (
+          <div className="code-canvas-grid-bar" role="region" aria-label="Layout presets">
           <div className="code-grid-bar-header">
             <span>Drop pane to change layout grid:</span>
           </div>
           <div className="code-grid-bar-options">
-            {GRID_OPTIONS.map((opt) => {
-              const isHovered = activeDropPreset === opt.id
-              return (
-                <div
-                  key={opt.id}
-                  className={`code-grid-drop-card ${isHovered ? 'is-active' : ''}`}
-                  onDragEnter={() => setActiveDropPreset(opt.id)}
-                  onDragOver={(e) => {
-                    e.preventDefault()
-                    e.dataTransfer.dropEffect = 'move'
-                    if (activeDropPreset !== opt.id) setActiveDropPreset(opt.id)
-                  }}
-                  onDragLeave={() => {
-                    if (activeDropPreset === opt.id) setActiveDropPreset(null)
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    setIsDragging(false)
-                    setActiveDropPreset(null)
-                    document.body.classList.remove('is-dragging-pane')
-                    window.dispatchEvent(new Event('agentic-super-app-pane-drag-end'))
-                    void applyPreset(opt.id)
-                  }}
-                  onClick={() => {
-                    void applyPreset(opt.id)
-                  }}
-                >
-                  <span className="code-grid-drop-icon">{opt.icon}</span>
-                  <div className="code-grid-drop-text">
-                    <span className="code-grid-drop-title">{opt.title}</span>
-                    <span className="code-grid-drop-desc">{opt.desc}</span>
-                  </div>
+            {GRID_OPTIONS.map((opt) => (
+              <button
+                type="button"
+                key={opt.id}
+                className="code-grid-drop-card"
+                onClick={() => void applyPreset(opt.id)}
+              >
+                <GridPresetDropTarget preset={opt.id} active={Boolean(activePaneId)} />
+                <span className="code-grid-drop-icon">{opt.icon}</span>
+                <div className="code-grid-drop-text">
+                  <span className="code-grid-drop-title">{opt.title}</span>
+                  <span className="code-grid-drop-desc">{opt.desc}</span>
                 </div>
-              )
-            })}
+              </button>
+            ))}
           </div>
         </div>
-      )}
-
-      <div className="code-pane-canvas-body">
-        {maximizedNode ? (
-          <CodePaneLeaf node={maximizedNode} controller={controller} />
-        ) : (
-          <CodePaneTree nodeId={layout.root_id} layout={layout} controller={controller} />
         )}
-      </div>
+
+        <div className="code-pane-canvas-body">
+          {maximizedNode ? (
+            <CodePaneLeaf node={maximizedNode} controller={controller} isDragActive={Boolean(activePaneId)} />
+          ) : (
+            <CodePaneTree nodeId={layout.root_id} layout={layout} controller={controller} isDragActive={Boolean(activePaneId)} />
+          )}
+        </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activePane ? (
+            <div className="code-pane-drag-overlay">
+              <span className="code-live-dot" />
+              <span>{activePane.title || 'Empty'}</span>
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {confirmClosePane && (
         <div className="code-modal-backdrop" role="presentation">

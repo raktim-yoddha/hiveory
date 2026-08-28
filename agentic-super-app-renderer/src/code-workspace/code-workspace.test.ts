@@ -35,6 +35,7 @@ describe('codeWorkspaceReducer', () => {
     state: 'running',
     pid: 1234,
     adapter_id: null,
+    model: null,
     session_id: null,
     exit_code: null,
     started_at_unix_ms: 1000,

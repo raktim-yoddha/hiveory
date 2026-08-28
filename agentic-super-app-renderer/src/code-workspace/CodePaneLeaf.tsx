@@ -1,7 +1,8 @@
-import React, { Component, useState, type ReactNode } from 'react'
-import type { CodePaneNode, CodePanePlacement } from '../api/agentic-super-app-client'
+import React, { Component, type ReactNode } from 'react'
+import type { CodePaneNode } from '../api/agentic-super-app-client'
 import type { CodeWorkspaceController } from './state/use-code-workspace-controller'
 import { CodePaneHeader } from './CodePaneHeader'
+import { CodePaneDropTargets } from './CodePaneDropTargets'
 import { CodePaneLauncher } from './CodePaneLauncher'
 import { CodeTerminalPane } from './panes/CodeTerminalPane'
 import { CodePreviewPane } from './panes/CodePreviewPane'
@@ -48,9 +49,10 @@ class PaneErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState
 interface CodePaneLeafProps {
   node: CodePaneNode
   controller: CodeWorkspaceController
+  isDragActive?: boolean
 }
 
-export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller }) => {
+export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller, isDragActive = false }) => {
   const {
     state,
     focusPane,
@@ -62,8 +64,6 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller }) 
     openPreview,
     createThread,
   } = controller
-  const [dropPlacement, setDropPlacement] = useState<CodePanePlacement | null>(null)
-
   const isFocused = state.focusedPaneId === node.pane_id
   const isMaximized = state.maximizedPaneId === node.pane_id
 
@@ -100,7 +100,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller }) 
             terminalId={node.resource_id}
             summary={terminalSummary}
             onRelaunch={() => {
-              void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id)
+              void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model)
             }}
           />
         )
@@ -114,92 +114,42 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller }) 
     }
   }
 
-  const isLauncherState =
-    node.kind === 'empty' ||
-    ((node.kind === 'terminal' || node.kind === 'coding_agent') && (!node.resource_id || !terminalSummary))
-
   return (
     <div
-      className={`code-pane-leaf ${isFocused ? 'focused' : ''} ${dropPlacement ? `drop-${dropPlacement}` : ''}`}
+      className={`code-pane-leaf ${isFocused ? 'focused' : ''}`}
       data-pane-id={node.pane_id}
       onClick={() => {
         if (!isFocused) void focusPane(node.pane_id)
       }}
-      onDragOver={(event) => {
-        event.preventDefault()
-        event.dataTransfer.dropEffect = 'move'
-        const rect = event.currentTarget.getBoundingClientRect()
-        const x = (event.clientX - rect.left) / Math.max(rect.width, 1)
-        const y = (event.clientY - rect.top) / Math.max(rect.height, 1)
-        const placement: CodePanePlacement = x < 0.2 ? 'left' : x > 0.8 ? 'right' : y < 0.2 ? 'top' : y > 0.8 ? 'bottom' : 'center'
-        setDropPlacement(placement)
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropPlacement(null)
-      }}
-      onDrop={(event) => {
-        event.preventDefault()
-        const sourcePaneId = event.dataTransfer.getData('text/plain')
-        const rect = event.currentTarget.getBoundingClientRect()
-        const x = (event.clientX - rect.left) / Math.max(rect.width, 1)
-        const y = (event.clientY - rect.top) / Math.max(rect.height, 1)
-        const placement: CodePanePlacement = x < 0.2 ? 'left' : x > 0.8 ? 'right' : y < 0.2 ? 'top' : y > 0.8 ? 'bottom' : 'center'
-        setDropPlacement(null)
-        document.body.classList.remove('is-dragging-pane')
-        window.dispatchEvent(new Event('agentic-super-app-pane-drag-end'))
-        if (sourcePaneId && sourcePaneId !== node.pane_id) {
-          void controller.movePane(sourcePaneId, node.pane_id, placement)
-        }
-      }}
     >
-      {dropPlacement && (
-        <div className={`code-pane-drop-overlay drop-${dropPlacement}`}>
-          {dropPlacement === 'center' && <span className="code-drop-badge">⇄ Swap positions</span>}
-        </div>
-      )}
-
-      {!isLauncherState && (
-        <CodePaneHeader
-          node={node}
-          isFocused={isFocused}
-          isMaximized={isMaximized}
-          terminalState={terminalSummary?.state}
-          onFocus={() => void focusPane(node.pane_id)}
-          onRename={(title) => void renamePane(node.pane_id, title)}
-          onSplitAndLaunch={(placement, kind, adapterId, model, url) => {
-            void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url)
-          }}
-          onToggleMaximize={() => void toggleMaximize(node.pane_id)}
-          onClose={() => void requestClosePane(node.pane_id)}
-          onRelaunch={
-            node.kind === 'terminal' || node.kind === 'coding_agent'
-              ? () => {
-                  void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id)
-                }
-              : undefined
-          }
-          onOpenShellInstead={
-            node.kind === 'coding_agent'
-              ? () => {
-                  void launchTerminal(node.pane_id, 'shell')
-                }
-              : undefined
-          }
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/plain', node.pane_id)
-            document.body.classList.add('is-dragging-pane')
-            event.currentTarget.closest('.code-pane-leaf')?.classList.add('is-dragging')
-            window.dispatchEvent(new CustomEvent('agentic-super-app-pane-drag-start', { detail: { paneId: node.pane_id } }))
-          }}
-          onDragEnd={() => {
-            setDropPlacement(null)
-            document.body.classList.remove('is-dragging-pane')
-            document.querySelector(`[data-pane-id="${CSS.escape(node.pane_id)}"]`)?.classList.remove('is-dragging')
-            window.dispatchEvent(new Event('agentic-super-app-pane-drag-end'))
-          }}
-        />
-      )}
+      <CodePaneHeader
+        node={node}
+        isFocused={isFocused}
+        isMaximized={isMaximized}
+        terminalState={terminalSummary?.state}
+        onFocus={() => void focusPane(node.pane_id)}
+        onRename={(title) => void renamePane(node.pane_id, title)}
+        onSplitAndLaunch={(placement, kind, adapterId, model, url) => {
+          void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url)
+        }}
+        onToggleMaximize={() => void toggleMaximize(node.pane_id)}
+        onClose={() => void requestClosePane(node.pane_id)}
+        onRelaunch={
+          node.kind === 'terminal' || node.kind === 'coding_agent'
+            ? () => {
+                void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model)
+              }
+            : undefined
+        }
+        onOpenShellInstead={
+          node.kind === 'coding_agent'
+            ? () => {
+                void launchTerminal(node.pane_id, 'shell')
+              }
+            : undefined
+        }
+      />
+      <CodePaneDropTargets paneId={node.pane_id} active={isDragActive} />
       <div className="code-pane-body">
         <PaneErrorBoundary>{renderContent()}</PaneErrorBoundary>
       </div>
