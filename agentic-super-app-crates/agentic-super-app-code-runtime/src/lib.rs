@@ -103,16 +103,23 @@ fn resolve_executable(name: &str) -> ResolvedExecutable {
             .output()
             .ok();
         if let Some(output) = where_output {
-            for line in String::from_utf8_lossy(&output.stdout).lines() {
-                let candidate = PathBuf::from(line.trim());
-                if !candidate.is_file() {
-                    continue;
-                }
-                if candidate
+            let mut candidates = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(|line| PathBuf::from(line.trim()))
+                .filter(|candidate| candidate.is_file())
+                .collect::<Vec<_>>();
+            // `where.exe` can return npm's extensionless and .cmd shims before
+            // the real executable. Prefer a directly runnable binary, then a
+            // shell wrapper, and only use an extensionless path as a last
+            // resort. This is what makes installed CLIs visible from Tauri as
+            // well as from an interactive PowerShell session.
+            candidates.sort_by_key(|candidate| executable_priority(candidate));
+            if let Some(candidate) = candidates.into_iter().next() {
+                let extension = candidate
                     .extension()
                     .and_then(OsStr::to_str)
-                    .is_some_and(|extension| extension.eq_ignore_ascii_case("ps1"))
-                {
+                    .unwrap_or_default();
+                if extension.eq_ignore_ascii_case("ps1") {
                     return ResolvedExecutable {
                         program: PathBuf::from("powershell.exe"),
                         prefix: vec![
@@ -120,6 +127,17 @@ fn resolve_executable(name: &str) -> ResolvedExecutable {
                             OsString::from("-ExecutionPolicy"),
                             OsString::from("Bypass"),
                             OsString::from("-File"),
+                            candidate.into_os_string(),
+                        ],
+                    };
+                }
+                if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat") {
+                    return ResolvedExecutable {
+                        program: PathBuf::from("cmd.exe"),
+                        prefix: vec![
+                            OsString::from("/D"),
+                            OsString::from("/S"),
+                            OsString::from("/C"),
                             candidate.into_os_string(),
                         ],
                     };
@@ -134,6 +152,18 @@ fn resolve_executable(name: &str) -> ResolvedExecutable {
     ResolvedExecutable {
         program: PathBuf::from(name),
         prefix: Vec::new(),
+    }
+}
+
+#[cfg(windows)]
+fn executable_priority(path: &Path) -> u8 {
+    match path.extension().and_then(OsStr::to_str) {
+        Some(extension) if extension.eq_ignore_ascii_case("exe") => 0,
+        Some(extension) if extension.eq_ignore_ascii_case("com") => 1,
+        Some(extension) if extension.eq_ignore_ascii_case("cmd") => 2,
+        Some(extension) if extension.eq_ignore_ascii_case("bat") => 3,
+        Some(extension) if extension.eq_ignore_ascii_case("ps1") => 4,
+        _ => 5,
     }
 }
 
@@ -182,12 +212,18 @@ fn adapter_capabilities(id: &str) -> Vec<CodeAdapterCapability> {
     capabilities
 }
 
+const MAX_RING_BUFFER_BYTES: usize = 1024 * 1024; // 1 MiB
+
 struct TerminalSession {
     summary: Mutex<CodeTerminalSummary>,
+    dimensions: Mutex<(u16, u16)>,
     writer: Mutex<Box<dyn Write + Send>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     process_group_id: Option<i32>,
+    ring_buffer: Mutex<std::collections::VecDeque<u8>>,
+    sequence: std::sync::atomic::AtomicU64,
+    broadcast_tx: tokio::sync::broadcast::Sender<CodeTerminalEvent>,
 }
 
 #[derive(Clone, Default)]
@@ -307,12 +343,17 @@ impl AgenticSuperAppCodeRuntime {
             started_at_unix_ms,
             updated_at_unix_ms: started_at_unix_ms,
         };
+        let (broadcast_tx, _) = tokio::sync::broadcast::channel(2048);
         let session = Arc::new(TerminalSession {
             summary: Mutex::new(summary.clone()),
+            dimensions: Mutex::new((request.cols, request.rows)),
             writer: Mutex::new(writer),
             master: Mutex::new(pair.master),
             killer: Mutex::new(killer),
             process_group_id,
+            ring_buffer: Mutex::new(std::collections::VecDeque::with_capacity(16 * 1024)),
+            sequence: std::sync::atomic::AtomicU64::new(0),
+            broadcast_tx: broadcast_tx.clone(),
         });
         self.sessions
             .lock()
@@ -320,18 +361,24 @@ impl AgenticSuperAppCodeRuntime {
                 AgenticSuperAppCodeRuntimeError::Operation("terminal lock poisoned".to_owned())
             })?
             .insert(id.clone(), session.clone());
-        emit(
-            &sink,
-            CodeTerminalEvent {
-                terminal_id: id.clone(),
-                kind: CodeTerminalEventKind::Started,
-                data_base64: None,
-                exit_code: None,
-                message: None,
-                emitted_at_unix_ms: now_ms(),
-            },
-        );
 
+        let start_ev = CodeTerminalEvent {
+            terminal_id: id.clone(),
+            sequence: session
+                .sequence
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1,
+            kind: CodeTerminalEventKind::Started,
+            data_base64: None,
+            exit_code: None,
+            message: None,
+            emitted_at_unix_ms: now_ms(),
+        };
+        let _ = broadcast_tx.send(start_ev.clone());
+        emit(&sink, start_ev);
+
+        let bg_session = session.clone();
+        let bg_id = id.clone();
         std::thread::Builder::new()
             .name(format!("agentic-terminal-{id}"))
             .spawn(move || {
@@ -339,36 +386,53 @@ impl AgenticSuperAppCodeRuntime {
                 loop {
                     match reader.read(&mut buffer) {
                         Ok(0) => break,
-                        Ok(bytes_read) => emit(
-                            &sink,
-                            CodeTerminalEvent {
-                                terminal_id: id.clone(),
+                        Ok(bytes_read) => {
+                            if let Ok(mut rb) = bg_session.ring_buffer.lock() {
+                                for b in &buffer[..bytes_read] {
+                                    if rb.len() >= MAX_RING_BUFFER_BYTES {
+                                        rb.pop_front();
+                                    }
+                                    rb.push_back(*b);
+                                }
+                            }
+                            let sequence = bg_session
+                                .sequence
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                                + 1;
+                            let ev = CodeTerminalEvent {
+                                terminal_id: bg_id.clone(),
+                                sequence,
                                 kind: CodeTerminalEventKind::Output,
                                 data_base64: Some(STANDARD.encode(&buffer[..bytes_read])),
                                 exit_code: None,
                                 message: None,
                                 emitted_at_unix_ms: now_ms(),
-                            },
-                        ),
+                            };
+                            let _ = bg_session.broadcast_tx.send(ev.clone());
+                            emit(&sink, ev);
+                        }
                         Err(error) => {
-                            emit(
-                                &sink,
-                                CodeTerminalEvent {
-                                    terminal_id: id.clone(),
-                                    kind: CodeTerminalEventKind::Error,
-                                    data_base64: None,
-                                    exit_code: None,
-                                    message: Some(error.to_string()),
-                                    emitted_at_unix_ms: now_ms(),
-                                },
-                            );
+                            let ev = CodeTerminalEvent {
+                                terminal_id: bg_id.clone(),
+                                sequence: bg_session
+                                    .sequence
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                                    + 1,
+                                kind: CodeTerminalEventKind::Error,
+                                data_base64: None,
+                                exit_code: None,
+                                message: Some(error.to_string()),
+                                emitted_at_unix_ms: now_ms(),
+                            };
+                            let _ = bg_session.broadcast_tx.send(ev.clone());
+                            emit(&sink, ev);
                             break;
                         }
                     }
                 }
                 let exit_status = child.wait().ok();
                 let exit_code = exit_status.as_ref().map(|status| status.exit_code() as i32);
-                if let Ok(mut summary) = session.summary.lock() {
+                if let Ok(mut summary) = bg_session.summary.lock() {
                     summary.state = if exit_status.is_some() {
                         CodeTerminalState::Exited
                     } else {
@@ -377,20 +441,64 @@ impl AgenticSuperAppCodeRuntime {
                     summary.exit_code = exit_code;
                     summary.updated_at_unix_ms = now_ms();
                 }
-                emit(
-                    &sink,
-                    CodeTerminalEvent {
-                        terminal_id: id.clone(),
-                        kind: CodeTerminalEventKind::Exited,
-                        data_base64: None,
-                        exit_code,
-                        message: exit_status.map(|status| status.to_string()),
-                        emitted_at_unix_ms: now_ms(),
-                    },
-                );
+                let exit_ev = CodeTerminalEvent {
+                    terminal_id: bg_id.clone(),
+                    sequence: bg_session
+                        .sequence
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                        + 1,
+                    kind: CodeTerminalEventKind::Exited,
+                    data_base64: None,
+                    exit_code,
+                    message: exit_status.map(|status| status.to_string()),
+                    emitted_at_unix_ms: now_ms(),
+                };
+                let _ = bg_session.broadcast_tx.send(exit_ev.clone());
+                emit(&sink, exit_ev);
             })
             .map_err(|error| AgenticSuperAppCodeRuntimeError::Operation(error.to_string()))?;
         Ok(summary)
+    }
+
+    pub fn snapshot(
+        &self,
+        terminal_id: &str,
+    ) -> Result<agentic_super_app_protocol::CodeTerminalSnapshot, AgenticSuperAppCodeRuntimeError>
+    {
+        let session = self.session(terminal_id)?;
+        let summary = session
+            .summary
+            .lock()
+            .map_err(|_| AgenticSuperAppCodeRuntimeError::Operation("lock poisoned".to_owned()))?
+            .clone();
+        let (cols, rows) = *session
+            .dimensions
+            .lock()
+            .map_err(|_| AgenticSuperAppCodeRuntimeError::Operation("lock poisoned".to_owned()))?;
+        let output_base64 = {
+            let rb = session.ring_buffer.lock().map_err(|_| {
+                AgenticSuperAppCodeRuntimeError::Operation("lock poisoned".to_owned())
+            })?;
+            let bytes: Vec<u8> = rb.iter().copied().collect();
+            STANDARD.encode(&bytes)
+        };
+        let sequence = session.sequence.load(std::sync::atomic::Ordering::Relaxed);
+        Ok(agentic_super_app_protocol::CodeTerminalSnapshot {
+            summary,
+            cols,
+            rows,
+            output_base64,
+            sequence,
+        })
+    }
+
+    pub fn subscribe(
+        &self,
+        terminal_id: &str,
+    ) -> Result<tokio::sync::broadcast::Receiver<CodeTerminalEvent>, AgenticSuperAppCodeRuntimeError>
+    {
+        let session = self.session(terminal_id)?;
+        Ok(session.broadcast_tx.subscribe())
     }
 
     pub fn write(
@@ -399,19 +507,15 @@ impl AgenticSuperAppCodeRuntime {
     ) -> Result<(), AgenticSuperAppCodeRuntimeError> {
         let session = self.session(&request.terminal_id)?;
         let bytes = STANDARD
-            .decode(&request.data)
+            .decode(&request.data_base64)
             .map_err(|error| AgenticSuperAppCodeRuntimeError::Operation(error.to_string()))?;
-        let result = session
-            .writer
-            .lock()
-            .map_err(|_| {
-                AgenticSuperAppCodeRuntimeError::Operation(
-                    "terminal writer lock poisoned".to_owned(),
-                )
-            })?
+        let mut writer = session.writer.lock().map_err(|_| {
+            AgenticSuperAppCodeRuntimeError::Operation("terminal writer lock poisoned".to_owned())
+        })?;
+        writer
             .write_all(&bytes)
-            .map_err(|error| AgenticSuperAppCodeRuntimeError::Operation(error.to_string()));
-        result
+            .and_then(|_| writer.flush())
+            .map_err(|error| AgenticSuperAppCodeRuntimeError::Operation(error.to_string()))
     }
 
     pub fn resize(
@@ -422,6 +526,9 @@ impl AgenticSuperAppCodeRuntime {
             return Err(AgenticSuperAppCodeRuntimeError::InvalidDimensions);
         }
         let session = self.session(&request.terminal_id)?;
+        if let Ok(mut dims) = session.dimensions.lock() {
+            *dims = (request.cols, request.rows);
+        }
         let result = session
             .master
             .lock()
@@ -1133,11 +1240,87 @@ mod tests {
             )
             .unwrap();
         let _ = runtime.stop(&CodeTerminalStopRequest {
-            terminal_id: summary.id,
+            terminal_id: summary.id.clone(),
             force: true,
         });
         assert!(receiver
             .recv_timeout(std::time::Duration::from_secs(2))
             .is_ok());
+
+        let snapshot = runtime.snapshot(&summary.id).unwrap();
+        assert_eq!(snapshot.summary.id, summary.id);
+        assert_eq!(snapshot.cols, 80);
+        assert_eq!(snapshot.rows, 24);
+        assert!(snapshot.sequence >= 1);
+    }
+
+    #[test]
+    fn writes_utf8_base64_input_to_a_shell() {
+        let runtime = AgenticSuperAppCodeRuntime::new();
+        let (sender, receiver) = mpsc::channel();
+        let sink: TerminalEventSink = Arc::new(move |event| {
+            let _ = sender.send(event);
+        });
+        let root = std::env::current_dir().unwrap();
+        let summary = runtime
+            .start(
+                &CodeTerminalStartRequest {
+                    workspace_id: "test".to_owned(),
+                    kind: CodeTerminalKind::Shell,
+                    cols: 80,
+                    rows: 24,
+                    adapter_id: None,
+                    model: None,
+                    resume_session_id: None,
+                },
+                &root,
+                sink,
+            )
+            .unwrap();
+
+        // Let the interactive shell finish its initial prompt before writing,
+        // matching the point at which an attached xterm can accept input.
+        let startup_deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        while std::time::Instant::now() < startup_deadline {
+            let Ok(event) = receiver.recv_timeout(std::time::Duration::from_millis(100)) else {
+                continue;
+            };
+            if event.kind == CodeTerminalEventKind::Output {
+                break;
+            }
+        }
+
+        runtime
+            .write(&CodeTerminalInputRequest {
+                terminal_id: summary.id.clone(),
+                // cmd.exe asks the attached terminal for its cursor position
+                // during startup. Answer that query before pressing Enter.
+                data_base64: STANDARD.encode("\x1b[1;1Recho phase11\r".as_bytes()),
+            })
+            .unwrap();
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut saw_echo = false;
+        while std::time::Instant::now() < deadline {
+            let Ok(event) = receiver.recv_timeout(std::time::Duration::from_millis(100)) else {
+                continue;
+            };
+            if event.kind == CodeTerminalEventKind::Output {
+                let bytes = event
+                    .data_base64
+                    .as_deref()
+                    .and_then(|value| STANDARD.decode(value).ok())
+                    .unwrap_or_default();
+                if String::from_utf8_lossy(&bytes).contains("phase11") {
+                    saw_echo = true;
+                    break;
+                }
+            }
+        }
+        let _ = runtime.stop(&CodeTerminalStopRequest {
+            terminal_id: summary.id,
+            force: true,
+        });
+        assert!(saw_echo, "shell did not echo the base64-decoded input");
     }
 }

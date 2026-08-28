@@ -1,6 +1,7 @@
 //! Durable Code-mode metadata. Terminal bytes are intentionally not stored.
 
 use super::{now_ms, AgenticSuperAppPersistence};
+use agentic_super_app_code_domain::migrate_layout_v1;
 use agentic_super_app_protocol::{
     CodeDocumentSummary, CodePaneLayout, CodePreviewState, CodePreviewSummary, CodeTerminalKind,
     CodeTerminalState, CodeTerminalSummary, CodeWorkspaceSummary, CodeWorkspaceTrust,
@@ -63,33 +64,98 @@ impl AgenticSuperAppPersistence {
         &self,
         workspace_id: &str,
     ) -> Result<Option<CodePaneLayout>, sqlx::Error> {
-        let Some(layout_json) = sqlx::query(
-            "SELECT layout_json FROM agentic_super_app_code_layouts WHERE workspace_id=?",
+        let Some(row) = sqlx::query(
+            "SELECT layout_json, version, revision FROM agentic_super_app_code_layouts WHERE workspace_id=?",
         )
         .bind(workspace_id)
         .fetch_optional(&self.pool)
-        .await?
-        .map(|row| row.get::<String, _>(0)) else {
+        .await? else {
             return Ok(None);
         };
-        serde_json::from_str(&layout_json)
-            .map(Some)
-            .map_err(|error| sqlx::Error::Decode(Box::new(error)))
+        let layout_json: String = row.get(0);
+        let version: i64 = row.get(1);
+        let revision: i64 = row.try_get(2).unwrap_or(0);
+
+        let parsed: Result<CodePaneLayout, _> = serde_json::from_str(&layout_json);
+        match parsed {
+            Ok(mut layout) => {
+                if version == 1 || layout.version == 1 {
+                    let migrated = migrate_layout_v1(&layout);
+                    self.save_code_layout(&migrated).await?;
+                    Ok(Some(migrated))
+                } else {
+                    layout.revision = revision as u64;
+                    Ok(Some(layout))
+                }
+            }
+            Err(_) => {
+                // If corrupted, fallback to clean migrated default
+                let default = agentic_super_app_code_domain::default_layout(workspace_id);
+                self.save_code_layout(&default).await?;
+                Ok(Some(default))
+            }
+        }
     }
 
     pub async fn save_code_layout(&self, layout: &CodePaneLayout) -> Result<(), sqlx::Error> {
         let layout_json = serde_json::to_string(layout)
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
         sqlx::query(
-            "INSERT INTO agentic_super_app_code_layouts (workspace_id, layout_json, version, updated_at_unix_ms) VALUES (?, ?, ?, ?) ON CONFLICT(workspace_id) DO UPDATE SET layout_json=excluded.layout_json, version=excluded.version, updated_at_unix_ms=excluded.updated_at_unix_ms",
+            "INSERT INTO agentic_super_app_code_layouts (workspace_id, layout_json, version, revision, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?) ON CONFLICT(workspace_id) DO UPDATE SET layout_json=excluded.layout_json, version=excluded.version, revision=excluded.revision, updated_at_unix_ms=excluded.updated_at_unix_ms",
         )
         .bind(&layout.workspace_id)
         .bind(layout_json)
         .bind(layout.version as i64)
+        .bind(layout.revision as i64)
         .bind(now_ms())
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    pub async fn mutate_code_layout(
+        &self,
+        workspace_id: &str,
+        expected_revision: u64,
+        new_layout: &CodePaneLayout,
+    ) -> Result<CodePaneLayout, sqlx::Error> {
+        let mut layout = new_layout.clone();
+        layout.revision = expected_revision + 1;
+        let layout_json = serde_json::to_string(&layout)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+
+        let result = sqlx::query(
+            "UPDATE agentic_super_app_code_layouts SET layout_json=?, version=?, revision=?, updated_at_unix_ms=? WHERE workspace_id=? AND revision=?",
+        )
+        .bind(&layout_json)
+        .bind(layout.version as i64)
+        .bind(layout.revision as i64)
+        .bind(now_ms())
+        .bind(workspace_id)
+        .bind(expected_revision as i64)
+        .execute(&self.pool)
+        .await?;
+
+        if result.rows_affected() == 0 {
+            // Check if workspace exists
+            let exists = sqlx::query(
+                "SELECT revision FROM agentic_super_app_code_layouts WHERE workspace_id=?",
+            )
+            .bind(workspace_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            if exists.is_none() && expected_revision == 0 {
+                self.save_code_layout(&layout).await?;
+                return Ok(layout);
+            }
+
+            return Err(sqlx::Error::Protocol(
+                "layout_conflict: optimistic concurrency revision mismatch".to_owned(),
+            ));
+        }
+
+        Ok(layout)
     }
 
     pub async fn save_code_document(

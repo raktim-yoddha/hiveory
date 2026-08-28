@@ -1,5 +1,0 @@
-[
-  { "label": "agent reference", "path": "techn/hermes-agent", "revision": "68518c1f9bca11d9f5dbdf59ecf7e024cce057ba", "license": "MIT" },
-  { "label": "code reference", "path": "techn/orca", "revision": "aab6464a6a35791bee23c14fdd3ba56eb0b9c4a1", "license": "MIT" },
-  { "label": "conversation reference", "path": "techn/t3code", "revision": "a3a8cbd60539b4af4de8f96c892dbd07a2b6c041", "license": "MIT" }
-]

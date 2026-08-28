@@ -5,14 +5,13 @@ import { agenticSuperAppClient, type ApplicationMode, type DiagnosticSnapshot, t
 import { AgenticSuperAppChat } from './chat/agentic-super-app-chat'
 import { AgenticSuperAppPlugins } from './automation/agentic-super-app-plugins'
 import { AgenticSuperAppRoutines } from './automation/agentic-super-app-routines'
-const AgenticSuperAppCode = lazy(() => import('./code/agentic-super-app-code').then((module) => ({ default: module.AgenticSuperAppCode })))
-const AgenticSuperAppCodeRuns = lazy(() => import('./code/agentic-super-app-code-runs').then((module) => ({ default: module.AgenticSuperAppCodeRuns })))
+import { AgenticSuperAppCodeWorkspace } from './code-workspace/AgenticSuperAppCodeWorkspace'
 const AgenticSuperAppAgent = lazy(() => import('./agent/agentic-super-app-agent').then((module) => ({ default: module.AgenticSuperAppAgent })))
 
 type ModeDefinition = { mode: ApplicationMode; label: string; description: string; icon: typeof Bot; navigation: string[] }
 const modes: ModeDefinition[] = [
   { mode: 'agent', label: 'Agent', description: 'Named assistants, explicit tools, durable runs, and inspectable memory.', icon: Bot, navigation: ['Workspace', 'Runs', 'Routines', 'Plugins', 'Skills'] },
-  { mode: 'code', label: 'Code', description: 'Projects, worker lanes, checkpoints, and reviewable runs live here.', icon: Code2, navigation: ['Workbench', 'Runs'] },
+  { mode: 'code', label: 'Code', description: 'Projects, panes, and local tools live here.', icon: Code2, navigation: [] },
   { mode: 'chat', label: 'Chat', description: 'Focused conversations and artifacts will appear here.', icon: MessageSquare, navigation: ['Conversations', 'Artifacts', 'Archive'] },
 ]
 const previewSnapshot: DiagnosticSnapshot = { providers: [], recent_jobs: [], notifications: [], recovery_message: null }
@@ -40,7 +39,6 @@ function formatBytes(bytes: number): string {
 
 export function AgenticSuperAppShell() {
   const [activeMode, setActiveMode] = useState<ApplicationMode>('agent')
-  const [codeScreen, setCodeScreen] = useState<'workbench' | 'runs'>('workbench')
   const [agentScreen, setAgentScreen] = useState<'workspace' | 'runs' | 'routines' | 'plugins' | 'skills'>('workspace')
   const [globalSection, setGlobalSection] = useState<GlobalSection>('dashboard')
   const [screen, setScreen] = useState<ShellScreen>('workspace')
@@ -64,10 +62,11 @@ export function AgenticSuperAppShell() {
     document.documentElement.dataset.reducedMotion = preferences.reducedMotion ? 'true' : 'false'
     try { window.localStorage.setItem('agentic-super-app.preferences', JSON.stringify(preferences)) } catch { /* local preferences are optional */ }
   }, [preferences])
-  const selectMode = (mode: ApplicationMode) => { setScreen('workspace'); setGlobalSection('dashboard'); setNotificationsOpen(false); if (mode === 'code') setCodeScreen('workbench'); if (mode === 'agent') setAgentScreen('workspace'); setActiveMode(mode); void agenticSuperAppClient.setActiveMode(mode).then((item) => setActiveMode(item.active_mode)).catch(() => undefined) }
+  const selectMode = (mode: ApplicationMode) => { setScreen('workspace'); setGlobalSection('dashboard'); setNotificationsOpen(false); if (mode === 'agent') setAgentScreen('workspace'); setActiveMode(mode); void agenticSuperAppClient.setActiveMode(mode).then((item) => setActiveMode(item.active_mode)).catch(() => undefined) }
   const selectGlobalSection = (section: GlobalSection) => { setScreen('workspace'); setGlobalSection(section); setNotificationsOpen(false) }
   const selectAgentScreen = (item: string) => { if (item === 'Runs' || item === 'Routines' || item === 'Plugins' || item === 'Skills') setAgentScreen(item.toLowerCase() as 'runs' | 'routines' | 'plugins' | 'skills'); else setAgentScreen('workspace') }
   const agentPanel = agentScreen === 'runs' ? 'runs' : agentScreen === 'skills' ? 'skills' : 'overview'
+  const isCodeApp = screen === 'workspace' && activeMode === 'code'
   const commandActions: CommandAction[] = [
     ...modes.map(({ mode, label, description }) => ({ id: `mode-${mode}`, label: `Switch to ${label}`, description, shortcut: mode === 'agent' ? 'Ctrl 1' : mode === 'code' ? 'Ctrl 2' : 'Ctrl 3', keywords: [label, 'mode', 'workspace'], run: () => selectMode(mode) })),
     { id: 'diagnostics', label: 'Open diagnostics', description: 'Inspect providers, jobs, notifications, and recovery state.', shortcut: 'Ctrl Shift D', keywords: ['system', 'health', 'provider'], run: () => { setScreen('diagnostics'); setCommandOpen(false); void refresh() } },
@@ -92,9 +91,37 @@ export function AgenticSuperAppShell() {
     <a className="agentic-super-app-skip-link" href="#agentic-super-app-main-content">Skip to main content</a>
     <main className="agentic-super-app-shell">
     <header className="agentic-super-app-titlebar">
-      <div className="agentic-super-app-brand"><PanelLeft size={16} aria-hidden="true" /><span>Agentic Super App</span></div>
-      <nav className="agentic-super-app-mode-switch" aria-label="Workspace mode">{modes.map(({ mode, label, icon: Icon }) => <button type="button" key={mode} className={mode === activeMode && screen === 'workspace' ? 'is-active' : ''} onClick={() => selectMode(mode)} aria-pressed={mode === activeMode && screen === 'workspace'} aria-keyshortcuts={`Control+${mode === 'agent' ? '1' : mode === 'code' ? '2' : '3'}`}><Icon size={15} aria-hidden="true" />{label}</button>)}</nav>
+      <div className="agentic-super-app-brand">
+        <span style={{ color: '#f59e0b', fontSize: 16, lineHeight: 1 }}>⚡</span>
+        <span>Agentic Super App</span>
+        <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: 12, marginLeft: -3 }}>One</span>
+        <PanelLeft size={15} style={{ opacity: 0.5, cursor: 'pointer', marginLeft: 8 }} />
+      </div>
+      <nav className="agentic-super-app-mode-switch" aria-label="Workspace mode">
+        {modes.map(({ mode, label }) => (
+          <button
+            type="button"
+            key={mode}
+            className={mode === activeMode && screen === 'workspace' ? 'is-active' : ''}
+            onClick={() => selectMode(mode)}
+            aria-pressed={mode === activeMode && screen === 'workspace'}
+            aria-keyshortcuts={`Control+${mode === 'agent' ? '1' : mode === 'code' ? '2' : '3'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
       <div className="agentic-super-app-title-actions">
+        {isCodeApp && (
+          <button
+            type="button"
+            className="agentic-super-app-title-action"
+            onClick={() => window.dispatchEvent(new Event('agentic-super-app-tidy-code-layout'))}
+          >
+            <Sparkles size={13} aria-hidden="true" />
+            Tidy
+          </button>
+        )}
         <button type="button" className="agentic-super-app-icon-button agentic-super-app-command-trigger" onClick={() => { setCommandOpen(true); setNotificationsOpen(false) }} aria-label="Open command palette" title="Command palette (Ctrl K)"><Command size={16} /></button>
         <button type="button" className={notificationsOpen ? 'agentic-super-app-icon-button is-active agentic-super-app-notification-trigger' : 'agentic-super-app-icon-button agentic-super-app-notification-trigger'} onClick={() => { setNotificationsOpen((value) => !value); setCommandOpen(false); void refresh() }} aria-label={`Open notifications${unreadNotifications ? `, ${unreadNotifications} unread` : ''}`} title="Notifications"><Bell size={16} />{unreadNotifications > 0 && <span className="agentic-super-app-notification-count">{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}</button>
         <button type="button" className={screen === 'diagnostics' ? 'agentic-super-app-icon-button is-active' : 'agentic-super-app-icon-button'} onClick={() => { setScreen('diagnostics'); setCommandOpen(false); void refresh() }} aria-label="Open diagnostics" title="Diagnostics"><Activity size={16} /></button>
@@ -102,12 +129,14 @@ export function AgenticSuperAppShell() {
         <div className="agentic-super-app-connection" aria-label={connected ? 'Connected to local host' : 'Preview mode'}><ShieldCheck size={15} aria-hidden="true" />{connected ? 'Local host' : 'Preview'}</div>
       </div>
     </header>
-    <section id="agentic-super-app-main-content" tabIndex={-1} className={`agentic-super-app-workspace ${screen === 'workspace' && activeMode === 'chat' ? 'is-chat-mode' : ''} ${screen === 'workspace' && activeMode === 'code' ? 'is-code-mode' : ''}`}>
-      <aside className="agentic-super-app-rail" aria-label={screen === 'workspace' ? 'Application navigation' : 'Global navigation'}>
-        {screen !== 'workspace' ? <><div className="agentic-super-app-rail-heading">System</div><button type="button" className={screen === 'diagnostics' ? 'is-selected' : ''} onClick={() => { setScreen('diagnostics'); void refresh() }} aria-current={screen === 'diagnostics' ? 'page' : undefined}><Activity size={15} aria-hidden="true" />Diagnostics</button><button type="button" className={screen === 'settings' ? 'is-selected' : ''} onClick={() => setScreen('settings')} aria-current={screen === 'settings' ? 'page' : undefined}><Settings2 size={15} aria-hidden="true" />Settings</button><button type="button" onClick={() => setScreen('workspace')}><PanelLeft size={15} aria-hidden="true" />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">Workspace</div><button type="button" className={globalSection === 'dashboard' ? 'is-selected' : ''} onClick={() => selectGlobalSection('dashboard')}><LayoutDashboard size={15} aria-hidden="true" />Dashboard</button><button type="button" className={globalSection === 'routines' ? 'is-selected' : ''} onClick={() => selectGlobalSection('routines')}><Clock3 size={15} aria-hidden="true" />Routines</button><button type="button" className={globalSection === 'plugins' ? 'is-selected' : ''} onClick={() => selectGlobalSection('plugins')}><Puzzle size={15} aria-hidden="true" />Plugins</button><button type="button" className={globalSection === 'skills' ? 'is-selected' : ''} onClick={() => selectGlobalSection('skills')}><Sparkles size={15} aria-hidden="true" />Skills</button><div className="agentic-super-app-rail-divider" /><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.filter((item) => !['Routines', 'Plugins', 'Skills'].includes(item)).map((item) => <button type="button" key={item} className={activeMode === 'code' && ((item === 'Runs' && codeScreen === 'runs') || (item === 'Workbench' && codeScreen === 'workbench')) || activeMode === 'agent' && ((item === 'Workspace' && agentScreen === 'workspace') || item.toLowerCase() === agentScreen) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'code') setCodeScreen(item === 'Runs' ? 'runs' : 'workbench'); if (activeMode === 'agent') selectAgentScreen(item) }}>{item}</button>)}</>}
-        <div className="agentic-super-app-rail-footer"><button type="button" className="agentic-super-app-rail-action" onClick={() => setCommandOpen(true)}><Keyboard size={14} aria-hidden="true" />Command palette <kbd>Ctrl K</kbd></button><button type="button" className="agentic-super-app-rail-action" onClick={() => setScreen('settings')}><Settings2 size={14} aria-hidden="true" />Settings</button><span className="agentic-super-app-rail-version">v1.0.0 · local-first</span></div>
-      </aside>
-      {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : screen === 'settings' ? <AgenticSuperAppSettings preferences={preferences} setPreferences={setPreferences} onOpenDiagnostics={() => { setScreen('diagnostics'); void refresh() }} /> : globalSection === 'routines' ? <AgenticSuperAppRoutines /> : globalSection === 'plugins' ? <AgenticSuperAppPlugins /> : globalSection === 'skills' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading skills…</section>}><AgenticSuperAppAgent initialPanel="skills" /></Suspense> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}>{codeScreen === 'runs' ? <AgenticSuperAppCodeRuns /> : <AgenticSuperAppCode />}</Suspense> : agentScreen === 'routines' ? <AgenticSuperAppRoutines /> : agentScreen === 'plugins' ? <AgenticSuperAppPlugins /> : <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Agent workspace…</section>}><AgenticSuperAppAgent initialPanel={agentPanel} /></Suspense>}
+    <section id="agentic-super-app-main-content" tabIndex={-1} className={`agentic-super-app-workspace ${screen === 'workspace' && activeMode === 'chat' ? 'is-chat-mode' : ''} ${screen === 'workspace' && activeMode === 'code' ? 'is-code-mode' : ''} ${isCodeApp ? 'is-code-app' : ''}`}>
+      {isCodeApp ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Code workspace…</section>}><AgenticSuperAppCodeWorkspace /></Suspense> : <>
+        <aside className="agentic-super-app-rail" aria-label={screen === 'workspace' ? 'Application navigation' : 'Global navigation'}>
+          {screen !== 'workspace' ? <><div className="agentic-super-app-rail-heading">System</div><button type="button" className={screen === 'diagnostics' ? 'is-selected' : ''} onClick={() => { setScreen('diagnostics'); void refresh() }} aria-current={screen === 'diagnostics' ? 'page' : undefined}><Activity size={15} aria-hidden="true" />Diagnostics</button><button type="button" className={screen === 'settings' ? 'is-selected' : ''} onClick={() => setScreen('settings')} aria-current={screen === 'settings' ? 'page' : undefined}><Settings2 size={15} aria-hidden="true" />Settings</button><button type="button" onClick={() => setScreen('workspace')}><PanelLeft size={15} aria-hidden="true" />Workspaces</button></> : <><div className="agentic-super-app-rail-heading">Workspace</div><button type="button" className={globalSection === 'dashboard' ? 'is-selected' : ''} onClick={() => selectGlobalSection('dashboard')}><LayoutDashboard size={15} aria-hidden="true" />Dashboard</button><button type="button" className={globalSection === 'routines' ? 'is-selected' : ''} onClick={() => selectGlobalSection('routines')}><Clock3 size={15} aria-hidden="true" />Routines</button><button type="button" className={globalSection === 'plugins' ? 'is-selected' : ''} onClick={() => selectGlobalSection('plugins')}><Puzzle size={15} aria-hidden="true" />Plugins</button><button type="button" className={globalSection === 'skills' ? 'is-selected' : ''} onClick={() => selectGlobalSection('skills')}><Sparkles size={15} aria-hidden="true" />Skills</button><div className="agentic-super-app-rail-divider" /><div className="agentic-super-app-rail-heading">{definition.label}</div>{definition.navigation.filter((item) => !['Routines', 'Plugins', 'Skills'].includes(item)).map((item) => <button type="button" key={item} className={activeMode === 'agent' && ((item === 'Workspace' && agentScreen === 'workspace') || item.toLowerCase() === agentScreen) ? 'is-selected' : ''} onClick={() => { if (activeMode === 'agent') selectAgentScreen(item) }}>{item}</button>)}</>}
+          <div className="agentic-super-app-rail-footer"><button type="button" className="agentic-super-app-rail-action" onClick={() => setCommandOpen(true)}><Keyboard size={14} aria-hidden="true" />Command palette <kbd>Ctrl K</kbd></button><button type="button" className="agentic-super-app-rail-action" onClick={() => setScreen('settings')}><Settings2 size={14} aria-hidden="true" />Settings</button><span className="agentic-super-app-rail-version">v1.0.0 · local-first</span></div>
+        </aside>
+        {screen === 'diagnostics' ? <AgenticSuperAppDiagnostics snapshot={snapshot} events={events} refresh={refresh} /> : screen === 'settings' ? <AgenticSuperAppSettings preferences={preferences} setPreferences={setPreferences} onOpenDiagnostics={() => { setScreen('diagnostics'); void refresh() }} /> : globalSection === 'routines' ? <AgenticSuperAppRoutines /> : globalSection === 'plugins' ? <AgenticSuperAppPlugins /> : globalSection === 'skills' ? <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading skills…</section>}><AgenticSuperAppAgent initialPanel="skills" /></Suspense> : activeMode === 'chat' ? <AgenticSuperAppChat /> : activeMode === 'code' ? <AgenticSuperAppCodeWorkspace /> : agentScreen === 'routines' ? <AgenticSuperAppRoutines /> : agentScreen === 'plugins' ? <AgenticSuperAppPlugins /> : <Suspense fallback={<section className="agentic-super-app-content" role="status">Loading Agent workspace…</section>}><AgenticSuperAppAgent initialPanel={agentPanel} /></Suspense>}
+      </>}
     </section>
     <span className="agentic-super-app-sr-only" aria-live="polite">{connected ? 'Connected to the local application host.' : 'Running in browser preview mode.'}</span>
     {notificationsOpen && <AgenticSuperAppNotificationCenter notifications={snapshot.notifications} onClose={() => setNotificationsOpen(false)} onRead={async (id) => { await agenticSuperAppClient.markNotificationRead(id); await refresh() }} onReadAll={async () => { await agenticSuperAppClient.markAllNotificationsRead(); await refresh() }} />}

@@ -646,6 +646,7 @@ pub enum CodePaneKind {
     Preview,
     Problems,
     Empty,
+    Thread,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -666,6 +667,8 @@ pub struct CodePaneNode {
     pub ratio_percent: Option<u8>,
     pub children: Vec<String>,
     pub resource_id: Option<String>,
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -675,6 +678,12 @@ pub struct CodePaneLayout {
     pub version: u32,
     pub root_id: String,
     pub nodes: Vec<CodePaneNode>,
+    #[serde(default)]
+    pub revision: u64,
+    #[serde(default)]
+    pub focused_pane_id: Option<String>,
+    #[serde(default)]
+    pub maximized_pane_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -682,6 +691,158 @@ pub struct CodePaneLayout {
 pub struct CodeSaveLayoutRequest {
     pub workspace_id: String,
     pub layout: CodePaneLayout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodePanePlacement {
+    Center,
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodePanePreset {
+    EqualColumns,
+    EqualRows,
+    MainLeft,
+    MainTop,
+    Grid,
+    Tidy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CodePaneMutation {
+    Split {
+        pane_id: String,
+        placement: CodePanePlacement,
+    },
+    Rename {
+        pane_id: String,
+        title: String,
+    },
+    Move {
+        pane_id: String,
+        target_pane_id: String,
+        placement: CodePanePlacement,
+    },
+    Resize {
+        split_id: String,
+        ratio_percent: u8,
+    },
+    Focus {
+        pane_id: String,
+    },
+    Maximize {
+        pane_id: Option<String>,
+    },
+    ApplyPreset {
+        preset: CodePanePreset,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePaneMutationRequest {
+    pub workspace_id: String,
+    pub expected_revision: u64,
+    pub mutation: CodePaneMutation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodePaneMutationResult {
+    pub layout: CodePaneLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct LaunchCodePaneTerminalRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+    pub kind: CodeTerminalKind,
+    pub adapter_id: Option<String>,
+    pub model: Option<String>,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct LaunchCodePaneTerminalResult {
+    pub layout: CodePaneLayout,
+    pub terminal: CodeTerminalSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OpenCodePanePreviewRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OpenCodePanePreviewResult {
+    pub layout: CodePaneLayout,
+    pub preview: CodePreviewSummary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CreateCodePaneThreadRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CreateCodePaneThreadResult {
+    pub layout: CodePaneLayout,
+    pub conversation: ChatConversationDetail,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CloseCodePaneRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+    pub terminate_running_resource: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalSnapshotQuery {
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalSnapshot {
+    pub summary: CodeTerminalSummary,
+    pub cols: u16,
+    pub rows: u16,
+    pub output_base64: String,
+    pub sequence: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeTerminalSubscribeRequest {
+    pub terminal_id: String,
+    pub after_sequence: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -732,9 +893,11 @@ pub struct CodeTerminalStartRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+/// Terminal input is transported as UTF-8 encoded standard base64 so control
+/// bytes and pasted Unicode text cross the JSON/Tauri boundary without loss.
 pub struct CodeTerminalInputRequest {
     pub terminal_id: String,
-    pub data: String,
+    pub data_base64: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -764,8 +927,11 @@ pub enum CodeTerminalEventKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+/// A terminal event carries a monotonic per-terminal sequence so clients can
+/// close snapshot/stream races and recover from a lagged broadcast subscriber.
 pub struct CodeTerminalEvent {
     pub terminal_id: String,
+    pub sequence: u64,
     pub kind: CodeTerminalEventKind,
     pub data_base64: Option<String>,
     pub exit_code: Option<i32>,
@@ -2373,6 +2539,21 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodePaneNode::export_all(&config)?;
     CodePaneLayout::export_all(&config)?;
     CodeSaveLayoutRequest::export_all(&config)?;
+    CodePanePlacement::export_all(&config)?;
+    CodePanePreset::export_all(&config)?;
+    CodePaneMutation::export_all(&config)?;
+    CodePaneMutationRequest::export_all(&config)?;
+    CodePaneMutationResult::export_all(&config)?;
+    LaunchCodePaneTerminalRequest::export_all(&config)?;
+    LaunchCodePaneTerminalResult::export_all(&config)?;
+    OpenCodePanePreviewRequest::export_all(&config)?;
+    OpenCodePanePreviewResult::export_all(&config)?;
+    CreateCodePaneThreadRequest::export_all(&config)?;
+    CreateCodePaneThreadResult::export_all(&config)?;
+    CloseCodePaneRequest::export_all(&config)?;
+    CodeTerminalSnapshotQuery::export_all(&config)?;
+    CodeTerminalSnapshot::export_all(&config)?;
+    CodeTerminalSubscribeRequest::export_all(&config)?;
     CodeTerminalKind::export_all(&config)?;
     CodeTerminalState::export_all(&config)?;
     CodeTerminalSummary::export_all(&config)?;

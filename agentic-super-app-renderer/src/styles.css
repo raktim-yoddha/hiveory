@@ -288,14 +288,15 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
 }
 body { background: var(--agentic-super-app-canvas); color: var(--agentic-super-app-text); }
 .agentic-super-app-shell { background: radial-gradient(circle at 54% -28%, rgba(47, 123, 246, .12), transparent 32%), var(--agentic-super-app-canvas); }
-.agentic-super-app-titlebar { height: 54px; padding: 0 14px; border-bottom-color: var(--agentic-super-app-border); background: rgba(13, 14, 17, .96); }
-.agentic-super-app-brand { color: #f6f7fa; letter-spacing: -.01em; }
-.agentic-super-app-brand svg { color: var(--agentic-super-app-blue); }
-.agentic-super-app-mode-switch { gap: 2px; border-color: var(--agentic-super-app-border); border-radius: 10px; padding: 3px; background: #151619; }
-.agentic-super-app-mode-switch button { border-radius: 7px; padding: 6px 13px; color: #8d9098; }
+.agentic-super-app-titlebar { height: 48px; padding: 0 16px; border-bottom: 1px solid #1a1b20; background: #0c0d0f; }
+.agentic-super-app-brand { color: #f6f7fa; font-size: 13px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.agentic-super-app-mode-switch { gap: 2px; border: 1px solid #23252a; border-radius: 20px; padding: 2px; background: #18191d; }
+.agentic-super-app-mode-switch button { border-radius: 16px; padding: 4px 16px; color: #8a8f98; font-size: 13px; font-weight: 500; }
 .agentic-super-app-mode-switch button:hover { color: #f4f5f7; background: #202126; }
-.agentic-super-app-mode-switch button.is-active { color: #fff; background: #292a2f; box-shadow: inset 0 0 0 1px #3d3f46; }
+.agentic-super-app-mode-switch button.is-active { color: #fff; background: #2e3037; font-weight: 600; box-shadow: none; }
 .agentic-super-app-title-actions { gap: 7px; }
+.agentic-super-app-title-action { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 500; color: #d1d5db; background: #18191d; border: 1px solid #23252a; cursor: pointer; }
+.agentic-super-app-title-action:hover { background: #22242b; color: #ffffff; }
 .agentic-super-app-connection { border: 1px solid #263b2d; border-radius: 99px; padding: 5px 9px; color: #83bf91; background: #111a14; font-size: 10px; }
 .agentic-super-app-workspace { grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 54px); }
 .agentic-super-app-rail { gap: 3px; padding: 18px 10px 12px; border-right-color: var(--agentic-super-app-border); background: var(--agentic-super-app-surface); }
@@ -347,3 +348,12 @@ body { background: var(--agentic-super-app-canvas); color: var(--agentic-super-a
 .agentic-super-app-code-preview-pane iframe { width: 100%; height: 100%; min-height: 0; border: 0; background: #fff; }
 .agentic-super-app-code-preview-pane a { display: inline-grid; width: 27px; height: 27px; place-items: center; color: #9eb5c9; }
 .agentic-super-app-code-preview-pane a:hover { color: #fff; }
+.agentic-super-app-title-action { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; border: 1px solid #3e4f68; border-radius: 6px; padding: 5px 9px; color: #dbe9ff; background: #1e2d42; cursor: pointer; font-size: 12px; }
+.agentic-super-app-title-action:hover { border-color: #698dc2; background: #29405d; }
+.agentic-super-app-skip-link { z-index: 200; }
+html, body, #root { height: 100%; min-height: 0; }
+body { overflow: hidden; }
+.agentic-super-app-titlebar { height: 52px; }
+.agentic-super-app-shell { display: grid; height: 100%; min-height: 0; grid-template-rows: 52px minmax(0, 1fr); overflow: hidden; }
+.agentic-super-app-workspace { min-height: 0; height: auto; overflow: hidden; }
+.agentic-super-app-workspace.is-code-app { display: block; height: 100%; min-height: 0; }

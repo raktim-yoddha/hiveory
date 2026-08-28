@@ -24,7 +24,25 @@ test('preview Code enforces trust before saving and preserves the pane contract'
   await expect(agenticSuperAppClient.saveCodeFile({ workspace_id: detail.summary.id, relative_path: document.relative_path, content: 'blocked', expected_fingerprint: document.fingerprint })).rejects.toThrow()
   const trusted = await agenticSuperAppClient.trustCodeWorkspace(detail.summary.id, true)
   expect(trusted.summary.capabilities).toContain('execute_processes')
-  expect(trusted.layout.nodes.find((node) => node.pane_id === trusted.layout.root_id)?.children).toEqual(['editor', 'terminal'])
+  expect(trusted.layout.nodes.find((node) => node.pane_id === trusted.layout.root_id)?.children).toEqual([])
+  const launched = await agenticSuperAppClient.launchCodePaneTerminal({
+    workspace_id: detail.summary.id,
+    pane_id: trusted.layout.root_id,
+    expected_revision: trusted.layout.revision ?? 0,
+    kind: 'shell',
+    adapter_id: null,
+    model: null,
+    cols: 80,
+    rows: 24,
+  })
+  expect(launched.terminal.state).toBe('running')
+  expect(launched.layout.nodes.find((node) => node.pane_id === trusted.layout.root_id)?.kind).toBe('terminal')
+  const split = await agenticSuperAppClient.applyCodePaneMutation({
+    workspace_id: detail.summary.id,
+    expected_revision: launched.layout.revision ?? 0,
+    mutation: { type: 'split', pane_id: trusted.layout.root_id, placement: 'right' },
+  })
+  expect(split.layout.nodes.filter((node) => node.children.length === 0)).toHaveLength(2)
   const saved = await agenticSuperAppClient.saveCodeFile({ workspace_id: detail.summary.id, relative_path: document.relative_path, content: '# Saved from preview\n', expected_fingerprint: document.fingerprint })
   expect(saved.content).toContain('Saved from preview')
 })

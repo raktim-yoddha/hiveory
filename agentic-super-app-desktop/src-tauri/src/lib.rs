@@ -44,26 +44,29 @@ use agentic_super_app_protocol::{
     ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
     ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
-    CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
+    CloseCodePaneRequest, CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
     CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff,
     CodeGitDiffRequest, CodeGitStatus, CodeGitStatusRequest, CodeOrchestrationEventEnvelope,
-    CodeOrchestrationEventsQuery, CodePaneLayout, CodePreviewRequest, CodePreviewState,
-    CodePreviewSummary, CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest,
-    CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest,
-    CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest,
-    CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent,
-    CodeTerminalInputRequest, CodeTerminalResizeRequest, CodeTerminalStartRequest,
-    CodeTerminalStopRequest, CodeTerminalSummary, CodeWorkspaceDetail, CodeWorkspaceOpenRequest,
-    CodeWorkspaceQuery, CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope,
-    DiagnosticSnapshot, JobState, PluginCatalogEntry, PluginConnectionCreateRequest,
-    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
-    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
-    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
-    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
-    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
-    AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+    CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
+    CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
+    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest, CodeRunCreateRequest,
+    CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest,
+    CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest, CodeTaskDeleteRequest,
+    CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent, CodeTerminalInputRequest,
+    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot, CodeTerminalSnapshotQuery,
+    CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSubscribeRequest,
+    CodeTerminalSummary, CodeWorkspaceDetail, CodeWorkspaceOpenRequest, CodeWorkspaceQuery,
+    CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope, CreateCodePaneThreadRequest,
+    CreateCodePaneThreadResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
+    LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
+    PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
+    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
+    PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest, ResponseEnvelope,
+    RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
+    RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
+    SharedEventEnvelope, SharedEventKind, UpdateSnapshot, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
 };
 use agentic_super_app_routine_scheduler::{
     AgenticSuperAppRoutineScheduler, AgenticSuperAppRoutineSchedulerError,
@@ -1963,6 +1966,593 @@ async fn agentic_super_app_command_open_code_preview(
         .await
         .map_err(database_error)?;
     Ok(response(&command.request_id, preview))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_apply_code_pane_mutation(
+    command: CommandEnvelope<CodePaneMutationRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodePaneMutationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace_id = &command.payload.workspace_id;
+    let expected_revision = command.payload.expected_revision;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == *workspace_id => layout,
+        _ => default_layout(workspace_id),
+    };
+
+    if current_layout.revision != expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    let mutated_layout = match &command.payload.mutation {
+        CodePaneMutation::Split { pane_id, placement } => {
+            agentic_super_app_code_domain::split_pane(&current_layout, pane_id, *placement)
+                .map_err(|e| validation_error(e.to_string()))?
+        }
+        CodePaneMutation::Rename { pane_id, title } => {
+            agentic_super_app_code_domain::rename_pane(&current_layout, pane_id, title)
+                .map_err(|e| validation_error(e.to_string()))?
+        }
+        CodePaneMutation::Move {
+            pane_id,
+            target_pane_id,
+            placement,
+        } => agentic_super_app_code_domain::move_pane(
+            &current_layout,
+            pane_id,
+            target_pane_id,
+            *placement,
+        )
+        .map_err(|e| validation_error(e.to_string()))?,
+        CodePaneMutation::Resize {
+            split_id,
+            ratio_percent,
+        } => agentic_super_app_code_domain::resize_split(&current_layout, split_id, *ratio_percent)
+            .map_err(|e| validation_error(e.to_string()))?,
+        CodePaneMutation::Focus { pane_id } => {
+            agentic_super_app_code_domain::focus_pane(&current_layout, pane_id)
+                .map_err(|e| validation_error(e.to_string()))?
+        }
+        CodePaneMutation::Maximize { pane_id } => {
+            agentic_super_app_code_domain::set_maximized_pane(&current_layout, pane_id.as_deref())
+                .map_err(|e| validation_error(e.to_string()))?
+        }
+        CodePaneMutation::ApplyPreset { preset } => {
+            agentic_super_app_code_domain::apply_layout_preset(&current_layout, *preset)
+                .map_err(|e| validation_error(e.to_string()))?
+        }
+    };
+
+    let saved_layout = foundation
+        .persistence
+        .mutate_code_layout(workspace_id, expected_revision, &mutated_layout)
+        .await
+        .map_err(|e| {
+            if e.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(e)
+            }
+        })?;
+
+    Ok(response(
+        &command.request_id,
+        CodePaneMutationResult {
+            layout: saved_layout,
+        },
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_launch_code_pane_terminal(
+    command: CommandEnvelope<LaunchCodePaneTerminalRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<CodeTerminalEvent>,
+) -> Result<ResponseEnvelope<LaunchCodePaneTerminalResult>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ExecuteProcesses,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&command.payload.workspace_id)
+        .map_err(workspace_error)?;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    let persistence = foundation.persistence.clone();
+    let sink: TerminalEventSink = Arc::new(move |event| {
+        let _ = channel.send(event.clone());
+        if matches!(
+            event.kind,
+            agentic_super_app_protocol::CodeTerminalEventKind::Exited
+        ) {
+            let persistence = persistence.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = persistence
+                    .finish_code_terminal(
+                        &event.terminal_id,
+                        agentic_super_app_protocol::CodeTerminalState::Exited,
+                        event.exit_code,
+                    )
+                    .await;
+            });
+        }
+    });
+
+    let terminal_start = CodeTerminalStartRequest {
+        workspace_id: command.payload.workspace_id.clone(),
+        kind: command.payload.kind,
+        cols: command.payload.cols,
+        rows: command.payload.rows,
+        adapter_id: command.payload.adapter_id.clone(),
+        model: command.payload.model.clone(),
+        resume_session_id: None,
+    };
+
+    let summary = foundation
+        .code_runtime
+        .start(&terminal_start, &root, sink)
+        .map_err(runtime_error)?;
+
+    foundation
+        .persistence
+        .save_code_terminal(&summary)
+        .await
+        .map_err(database_error)?;
+
+    let pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
+        summary
+            .adapter_id
+            .clone()
+            .unwrap_or_else(|| "Coding Agent".to_owned())
+    } else {
+        "Terminal".to_owned()
+    };
+
+    let pane_kind = if summary.kind == CodeTerminalKind::CodingAgent {
+        agentic_super_app_protocol::CodePaneKind::CodingAgent
+    } else {
+        agentic_super_app_protocol::CodePaneKind::Terminal
+    };
+
+    let mut new_layout = current_layout.clone();
+    if let Some(node) = new_layout
+        .nodes
+        .iter_mut()
+        .find(|n| n.pane_id == command.payload.pane_id)
+    {
+        node.kind = pane_kind;
+        node.resource_id = Some(summary.id.clone());
+        node.title = Some(pane_title);
+    } else {
+        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
+            terminal_id: summary.id,
+            force: true,
+        });
+        return Err(validation_error("Target pane was not found."));
+    }
+    new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
+
+    let saved_layout = match foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &new_layout,
+        )
+        .await
+    {
+        Ok(l) => l,
+        Err(err) => {
+            let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
+                terminal_id: summary.id,
+                force: true,
+            });
+            return Err(if err.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(err)
+            });
+        }
+    };
+
+    foundation
+        .audit
+        .record(
+            "code.pane.terminal.launch",
+            "success",
+            "info",
+            Some(&summary.id),
+            Some("docked terminal pane launched"),
+        )
+        .await
+        .map_err(database_error)?;
+
+    Ok(response(
+        &command.request_id,
+        LaunchCodePaneTerminalResult {
+            layout: saved_layout,
+            terminal: summary,
+        },
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_open_code_pane_preview(
+    command: CommandEnvelope<OpenCodePanePreviewRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<OpenCodePanePreviewResult>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::OpenPreview,
+        )
+        .map_err(workspace_error)?;
+
+    let url = validate_preview_url(&command.payload.url)?;
+    let origin = url.origin().ascii_serialization();
+    let preview_id = format!("agentic-preview-{}", uuid::Uuid::now_v7());
+    let preview = CodePreviewSummary {
+        id: preview_id.clone(),
+        workspace_id: command.payload.workspace_id.clone(),
+        url: url.to_string(),
+        origin,
+        state: CodePreviewState::Open,
+    };
+    foundation
+        .persistence
+        .save_code_preview(&preview, now_ms())
+        .await
+        .map_err(database_error)?;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    let mut new_layout = current_layout.clone();
+    let preview_title = url.host_str().unwrap_or("Preview").to_owned();
+    if let Some(node) = new_layout
+        .nodes
+        .iter_mut()
+        .find(|n| n.pane_id == command.payload.pane_id)
+    {
+        node.kind = agentic_super_app_protocol::CodePaneKind::Preview;
+        node.resource_id = Some(preview_id);
+        node.title = Some(preview_title);
+    } else {
+        return Err(validation_error("Target pane was not found."));
+    }
+    new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
+
+    let saved_layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &new_layout,
+        )
+        .await
+        .map_err(|err| {
+            if err.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(err)
+            }
+        })?;
+
+    Ok(response(
+        &command.request_id,
+        OpenCodePanePreviewResult {
+            layout: saved_layout,
+            preview,
+        },
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_code_pane_thread(
+    command: CommandEnvelope<CreateCodePaneThreadRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CreateCodePaneThreadResult>, ApiError> {
+    validate_code_command(&command)?;
+
+    let create_req = ChatCreateRequest {
+        title: Some("Workspace Thread".to_owned()),
+    };
+    let detail = foundation
+        .chat
+        .create(&create_req, Some(&command.request_id))
+        .await
+        .map_err(chat_error)?;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    let mut new_layout = current_layout.clone();
+    let thread_title = detail.title.clone();
+    if let Some(node) = new_layout
+        .nodes
+        .iter_mut()
+        .find(|n| n.pane_id == command.payload.pane_id)
+    {
+        node.kind = agentic_super_app_protocol::CodePaneKind::Thread;
+        node.resource_id = Some(detail.id.clone());
+        node.title = Some(thread_title);
+    } else {
+        return Err(validation_error("Target pane was not found."));
+    }
+    new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
+
+    let saved_layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &new_layout,
+        )
+        .await
+        .map_err(|err| {
+            if err.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(err)
+            }
+        })?;
+
+    Ok(response(
+        &command.request_id,
+        CreateCodePaneThreadResult {
+            layout: saved_layout,
+            conversation: detail,
+        },
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_close_code_pane(
+    command: CommandEnvelope<CloseCodePaneRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodePaneMutationResult>, ApiError> {
+    validate_code_command(&command)?;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    if let Some(pane) = current_layout
+        .nodes
+        .iter()
+        .find(|n| n.pane_id == command.payload.pane_id)
+    {
+        if matches!(
+            pane.kind,
+            agentic_super_app_protocol::CodePaneKind::Terminal
+                | agentic_super_app_protocol::CodePaneKind::CodingAgent
+        ) {
+            if let Some(resource_id) = &pane.resource_id {
+                let is_running = foundation
+                    .code_runtime
+                    .list()
+                    .map_err(runtime_error)?
+                    .into_iter()
+                    .any(|t| {
+                        t.id == *resource_id
+                            && matches!(
+                                t.state,
+                                agentic_super_app_protocol::CodeTerminalState::Running
+                                    | agentic_super_app_protocol::CodeTerminalState::Starting
+                            )
+                    });
+
+                if is_running {
+                    if !command.payload.terminate_running_resource {
+                        return Err(application_error(
+                            "resource_running",
+                            "The terminal in this pane is still running. Stop it or confirm termination.",
+                            RetryClass::AfterUserAction,
+                        ));
+                    } else {
+                        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
+                            terminal_id: resource_id.clone(),
+                            force: true,
+                        });
+                        let _ = foundation
+                            .persistence
+                            .finish_code_terminal(
+                                resource_id,
+                                agentic_super_app_protocol::CodeTerminalState::Interrupted,
+                                None,
+                            )
+                            .await;
+                    }
+                }
+            }
+        }
+    }
+
+    let mutated_layout = agentic_super_app_code_domain::close_pane_and_collapse(
+        &current_layout,
+        &command.payload.pane_id,
+    )
+    .map_err(|e| validation_error(e.to_string()))?;
+
+    let saved_layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &mutated_layout,
+        )
+        .await
+        .map_err(|err| {
+            if err.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(err)
+            }
+        })?;
+
+    Ok(response(
+        &command.request_id,
+        CodePaneMutationResult {
+            layout: saved_layout,
+        },
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_terminal_snapshot(
+    query: CodeTerminalSnapshotQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeTerminalSnapshot, ApiError> {
+    foundation
+        .code_runtime
+        .snapshot(&query.terminal_id)
+        .map_err(runtime_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_stream_code_terminal_events(
+    request: CodeTerminalSubscribeRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+    channel: Channel<CodeTerminalEvent>,
+) -> Result<(), ApiError> {
+    let mut receiver = foundation
+        .code_runtime
+        .subscribe(&request.terminal_id)
+        .map_err(runtime_error)?;
+
+    loop {
+        match receiver.recv().await {
+            Ok(event) => {
+                if event.sequence <= request.after_sequence {
+                    continue;
+                }
+                if channel.send(event).is_err() {
+                    break;
+                }
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                // The renderer will compare the next sequence with its local
+                // cursor and reload the bounded PTY snapshot if a gap exists.
+                continue;
+            }
+            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -3912,6 +4502,13 @@ pub fn run() {
             agentic_super_app_query_code_file,
             agentic_super_app_command_save_code_file,
             agentic_super_app_command_save_code_layout,
+            agentic_super_app_command_apply_code_pane_mutation,
+            agentic_super_app_command_launch_code_pane_terminal,
+            agentic_super_app_command_open_code_pane_preview,
+            agentic_super_app_command_create_code_pane_thread,
+            agentic_super_app_command_close_code_pane,
+            agentic_super_app_query_code_terminal_snapshot,
+            agentic_super_app_stream_code_terminal_events,
             agentic_super_app_query_code_git_status,
             agentic_super_app_query_code_git_diff,
             agentic_super_app_command_start_code_terminal,

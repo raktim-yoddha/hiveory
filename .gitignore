@@ -3,6 +3,7 @@
 /agentic-super-app-renderer/node_modules/
 /agentic-super-app-renderer/dist/
 /agentic-super-app-desktop/src-tauri/target/
+/releases/
 /agentic-super-app-crates/agentic-super-app-protocol/bindings/
 *.log
 .env

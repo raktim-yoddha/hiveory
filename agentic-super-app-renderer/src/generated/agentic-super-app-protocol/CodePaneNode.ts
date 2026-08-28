@@ -2,4 +2,4 @@
 import type { CodePaneKind } from "./CodePaneKind";
 import type { CodePaneOrientation } from "./CodePaneOrientation";
 
-export type CodePaneNode = { pane_id: string, parent_id: string | null, kind: CodePaneKind, orientation: CodePaneOrientation | null, ratio_percent: number | null, children: Array<string>, resource_id: string | null, };
+export type CodePaneNode = { pane_id: string, parent_id: string | null, kind: CodePaneKind, orientation: CodePaneOrientation | null, ratio_percent: number | null, children: Array<string>, resource_id: string | null, title: string | null, };

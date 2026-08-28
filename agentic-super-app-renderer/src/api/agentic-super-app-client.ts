@@ -101,15 +101,37 @@ export type CodeFileNode = { name: string; relative_path: string; kind: CodeFile
 export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
 export type CodeDocumentSummary = { relative_path: string; language: string | null; last_fingerprint: string | null; last_opened_at_unix_ms: number }
 export type CodeDocument = { workspace_id: string; relative_path: string; content: string; language: string | null; fingerprint: string; bytes: number; read_only: boolean; binary: boolean }
-export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty'
+export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty' | 'thread'
 export type CodePaneOrientation = 'horizontal' | 'vertical'
-export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: CodePaneKind; orientation: CodePaneOrientation | null; ratio_percent: number | null; children: string[]; resource_id: string | null }
-export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[] }
+export type CodePanePlacement = 'center' | 'left' | 'right' | 'top' | 'bottom'
+export type CodePanePreset = 'equal_columns' | 'equal_rows' | 'main_left' | 'main_top' | 'grid' | 'tidy'
+export type CodePaneMutation =
+  | { type: 'split'; pane_id: string; placement: CodePanePlacement }
+  | { type: 'rename'; pane_id: string; title: string }
+  | { type: 'move'; pane_id: string; target_pane_id: string; placement: CodePanePlacement }
+  | { type: 'resize'; split_id: string; ratio_percent: number }
+  | { type: 'focus'; pane_id: string }
+  | { type: 'maximize'; pane_id: string | null }
+  | { type: 'apply_preset'; preset: CodePanePreset }
+
+export type CodePaneMutationRequest = { workspace_id: string; expected_revision: number; mutation: CodePaneMutation }
+export type CodePaneMutationResult = { layout: CodePaneLayout }
+export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; cols: number; rows: number }
+export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
+export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
+export type OpenCodePanePreviewResult = { layout: CodePaneLayout; preview: CodePreviewSummary }
+export type CreateCodePaneThreadRequest = { workspace_id: string; pane_id: string; expected_revision: number }
+export type CreateCodePaneThreadResult = { layout: CodePaneLayout; conversation: ChatConversationDetail }
+export type CloseCodePaneRequest = { workspace_id: string; pane_id: string; expected_revision: number; terminate_running_resource: boolean }
+export type CodeTerminalSnapshot = { summary: CodeTerminalSummary; cols: number; rows: number; output_base64: string; sequence: number }
+
+export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: CodePaneKind; orientation: CodePaneOrientation | null; ratio_percent: number | null; children: string[]; resource_id: string | null; title?: string | null }
+export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[]; revision?: number; focused_pane_id?: string | null; maximized_pane_id?: string | null }
 export type CodeTerminalKind = 'shell' | 'coding_agent'
 export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted'
 export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
-export type CodeTerminalEvent = { terminal_id: string; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
+export type CodeTerminalEvent = { terminal_id: string; sequence: number; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
 export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
 export type CodeAdapterSummary = { id: string; display_name: string; executable: string; detected: boolean; authenticated: boolean; capabilities: CodeAdapterCapability[] }
 export type CodeGitFileStatus = { relative_path: string; status: string; staged: boolean; conflict: boolean }
@@ -189,7 +211,8 @@ type CodeSaveLayoutRequest = { workspace_id: string; layout: CodePaneLayout }
 type CodeGitStatusRequest = { workspace_id: string }
 type CodeGitDiffRequest = { workspace_id: string; relative_path: string | null }
 type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; resume_session_id: string | null }
-type CodeTerminalInputRequest = { terminal_id: string; data: string }
+type CodeTerminalInputRequest = { terminal_id: string; data_base64: string }
+type CodeTerminalInput = { terminal_id: string; data: string }
 type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
 type CodeTerminalStopRequest = { terminal_id: string; force: boolean }
 type CodePreviewRequest = { workspace_id: string; url: string }
@@ -216,6 +239,16 @@ export type CodeCheckpointDiffRequest = { run_id: string; checkpoint_id: string;
 const protocol: ProtocolVersion = { major: 2, minor: 0, patch: 0 }
 const agenticSuperAppIsTauri = '__TAURI_INTERNALS__' in window
 const previewProvider: ProviderAccountSummary = { id: 'agentic-super-app-openai', display_name: 'OpenAI Responses', default_model: 'gpt-5.6-mini', secret_configured: false, enabled: true }
+
+function encodeTerminalInput(data: string): string {
+  const bytes = new TextEncoder().encode(data)
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize))
+  }
+  return btoa(binary)
+}
 const previewConversations = new Map<string, ChatConversationDetail>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
@@ -257,14 +290,122 @@ function previewResponse<T>(payload: T): Promise<T> { return Promise.resolve(pay
 function previewCodeLayout(workspaceId: string): CodePaneLayout {
   return {
     workspace_id: workspaceId,
-    version: 1,
+    version: 2,
     root_id: 'root',
     nodes: [
-      { pane_id: 'root', parent_id: null, kind: 'empty', orientation: 'horizontal', ratio_percent: 24, children: ['editor', 'terminal'], resource_id: null },
-      { pane_id: 'editor', parent_id: 'root', kind: 'editor', orientation: null, ratio_percent: null, children: [], resource_id: null },
-      { pane_id: 'terminal', parent_id: 'root', kind: 'terminal', orientation: null, ratio_percent: null, children: [], resource_id: null },
+      { pane_id: 'root', parent_id: null, kind: 'empty', orientation: null, ratio_percent: null, children: [], resource_id: null, title: null },
     ],
+    revision: 0,
+    focused_pane_id: 'root',
+    maximized_pane_id: null,
   }
+}
+
+function previewFindPane(layout: CodePaneLayout, paneId: string): CodePaneNode {
+  const pane = layout.nodes.find((node) => node.pane_id === paneId)
+  if (!pane) throw new Error(`Pane ${paneId} was not found.`)
+  return pane
+}
+
+function previewCommitLayout(
+  workspace: { detail: CodeWorkspaceDetail },
+  mutate: (layout: CodePaneLayout) => void,
+): CodePaneLayout {
+  const layout = structuredClone(workspace.detail.layout)
+  mutate(layout)
+  layout.revision = (layout.revision ?? 0) + 1
+  workspace.detail.layout = layout
+  return structuredClone(layout)
+}
+
+function previewBindPane(
+  layout: CodePaneLayout,
+  paneId: string,
+  kind: CodePaneKind,
+  resourceId: string,
+  title: string,
+) {
+  const pane = previewFindPane(layout, paneId)
+  if (pane.children.length) throw new Error('Only leaf panes can hold a resource.')
+  pane.kind = kind
+  pane.resource_id = resourceId
+  pane.title = title
+  layout.focused_pane_id = paneId
+  layout.maximized_pane_id = null
+}
+
+function previewSplitPane(layout: CodePaneLayout, paneId: string, placement: CodePanePlacement) {
+  const target = previewFindPane(layout, paneId)
+  if (target.children.length) throw new Error('Only leaf panes can be split.')
+  const parentId = target.parent_id
+  const splitId = previewId('split')
+  const newPaneId = previewId('pane')
+  const orientation: CodePaneOrientation = placement === 'top' || placement === 'bottom' ? 'vertical' : 'horizontal'
+  const children = placement === 'left' || placement === 'top' ? [newPaneId, paneId] : [paneId, newPaneId]
+
+  target.parent_id = splitId
+  if (parentId) {
+    const parent = previewFindPane(layout, parentId)
+    parent.children = parent.children.map((child) => child === paneId ? splitId : child)
+  } else {
+    layout.root_id = splitId
+  }
+  layout.nodes.push(
+    { pane_id: splitId, parent_id: parentId, kind: 'empty', orientation, ratio_percent: 50, children, resource_id: null, title: null },
+    { pane_id: newPaneId, parent_id: splitId, kind: 'empty', orientation: null, ratio_percent: null, children: [], resource_id: null, title: null },
+  )
+  layout.focused_pane_id = newPaneId
+  layout.maximized_pane_id = null
+}
+
+function previewDetachPane(layout: CodePaneLayout, paneId: string): CodePaneNode {
+  const target = previewFindPane(layout, paneId)
+  if (target.children.length) throw new Error('Only leaf panes can move.')
+  const detached = structuredClone(target)
+  const parentId = target.parent_id
+  if (!parentId) {
+    throw new Error('The root pane cannot be detached.')
+  }
+  const parent = previewFindPane(layout, parentId)
+  const siblingId = parent.children.find((child) => child !== paneId)
+  if (!siblingId) throw new Error('The pane split is missing its sibling.')
+  const grandparentId = parent.parent_id
+  const sibling = previewFindPane(layout, siblingId)
+  sibling.parent_id = grandparentId
+  if (grandparentId) {
+    const grandparent = previewFindPane(layout, grandparentId)
+    grandparent.children = grandparent.children.map((child) => child === parentId ? siblingId : child)
+  } else {
+    layout.root_id = siblingId
+  }
+  layout.nodes = layout.nodes.filter((node) => node.pane_id !== paneId && node.pane_id !== parentId)
+  detached.parent_id = null
+  return detached
+}
+
+function previewDockPane(layout: CodePaneLayout, detached: CodePaneNode, targetPaneId: string, placement: CodePanePlacement) {
+  const target = previewFindPane(layout, targetPaneId)
+  if (target.children.length) throw new Error('Only leaf panes can receive a moved pane.')
+  const parentId = target.parent_id
+  const splitId = previewId('split')
+  const orientation: CodePaneOrientation = placement === 'top' || placement === 'bottom' ? 'vertical' : 'horizontal'
+  const children = placement === 'left' || placement === 'top' ? [detached.pane_id, targetPaneId] : [targetPaneId, detached.pane_id]
+  target.parent_id = splitId
+  detached.parent_id = splitId
+  if (parentId) {
+    const parent = previewFindPane(layout, parentId)
+    parent.children = parent.children.map((child) => child === targetPaneId ? splitId : child)
+  } else {
+    layout.root_id = splitId
+  }
+  layout.nodes.push({ pane_id: splitId, parent_id: parentId, kind: 'empty', orientation, ratio_percent: 50, children, resource_id: null, title: null }, detached)
+  layout.focused_pane_id = detached.pane_id
+  layout.maximized_pane_id = null
+}
+
+function previewReplaceWithEmpty(layout: CodePaneLayout) {
+  const empty = previewCodeLayout(layout.workspace_id)
+  Object.assign(layout, empty)
 }
 function previewCodeWorkspace(path: string): { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> } {
   const id = previewId('workspace')
@@ -575,6 +716,144 @@ export const agenticSuperAppClient = {
     workspace.detail.layout = structuredClone(request.layout)
     return structuredClone(request.layout)
   },
+  async applyCodePaneMutation(request: CodePaneMutationRequest): Promise<CodePaneMutationResult> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodePaneMutationRequest, CodePaneMutationResult>('agentic_super_app_command_apply_code_pane_mutation', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if ((workspace.detail.layout.revision ?? 0) !== request.expected_revision) throw new Error('layout_conflict')
+    const layout = previewCommitLayout(workspace, (next) => {
+      switch (request.mutation.type) {
+        case 'split':
+          previewSplitPane(next, request.mutation.pane_id, request.mutation.placement)
+          break
+        case 'rename': {
+          const pane = previewFindPane(next, request.mutation.pane_id)
+          if (pane.children.length) throw new Error('Only leaf panes can be renamed.')
+          const title = request.mutation.title.trim()
+          if (!title || title.length > 80) throw new Error('Pane title must be between 1 and 80 characters.')
+          pane.title = title
+          break
+        }
+        case 'move': {
+          const source = previewFindPane(next, request.mutation.pane_id)
+          const target = previewFindPane(next, request.mutation.target_pane_id)
+          if (source.children.length || target.children.length) throw new Error('Only leaf panes can move.')
+          if (request.mutation.placement === 'center') {
+            const sourceContent = { kind: source.kind, resource_id: source.resource_id, title: source.title }
+            source.kind = target.kind
+            source.resource_id = target.resource_id
+            source.title = target.title
+            target.kind = sourceContent.kind
+            target.resource_id = sourceContent.resource_id
+            target.title = sourceContent.title
+            next.focused_pane_id = target.pane_id
+          } else {
+            const detached = previewDetachPane(next, source.pane_id)
+            previewDockPane(next, detached, target.pane_id, request.mutation.placement)
+          }
+          break
+        }
+        case 'resize': {
+          const split = previewFindPane(next, request.mutation.split_id)
+          if (split.children.length !== 2) throw new Error('Only split panes can be resized.')
+          split.ratio_percent = Math.max(10, Math.min(90, Math.round(request.mutation.ratio_percent)))
+          break
+        }
+        case 'focus':
+          previewFindPane(next, request.mutation.pane_id)
+          next.focused_pane_id = request.mutation.pane_id
+          break
+        case 'maximize':
+          if (request.mutation.pane_id) {
+            const pane = previewFindPane(next, request.mutation.pane_id)
+            if (pane.children.length) throw new Error('Only leaf panes can be maximized.')
+          }
+          next.maximized_pane_id = request.mutation.pane_id
+          if (request.mutation.pane_id) next.focused_pane_id = request.mutation.pane_id
+          break
+        case 'apply_preset':
+          // The preview keeps the existing tree but still records the action;
+          // native hosts apply the full deterministic preset topology.
+          next.maximized_pane_id = null
+          break
+      }
+    })
+    return { layout }
+  },
+  async launchCodePaneTerminal(request: LaunchCodePaneTerminalRequest, onEvent?: (event: CodeTerminalEvent) => void): Promise<LaunchCodePaneTerminalResult> {
+    if (agenticSuperAppIsTauri) {
+      const channel = new Channel<CodeTerminalEvent>(onEvent ?? (() => undefined))
+      const result = await invoke<ResponseEnvelope<LaunchCodePaneTerminalResult>>('agentic_super_app_command_launch_code_pane_terminal', { command: envelope(request), channel })
+      return unwrap(result)
+    }
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
+    const id = previewId('terminal')
+    const now = previewNow()
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, request.kind === 'coding_agent' ? 'coding_agent' : 'terminal', id, request.kind === 'coding_agent' ? (request.adapter_id ?? 'Coding Agent') : 'Terminal'))
+    onEvent?.({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
+    onEvent?.({ terminal_id: id, sequence: 2, kind: 'output', data_base64: btoa('Preview terminal ready.\r\n'), exit_code: null, message: null, emitted_at_unix_ms: now })
+    return { layout, terminal: summary }
+  },
+  async openCodePanePreview(request: OpenCodePanePreviewRequest): Promise<OpenCodePanePreviewResult> {
+    if (agenticSuperAppIsTauri) return tauriCommand<OpenCodePanePreviewRequest, OpenCodePanePreviewResult>('agentic_super_app_command_open_code_pane_preview', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before opening a preview.')
+    const url = new URL(request.url)
+    const preview: CodePreviewSummary = { id: previewId('preview'), workspace_id: request.workspace_id, url: url.toString(), origin: url.origin, state: 'open' }
+    workspace.detail.previews = [preview, ...workspace.detail.previews]
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'preview', preview.id, 'Preview'))
+    return { layout, preview }
+  },
+  async createCodePaneThread(request: CreateCodePaneThreadRequest): Promise<CreateCodePaneThreadResult> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CreateCodePaneThreadRequest, CreateCodePaneThreadResult>('agentic_super_app_command_create_code_pane_thread', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before creating a thread.')
+    const conversation = previewDetail('Workspace Thread')
+    previewConversations.set(conversation.id, conversation)
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'thread', conversation.id, 'Thread'))
+    return { layout, conversation }
+  },
+  async closeCodePane(request: CloseCodePaneRequest): Promise<CodePaneMutationResult> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CloseCodePaneRequest, CodePaneMutationResult>('agentic_super_app_command_close_code_pane', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    const node = previewFindPane(workspace.detail.layout, request.pane_id)
+    if (node.resource_id) {
+      workspace.detail.terminals = workspace.detail.terminals.filter((terminal) => terminal.id !== node.resource_id)
+      workspace.detail.previews = workspace.detail.previews.filter((preview) => preview.id !== node.resource_id)
+    }
+    const layout = previewCommitLayout(workspace, (next) => {
+      const leaves = next.nodes.filter((item) => item.children.length === 0)
+      if (leaves.length <= 1) previewReplaceWithEmpty(next)
+      else previewDetachPane(next, request.pane_id)
+    })
+    return { layout }
+  },
+  async getCodeTerminalSnapshot(terminalId: string): Promise<CodeTerminalSnapshot> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeTerminalSnapshot>('agentic_super_app_query_code_terminal_snapshot', { query: { terminal_id: terminalId } })
+    const previewTerminal = [...previewCodeWorkspaces.values()].flatMap((item) => item.detail.terminals).find((terminal) => terminal.id === terminalId)
+    return {
+      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
+      cols: 80,
+      rows: 24,
+      output_base64: btoa('Preview terminal snapshot\r\n'),
+      sequence: 1,
+    }
+  },
+  subscribeCodeTerminalEvents(terminalId: string, afterSequence: number, onEvent: (event: CodeTerminalEvent) => void): () => void {
+    if (agenticSuperAppIsTauri) {
+      const channel = new Channel<CodeTerminalEvent>(onEvent)
+      void invoke('agentic_super_app_stream_code_terminal_events', { request: { terminal_id: terminalId, after_sequence: afterSequence }, channel })
+      return () => undefined
+    }
+    return () => undefined
+  },
   async codeGitStatus(request: CodeGitStatusRequest): Promise<CodeGitStatus> {
     if (agenticSuperAppIsTauri) return tauriQuery<CodeGitStatus>('agentic_super_app_query_code_git_status', { request })
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before reading Git status.')
@@ -600,11 +879,14 @@ export const agenticSuperAppClient = {
     const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
-    onEvent({ terminal_id: id, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
-    setTimeout(() => onEvent({ terminal_id: id, kind: 'output', data_base64: btoa('Phase 4 preview terminal ready.\r\n'), exit_code: null, message: null, emitted_at_unix_ms: previewNow() }), 20)
+    onEvent({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
+    setTimeout(() => onEvent({ terminal_id: id, sequence: 2, kind: 'output', data_base64: btoa('Preview terminal ready.\r\n'), exit_code: null, message: null, emitted_at_unix_ms: previewNow() }), 20)
     return summary
   },
-  async writeCodeTerminal(request: CodeTerminalInputRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalInputRequest, boolean>('agentic_super_app_command_write_code_terminal', request) : true },
+  async writeCodeTerminal(request: CodeTerminalInput): Promise<boolean> {
+    const payload: CodeTerminalInputRequest = { terminal_id: request.terminal_id, data_base64: encodeTerminalInput(request.data) }
+    return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalInputRequest, boolean>('agentic_super_app_command_write_code_terminal', payload) : true
+  },
   async resizeCodeTerminal(request: CodeTerminalResizeRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalResizeRequest, boolean>('agentic_super_app_command_resize_code_terminal', request) : true },
   async stopCodeTerminal(request: CodeTerminalStopRequest): Promise<boolean> { return agenticSuperAppIsTauri ? tauriCommand<CodeTerminalStopRequest, boolean>('agentic_super_app_command_stop_code_terminal', request) : true },
   async openCodePreview(request: CodePreviewRequest): Promise<CodePreviewSummary> {
