@@ -12,8 +12,8 @@ use agentic_super_app_code_orchestration::{
     AgenticSuperAppCodeOrchestration, AgenticSuperAppCodeOrchestrationError,
 };
 use agentic_super_app_code_runtime::{
-    AgenticSuperAppCodeRuntime, AgenticSuperAppCodeRuntimeError, TerminalEventSink,
-    CODEX_ADAPTER_ID,
+    stream_cli_chat_turn, AgenticSuperAppCodeRuntime, AgenticSuperAppCodeRuntimeError,
+    TerminalEventSink,
 };
 use agentic_super_app_git_service::{AgenticSuperAppGitError, AgenticSuperAppGitService};
 use agentic_super_app_job_runtime::AgenticSuperAppJobRuntime;
@@ -1822,18 +1822,6 @@ async fn agentic_super_app_command_start_code_terminal(
             agentic_super_app_protocol::CodeWorkspaceCapability::ExecuteProcesses,
         )
         .map_err(workspace_error)?;
-    if command.payload.kind == agentic_super_app_protocol::CodeTerminalKind::CodingAgent
-        && command
-            .payload
-            .adapter_id
-            .as_deref()
-            .unwrap_or(CODEX_ADAPTER_ID)
-            != CODEX_ADAPTER_ID
-    {
-        return Err(validation_error(
-            "Only the configured Codex adapter is available in Code mode.",
-        ));
-    }
     let root = foundation
         .code_workspaces
         .root_path(&command.payload.workspace_id)
@@ -1937,7 +1925,6 @@ async fn agentic_super_app_command_stop_code_terminal(
 
 #[tauri::command]
 async fn agentic_super_app_command_open_code_preview(
-    app: tauri::AppHandle,
     command: CommandEnvelope<CodePreviewRequest>,
     foundation: State<'_, AgenticSuperAppFoundation>,
 ) -> Result<ResponseEnvelope<CodePreviewSummary>, ApiError> {
@@ -1952,23 +1939,6 @@ async fn agentic_super_app_command_open_code_preview(
     let url = validate_preview_url(&command.payload.url)?;
     let origin = url.origin().ascii_serialization();
     let label = format!("agentic-preview-{}", uuid::Uuid::now_v7());
-    let allowed_origin = origin.clone();
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        &label,
-        tauri::utils::config::WebviewUrl::External(url.clone()),
-    )
-    .title("Local preview")
-    .on_navigation(move |next| next.origin().ascii_serialization() == allowed_origin)
-    .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
-    .build()
-    .map_err(|error| {
-        application_error(
-            "preview_open_failed",
-            error.to_string(),
-            RetryClass::AfterUserAction,
-        )
-    })?;
     let preview = CodePreviewSummary {
         id: label,
         workspace_id: command.payload.workspace_id.clone(),
@@ -1988,7 +1958,7 @@ async fn agentic_super_app_command_open_code_preview(
             "success",
             "info",
             Some(&preview.origin),
-            Some("isolated auxiliary webview with same-origin navigation policy"),
+            Some("host-validated sandboxed renderer iframe with credential-free URL policy"),
         )
         .await
         .map_err(database_error)?;
@@ -2172,6 +2142,35 @@ async fn agentic_super_app_command_delete_chat_attachment(
     Ok(response(&command.request_id, true))
 }
 
+async fn resolve_chat_engine_secret(
+    foundation: &AgenticSuperAppFoundation,
+    engine_id: &str,
+    action: &str,
+) -> Result<Option<String>, ApiError> {
+    if engine_id == AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID {
+        return foundation
+            .persistence
+            .provider_secret_ref()
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error(format!("Store an API key before {action}.")))
+            .map(Some);
+    }
+    let adapter = foundation
+        .code_runtime
+        .adapters()
+        .into_iter()
+        .find(|adapter| adapter.id == engine_id)
+        .ok_or_else(|| validation_error("Unknown local engine."))?;
+    if !adapter.detected {
+        return Err(validation_error(format!(
+            "{} was not detected on this host. Install it and restart the app before {action}.",
+            adapter.display_name
+        )));
+    }
+    Ok(None)
+}
+
 #[tauri::command]
 async fn agentic_super_app_command_start_chat_turn(
     command: CommandEnvelope<ChatSendRequest>,
@@ -2179,9 +2178,6 @@ async fn agentic_super_app_command_start_chat_turn(
 ) -> Result<ResponseEnvelope<ChatConversationDetail>, ApiError> {
     validate_chat_command(&command)?;
     validate_send_request(&command.payload).map_err(|error| validation_error(error.to_string()))?;
-    if command.payload.provider_account_id != AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID {
-        return Err(validation_error("Unknown provider account."));
-    }
     if let Some(existing) = foundation
         .chat
         .turn_for_command(&command.request_id)
@@ -2197,12 +2193,8 @@ async fn agentic_super_app_command_start_chat_turn(
                 .map_err(chat_error)?,
         ));
     }
-    let secret = foundation
-        .persistence
-        .provider_secret_ref()
-        .await
-        .map_err(database_error)?
-        .ok_or_else(|| validation_error("Store an API key before starting a chat."))?;
+    let engine_id = command.payload.provider_account_id.clone();
+    let secret = resolve_chat_engine_secret(&foundation, &engine_id, "starting a chat").await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn")
@@ -2266,6 +2258,7 @@ async fn agentic_super_app_command_start_chat_turn(
         runtime,
         start,
         secret,
+        engine_id,
         command.payload.model.clone(),
         command.payload.reasoning_effort,
         cancellation,
@@ -2326,20 +2319,31 @@ async fn agentic_super_app_command_retry_chat_turn(
                 .map_err(chat_error)?,
         ));
     }
-    let account = foundation
-        .persistence
-        .provider_accounts()
+    let (engine_id, stored_model) = foundation
+        .chat
+        .turn_configuration(&command.payload.conversation_id, &command.payload.turn_id)
         .await
-        .map_err(database_error)?
-        .into_iter()
-        .find(|account| account.id == AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID)
-        .ok_or_else(|| validation_error("Provider account is unavailable."))?;
+        .map_err(chat_error)?
+        .ok_or_else(|| validation_error("The chat turn configuration is unavailable."))?;
+    let default_model = if engine_id == AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID {
+        foundation
+            .persistence
+            .provider_accounts()
+            .await
+            .map_err(database_error)?
+            .into_iter()
+            .find(|account| account.id == AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID)
+            .and_then(|account| account.default_model)
+    } else {
+        None
+    };
     let model = command
         .payload
         .model
         .clone()
-        .or(account.default_model)
-        .ok_or_else(|| validation_error("Select a model before retrying."))?;
+        .or_else(|| (!stored_model.trim().is_empty()).then_some(stored_model))
+        .or(default_model)
+        .unwrap_or_else(|| "default".to_owned());
     let effort = command
         .payload
         .reasoning_effort
@@ -2349,16 +2353,11 @@ async fn agentic_super_app_command_retry_chat_turn(
         branch_id: String::new(),
         text: String::new(),
         attachment_ids: Vec::new(),
-        provider_account_id: AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
+        provider_account_id: engine_id.clone(),
         model,
         reasoning_effort: effort,
     };
-    let secret = foundation
-        .persistence
-        .provider_secret_ref()
-        .await
-        .map_err(database_error)?
-        .ok_or_else(|| validation_error("Store an API key before retrying a chat."))?;
+    let secret = resolve_chat_engine_secret(&foundation, &engine_id, "retrying a chat").await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn_retry")
@@ -2414,6 +2413,7 @@ async fn agentic_super_app_command_retry_chat_turn(
         runtime,
         start,
         secret,
+        engine_id,
         request.model,
         request.reasoning_effort,
         cancellation,
@@ -2452,12 +2452,8 @@ async fn agentic_super_app_command_edit_chat_message(
                 .map_err(chat_error)?,
         ));
     }
-    let secret = foundation
-        .persistence
-        .provider_secret_ref()
-        .await
-        .map_err(database_error)?
-        .ok_or_else(|| validation_error("Store an API key before editing a chat."))?;
+    let engine_id = command.payload.provider_account_id.clone();
+    let secret = resolve_chat_engine_secret(&foundation, &engine_id, "editing a chat").await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn_edit")
@@ -2507,6 +2503,7 @@ async fn agentic_super_app_command_edit_chat_message(
         runtime,
         start,
         secret,
+        engine_id,
         command.payload.model.clone(),
         command.payload.reasoning_effort,
         cancellation,
@@ -2613,7 +2610,8 @@ async fn agentic_super_app_stream_chat_events(
 async fn run_chat_turn(
     foundation: AgenticSuperAppFoundation,
     start: agentic_super_app_persistence::chat::AgenticSuperAppChatTurnStart,
-    secret: String,
+    secret: Option<String>,
+    engine_id: String,
     model: String,
     reasoning_effort: ChatReasoningEffort,
     cancellation: CancellationToken,
@@ -2661,9 +2659,14 @@ async fn run_chat_turn(
     let callback = Arc::new(move |event: ChatProviderStreamEvent| {
         let _ = sender.send(event);
     });
-    let provider = foundation.provider.clone();
-    let provider_future =
-        provider.stream_chat_turn(&secret, request, cancellation.clone(), callback);
+    let provider_future = stream_chat_engine(
+        &foundation,
+        &engine_id,
+        secret.as_deref(),
+        request,
+        cancellation.clone(),
+        callback,
+    );
     let chat = foundation.chat.clone();
     let events = foundation.chat_events.clone();
     let conversation_id = start.conversation_id.clone();
@@ -2750,6 +2753,34 @@ async fn run_chat_turn(
         .chat_cancellations
         .lock()
         .map(|mut values| values.remove(&start.turn_id));
+}
+
+async fn stream_chat_engine(
+    foundation: &AgenticSuperAppFoundation,
+    engine_id: &str,
+    secret: Option<&str>,
+    request: ChatModelTurnRequest,
+    cancellation: CancellationToken,
+    callback: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static>,
+) -> Result<(), AgenticSuperAppProviderError> {
+    if engine_id == AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID {
+        return foundation
+            .provider
+            .stream_chat_turn(
+                secret.ok_or(AgenticSuperAppProviderError::CredentialsUnavailable)?,
+                request,
+                cancellation,
+                callback,
+            )
+            .await;
+    }
+    let prompt = render_chat_cli_prompt(&request);
+    stream_cli_chat_turn(engine_id, &request.model, &prompt, cancellation, callback)
+        .await
+        .map_err(|error| match error {
+            AgenticSuperAppCodeRuntimeError::Cancelled => AgenticSuperAppProviderError::Cancelled,
+            other => AgenticSuperAppProviderError::Request(other.to_string()),
+        })
 }
 
 async fn finish_chat_turn_with_error(
@@ -2855,6 +2886,55 @@ async fn build_chat_model_request(
         reasoning_effort,
         messages,
     })
+}
+
+fn render_chat_cli_prompt(request: &ChatModelTurnRequest) -> String {
+    const MAX_PROMPT_BYTES: usize = 180 * 1024;
+    let mut prompt = String::from(
+        "You are responding in a focused desktop chat. Tools, file access, and workspace edits are disabled. Use the conversation below as context and answer the latest user message directly.\n\n",
+    );
+    for message in &request.messages {
+        prompt.push_str("[ ");
+        prompt.push_str(&format!("{:?}", message.role).to_lowercase());
+        prompt.push_str(" ]\n");
+        for part in &message.parts {
+            if let Some(text) = part.text.as_deref().filter(|text| !text.is_empty()) {
+                prompt.push_str(text);
+                prompt.push('\n');
+            } else if part.kind == "file" {
+                if let Some(data_url) = part.data_url.as_deref() {
+                    if let Some(encoded) = data_url.split_once(",").map(|(_, value)| value) {
+                        if let Ok(bytes) = STANDARD.decode(encoded) {
+                            if let Ok(text) = String::from_utf8(bytes) {
+                                prompt.push_str("[Attached text content]\n");
+                                prompt.push_str(&text.chars().take(32_000).collect::<String>());
+                                prompt.push('\n');
+                                continue;
+                            }
+                        }
+                    }
+                }
+                prompt.push_str("[Attached file content is not representable as text]\n");
+            } else if let Some(file_name) = part.file_name.as_deref() {
+                prompt.push_str("[Attached ");
+                prompt.push_str(part.kind.as_str());
+                prompt.push_str(": ");
+                prompt.push_str(file_name);
+                if let Some(mime_type) = part.mime_type.as_deref() {
+                    prompt.push_str(" ( ");
+                    prompt.push_str(mime_type);
+                    prompt.push_str(" )");
+                }
+                prompt.push_str("]\n");
+            }
+        }
+        prompt.push('\n');
+    }
+    if prompt.len() > MAX_PROMPT_BYTES {
+        prompt.truncate(MAX_PROMPT_BYTES);
+        prompt.push_str("\n\n[Earlier context was truncated by the local chat safety limit.]");
+    }
+    prompt
 }
 
 fn validate_chat_command<T>(command: &CommandEnvelope<T>) -> Result<(), ApiError> {
@@ -2963,6 +3043,10 @@ fn runtime_error(error: AgenticSuperAppCodeRuntimeError) -> ApiError {
         AgenticSuperAppCodeRuntimeError::UnsupportedAdapter => (
             "code_adapter_unavailable",
             "The requested coding-agent adapter is unavailable.",
+        ),
+        AgenticSuperAppCodeRuntimeError::Cancelled => (
+            "terminal_cancelled",
+            "The coding-agent process was cancelled.",
         ),
         AgenticSuperAppCodeRuntimeError::TerminalNotFound => (
             "terminal_not_found",

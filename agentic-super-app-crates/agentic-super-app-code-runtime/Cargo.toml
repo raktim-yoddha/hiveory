@@ -9,5 +9,8 @@ agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
 base64.workspace = true
 libc.workspace = true
 portable-pty.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
 uuid.workspace = true

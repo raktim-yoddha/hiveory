@@ -148,7 +148,10 @@ dependencies = [
  "base64 0.22.1",
  "libc",
  "portable-pty",
+ "serde_json",
  "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
  "uuid",
 ]
 

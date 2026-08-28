@@ -9,11 +9,14 @@ import {
   type CodeRunSummary,
   type CodeTask,
   type CodeTerminalEvent,
+  type CodeAdapterSummary,
   type CodeWorkspaceSummary,
 } from '../api/agentic-super-app-client'
 
 export function AgenticSuperAppCodeRuns() {
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
+  const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
+  const [selectedAdapterId, setSelectedAdapterId] = useState('codex-cli')
   const [runs, setRuns] = useState<CodeRunSummary[]>([])
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [detail, setDetail] = useState<CodeRunDetail | null>(null)
@@ -50,7 +53,7 @@ export function AgenticSuperAppCodeRuns() {
   }, [])
 
   useEffect(() => {
-    void agenticSuperAppClient.codeSnapshot().then((snapshot) => { setWorkspaces(snapshot.workspaces); return loadRuns() }).catch((error) => setFeedback(error instanceof Error ? error.message : 'Runs could not be loaded.'))
+    void agenticSuperAppClient.codeSnapshot().then((snapshot) => { setWorkspaces(snapshot.workspaces); setAdapters(snapshot.adapters); setSelectedAdapterId((current) => snapshot.adapters.find((item) => item.id === current && item.detected)?.id ?? snapshot.adapters.find((item) => item.detected)?.id ?? current); return loadRuns() }).catch((error) => setFeedback(error instanceof Error ? error.message : 'Runs could not be loaded.'))
   }, [loadRuns])
 
   useEffect(() => {
@@ -78,7 +81,7 @@ export function AgenticSuperAppCodeRuns() {
     if (!selectedWorkspace) { setFeedback('Open a workspace from Workbench before creating a run.'); return }
     setBusy('create-run'); setFeedback(null)
     try {
-      const nextDetail = await agenticSuperAppClient.createCodeRun({ workspace_id: selectedWorkspace.id, title, objective, review_policy: 'manual', concurrency_limit: 2, model: null })
+      const nextDetail = await agenticSuperAppClient.createCodeRun({ workspace_id: selectedWorkspace.id, title, objective, review_policy: 'manual', concurrency_limit: 2, model: null, adapter_id: selectedAdapterId })
       setDetail(nextDetail); setSelectedRunId(nextDetail.summary.id); setRuns((items) => [nextDetail.summary, ...items]); setTitle('New implementation run'); setObjective('Describe the coding objective for this run.')
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'The run could not be created.') }
     finally { setBusy(null) }
@@ -161,7 +164,7 @@ export function AgenticSuperAppCodeRuns() {
     <div className="agentic-super-app-runs-layout">
       <aside className="agentic-super-app-runs-sidebar" aria-label="Code runs">
         <div className="agentic-super-app-runs-sidebar-heading"><span>Run queue</span><span className="agentic-super-app-code-count">{runs.length}</span></div>
-        <div className="agentic-super-app-run-create"><label htmlFor="agentic-super-app-run-title">Run title</label><input id="agentic-super-app-run-title" value={title} onChange={(event) => setTitle(event.target.value)} /><label htmlFor="agentic-super-app-run-objective">Objective</label><textarea id="agentic-super-app-run-objective" rows={4} value={objective} onChange={(event) => setObjective(event.target.value)} /><button onClick={() => void createRun()} disabled={busy !== null || !selectedWorkspace}><Plus size={14} />Create run</button>{!selectedWorkspace && <p>Open a workspace from Workbench first.</p>}</div>
+        <div className="agentic-super-app-run-create"><label htmlFor="agentic-super-app-run-title">Run title</label><input id="agentic-super-app-run-title" value={title} onChange={(event) => setTitle(event.target.value)} /><label htmlFor="agentic-super-app-run-objective">Objective</label><textarea id="agentic-super-app-run-objective" rows={4} value={objective} onChange={(event) => setObjective(event.target.value)} /><label htmlFor="agentic-super-app-run-engine">Worker engine</label><select id="agentic-super-app-run-engine" value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)}>{adapters.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.detected ? ' · ready' : ' · not detected'}</option>)}</select><button onClick={() => void createRun()} disabled={busy !== null || !selectedWorkspace || !adapters.some((item) => item.id === selectedAdapterId && item.detected)}><Plus size={14} />Create run</button>{!selectedWorkspace && <p>Open a workspace from Workbench first.</p>}{selectedWorkspace && !adapters.some((item) => item.id === selectedAdapterId && item.detected) && <p>Install the selected engine before creating a worker run.</p>}</div>
         <div className="agentic-super-app-run-list">{runs.length ? runs.map((run) => <button key={run.id} className={run.id === selectedRunId ? 'is-active' : ''} onClick={() => setSelectedRunId(run.id)}><span className={`agentic-super-app-run-state ${run.state}`} aria-hidden="true" /><span><strong>{run.title}</strong><small>{run.completed_tasks}/{run.task_count} tasks · {run.state.replaceAll('_', ' ')}</small></span></button>) : <div className="agentic-super-app-run-list-empty"><Workflow size={20} /><p>No runs yet. Create one after opening a workspace.</p></div>}</div>
       </aside>
       <main className="agentic-super-app-runs-main">
@@ -169,7 +172,7 @@ export function AgenticSuperAppCodeRuns() {
           <div className="agentic-super-app-runs-toolbar"><div><p className="agentic-super-app-eyebrow">{selectedWorkspace?.display_name ?? 'Workspace'} · {detail.summary.review_policy} review</p><h2>{detail.summary.title}</h2><p>{detail.summary.objective}</p><div className="agentic-super-app-run-meta" aria-label="Run execution metadata"><span>Coordinator <code>{detail.summary.coordinator_id}</code></span><span>Adapter <code>{detail.summary.adapter_id}</code></span><span>Concurrency <code>{detail.summary.active_dispatches}/{Math.min(detail.summary.concurrency_limit, detail.summary.host_concurrency_cap)}</code></span><span>Trust <code>{selectedWorkspace?.trust ?? 'unknown'}</code></span></div></div><div className="agentic-super-app-runs-toolbar-actions"><span className={`agentic-super-app-run-badge ${detail.summary.state}`}>{detail.summary.state.replaceAll('_', ' ')}</span>{['draft', 'ready', 'paused', 'blocked'].includes(detail.summary.state) && <button onClick={() => void runAction('start', () => agenticSuperAppClient.startCodeRun({ run_id: detail.summary.id }))} disabled={busy !== null}><Play size={14} />Start</button>}{detail.summary.state === 'interrupted' && <span className="agentic-super-app-code-muted">Resume each interrupted lane below</span>}{detail.summary.state === 'running' && <button className="is-secondary" onClick={() => void runAction('pause', () => agenticSuperAppClient.pauseCodeRun({ run_id: detail.summary.id }))} disabled={busy !== null}><Pause size={14} />Pause</button>}{!['completed', 'cancelled'].includes(detail.summary.state) && <button className="is-danger" onClick={() => void runAction('cancel', () => agenticSuperAppClient.cancelCodeRun({ run_id: detail.summary.id }))} disabled={busy !== null}><Square size={13} />Cancel</button>}</div></div>
           {feedback && <div className="agentic-super-app-feedback agentic-super-app-runs-feedback" role="status">{feedback}</div>}
           <div className="agentic-super-app-runs-content-grid">
-            <section className="agentic-super-app-run-board" aria-labelledby="agentic-super-app-dag-title"><div className="agentic-super-app-run-section-heading"><div><Workflow size={15} /><h3 id="agentic-super-app-dag-title">Task DAG</h3><span>{detail.tasks.length} tasks</span></div><button className="is-secondary" onClick={() => void propose()} disabled={busy !== null || !selectedWorkspace}><Sparkles size={14} />Draft with Codex</button></div>
+            <section className="agentic-super-app-run-board" aria-labelledby="agentic-super-app-dag-title"><div className="agentic-super-app-run-section-heading"><div><Workflow size={15} /><h3 id="agentic-super-app-dag-title">Task DAG</h3><span>{detail.tasks.length} tasks</span></div><button className="is-secondary" onClick={() => void propose()} disabled={busy !== null || !selectedWorkspace}><Sparkles size={14} />Draft task DAG</button></div>
               {proposal && <div className="agentic-super-app-proposal-card"><div className="agentic-super-app-proposal-heading"><div><Sparkles size={15} /><strong>Structured proposal</strong></div><button className="agentic-super-app-mini-button" onClick={() => setProposal(null)} aria-label="Dismiss proposal"><X size={13} /></button></div><p>Review {proposal.tasks.length} proposed tasks before they become runnable.</p><div className="agentic-super-app-proposal-list">{proposal.tasks.map((task) => <div key={task.client_id}><span className="agentic-super-app-proposal-index">{task.client_id}</span><span><strong>{task.title}</strong><small>{task.depends_on.length ? `Depends on ${task.depends_on.join(', ')}` : 'No dependencies'}</small></span></div>)}</div>{proposal.warnings.map((warning) => <p key={warning} className="agentic-super-app-proposal-warning"><CircleAlert size={13} />{warning}</p>)}<button onClick={() => void acceptProposal()} disabled={busy !== null}><Check size={14} />Accept proposal into run</button></div>}
               <div className="agentic-super-app-dag-list">{detail.tasks.length ? detail.tasks.map((task, index) => <TaskNode key={task.id} task={task} index={index} selected={task.id === selectedTask?.id} dependencies={detail.dependencies.filter((dependency) => dependency.task_id === task.id).map((dependency) => detail.tasks.find((candidate) => candidate.id === dependency.depends_on_task_id)?.client_id ?? dependency.depends_on_task_id)} onSelect={() => setSelectedTaskId(task.id)} />) : <div className="agentic-super-app-run-board-empty"><Bot size={22} /><p>Add a task manually or draft a structured DAG.</p></div>}</div>
             </section>

@@ -85,8 +85,10 @@ const WORKER_ENVIRONMENT_ALLOWLIST: &[&str] = &[
 
 trait CodeWorkerAdapter: Send + Sync {
     fn id(&self) -> &'static str;
+    fn supports(&self, adapter_id: &str) -> bool;
     fn command(
         &self,
+        adapter_id: &str,
         worktree: &Path,
         model: Option<&str>,
         resume_session_id: Option<&str>,
@@ -94,34 +96,74 @@ trait CodeWorkerAdapter: Send + Sync {
 }
 
 #[derive(Debug, Default)]
-struct CodexCliWorkerAdapter;
+struct CliWorkerAdapter;
 
-impl CodeWorkerAdapter for CodexCliWorkerAdapter {
+impl CodeWorkerAdapter for CliWorkerAdapter {
     fn id(&self) -> &'static str {
         CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID
     }
 
+    fn supports(&self, adapter_id: &str) -> bool {
+        matches!(
+            adapter_id,
+            "codex-cli" | "claude-code" | "antigravity" | "opencode"
+        )
+    }
+
     fn command(
         &self,
+        adapter_id: &str,
         worktree: &Path,
         model: Option<&str>,
         resume_session_id: Option<&str>,
     ) -> Command {
-        let mut command = Command::new("codex");
-        command
-            .arg("exec")
-            .arg("--json")
-            .arg("--cd")
-            .arg(worktree)
-            .arg("--approve-for-me");
-        if resume_session_id.is_none() {
-            command.arg("--sandbox").arg("workspace-write");
+        let executable = match adapter_id {
+            "claude-code" => "claude",
+            "antigravity" => "agy",
+            "opencode" => "opencode",
+            _ => "codex",
+        };
+        let mut command = Command::new(executable);
+        match adapter_id {
+            "claude-code" => {
+                command.args([
+                    "-p",
+                    "--output-format",
+                    "stream-json",
+                    "--permission-mode",
+                    "acceptEdits",
+                ]);
+                if let Some(session_id) = resume_session_id {
+                    command.args(["--resume", session_id]);
+                }
+            }
+            "antigravity" => {
+                command.args(["-p", "--output-format", "stream-json"]);
+            }
+            "opencode" => {
+                command.args(["run", "--format", "json", "--dir"]);
+                command.arg(worktree);
+                if let Some(session_id) = resume_session_id {
+                    command.args(["--session", session_id]);
+                }
+            }
+            _ => {
+                command
+                    .arg("exec")
+                    .arg("--json")
+                    .arg("--cd")
+                    .arg(worktree)
+                    .arg("--approve-for-me");
+                if resume_session_id.is_none() {
+                    command.arg("--sandbox").arg("workspace-write");
+                }
+                if let Some(session_id) = resume_session_id {
+                    command.arg("resume").arg(session_id);
+                }
+            }
         }
-        if let Some(model) = model.filter(|value| !value.trim().is_empty()) {
+        if let Some(model) = model.filter(|value| !value.trim().is_empty() && *value != "default") {
             command.arg("--model").arg(model);
-        }
-        if let Some(session_id) = resume_session_id {
-            command.arg("resume").arg(session_id);
         }
         command
     }
@@ -231,7 +273,7 @@ impl AgenticSuperAppCodeOrchestration {
             events,
             scheduled_runs: Arc::new(Mutex::new(HashMap::new())),
             event_lock: Arc::new(Mutex::new(())),
-            worker_adapter: Arc::new(CodexCliWorkerAdapter),
+            worker_adapter: Arc::new(CliWorkerAdapter),
             worker_controls: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -273,7 +315,7 @@ impl AgenticSuperAppCodeOrchestration {
             .as_deref()
             .filter(|value| !value.trim().is_empty())
             .unwrap_or(self.worker_adapter.id());
-        if adapter_id != self.worker_adapter.id() {
+        if !self.worker_adapter.supports(adapter_id) {
             return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
                 format!("worker adapter {adapter_id} is not installed"),
             ));
@@ -1905,6 +1947,7 @@ impl AgenticSuperAppCodeOrchestration {
     ) -> AgenticSuperAppCodeOrchestrationResult<WorkerResult> {
         let prompt = worker_prompt(&launch.task, launch.answer.as_deref());
         let mut command = self.worker_adapter.command(
+            &launch.dispatch.adapter_id,
             Path::new(&launch.worktree.path),
             launch.model.as_deref(),
             launch.resume_session_id.as_deref(),

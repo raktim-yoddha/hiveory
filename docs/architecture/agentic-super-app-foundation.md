@@ -44,7 +44,7 @@ Code is split into explicit host-side boundaries:
 - `agentic-super-app-git-service`: read-only Git status and working-tree diff through `git2`; no commits, worktree mutations, remotes, or credentials are exposed in Phase 4.
 - `agentic-super-app-persistence::code`: workspace trust, pane layouts, recent documents, terminal summaries, and preview metadata. Terminal bytes are not persisted by default.
 
-Opening a folder creates an `Untrusted` workspace. Only an explicit trust command grants write, process, Git-read, and preview capabilities. The main renderer has no filesystem or shell plugin permissions. Local previews use a separate capability-free auxiliary webview with credential-free URL validation and same-origin navigation filtering.
+Opening a folder creates an `Untrusted` workspace. Only an explicit trust command grants write, process, Git-read, and preview capabilities. The main renderer has no filesystem or shell plugin permissions. Local previews load in a sandboxed docked iframe after host-side credential-free URL validation; the iframe is restricted by the Tauri `frame-src` policy and cannot open new windows through the preview surface.
 
 ## Phase 5 Code orchestration
 

@@ -34,6 +34,7 @@ import {
   type ChatMessagePart,
   type ChatReasoningEffort,
   type ChatTurnSummary,
+  type CodeAdapterSummary,
   type DiagnosticSnapshot,
 } from '../api/agentic-super-app-client'
 
@@ -56,6 +57,7 @@ export function AgenticSuperAppChat() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<ChatConversationDetail | null>(null)
   const [snapshot, setSnapshot] = useState<DiagnosticSnapshot>({ providers: [], recent_jobs: [], notifications: [], recovery_message: null })
+  const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<ChatAttachmentSummary[]>([])
   const [model, setModel] = useState(modelFallback)
@@ -71,7 +73,10 @@ export function AgenticSuperAppChat() {
   const transcriptRef = useRef<HTMLElement | null>(null)
   const eventCursorRef = useRef(0)
 
-  const provider = snapshot.providers.find((item) => item.id === providerId) ?? snapshot.providers[0]
+  const provider = snapshot.providers.find((item) => item.id === providerId)
+  const selectedAdapter = adapters.find((item) => item.id === providerId)
+  const selectedEngineLabel = provider?.display_name ?? selectedAdapter?.display_name ?? 'Select an engine'
+  const selectedEngineReady = Boolean(provider) || Boolean(selectedAdapter?.detected)
   const activeTurn = useMemo(() => detail?.turns.find((turn) => turn.branch_id === detail.active_branch_id && ['queued', 'streaming', 'cancel_requested'].includes(turn.state)), [detail])
   const activeTurnForMessage = (message: ChatMessage): ChatTurnSummary | undefined => detail?.turns.find((turn) => turn.id === message.turn_id || turn.assistant_message_id === message.id || turn.message_id === message.id)
 
@@ -106,9 +111,12 @@ export function AgenticSuperAppChat() {
     let cancelled = false
     const initialise = async () => {
       try {
-        const diagnosticSnapshot = await agenticSuperAppClient.diagnostics()
+        const [diagnosticSnapshot, codeSnapshot] = await Promise.all([agenticSuperAppClient.diagnostics(), agenticSuperAppClient.codeSnapshot()])
         if (cancelled) return
         setSnapshot(diagnosticSnapshot)
+        setAdapters(codeSnapshot.adapters)
+        const detectedAdapter = codeSnapshot.adapters.find((item) => item.detected)
+        if (!diagnosticSnapshot.providers.some((item) => item.id === providerFallback) && detectedAdapter) setProviderId(detectedAdapter.id)
         const page = await agenticSuperAppClient.chatSidebar({ archived: false, limit: 1 })
         if (cancelled) return
         if (page.conversations[0]) {
@@ -159,10 +167,12 @@ export function AgenticSuperAppChat() {
   }, [detail])
 
   useEffect(() => {
-    if (!provider) return
-    setProviderId(provider.id)
-    if (provider.default_model) setModel(provider.default_model)
-  }, [provider])
+    if (providerId !== providerFallback) return
+    const nextProvider = snapshot.providers.find((item) => item.id === providerFallback) ?? snapshot.providers[0]
+    if (!nextProvider) return
+    if (providerId !== nextProvider.id) setProviderId(nextProvider.id)
+    if (nextProvider.default_model && model === modelFallback) setModel(nextProvider.default_model)
+  }, [model, providerId, snapshot.providers])
 
   useEffect(() => {
     if (!detail || draft === detail.draft) return
@@ -260,12 +270,12 @@ export function AgenticSuperAppChat() {
     setBusy('send')
     setStatus(null)
     try {
-      const next = await agenticSuperAppClient.startChatTurn({ conversation_id: detail.id, branch_id: detail.active_branch_id, text: draft.trim(), attachment_ids: attachments.map((item) => item.id), provider_account_id: provider?.id ?? providerId, model: model.trim() || modelFallback, reasoning_effort: reasoningEffort })
+      const next = await agenticSuperAppClient.startChatTurn({ conversation_id: detail.id, branch_id: detail.active_branch_id, text: draft.trim(), attachment_ids: attachments.map((item) => item.id), provider_account_id: providerId, model: model.trim() || (selectedAdapter ? 'default' : modelFallback), reasoning_effort: reasoningEffort })
       await agenticSuperAppClient.saveChatDraft(detail.id, '')
       setDraft('')
       setAttachments([])
       setDetail(next)
-      setStatus(agenticSuperAppClient.isTauri ? 'Response streaming…' : 'Preview response completed.')
+      setStatus(agenticSuperAppClient.isTauri ? `${selectedEngineLabel} response streaming…` : 'Desktop host is unavailable. Start the Tauri application to run a real engine.')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'The response could not be started.')
     } finally {
@@ -319,7 +329,7 @@ export function AgenticSuperAppChat() {
     if (!detail || !pendingEdit?.text.trim()) return
     setBusy('edit')
     try {
-      const next = await agenticSuperAppClient.editChatMessage({ conversation_id: detail.id, message_id: pendingEdit.messageId, text: pendingEdit.text.trim(), provider_account_id: provider?.id ?? providerId, model: model || modelFallback, reasoning_effort: reasoningEffort })
+      const next = await agenticSuperAppClient.editChatMessage({ conversation_id: detail.id, message_id: pendingEdit.messageId, text: pendingEdit.text.trim(), provider_account_id: providerId, model: model || (selectedAdapter ? 'default' : modelFallback), reasoning_effort: reasoningEffort })
       setDetail(next)
       setPendingEdit(null)
       setStatus('Edited message branched into a new response path.')
@@ -365,7 +375,7 @@ export function AgenticSuperAppChat() {
     <section className="agentic-super-app-chat-main" aria-label="Conversation">
       {detail ? <>
         <header className="agentic-super-app-chat-header">
-          <div className="agentic-super-app-chat-title-wrap"><Bot size={19} aria-hidden="true" /><div><label className="agentic-super-app-visually-hidden" htmlFor="agentic-super-app-chat-title-input">Conversation title</label><input id="agentic-super-app-chat-title-input" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} onBlur={renameConversation} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); renameConversation(); event.currentTarget.blur() } }} /><p>{detail.branches.length > 1 ? `${detail.branches.length} branches` : 'Main branch'} · {agenticSuperAppClient.isTauri ? 'Desktop host' : 'Preview mode'}</p></div></div>
+          <div className="agentic-super-app-chat-title-wrap"><Bot size={19} aria-hidden="true" /><div><label className="agentic-super-app-visually-hidden" htmlFor="agentic-super-app-chat-title-input">Conversation title</label><input id="agentic-super-app-chat-title-input" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} onBlur={renameConversation} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); renameConversation(); event.currentTarget.blur() } }} /><p>{detail.branches.length > 1 ? `${detail.branches.length} branches` : 'Main branch'} · {agenticSuperAppClient.isTauri ? `${selectedEngineLabel} · Desktop host` : 'Desktop host unavailable'}</p></div></div>
           <div className="agentic-super-app-chat-header-actions">
             <button className="agentic-super-app-icon-button" type="button" onClick={() => void updateMetadata({ pinned: !detail.pinned }, detail.pinned ? 'Removed from pinned.' : 'Pinned chat.')} disabled={busy !== null} aria-label={detail.pinned ? 'Unpin chat' : 'Pin chat'} title={detail.pinned ? 'Unpin chat' : 'Pin chat'}><Pin size={16} fill={detail.pinned ? 'currentColor' : 'none'} /></button>
             <button className="agentic-super-app-icon-button" type="button" onClick={() => void updateMetadata({ archived: !detail.archived }, detail.archived ? 'Chat restored.' : 'Chat archived.')} disabled={busy !== null} aria-label={detail.archived ? 'Restore chat' : 'Archive chat'} title={detail.archived ? 'Restore chat' : 'Archive chat'}>{detail.archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>
@@ -373,7 +383,7 @@ export function AgenticSuperAppChat() {
             <button className="agentic-super-app-icon-button is-danger" type="button" onClick={() => void deleteConversation()} disabled={busy !== null} aria-label="Delete chat" title="Delete chat"><Trash2 size={16} /></button>
           </div>
         </header>
-        <div className="agentic-super-app-chat-context-bar"><span><Zap size={14} aria-hidden="true" />{model || modelFallback}</span><span><ShieldCheck size={14} aria-hidden="true" />Tools off</span><span>Context ~{contextTokens.toLocaleString()} tokens · 128k policy</span>{detail.branches.length > 1 && <span className="agentic-super-app-branch-badge"><GitBranch size={13} />{detail.branches.find((branch) => branch.active)?.label ?? 'Active branch'}</span>}</div>
+        <div className="agentic-super-app-chat-context-bar"><span><Zap size={14} aria-hidden="true" />{selectedEngineLabel}</span><span>{model || (selectedAdapter ? 'default model' : modelFallback)}</span><span><ShieldCheck size={14} aria-hidden="true" />Tools off</span><span>Context ~{contextTokens.toLocaleString()} tokens · 128k policy</span>{detail.branches.length > 1 && <span className="agentic-super-app-branch-badge"><GitBranch size={13} />{detail.branches.find((branch) => branch.active)?.label ?? 'Active branch'}</span>}</div>
         <main className="agentic-super-app-chat-transcript" ref={transcriptRef} aria-live="polite" aria-label="Message transcript">
           {!detail.messages.length && <div className="agentic-super-app-chat-empty"><div className="agentic-super-app-empty-mark"><MessageGlyph /></div><h2>Start a focused conversation</h2><p>Ask a question, attach a PDF or image, and keep the response on this branch. Nothing is sent until you press Send.</p></div>}
           {detail.messages.map((message) => <ChatMessageView key={message.id} message={message} turn={activeTurnForMessage(message)} onEdit={message.role === 'user' ? () => setPendingEdit({ messageId: message.id, text: messageText(message) }) : undefined} onBranch={() => void branchMessage(message.id)} onRetry={message.role === 'assistant' && activeTurnForMessage(message) ? () => void retryResponse(activeTurnForMessage(message)!) : undefined} />)}
@@ -386,8 +396,8 @@ export function AgenticSuperAppChat() {
           <label className="agentic-super-app-visually-hidden" htmlFor="agentic-super-app-chat-draft">Message</label>
           <textarea id="agentic-super-app-chat-draft" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); if (!activeTurn) void sendMessage() } }} placeholder="Message the assistant…" rows={3} disabled={busy === 'send'} />
           <div className="agentic-super-app-chat-composer-toolbar">
-            <div className="agentic-super-app-chat-composer-controls"><button className="agentic-super-app-icon-button" type="button" onClick={() => void importAttachments()} disabled={busy !== null || Boolean(activeTurn)} aria-label="Attach files" title="Attach PDF, image, or text file"><Paperclip size={17} /></button><select aria-label="Provider" value={providerId} onChange={(event) => setProviderId(event.target.value)} disabled={Boolean(activeTurn)}>{snapshot.providers.length ? snapshot.providers.map((item) => <option key={item.id} value={item.id}>{item.display_name}</option>) : <option value={providerFallback}>OpenAI Responses</option>}</select><input aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Model" disabled={Boolean(activeTurn)} /><select aria-label="Reasoning effort" value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value as ChatReasoningEffort)} disabled={Boolean(activeTurn)}>{reasoningOptions.map((option) => <option key={option.value} value={option.value}>{option.label} reasoning</option>)}</select></div>
-            <div className="agentic-super-app-chat-composer-submit"><span className="agentic-super-app-composer-hint">Ctrl/⌘ + Enter</span>{activeTurn ? <button className="is-stop" type="submit" disabled={busy === 'stop'}><Square size={15} />{busy === 'stop' ? 'Stopping…' : 'Stop'}</button> : <button type="submit" disabled={busy !== null || (!draft.trim() && !attachments.length)}><Send size={15} />Send</button>}</div>
+            <div className="agentic-super-app-chat-composer-controls"><button className="agentic-super-app-icon-button" type="button" onClick={() => void importAttachments()} disabled={busy !== null || Boolean(activeTurn)} aria-label="Attach files" title="Attach PDF, image, or text file"><Paperclip size={17} /></button><select aria-label="Engine" value={providerId} onChange={(event) => { setProviderId(event.target.value); if (event.target.value !== providerFallback) setModel('default') }} disabled={Boolean(activeTurn)}>{snapshot.providers.map((item) => <option key={item.id} value={item.id}>{item.display_name} · API</option>)}{adapters.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.detected ? ' · ready' : ' · not detected'}</option>)}{!snapshot.providers.length && !adapters.length && <option value={providerFallback}>No engines detected</option>}</select><input aria-label="Model" value={model} onChange={(event) => setModel(event.target.value)} placeholder={selectedAdapter ? 'default model' : 'Model'} disabled={Boolean(activeTurn)} /><select aria-label="Reasoning effort" value={reasoningEffort} onChange={(event) => setReasoningEffort(event.target.value as ChatReasoningEffort)} disabled={Boolean(activeTurn) || Boolean(selectedAdapter)}>{reasoningOptions.map((option) => <option key={option.value} value={option.value}>{option.label} reasoning</option>)}</select></div>
+            <div className="agentic-super-app-chat-composer-submit"><span className="agentic-super-app-composer-hint">{selectedEngineReady ? `${selectedEngineLabel} · Ctrl/⌘ + Enter` : `${selectedEngineLabel} is not detected`}</span>{activeTurn ? <button className="is-stop" type="submit" disabled={busy === 'stop'}><Square size={15} />{busy === 'stop' ? 'Stopping…' : 'Stop'}</button> : <button type="submit" disabled={busy !== null || !selectedEngineReady || (!draft.trim() && !attachments.length)}><Send size={15} />Send</button>}</div>
           </div>
         </form>
       </> : <div className="agentic-super-app-chat-no-selection"><MessageGlyph /><h2>Select a conversation</h2><button type="button" onClick={createConversation}><Plus size={15} />New chat</button></div>}

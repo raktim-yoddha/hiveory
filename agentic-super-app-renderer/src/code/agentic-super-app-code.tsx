@@ -14,6 +14,7 @@ import {
   type CodeGitDiff,
   type CodeGitStatus,
   type CodePaneLayout,
+  type CodePreviewSummary,
   type CodeTerminalEvent,
   type CodeTerminalKind,
   type CodeWorkspaceDetail,
@@ -25,6 +26,8 @@ type MonacoEnvironment = { getWorker: () => Worker }
 export function AgenticSuperAppCode() {
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
+  const [selectedAdapterId, setSelectedAdapterId] = useState(CODEX_ADAPTER_ID)
+  const [adapterModel, setAdapterModel] = useState('')
   const [detail, setDetail] = useState<CodeWorkspaceDetail | null>(null)
   const [tree, setTree] = useState<CodeFileTree | null>(null)
   const [currentDirectory, setCurrentDirectory] = useState('')
@@ -35,6 +38,7 @@ export function AgenticSuperAppCode() {
   const [terminalOutput, setTerminalOutput] = useState('')
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState('http://localhost:5173')
+  const [preview, setPreview] = useState<CodePreviewSummary | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
 
@@ -53,6 +57,7 @@ export function AgenticSuperAppCode() {
       setGitStatus(nextStatus)
       setDocument(null)
       setGitDiff(null)
+      setPreview(nextDetail.previews.find((item) => item.state === 'open') ?? null)
       setTerminalOutput('')
       setActiveTerminalId(nextDetail.terminals.find((terminal) => terminal.state === 'running')?.id ?? null)
       if (nextStatus?.branch) setWorkspaces((items) => items.map((workspace) => workspace.id === workspaceId ? { ...workspace, branch: nextStatus.branch } : workspace))
@@ -68,6 +73,7 @@ export function AgenticSuperAppCode() {
       const snapshot = await agenticSuperAppClient.codeSnapshot()
       setWorkspaces(snapshot.workspaces)
       setAdapters(snapshot.adapters)
+      setSelectedAdapterId((current) => snapshot.adapters.find((item) => item.id === current && item.detected)?.id ?? snapshot.adapters.find((item) => item.detected)?.id ?? current)
       const nextWorkspaceId = workspaceId ?? snapshot.active_workspace_id ?? snapshot.workspaces[0]?.id
       if (nextWorkspaceId && snapshot.workspaces.some((workspace) => workspace.id === nextWorkspaceId)) await loadWorkspace(nextWorkspaceId)
     } catch (error) {
@@ -79,7 +85,7 @@ export function AgenticSuperAppCode() {
 
   const selectedWorkspace = detail?.summary
   const activeTerminal = detail?.terminals.find((terminal) => terminal.id === activeTerminalId) ?? null
-  const adapter = adapters.find((item) => item.id === CODEX_ADAPTER_ID)
+  const adapter = adapters.find((item) => item.id === selectedAdapterId)
   const trusted = selectedWorkspace?.trust === 'trusted'
 
   const openWorkspace = async () => {
@@ -194,17 +200,17 @@ export function AgenticSuperAppCode() {
 
   const startTerminal = async (kind: CodeTerminalKind) => {
     if (!selectedWorkspace || !trusted) return
-    if (kind === 'coding_agent' && !adapter?.detected) {
-      setFeedback('Codex CLI was not detected on this host. Install it or use the shell terminal.')
+    if (kind === 'coding_agent' && (!adapter || !adapter.detected)) {
+      setFeedback(`${adapter?.display_name ?? 'Selected coding engine'} was not detected on this host. Install it before starting a coding-agent terminal.`)
       return
     }
     setBusy(kind)
     setTerminalOutput('')
     try {
-      const terminal = await agenticSuperAppClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? CODEX_ADAPTER_ID : null, model: null, resume_session_id: null }, handleTerminalEvent)
+      const terminal = await agenticSuperAppClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? selectedAdapterId : null, model: kind === 'coding_agent' ? (adapterModel.trim() || null) : null, resume_session_id: null }, handleTerminalEvent)
       setDetail((current) => current ? { ...current, terminals: [terminal, ...current.terminals.filter((item) => item.id !== terminal.id)] } : current)
       setActiveTerminalId(terminal.id)
-      setFeedback(kind === 'coding_agent' ? 'Coding-agent terminal started with workspace-write and on-request approvals.' : 'Workspace shell started.')
+      setFeedback(kind === 'coding_agent' ? `${adapter?.display_name ?? 'Coding engine'} terminal started with workspace-scoped permissions.` : 'Workspace shell started.')
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'The terminal could not be started.')
     } finally {
@@ -255,8 +261,9 @@ export function AgenticSuperAppCode() {
     if (!selectedWorkspace || !trusted) return
     setBusy('preview')
     try {
-      await agenticSuperAppClient.openCodePreview({ workspace_id: selectedWorkspace.id, url: previewUrl })
-      setFeedback('Preview opened in an isolated auxiliary webview.')
+      const nextPreview = await agenticSuperAppClient.openCodePreview({ workspace_id: selectedWorkspace.id, url: previewUrl })
+      setPreview(nextPreview)
+      setFeedback('Preview opened in a docked, sandboxed pane. The host still enforces the approved origin.')
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'The preview URL was blocked.')
     } finally {
@@ -290,10 +297,11 @@ export function AgenticSuperAppCode() {
           <div className="agentic-super-app-code-pane-toolbar"><span><LayoutPanelTop size={14} />Pane tree · {detail?.layout.nodes.length ?? 0} nodes</span><span className="agentic-super-app-code-pane-list">{detail?.layout.nodes.filter((node) => node.children.length === 0).map((node) => <span key={node.pane_id}>{node.kind.replace('_', ' ')}</span>)}</span><button className="agentic-super-app-mini-button" onClick={() => detail && void saveLayout(detail.layout)} disabled={busy !== null} aria-label="Save pane layout"><Save size={13} /></button></div>
           <div className="agentic-super-app-code-workbench">
             <section className="agentic-super-app-code-editor-pane" aria-label="File editor"><div className="agentic-super-app-code-pane-heading"><span><FileCode2 size={14} />{document?.relative_path ?? 'Editor'}</span><div>{document && <span className="agentic-super-app-code-language">{document.language ?? 'plain text'}</span>}<button className="agentic-super-app-mini-button" onClick={() => void saveFile()} disabled={!document || !trusted || document.read_only || busy !== null} aria-label="Save file"><Save size={14} /></button></div></div>{document ? document.binary ? <div className="agentic-super-app-code-binary"><ShieldAlert size={20} /><p>Binary file preview is blocked.</p></div> : <MonacoEditorPane key={`${document.relative_path}:${document.fingerprint}`} path={document.relative_path} content={editorContent} language={document.language} readOnly={!trusted || document.read_only} onChange={setEditorContent} /> : <div className="agentic-super-app-code-editor-empty"><FileCode2 size={24} /><p>Select a file from the workspace tree.</p></div>}</section>
-            <section className="agentic-super-app-code-terminal-pane" aria-label="Workspace terminal"><div className="agentic-super-app-code-pane-heading"><span><Terminal size={14} />Terminal</span><div className="agentic-super-app-code-terminal-actions"><button className="agentic-super-app-mini-button" onClick={() => void startTerminal('shell')} disabled={!trusted || busy !== null} aria-label="Start shell"><Play size={13} /></button><button className="agentic-super-app-mini-button" onClick={() => void startTerminal('coding_agent')} disabled={!trusted || !adapter?.detected || busy !== null} aria-label="Start coding agent"><Bot size={13} /></button>{activeTerminal && <><button className="agentic-super-app-mini-button" onClick={() => void stopTerminal(false)} disabled={busy !== null} aria-label="Interrupt terminal"><Square size={12} /></button><button className="agentic-super-app-mini-button is-danger" onClick={() => void stopTerminal(true)} disabled={busy !== null} aria-label="Force stop terminal"><X size={13} /></button></>}</div></div><TerminalPane terminalId={activeTerminal?.id ?? null} output={terminalOutput} onInput={(data) => activeTerminal && void agenticSuperAppClient.writeCodeTerminal({ terminal_id: activeTerminal.id, data })} onResize={(cols, rows) => activeTerminal && void agenticSuperAppClient.resizeCodeTerminal({ terminal_id: activeTerminal.id, cols, rows })} /><div className="agentic-super-app-code-terminal-status">{activeTerminal ? `${activeTerminal.kind === 'coding_agent' ? 'Coding agent' : 'Shell'} · ${activeTerminal.state}` : trusted ? 'Start a shell or coding-agent terminal.' : 'Trust the workspace to execute processes.'}</div></section>
+            <section className="agentic-super-app-code-terminal-pane" aria-label="Workspace terminal"><div className="agentic-super-app-code-pane-heading"><span><Terminal size={14} />Terminal</span><div className="agentic-super-app-code-terminal-actions"><label className="agentic-super-app-code-engine-select"><span className="agentic-super-app-visually-hidden">Coding engine</span><select aria-label="Coding engine" value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)} disabled={Boolean(activeTerminal) || busy !== null}>{adapters.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.detected ? ' · ready' : ' · not detected'}</option>)}</select></label><input className="agentic-super-app-code-model-input" aria-label="Coding engine model" value={adapterModel} onChange={(event) => setAdapterModel(event.target.value)} placeholder="default model" disabled={Boolean(activeTerminal) || busy !== null} /><button className="agentic-super-app-mini-button" onClick={() => void startTerminal('shell')} disabled={!trusted || busy !== null} aria-label="Start shell"><Play size={13} /></button><button className="agentic-super-app-mini-button" onClick={() => void startTerminal('coding_agent')} disabled={!trusted || !adapter?.detected || busy !== null} aria-label={`Start ${adapter?.display_name ?? 'coding agent'}`}><Bot size={13} /></button>{activeTerminal && <><button className="agentic-super-app-mini-button" onClick={() => void stopTerminal(false)} disabled={busy !== null} aria-label="Interrupt terminal"><Square size={12} /></button><button className="agentic-super-app-mini-button is-danger" onClick={() => void stopTerminal(true)} disabled={busy !== null} aria-label="Force stop terminal"><X size={13} /></button></>}</div></div><TerminalPane terminalId={activeTerminal?.id ?? null} output={terminalOutput} onInput={(data) => activeTerminal && void agenticSuperAppClient.writeCodeTerminal({ terminal_id: activeTerminal.id, data })} onResize={(cols, rows) => activeTerminal && void agenticSuperAppClient.resizeCodeTerminal({ terminal_id: activeTerminal.id, cols, rows })} /><div className="agentic-super-app-code-terminal-status">{activeTerminal ? `${activeTerminal.kind === 'coding_agent' ? `${activeTerminal.adapter_id ?? adapter?.display_name ?? 'Coding agent'} · ` : ''}${activeTerminal.state}` : trusted ? `${adapter?.display_name ?? 'Coding engine'} · ${adapter?.detected ? 'ready' : 'not detected'} · start a shell or coding-agent terminal.` : 'Trust the workspace to execute processes.'}</div></section>
+            {preview && <section className="agentic-super-app-code-preview-pane" aria-label="Docked local preview"><div className="agentic-super-app-code-pane-heading"><span><ExternalLink size={14} />Preview</span><div><a href={preview.url} target="_blank" rel="noreferrer" aria-label="Open preview in a new window"><ExternalLink size={13} /></a><button className="agentic-super-app-mini-button" onClick={() => setPreview(null)} aria-label="Close docked preview"><X size={13} /></button></div></div><iframe title="Local workspace preview" src={preview.url} sandbox="allow-scripts allow-forms allow-same-origin" referrerPolicy="no-referrer" /></section>}
           </div>
-          <div className="agentic-super-app-code-bottom-grid"><section className="agentic-super-app-code-card" aria-labelledby="agentic-super-app-git-title"><div className="agentic-super-app-code-card-heading"><div><GitBranch size={15} /><h3 id="agentic-super-app-git-title">Changes</h3></div><button className="agentic-super-app-mini-button" onClick={() => void refreshGit()} disabled={!trusted || busy !== null} aria-label="Refresh Git status"><RefreshCw size={13} /></button></div>{gitStatus ? <><div className="agentic-super-app-code-git-summary"><span>{gitStatus.branch ?? 'detached HEAD'}</span><span>{gitStatus.ahead} ahead · {gitStatus.behind} behind</span></div><div className="agentic-super-app-code-change-list">{gitStatus.files.length ? gitStatus.files.map((file) => <button key={file.relative_path} onClick={() => void showDiff(file.relative_path)}><span className={`agentic-super-app-code-change-mark ${file.conflict ? 'conflict' : file.status}`}>{file.conflict ? '!' : file.status.slice(0, 1).toUpperCase()}</span><span>{file.relative_path}</span>{file.staged && <small>staged</small>}</button>) : <p className="agentic-super-app-code-muted">Working tree clean.</p>}</div></> : <p className="agentic-super-app-code-muted">{trusted ? 'Git status unavailable or not a repository.' : 'Trust the workspace to read Git status.'}</p>}</section><section className="agentic-super-app-code-card agentic-super-app-code-diff-card" aria-labelledby="agentic-super-app-diff-title"><div className="agentic-super-app-code-card-heading"><div><FileText size={15} /><h3 id="agentic-super-app-diff-title">Diff / review</h3></div>{gitDiff && <button className="agentic-super-app-mini-button" onClick={() => setGitDiff(null)} aria-label="Close diff"><X size={13} /></button>}</div>{gitDiff ? <pre>{gitDiff.content || 'No unstaged diff for this path.'}</pre> : <p className="agentic-super-app-code-muted">Select a changed file to inspect its working-tree diff.</p>}</section><section className="agentic-super-app-code-card" aria-labelledby="agentic-super-app-preview-title"><div className="agentic-super-app-code-card-heading"><div><ExternalLink size={15} /><h3 id="agentic-super-app-preview-title">Local preview</h3></div></div><p className="agentic-super-app-code-muted">Opens in an isolated webview. Only localhost HTTP or explicit HTTPS URLs pass host validation.</p><div className="agentic-super-app-code-preview-form"><input value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} aria-label="Preview URL" /><button onClick={() => void openPreview()} disabled={!trusted || busy !== null}><ExternalLink size={14} />Open</button></div></section></div>
-          <div className="agentic-super-app-code-session-strip"><span><Terminal size={14} />{detail?.terminals.length ?? 0} persisted session(s)</span><span><Bot size={14} />Codex {adapter?.detected ? 'detected' : 'not detected'}{adapter?.authenticated ? ' · authenticated' : ''}</span><span><ShieldAlert size={14} />No terminal bytes are persisted</span></div>
+          <div className="agentic-super-app-code-bottom-grid"><section className="agentic-super-app-code-card" aria-labelledby="agentic-super-app-git-title"><div className="agentic-super-app-code-card-heading"><div><GitBranch size={15} /><h3 id="agentic-super-app-git-title">Changes</h3></div><button className="agentic-super-app-mini-button" onClick={() => void refreshGit()} disabled={!trusted || busy !== null} aria-label="Refresh Git status"><RefreshCw size={13} /></button></div>{gitStatus ? <><div className="agentic-super-app-code-git-summary"><span>{gitStatus.branch ?? 'detached HEAD'}</span><span>{gitStatus.ahead} ahead · {gitStatus.behind} behind</span></div><div className="agentic-super-app-code-change-list">{gitStatus.files.length ? gitStatus.files.map((file) => <button key={file.relative_path} onClick={() => void showDiff(file.relative_path)}><span className={`agentic-super-app-code-change-mark ${file.conflict ? 'conflict' : file.status}`}>{file.conflict ? '!' : file.status.slice(0, 1).toUpperCase()}</span><span>{file.relative_path}</span>{file.staged && <small>staged</small>}</button>) : <p className="agentic-super-app-code-muted">Working tree clean.</p>}</div></> : <p className="agentic-super-app-code-muted">{trusted ? 'Git status unavailable or not a repository.' : 'Trust this workspace to read Git status.'}</p>}</section><section className="agentic-super-app-code-card agentic-super-app-code-diff-card" aria-labelledby="agentic-super-app-diff-title"><div className="agentic-super-app-code-card-heading"><div><FileText size={15} /><h3 id="agentic-super-app-diff-title">Diff / review</h3></div>{gitDiff && <button className="agentic-super-app-mini-button" onClick={() => setGitDiff(null)} aria-label="Close diff"><X size={13} /></button>}</div>{gitDiff ? <pre>{gitDiff.content || 'No unstaged diff for this path.'}</pre> : <p className="agentic-super-app-code-muted">Select a changed file to inspect its working-tree diff.</p>}</section><section className="agentic-super-app-code-card" aria-labelledby="agentic-super-app-preview-title"><div className="agentic-super-app-code-card-heading"><div><ExternalLink size={15} /><h3 id="agentic-super-app-preview-title">Local preview</h3></div></div><p className="agentic-super-app-code-muted">Loads in the docked sandboxed pane. Only localhost HTTP or explicit HTTPS URLs pass host validation.</p><div className="agentic-super-app-code-preview-form"><input value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} aria-label="Preview URL" /><button onClick={() => void openPreview()} disabled={!trusted || busy !== null}><ExternalLink size={14} />Open</button></div></section></div>
+          <div className="agentic-super-app-code-session-strip"><span><Terminal size={14} />{detail?.terminals.length ?? 0} persisted session(s)</span><span><Bot size={14} />{adapters.filter((item) => item.detected).map((item) => item.display_name).join(' · ') || 'No coding engines detected'}</span><span><ShieldAlert size={14} />No terminal bytes are persisted</span></div>
         </>}
       </section>
     </div>

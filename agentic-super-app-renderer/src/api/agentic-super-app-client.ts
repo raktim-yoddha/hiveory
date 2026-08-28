@@ -128,6 +128,10 @@ export type CodeManagedWorktreeState = 'provisioning' | 'ready' | 'cleanup_pendi
 export type CodeOrchestrationMessageKind = 'status' | 'heartbeat' | 'question' | 'answer' | 'escalation' | 'progress' | 'completion'
 export type CodeOrchestrationEventOrigin = 'host' | 'worker'
 export const CODEX_ADAPTER_ID = 'codex-cli'
+export const CLAUDE_CODE_ADAPTER_ID = 'claude-code'
+export const ANTIGRAVITY_ADAPTER_ID = 'antigravity'
+export const OPENCODE_ADAPTER_ID = 'opencode'
+export const CODE_ADAPTER_IDS = [CODEX_ADAPTER_ID, CLAUDE_CODE_ADAPTER_ID, ANTIGRAVITY_ADAPTER_ID, OPENCODE_ADAPTER_ID] as const
 export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; coordinator_id: string; adapter_id: string; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
 export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTaskDependency = { run_id: string; task_id: string; depends_on_task_id: string }
@@ -297,7 +301,16 @@ function previewCodeTree(workspaceId: string, relativeDirectory: string | null):
   return { workspace_id: workspaceId, directory, entries: [...entries.values()].sort((a, b) => (a.kind === 'directory' ? -1 : 1) - (b.kind === 'directory' ? -1 : 1) || a.name.localeCompare(b.name)), truncated: false }
 }
 function previewCodeSummary(): CodeSnapshot {
-  return { workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary), active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null, adapters: [{ id: CODEX_ADAPTER_ID, display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] }] }
+  return {
+    workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary),
+    active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null,
+    adapters: [
+      { id: CODEX_ADAPTER_ID, display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] },
+      { id: CLAUDE_CODE_ADAPTER_ID, display_name: 'Claude Code', executable: 'claude', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
+      { id: ANTIGRAVITY_ADAPTER_ID, display_name: 'Antigravity', executable: 'agy', detected: false, authenticated: false, capabilities: ['model_selection', 'permission_modes'] },
+      { id: OPENCODE_ADAPTER_ID, display_name: 'OpenCode', executable: 'opencode', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
+    ],
+  }
 }
 function previewCodeRunDetail(runId: string): CodeRunDetail {
   const detail = previewCodeRuns.get(runId)

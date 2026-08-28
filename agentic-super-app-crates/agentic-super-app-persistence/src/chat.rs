@@ -366,6 +366,21 @@ impl AgenticSuperAppChatStore {
             }))
     }
 
+    pub async fn turn_configuration(
+        &self,
+        conversation_id: &str,
+        turn_id: &str,
+    ) -> Result<Option<(String, String)>, AgenticSuperAppChatStoreError> {
+        Ok(sqlx::query(
+            "SELECT provider_account_id, model FROM agentic_super_app_chat_turns WHERE conversation_id=? AND id=?",
+        )
+        .bind(conversation_id)
+        .bind(turn_id)
+        .fetch_optional(self.persistence.pool())
+        .await?
+        .map(|row| (row.get(0), row.get(1))))
+    }
+
     async fn start_turn_internal(
         &self,
         request: &ChatSendRequest,
