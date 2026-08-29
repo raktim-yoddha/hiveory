@@ -14,7 +14,7 @@ use std::path::{Component, Path};
 use thiserror::Error;
 
 pub const CODE_LAYOUT_VERSION: u32 = 2;
-pub const CODE_MAX_PANES: usize = 12;
+pub const CODE_MAX_PANES: usize = 17;
 pub const CODE_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 pub const CODE_MAX_TREE_ENTRIES: usize = 5_000;
 pub const CODE_MAX_ORCHESTRATION_TASKS: usize = 128;
@@ -33,8 +33,14 @@ pub enum CodeDomainError {
     EmptyPath,
     #[error("pane layout is invalid: {0}")]
     InvalidLayout(String),
-    #[error("maximum limit of 12 panes reached")]
+    #[error("maximum limit of 17 panes reached")]
     TooManyPanes,
+    #[error("preset {preset} supports up to {max} panes, but workspace has {count}")]
+    PresetCapacityExceeded {
+        preset: String,
+        count: usize,
+        max: usize,
+    },
     #[error("pane {0} not found")]
     PaneNotFound(String),
     #[error("pane title must be between 1 and 80 non-control characters")]
@@ -1137,7 +1143,22 @@ pub fn move_pane(
     Ok(new_layout)
 }
 
-/// Applies a deterministic layout preset (EqualColumns, EqualRows, MainLeft, MainTop, Grid, Tidy).
+/// Returns the maximum number of panes supported by the given preset.
+pub fn preset_max_panes(preset: CodePanePreset) -> usize {
+    match preset {
+        CodePanePreset::Vertical | CodePanePreset::EqualColumns => 4,
+        CodePanePreset::Horizontal | CodePanePreset::EqualRows => 4,
+        CodePanePreset::TwoRows => 8,
+        CodePanePreset::ThreeRows => 12,
+        CodePanePreset::FourRows => 16,
+        CodePanePreset::Focus | CodePanePreset::MainLeft => 17,
+        CodePanePreset::MainTop => 12,
+        CodePanePreset::Grid => 16,
+        CodePanePreset::Tidy => 17,
+    }
+}
+
+/// Applies a deterministic layout preset.
 pub fn apply_layout_preset(
     layout: &CodePaneLayout,
     preset: CodePanePreset,
@@ -1163,6 +1184,15 @@ pub fn apply_layout_preset_with_primary(
         .filter_map(|id| layout.nodes.iter().find(|n| &n.pane_id == id))
         .cloned()
         .collect();
+
+    let max_allowed = preset_max_panes(preset);
+    if leaf_nodes.len() > max_allowed {
+        return Err(CodeDomainError::PresetCapacityExceeded {
+            preset: format!("{:?}", preset),
+            count: leaf_nodes.len(),
+            max: max_allowed,
+        });
+    }
 
     let preferred_primary = primary_pane_id.or(layout.focused_pane_id.as_deref());
     if let Some(focused_id) = preferred_primary {
@@ -1193,12 +1223,15 @@ pub fn apply_layout_preset_with_primary(
     let mut generated_nodes = Vec::new();
     let mut split_counter = 0;
 
-    fn build_balanced_split(
+    fn build_balanced_stack(
         leaves: &[CodePaneNode],
         orientation: CodePaneOrientation,
         split_counter: &mut usize,
         generated_nodes: &mut Vec<CodePaneNode>,
     ) -> String {
+        if leaves.is_empty() {
+            panic!("build_balanced_stack called with empty leaves");
+        }
         if leaves.len() == 1 {
             let mut leaf = leaves[0].clone();
             leaf.children = Vec::new();
@@ -1215,10 +1248,8 @@ pub fn apply_layout_preset_with_primary(
         let left_leaves = &leaves[..mid];
         let right_leaves = &leaves[mid..];
 
-        let left_id =
-            build_balanced_split(left_leaves, orientation, split_counter, generated_nodes);
-        let right_id =
-            build_balanced_split(right_leaves, orientation, split_counter, generated_nodes);
+        let left_id = build_balanced_stack(left_leaves, orientation, split_counter, generated_nodes);
+        let right_id = build_balanced_stack(right_leaves, orientation, split_counter, generated_nodes);
 
         let left_ratio = ((left_leaves.len() as f64 / leaves.len() as f64) * 100.0).round() as u8;
         let ratio_percent = left_ratio.clamp(10, 90);
@@ -1243,6 +1274,171 @@ pub fn apply_layout_preset_with_primary(
         split_id
     }
 
+    fn build_column_group(
+        col_roots: &[(String, usize)],
+        split_counter: &mut usize,
+        generated_nodes: &mut Vec<CodePaneNode>,
+    ) -> String {
+        if col_roots.is_empty() {
+            panic!("build_column_group called with empty columns");
+        }
+        if col_roots.len() == 1 {
+            return col_roots[0].0.clone();
+        }
+
+        let total_leaves: usize = col_roots.iter().map(|(_, count)| *count).sum();
+        *split_counter += 1;
+        let split_id = format!("split_{}", split_counter);
+
+        let mid = col_roots.len() / 2;
+        let left_cols = &col_roots[..mid];
+        let right_cols = &col_roots[mid..];
+
+        let left_id = build_column_group(left_cols, split_counter, generated_nodes);
+        let right_id = build_column_group(right_cols, split_counter, generated_nodes);
+
+        let left_leaves: usize = left_cols.iter().map(|(_, count)| *count).sum();
+        let left_ratio = ((left_leaves as f64 / total_leaves as f64) * 100.0).round() as u8;
+        let ratio_percent = left_ratio.clamp(10, 90);
+
+        for node in generated_nodes.iter_mut() {
+            if node.pane_id == left_id || node.pane_id == right_id {
+                node.parent_id = Some(split_id.clone());
+            }
+        }
+
+        generated_nodes.push(CodePaneNode {
+            pane_id: split_id.clone(),
+            parent_id: None,
+            kind: CodePaneKind::Empty,
+            orientation: Some(CodePaneOrientation::Horizontal),
+            ratio_percent: Some(ratio_percent),
+            children: vec![left_id, right_id],
+            resource_id: None,
+            title: None,
+        });
+
+        split_id
+    }
+
+    fn build_fixed_row_grid(
+        leaves: &[CodePaneNode],
+        max_rows_per_col: usize,
+        split_counter: &mut usize,
+        generated_nodes: &mut Vec<CodePaneNode>,
+    ) -> String {
+        let n = leaves.len();
+        if n == 1 {
+            let mut leaf = leaves[0].clone();
+            leaf.children = Vec::new();
+            leaf.orientation = None;
+            leaf.ratio_percent = None;
+            let id = leaf.pane_id.clone();
+            generated_nodes.push(leaf);
+            return id;
+        }
+
+        let mut col_slices: Vec<&[CodePaneNode]> = Vec::new();
+        let mut start = 0;
+        while start < n {
+            let end = (start + max_rows_per_col).min(n);
+            col_slices.push(&leaves[start..end]);
+            start = end;
+        }
+
+        let mut col_roots = Vec::new();
+        for col_leaves in col_slices {
+            let root_id = build_balanced_stack(col_leaves, CodePaneOrientation::Vertical, split_counter, generated_nodes);
+            col_roots.push((root_id, 1));
+        }
+
+        build_column_group(&col_roots, split_counter, generated_nodes)
+    }
+
+    fn build_focus_layout(
+        leaves: &[CodePaneNode],
+        split_counter: &mut usize,
+        generated_nodes: &mut Vec<CodePaneNode>,
+    ) -> String {
+        if leaves.len() == 1 {
+            let mut leaf = leaves[0].clone();
+            leaf.parent_id = None;
+            leaf.children = Vec::new();
+            leaf.orientation = None;
+            leaf.ratio_percent = None;
+            let id = leaf.pane_id.clone();
+            generated_nodes.push(leaf);
+            return id;
+        }
+
+        let mut main_leaf = leaves[0].clone();
+        main_leaf.children = Vec::new();
+        main_leaf.orientation = None;
+        main_leaf.ratio_percent = None;
+        let main_id = main_leaf.pane_id.clone();
+
+        let supporting = &leaves[1..];
+        let sup_count = supporting.len();
+
+        let right_root_id = if sup_count <= 4 {
+            build_balanced_stack(supporting, CodePaneOrientation::Vertical, split_counter, generated_nodes)
+        } else {
+            let col1_count = sup_count / 2;
+            let col1_leaves = &supporting[..col1_count];
+            let col2_leaves = &supporting[col1_count..];
+
+            let col1_id = build_balanced_stack(col1_leaves, CodePaneOrientation::Vertical, split_counter, generated_nodes);
+            let col2_id = build_balanced_stack(col2_leaves, CodePaneOrientation::Vertical, split_counter, generated_nodes);
+
+            *split_counter += 1;
+            let right_split_id = format!("split_{}", split_counter);
+
+            for node in generated_nodes.iter_mut() {
+                if node.pane_id == col1_id || node.pane_id == col2_id {
+                    node.parent_id = Some(right_split_id.clone());
+                }
+            }
+
+            generated_nodes.push(CodePaneNode {
+                pane_id: right_split_id.clone(),
+                parent_id: None,
+                kind: CodePaneKind::Empty,
+                orientation: Some(CodePaneOrientation::Horizontal),
+                ratio_percent: Some(50),
+                children: vec![col1_id, col2_id],
+                resource_id: None,
+                title: None,
+            });
+
+            right_split_id
+        };
+
+        *split_counter += 1;
+        let root_split_id = format!("split_{}", split_counter);
+
+        main_leaf.parent_id = Some(root_split_id.clone());
+        generated_nodes.push(main_leaf);
+
+        for node in generated_nodes.iter_mut() {
+            if node.pane_id == right_root_id {
+                node.parent_id = Some(root_split_id.clone());
+            }
+        }
+
+        generated_nodes.push(CodePaneNode {
+            pane_id: root_split_id.clone(),
+            parent_id: None,
+            kind: CodePaneKind::Empty,
+            orientation: Some(CodePaneOrientation::Horizontal),
+            ratio_percent: Some(60),
+            children: vec![main_id, right_root_id],
+            resource_id: None,
+            title: None,
+        });
+
+        root_split_id
+    }
+
     fn build_main_side(
         leaves: &[CodePaneNode],
         main_orientation: CodePaneOrientation,
@@ -1253,20 +1449,23 @@ pub fn apply_layout_preset_with_primary(
         if leaves.len() == 1 {
             let mut leaf = leaves[0].clone();
             leaf.parent_id = None;
+            leaf.children = Vec::new();
+            leaf.orientation = None;
+            leaf.ratio_percent = None;
             let id = leaf.pane_id.clone();
             generated_nodes.push(leaf);
             return id;
         }
 
-        let main_leaf = leaves[0].clone();
+        let mut main_leaf = leaves[0].clone();
         let remaining_leaves = &leaves[1..];
 
-        let mut main_clean = main_leaf;
-        main_clean.children = Vec::new();
-        main_clean.orientation = None;
-        let main_id = main_clean.pane_id.clone();
+        main_leaf.children = Vec::new();
+        main_leaf.orientation = None;
+        main_leaf.ratio_percent = None;
+        let main_id = main_leaf.pane_id.clone();
 
-        let sub_id = build_balanced_split(
+        let sub_id = build_balanced_stack(
             remaining_leaves,
             sub_orientation,
             split_counter,
@@ -1276,8 +1475,8 @@ pub fn apply_layout_preset_with_primary(
         *split_counter += 1;
         let root_split_id = format!("split_{}", split_counter);
 
-        main_clean.parent_id = Some(root_split_id.clone());
-        generated_nodes.push(main_clean);
+        main_leaf.parent_id = Some(root_split_id.clone());
+        generated_nodes.push(main_leaf);
 
         for node in generated_nodes.iter_mut() {
             if node.pane_id == sub_id {
@@ -1300,22 +1499,38 @@ pub fn apply_layout_preset_with_primary(
     }
 
     let root_id = match preset {
-        CodePanePreset::EqualColumns => build_balanced_split(
+        CodePanePreset::Vertical | CodePanePreset::EqualColumns => build_balanced_stack(
             &leaf_nodes,
             CodePaneOrientation::Horizontal,
             &mut split_counter,
             &mut generated_nodes,
         ),
-        CodePanePreset::EqualRows => build_balanced_split(
+        CodePanePreset::Horizontal | CodePanePreset::EqualRows => build_balanced_stack(
             &leaf_nodes,
             CodePaneOrientation::Vertical,
             &mut split_counter,
             &mut generated_nodes,
         ),
-        CodePanePreset::MainLeft => build_main_side(
+        CodePanePreset::TwoRows => build_fixed_row_grid(
             &leaf_nodes,
-            CodePaneOrientation::Horizontal,
-            CodePaneOrientation::Vertical,
+            2,
+            &mut split_counter,
+            &mut generated_nodes,
+        ),
+        CodePanePreset::ThreeRows => build_fixed_row_grid(
+            &leaf_nodes,
+            3,
+            &mut split_counter,
+            &mut generated_nodes,
+        ),
+        CodePanePreset::FourRows => build_fixed_row_grid(
+            &leaf_nodes,
+            4,
+            &mut split_counter,
+            &mut generated_nodes,
+        ),
+        CodePanePreset::Focus | CodePanePreset::MainLeft => build_focus_layout(
+            &leaf_nodes,
             &mut split_counter,
             &mut generated_nodes,
         ),
@@ -1326,267 +1541,53 @@ pub fn apply_layout_preset_with_primary(
             &mut split_counter,
             &mut generated_nodes,
         ),
-        CodePanePreset::Grid => {
-            if leaf_nodes.len() <= 3 {
-                build_balanced_split(
-                    &leaf_nodes,
-                    CodePaneOrientation::Horizontal,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                )
-            } else if leaf_nodes.len() == 4 {
-                // 2x2 grid
-                let left_id = build_balanced_split(
-                    &leaf_nodes[..2],
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let right_id = build_balanced_split(
-                    &leaf_nodes[2..],
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                split_counter += 1;
-                let root_id = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == left_id || node.pane_id == right_id {
-                        node.parent_id = Some(root_id.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: root_id.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![left_id, right_id],
-                    resource_id: None,
-                    title: None,
-                });
-                root_id
-            } else {
-                // Near square 2D tree
-                build_balanced_split(
-                    &leaf_nodes,
-                    CodePaneOrientation::Horizontal,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                )
-            }
-        }
+        CodePanePreset::Grid => build_fixed_row_grid(
+            &leaf_nodes,
+            2,
+            &mut split_counter,
+            &mut generated_nodes,
+        ),
         CodePanePreset::Tidy => match leaf_nodes.len() {
             1 => {
-                let single = leaf_nodes[0].clone();
+                let mut single = leaf_nodes[0].clone();
+                single.children = Vec::new();
+                single.orientation = None;
+                single.ratio_percent = None;
                 let id = single.pane_id.clone();
                 generated_nodes.push(single);
                 id
             }
-            2 => build_balanced_split(
+            2 => build_balanced_stack(
                 &leaf_nodes,
                 CodePaneOrientation::Horizontal,
                 &mut split_counter,
                 &mut generated_nodes,
             ),
-            3 => build_main_side(
+            3 => build_focus_layout(
                 &leaf_nodes,
-                CodePaneOrientation::Horizontal,
-                CodePaneOrientation::Vertical,
                 &mut split_counter,
                 &mut generated_nodes,
             ),
-            4 => {
-                // 2x2
-                let left_id = build_balanced_split(
-                    &leaf_nodes[..2],
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let right_id = build_balanced_split(
-                    &leaf_nodes[2..],
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                split_counter += 1;
-                let root_id = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == left_id || node.pane_id == right_id {
-                        node.parent_id = Some(root_id.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: root_id.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![left_id, right_id],
-                    resource_id: None,
-                    title: None,
-                });
-                root_id
-            }
-            5 | 6 => {
-                // 3 columns
-                let col1_count = if leaf_nodes.len() == 5 { 1 } else { 2 };
-                let col2_count = 2;
-                let col1_leaves = &leaf_nodes[..col1_count];
-                let col2_leaves = &leaf_nodes[col1_count..col1_count + col2_count];
-                let col3_leaves = &leaf_nodes[col1_count + col2_count..];
-
-                let id1 = build_balanced_split(
-                    col1_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let id2 = build_balanced_split(
-                    col2_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let id3 = build_balanced_split(
-                    col3_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-
-                split_counter += 1;
-                let sub_split_id = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == id2 || node.pane_id == id3 {
-                        node.parent_id = Some(sub_split_id.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: sub_split_id.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![id2, id3],
-                    resource_id: None,
-                    title: None,
-                });
-
-                split_counter += 1;
-                let root_id = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == id1 || node.pane_id == sub_split_id {
-                        node.parent_id = Some(root_id.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: root_id.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(33),
-                    children: vec![id1, sub_split_id],
-                    resource_id: None,
-                    title: None,
-                });
-                root_id
-            }
-            7 | 8 => {
-                // 4 columns balanced
-                let col1_count = if leaf_nodes.len() == 7 { 1 } else { 2 };
-                let col2_count = 2;
-                let col3_count = 2;
-                let col1_leaves = &leaf_nodes[..col1_count];
-                let col2_leaves = &leaf_nodes[col1_count..col1_count + col2_count];
-                let col3_leaves =
-                    &leaf_nodes[col1_count + col2_count..col1_count + col2_count + col3_count];
-                let col4_leaves = &leaf_nodes[col1_count + col2_count + col3_count..];
-
-                let id1 = build_balanced_split(
-                    col1_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let id2 = build_balanced_split(
-                    col2_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let id3 = build_balanced_split(
-                    col3_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-                let id4 = build_balanced_split(
-                    col4_leaves,
-                    CodePaneOrientation::Vertical,
-                    &mut split_counter,
-                    &mut generated_nodes,
-                );
-
-                split_counter += 1;
-                let left_pair = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == id1 || node.pane_id == id2 {
-                        node.parent_id = Some(left_pair.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: left_pair.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![id1, id2],
-                    resource_id: None,
-                    title: None,
-                });
-
-                split_counter += 1;
-                let right_pair = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == id3 || node.pane_id == id4 {
-                        node.parent_id = Some(right_pair.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: right_pair.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![id3, id4],
-                    resource_id: None,
-                    title: None,
-                });
-
-                split_counter += 1;
-                let root_id = format!("split_{}", split_counter);
-                for node in generated_nodes.iter_mut() {
-                    if node.pane_id == left_pair || node.pane_id == right_pair {
-                        node.parent_id = Some(root_id.clone());
-                    }
-                }
-                generated_nodes.push(CodePaneNode {
-                    pane_id: root_id.clone(),
-                    parent_id: None,
-                    kind: CodePaneKind::Empty,
-                    orientation: Some(CodePaneOrientation::Horizontal),
-                    ratio_percent: Some(50),
-                    children: vec![left_pair, right_pair],
-                    resource_id: None,
-                    title: None,
-                });
-                root_id
-            }
-            _ => build_balanced_split(
+            4..=8 => build_fixed_row_grid(
                 &leaf_nodes,
-                CodePaneOrientation::Horizontal,
+                2,
+                &mut split_counter,
+                &mut generated_nodes,
+            ),
+            9..=12 => build_fixed_row_grid(
+                &leaf_nodes,
+                3,
+                &mut split_counter,
+                &mut generated_nodes,
+            ),
+            13..=16 => build_fixed_row_grid(
+                &leaf_nodes,
+                4,
+                &mut split_counter,
+                &mut generated_nodes,
+            ),
+            _ => build_focus_layout(
+                &leaf_nodes,
                 &mut split_counter,
                 &mut generated_nodes,
             ),
@@ -1815,14 +1816,14 @@ mod tests {
     }
 
     #[test]
-    fn split_limit_rejects_leaf_13() {
+    fn split_limit_rejects_leaf_18() {
         let mut layout = default_layout("ws_1");
-        for _ in 0..11 {
+        for _ in 0..16 {
             let leaves = visual_leaf_order(&layout);
             layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
         }
         let leaves = visual_leaf_order(&layout);
-        assert_eq!(leaves.len(), 12);
+        assert_eq!(leaves.len(), 17);
         assert_eq!(
             split_pane(&layout, &leaves[0], CodePanePlacement::Right),
             Err(CodeDomainError::TooManyPanes)
@@ -1941,10 +1942,16 @@ mod tests {
     }
 
     #[test]
-    fn presets_are_deterministic_for_all_counts() {
+    fn presets_are_deterministic_for_all_valid_counts() {
         let mut layout = default_layout("ws_1");
-        for count in 1..=12 {
+        for count in 1..=17 {
             for preset in [
+                CodePanePreset::Vertical,
+                CodePanePreset::Horizontal,
+                CodePanePreset::TwoRows,
+                CodePanePreset::ThreeRows,
+                CodePanePreset::FourRows,
+                CodePanePreset::Focus,
                 CodePanePreset::EqualColumns,
                 CodePanePreset::EqualRows,
                 CodePanePreset::MainLeft,
@@ -1952,16 +1959,88 @@ mod tests {
                 CodePanePreset::Grid,
                 CodePanePreset::Tidy,
             ] {
-                let applied = apply_layout_preset(&layout, preset).unwrap();
-                validate_layout(&applied).unwrap();
-                let leaves = visual_leaf_order(&applied);
-                assert_eq!(leaves.len(), count);
+                let max_allowed = preset_max_panes(preset);
+                if count <= max_allowed {
+                    let applied = apply_layout_preset(&layout, preset).unwrap();
+                    validate_layout(&applied).unwrap();
+                    let leaves = visual_leaf_order(&applied);
+                    assert_eq!(leaves.len(), count);
+                } else {
+                    assert!(matches!(
+                        apply_layout_preset(&layout, preset),
+                        Err(CodeDomainError::PresetCapacityExceeded { .. })
+                    ));
+                }
             }
-            if count < 12 {
+            if count < 17 {
                 let leaves = visual_leaf_order(&layout);
                 layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn preset_capacity_limits_are_strictly_enforced() {
+        let mut layout = default_layout("ws_1");
+        for _ in 0..4 {
+            let leaves = visual_leaf_order(&layout);
+            layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
+        }
+        // 5 panes: Vertical and Horizontal must fail with PresetCapacityExceeded
+        assert_eq!(
+            apply_layout_preset(&layout, CodePanePreset::Vertical),
+            Err(CodeDomainError::PresetCapacityExceeded {
+                preset: "Vertical".to_owned(),
+                count: 5,
+                max: 4,
+            })
+        );
+        assert_eq!(
+            apply_layout_preset(&layout, CodePanePreset::Horizontal),
+            Err(CodeDomainError::PresetCapacityExceeded {
+                preset: "Horizontal".to_owned(),
+                count: 5,
+                max: 4,
+            })
+        );
+        // 2 Rows (max 8) should succeed at 5 panes
+        assert!(apply_layout_preset(&layout, CodePanePreset::TwoRows).is_ok());
+
+        // Split to 9 panes
+        for _ in 0..4 {
+            let leaves = visual_leaf_order(&layout);
+            layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
+        }
+        assert_eq!(visual_leaf_order(&layout).len(), 9);
+        assert!(matches!(
+            apply_layout_preset(&layout, CodePanePreset::TwoRows),
+            Err(CodeDomainError::PresetCapacityExceeded { count: 9, max: 8, .. })
+        ));
+        assert!(apply_layout_preset(&layout, CodePanePreset::ThreeRows).is_ok());
+
+        // Split to 13 panes
+        for _ in 0..4 {
+            let leaves = visual_leaf_order(&layout);
+            layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
+        }
+        assert_eq!(visual_leaf_order(&layout).len(), 13);
+        assert!(matches!(
+            apply_layout_preset(&layout, CodePanePreset::ThreeRows),
+            Err(CodeDomainError::PresetCapacityExceeded { count: 13, max: 12, .. })
+        ));
+        assert!(apply_layout_preset(&layout, CodePanePreset::FourRows).is_ok());
+
+        // Split to 17 panes
+        for _ in 0..4 {
+            let leaves = visual_leaf_order(&layout);
+            layout = split_pane(&layout, &leaves[0], CodePanePlacement::Right).unwrap();
+        }
+        assert_eq!(visual_leaf_order(&layout).len(), 17);
+        assert!(matches!(
+            apply_layout_preset(&layout, CodePanePreset::FourRows),
+            Err(CodeDomainError::PresetCapacityExceeded { count: 17, max: 16, .. })
+        ));
+        assert!(apply_layout_preset(&layout, CodePanePreset::Focus).is_ok());
     }
 
     #[test]
@@ -1970,7 +2049,7 @@ mod tests {
         let split = split_pane(&layout, "root", CodePanePlacement::Right).unwrap();
         let leaves = visual_leaf_order(&split);
         let applied =
-            apply_layout_preset_with_primary(&split, CodePanePreset::MainLeft, Some(&leaves[1]))
+            apply_layout_preset_with_primary(&split, CodePanePreset::Focus, Some(&leaves[1]))
                 .unwrap();
 
         assert_eq!(applied.focused_pane_id.as_deref(), Some(leaves[1].as_str()));

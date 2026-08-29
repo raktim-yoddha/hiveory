@@ -23,6 +23,7 @@ export interface CodeWorkspaceState {
 }
 
 export type CodeWorkspaceAction =
+  | { type: 'SET_WORKSPACE_LOADING'; workspaceId: string }
   | { type: 'SET_WORKSPACE'; workspaceId: string; layout: CodePaneLayout; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
   | { type: 'SET_LAYOUT'; layout: CodePaneLayout }
   | { type: 'SET_FOCUSED_PANE'; paneId: string }
@@ -52,6 +53,18 @@ export function codeWorkspaceReducer(
   action: CodeWorkspaceAction
 ): CodeWorkspaceState {
   switch (action.type) {
+    case 'SET_WORKSPACE_LOADING':
+      return {
+        ...state,
+        workspaceId: action.workspaceId,
+        layout: null,
+        revision: 0,
+        focusedPaneId: null,
+        maximizedPaneId: null,
+        terminals: new Map(),
+        previews: new Map(),
+        error: null,
+      }
     case 'SET_WORKSPACE': {
       const termMap = new Map<string, CodeTerminalSummary>()
       action.terminals.forEach((t) => termMap.set(t.id, t))

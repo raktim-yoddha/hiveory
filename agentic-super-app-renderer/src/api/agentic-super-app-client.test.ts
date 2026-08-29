@@ -76,3 +76,21 @@ test('preview keeps projects as parents of primary and isolated workspaces', asy
   expect(updatedProject?.workspace_count).toBe(2)
   expect(after.workspaces.map((workspace) => workspace.id)).toEqual(expect.arrayContaining([primary.summary.id, isolated.summary.id]))
 })
+
+test('preview removes secondary workspaces without allowing primary deletion', async () => {
+  const primary = await agenticSuperAppClient.addCodeProject('~/removal-hierarchy-demo')
+  const isolated = await agenticSuperAppClient.createCodeWorkspace({
+    project_id: primary.summary.project_id,
+    name: 'Temporary workspace',
+    base_ref: 'HEAD',
+    branch_name: 'feature/removal-hierarchy-demo',
+  })
+
+  const afterWorkspaceRemoval = await agenticSuperAppClient.removeCodeWorkspace({ workspace_id: isolated.summary.id, force: true })
+  expect(afterWorkspaceRemoval.workspaces.map((workspace) => workspace.id)).not.toContain(isolated.summary.id)
+  expect(afterWorkspaceRemoval.projects.find((project) => project.id === primary.summary.project_id)?.workspace_count).toBe(1)
+  await expect(agenticSuperAppClient.removeCodeWorkspace({ workspace_id: primary.summary.id, force: true })).rejects.toThrow('primary workspace')
+
+  const afterProjectRemoval = await agenticSuperAppClient.removeCodeProject({ project_id: primary.summary.project_id, force: true })
+  expect(afterProjectRemoval.projects.map((project) => project.id)).not.toContain(primary.summary.project_id)
+})

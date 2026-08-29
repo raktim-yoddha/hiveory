@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+mod hosted_source;
 mod release;
 
 use agentic_super_app_agent_runtime::AgenticSuperAppAgentRuntime;
@@ -46,28 +47,34 @@ use agentic_super_app_protocol::{
     ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
     CloseCodePaneRequest, CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
-    CodeDagProposalRequest, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
-    CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery, CodeGitDiff,
-    CodeGitDiffRequest, CodeGitStatus, CodeGitStatusRequest, CodeOrchestrationEventEnvelope,
+    CodeDagProposalRequest, CodeDecisionGate, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
+    CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery,
+    CodeGateCreateRequest, CodeGateResolveRequest, CodeGatesQuery, CodeGitDiff, CodeGitDiffRequest,
+    CodeGitRepositoryRequest, CodeGitRepositorySummary, CodeGitStatus, CodeGitStatusRequest,
+    CodeHostedTracking, CodeHostedTrackingRequest, CodeMailboxAckRequest, CodeMailboxDelivery,
+    CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
     CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
     CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
-    CodeProjectAddRequest, CodeProjectKind, CodeProjectSummary, CodeQuestionAnswerRequest,
+    CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary,
+    CodeQuestionAnswerRequest,
     CodeReadFileRequest, CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest,
     CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
     CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
     CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
     CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
     CodeTerminalStopRequest, CodeTerminalSubscribeRequest, CodeTerminalSummary,
-    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenRequest, CodeWorkspaceQuery,
-    CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope, CreateCodePaneThreadRequest,
-    CreateCodePaneThreadResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
-    LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
-    PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
-    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
-    PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest, ResponseEnvelope,
-    RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
-    RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
-    SharedEventEnvelope, SharedEventKind, UpdateSnapshot, AGENTIC_SUPER_APP_PROTOCOL_VERSION,
+    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenRequest,
+    CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeWorkspaceTrustRequest, CommandEnvelope,
+    CreateCodePaneThreadRequest, CreateCodePaneThreadResult, DiagnosticSnapshot, JobState,
+    LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest,
+    OpenCodePanePreviewResult, PluginCatalogEntry, PluginConnectionCreateRequest,
+    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
+    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
+    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
+    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
+    AGENTIC_SUPER_APP_PROTOCOL_VERSION,
 };
 use agentic_super_app_routine_scheduler::{
     AgenticSuperAppRoutineScheduler, AgenticSuperAppRoutineSchedulerError,
@@ -331,6 +338,48 @@ impl AgenticSuperAppFoundation {
         })
     }
 
+    async fn reopen_persisted_code_workspace(
+        &self,
+        persisted: &CodeWorkspaceSummary,
+    ) -> Result<CodeWorkspaceSummary, ApiError> {
+        let opened = self
+            .code_workspaces
+            .open_workspace(
+                Path::new(&persisted.root_path),
+                Some(&persisted.id),
+                persisted.trust,
+            )
+            .map_err(workspace_error)?;
+        if opened.id != persisted.id {
+            return Err(application_error(
+                "workspace_identity_conflict",
+                "The saved workspace path is already attached to a different workspace.",
+                RetryClass::AfterUserAction,
+            ));
+        }
+        let summary = self
+            .code_workspaces
+            .update_workspace_metadata(
+                &persisted.id,
+                AgenticSuperAppWorkspaceMetadata {
+                    project_id: persisted.project_id.clone(),
+                    workspace_kind: persisted.workspace_kind,
+                    worktree_name: persisted.worktree_name.clone(),
+                    base_ref: persisted.base_ref.clone(),
+                    branch: persisted.branch.clone(),
+                    managed_by_app: persisted.managed_by_app,
+                    available: true,
+                    unavailable_reason: None,
+                },
+            )
+            .map_err(workspace_error)?;
+        self.persistence
+            .save_code_workspace(&summary)
+            .await
+            .map_err(database_error)?;
+        Ok(summary)
+    }
+
     async fn code_snapshot(&self) -> Result<CodeSnapshot, ApiError> {
         let persisted_workspaces = self
             .persistence
@@ -338,19 +387,40 @@ impl AgenticSuperAppFoundation {
             .await
             .map_err(database_error)?;
         let mut workspaces = self.code_workspaces.summaries().map_err(workspace_error)?;
-        let loaded_workspace_ids = workspaces
-            .iter()
-            .map(|workspace| workspace.id.clone())
-            .collect::<std::collections::HashSet<_>>();
         for persisted in persisted_workspaces {
-            if loaded_workspace_ids.contains(&persisted.id) {
+            let loaded_index = workspaces
+                .iter()
+                .position(|workspace| workspace.id == persisted.id);
+            if loaded_index
+                .and_then(|index| workspaces.get(index))
+                .is_some_and(|workspace| {
+                    workspace.available
+                        && std::fs::metadata(&persisted.root_path)
+                            .map(|metadata| metadata.is_dir())
+                            .unwrap_or(false)
+                })
+            {
                 continue;
             }
-            let mut unavailable = persisted;
-            unavailable.available = false;
-            unavailable.unavailable_reason =
-                Some("The workspace folder is unavailable on this device.".to_owned());
-            workspaces.push(unavailable);
+            match self.reopen_persisted_code_workspace(&persisted).await {
+                Ok(summary) => {
+                    if let Some(index) = loaded_index {
+                        workspaces[index] = summary;
+                    } else {
+                        workspaces.push(summary);
+                    }
+                }
+                Err(error) => {
+                    let mut unavailable = persisted;
+                    unavailable.available = false;
+                    unavailable.unavailable_reason = Some(error.message);
+                    if let Some(index) = loaded_index {
+                        workspaces[index] = unavailable;
+                    } else {
+                        workspaces.push(unavailable);
+                    }
+                }
+            }
         }
         workspaces.sort_by(|left, right| left.display_name.cmp(&right.display_name));
 
@@ -359,11 +429,24 @@ impl AgenticSuperAppFoundation {
             .code_projects()
             .await
             .map_err(database_error)?;
+        for project in &projects {
+            if let Some(workspace) = workspaces
+                .iter_mut()
+                .find(|workspace| workspace.id == project.primary_workspace_id)
+            {
+                // The primary workspace is the authoritative project relationship.
+                // Older records could retain a legacy project id after migration.
+                workspace.project_id = project.id.clone();
+            }
+        }
         for project in &mut projects {
-            if !workspaces
+            if workspaces
                 .iter()
                 .any(|workspace| workspace.project_id == project.id && workspace.available)
             {
+                project.available = true;
+                project.unavailable_reason = None;
+            } else {
                 project.available = false;
                 project.unavailable_reason = Some(
                     "No workspace folder for this project is available on this device.".to_owned(),
@@ -607,11 +690,215 @@ impl AgenticSuperAppFoundation {
         self.code_detail(&summary.id).await
     }
 
+    async fn stop_code_workspace_terminals(&self, workspace_id: &str) -> Result<(), ApiError> {
+        let terminals = self
+            .code_runtime
+            .list()
+            .map_err(runtime_error)?
+            .into_iter()
+            .filter(|terminal| terminal.workspace_id == workspace_id)
+            .collect::<Vec<_>>();
+        for terminal in terminals {
+            if self
+                .code_runtime
+                .stop(&CodeTerminalStopRequest {
+                    terminal_id: terminal.id.clone(),
+                    force: true,
+                })
+                .map_err(runtime_error)?
+            {
+                self.persistence
+                    .finish_code_terminal(
+                        &terminal.id,
+                        agentic_super_app_protocol::CodeTerminalState::Interrupted,
+                        None,
+                    )
+                    .await
+                    .map_err(database_error)?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn remove_code_workspace(
+        &self,
+        request: &CodeWorkspaceRemoveRequest,
+    ) -> Result<CodeSnapshot, ApiError> {
+        let workspace_id = request.workspace_id.trim();
+        if workspace_id.is_empty() {
+            return Err(validation_error("A workspace is required."));
+        }
+        let summary = match self
+            .persistence
+            .code_workspace(workspace_id)
+            .await
+            .map_err(database_error)?
+        {
+            Some(summary) => summary,
+            None => self
+                .code_workspaces
+                .summary(workspace_id)
+                .map_err(workspace_error)?,
+        };
+        let project = self
+            .persistence
+            .code_project(&summary.project_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The workspace project no longer exists."))?;
+        if matches!(
+            summary.workspace_kind,
+            agentic_super_app_protocol::CodeWorkspaceKind::Primary
+        ) || summary.id == project.primary_workspace_id
+        {
+            return Err(validation_error(
+                "The primary workspace cannot be deleted. Remove the project instead.",
+            ));
+        }
+
+        self.stop_code_workspace_terminals(&summary.id).await?;
+        if summary.managed_by_app {
+            let worktree_name = summary.worktree_name.as_deref().ok_or_else(|| {
+                validation_error("The managed workspace has no Git worktree identity.")
+            })?;
+            self.code_git
+                .remove_worktree(
+                    Path::new(&project.root_path),
+                    worktree_name,
+                    &self.code_workspaces_root,
+                    request.force,
+                )
+                .map_err(git_error)?;
+        }
+
+        let _ = self.code_workspaces.close_workspace(&summary.id);
+        self.persistence
+            .delete_code_workspace(&summary.id)
+            .await
+            .map_err(database_error)?;
+        let should_move_active = self
+            .code_active_workspace_id
+            .read()
+            .map_err(|_| unavailable_error())?
+            .as_deref()
+            == Some(summary.id.as_str());
+        if should_move_active {
+            *self
+                .code_active_workspace_id
+                .write()
+                .map_err(|_| unavailable_error())? = Some(project.primary_workspace_id.clone());
+        }
+        self.audit
+            .record(
+                "code.workspace.remove",
+                "success",
+                "warning",
+                Some(&summary.id),
+                Some(if summary.managed_by_app {
+                    "secondary managed workspace and its app-owned worktree removed"
+                } else {
+                    "secondary workspace detached without deleting user files"
+                }),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_snapshot().await
+    }
+
+    async fn remove_code_project(
+        &self,
+        request: &CodeProjectRemoveRequest,
+    ) -> Result<CodeSnapshot, ApiError> {
+        let project_id = request.project_id.trim();
+        if project_id.is_empty() {
+            return Err(validation_error("A project is required."));
+        }
+        let project = self
+            .persistence
+            .code_project(project_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The selected project no longer exists."))?;
+        let workspaces = self
+            .persistence
+            .code_workspaces()
+            .await
+            .map_err(database_error)?
+            .into_iter()
+            .filter(|workspace| {
+                workspace.project_id == project.id
+                    || workspace.id == project.primary_workspace_id
+            })
+            .collect::<Vec<_>>();
+
+        for workspace in &workspaces {
+            self.stop_code_workspace_terminals(&workspace.id).await?;
+        }
+        for workspace in &workspaces {
+            if !workspace.managed_by_app {
+                continue;
+            }
+            let worktree_name = workspace.worktree_name.as_deref().ok_or_else(|| {
+                validation_error("A managed workspace has no Git worktree identity.")
+            })?;
+            self.code_git
+                .remove_worktree(
+                    Path::new(&project.root_path),
+                    worktree_name,
+                    &self.code_workspaces_root,
+                    request.force,
+                )
+                .map_err(git_error)?;
+        }
+
+        for workspace in &workspaces {
+            let _ = self.code_workspaces.close_workspace(&workspace.id);
+            self.persistence
+                .delete_code_workspace(&workspace.id)
+                .await
+                .map_err(database_error)?;
+        }
+        self.persistence
+            .delete_code_project(&project.id)
+            .await
+            .map_err(database_error)?;
+        *self
+            .code_active_workspace_id
+            .write()
+            .map_err(|_| unavailable_error())? = None;
+        self.audit
+            .record(
+                "code.project.remove",
+                "success",
+                "warning",
+                Some(&project.id),
+                Some("project metadata removed; the primary project folder was preserved"),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_snapshot().await
+    }
+
     async fn code_detail(&self, workspace_id: &str) -> Result<CodeWorkspaceDetail, ApiError> {
-        let summary = self
-            .code_workspaces
-            .summary(workspace_id)
-            .map_err(workspace_error)?;
+        let summary = match self.code_workspaces.summary(workspace_id) {
+            Ok(summary)
+                if summary.available
+                    && std::fs::metadata(&summary.root_path)
+                        .map(|metadata| metadata.is_dir())
+                        .unwrap_or(false) =>
+            {
+                summary
+            }
+            _ => {
+                let persisted = self
+                    .persistence
+                    .code_workspace(workspace_id)
+                    .await
+                    .map_err(database_error)?
+                    .ok_or_else(|| workspace_error(AgenticSuperAppWorkspaceError::NotFound))?;
+                self.reopen_persisted_code_workspace(&persisted).await?
+            }
+        };
         let layout = match self
             .persistence
             .code_layout(workspace_id)
@@ -1456,6 +1743,86 @@ async fn agentic_super_app_query_code_run(
 }
 
 #[tauri::command]
+async fn agentic_super_app_query_code_mailbox(
+    query: CodeMailboxQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<CodeMailboxDelivery>, ApiError> {
+    foundation
+        .code_orchestration
+        .mailbox(&query)
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_send_code_mailbox(
+    command: CommandEnvelope<CodeMailboxSendRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeMailboxDelivery>, ApiError> {
+    validate_code_command(&command)?;
+    let delivery = foundation
+        .code_orchestration
+        .send_mailbox_message(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, delivery))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_ack_code_mailbox(
+    command: CommandEnvelope<CodeMailboxAckRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    let acknowledged = foundation
+        .code_orchestration
+        .acknowledge_mailbox(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, acknowledged))
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_gates(
+    query: CodeGatesQuery,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<Vec<CodeDecisionGate>, ApiError> {
+    foundation
+        .code_orchestration
+        .gates(&query)
+        .await
+        .map_err(orchestration_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_code_gate(
+    command: CommandEnvelope<CodeGateCreateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeDecisionGate>, ApiError> {
+    validate_code_command(&command)?;
+    let gate = foundation
+        .code_orchestration
+        .create_gate(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, gate))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_resolve_code_gate(
+    command: CommandEnvelope<CodeGateResolveRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeDecisionGate>, ApiError> {
+    validate_code_command(&command)?;
+    let gate = foundation
+        .code_orchestration
+        .resolve_gate(&command.payload)
+        .await
+        .map_err(orchestration_error)?;
+    Ok(response(&command.request_id, gate))
+}
+
+#[tauri::command]
 async fn agentic_super_app_query_code_orchestration_events(
     query: CodeOrchestrationEventsQuery,
     foundation: State<'_, AgenticSuperAppFoundation>,
@@ -1907,6 +2274,30 @@ async fn agentic_super_app_command_create_code_workspace(
 }
 
 #[tauri::command]
+async fn agentic_super_app_command_remove_code_workspace(
+    command: CommandEnvelope<CodeWorkspaceRemoveRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeSnapshot>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation.remove_code_workspace(&command.payload).await?,
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_remove_code_project(
+    command: CommandEnvelope<CodeProjectRemoveRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeSnapshot>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation.remove_code_project(&command.payload).await?,
+    ))
+}
+
+#[tauri::command]
 async fn agentic_super_app_command_trust_code_workspace(
     command: CommandEnvelope<CodeWorkspaceTrustRequest>,
     foundation: State<'_, AgenticSuperAppFoundation>,
@@ -2098,6 +2489,47 @@ async fn agentic_super_app_query_code_git_diff(
             request.relative_path.as_deref(),
         )
         .map_err(git_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_git_repository(
+    request: CodeGitRepositoryRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeGitRepositorySummary, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&request.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .code_git
+        .repository_summary(&request.workspace_id, &root)
+        .map_err(git_error)
+}
+
+#[tauri::command]
+async fn agentic_super_app_query_code_hosted_tracking(
+    request: CodeHostedTrackingRequest,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<CodeHostedTracking, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            agentic_super_app_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&request.workspace_id)
+        .map_err(workspace_error)?;
+    Ok(hosted_source::load_tracking(&foundation.persistence, &request.workspace_id, &root).await)
 }
 
 #[tauri::command]
@@ -4769,11 +5201,19 @@ pub fn run() {
             agentic_super_app_query_code_workspace,
             agentic_super_app_query_code_runs,
             agentic_super_app_query_code_run,
+            agentic_super_app_query_code_mailbox,
+            agentic_super_app_command_send_code_mailbox,
+            agentic_super_app_command_ack_code_mailbox,
+            agentic_super_app_query_code_gates,
+            agentic_super_app_command_create_code_gate,
+            agentic_super_app_command_resolve_code_gate,
             agentic_super_app_query_code_orchestration_events,
             agentic_super_app_stream_code_orchestration_events,
             agentic_super_app_command_add_code_project,
             agentic_super_app_command_open_code_workspace,
             agentic_super_app_command_create_code_workspace,
+            agentic_super_app_command_remove_code_workspace,
+            agentic_super_app_command_remove_code_project,
             agentic_super_app_command_trust_code_workspace,
             agentic_super_app_command_create_code_run,
             agentic_super_app_command_update_code_run,
@@ -4807,6 +5247,8 @@ pub fn run() {
             agentic_super_app_stream_code_terminal_events,
             agentic_super_app_query_code_git_status,
             agentic_super_app_query_code_git_diff,
+            agentic_super_app_query_code_git_repository,
+            agentic_super_app_query_code_hosted_tracking,
             agentic_super_app_command_start_code_terminal,
             agentic_super_app_command_write_code_terminal,
             agentic_super_app_command_resize_code_terminal,

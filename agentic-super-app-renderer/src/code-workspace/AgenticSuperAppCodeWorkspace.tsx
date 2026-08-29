@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback, type ReactNode } from 'react'
 import {
   agenticSuperAppClient,
+  type CodePanePreset,
   type CodeProjectSummary,
+  type CodeSnapshot,
   type CodeWorkspaceCreateRequest,
   type CodeWorkspaceSummary,
 } from '../api/agentic-super-app-client'
@@ -12,8 +14,20 @@ import { AgenticSuperAppCodeDashboard } from './AgenticSuperAppCodeDashboard'
 import { AgenticSuperAppCodeRoutines } from './AgenticSuperAppCodeRoutines'
 import { AgenticSuperAppCodePlugins } from './AgenticSuperAppCodePlugins'
 import { AgenticSuperAppCodeSkills } from './AgenticSuperAppCodeSkills'
-import { CodeWorkspaceCreateDialog } from './CodeWorkspaceDialogs'
+import { CodeProjectSettingsDialog, CodeWorkspaceCreateDialog } from './CodeWorkspaceDialogs'
+import { CodeSourcePanel } from './CodeSourcePanel'
+import { CodeCoordinationPanel } from './CodeCoordinationPanel'
 import './code-workspace.css'
+
+function readSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const preferences = JSON.parse(window.localStorage.getItem('agentic-super-app.preferences') ?? '{}') as { sidebarCollapsed?: unknown }
+    return preferences.sidebarCollapsed === true
+  } catch {
+    return false
+  }
+}
 
 interface AgenticSuperAppCodeWorkspaceProps {
   initialWorkspaceId?: string | null
@@ -33,31 +47,48 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   const [createWorkspaceProjectId, setCreateWorkspaceProjectId] = useState<string | null>(null)
   const [createWorkspaceBusy, setCreateWorkspaceBusy] = useState(false)
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null)
+  const [projectSettingsProjectId, setProjectSettingsProjectId] = useState<string | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+  const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
+  const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
+  const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
 
-  const refreshWorkspaces = useCallback(async () => {
+  const refreshWorkspaces = useCallback(async (): Promise<CodeSnapshot | null> => {
     try {
       const snapshot = await agenticSuperAppClient.codeSnapshot()
       setProjects(snapshot.projects)
       setWorkspaces(snapshot.workspaces)
-      const availableWorkspace = snapshot.workspaces.find((workspace) => workspace.available)
-      if (!activeWorkspaceId && availableWorkspace) {
-        const firstId = snapshot.active_workspace_id && snapshot.workspaces.some((workspace) => workspace.id === snapshot.active_workspace_id && workspace.available)
+      const activeWorkspaceStillAvailable = Boolean(activeWorkspaceId && snapshot.workspaces.some((workspace) => workspace.id === activeWorkspaceId && workspace.available))
+      if (!activeWorkspaceStillAvailable) {
+        const availableWorkspace = snapshot.workspaces.find((workspace) => workspace.available)
+        const nextId = snapshot.active_workspace_id && snapshot.workspaces.some((workspace) => workspace.id === snapshot.active_workspace_id && workspace.available)
           ? snapshot.active_workspace_id
-          : availableWorkspace.id
-        setActiveWorkspaceId(firstId)
-        void loadWorkspace(firstId)
+          : availableWorkspace?.id ?? null
+        setActiveWorkspaceId(nextId)
+        if (nextId) void loadWorkspace(nextId)
       }
+      return snapshot
     } catch {
       // ignore snapshot error
+      return null
     }
   }, [activeWorkspaceId, loadWorkspace])
 
   useEffect(() => {
     void refreshWorkspaces()
   }, [refreshWorkspaces])
+
+  useEffect(() => {
+    const handleSidebarToggle = (event: Event) => {
+      const requested = (event as CustomEvent<{ collapsed?: unknown }>).detail?.collapsed
+      setSidebarCollapsed(typeof requested === 'boolean' ? requested : (current) => !current)
+    }
+    window.addEventListener('agentic-super-app-sidebar-toggle', handleSidebarToggle)
+    return () => window.removeEventListener('agentic-super-app-sidebar-toggle', handleSidebarToggle)
+  }, [])
 
   const handleSelectWorkspace = (wsId: string) => {
     setActiveWorkspaceId(wsId)
@@ -106,12 +137,52 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
     }
   }
 
+  const handleRemoveWorkspace = async (workspaceId: string) => {
+    const workspace = workspaces.find((item) => item.id === workspaceId)
+    if (!workspace) return
+    const message = workspace.managed_by_app
+      ? `Delete "${workspace.display_name}"? Running panes will be stopped and this app-managed worktree will be permanently removed. Uncommitted changes in it will be lost.`
+      : `Remove "${workspace.display_name}" from this app? Its folder and files will be kept.`
+    if (!window.confirm(message)) return
+    try {
+      await agenticSuperAppClient.removeCodeWorkspace({ workspace_id: workspace.id, force: true })
+      await refreshWorkspaces()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleRemoveProject = async (projectId: string) => {
+    const project = projects.find((item) => item.id === projectId)
+    if (!project) return
+    const message = `Remove "${project.display_name}" from this app? Running panes will be stopped, app-managed secondary worktrees will be deleted, and the primary project folder will be preserved.`
+    if (!window.confirm(message)) return
+    try {
+      await agenticSuperAppClient.removeCodeProject({ project_id: project.id, force: true })
+      await refreshWorkspaces()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const handleToggleSourcePanel = (open?: boolean) => {
+    setActiveSection('workspace')
+    setCoordinationPanelOpen(false)
+    setSourcePanelOpen((current) => typeof open === 'boolean' ? open : !current)
+  }
+
+  const handleToggleCoordinationPanel = (open?: boolean) => {
+    setActiveSection('workspace')
+    setSourcePanelOpen(false)
+    setCoordinationPanelOpen((current) => typeof open === 'boolean' ? open : !current)
+  }
+
   // Keyboard shortcut listener
   useEffect(() => {
     const onTidy = () => void applyPreset('tidy')
     const onApplyPreset = (event: Event) => {
-      const preset = (event as CustomEvent<{ preset?: string }>).detail?.preset
-      if (preset === 'main_left' || preset === 'equal_columns' || preset === 'equal_rows' || preset === 'grid' || preset === 'tidy') {
+      const preset = (event as CustomEvent<{ preset?: CodePanePreset }>).detail?.preset
+      if (preset) {
         void applyPreset(preset)
       }
     }
@@ -194,7 +265,7 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   }, [applyPreset, focusPane, requestClosePane, setError, state.focusedPaneId, toggleMaximize])
 
   return (
-    <div className="code-workspace-root">
+    <div className={`code-workspace-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
       <CodeWorkspaceRail
         controller={controller}
         projects={projects}
@@ -204,7 +275,14 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         onSelectWorkspace={handleSelectWorkspace}
         onAddProject={() => void handleAddProject()}
         onAddWorkspace={handleAddWorkspace}
+        onOpenProjectSettings={setProjectSettingsProjectId}
+        onRemoveProject={(projectId) => void handleRemoveProject(projectId)}
+        onRemoveWorkspace={(workspaceId) => void handleRemoveWorkspace(workspaceId)}
         onSelectGlobalSection={(section) => setActiveSection(section)}
+        sourcePanelOpen={sourcePanelOpen}
+        coordinationPanelOpen={coordinationPanelOpen}
+        onToggleSourcePanel={handleToggleSourcePanel}
+        onToggleCoordinationPanel={handleToggleCoordinationPanel}
       />
 
       <main className="code-workspace-main">
@@ -213,7 +291,13 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         {activeSection === 'plugins' && <AgenticSuperAppCodePlugins />}
         {activeSection === 'skills' && <AgenticSuperAppCodeSkills />}
         {activeSection === 'workspace' && (
-          <CodePaneCanvas controller={controller} onOpenFolder={() => void handleAddProject()} />
+          <div className="code-workspace-workspace-view">
+            <div className={`code-workspace-canvas-shell ${sourcePanelOpen && activeWorkspace ? 'has-source-panel' : ''} ${coordinationPanelOpen && activeWorkspace ? 'has-coordination-panel' : ''}`}>
+              <CodePaneCanvas controller={controller} onOpenFolder={() => void handleAddProject()} />
+              {sourcePanelOpen && activeWorkspace && <CodeSourcePanel workspace={activeWorkspace} onClose={() => setSourcePanelOpen(false)} />}
+              {coordinationPanelOpen && activeWorkspace && <CodeCoordinationPanel workspace={activeWorkspace} onClose={() => setCoordinationPanelOpen(false)} />}
+            </div>
+          </div>
         )}
       </main>
 
@@ -225,6 +309,12 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         error={createWorkspaceError}
         onClose={() => { if (!createWorkspaceBusy) setCreateWorkspaceOpen(false) }}
         onSubmit={(request) => void handleCreateWorkspace(request)}
+      />
+
+      <CodeProjectSettingsDialog
+        open={projectSettingsProjectId !== null}
+        project={projects.find((project) => project.id === projectSettingsProjectId) ?? null}
+        onClose={() => setProjectSettingsProjectId(null)}
       />
 
     </div>

@@ -70,6 +70,14 @@ impl AgenticSuperAppPersistence {
         Ok(())
     }
 
+    pub async fn delete_code_project(&self, project_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM agentic_super_app_code_projects WHERE id=?")
+            .bind(project_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn code_workspaces(&self) -> Result<Vec<CodeWorkspaceSummary>, sqlx::Error> {
         let rows = sqlx::query(
             "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason FROM agentic_super_app_code_workspaces ORDER BY updated_at_unix_ms DESC",
@@ -125,6 +133,14 @@ impl AgenticSuperAppPersistence {
         .bind(&summary.unavailable_reason)
         .execute(&self.pool)
         .await?;
+        Ok(())
+    }
+
+    pub async fn delete_code_workspace(&self, workspace_id: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM agentic_super_app_code_workspaces WHERE id=?")
+            .bind(workspace_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 

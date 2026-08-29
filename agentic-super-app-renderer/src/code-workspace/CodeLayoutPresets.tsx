@@ -1,15 +1,18 @@
 import React, { useEffect, useRef } from 'react'
-import { Columns, Rows, LayoutGrid, Sparkles, Layout, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { CodePanePreset } from '../api/agentic-super-app-client'
+import { PRIMARY_PRESETS } from './code-layout-presets-meta'
 
 interface CodeLayoutPresetsProps {
   onSelectPreset: (preset: CodePanePreset) => void
   onClose: () => void
+  paneCount?: number
 }
 
 export const CodeLayoutPresets: React.FC<CodeLayoutPresetsProps> = ({
   onSelectPreset,
   onClose,
+  paneCount = 1,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -19,20 +22,18 @@ export const CodeLayoutPresets: React.FC<CodeLayoutPresetsProps> = ({
         onClose()
       }
     }
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
     document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [onClose])
-
-  const presets: { id: CodePanePreset; label: string; desc: string; icon: React.ReactNode }[] = [
-    { id: 'tidy', label: 'Tidy', desc: 'Normalize layout cleanly (Ctrl+Shift+T)', icon: <Sparkles size={16} /> },
-    { id: 'equal_columns', label: 'Equal Columns', desc: 'Distribute panes in vertical columns', icon: <Columns size={16} /> },
-    { id: 'equal_rows', label: 'Equal Rows', desc: 'Distribute panes in horizontal rows', icon: <Rows size={16} /> },
-    { id: 'main_left', label: 'Main Left', desc: 'Large primary pane on left, stacked on right', icon: <Layout size={16} /> },
-    { id: 'main_top', label: 'Main Top', desc: 'Large primary pane on top, stacked below', icon: <Layout className="code-preset-icon-rotated" size={16} /> },
-    { id: 'grid', label: 'Grid (2x2 / 3x2)', desc: 'Balanced 2D grid arrangement', icon: <LayoutGrid size={16} /> },
-  ]
 
   return (
     <div className="code-presets-backdrop">
@@ -45,22 +46,35 @@ export const CodeLayoutPresets: React.FC<CodeLayoutPresetsProps> = ({
         </div>
 
         <div className="code-presets-grid">
-          {presets.map((preset) => (
-            <button
-              key={preset.id}
-              onClick={() => {
-                onSelectPreset(preset.id)
-                onClose()
-              }}
-              className="code-preset-card"
-            >
-              <div className="code-preset-icon">{preset.icon}</div>
-              <div>
-                <div className="code-preset-label">{preset.label}</div>
-                <div className="code-preset-description">{preset.desc}</div>
-              </div>
-            </button>
-          ))}
+          {PRIMARY_PRESETS.map((preset) => {
+            const disabled = paneCount > preset.maxPanes
+            return (
+              <button
+                key={preset.id}
+                onClick={() => {
+                  if (!disabled) {
+                    onSelectPreset(preset.id)
+                    onClose()
+                  }
+                }}
+                disabled={disabled}
+                aria-disabled={disabled}
+                className={`code-preset-card ${disabled ? 'is-disabled' : ''}`}
+                title={
+                  disabled
+                    ? `${preset.label}: Supports up to ${preset.maxPanes} panes (current: ${paneCount})`
+                    : preset.description
+                }
+              >
+                <div>
+                  <div className="code-preset-label">{preset.label}</div>
+                  <div className="code-preset-description">
+                    {disabled ? `Max ${preset.maxPanes} panes` : preset.description}
+                  </div>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>

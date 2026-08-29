@@ -268,6 +268,63 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
 @media (max-width: 860px) { .agentic-super-app-settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .agentic-super-app-title-actions { gap: 4px; }.agentic-super-app-title-actions .agentic-super-app-connection { display: none; }.agentic-super-app-title-actions .agentic-super-app-icon-button { width: 29px; height: 29px; }.agentic-super-app-settings { padding: 34px 18px 42px; }.agentic-super-app-overlay { padding: 66px 10px 10px; }.agentic-super-app-notification-center { top: 58px; right: 8px; width: calc(100vw - 16px); } }
 
+/* Phase 13 shell controls: title-bar children are explicit no-drag targets. */
+.agentic-super-app-titlebar .agentic-super-app-brand,
+.agentic-super-app-titlebar .agentic-super-app-mode-switch,
+.agentic-super-app-titlebar .agentic-super-app-title-actions,
+.agentic-super-app-titlebar button,
+.agentic-super-app-titlebar nav {
+  -webkit-app-region: no-drag;
+}
+.agentic-super-app-sidebar-toggle {
+  width: 36px;
+  height: 36px;
+  margin-left: 2px;
+}
+.agentic-window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+.agentic-win-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.agentic-win-btn:hover {
+  border-color: #30343c;
+  background: #1c1e23;
+  color: #f4f5f7;
+}
+.agentic-win-btn.close:hover {
+  border-color: #a33b43;
+  background: #b4232f;
+  color: #fff;
+}
+.agentic-win-btn:focus-visible,
+.agentic-super-app-sidebar-toggle:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 1px;
+}
+.agentic-window-control-error {
+  max-width: 220px;
+  overflow: hidden;
+  color: #f3a6a6;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Phase 9 visual system: graphite surfaces, restrained blue action color,
    and a persistent global rail modeled on the approved product reference. */
 :root {
@@ -348,17 +405,17 @@ body { background: var(--agentic-super-app-canvas); color: var(--agentic-super-a
 .agentic-super-app-code-preview-pane iframe { width: 100%; height: 100%; min-height: 0; border: 0; background: #fff; }
 .agentic-super-app-code-preview-pane a { display: inline-grid; width: 27px; height: 27px; place-items: center; color: #9eb5c9; }
 .agentic-super-app-code-preview-pane a:hover { color: #fff; }
-.agentic-super-app-title-action { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; border: 1px solid #3e4f68; border-radius: 6px; padding: 5px 9px; color: #dbe9ff; background: #1e2d42; cursor: pointer; font-size: 12px; }
-.agentic-super-app-title-action:hover { border-color: #698dc2; background: #29405d; }
+.agentic-super-app-title-action { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; padding: 4px 9px; color: #e2e8f0; background: rgba(255, 255, 255, 0.04); cursor: pointer; font-size: 11.5px; font-weight: 500; transition: all 0.15s ease; }
+.agentic-super-app-title-action:hover { border-color: rgba(96, 165, 250, 0.4); background: rgba(30, 41, 59, 0.6); color: #ffffff; }
 .agentic-super-app-layout-menu { position: relative; }
-.agentic-super-app-layout-chevron { color: #8fa9c9; font-size: 13px; line-height: 1; }
-.agentic-super-app-layout-dropdown { position: absolute; top: calc(100% + 7px); right: 0; z-index: 300; display: grid; width: 270px; gap: 3px; border: 1px solid #354860; border-radius: 9px; padding: 5px; background: #14171d; box-shadow: 0 18px 45px rgba(0, 0, 0, .55); }
-.agentic-super-app-layout-option { display: grid; grid-template-columns: 27px minmax(0, 1fr); align-items: center; gap: 9px; width: 100%; min-height: 46px; border: 1px solid transparent; border-radius: 6px; padding: 7px 8px; text-align: left; color: #dbe9f5; background: transparent; cursor: pointer; }
-.agentic-super-app-layout-option:hover, .agentic-super-app-layout-option:focus-visible { border-color: #365a86; background: #1b2b40; }
-.agentic-super-app-layout-option-icon { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 6px; color: #8db9ff; background: #1d2b42; }
-.agentic-super-app-layout-option span:last-child { display: grid; gap: 2px; min-width: 0; }
-.agentic-super-app-layout-option strong { color: #f5f8fc; font-size: 11px; font-weight: 650; }
-.agentic-super-app-layout-option small { overflow: hidden; color: #8c9dad; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.agentic-super-app-layout-chevron { color: #94a3b8; font-size: 12px; line-height: 1; transition: transform 0.15s ease; }
+.agentic-super-app-layout-dropdown { position: absolute; top: calc(100% + 6px); right: 0; z-index: 300; display: grid; width: 280px; gap: 4px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 6px; background: linear-gradient(180deg, rgba(17, 20, 28, 0.96) 0%, rgba(10, 12, 18, 0.98) 100%); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.agentic-super-app-layout-option { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-height: 44px; border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; text-align: left; color: #e2e8f0; background: transparent; cursor: pointer; transition: all 0.14s ease; }
+.agentic-super-app-layout-option:hover, .agentic-super-app-layout-option:focus-visible { border-color: rgba(96, 165, 250, 0.35); background: rgba(37, 99, 235, 0.14); color: #ffffff; }
+.agentic-super-app-layout-option-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; color: #60a5fa; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(96, 165, 250, 0.2); }
+.agentic-super-app-layout-option span:last-child { display: grid; gap: 1px; min-width: 0; }
+.agentic-super-app-layout-option strong { color: #f8fafc; font-size: 11.5px; font-weight: 600; }
+.agentic-super-app-layout-option small { overflow: hidden; color: #94a3b8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .agentic-super-app-skip-link { z-index: 200; }
 html, body, #root { height: 100%; min-height: 0; }
 body { overflow: hidden; }

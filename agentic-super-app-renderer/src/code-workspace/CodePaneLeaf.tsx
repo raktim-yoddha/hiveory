@@ -50,9 +50,15 @@ interface CodePaneLeafProps {
   node: CodePaneNode
   controller: CodeWorkspaceController
   isDragActive?: boolean
+  draggedPaneId?: string | null
 }
 
-export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller, isDragActive = false }) => {
+export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
+  node,
+  controller,
+  isDragActive = false,
+  draggedPaneId = null,
+}) => {
   const {
     state,
     focusPane,
@@ -151,7 +157,10 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({ node, controller, is
           }
         />
       )}
-      <CodePaneDropTargets paneId={node.pane_id} active={isDragActive} />
+      <CodePaneDropTargets
+        paneId={node.pane_id}
+        active={isDragActive && draggedPaneId !== node.pane_id}
+      />
       <div className="code-pane-body">
         <PaneErrorBoundary>{renderContent()}</PaneErrorBoundary>
       </div>

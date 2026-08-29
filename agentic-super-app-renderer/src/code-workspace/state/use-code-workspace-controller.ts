@@ -61,12 +61,16 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   const [state, dispatch] = useReducer(codeWorkspaceReducer, initialCodeWorkspaceState)
   const stateRef = useRef(state)
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const loadRequestRef = useRef(0)
   stateRef.current = state
 
   const loadWorkspace = useCallback(async (workspaceId: string) => {
+    const requestId = ++loadRequestRef.current
+    dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
     try {
       dispatch({ type: 'SET_MUTATING', isMutating: true })
       const snapshot = await agenticSuperAppClient.codeWorkspace(workspaceId)
+      if (requestId !== loadRequestRef.current) return
       dispatch({
         type: 'SET_WORKSPACE',
         workspaceId,
@@ -83,9 +87,12 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
       }
     } catch (err: unknown) {
+      if (requestId !== loadRequestRef.current) return
       dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${formatError(err)}` })
     } finally {
-      dispatch({ type: 'SET_MUTATING', isMutating: false })
+      if (requestId === loadRequestRef.current) {
+        dispatch({ type: 'SET_MUTATING', isMutating: false })
+      }
     }
   }, [])
 

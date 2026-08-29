@@ -1,10 +1,13 @@
-//! Read-only Git integration for Code mode.
+//! Bounded Git integration for Code mode.
 //!
-//! Phase 4 intentionally exposes status and diff only. Mutations, worktrees,
-//! commits, and remotes remain behind later approval and policy surfaces.
+//! Repository inspection is kept separate from hosted-source access. Mutating
+//! operations remain explicit and are called only by trusted host commands.
 
 use agentic_super_app_code_domain::validate_relative_path;
-use agentic_super_app_protocol::{CodeGitDiff, CodeGitFileStatus, CodeGitStatus};
+use agentic_super_app_protocol::{
+    CodeGitBranch, CodeGitCommit, CodeGitDiff, CodeGitFileStatus, CodeGitRemote,
+    CodeGitRepositorySummary, CodeGitStatus, CodeGitWorktree,
+};
 use git2::{
     BranchType, DiffFormat, DiffOptions, Index, IndexEntry, IndexTime, MergeOptions, Repository,
     Signature, Status, StatusOptions, WorktreeAddOptions, WorktreeLockStatus, WorktreePruneOptions,
@@ -185,6 +188,148 @@ impl AgenticSuperAppGitService {
             .head()
             .ok()
             .and_then(|head| head.shorthand().ok().map(ToOwned::to_owned)))
+    }
+
+    pub fn repository_summary(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+    ) -> Result<CodeGitRepositorySummary, AgenticSuperAppGitError> {
+        let repository = self.open_repository(root)?;
+        let head = repository.head().ok();
+        let branch = head
+            .as_ref()
+            .and_then(|reference| reference.shorthand().ok().map(ToOwned::to_owned));
+        let head_oid = head
+            .as_ref()
+            .and_then(|reference| reference.target())
+            .map(|oid| oid.to_string());
+        let detached = head
+            .as_ref()
+            .map(|reference| reference.is_branch())
+            .is_some_and(|value| !value);
+        let upstream = branch.as_deref().and_then(|name| {
+            repository
+                .find_branch(name, BranchType::Local)
+                .ok()
+                .and_then(|local| local.upstream().ok())
+                .and_then(|remote| remote.name().ok().flatten().map(ToOwned::to_owned))
+        });
+
+        let remotes = repository
+            .remotes()?
+            .iter()
+            .filter_map(Result::ok)
+            .flatten()
+            .filter_map(|name| {
+                let remote = repository.find_remote(name).ok()?;
+                let fetch_url = remote.url().ok().map(ToOwned::to_owned);
+                let push_url = remote
+                    .pushurl()
+                    .ok()
+                    .flatten()
+                    .map(ToOwned::to_owned)
+                    .or_else(|| fetch_url.clone());
+                Some(CodeGitRemote {
+                    name: name.to_owned(),
+                    fetch_url,
+                    push_url,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let mut branches = Vec::new();
+        for item in repository.branches(Some(BranchType::Local))? {
+            let (branch_ref, _) = item?;
+            let Some(name) = branch_ref.name()?.map(ToOwned::to_owned) else {
+                continue;
+            };
+            let current = branch.as_deref() == Some(name.as_str());
+            let upstream_ref = branch_ref.upstream().ok();
+            let upstream_name = upstream_ref
+                .as_ref()
+                .and_then(|reference| reference.name().ok().flatten().map(ToOwned::to_owned));
+            let (ahead, behind) = match (
+                branch_ref.get().target(),
+                upstream_ref
+                    .as_ref()
+                    .and_then(|reference| reference.get().target()),
+            ) {
+                (Some(local), Some(remote)) => repository
+                    .graph_ahead_behind(local, remote)
+                    .unwrap_or((0, 0)),
+                _ => (0, 0),
+            };
+            branches.push(CodeGitBranch {
+                name,
+                current,
+                upstream: upstream_name,
+                ahead,
+                behind,
+            });
+        }
+        branches.sort_by(|left, right| left.name.cmp(&right.name));
+
+        let worktrees = self
+            .list_worktrees(root)?
+            .into_iter()
+            .map(|worktree| CodeGitWorktree {
+                name: worktree.name,
+                path: worktree.path.to_string_lossy().into_owned(),
+                branch: worktree.branch,
+                locked: worktree.locked,
+                dirty_files: worktree.dirty_files,
+            })
+            .collect::<Vec<_>>();
+
+        let mut commits = Vec::new();
+        if let Some(oid) = head_oid.as_deref() {
+            let mut walk = repository.revwalk()?;
+            walk.push(
+                git2::Oid::from_str(oid)
+                    .map_err(|error| AgenticSuperAppGitError::InvalidPath(error.to_string()))?,
+            )?;
+            for commit_oid in walk.take(40) {
+                let commit = repository.find_commit(commit_oid?)?;
+                let message = commit
+                    .summary()
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
+                let author = commit.author().name().ok().map(ToOwned::to_owned);
+                let committed_at_unix_ms = commit.time().seconds().checked_mul(1000);
+                let oid = commit.id().to_string();
+                commits.push(CodeGitCommit {
+                    short_oid: oid.chars().take(8).collect(),
+                    oid,
+                    message,
+                    author,
+                    committed_at_unix_ms,
+                });
+            }
+        }
+
+        let status = self.status(workspace_id, root)?;
+        let repository_name = repository
+            .workdir()
+            .and_then(|path| path.file_name())
+            .map(|name| name.to_string_lossy().into_owned());
+        Ok(CodeGitRepositorySummary {
+            workspace_id: workspace_id.to_owned(),
+            root_path: root.to_string_lossy().into_owned(),
+            repository_name,
+            head_oid,
+            branch,
+            detached,
+            upstream,
+            remotes,
+            branches,
+            worktrees,
+            commits,
+            has_conflicts: status.files.iter().any(|file| file.conflict),
+        })
     }
 
     pub fn resolve_ref_oid(
@@ -671,6 +816,42 @@ mod tests {
             .diff("workspace", &root, Some("README.md"))
             .unwrap();
         assert!(diff.content.contains("changed"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn repository_summary_reports_branch_and_recent_commit() {
+        let root =
+            std::env::temp_dir().join(format!("agentic-code-summary-{}", uuid::Uuid::now_v7()));
+        fs::create_dir_all(&root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        fs::write(root.join("README.md"), "hello\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        repository
+            .commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                "initial commit",
+                &tree,
+                &[],
+            )
+            .unwrap();
+        drop(tree);
+        drop(repository);
+
+        let summary = AgenticSuperAppGitService
+            .repository_summary("workspace", &root)
+            .unwrap();
+        assert!(summary.branches.iter().any(|branch| branch.current));
+        assert_eq!(summary.commits.len(), 1);
+        assert_eq!(summary.commits[0].message, "initial commit");
+        assert!(!summary.detached);
         let _ = fs::remove_dir_all(root);
     }
 

@@ -9,6 +9,7 @@ interface CodePaneTreeProps {
   layout: CodePaneLayout
   controller: CodeWorkspaceController
   isDragActive?: boolean
+  draggedPaneId?: string | null
 }
 
 export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
@@ -16,6 +17,7 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
   layout,
   controller,
   isDragActive = false,
+  draggedPaneId = null,
 }) => {
   const node = layout.nodes.find((n) => n.pane_id === nodeId)
   const resizeDebounceRef = useRef<number | null>(null)
@@ -30,7 +32,14 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
 
   // Leaf node
   if (node.children.length === 0) {
-    return <CodePaneLeaf node={node} controller={controller} isDragActive={isDragActive} />
+    return (
+      <CodePaneLeaf
+        node={node}
+        controller={controller}
+        isDragActive={isDragActive}
+        draggedPaneId={draggedPaneId}
+      />
+    )
   }
 
   // Internal split node
@@ -60,13 +69,25 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
       className="code-pane-tree-group"
     >
       <Panel id={leftChildId} defaultSize={`${defaultRatio}%`} minSize="10%">
-        <CodePaneTree nodeId={leftChildId} layout={layout} controller={controller} isDragActive={isDragActive} />
+        <CodePaneTree
+          nodeId={leftChildId}
+          layout={layout}
+          controller={controller}
+          isDragActive={isDragActive}
+          draggedPaneId={draggedPaneId}
+        />
       </Panel>
 
       <Separator className="code-panel-resize-handle" />
 
       <Panel id={rightChildId} defaultSize={`${100 - defaultRatio}%`} minSize="10%">
-        <CodePaneTree nodeId={rightChildId} layout={layout} controller={controller} isDragActive={isDragActive} />
+        <CodePaneTree
+          nodeId={rightChildId}
+          layout={layout}
+          controller={controller}
+          isDragActive={isDragActive}
+          draggedPaneId={draggedPaneId}
+        />
       </Panel>
     </Group>
   )

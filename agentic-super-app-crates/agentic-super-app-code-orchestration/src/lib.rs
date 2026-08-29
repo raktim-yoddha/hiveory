@@ -15,9 +15,11 @@ use agentic_super_app_protocol::CodeWorkspaceCapability;
 use agentic_super_app_protocol::{
     CodeCheckpoint, CodeCheckpointDiffRequest, CodeCheckpointKind, CodeCheckpointState,
     CodeCleanupConfirmRequest, CodeCleanupPreview, CodeCleanupPreviewRequest, CodeDagProposal,
-    CodeDagProposalAcceptRequest, CodeDagProposalRequest, CodeDagProposalTask, CodeDispatch,
-    CodeDispatchCancelRequest, CodeDispatchResumeRequest, CodeDispatchState,
-    CodeDispatchTerminalRequest, CodeManagedWorktree, CodeManagedWorktreeState,
+    CodeDagProposalAcceptRequest, CodeDagProposalRequest, CodeDagProposalTask, CodeDecisionGate,
+    CodeDispatch, CodeDispatchCancelRequest, CodeDispatchResumeRequest, CodeDispatchState,
+    CodeDispatchTerminalRequest, CodeGateCreateRequest, CodeGateResolveRequest, CodeGateState,
+    CodeGatesQuery, CodeMailboxAckRequest, CodeMailboxDelivery, CodeMailboxQuery,
+    CodeMailboxSendRequest, CodeManagedWorktree, CodeManagedWorktreeState,
     CodeOrchestrationEventEnvelope, CodeOrchestrationEventOrigin, CodeOrchestrationMessage,
     CodeOrchestrationMessageKind, CodeQuestionAnswerRequest, CodeReview, CodeReviewDecision,
     CodeReviewPolicy, CodeReviewRequest, CodeRunCreateRequest, CodeRunRequest, CodeRunState,
@@ -301,6 +303,149 @@ impl AgenticSuperAppCodeOrchestration {
             .orchestration_detail(run_id)
             .await?
             .ok_or(AgenticSuperAppCodeOrchestrationError::NotFound)
+    }
+
+    pub async fn send_mailbox_message(
+        &self,
+        request: &CodeMailboxSendRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<CodeMailboxDelivery> {
+        validate_participant_address(&request.sender_address)?;
+        validate_participant_address(&request.recipient_address)?;
+        validate_orchestration_text(&request.payload)?;
+        if request.sender_address == request.recipient_address {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "a mailbox message needs a different sender and recipient".to_owned(),
+            ));
+        }
+        if request
+            .thread_id
+            .as_deref()
+            .is_some_and(|value| value.trim().is_empty())
+        {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "a thread id cannot be empty".to_owned(),
+            ));
+        }
+        if request.payload.len() > MAX_EVENT_PAYLOAD_BYTES {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "mailbox payload exceeds the supported size".to_owned(),
+            ));
+        }
+        self.detail(&request.run_id).await?;
+        let delivery = self.persistence.send_orchestration_mailbox(request).await?;
+        self.emit_status(
+            &request.run_id,
+            None,
+            None,
+            &format!(
+                "Message queued for {} (delivery #{})",
+                delivery.recipient_address, delivery.sequence
+            ),
+            true,
+        )
+        .await?;
+        Ok(delivery)
+    }
+
+    pub async fn mailbox(
+        &self,
+        query: &CodeMailboxQuery,
+    ) -> AgenticSuperAppCodeOrchestrationResult<Vec<CodeMailboxDelivery>> {
+        self.detail(&query.run_id).await?;
+        validate_participant_address(&query.recipient_address)?;
+        Ok(self.persistence.orchestration_inbox(query).await?)
+    }
+
+    pub async fn acknowledge_mailbox(
+        &self,
+        request: &CodeMailboxAckRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<bool> {
+        validate_participant_address(&request.recipient_address)?;
+        self.detail(&request.run_id).await?;
+        Ok(self
+            .persistence
+            .acknowledge_orchestration_mailbox(
+                &request.run_id,
+                &request.delivery_id,
+                &request.recipient_address,
+            )
+            .await?)
+    }
+
+    pub async fn gates(
+        &self,
+        query: &CodeGatesQuery,
+    ) -> AgenticSuperAppCodeOrchestrationResult<Vec<CodeDecisionGate>> {
+        self.detail(&query.run_id).await?;
+        Ok(self
+            .persistence
+            .orchestration_gates(&query.run_id, query.include_resolved)
+            .await?)
+    }
+
+    pub async fn create_gate(
+        &self,
+        request: &CodeGateCreateRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<CodeDecisionGate> {
+        validate_orchestration_text(&request.title)?;
+        validate_orchestration_text(&request.reason)?;
+        validate_orchestration_text(&request.allowed_actor)?;
+        let detail = self.detail(&request.run_id).await?;
+        if request
+            .task_id
+            .as_deref()
+            .is_some_and(|task_id| !detail.tasks.iter().any(|task| task.id == task_id))
+        {
+            return Err(AgenticSuperAppCodeOrchestrationError::NotFound);
+        }
+        if request.dispatch_id.as_deref().is_some_and(|dispatch_id| {
+            !detail
+                .dispatches
+                .iter()
+                .any(|dispatch| dispatch.id == dispatch_id)
+        }) {
+            return Err(AgenticSuperAppCodeOrchestrationError::NotFound);
+        }
+        let gate = self.persistence.create_orchestration_gate(request).await?;
+        self.emit_status(
+            &request.run_id,
+            request.task_id.as_deref(),
+            request.dispatch_id.as_deref(),
+            "Decision gate opened",
+            true,
+        )
+        .await?;
+        Ok(gate)
+    }
+
+    pub async fn resolve_gate(
+        &self,
+        request: &CodeGateResolveRequest,
+    ) -> AgenticSuperAppCodeOrchestrationResult<CodeDecisionGate> {
+        validate_orchestration_text(&request.actor)?;
+        if matches!(request.state, CodeGateState::Open) {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                "a gate can only be resolved as approved, rejected, or timed out".to_owned(),
+            ));
+        }
+        let gate = self
+            .persistence
+            .resolve_orchestration_gate(request)
+            .await?
+            .ok_or_else(|| {
+                AgenticSuperAppCodeOrchestrationError::InvalidState(
+                    "the gate is closed or the actor is not allowed to resolve it".to_owned(),
+                )
+            })?;
+        self.emit_status(
+            &request.run_id,
+            gate.task_id.as_deref(),
+            gate.dispatch_id.as_deref(),
+            &format!("Decision gate {}", gate_state_label(gate.state)),
+            true,
+        )
+        .await?;
+        Ok(gate)
     }
 
     pub async fn create_run(
@@ -639,6 +784,20 @@ impl AgenticSuperAppCodeOrchestration {
     ) -> AgenticSuperAppCodeOrchestrationResult<agentic_super_app_protocol::CodeRunDetail> {
         let detail = self.detail(&request.run_id).await?;
         self.require_worker_capabilities(&detail.summary.workspace_id)?;
+        if let Some(gate) = self
+            .persistence
+            .orchestration_gates(&request.run_id, false)
+            .await?
+            .into_iter()
+            .find(|gate| gate.task_id.is_none() && gate.dispatch_id.is_none())
+        {
+            return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+                format!(
+                    "resolve decision gate '{}' before starting this run",
+                    gate.title
+                ),
+            ));
+        }
         if detail.tasks.is_empty() {
             return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
                 "add or accept at least one task before starting the run".to_owned(),
@@ -2174,8 +2333,49 @@ impl AgenticSuperAppCodeOrchestration {
                 Some(&event.nonce),
             )
             .await?;
-        if persisted.event_id == event_id {
+        let is_new_event = persisted.event_id == event_id;
+        if is_new_event {
             let _ = self.events.send(persisted);
+        }
+        if is_new_event
+            && matches!(
+                kind,
+                CodeOrchestrationMessageKind::Question
+                    | CodeOrchestrationMessageKind::Answer
+                    | CodeOrchestrationMessageKind::Escalation
+                    | CodeOrchestrationMessageKind::Progress
+                    | CodeOrchestrationMessageKind::Completion
+            )
+        {
+            self.persistence
+                .insert_orchestration_message(&CodeOrchestrationMessage {
+                    id: format!("message-{}", Uuid::now_v7()),
+                    run_id: launch.dispatch.run_id.clone(),
+                    task_id: Some(launch.task.id.clone()),
+                    dispatch_id: Some(launch.dispatch.id.clone()),
+                    kind,
+                    question_id: None,
+                    payload: event.payload.clone(),
+                    created_at_unix_ms: now_ms(),
+                })
+                .await?;
+            if let Some(run) = self
+                .persistence
+                .orchestration_run(&launch.dispatch.run_id)
+                .await?
+            {
+                self.persistence
+                    .send_orchestration_mailbox(&CodeMailboxSendRequest {
+                        run_id: launch.dispatch.run_id.clone(),
+                        sender_address: format!("worker:{}", launch.dispatch.id),
+                        recipient_address: format!("coordinator:{}", run.coordinator_id),
+                        kind,
+                        payload: event.payload.clone(),
+                        thread_id: Some(format!("task:{}", launch.task.id)),
+                        client_request_id: Some(format!("worker-event:{}", event.nonce)),
+                    })
+                    .await?;
+            }
         }
         Ok(())
     }
@@ -2925,6 +3125,36 @@ fn parse_message_kind(value: &str) -> Option<CodeOrchestrationMessageKind> {
         "completion" => Some(CodeOrchestrationMessageKind::Completion),
         _ => None,
     }
+}
+
+fn gate_state_label(state: CodeGateState) -> &'static str {
+    match state {
+        CodeGateState::Open => "opened",
+        CodeGateState::Approved => "approved",
+        CodeGateState::Rejected => "rejected",
+        CodeGateState::TimedOut => "timed out",
+    }
+}
+
+fn validate_participant_address(value: &str) -> AgenticSuperAppCodeOrchestrationResult<()> {
+    let Some((kind, identifier)) = value.split_once(':') else {
+        return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+            "participant addresses must use a typed prefix".to_owned(),
+        ));
+    };
+    if !matches!(kind, "coordinator" | "worker" | "user" | "system")
+        || identifier.is_empty()
+        || identifier.len() > 120
+        || value.len() > 128
+        || value.chars().any(|character| {
+            !(character.is_ascii_alphanumeric() || matches!(character, ':' | '-' | '_' | '.' | '/'))
+        })
+    {
+        return Err(AgenticSuperAppCodeOrchestrationError::InvalidState(
+            "participant address is not valid".to_owned(),
+        ));
+    }
+    Ok(())
 }
 
 fn hex_value(value: u8) -> Option<u8> {

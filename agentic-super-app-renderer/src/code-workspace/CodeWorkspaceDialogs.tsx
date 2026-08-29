@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BriefcaseBusiness, GitBranch, X } from 'lucide-react'
+import { BriefcaseBusiness, FolderOpen, GitBranch, Layers3, X } from 'lucide-react'
 import type {
   CodeProjectSummary,
   CodeWorkspaceCreateRequest,
@@ -65,6 +65,36 @@ export const CodeWorkspaceCreateDialog: React.FC<CodeWorkspaceCreateDialogProps>
           <button type="button" className="code-primary-button" onClick={() => onSubmit({ project_id: projectId, name, base_ref: 'HEAD', branch_name: branchName.trim() || null })} disabled={busy || !projectId || !name.trim()}>
             {busy ? 'Creating…' : 'Create workspace'}
           </button>
+        </footer>
+      </section>
+    </div>
+  )
+}
+
+interface CodeProjectSettingsDialogProps {
+  open: boolean
+  project: CodeProjectSummary | null
+  onClose: () => void
+}
+
+export const CodeProjectSettingsDialog: React.FC<CodeProjectSettingsDialogProps> = ({ open, project, onClose }) => {
+  if (!open || !project) return null
+
+  return (
+    <div className="code-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="code-project-dialog code-project-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="code-project-settings-title">
+        <header className="code-project-dialog-header">
+          <div><div className="code-dialog-icon"><FolderOpen size={17} aria-hidden="true" /></div><div><p className="code-dialog-eyebrow">Project</p><h2 id="code-project-settings-title">Project Settings</h2></div></div>
+          <button type="button" className="code-dialog-close" onClick={onClose} aria-label="Close dialog"><X size={17} aria-hidden="true" /></button>
+        </header>
+        <p className="code-dialog-description">Project identity is anchored to this folder. Workspace panes and app-managed worktrees remain separate children of the project.</p>
+        <div className="code-project-settings-list">
+          <div><FolderOpen size={14} aria-hidden="true" /><span><strong>Root folder</strong><small>{project.root_path}</small></span></div>
+          <div><GitBranch size={14} aria-hidden="true" /><span><strong>Repository</strong><small>{project.repository_name ?? 'Folder project'} · {project.current_branch ?? 'No active branch'}</small></span></div>
+          <div><Layers3 size={14} aria-hidden="true" /><span><strong>Workspaces</strong><small>{project.workspace_count} registered workspace{project.workspace_count === 1 ? '' : 's'}</small></span></div>
+        </div>
+        <footer className="code-dialog-actions">
+          <button type="button" className="code-secondary-button" onClick={onClose}>Close</button>
         </footer>
       </section>
     </div>

@@ -5,6 +5,7 @@ import {
   type CodeWorkspaceState,
 } from './state/code-workspace-reducer'
 import type { CodePaneLayout, CodeTerminalSummary, CodePreviewSummary } from '../api/agentic-super-app-client'
+import { shouldShowProjectWorkspaceRows } from './code-workspace-rail-utils'
 
 describe('codeWorkspaceReducer', () => {
   const sampleLayout: CodePaneLayout = {
@@ -66,6 +67,27 @@ describe('codeWorkspaceReducer', () => {
     expect(next.maximizedPaneId).toBeNull()
     expect(next.terminals.get('term_1')).toEqual(sampleTerminal)
     expect(next.previews.get('prev_1')).toEqual(samplePreview)
+    expect(next.error).toBeNull()
+  })
+
+  it('clears the previous workspace while a new workspace is loading', () => {
+    const loaded = codeWorkspaceReducer(initialCodeWorkspaceState, {
+      type: 'SET_WORKSPACE',
+      workspaceId: 'ws_1',
+      layout: sampleLayout,
+      terminals: [sampleTerminal],
+      previews: [samplePreview],
+    })
+
+    const next = codeWorkspaceReducer(loaded, {
+      type: 'SET_WORKSPACE_LOADING',
+      workspaceId: 'ws_2',
+    })
+
+    expect(next.workspaceId).toBe('ws_2')
+    expect(next.layout).toBeNull()
+    expect(next.terminals.size).toBe(0)
+    expect(next.previews.size).toBe(0)
     expect(next.error).toBeNull()
   })
 
@@ -159,5 +181,53 @@ describe('codeWorkspaceReducer', () => {
       confirm: null,
     })
     expect(next.confirmClosePane).toBeNull()
+  })
+})
+
+describe('code-layout-presets-meta', () => {
+  it('defines exactly six primary presets in the required order', async () => {
+    const { PRIMARY_PRESETS } = await import('./code-layout-presets-meta')
+    expect(PRIMARY_PRESETS.map((p) => p.id)).toEqual([
+      'vertical',
+      'horizontal',
+      'two_rows',
+      'three_rows',
+      'four_rows',
+      'focus',
+    ])
+    expect(PRIMARY_PRESETS.map((p) => p.maxPanes)).toEqual([4, 4, 8, 12, 16, 17])
+  })
+
+  it('correctly calculates preset compatibility based on pane counts', async () => {
+    const { isPresetCompatible } = await import('./code-layout-presets-meta')
+    // Vertical & Horizontal: max 4
+    expect(isPresetCompatible('vertical', 4)).toBe(true)
+    expect(isPresetCompatible('vertical', 5)).toBe(false)
+    expect(isPresetCompatible('horizontal', 4)).toBe(true)
+    expect(isPresetCompatible('horizontal', 5)).toBe(false)
+
+    // 2 Rows: max 8
+    expect(isPresetCompatible('two_rows', 8)).toBe(true)
+    expect(isPresetCompatible('two_rows', 9)).toBe(false)
+
+    // 3 Rows: max 12
+    expect(isPresetCompatible('three_rows', 12)).toBe(true)
+    expect(isPresetCompatible('three_rows', 13)).toBe(false)
+
+    // 4 Rows: max 16
+    expect(isPresetCompatible('four_rows', 16)).toBe(true)
+    expect(isPresetCompatible('four_rows', 17)).toBe(false)
+
+    // Focus: max 17
+    expect(isPresetCompatible('focus', 17)).toBe(true)
+    expect(isPresetCompatible('focus', 18)).toBe(false)
+  })
+})
+
+describe('workspace rail visibility', () => {
+  it('hides the primary workspace row until a secondary workspace exists', () => {
+    expect(shouldShowProjectWorkspaceRows(0)).toBe(false)
+    expect(shouldShowProjectWorkspaceRows(1)).toBe(false)
+    expect(shouldShowProjectWorkspaceRows(2)).toBe(true)
   })
 })

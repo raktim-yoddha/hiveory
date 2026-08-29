@@ -578,11 +578,25 @@ pub struct CodeProjectAddRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct CodeProjectRemoveRequest {
+    pub project_id: String,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CodeWorkspaceCreateRequest {
     pub project_id: String,
     pub name: String,
     pub base_ref: Option<String>,
     pub branch_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceRemoveRequest {
+    pub workspace_id: String,
+    pub force: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -765,6 +779,12 @@ pub enum CodePanePlacement {
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum CodePanePreset {
+    Vertical,
+    Horizontal,
+    TwoRows,
+    ThreeRows,
+    FourRows,
+    Focus,
     EqualColumns,
     EqualRows,
     MainLeft,
@@ -1064,6 +1084,136 @@ pub struct CodeGitDiff {
     pub truncated: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitRepositoryRequest {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitRemote {
+    pub name: String,
+    pub fetch_url: Option<String>,
+    pub push_url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitBranch {
+    pub name: String,
+    pub current: bool,
+    pub upstream: Option<String>,
+    pub ahead: usize,
+    pub behind: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitWorktree {
+    pub name: String,
+    pub path: String,
+    pub branch: Option<String>,
+    pub locked: bool,
+    pub dirty_files: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitCommit {
+    pub oid: String,
+    pub short_oid: String,
+    pub message: String,
+    pub author: Option<String>,
+    pub committed_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitRepositorySummary {
+    pub workspace_id: String,
+    pub root_path: String,
+    pub repository_name: Option<String>,
+    pub head_oid: Option<String>,
+    pub branch: Option<String>,
+    pub detached: bool,
+    pub upstream: Option<String>,
+    pub remotes: Vec<CodeGitRemote>,
+    pub branches: Vec<CodeGitBranch>,
+    pub worktrees: Vec<CodeGitWorktree>,
+    pub commits: Vec<CodeGitCommit>,
+    pub has_conflicts: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeHostedAuthState {
+    Ready,
+    MissingCli,
+    NotAuthenticated,
+    NoRepository,
+    Offline,
+    RateLimited,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedTrackingRequest {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedRepository {
+    pub host: String,
+    pub owner: String,
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedIssue {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub url: String,
+    pub author: Option<String>,
+    pub labels: Vec<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedPullRequest {
+    pub number: u64,
+    pub title: String,
+    pub state: String,
+    pub draft: bool,
+    pub url: String,
+    pub head_branch: String,
+    pub base_branch: String,
+    pub author: Option<String>,
+    pub review_decision: Option<String>,
+    pub check_state: String,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedTracking {
+    pub workspace_id: String,
+    pub repository: Option<CodeHostedRepository>,
+    pub auth_state: CodeHostedAuthState,
+    pub message: Option<String>,
+    pub issues: Vec<CodeHostedIssue>,
+    pub pull_requests: Vec<CodeHostedPullRequest>,
+    pub refreshed_at_unix_ms: i64,
+    pub stale: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -1345,6 +1495,132 @@ pub struct CodeOrchestrationMessage {
     pub question_id: Option<String>,
     pub payload: String,
     pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeParticipantKind {
+    Coordinator,
+    Worker,
+    User,
+    System,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeParticipant {
+    pub id: String,
+    pub run_id: String,
+    pub address: String,
+    pub kind: CodeParticipantKind,
+    pub display_name: String,
+    pub active: bool,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeMailboxDelivery {
+    pub id: String,
+    pub run_id: String,
+    pub sender_address: String,
+    pub recipient_address: String,
+    pub kind: CodeOrchestrationMessageKind,
+    pub payload: String,
+    pub thread_id: Option<String>,
+    pub sequence: u64,
+    pub acknowledged: bool,
+    pub created_at_unix_ms: i64,
+    pub acknowledged_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeMailboxSendRequest {
+    pub run_id: String,
+    pub sender_address: String,
+    pub recipient_address: String,
+    pub kind: CodeOrchestrationMessageKind,
+    pub payload: String,
+    pub thread_id: Option<String>,
+    #[serde(default)]
+    pub client_request_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeMailboxQuery {
+    pub run_id: String,
+    pub recipient_address: String,
+    pub include_acknowledged: bool,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeMailboxAckRequest {
+    pub run_id: String,
+    pub delivery_id: String,
+    pub recipient_address: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeGateState {
+    Open,
+    Approved,
+    Rejected,
+    TimedOut,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeDecisionGate {
+    pub id: String,
+    pub run_id: String,
+    pub task_id: Option<String>,
+    pub dispatch_id: Option<String>,
+    pub title: String,
+    pub reason: String,
+    pub state: CodeGateState,
+    pub allowed_actor: String,
+    pub resolved_by: Option<String>,
+    pub resolution: Option<String>,
+    pub expires_at_unix_ms: Option<i64>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGateCreateRequest {
+    pub run_id: String,
+    pub task_id: Option<String>,
+    pub dispatch_id: Option<String>,
+    pub title: String,
+    pub reason: String,
+    pub allowed_actor: String,
+    pub expires_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGateResolveRequest {
+    pub run_id: String,
+    pub gate_id: String,
+    pub actor: String,
+    pub state: CodeGateState,
+    pub resolution: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGatesQuery {
+    pub run_id: String,
+    pub include_resolved: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2637,6 +2913,18 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeGitStatus::export_all(&config)?;
     CodeGitDiffRequest::export_all(&config)?;
     CodeGitDiff::export_all(&config)?;
+    CodeGitRepositoryRequest::export_all(&config)?;
+    CodeGitRemote::export_all(&config)?;
+    CodeGitBranch::export_all(&config)?;
+    CodeGitWorktree::export_all(&config)?;
+    CodeGitCommit::export_all(&config)?;
+    CodeGitRepositorySummary::export_all(&config)?;
+    CodeHostedAuthState::export_all(&config)?;
+    CodeHostedTrackingRequest::export_all(&config)?;
+    CodeHostedRepository::export_all(&config)?;
+    CodeHostedIssue::export_all(&config)?;
+    CodeHostedPullRequest::export_all(&config)?;
+    CodeHostedTracking::export_all(&config)?;
     CodePreviewState::export_all(&config)?;
     CodePreviewRequest::export_all(&config)?;
     CodePreviewSummary::export_all(&config)?;
@@ -2659,6 +2947,17 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeReview::export_all(&config)?;
     CodeQuestion::export_all(&config)?;
     CodeOrchestrationMessage::export_all(&config)?;
+    CodeParticipantKind::export_all(&config)?;
+    CodeParticipant::export_all(&config)?;
+    CodeMailboxDelivery::export_all(&config)?;
+    CodeMailboxSendRequest::export_all(&config)?;
+    CodeMailboxQuery::export_all(&config)?;
+    CodeMailboxAckRequest::export_all(&config)?;
+    CodeGateState::export_all(&config)?;
+    CodeDecisionGate::export_all(&config)?;
+    CodeGateCreateRequest::export_all(&config)?;
+    CodeGateResolveRequest::export_all(&config)?;
+    CodeGatesQuery::export_all(&config)?;
     CodeOrchestrationEventEnvelope::export_all(&config)?;
     CodeDagProposalTask::export_all(&config)?;
     CodeDagProposal::export_all(&config)?;

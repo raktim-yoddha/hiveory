@@ -125,7 +125,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       case 'terminal':
         return <Terminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       case 'preview':
-        return <Globe size={13} style={{ color: '#60a5fa' }} />
+        return <Globe size={13} style={{ color: '#aeb7c2' }} />
       case 'thread':
         return <Settings2 size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       default:

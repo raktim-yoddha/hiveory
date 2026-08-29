@@ -4,35 +4,33 @@ import {
   Bot,
   CheckCircle2,
   Code2,
-  Columns2,
   Command,
   Download,
   FolderArchive,
-  Grid2X2,
   KeyRound,
   Keyboard,
-  LayoutTemplate,
   MessageSquare,
+  Minimize2,
   Minus,
   PanelLeft,
-  Rows2,
   Settings2,
   Sparkles,
   X,
   Square as SquareIcon,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   agenticSuperAppClient,
   type ApplicationMode,
-  type CodePanePreset,
   type DiagnosticSnapshot,
   type UpdateSnapshot,
 } from './api/agentic-super-app-client'
 import { AgenticSuperAppChat } from './chat/agentic-super-app-chat'
 import { AgenticSuperAppCodeWorkspace } from './code-workspace/AgenticSuperAppCodeWorkspace'
 import { AgenticSuperAppAgent } from './agent/agentic-super-app-agent'
+import { PRIMARY_PRESETS } from './code-workspace/code-layout-presets-meta'
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -74,7 +72,7 @@ const previewSnapshot: DiagnosticSnapshot = {
 }
 
 type ShellScreen = 'workspace' | 'diagnostics' | 'settings'
-type ShellPreferences = { fontScale: 100 | 110 | 125; compact: boolean; reducedMotion: boolean }
+type ShellPreferences = { fontScale: 100 | 110 | 125; compact: boolean; reducedMotion: boolean; sidebarCollapsed: boolean }
 type CommandAction = {
   id: string
   label: string
@@ -84,20 +82,7 @@ type CommandAction = {
   run: () => void
 }
 
-const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false }
-
-const codeLayoutOptions: Array<{
-  id: CodePanePreset
-  label: string
-  description: string
-  Icon: typeof LayoutTemplate
-}> = [
-  { id: 'main_left', label: 'Focus grid', description: 'Main pane left, supporting panes stacked right', Icon: LayoutTemplate },
-  { id: 'equal_columns', label: 'Dual grid', description: 'Equal side-by-side columns', Icon: Columns2 },
-  { id: 'equal_rows', label: 'Stack grid', description: 'Equal stacked horizontal rows', Icon: Rows2 },
-  { id: 'grid', label: 'Quad grid', description: 'Balanced 2 × 2 workspace', Icon: Grid2X2 },
-  { id: 'tidy', label: 'Tidy', description: 'Automatically balance the workspace', Icon: Sparkles },
-]
+const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false, sidebarCollapsed: false }
 
 function readPreferences(): ShellPreferences {
   if (typeof window === 'undefined') return defaultPreferences
@@ -107,6 +92,7 @@ function readPreferences(): ShellPreferences {
       ...defaultPreferences,
       ...value,
       fontScale: value.fontScale === 110 || value.fontScale === 125 ? value.fontScale : 100,
+      sidebarCollapsed: value.sidebarCollapsed === true,
     }
   } catch {
     return defaultPreferences
@@ -127,6 +113,8 @@ export function AgenticSuperAppShell() {
   const [commandOpen, setCommandOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [codeLayoutMenuOpen, setCodeLayoutMenuOpen] = useState(false)
+  const [windowMaximized, setWindowMaximized] = useState(false)
+  const [windowControlError, setWindowControlError] = useState<string | null>(null)
 
   const refresh = async () => {
     try {
@@ -160,6 +148,43 @@ export function AgenticSuperAppShell() {
     }
   }, [preferences])
 
+  useEffect(() => {
+    if (!('__TAURI_INTERNALS__' in window)) return
+
+    let disposed = false
+    let unlisten: (() => void) | undefined
+
+    try {
+      const win = getCurrentWindow()
+      const syncMaximizedState = async () => {
+        try {
+          const maximized = await win.isMaximized()
+          if (!disposed) setWindowMaximized(maximized)
+        } catch {
+          // Browser previews and older native sessions may not expose this state.
+        }
+      }
+
+      void syncMaximizedState()
+      void win
+        .onResized(() => {
+          void syncMaximizedState()
+        })
+        .then((removeListener) => {
+          if (disposed) removeListener()
+          else unlisten = removeListener
+        })
+        .catch(() => undefined)
+    } catch {
+      // The renderer can still be exercised outside the native host.
+    }
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
   const selectMode = (mode: ApplicationMode) => {
     setScreen('workspace')
     setNotificationsOpen(false)
@@ -172,30 +197,43 @@ export function AgenticSuperAppShell() {
   }
 
   const handleMinimize = () => {
+    setWindowControlError(null)
     try {
       const win = getCurrentWindow()
-      void win.minimize()
+      void win.minimize().catch(() => setWindowControlError('The window could not be minimized.'))
     } catch {
-      // not in tauri
+      setWindowControlError('Window controls are unavailable in preview mode.')
     }
   }
 
   const handleToggleMaximize = () => {
+    setWindowControlError(null)
     try {
       const win = getCurrentWindow()
-      void win.toggleMaximize()
+      void win
+        .toggleMaximize()
+        .then(() => win.isMaximized())
+        .then(setWindowMaximized)
+        .catch(() => setWindowControlError('The window could not change size.'))
     } catch {
-      // not in tauri
+      setWindowControlError('Window controls are unavailable in preview mode.')
     }
   }
 
   const handleCloseWindow = () => {
+    setWindowControlError(null)
     try {
       const win = getCurrentWindow()
-      void win.close()
+      void win.close().catch(() => setWindowControlError('The window could not be closed.'))
     } catch {
-      // not in tauri
+      setWindowControlError('Window controls are unavailable in preview mode.')
     }
+  }
+
+  const handleToggleSidebar = () => {
+    const collapsed = !preferences.sidebarCollapsed
+    setPreferences((current) => ({ ...current, sidebarCollapsed: collapsed }))
+    window.dispatchEvent(new CustomEvent('agentic-super-app-sidebar-toggle', { detail: { collapsed } }))
   }
 
   const commandActions: CommandAction[] = [
@@ -260,6 +298,10 @@ export function AgenticSuperAppShell() {
         setCommandOpen(true)
         setNotificationsOpen(false)
       }
+      if (modifier && !event.shiftKey && event.key.toLowerCase() === 'b') {
+        event.preventDefault()
+        handleToggleSidebar()
+      }
       if (modifier && event.key === ',') {
         event.preventDefault()
         setScreen('settings')
@@ -312,10 +354,21 @@ export function AgenticSuperAppShell() {
           data-tauri-drag-region
           onDoubleClick={handleToggleMaximize}
         >
-          <div className="agentic-super-app-brand" data-tauri-drag-region>
-            <span style={{ color: '#f59e0b', fontSize: 16, lineHeight: 1 }}>⚡</span>
+          <div className="agentic-super-app-brand">
+            <Zap size={15} style={{ color: '#f59e0b' }} aria-hidden="true" />
             <span>Agentic Super App</span>
-            <PanelLeft size={15} style={{ opacity: 0.5, cursor: 'pointer', marginLeft: 8 }} />
+            <button
+              type="button"
+              className="agentic-super-app-icon-button agentic-super-app-sidebar-toggle"
+              onClick={handleToggleSidebar}
+              onDoubleClick={(event) => event.stopPropagation()}
+              aria-label={preferences.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-expanded={!preferences.sidebarCollapsed}
+              aria-keyshortcuts="Control+B"
+              title={`${preferences.sidebarCollapsed ? 'Show' : 'Hide'} sidebar (Ctrl B)`}
+            >
+              <PanelLeft size={15} aria-hidden="true" />
+            </button>
           </div>
 
           <nav className="agentic-super-app-mode-switch" aria-label="Workspace mode">
@@ -333,7 +386,7 @@ export function AgenticSuperAppShell() {
             ))}
           </nav>
 
-          <div className="agentic-super-app-title-actions">
+          <div className="agentic-super-app-title-actions" onDoubleClick={(event) => event.stopPropagation()}>
             {screen === 'workspace' && activeMode === 'code' && (
               <div className="agentic-super-app-layout-menu">
                 <button
@@ -344,26 +397,26 @@ export function AgenticSuperAppShell() {
                   onClick={() => setCodeLayoutMenuOpen((value) => !value)}
                 >
                   <Sparkles size={13} aria-hidden="true" />
-                  Tidy
+                  Layout
                   <span className="agentic-super-app-layout-chevron" aria-hidden="true">⌄</span>
                 </button>
                 {codeLayoutMenuOpen && (
                   <div className="agentic-super-app-layout-dropdown" role="menu" aria-label="Workspace layout">
-                    {codeLayoutOptions.map(({ id, label, description, Icon }) => (
+                    {PRIMARY_PRESETS.map((preset) => (
                       <button
                         type="button"
-                        key={id}
+                        key={preset.id}
                         role="menuitem"
                         className="agentic-super-app-layout-option"
                         onClick={() => {
-                          window.dispatchEvent(new CustomEvent('agentic-super-app-apply-code-layout-preset', { detail: { preset: id } }))
+                          window.dispatchEvent(new CustomEvent('agentic-super-app-apply-code-layout-preset', { detail: { preset: preset.id } }))
                           setCodeLayoutMenuOpen(false)
                         }}
                       >
-                        <span className="agentic-super-app-layout-option-icon"><Icon size={14} aria-hidden="true" /></span>
+                        <span className="agentic-super-app-layout-option-icon"><Sparkles size={13} aria-hidden="true" /></span>
                         <span>
-                          <strong>{label}</strong>
-                          <small>{description}</small>
+                          <strong>{preset.label}</strong>
+                          <small>{preset.description}</small>
                         </span>
                       </button>
                     ))}
@@ -421,12 +474,19 @@ export function AgenticSuperAppShell() {
               <Settings2 size={15} />
             </button>
 
+            {windowControlError && (
+              <span className="agentic-window-control-error" role="status" aria-live="polite">
+                {windowControlError}
+              </span>
+            )}
+
             {/* Window Controls (Minimize, Maximize, Close) */}
-            <div className="agentic-window-controls" data-tauri-drag-region="false">
+            <div className="agentic-window-controls">
               <button
                 type="button"
                 className="agentic-win-btn minimize"
                 onClick={handleMinimize}
+                onDoubleClick={(event) => event.stopPropagation()}
                 title="Minimize"
                 aria-label="Minimize"
               >
@@ -436,15 +496,17 @@ export function AgenticSuperAppShell() {
                 type="button"
                 className="agentic-win-btn maximize"
                 onClick={handleToggleMaximize}
-                title="Maximize"
-                aria-label="Maximize"
+                onDoubleClick={(event) => event.stopPropagation()}
+                title={windowMaximized ? 'Restore' : 'Maximize'}
+                aria-label={windowMaximized ? 'Restore' : 'Maximize'}
               >
-                <SquareIcon size={11} />
+                {windowMaximized ? <Minimize2 size={12} /> : <SquareIcon size={11} />}
               </button>
               <button
                 type="button"
                 className="agentic-win-btn close"
                 onClick={handleCloseWindow}
+                onDoubleClick={(event) => event.stopPropagation()}
                 title="Close"
                 aria-label="Close"
               >

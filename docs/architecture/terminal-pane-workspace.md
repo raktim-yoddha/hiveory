@@ -36,7 +36,7 @@ graph TD
 pub struct CodePaneNode {
     pub pane_id: String,
     pub parent_id: Option<String>,
-    pub kind: CodePaneKind, // Terminal | CodingAgent | Preview | Thread | Empty
+    pub kind: CodePaneKind, // Terminal | CodingAgent | Editor | Diff | Preview | Problems | Empty | Thread
     pub orientation: Option<CodePaneOrientation>, // Horizontal | Vertical (internal nodes only)
     pub ratio_percent: Option<u8>, // 10..=90
     pub children: Vec<String>, // Leaf: [], Internal: [child_1, child_2]
@@ -58,7 +58,36 @@ If another process or window mutated the tree concurrently, an `ApiError` with c
 
 ---
 
-## 3. Reconnectable PTY Runtime & Ring Buffer
+## 3. Deterministic Layout Engine & 17-Pane Scaling
+
+The code workspace supports up to **17 panes** (`CODE_MAX_PANES = 17`). Attempting to split when 17 panes are already active returns `CodeDomainError::TooManyPanes`.
+
+### Canonical Layout Presets & Capacity Rules
+
+| Preset | Identifiers | Maximum Panes | Arrangement Rule |
+|---|---|---:|---|
+| **Vertical** | `vertical`, `equal_columns` | 4 | Equal side-by-side columns separated by vertical dividers. |
+| **Horizontal** | `horizontal`, `equal_rows` | 4 | Equal stacked rows separated by horizontal dividers. |
+| **2 Rows** | `two_rows` | 8 | Up to four columns, with no column containing more than two rows. Columns filled evenly with remainder in rightmost column (e.g. 5 panes -> `[2, 2, 1]`). |
+| **3 Rows** | `three_rows` | 12 | Up to four columns, with no column containing more than three rows. Remainder in rightmost column (e.g. 5 panes -> `[3, 2]`). |
+| **4 Rows** | `four_rows`, `grid` | 16 | Up to four columns, with no column containing more than four rows. Remainder in rightmost column (e.g. 5 panes -> `[4, 1]`, 16 panes -> `[4, 4, 4, 4]`). |
+| **Focus** | `focus`, `main_left`, `tidy` | 17 | Focused pane occupies 60% of canvas width (left). Supporting panes $S = N - 1$ ($1 \le S \le 16$): 1–4 panes in single right column; 5–16 panes split horizontally into 2 equal right columns with $\lfloor S/2 \rfloor$ and $\lceil S/2 \rceil$ panes (e.g. 6 panes -> `[2, 3]`, 17 panes -> `[8, 8]`). |
+
+### Capacity Guard & Error Protocol
+
+When an operation attempts to apply a preset to more panes than supported, the domain returns:
+```rust
+CodeDomainError::PresetCapacityExceeded {
+    preset: String,
+    count: usize,
+    max: usize,
+}
+```
+In the UI, incompatible preset cards are visually muted, marked with `aria-disabled="true"`, ignore click/drop gestures, and display a helpful tooltip explaining capacity limits.
+
+---
+
+## 4. Reconnectable PTY Runtime & Ring Buffer
 
 Each terminal session (`TerminalSession`) is owned in-memory by `agentic-super-app-code-runtime`:
 
@@ -70,10 +99,10 @@ Each terminal session (`TerminalSession`) is owned in-memory by `agentic-super-a
 
 ---
 
-## 4. Safe Process Lifecycle & Close Protocol
+## 5. Safe Process Lifecycle & Close Protocol
 
 Closing a pane follows a strict safety protocol:
-1. If the pane is an `Empty`, `Preview`, or `Thread` pane, the leaf is removed and the tree collapsed immediately.
+1. If the pane is an `Empty`, `Editor`, `Diff`, `Problems`, `Preview`, or `Thread` pane, the leaf is removed and the tree collapsed immediately.
 2. If the pane contains an active `Terminal` or `CodingAgent` with state `Running` or `Starting`, closing without `terminate_running_resource = true` returns an application error `resource_running`.
 3. When the user confirms termination, the host:
    - Force-terminates the exact OS process tree through `StopCodeTerminal`.

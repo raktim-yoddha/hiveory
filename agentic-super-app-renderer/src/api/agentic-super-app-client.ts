@@ -97,6 +97,8 @@ export type CodeProjectKind = 'git' | 'folder'
 export type CodeWorkspaceKind = 'primary' | 'managed_worktree' | 'external_worktree'
 export type CodeProjectSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; kind: CodeProjectKind; primary_workspace_id: string; current_branch: string | null; workspace_count: number; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
 export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; project_id: string; workspace_kind: CodeWorkspaceKind; worktree_name: string | null; base_ref: string | null; managed_by_app: boolean; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
+export type CodeProjectRemoveRequest = { project_id: string; force: boolean }
+export type CodeWorkspaceRemoveRequest = { workspace_id: string; force: boolean }
 export type CodeWorkspaceDetail = { summary: CodeWorkspaceSummary; layout: CodePaneLayout; open_documents: CodeDocumentSummary[]; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
 export type CodeSnapshot = { projects: CodeProjectSummary[]; workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
 export type CodeFileKind = 'file' | 'directory' | 'symlink' | 'binary'
@@ -107,7 +109,19 @@ export type CodeDocument = { workspace_id: string; relative_path: string; conten
 export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty' | 'thread'
 export type CodePaneOrientation = 'horizontal' | 'vertical'
 export type CodePanePlacement = 'center' | 'left' | 'right' | 'top' | 'bottom'
-export type CodePanePreset = 'equal_columns' | 'equal_rows' | 'main_left' | 'main_top' | 'grid' | 'tidy'
+export type CodePanePreset =
+  | 'vertical'
+  | 'horizontal'
+  | 'two_rows'
+  | 'three_rows'
+  | 'four_rows'
+  | 'focus'
+  | 'equal_columns'
+  | 'equal_rows'
+  | 'main_left'
+  | 'main_top'
+  | 'grid'
+  | 'tidy'
 export type CodePaneMutation =
   | { type: 'split'; pane_id: string; placement: CodePanePlacement }
   | { type: 'rename'; pane_id: string; title: string }
@@ -140,6 +154,18 @@ export type CodeAdapterSummary = { id: string; display_name: string; executable:
 export type CodeGitFileStatus = { relative_path: string; status: string; staged: boolean; conflict: boolean }
 export type CodeGitStatus = { workspace_id: string; branch: string | null; ahead: number; behind: number; files: CodeGitFileStatus[] }
 export type CodeGitDiff = { workspace_id: string; relative_path: string | null; content: string; binary: boolean; truncated: boolean }
+export type CodeGitRepositoryRequest = { workspace_id: string }
+export type CodeGitRemote = { name: string; fetch_url: string | null; push_url: string | null }
+export type CodeGitBranch = { name: string; current: boolean; upstream: string | null; ahead: number; behind: number }
+export type CodeGitWorktree = { name: string; path: string; branch: string | null; locked: boolean; dirty_files: string[] }
+export type CodeGitCommit = { oid: string; short_oid: string; message: string; author: string | null; committed_at_unix_ms: number | null }
+export type CodeGitRepositorySummary = { workspace_id: string; root_path: string; repository_name: string | null; head_oid: string | null; branch: string | null; detached: boolean; upstream: string | null; remotes: CodeGitRemote[]; branches: CodeGitBranch[]; worktrees: CodeGitWorktree[]; commits: CodeGitCommit[]; has_conflicts: boolean }
+export type CodeHostedAuthState = 'ready' | 'missing_cli' | 'not_authenticated' | 'no_repository' | 'offline' | 'rate_limited' | 'error'
+export type CodeHostedTrackingRequest = { workspace_id: string }
+export type CodeHostedRepository = { host: string; owner: string; name: string; url: string }
+export type CodeHostedIssue = { number: number; title: string; state: string; url: string; author: string | null; labels: string[]; updated_at: string | null }
+export type CodeHostedPullRequest = { number: number; title: string; state: string; draft: boolean; url: string; head_branch: string; base_branch: string; author: string | null; review_decision: string | null; check_state: string; updated_at: string | null }
+export type CodeHostedTracking = { workspace_id: string; repository: CodeHostedRepository | null; auth_state: CodeHostedAuthState; message: string | null; issues: CodeHostedIssue[]; pull_requests: CodeHostedPullRequest[]; refreshed_at_unix_ms: number; stale: boolean }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
 export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
@@ -152,6 +178,17 @@ export type CodeCheckpointState = 'creating' | 'ready' | 'failed'
 export type CodeManagedWorktreeState = 'provisioning' | 'ready' | 'cleanup_pending' | 'removed' | 'failed'
 export type CodeOrchestrationMessageKind = 'status' | 'heartbeat' | 'question' | 'answer' | 'escalation' | 'progress' | 'completion'
 export type CodeOrchestrationEventOrigin = 'host' | 'worker'
+export type CodeParticipantKind = 'coordinator' | 'worker' | 'user' | 'system'
+export type CodeParticipant = { id: string; run_id: string; address: string; kind: CodeParticipantKind; display_name: string; active: boolean; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeMailboxDelivery = { id: string; run_id: string; sender_address: string; recipient_address: string; kind: CodeOrchestrationMessageKind; payload: string; thread_id: string | null; sequence: number; acknowledged: boolean; created_at_unix_ms: number; acknowledged_at_unix_ms: number | null }
+export type CodeMailboxSendRequest = { run_id: string; sender_address: string; recipient_address: string; kind: CodeOrchestrationMessageKind; payload: string; thread_id: string | null; client_request_id?: string | null }
+export type CodeMailboxQuery = { run_id: string; recipient_address: string; include_acknowledged: boolean; limit: number | null }
+export type CodeMailboxAckRequest = { run_id: string; delivery_id: string; recipient_address: string }
+export type CodeGateState = 'open' | 'approved' | 'rejected' | 'timed_out'
+export type CodeDecisionGate = { id: string; run_id: string; task_id: string | null; dispatch_id: string | null; title: string; reason: string; state: CodeGateState; allowed_actor: string; resolved_by: string | null; resolution: string | null; expires_at_unix_ms: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeGateCreateRequest = { run_id: string; task_id: string | null; dispatch_id: string | null; title: string; reason: string; allowed_actor: string; expires_at_unix_ms: number | null }
+export type CodeGateResolveRequest = { run_id: string; gate_id: string; actor: string; state: CodeGateState; resolution: string | null }
+export type CodeGatesQuery = { run_id: string; include_resolved: boolean }
 export const CODEX_ADAPTER_ID = 'codex-cli'
 export const CLAUDE_CODE_ADAPTER_ID = 'claude-code'
 export const ANTIGRAVITY_ADAPTER_ID = 'antigravity'
@@ -259,6 +296,9 @@ const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeProjects = new Map<string, CodeProjectSummary>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
 const previewCodeRuns = new Map<string, CodeRunDetail>()
+const previewCodeMailboxes = new Map<string, CodeMailboxDelivery[]>()
+const previewCodeMailboxRequests = new Map<string, CodeMailboxDelivery>()
+const previewCodeGates = new Map<string, CodeDecisionGate[]>()
 const previewCodeSubscribers = new Set<(event: CodeOrchestrationEventEnvelope) => void>()
 const previewAgentSubscribers = new Set<(event: AgentEventEnvelope) => void>()
 const previewAgentSummary: AgentSummary = { id: 'local-operator', name: 'Local operator', description: 'A focused assistant for your explicitly granted folders.', avatar_color: '#22d3ee', provider_account_id: previewProvider.id, model: previewProvider.default_model ?? 'gpt-5.6-mini', version: 1, archived: false, active_run_state: null, enabled_skill_count: 1, enabled_tool_count: 8, folder_grant_count: 0, created_at_unix_ms: Date.now(), updated_at_unix_ms: Date.now() }
@@ -715,6 +755,25 @@ export const agenticSuperAppClient = {
     workspace.detail.summary.worktree_name = name.toLowerCase().replaceAll(' ', '-')
     return workspace.detail
   },
+  async removeCodeWorkspace(request: CodeWorkspaceRemoveRequest): Promise<CodeSnapshot> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceRemoveRequest, CodeSnapshot>('agentic_super_app_command_remove_code_workspace', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.workspace_kind === 'primary') throw new Error('The primary workspace cannot be deleted. Remove the project instead.')
+    const project = previewCodeProjects.get(workspace.detail.summary.project_id)
+    previewCodeWorkspaces.delete(request.workspace_id)
+    if (project) project.workspace_count = Math.max(1, project.workspace_count - 1)
+    return previewCodeSummary()
+  },
+  async removeCodeProject(request: CodeProjectRemoveRequest): Promise<CodeSnapshot> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeProjectRemoveRequest, CodeSnapshot>('agentic_super_app_command_remove_code_project', request)
+    if (!previewCodeProjects.has(request.project_id)) throw new Error('Project was not found.')
+    previewCodeProjects.delete(request.project_id)
+    for (const [workspaceId, workspace] of previewCodeWorkspaces) {
+      if (workspace.detail.summary.project_id === request.project_id) previewCodeWorkspaces.delete(workspaceId)
+    }
+    return previewCodeSummary()
+  },
   async trustCodeWorkspace(workspaceId: string, grant: boolean): Promise<CodeWorkspaceDetail> {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceTrustRequest, CodeWorkspaceDetail>('agentic_super_app_command_trust_code_workspace', { workspace_id: workspaceId, grant })
     const workspace = previewCodeWorkspaces.get(workspaceId)
@@ -907,6 +966,41 @@ export const agenticSuperAppClient = {
     const file = request.relative_path ? workspace.files.get(request.relative_path) : null
     return { workspace_id: request.workspace_id, relative_path: request.relative_path, content: file ? `diff --git a/${file.relative_path} b/${file.relative_path}\n--- a/${file.relative_path}\n+++ b/${file.relative_path}\n@@\n+${file.content}` : '', binary: false, truncated: false }
   },
+  async codeGitRepository(request: CodeGitRepositoryRequest): Promise<CodeGitRepositorySummary> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeGitRepositorySummary>('agentic_super_app_query_code_git_repository', { request })
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before reading repository details.')
+    const summary = workspace.detail.summary
+    return {
+      workspace_id: request.workspace_id,
+      root_path: summary.root_path,
+      repository_name: summary.repository_name,
+      head_oid: 'preview-head',
+      branch: summary.branch,
+      detached: false,
+      upstream: summary.branch ? `origin/${summary.branch}` : null,
+      remotes: [{ name: 'origin', fetch_url: 'https://example.invalid/repository.git', push_url: 'https://example.invalid/repository.git' }],
+      branches: summary.branch ? [{ name: summary.branch, current: true, upstream: `origin/${summary.branch}`, ahead: 0, behind: 0 }] : [],
+      worktrees: [],
+      commits: [{ oid: 'preview-head', short_oid: 'preview', message: 'Preview repository state', author: 'Local preview', committed_at_unix_ms: previewNow() }],
+      has_conflicts: false,
+    }
+  },
+  async codeHostedTracking(request: CodeHostedTrackingRequest): Promise<CodeHostedTracking> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeHostedTracking>('agentic_super_app_query_code_hosted_tracking', { request })
+    if (!previewCodeWorkspaces.has(request.workspace_id)) throw new Error('Workspace was not found.')
+    return {
+      workspace_id: request.workspace_id,
+      repository: null,
+      auth_state: 'no_repository',
+      message: 'Hosted tracking becomes available when the desktop host can inspect a configured remote.',
+      issues: [],
+      pull_requests: [],
+      refreshed_at_unix_ms: previewNow(),
+      stale: false,
+    }
+  },
   async startCodeTerminal(request: CodeTerminalStartRequest, onEvent: (event: CodeTerminalEvent) => void): Promise<CodeTerminalSummary> {
     if (agenticSuperAppIsTauri) {
       const channel = new Channel<CodeTerminalEvent>(onEvent)
@@ -945,6 +1039,50 @@ export const agenticSuperAppClient = {
   async codeRun(runId: string): Promise<CodeRunDetail> {
     if (agenticSuperAppIsTauri) return tauriQuery<CodeRunDetail>('agentic_super_app_query_code_run', { runId })
     return previewCodeRunDetail(runId)
+  },
+  async codeMailbox(query: CodeMailboxQuery): Promise<CodeMailboxDelivery[]> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeMailboxDelivery[]>('agentic_super_app_query_code_mailbox', { query })
+    const deliveries = previewCodeMailboxes.get(query.run_id) ?? []
+    return structuredClone(deliveries.filter((delivery) => delivery.recipient_address === query.recipient_address && (query.include_acknowledged || !delivery.acknowledged)).slice(0, query.limit ?? 250))
+  },
+  async sendCodeMailbox(request: CodeMailboxSendRequest): Promise<CodeMailboxDelivery> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeMailboxSendRequest, CodeMailboxDelivery>('agentic_super_app_command_send_code_mailbox', request)
+    if (!request.payload.trim()) throw new Error('A mailbox message cannot be empty.')
+    const deliveries = previewCodeMailboxes.get(request.run_id) ?? []
+    const requestKey = request.client_request_id ? `${request.run_id}:${request.client_request_id}` : null
+    const existing = requestKey ? previewCodeMailboxRequests.get(requestKey) : undefined
+    if (existing) return structuredClone(existing)
+    const delivery: CodeMailboxDelivery = { id: previewId('delivery'), run_id: request.run_id, sender_address: request.sender_address, recipient_address: request.recipient_address, kind: request.kind, payload: request.payload, thread_id: request.thread_id, sequence: deliveries.filter((item) => item.recipient_address === request.recipient_address).length + 1, acknowledged: false, created_at_unix_ms: previewNow(), acknowledged_at_unix_ms: null }
+    deliveries.push(delivery)
+    previewCodeMailboxes.set(request.run_id, deliveries)
+    if (requestKey) previewCodeMailboxRequests.set(requestKey, delivery)
+    return structuredClone(delivery)
+  },
+  async acknowledgeCodeMailbox(request: CodeMailboxAckRequest): Promise<boolean> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeMailboxAckRequest, boolean>('agentic_super_app_command_ack_code_mailbox', request)
+    const delivery = (previewCodeMailboxes.get(request.run_id) ?? []).find((item) => item.id === request.delivery_id && item.recipient_address === request.recipient_address)
+    if (!delivery || delivery.acknowledged) return false
+    delivery.acknowledged = true; delivery.acknowledged_at_unix_ms = previewNow()
+    return true
+  },
+  async codeGates(query: CodeGatesQuery): Promise<CodeDecisionGate[]> {
+    if (agenticSuperAppIsTauri) return tauriQuery<CodeDecisionGate[]>('agentic_super_app_query_code_gates', { query })
+    const gates = previewCodeGates.get(query.run_id) ?? []
+    return structuredClone(query.include_resolved ? gates : gates.filter((gate) => gate.state === 'open'))
+  },
+  async createCodeGate(request: CodeGateCreateRequest): Promise<CodeDecisionGate> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeGateCreateRequest, CodeDecisionGate>('agentic_super_app_command_create_code_gate', request)
+    const gate: CodeDecisionGate = { id: previewId('gate'), run_id: request.run_id, task_id: request.task_id, dispatch_id: request.dispatch_id, title: request.title, reason: request.reason, state: 'open', allowed_actor: request.allowed_actor, resolved_by: null, resolution: null, expires_at_unix_ms: request.expires_at_unix_ms, created_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() }
+    const gates = previewCodeGates.get(request.run_id) ?? []
+    gates.unshift(gate); previewCodeGates.set(request.run_id, gates)
+    return structuredClone(gate)
+  },
+  async resolveCodeGate(request: CodeGateResolveRequest): Promise<CodeDecisionGate> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeGateResolveRequest, CodeDecisionGate>('agentic_super_app_command_resolve_code_gate', request)
+    const gate = (previewCodeGates.get(request.run_id) ?? []).find((item) => item.id === request.gate_id)
+    if (!gate || gate.state !== 'open' || (gate.allowed_actor !== '*' && gate.allowed_actor !== request.actor)) throw new Error('The gate is closed or the actor is not allowed to resolve it.')
+    gate.state = request.state; gate.resolved_by = request.actor; gate.resolution = request.resolution; gate.updated_at_unix_ms = previewNow()
+    return structuredClone(gate)
   },
   async createCodeRun(request: CodeRunCreateRequest): Promise<CodeRunDetail> {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeRunCreateRequest, CodeRunDetail>('agentic_super_app_command_create_code_run', request)

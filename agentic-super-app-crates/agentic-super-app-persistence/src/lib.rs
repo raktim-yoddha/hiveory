@@ -15,9 +15,12 @@ use uuid::Uuid;
 pub mod agent;
 pub mod chat;
 pub mod code;
+pub mod gates;
+pub mod mailbox;
 pub mod orchestration;
 pub mod plugin;
 pub mod routine;
+pub mod source;
 
 pub const AGENTIC_SUPER_APP_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "agentic-super-app-openai";
 static AGENTIC_SUPER_APP_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
