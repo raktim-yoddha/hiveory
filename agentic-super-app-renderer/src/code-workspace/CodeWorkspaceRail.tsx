@@ -107,6 +107,32 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     })
   }
 
+  const renderPaneTree = (workspaceId: string) => {
+    if (workspaceId !== activeWorkspaceId || activeGlobalSection !== 'workspace') return null
+
+    return (
+      <div className="code-rail-pane-tree">
+        {leaves.map((leaf) => {
+          const isFocused = leaf.pane_id === state.focusedPaneId
+          return (
+            <button
+              type="button"
+              key={leaf.pane_id}
+              className={`code-rail-pane-row ${isFocused ? 'is-focused' : ''}`}
+              onClick={() => {
+                onSelectGlobalSection?.('workspace')
+                void focusPane(leaf.pane_id)
+              }}
+            >
+              {renderPaneRailIcon(leaf)}
+              <span>{leaf.title || (leaf.kind === 'empty' ? 'New pane' : leaf.kind.replace('_', ' '))}</span>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <aside className="code-workspace-rail" aria-label="Code workspace">
       <nav className="code-rail-global-nav" aria-label="Application sections">
@@ -169,9 +195,20 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           const isCollapsed = collapsedProjects.has(project.id)
           const projectIsActive = activeWorkspace?.project_id === project.id
           const primaryWorkspace = workspaces.find((workspace) => workspace.id === project.primary_workspace_id) ?? projectWorkspaces[0]
+          const showWorkspaceRows = projectWorkspaces.length > 1
           return (
             <section key={project.id} className={`code-rail-project-group ${projectIsActive ? 'is-active-project' : ''}`}>
               <div className="code-rail-project-row">
+                <button
+                  type="button"
+                  className="code-rail-project-disclosure"
+                  onClick={() => toggleProject(project.id)}
+                  aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${project.display_name}`}
+                  aria-expanded={!isCollapsed}
+                  title={`${isCollapsed ? 'Expand' : 'Collapse'} ${project.display_name}`}
+                >
+                  {isCollapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+                </button>
                 <button
                   type="button"
                   className="code-rail-project-select"
@@ -184,15 +221,11 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                   title={project.available ? project.root_path : project.unavailable_reason ?? project.root_path}
                   disabled={!primaryWorkspace?.available}
                 >
-                  {isCollapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
                   <Folder size={14} aria-hidden="true" />
                   <span className="code-rail-project-name">{project.display_name}</span>
                   <span className={`code-live-dot ${project.available ? '' : 'is-offline'}`} aria-label={project.available ? 'Available' : 'Unavailable'} />
                 </button>
                 <div className="code-rail-project-actions">
-                  <button type="button" onClick={() => toggleProject(project.id)} aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${project.display_name}`}>
-                    {isCollapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
-                  </button>
                   <button
                     type="button"
                     onClick={() => onAddWorkspace(project.id)}
@@ -206,14 +239,13 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
               </div>
               {!isCollapsed && (
                 <div className="code-rail-project-children">
-                  {projectWorkspaces.map((workspace) => {
+                  {showWorkspaceRows ? projectWorkspaces.map((workspace) => {
                     const isActive = workspace.id === activeWorkspaceId
-                    const isWorkspaceView = activeGlobalSection === 'workspace'
                     return (
                       <div key={workspace.id} className="code-rail-workspace-group">
                         <button
                           type="button"
-                          className={`code-rail-workspace-row ${isActive && isWorkspaceView ? 'is-active' : ''}`}
+                          className={`code-rail-workspace-row ${isActive && activeGlobalSection === 'workspace' ? 'is-active' : ''}`}
                           onClick={() => {
                             if (!workspace.available) return
                             onSelectWorkspace(workspace.id)
@@ -229,30 +261,10 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                           {!workspace.available && <CircleAlert size={12} className="code-rail-warning-icon" aria-label="Workspace unavailable" />}
                           {workspace.workspace_kind === 'managed_worktree' && <span className="code-rail-kind-label">isolated</span>}
                         </button>
-                        {isActive && isWorkspaceView && (
-                          <div className="code-rail-pane-tree">
-                            {leaves.map((leaf) => {
-                              const isFocused = leaf.pane_id === state.focusedPaneId
-                              return (
-                                <button
-                                  type="button"
-                                  key={leaf.pane_id}
-                                  className={`code-rail-pane-row ${isFocused ? 'is-focused' : ''}`}
-                                  onClick={() => {
-                                    onSelectGlobalSection?.('workspace')
-                                    void focusPane(leaf.pane_id)
-                                  }}
-                                >
-                                  {renderPaneRailIcon(leaf)}
-                                  <span>{leaf.title || (leaf.kind === 'empty' ? 'New pane' : leaf.kind.replace('_', ' '))}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
+                        {renderPaneTree(workspace.id)}
                       </div>
                     )
-                  })}
+                  }) : primaryWorkspace && renderPaneTree(primaryWorkspace.id)}
                 </div>
               )}
             </section>

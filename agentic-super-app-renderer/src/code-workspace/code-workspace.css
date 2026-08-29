@@ -2545,6 +2545,31 @@
   text-align: left;
 }
 
+.code-rail-project-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #9aa0ac;
+  cursor: pointer;
+}
+
+.code-rail-project-disclosure:hover {
+  background: #23242a;
+  color: #fff;
+}
+
+.code-rail-project-disclosure:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
 .code-rail-project-select:hover {
   color: #fff;
   background: #23242a;
