@@ -3,15 +3,76 @@
 use super::{now_ms, AgenticSuperAppPersistence};
 use agentic_super_app_code_domain::migrate_layout_v1;
 use agentic_super_app_protocol::{
-    CodeDocumentSummary, CodePaneLayout, CodePreviewState, CodePreviewSummary, CodeTerminalKind,
-    CodeTerminalState, CodeTerminalSummary, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeDocumentSummary, CodePaneLayout, CodePreviewState, CodePreviewSummary, CodeProjectKind,
+    CodeProjectSummary, CodeTerminalKind, CodeTerminalState, CodeTerminalSummary,
+    CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
 };
 use sqlx::Row;
 
 impl AgenticSuperAppPersistence {
+    pub async fn code_projects(&self) -> Result<Vec<CodeProjectSummary>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.host_id, p.display_name, p.root_path, p.repository_name, p.project_kind, p.primary_workspace_id, p.current_branch, (SELECT COUNT(*) FROM agentic_super_app_code_workspaces w WHERE w.project_id = p.id), p.available, p.unavailable_reason, p.updated_at_unix_ms FROM agentic_super_app_code_projects p ORDER BY p.updated_at_unix_ms DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(project_from_row).collect())
+    }
+
+    pub async fn code_project(
+        &self,
+        project_id: &str,
+    ) -> Result<Option<CodeProjectSummary>, sqlx::Error> {
+        Ok(sqlx::query(
+            "SELECT p.id, p.host_id, p.display_name, p.root_path, p.repository_name, p.project_kind, p.primary_workspace_id, p.current_branch, (SELECT COUNT(*) FROM agentic_super_app_code_workspaces w WHERE w.project_id = p.id), p.available, p.unavailable_reason, p.updated_at_unix_ms FROM agentic_super_app_code_projects p WHERE p.id=?",
+        )
+        .bind(project_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(project_from_row))
+    }
+
+    pub async fn code_project_by_root(
+        &self,
+        host_id: &str,
+        canonical_root_path: &str,
+    ) -> Result<Option<CodeProjectSummary>, sqlx::Error> {
+        Ok(sqlx::query(
+            "SELECT p.id, p.host_id, p.display_name, p.root_path, p.repository_name, p.project_kind, p.primary_workspace_id, p.current_branch, (SELECT COUNT(*) FROM agentic_super_app_code_workspaces w WHERE w.project_id = p.id), p.available, p.unavailable_reason, p.updated_at_unix_ms FROM agentic_super_app_code_projects p WHERE p.host_id=? AND p.canonical_root_path=?",
+        )
+        .bind(host_id)
+        .bind(canonical_root_path)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(project_from_row))
+    }
+
+    pub async fn save_code_project(&self, project: &CodeProjectSummary) -> Result<(), sqlx::Error> {
+        let kind = project_kind_value(project.kind);
+        sqlx::query(
+            "INSERT INTO agentic_super_app_code_projects (id, host_id, root_path, canonical_root_path, display_name, repository_name, project_kind, current_branch, primary_workspace_id, available, unavailable_reason, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, root_path=excluded.root_path, canonical_root_path=excluded.canonical_root_path, display_name=excluded.display_name, repository_name=excluded.repository_name, project_kind=excluded.project_kind, current_branch=excluded.current_branch, primary_workspace_id=excluded.primary_workspace_id, available=excluded.available, unavailable_reason=excluded.unavailable_reason, updated_at_unix_ms=excluded.updated_at_unix_ms",
+        )
+        .bind(&project.id)
+        .bind(&project.host_id)
+        .bind(&project.root_path)
+        .bind(&project.root_path)
+        .bind(&project.display_name)
+        .bind(&project.repository_name)
+        .bind(kind)
+        .bind(&project.current_branch)
+        .bind(&project.primary_workspace_id)
+        .bind(project.available as i64)
+        .bind(&project.unavailable_reason)
+        .bind(project.updated_at_unix_ms)
+        .bind(project.updated_at_unix_ms)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     pub async fn code_workspaces(&self) -> Result<Vec<CodeWorkspaceSummary>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms FROM agentic_super_app_code_workspaces ORDER BY updated_at_unix_ms DESC",
+            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason FROM agentic_super_app_code_workspaces ORDER BY updated_at_unix_ms DESC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -23,7 +84,7 @@ impl AgenticSuperAppPersistence {
         workspace_id: &str,
     ) -> Result<Option<CodeWorkspaceSummary>, sqlx::Error> {
         Ok(sqlx::query(
-            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms FROM agentic_super_app_code_workspaces WHERE id=?",
+            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason FROM agentic_super_app_code_workspaces WHERE id=?",
         )
         .bind(workspace_id)
         .fetch_optional(&self.pool)
@@ -41,7 +102,7 @@ impl AgenticSuperAppPersistence {
         };
         let trusted_at = matches!(summary.trust, CodeWorkspaceTrust::Trusted).then_some(now_ms());
         sqlx::query(
-            "INSERT INTO agentic_super_app_code_workspaces (id, host_id, root_path, canonical_root_path, display_name, repository_name, branch, is_git_repository, trust_state, trusted_at_unix_ms, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, root_path=excluded.root_path, canonical_root_path=excluded.canonical_root_path, display_name=excluded.display_name, repository_name=excluded.repository_name, branch=excluded.branch, is_git_repository=excluded.is_git_repository, trust_state=excluded.trust_state, trusted_at_unix_ms=excluded.trusted_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms",
+            "INSERT INTO agentic_super_app_code_workspaces (id, host_id, root_path, canonical_root_path, display_name, repository_name, branch, is_git_repository, trust_state, trusted_at_unix_ms, created_at_unix_ms, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, root_path=excluded.root_path, canonical_root_path=excluded.canonical_root_path, display_name=excluded.display_name, repository_name=excluded.repository_name, branch=excluded.branch, is_git_repository=excluded.is_git_repository, trust_state=excluded.trust_state, trusted_at_unix_ms=excluded.trusted_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, project_id=excluded.project_id, workspace_kind=excluded.workspace_kind, worktree_name=excluded.worktree_name, base_ref=excluded.base_ref, managed_by_app=excluded.managed_by_app, available=excluded.available, unavailable_reason=excluded.unavailable_reason",
         )
         .bind(&summary.id)
         .bind(&summary.host_id)
@@ -55,6 +116,13 @@ impl AgenticSuperAppPersistence {
         .bind(trusted_at)
         .bind(summary.updated_at_unix_ms)
         .bind(summary.updated_at_unix_ms)
+        .bind(&summary.project_id)
+        .bind(workspace_kind_value(summary.workspace_kind))
+        .bind(&summary.worktree_name)
+        .bind(&summary.base_ref)
+        .bind(summary.managed_by_app as i64)
+        .bind(summary.available as i64)
+        .bind(&summary.unavailable_reason)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -295,6 +363,26 @@ impl AgenticSuperAppPersistence {
     }
 }
 
+fn project_from_row(row: sqlx::sqlite::SqliteRow) -> CodeProjectSummary {
+    CodeProjectSummary {
+        id: row.get(0),
+        host_id: row.get(1),
+        display_name: row.get(2),
+        root_path: row.get(3),
+        repository_name: row.get(4),
+        kind: match row.get::<String, _>(5).as_str() {
+            "git" => CodeProjectKind::Git,
+            _ => CodeProjectKind::Folder,
+        },
+        primary_workspace_id: row.get(6),
+        current_branch: row.get(7),
+        workspace_count: row.get::<i64, _>(8).max(0) as u32,
+        available: row.get::<i64, _>(9) != 0,
+        unavailable_reason: row.get(10),
+        updated_at_unix_ms: row.get(11),
+    }
+}
+
 fn workspace_from_row(row: sqlx::sqlite::SqliteRow) -> CodeWorkspaceSummary {
     let trust = if row.get::<String, _>(7) == "trusted" {
         CodeWorkspaceTrust::Trusted
@@ -311,7 +399,41 @@ fn workspace_from_row(row: sqlx::sqlite::SqliteRow) -> CodeWorkspaceSummary {
         is_git_repository: row.get::<i64, _>(6) != 0,
         trust,
         capabilities: agentic_super_app_code_domain::capabilities_for_trust(trust),
+        project_id: row
+            .try_get::<Option<String>, _>(9)
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| format!("legacy-project-{}", row.get::<String, _>(0))),
+        workspace_kind: match row
+            .try_get::<String, _>(10)
+            .unwrap_or_else(|_| "primary".to_owned())
+            .as_str()
+        {
+            "managed_worktree" => CodeWorkspaceKind::ManagedWorktree,
+            "external_worktree" => CodeWorkspaceKind::ExternalWorktree,
+            _ => CodeWorkspaceKind::Primary,
+        },
+        worktree_name: row.try_get(11).unwrap_or(None),
+        base_ref: row.try_get(12).unwrap_or(None),
+        managed_by_app: row.try_get::<i64, _>(13).unwrap_or(0) != 0,
+        available: row.try_get::<i64, _>(14).unwrap_or(1) != 0,
+        unavailable_reason: row.try_get(15).unwrap_or(None),
         updated_at_unix_ms: row.get(8),
+    }
+}
+
+fn project_kind_value(kind: CodeProjectKind) -> &'static str {
+    match kind {
+        CodeProjectKind::Git => "git",
+        CodeProjectKind::Folder => "folder",
+    }
+}
+
+fn workspace_kind_value(kind: CodeWorkspaceKind) -> &'static str {
+    match kind {
+        CodeWorkspaceKind::Primary => "primary",
+        CodeWorkspaceKind::ManagedWorktree => "managed_worktree",
+        CodeWorkspaceKind::ExternalWorktree => "external_worktree",
     }
 }
 

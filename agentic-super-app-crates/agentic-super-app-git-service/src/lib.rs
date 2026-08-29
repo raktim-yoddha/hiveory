@@ -58,6 +58,15 @@ pub struct AgenticSuperAppWorktreeInspection {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgenticSuperAppListedWorktree {
+    pub name: String,
+    pub path: PathBuf,
+    pub branch: Option<String>,
+    pub locked: bool,
+    pub dirty_files: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgenticSuperAppCheckpoint {
     pub ref_name: String,
     pub commit_oid: String,
@@ -168,6 +177,56 @@ impl AgenticSuperAppGitService {
             .and_then(|head| head.target())
             .map(|oid| oid.to_string())
             .ok_or(AgenticSuperAppGitError::MissingHead)
+    }
+
+    pub fn current_branch(&self, root: &Path) -> Result<Option<String>, AgenticSuperAppGitError> {
+        let repository = self.open_repository(root)?;
+        Ok(repository
+            .head()
+            .ok()
+            .and_then(|head| head.shorthand().ok().map(ToOwned::to_owned)))
+    }
+
+    pub fn resolve_ref_oid(
+        &self,
+        root: &Path,
+        reference: &str,
+    ) -> Result<String, AgenticSuperAppGitError> {
+        let repository = self.open_repository(root)?;
+        let object = repository.revparse_single(reference.trim())?;
+        let commit = object.peel(git2::ObjectType::Commit)?;
+        Ok(commit.id().to_string())
+    }
+
+    pub fn list_worktrees(
+        &self,
+        repository_root: &Path,
+    ) -> Result<Vec<AgenticSuperAppListedWorktree>, AgenticSuperAppGitError> {
+        let repository = self.open_repository(repository_root)?;
+        let mut worktrees = Vec::new();
+        for name in repository.worktrees()?.iter() {
+            let Ok(Some(name)) = name else { continue };
+            let worktree = repository.find_worktree(name)?;
+            let path = worktree.path().to_path_buf();
+            let branch = if path.exists() {
+                self.current_branch(&path)?
+            } else {
+                None
+            };
+            let dirty_files = if path.exists() {
+                self.dirty_paths(&path)?
+            } else {
+                Vec::new()
+            };
+            worktrees.push(AgenticSuperAppListedWorktree {
+                name: name.to_owned(),
+                path,
+                branch,
+                locked: matches!(worktree.is_locked()?, WorktreeLockStatus::Locked(_)),
+                dirty_files,
+            });
+        }
+        Ok(worktrees)
     }
 
     pub fn create_worktree(

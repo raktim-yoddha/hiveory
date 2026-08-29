@@ -10,7 +10,7 @@ use agentic_super_app_code_domain::{
 };
 use agentic_super_app_protocol::{
     CodeDocument, CodeFileKind, CodeFileNode, CodeFileTree, CodeWorkspaceCapability,
-    CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
 };
 use cap_std::{
     ambient_authority,
@@ -57,6 +57,18 @@ pub enum AgenticSuperAppWorkspaceError {
 struct WorkspaceHandle {
     summary: CodeWorkspaceSummary,
     root: Arc<Dir>,
+}
+
+#[derive(Debug, Clone)]
+pub struct AgenticSuperAppWorkspaceMetadata {
+    pub project_id: String,
+    pub workspace_kind: CodeWorkspaceKind,
+    pub worktree_name: Option<String>,
+    pub base_ref: Option<String>,
+    pub branch: Option<String>,
+    pub managed_by_app: bool,
+    pub available: bool,
+    pub unavailable_reason: Option<String>,
 }
 
 #[derive(Clone, Default)]
@@ -124,6 +136,13 @@ impl AgenticSuperAppWorkspaceService {
             is_git_repository: canonical_root.join(".git").exists(),
             trust,
             capabilities: capabilities_for_trust(trust),
+            project_id: format!("legacy-project-{id}"),
+            workspace_kind: CodeWorkspaceKind::Primary,
+            worktree_name: None,
+            base_ref: None,
+            managed_by_app: false,
+            available: true,
+            unavailable_reason: None,
             updated_at_unix_ms: now_ms(),
         };
         self.workspaces
@@ -162,6 +181,59 @@ impl AgenticSuperAppWorkspaceService {
 
     pub fn root_path(&self, workspace_id: &str) -> Result<PathBuf, AgenticSuperAppWorkspaceError> {
         Ok(PathBuf::from(self.handle(workspace_id)?.summary.root_path))
+    }
+
+    pub fn update_workspace_metadata(
+        &self,
+        workspace_id: &str,
+        metadata: AgenticSuperAppWorkspaceMetadata,
+    ) -> Result<CodeWorkspaceSummary, AgenticSuperAppWorkspaceError> {
+        let mut workspaces = self
+            .workspaces
+            .write()
+            .map_err(|_| AgenticSuperAppWorkspaceError::NotFound)?;
+        let handle = workspaces
+            .get_mut(workspace_id)
+            .ok_or(AgenticSuperAppWorkspaceError::NotFound)?;
+        handle.summary.project_id = metadata.project_id;
+        handle.summary.workspace_kind = metadata.workspace_kind;
+        handle.summary.worktree_name = metadata.worktree_name;
+        handle.summary.base_ref = metadata.base_ref;
+        handle.summary.branch = metadata.branch;
+        handle.summary.managed_by_app = metadata.managed_by_app;
+        handle.summary.available = metadata.available;
+        handle.summary.unavailable_reason = metadata.unavailable_reason;
+        handle.summary.updated_at_unix_ms = now_ms();
+        Ok(handle.summary.clone())
+    }
+
+    pub fn rename_workspace(
+        &self,
+        workspace_id: &str,
+        display_name: String,
+    ) -> Result<CodeWorkspaceSummary, AgenticSuperAppWorkspaceError> {
+        let mut workspaces = self
+            .workspaces
+            .write()
+            .map_err(|_| AgenticSuperAppWorkspaceError::NotFound)?;
+        let handle = workspaces
+            .get_mut(workspace_id)
+            .ok_or(AgenticSuperAppWorkspaceError::NotFound)?;
+        handle.summary.display_name = display_name;
+        handle.summary.updated_at_unix_ms = now_ms();
+        Ok(handle.summary.clone())
+    }
+
+    pub fn close_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> Result<CodeWorkspaceSummary, AgenticSuperAppWorkspaceError> {
+        self.workspaces
+            .write()
+            .map_err(|_| AgenticSuperAppWorkspaceError::NotFound)?
+            .remove(workspace_id)
+            .map(|handle| handle.summary)
+            .ok_or(AgenticSuperAppWorkspaceError::NotFound)
     }
 
     pub fn set_trust(

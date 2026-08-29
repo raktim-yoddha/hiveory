@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useCallback, type ReactNode } from 'react'
 import {
   agenticSuperAppClient,
+  type CodeProjectSummary,
+  type CodeWorkspaceCreateRequest,
   type CodeWorkspaceSummary,
 } from '../api/agentic-super-app-client'
 import { useCodeWorkspaceController } from './state/use-code-workspace-controller'
@@ -10,6 +12,7 @@ import { AgenticSuperAppCodeDashboard } from './AgenticSuperAppCodeDashboard'
 import { AgenticSuperAppCodeRoutines } from './AgenticSuperAppCodeRoutines'
 import { AgenticSuperAppCodePlugins } from './AgenticSuperAppCodePlugins'
 import { AgenticSuperAppCodeSkills } from './AgenticSuperAppCodeSkills'
+import { CodeWorkspaceCreateDialog } from './CodeWorkspaceDialogs'
 import './code-workspace.css'
 
 interface AgenticSuperAppCodeWorkspaceProps {
@@ -22,9 +25,14 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   initialWorkspaceId,
   initialSection = 'workspace',
 }) => {
+  const [projects, setProjects] = useState<CodeProjectSummary[]>([])
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(initialWorkspaceId ?? null)
   const [activeSection, setActiveSection] = useState<'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'>(initialSection)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
+  const [createWorkspaceProjectId, setCreateWorkspaceProjectId] = useState<string | null>(null)
+  const [createWorkspaceBusy, setCreateWorkspaceBusy] = useState(false)
+  const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
@@ -32,9 +40,13 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
   const refreshWorkspaces = useCallback(async () => {
     try {
       const snapshot = await agenticSuperAppClient.codeSnapshot()
+      setProjects(snapshot.projects)
       setWorkspaces(snapshot.workspaces)
-      if (!activeWorkspaceId && snapshot.workspaces.length > 0) {
-        const firstId = snapshot.active_workspace_id || snapshot.workspaces[0].id
+      const availableWorkspace = snapshot.workspaces.find((workspace) => workspace.available)
+      if (!activeWorkspaceId && availableWorkspace) {
+        const firstId = snapshot.active_workspace_id && snapshot.workspaces.some((workspace) => workspace.id === snapshot.active_workspace_id && workspace.available)
+          ? snapshot.active_workspace_id
+          : availableWorkspace.id
         setActiveWorkspaceId(firstId)
         void loadWorkspace(firstId)
       }
@@ -53,11 +65,11 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
     void loadWorkspace(wsId)
   }
 
-  const handleOpenFolder = async () => {
+  const handleAddProject = async () => {
     const path = await agenticSuperAppClient.chooseWorkspacePath()
     if (!path) return
     try {
-      const detail = await agenticSuperAppClient.openCodeWorkspace(path)
+      const detail = await agenticSuperAppClient.addCodeProject(path)
       setActiveWorkspaceId(detail.summary.id)
       setActiveSection('workspace')
       await refreshWorkspaces()
@@ -65,6 +77,32 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
       setError(msg)
+    }
+  }
+
+  const handleAddWorkspace = (projectId?: string) => {
+    const fallbackProjectId = workspaces.find((workspace) => workspace.id === activeWorkspaceId)?.project_id ?? projects.find((project) => project.kind === 'git' && project.available)?.id ?? null
+    setCreateWorkspaceProjectId(projectId ?? fallbackProjectId)
+    setCreateWorkspaceError(null)
+    setCreateWorkspaceOpen(true)
+  }
+
+  const handleCreateWorkspace = async (request: CodeWorkspaceCreateRequest) => {
+    setCreateWorkspaceBusy(true)
+    setCreateWorkspaceError(null)
+    try {
+      const detail = await agenticSuperAppClient.createCodeWorkspace(request)
+      setActiveWorkspaceId(detail.summary.id)
+      setActiveSection('workspace')
+      setCreateWorkspaceOpen(false)
+      await refreshWorkspaces()
+      await loadWorkspace(detail.summary.id)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setCreateWorkspaceError(message)
+      setError(message)
+    } finally {
+      setCreateWorkspaceBusy(false)
     }
   }
 
@@ -159,11 +197,13 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
     <div className="code-workspace-root">
       <CodeWorkspaceRail
         controller={controller}
+        projects={projects}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         activeGlobalSection={activeSection}
         onSelectWorkspace={handleSelectWorkspace}
-        onOpenFolder={() => void handleOpenFolder()}
+        onAddProject={() => void handleAddProject()}
+        onAddWorkspace={handleAddWorkspace}
         onSelectGlobalSection={(section) => setActiveSection(section)}
       />
 
@@ -173,9 +213,19 @@ export const AgenticSuperAppCodeWorkspace: React.FC<AgenticSuperAppCodeWorkspace
         {activeSection === 'plugins' && <AgenticSuperAppCodePlugins />}
         {activeSection === 'skills' && <AgenticSuperAppCodeSkills />}
         {activeSection === 'workspace' && (
-          <CodePaneCanvas controller={controller} onOpenFolder={() => void handleOpenFolder()} />
+          <CodePaneCanvas controller={controller} onOpenFolder={() => void handleAddProject()} />
         )}
       </main>
+
+      <CodeWorkspaceCreateDialog
+        open={createWorkspaceOpen}
+        projects={projects}
+        activeProjectId={createWorkspaceProjectId}
+        busy={createWorkspaceBusy}
+        error={createWorkspaceError}
+        onClose={() => { if (!createWorkspaceBusy) setCreateWorkspaceOpen(false) }}
+        onSubmit={(request) => void handleCreateWorkspace(request)}
+      />
 
     </div>
   )

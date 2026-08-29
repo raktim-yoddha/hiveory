@@ -116,6 +116,8 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
     }
   }
 
+  const showPaneActions = node.kind !== 'empty'
+
   const getPaneIcon = () => {
     switch (node.kind) {
       case 'coding_agent':
@@ -189,7 +191,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
           )}
         </div>
 
-        <div className="code-pane-header-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+        {showPaneActions && <div className="code-pane-header-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           {/* More Options Menu */}
           <div style={{ position: 'relative' }}>
             <button
@@ -243,7 +245,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
           >
             <X size={13} />
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Centered Pop-up Modal for Split Pane Creation */}

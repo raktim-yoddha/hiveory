@@ -46,3 +46,33 @@ test('preview Code enforces trust before saving and preserves the pane contract'
   const saved = await agenticSuperAppClient.saveCodeFile({ workspace_id: detail.summary.id, relative_path: document.relative_path, content: '# Saved from preview\n', expected_fingerprint: document.fingerprint })
   expect(saved.content).toContain('Saved from preview')
 })
+
+test('preview keeps projects as parents of primary and isolated workspaces', async () => {
+  const primary = await agenticSuperAppClient.addCodeProject('~/hierarchy-demo')
+  const before = await agenticSuperAppClient.codeSnapshot()
+  const project = before.projects.find((candidate) => candidate.id === primary.summary.project_id)
+
+  expect(project).toMatchObject({
+    primary_workspace_id: primary.summary.id,
+    workspace_count: 1,
+    kind: 'git',
+  })
+
+  const isolated = await agenticSuperAppClient.createCodeWorkspace({
+    project_id: primary.summary.project_id,
+    name: 'Feature branch',
+    base_ref: 'HEAD',
+    branch_name: 'feature/hierarchy-demo',
+  })
+  const after = await agenticSuperAppClient.codeSnapshot()
+  const updatedProject = after.projects.find((candidate) => candidate.id === primary.summary.project_id)
+
+  expect(isolated.summary).toMatchObject({
+    project_id: primary.summary.project_id,
+    workspace_kind: 'managed_worktree',
+    managed_by_app: true,
+    display_name: 'Feature branch',
+  })
+  expect(updatedProject?.workspace_count).toBe(2)
+  expect(after.workspaces.map((workspace) => workspace.id)).toEqual(expect.arrayContaining([primary.summary.id, isolated.summary.id]))
+})

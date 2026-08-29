@@ -508,6 +508,40 @@ pub enum CodeWorkspaceCapability {
     OpenPreview,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeProjectKind {
+    Git,
+    Folder,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeWorkspaceKind {
+    Primary,
+    ManagedWorktree,
+    ExternalWorktree,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeProjectSummary {
+    pub id: String,
+    pub host_id: String,
+    pub display_name: String,
+    pub root_path: String,
+    pub repository_name: Option<String>,
+    pub kind: CodeProjectKind,
+    pub primary_workspace_id: String,
+    pub current_branch: Option<String>,
+    pub workspace_count: u32,
+    pub available: bool,
+    pub unavailable_reason: Option<String>,
+    pub updated_at_unix_ms: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeWorkspaceSummary {
@@ -520,6 +554,13 @@ pub struct CodeWorkspaceSummary {
     pub is_git_repository: bool,
     pub trust: CodeWorkspaceTrust,
     pub capabilities: Vec<CodeWorkspaceCapability>,
+    pub project_id: String,
+    pub workspace_kind: CodeWorkspaceKind,
+    pub worktree_name: Option<String>,
+    pub base_ref: Option<String>,
+    pub managed_by_app: bool,
+    pub available: bool,
+    pub unavailable_reason: Option<String>,
     pub updated_at_unix_ms: i64,
 }
 
@@ -527,6 +568,21 @@ pub struct CodeWorkspaceSummary {
 #[ts(export)]
 pub struct CodeWorkspaceOpenRequest {
     pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeProjectAddRequest {
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceCreateRequest {
+    pub project_id: String,
+    pub name: String,
+    pub base_ref: Option<String>,
+    pub branch_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -555,6 +611,7 @@ pub struct CodeWorkspaceDetail {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeSnapshot {
+    pub projects: Vec<CodeProjectSummary>,
     pub workspaces: Vec<CodeWorkspaceSummary>,
     pub active_workspace_id: Option<String>,
     pub adapters: Vec<CodeAdapterSummary>,
@@ -2525,8 +2582,13 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     ChatStreamRequest::export_all(&config)?;
     CodeWorkspaceTrust::export_all(&config)?;
     CodeWorkspaceCapability::export_all(&config)?;
+    CodeProjectKind::export_all(&config)?;
+    CodeWorkspaceKind::export_all(&config)?;
+    CodeProjectSummary::export_all(&config)?;
     CodeWorkspaceSummary::export_all(&config)?;
     CodeWorkspaceOpenRequest::export_all(&config)?;
+    CodeProjectAddRequest::export_all(&config)?;
+    CodeWorkspaceCreateRequest::export_all(&config)?;
     CodeWorkspaceTrustRequest::export_all(&config)?;
     CodeWorkspaceQuery::export_all(&config)?;
     CodeWorkspaceDetail::export_all(&config)?;

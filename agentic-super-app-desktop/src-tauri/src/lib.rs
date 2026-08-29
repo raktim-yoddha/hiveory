@@ -51,13 +51,14 @@ use agentic_super_app_protocol::{
     CodeGitDiffRequest, CodeGitStatus, CodeGitStatusRequest, CodeOrchestrationEventEnvelope,
     CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
     CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
-    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest, CodeRunCreateRequest,
-    CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest,
-    CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest, CodeTaskDeleteRequest,
-    CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent, CodeTerminalInputRequest,
-    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot, CodeTerminalSnapshotQuery,
-    CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSubscribeRequest,
-    CodeTerminalSummary, CodeWorkspaceDetail, CodeWorkspaceOpenRequest, CodeWorkspaceQuery,
+    CodeProjectAddRequest, CodeProjectKind, CodeProjectSummary, CodeQuestionAnswerRequest,
+    CodeReadFileRequest, CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest,
+    CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
+    CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
+    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
+    CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
+    CodeTerminalStopRequest, CodeTerminalSubscribeRequest, CodeTerminalSummary,
+    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenRequest, CodeWorkspaceQuery,
     CodeWorkspaceTrust, CodeWorkspaceTrustRequest, CommandEnvelope, CreateCodePaneThreadRequest,
     CreateCodePaneThreadResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
     LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
@@ -76,7 +77,8 @@ use agentic_super_app_secret_store::{
 };
 use agentic_super_app_tool_runtime::AgenticSuperAppAuditLog;
 use agentic_super_app_workspace_service::{
-    AgenticSuperAppWorkspaceError, AgenticSuperAppWorkspaceService,
+    AgenticSuperAppWorkspaceError, AgenticSuperAppWorkspaceMetadata,
+    AgenticSuperAppWorkspaceService,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
@@ -146,6 +148,7 @@ struct AgenticSuperAppFoundation {
     chat_cancellations: Arc<std::sync::Mutex<HashMap<String, CancellationToken>>>,
     recovery_message: Arc<RwLock<Option<String>>>,
     code_workspaces: AgenticSuperAppWorkspaceService,
+    code_workspaces_root: PathBuf,
     code_runtime: AgenticSuperAppCodeRuntime,
     code_git: AgenticSuperAppGitService,
     code_orchestration: AgenticSuperAppCodeOrchestration,
@@ -165,17 +168,39 @@ impl AgenticSuperAppFoundation {
             .previous_shutdown_was_clean()
             .await
             .map_err(|error| error.to_string())?;
+        let code_workspaces_root = orchestration_root
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("code-workspaces");
         let code_workspaces = AgenticSuperAppWorkspaceService::new();
         let persisted_workspaces = persistence
             .code_workspaces()
             .await
             .map_err(|error| error.to_string())?;
         for summary in &persisted_workspaces {
-            let _ = code_workspaces.open_workspace(
-                Path::new(&summary.root_path),
-                Some(&summary.id),
-                summary.trust,
-            );
+            if code_workspaces
+                .open_workspace(
+                    Path::new(&summary.root_path),
+                    Some(&summary.id),
+                    summary.trust,
+                )
+                .is_ok()
+            {
+                let _ = code_workspaces.update_workspace_metadata(
+                    &summary.id,
+                    AgenticSuperAppWorkspaceMetadata {
+                        project_id: summary.project_id.clone(),
+                        workspace_kind: summary.workspace_kind,
+                        worktree_name: summary.worktree_name.clone(),
+                        base_ref: summary.base_ref.clone(),
+                        branch: summary.branch.clone(),
+                        managed_by_app: summary.managed_by_app,
+                        available: summary.available,
+                        unavailable_reason: summary.unavailable_reason.clone(),
+                    },
+                );
+            }
         }
         let code_active_workspace_id = Arc::new(RwLock::new(
             persisted_workspaces
@@ -274,6 +299,7 @@ impl AgenticSuperAppFoundation {
             chat_cancellations: Arc::new(std::sync::Mutex::new(HashMap::new())),
             recovery_message: Arc::new(RwLock::new(recovery_message)),
             code_workspaces,
+            code_workspaces_root,
             code_runtime: AgenticSuperAppCodeRuntime::new(),
             code_git: AgenticSuperAppGitService,
             code_orchestration,
@@ -306,8 +332,47 @@ impl AgenticSuperAppFoundation {
     }
 
     async fn code_snapshot(&self) -> Result<CodeSnapshot, ApiError> {
+        let persisted_workspaces = self
+            .persistence
+            .code_workspaces()
+            .await
+            .map_err(database_error)?;
+        let mut workspaces = self.code_workspaces.summaries().map_err(workspace_error)?;
+        let loaded_workspace_ids = workspaces
+            .iter()
+            .map(|workspace| workspace.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+        for persisted in persisted_workspaces {
+            if loaded_workspace_ids.contains(&persisted.id) {
+                continue;
+            }
+            let mut unavailable = persisted;
+            unavailable.available = false;
+            unavailable.unavailable_reason =
+                Some("The workspace folder is unavailable on this device.".to_owned());
+            workspaces.push(unavailable);
+        }
+        workspaces.sort_by(|left, right| left.display_name.cmp(&right.display_name));
+
+        let mut projects = self
+            .persistence
+            .code_projects()
+            .await
+            .map_err(database_error)?;
+        for project in &mut projects {
+            if !workspaces
+                .iter()
+                .any(|workspace| workspace.project_id == project.id && workspace.available)
+            {
+                project.available = false;
+                project.unavailable_reason = Some(
+                    "No workspace folder for this project is available on this device.".to_owned(),
+                );
+            }
+        }
         Ok(CodeSnapshot {
-            workspaces: self.code_workspaces.summaries().map_err(workspace_error)?,
+            projects,
+            workspaces,
             active_workspace_id: self
                 .code_active_workspace_id
                 .read()
@@ -315,6 +380,231 @@ impl AgenticSuperAppFoundation {
                 .clone(),
             adapters: self.code_runtime.adapters(),
         })
+    }
+
+    async fn add_code_project(&self, path: &str) -> Result<CodeWorkspaceDetail, ApiError> {
+        let canonical_root = std::fs::canonicalize(path.trim()).map_err(|error| {
+            validation_error(format!(
+                "The selected project folder could not be opened: {error}"
+            ))
+        })?;
+        if !canonical_root.is_dir() {
+            return Err(validation_error(
+                "The selected project path must be a directory.",
+            ));
+        }
+        let canonical_root_string = canonical_root.to_string_lossy().into_owned();
+        if let Some(project) = self
+            .persistence
+            .code_project_by_root("local", &canonical_root_string)
+            .await
+            .map_err(database_error)?
+        {
+            *self
+                .code_active_workspace_id
+                .write()
+                .map_err(|_| unavailable_error())? = Some(project.primary_workspace_id.clone());
+            return self.code_detail(&project.primary_workspace_id).await;
+        }
+
+        let is_git_repository = canonical_root.join(".git").exists();
+        let branch = if is_git_repository {
+            self.code_git
+                .current_branch(&canonical_root)
+                .map_err(git_error)?
+        } else {
+            None
+        };
+        let workspace_id = uuid::Uuid::now_v7().to_string();
+        let project_id = format!("project-{}", uuid::Uuid::now_v7());
+        let opened = self
+            .code_workspaces
+            .open_workspace(
+                &canonical_root,
+                Some(&workspace_id),
+                CodeWorkspaceTrust::Untrusted,
+            )
+            .map_err(workspace_error)?;
+        let summary = self
+            .code_workspaces
+            .update_workspace_metadata(
+                &opened.id,
+                AgenticSuperAppWorkspaceMetadata {
+                    project_id: project_id.clone(),
+                    workspace_kind: agentic_super_app_protocol::CodeWorkspaceKind::Primary,
+                    worktree_name: None,
+                    base_ref: None,
+                    branch: branch.clone(),
+                    managed_by_app: false,
+                    available: true,
+                    unavailable_reason: None,
+                },
+            )
+            .map_err(workspace_error)?;
+        let now = now_ms();
+        let project = CodeProjectSummary {
+            id: project_id,
+            host_id: "local".to_owned(),
+            display_name: summary.display_name.clone(),
+            root_path: summary.root_path.clone(),
+            repository_name: summary.repository_name.clone(),
+            kind: if is_git_repository {
+                CodeProjectKind::Git
+            } else {
+                CodeProjectKind::Folder
+            },
+            primary_workspace_id: summary.id.clone(),
+            current_branch: branch,
+            workspace_count: 1,
+            available: true,
+            unavailable_reason: None,
+            updated_at_unix_ms: now,
+        };
+        self.persistence
+            .save_code_project(&project)
+            .await
+            .map_err(database_error)?;
+        self.persistence
+            .save_code_workspace(&summary)
+            .await
+            .map_err(database_error)?;
+        self.persistence
+            .save_code_layout(&default_layout(&summary.id))
+            .await
+            .map_err(database_error)?;
+        *self
+            .code_active_workspace_id
+            .write()
+            .map_err(|_| unavailable_error())? = Some(summary.id.clone());
+        self.audit
+            .record(
+                "code.project.add",
+                "success",
+                "info",
+                Some(&project.id),
+                Some("project registered with an untrusted primary workspace"),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_detail(&summary.id).await
+    }
+
+    async fn create_code_workspace(
+        &self,
+        request: &CodeWorkspaceCreateRequest,
+    ) -> Result<CodeWorkspaceDetail, ApiError> {
+        let project = self
+            .persistence
+            .code_project(&request.project_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The selected project no longer exists."))?;
+        if !matches!(project.kind, CodeProjectKind::Git) {
+            return Err(validation_error(
+                "A folder project can only have its primary workspace.",
+            ));
+        }
+        let display_name = validate_workspace_display_name(&request.name)?;
+        let project_root = PathBuf::from(&project.root_path);
+        let base_ref = request
+            .base_ref
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or("HEAD")
+            .to_owned();
+        let base_oid = self
+            .code_git
+            .resolve_ref_oid(&project_root, &base_ref)
+            .map_err(git_error)?;
+        let branch_name = request
+            .branch_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| format!("workspace/{}", workspace_slug(&display_name)));
+        validate_branch_name(&branch_name)?;
+
+        let workspace_id = uuid::Uuid::now_v7().to_string();
+        let worktree_name = format!(
+            "{}-{}",
+            workspace_slug(&display_name),
+            workspace_id.chars().take(8).collect::<String>()
+        );
+        let managed_path = self
+            .code_workspaces_root
+            .join(&project.id)
+            .join(&worktree_name);
+        let created = self
+            .code_git
+            .create_worktree(
+                &project_root,
+                &worktree_name,
+                &managed_path,
+                &branch_name,
+                &base_oid,
+            )
+            .map_err(git_error)?;
+        let opened = match self.code_workspaces.open_workspace(
+            &created.path,
+            Some(&workspace_id),
+            CodeWorkspaceTrust::Untrusted,
+        ) {
+            Ok(summary) => summary,
+            Err(error) => {
+                let _ = self.code_git.remove_worktree(
+                    &project_root,
+                    &created.name,
+                    &self.code_workspaces_root,
+                    true,
+                );
+                return Err(workspace_error(error));
+            }
+        };
+        let summary = self
+            .code_workspaces
+            .update_workspace_metadata(
+                &opened.id,
+                AgenticSuperAppWorkspaceMetadata {
+                    project_id: project.id.clone(),
+                    workspace_kind: agentic_super_app_protocol::CodeWorkspaceKind::ManagedWorktree,
+                    worktree_name: Some(created.name),
+                    base_ref: Some(base_ref),
+                    branch: Some(created.branch),
+                    managed_by_app: true,
+                    available: true,
+                    unavailable_reason: None,
+                },
+            )
+            .map_err(workspace_error)?;
+        let summary = self
+            .code_workspaces
+            .rename_workspace(&summary.id, display_name)
+            .map_err(workspace_error)?;
+        self.persistence
+            .save_code_workspace(&summary)
+            .await
+            .map_err(database_error)?;
+        self.persistence
+            .save_code_layout(&default_layout(&summary.id))
+            .await
+            .map_err(database_error)?;
+        *self
+            .code_active_workspace_id
+            .write()
+            .map_err(|_| unavailable_error())? = Some(summary.id.clone());
+        self.audit
+            .record(
+                "code.workspace.create",
+                "success",
+                "info",
+                Some(&summary.id),
+                Some("managed Git workspace created from the selected project"),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_detail(&summary.id).await
     }
 
     async fn code_detail(&self, workspace_id: &str) -> Result<CodeWorkspaceDetail, ApiError> {
@@ -1573,6 +1863,22 @@ async fn agentic_super_app_command_confirm_code_cleanup(
 }
 
 #[tauri::command]
+async fn agentic_super_app_command_add_code_project(
+    command: CommandEnvelope<CodeProjectAddRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    let path = command.payload.path.trim();
+    if path.is_empty() {
+        return Err(validation_error("Choose a project folder first."));
+    }
+    Ok(response(
+        &command.request_id,
+        foundation.add_code_project(path).await?,
+    ))
+}
+
+#[tauri::command]
 async fn agentic_super_app_command_open_code_workspace(
     command: CommandEnvelope<CodeWorkspaceOpenRequest>,
     foundation: State<'_, AgenticSuperAppFoundation>,
@@ -1582,38 +1888,21 @@ async fn agentic_super_app_command_open_code_workspace(
     if path.is_empty() {
         return Err(validation_error("Choose a workspace folder first."));
     }
-    let summary = foundation
-        .code_workspaces
-        .open_workspace(Path::new(path), None, CodeWorkspaceTrust::Untrusted)
-        .map_err(workspace_error)?;
-    foundation
-        .persistence
-        .save_code_workspace(&summary)
-        .await
-        .map_err(database_error)?;
-    foundation
-        .persistence
-        .save_code_layout(&default_layout(&summary.id))
-        .await
-        .map_err(database_error)?;
-    *foundation
-        .code_active_workspace_id
-        .write()
-        .map_err(|_| unavailable_error())? = Some(summary.id.clone());
-    foundation
-        .audit
-        .record(
-            "code.workspace.open",
-            "success",
-            "info",
-            Some(&summary.id),
-            Some("workspace opened with untrusted defaults"),
-        )
-        .await
-        .map_err(database_error)?;
     Ok(response(
         &command.request_id,
-        foundation.code_detail(&summary.id).await?,
+        foundation.add_code_project(path).await?,
+    ))
+}
+
+#[tauri::command]
+async fn agentic_super_app_command_create_code_workspace(
+    command: CommandEnvelope<CodeWorkspaceCreateRequest>,
+    foundation: State<'_, AgenticSuperAppFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation.create_code_workspace(&command.payload).await?,
     ))
 }
 
@@ -4482,7 +4771,9 @@ pub fn run() {
             agentic_super_app_query_code_run,
             agentic_super_app_query_code_orchestration_events,
             agentic_super_app_stream_code_orchestration_events,
+            agentic_super_app_command_add_code_project,
             agentic_super_app_command_open_code_workspace,
+            agentic_super_app_command_create_code_workspace,
             agentic_super_app_command_trust_code_workspace,
             agentic_super_app_command_create_code_run,
             agentic_super_app_command_update_code_run,
@@ -4564,6 +4855,51 @@ fn application_error(code: &str, message: impl Into<String>, retry: RetryClass) 
 fn validation_error(message: impl Into<String>) -> ApiError {
     application_error("validation_failed", message, RetryClass::AfterUserAction)
 }
+
+fn validate_workspace_display_name(value: &str) -> Result<String, ApiError> {
+    let value = value.trim();
+    if value.is_empty() || value.chars().count() > 80 || value.chars().any(char::is_control) {
+        return Err(validation_error(
+            "Workspace names must be 1-80 non-control characters.",
+        ));
+    }
+    Ok(value.to_owned())
+}
+
+fn validate_branch_name(value: &str) -> Result<(), ApiError> {
+    if value.is_empty()
+        || value.len() > 240
+        || value.chars().any(char::is_control)
+        || value.contains("..")
+        || value.contains(' ')
+        || value.ends_with('.')
+        || value.ends_with('/')
+        || value.starts_with('/')
+    {
+        return Err(validation_error(
+            "Branch names must be valid Git references without spaces or traversal segments.",
+        ));
+    }
+    Ok(())
+}
+
+fn workspace_slug(value: &str) -> String {
+    let mut slug = String::new();
+    for character in value.chars() {
+        if character.is_ascii_alphanumeric() {
+            slug.push(character.to_ascii_lowercase());
+        } else if !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    let slug = slug.trim_matches('-');
+    if slug.is_empty() {
+        "workspace".to_owned()
+    } else {
+        slug.chars().take(48).collect()
+    }
+}
+
 fn database_error(error: sqlx::Error) -> ApiError {
     application_error(
         "persistence_unavailable",

@@ -93,9 +93,12 @@ export type PluginInvocationSummary = { id: string; run_id: string | null; plugi
 
 export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
 export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'open_preview'
-export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; updated_at_unix_ms: number }
+export type CodeProjectKind = 'git' | 'folder'
+export type CodeWorkspaceKind = 'primary' | 'managed_worktree' | 'external_worktree'
+export type CodeProjectSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; kind: CodeProjectKind; primary_workspace_id: string; current_branch: string | null; workspace_count: number; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
+export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; project_id: string; workspace_kind: CodeWorkspaceKind; worktree_name: string | null; base_ref: string | null; managed_by_app: boolean; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
 export type CodeWorkspaceDetail = { summary: CodeWorkspaceSummary; layout: CodePaneLayout; open_documents: CodeDocumentSummary[]; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
-export type CodeSnapshot = { workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
+export type CodeSnapshot = { projects: CodeProjectSummary[]; workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
 export type CodeFileKind = 'file' | 'directory' | 'symlink' | 'binary'
 export type CodeFileNode = { name: string; relative_path: string; kind: CodeFileKind; size: number | null; language: string | null; modified_at_unix_ms: number | null }
 export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
@@ -203,6 +206,8 @@ type ChatBranchRequest = { conversation_id: string; message_id: string }
 type ChatDeleteAttachmentRequest = { conversation_id: string; message_id: string; attachment_id: string }
 type ChatExportRequest = { conversation_id: string; branch_id: string; destination: string }
 type CodeWorkspaceOpenRequest = { path: string }
+type CodeProjectAddRequest = { path: string }
+export type CodeWorkspaceCreateRequest = { project_id: string; name: string; base_ref: string | null; branch_name: string | null }
 type CodeWorkspaceTrustRequest = { workspace_id: string; grant: boolean }
 type CodeFileTreeQuery = { workspace_id: string; relative_path: string | null }
 type CodeReadFileRequest = { workspace_id: string; relative_path: string }
@@ -251,6 +256,7 @@ function encodeTerminalInput(data: string): string {
 }
 const previewConversations = new Map<string, ChatConversationDetail>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
+const previewCodeProjects = new Map<string, CodeProjectSummary>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
 const previewCodeRuns = new Map<string, CodeRunDetail>()
 const previewCodeSubscribers = new Set<(event: CodeOrchestrationEventEnvelope) => void>()
@@ -407,17 +413,29 @@ function previewReplaceWithEmpty(layout: CodePaneLayout) {
   const empty = previewCodeLayout(layout.workspace_id)
   Object.assign(layout, empty)
 }
-function previewCodeWorkspace(path: string): { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> } {
+function previewCodeWorkspace(
+  path: string,
+  projectId = previewId('project'),
+  workspaceKind: CodeWorkspaceKind = 'primary',
+  branch = 'main',
+): { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> } {
   const id = previewId('workspace')
   const now = previewNow()
   const files = new Map<string, CodeDocument>()
   const seed = (relativePath: string, content: string, language: string) => files.set(relativePath, { workspace_id: id, relative_path: relativePath, content, language, fingerprint: `preview-${relativePath}`, bytes: content.length, read_only: false, binary: false })
   seed('README.md', '# Agentic Super App\n\nThis is the Phase 4 browser preview workspace.\n', 'markdown')
   seed('src/main.tsx', "export function main() {\n  return 'Code mode is ready'\n}\n", 'typescript')
-  const summary: CodeWorkspaceSummary = { id, host_id: 'browser-preview', display_name: path.split(/[\\/]/).filter(Boolean).pop() || 'Preview workspace', root_path: path || '~/agentic-demo', repository_name: 'agentic-demo', branch: 'main', is_git_repository: true, trust: 'untrusted', capabilities: ['read_files'], updated_at_unix_ms: now }
+  const displayName = path.split(/[\\/]/).filter(Boolean).pop() || 'Preview workspace'
+  const summary: CodeWorkspaceSummary = { id, host_id: 'browser-preview', display_name: displayName, root_path: path || '~/agentic-demo', repository_name: 'agentic-demo', branch, is_git_repository: true, trust: 'untrusted', capabilities: ['read_files'], project_id: projectId, workspace_kind: workspaceKind, worktree_name: workspaceKind === 'primary' ? null : displayName.toLowerCase().replaceAll(' ', '-'), base_ref: workspaceKind === 'primary' ? null : 'HEAD', managed_by_app: workspaceKind === 'managed_worktree', available: true, unavailable_reason: null, updated_at_unix_ms: now }
   const detail: CodeWorkspaceDetail = { summary, layout: previewCodeLayout(id), open_documents: [], terminals: [], previews: [] }
   const value = { detail, files }
   previewCodeWorkspaces.set(id, value)
+  if (workspaceKind === 'primary') {
+    previewCodeProjects.set(projectId, { id: projectId, host_id: 'browser-preview', display_name: displayName, root_path: summary.root_path, repository_name: summary.repository_name, kind: 'git', primary_workspace_id: id, current_branch: branch, workspace_count: 1, available: true, unavailable_reason: null, updated_at_unix_ms: now })
+  } else {
+    const project = previewCodeProjects.get(projectId)
+    if (project) project.workspace_count += 1
+  }
   return value
 }
 function previewCodeDetail(workspaceId: string): CodeWorkspaceDetail {
@@ -443,6 +461,7 @@ function previewCodeTree(workspaceId: string, relativeDirectory: string | null):
 }
 function previewCodeSummary(): CodeSnapshot {
   return {
+    projects: [...previewCodeProjects.values()],
     workspaces: [...previewCodeWorkspaces.values()].map((item) => item.detail.summary),
     active_workspace_id: [...previewCodeWorkspaces.keys()][0] ?? null,
     adapters: [
@@ -675,9 +694,26 @@ export const agenticSuperAppClient = {
     if (agenticSuperAppIsTauri) return tauriQuery<CodeWorkspaceDetail>('agentic_super_app_query_code_workspace', { query: { workspace_id: workspaceId } })
     return previewCodeDetail(workspaceId)
   },
+  async addCodeProject(path: string): Promise<CodeWorkspaceDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeProjectAddRequest, CodeWorkspaceDetail>('agentic_super_app_command_add_code_project', { path })
+    return previewCodeWorkspace(path).detail
+  },
   async openCodeWorkspace(path: string): Promise<CodeWorkspaceDetail> {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceOpenRequest, CodeWorkspaceDetail>('agentic_super_app_command_open_code_workspace', { path })
-    return previewCodeWorkspace(path).detail
+    return this.addCodeProject(path)
+  },
+  async createCodeWorkspace(request: CodeWorkspaceCreateRequest): Promise<CodeWorkspaceDetail> {
+    if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceCreateRequest, CodeWorkspaceDetail>('agentic_super_app_command_create_code_workspace', request)
+    const project = previewCodeProjects.get(request.project_id)
+    if (!project) throw new Error('Project was not found.')
+    if (project.kind !== 'git') throw new Error('A folder project can only have its primary workspace.')
+    const name = request.name.trim()
+    if (!name) throw new Error('Workspace name is required.')
+    const branch = request.branch_name?.trim() || `workspace/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workspace'}`
+    const workspace = previewCodeWorkspace(`${project.root_path}/.agentic-workspaces/${name}`, project.id, 'managed_worktree', branch)
+    workspace.detail.summary.display_name = name
+    workspace.detail.summary.worktree_name = name.toLowerCase().replaceAll(' ', '-')
+    return workspace.detail
   },
   async trustCodeWorkspace(workspaceId: string, grant: boolean): Promise<CodeWorkspaceDetail> {
     if (agenticSuperAppIsTauri) return tauriCommand<CodeWorkspaceTrustRequest, CodeWorkspaceDetail>('agentic_super_app_command_trust_code_workspace', { workspace_id: workspaceId, grant })
