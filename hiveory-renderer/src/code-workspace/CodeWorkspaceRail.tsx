@@ -611,27 +611,24 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           >
             <Plus size={15} aria-hidden="true" />
           </button>
-          {isAddMenuOpen && (
-            <div ref={addMenuRef} className="code-rail-add-menu" role="menu" aria-label="Add to workspace rail">
-              <button type="button" role="menuitem" onClick={() => { setIsAddMenuOpen(false); onAddProject() }}>
-                <FolderOpen size={14} aria-hidden="true" />
-                <span><strong>Add Project</strong><small>Register a folder and its primary workspace</small></span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={!projectRows.some((project) => {
-                  const primary = workspaces.find((workspace) => workspace.id === project.primary_workspace_id)
-                  return project.kind === 'git' && Boolean(primary?.available)
-                })}
-                onClick={() => { setIsAddMenuOpen(false); onAddWorkspace() }}
-              >
-                <BriefcaseBusiness size={14} aria-hidden="true" />
-                <span><strong>Add Workspace</strong><small>Create an isolated Git workspace</small></span>
-              </button>
-            </div>
-          )}
         </div>
+        {isAddMenuOpen && (
+          <div ref={addMenuRef} className="code-rail-add-menu" role="menu" aria-label="Add to workspace rail">
+            <button type="button" role="menuitem" onClick={() => { setIsAddMenuOpen(false); onAddProject() }}>
+              <FolderOpen size={14} aria-hidden="true" />
+              <span><strong>Add Project</strong><small>Register a folder and its primary workspace</small></span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={projectRows.length === 0}
+              onClick={() => { setIsAddMenuOpen(false); onAddWorkspace() }}
+            >
+              <BriefcaseBusiness size={14} aria-hidden="true" />
+              <span><strong>Add Workspace</strong><small>Create an isolated workspace or worktree</small></span>
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="code-rail-workspaces-list">
@@ -692,9 +689,9 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                   <button
                     type="button"
                     onClick={() => onAddWorkspace(project.id)}
-                    disabled={project.kind !== 'git' || !primaryWorkspace?.available}
+                    disabled={!primaryWorkspace?.available}
                     aria-label={`Add workspace to ${project.display_name}`}
-                    title={project.kind === 'git' ? 'Add workspace' : 'Folder projects have one workspace'}
+                    title="Add workspace / worktree"
                   >
                     <Plus size={13} aria-hidden="true" />
                   </button>

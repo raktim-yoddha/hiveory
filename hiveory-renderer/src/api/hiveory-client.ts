@@ -747,7 +747,6 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceCreateRequest, CodeWorkspaceDetail>('hiveory_command_create_code_workspace', request)
     const project = previewCodeProjects.get(request.project_id)
     if (!project) throw new Error('Project was not found.')
-    if (project.kind !== 'git') throw new Error('A folder project can only have its primary workspace.')
     const name = request.name.trim()
     if (!name) throw new Error('Workspace name is required.')
     const branch = request.branch_name?.trim() || `workspace/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'workspace'}`

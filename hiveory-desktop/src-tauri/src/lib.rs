@@ -564,11 +564,6 @@ impl HiveoryFoundation {
             .await
             .map_err(database_error)?
             .ok_or_else(|| validation_error("The selected project no longer exists."))?;
-        if !matches!(project.kind, CodeProjectKind::Git) {
-            return Err(validation_error(
-                "A folder project can only have its primary workspace.",
-            ));
-        }
         let display_name = validate_workspace_display_name(&request.name)?;
         let project_root = PathBuf::from(&project.root_path);
         let base_ref = request
@@ -578,10 +573,20 @@ impl HiveoryFoundation {
             .filter(|value| !value.is_empty())
             .unwrap_or("HEAD")
             .to_owned();
-        let base_oid = self
-            .code_git
-            .resolve_ref_oid(&project_root, &base_ref)
-            .map_err(git_error)?;
+        let base_oid = if !matches!(project.kind, CodeProjectKind::Git) {
+            let oid = self.code_git.ensure_repository(&project_root).map_err(git_error)?;
+            let mut updated_project = project.clone();
+            updated_project.kind = CodeProjectKind::Git;
+            self.persistence
+                .save_code_project(&updated_project)
+                .await
+                .map_err(database_error)?;
+            oid
+        } else {
+            self.code_git
+                .resolve_ref_oid(&project_root, &base_ref)
+                .map_err(git_error)?
+        };
         let branch_name = request
             .branch_name
             .as_deref()

@@ -355,7 +355,7 @@ export function HiveoryShell() {
         >
           <div className="hiveory-brand">
             <img className="hiveory-brand-logo" src="/hiveory-logo.png" alt="" draggable={false} />
-            <span className="hiveory-brand-name">hiveory</span>
+            <span className="hiveory-brand-name">Hiveory</span>
             <button
               type="button"
               className="hiveory-icon-button hiveory-sidebar-toggle"

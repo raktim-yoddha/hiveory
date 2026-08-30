@@ -339,6 +339,27 @@ impl HiveoryGitService {
         Ok(commit.id().to_string())
     }
 
+    pub fn ensure_repository(&self, root: &Path) -> Result<String, HiveoryGitError> {
+        let repository = match Repository::discover(root) {
+            Ok(repo) => repo,
+            Err(_) => Repository::init(root)?,
+        };
+        if repository.head().is_err() {
+            let sig = Signature::now("Hiveory", "hiveory@local")?;
+            let tree_id = {
+                let mut index = repository.index()?;
+                index.write_tree()?
+            };
+            let tree = repository.find_tree(tree_id)?;
+            let oid = repository.commit(Some("HEAD"), &sig, &sig, "Initial commit", &tree, &[])?;
+            Ok(oid.to_string())
+        } else {
+            let head = repository.head()?;
+            let target = head.target().ok_or(HiveoryGitError::MissingHead)?;
+            Ok(target.to_string())
+        }
+    }
+
     pub fn list_worktrees(
         &self,
         repository_root: &Path,
