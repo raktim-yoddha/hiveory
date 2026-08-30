@@ -115,7 +115,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const [projectIcons, setProjectIcons] = useState<Record<string, ProjectIconId>>({})
   const [groupedProjects, setGroupedProjects] = useState<Set<string>>(new Set())
   const [workspaceFlags, setWorkspaceFlags] = useState<Record<string, WorkspaceRailFlags>>({})
-  const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
+  const addMenuRef = useRef<HTMLDivElement | null>(null)
   const leaves = state.layout?.nodes.filter((node) => node.children.length === 0) ?? []
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
   const projectRows = useMemo(() => {
@@ -142,17 +143,40 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   }, [projects, workspaces])
 
   useEffect(() => {
-    if (!openContextMenu) return
+    if (!openContextMenu && !isAddMenuOpen) return
 
     const handleOutsidePointer = (event: PointerEvent) => {
-      if (!workspaceMenuRef.current?.contains(event.target as Node)) {
+      const target = event.target as Node | null
+      if (
+        openContextMenu &&
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(target) &&
+        !((event.target as HTMLElement).closest?.('.code-rail-workspace-menu-trigger') ||
+          (event.target as HTMLElement).closest?.('.code-rail-project-menu-trigger'))
+      ) {
         setOpenContextMenu(null)
         setContextMenuPosition(null)
         setOpenProjectIconMenuId(null)
       }
+      if (
+        isAddMenuOpen &&
+        addMenuRef.current &&
+        !addMenuRef.current.contains(target) &&
+        !((event.target as HTMLElement).closest?.('.code-rail-add-btn'))
+      ) {
+        setIsAddMenuOpen(false)
+      }
     }
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        setOpenContextMenu(null)
+        setContextMenuPosition(null)
+        setOpenProjectIconMenuId(null)
+        setIsAddMenuOpen(false)
+      }
+    }
+    const handleScroll = () => {
+      if (openContextMenu) {
         setOpenContextMenu(null)
         setContextMenuPosition(null)
         setOpenProjectIconMenuId(null)
@@ -161,11 +185,13 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
 
     document.addEventListener('pointerdown', handleOutsidePointer)
     document.addEventListener('keydown', handleEscape)
+    window.addEventListener('scroll', handleScroll, true)
     return () => {
       document.removeEventListener('pointerdown', handleOutsidePointer)
       document.removeEventListener('keydown', handleEscape)
+      window.removeEventListener('scroll', handleScroll, true)
     }
-  }, [openContextMenu])
+  }, [openContextMenu, isAddMenuOpen])
 
   const navItems: { id: 'dashboard' | 'routines' | 'plugins' | 'skills'; label: string; badge?: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', badge: '1', icon: <LayoutDashboard size={15} aria-hidden="true" /> },
@@ -207,7 +233,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   }
 
   const openContextMenuAt = (
-    event: React.MouseEvent<HTMLButtonElement>,
+    event: React.MouseEvent<HTMLButtonElement | HTMLElement>,
     kind: 'project' | 'workspace',
     id: string,
     menuHeight: number,
@@ -221,15 +247,17 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
-    const menuWidth = kind === 'project' ? 236 : 268
+    const menuWidth = kind === 'project' ? 240 : 256
     const left = atPointer
-      ? Math.max(8, Math.min(event.clientX + 8, window.innerWidth - menuWidth - 8))
-      : (rect.right + 8 + menuWidth <= window.innerWidth
-        ? rect.right + 8
-        : Math.max(8, rect.left - menuWidth - 8))
-    const top = atPointer
-      ? Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
-      : Math.max(8, Math.min(rect.top, window.innerHeight - menuHeight - 8))
+      ? Math.max(8, Math.min(event.clientX + 4, window.innerWidth - menuWidth - 12))
+      : (rect.right + 6 + menuWidth <= window.innerWidth
+        ? rect.right + 6
+        : Math.max(8, rect.left - menuWidth - 6))
+    let top = atPointer ? event.clientY : rect.top
+    const maxTop = window.innerHeight - menuHeight - 12
+    if (top > maxTop) {
+      top = Math.max(12, maxTop)
+    }
     setContextMenuPosition({ top, left })
     setOpenProjectIconMenuId(null)
     setOpenContextMenu({ kind, id })
@@ -278,7 +306,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const renderWorkspaceActions = (workspace: CodeWorkspaceSummary) => {
     const isOpen = openContextMenu?.kind === 'workspace' && openContextMenu.id === workspace.id
     const isPrimary = workspace.workspace_kind === 'primary'
-    const flags = workspaceFlags[workspace.id] ?? {}
     return (
       <div className="code-rail-workspace-actions">
         <button
@@ -292,100 +319,18 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         >
           <MoreVertical size={14} aria-hidden="true" />
         </button>
-        {isOpen && (
-          <div
-            className="code-rail-context-menu code-rail-workspace-menu"
-            role="menu"
-            aria-label={`Actions for ${workspace.display_name}`}
-            style={contextMenuPosition ? { top: contextMenuPosition.top, left: contextMenuPosition.left } : undefined}
-          >
-            <div className="code-rail-context-menu-heading">
-              <span>{isPrimary ? 'Primary workspace' : 'Secondary workspace'}</span>
-              <strong>{workspace.display_name}</strong>
-              <small>{workspace.trust === 'trusted' ? 'Trusted' : 'Read only'} · {workspace.root_path}</small>
-            </div>
-            <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
-              <FolderOpen size={14} aria-hidden="true" />
-              <span>Open canvas</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => openWorkspacePanel(workspace.id, 'source')}>
-              <GitBranch size={14} aria-hidden="true" />
-              <span>{sourcePanelOpen && activeWorkspaceId === workspace.id ? 'Hide source panel' : 'Open source panel'}</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => openWorkspacePanel(workspace.id, 'coordination')}>
-              <Settings2 size={14} aria-hidden="true" />
-              <span>{coordinationPanelOpen && activeWorkspaceId === workspace.id ? 'Hide coordination panel' : 'Open coordination panel'}</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
-              <Pencil size={14} aria-hidden="true" />
-              <span>Update</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
-              <Layers3 size={14} aria-hidden="true" />
-              <span>Move to Status</span>
-              <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
-              <ExternalLink size={14} aria-hidden="true" />
-              <span>Open in</span>
-              <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
-            </button>
-            <button type="button" role="menuitem" onClick={() => void copyWorkspacePath(workspace)}>
-              <Copy size={14} aria-hidden="true" />
-              <span>Copy Path</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'pinned')}>
-              <Pin size={14} aria-hidden="true" />
-              <span>{flags.pinned ? 'Unpin' : 'Pin'}</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'unread')}>
-              <Bell size={14} aria-hidden="true" />
-              <span>{flags.unread ? 'Mark read' : 'Mark unread'}</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" onClick={() => toggleProjectGroup(workspace.project_id)}>
-              <FolderTree size={14} aria-hidden="true" />
-              <span>New group from project</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" className="is-disabled" disabled title="Parent worktree relationships are managed by the project">
-              <GitBranch size={14} aria-hidden="true" />
-              <span>Set Parent Worktree…</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'sleeping')}>
-              <Moon size={14} aria-hidden="true" />
-              <span>{flags.sleeping ? 'Wake' : 'Sleep'}</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            {isPrimary ? (
-              <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveProject(workspace.project_id) }}>
-                <Trash2 size={14} aria-hidden="true" />
-                <span>Remove Project</span>
-              </button>
-            ) : (
-              <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveWorkspace(workspace.id) }}>
-                <Trash2 size={14} aria-hidden="true" />
-                <span>{workspace.managed_by_app ? 'Delete Workspace' : 'Remove Workspace'}</span>
-              </button>
-            )}
-          </div>
-        )}
       </div>
     )
   }
 
   const renderProjectActions = (project: CodeProjectSummary) => {
     const isOpen = openContextMenu?.kind === 'project' && openContextMenu.id === project.id
-    const iconMenuOpen = openProjectIconMenuId === project.id
     return (
       <div className="code-rail-project-menu-actions">
         <button
           type="button"
           className={`code-rail-project-menu-trigger ${isOpen ? 'is-open' : ''}`}
-          onClick={(event) => openContextMenuAt(event, 'project', project.id, iconMenuOpen ? 290 : 220)}
+          onClick={(event) => openContextMenuAt(event, 'project', project.id, 240)}
           aria-label={`Project actions for ${project.display_name}`}
           aria-haspopup="menu"
           aria-expanded={isOpen}
@@ -393,51 +338,158 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         >
           <MoreVertical size={14} aria-hidden="true" />
         </button>
-        {isOpen && (
-          <div
-            className="code-rail-context-menu code-rail-project-menu"
-            role="menu"
-            aria-label={`Actions for ${project.display_name}`}
-            style={contextMenuPosition ? { top: contextMenuPosition.top, left: contextMenuPosition.left } : undefined}
-          >
-            <button type="button" role="menuitem" onClick={() => { closeContextMenu(); onOpenProjectSettings?.(project.id) }}>
-              <Settings2 size={14} aria-hidden="true" />
-              <span>Project Settings</span>
-            </button>
-            <button type="button" role="menuitem" onClick={() => setOpenProjectIconMenuId((current) => current === project.id ? null : project.id)}>
-              <FolderOpen size={14} aria-hidden="true" />
-              <span>Change Project Icon</span>
-              <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
-            </button>
-            {iconMenuOpen && (
-              <div className="code-rail-project-icon-picker" role="group" aria-label="Project icon choices">
-                {PROJECT_ICON_OPTIONS.map((option) => (
-                  <button
-                    type="button"
-                    key={option.id}
-                    className={projectIcons[project.id] === option.id ? 'is-selected' : ''}
-                    onClick={() => setProjectIcon(project.id, option.id)}
-                    title={option.label}
-                    aria-label={option.label}
-                  >
-                    {renderProjectIcon(option.id)}
-                  </button>
-                ))}
-              </div>
-            )}
-            <button type="button" role="menuitem" onClick={() => toggleProjectGroup(project.id)}>
-              <FolderTree size={14} aria-hidden="true" />
-              <span>{groupedProjects.has(project.id) ? 'Remove project group' : 'New group from project'}</span>
-            </button>
-            <div className="code-rail-context-menu-separator" />
-            <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveProject(project.id) }}>
+      </div>
+    )
+  }
+
+  const renderActiveContextMenu = () => {
+    if (!openContextMenu || !contextMenuPosition) return null
+
+    if (openContextMenu.kind === 'workspace') {
+      const workspace = workspaces.find((w) => w.id === openContextMenu.id)
+      if (!workspace) return null
+      const isPrimary = workspace.workspace_kind === 'primary'
+      const flags = workspaceFlags[workspace.id] ?? {}
+      const cleanPath = workspace.root_path.replace(/^\\\\\?\\/, '')
+
+      return (
+        <div
+          ref={contextMenuRef}
+          className="code-rail-context-menu code-rail-workspace-menu"
+          role="menu"
+          aria-label={`Actions for ${workspace.display_name}`}
+          style={{ top: contextMenuPosition.top, left: contextMenuPosition.left }}
+        >
+          <div className="code-rail-context-menu-heading">
+            <span className="code-rail-context-menu-tag">{isPrimary ? 'Primary Workspace' : 'Workspace'}</span>
+            <strong className="code-rail-context-menu-title">{workspace.display_name}</strong>
+            <small className="code-rail-context-menu-path" title={workspace.root_path}>
+              {workspace.trust === 'trusted' ? 'Trusted' : 'Read only'} · {cleanPath}
+            </small>
+          </div>
+          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+            <FolderOpen size={14} aria-hidden="true" />
+            <span>Open canvas</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => openWorkspacePanel(workspace.id, 'source')}>
+            <GitBranch size={14} aria-hidden="true" />
+            <span>{sourcePanelOpen && activeWorkspaceId === workspace.id ? 'Hide source panel' : 'Open source panel'}</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => openWorkspacePanel(workspace.id, 'coordination')}>
+            <Settings2 size={14} aria-hidden="true" />
+            <span>{coordinationPanelOpen && activeWorkspaceId === workspace.id ? 'Hide coordination panel' : 'Open coordination panel'}</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+            <Pencil size={14} aria-hidden="true" />
+            <span>Update</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+            <Layers3 size={14} aria-hidden="true" />
+            <span>Move to Status</span>
+            <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+            <ExternalLink size={14} aria-hidden="true" />
+            <span>Open in</span>
+            <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
+          </button>
+          <button type="button" role="menuitem" onClick={() => void copyWorkspacePath(workspace)}>
+            <Copy size={14} aria-hidden="true" />
+            <span>Copy Path</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'pinned')}>
+            <Pin size={14} aria-hidden="true" />
+            <span>{flags.pinned ? 'Unpin' : 'Pin'}</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'unread')}>
+            <Bell size={14} aria-hidden="true" />
+            <span>{flags.unread ? 'Mark read' : 'Mark unread'}</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" onClick={() => toggleProjectGroup(workspace.project_id)}>
+            <FolderTree size={14} aria-hidden="true" />
+            <span>New group from project</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" className="is-disabled" disabled title="Parent worktree relationships are managed by the project">
+            <GitBranch size={14} aria-hidden="true" />
+            <span>Set Parent Worktree…</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'sleeping')}>
+            <Moon size={14} aria-hidden="true" />
+            <span>{flags.sleeping ? 'Wake' : 'Sleep'}</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          {isPrimary ? (
+            <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveProject(workspace.project_id) }}>
               <Trash2 size={14} aria-hidden="true" />
               <span>Remove Project</span>
             </button>
-          </div>
-        )}
-      </div>
-    )
+          ) : (
+            <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveWorkspace(workspace.id) }}>
+              <Trash2 size={14} aria-hidden="true" />
+              <span>{workspace.managed_by_app ? 'Delete Workspace' : 'Remove Workspace'}</span>
+            </button>
+          )}
+        </div>
+      )
+    }
+
+    if (openContextMenu.kind === 'project') {
+      const project = projectRows.find((p) => p.id === openContextMenu.id)
+      if (!project) return null
+      const iconMenuOpen = openProjectIconMenuId === project.id
+
+      return (
+        <div
+          ref={contextMenuRef}
+          className="code-rail-context-menu code-rail-project-menu"
+          role="menu"
+          aria-label={`Actions for ${project.display_name}`}
+          style={{ top: contextMenuPosition.top, left: contextMenuPosition.left }}
+        >
+          <button type="button" role="menuitem" onClick={() => { closeContextMenu(); onOpenProjectSettings?.(project.id) }}>
+            <Settings2 size={14} aria-hidden="true" />
+            <span>Project Settings</span>
+          </button>
+          <button type="button" role="menuitem" onClick={() => setOpenProjectIconMenuId((current) => current === project.id ? null : project.id)}>
+            <FolderOpen size={14} aria-hidden="true" />
+            <span>Change Project Icon</span>
+            <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
+          </button>
+          {iconMenuOpen && (
+            <div className="code-rail-project-icon-picker" role="group" aria-label="Project icon choices">
+              {PROJECT_ICON_OPTIONS.map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className={projectIcons[project.id] === option.id ? 'is-selected' : ''}
+                  onClick={() => setProjectIcon(project.id, option.id)}
+                  title={option.label}
+                  aria-label={option.label}
+                >
+                  {renderProjectIcon(option.id)}
+                </button>
+              ))}
+            </div>
+          )}
+          <button type="button" role="menuitem" onClick={() => toggleProjectGroup(project.id)}>
+            <FolderTree size={14} aria-hidden="true" />
+            <span>{groupedProjects.has(project.id) ? 'Remove project group' : 'New group from project'}</span>
+          </button>
+          <div className="code-rail-context-menu-separator" />
+          <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveProject(project.id) }}>
+            <Trash2 size={14} aria-hidden="true" />
+            <span>Remove Project</span>
+          </button>
+        </div>
+      )
+    }
+
+    return null
   }
 
   const renderPaneTree = (workspaceId: string) => {
@@ -496,7 +548,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
             <Plus size={15} aria-hidden="true" />
           </button>
           {isAddMenuOpen && (
-            <div className="code-rail-add-menu" role="menu" aria-label="Add to workspace rail">
+            <div ref={addMenuRef} className="code-rail-add-menu" role="menu" aria-label="Add to workspace rail">
               <button type="button" role="menuitem" onClick={() => { setIsAddMenuOpen(false); onAddProject() }}>
                 <FolderOpen size={14} aria-hidden="true" />
                 <span><strong>Add Project</strong><small>Register a folder and its primary workspace</small></span>
@@ -518,7 +570,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         </div>
       </div>
 
-      <div ref={workspaceMenuRef} className="code-rail-workspaces-list">
+      <div className="code-rail-workspaces-list">
         {projectRows.length === 0 && (
           <div className="code-rail-empty-projects">
             <Folder size={15} aria-hidden="true" />
@@ -590,7 +642,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                     const isActive = workspace.id === activeWorkspaceId
                     return (
                       <div key={workspace.id} className="code-rail-workspace-group">
-                        <div className="code-rail-workspace-row-shell">
+                        <div className={`code-rail-workspace-row-shell ${isActive && activeGlobalSection === 'workspace' ? 'is-active' : ''}`}>
                           <button
                             type="button"
                             className={`code-rail-workspace-row ${isActive && activeGlobalSection === 'workspace' ? 'is-active' : ''} ${!workspace.available ? 'is-unavailable' : ''}`}
@@ -639,6 +691,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           </div>
         </div>
       </footer>
+
+      {renderActiveContextMenu()}
     </aside>
   )
 }
