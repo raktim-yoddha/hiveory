@@ -1,0 +1,17 @@
+[package]
+name = "hiveory-persistence"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-agent-domain = { path = "../hiveory-agent-domain" }
+hiveory-code-domain = { path = "../hiveory-code-domain" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+url.workspace = true

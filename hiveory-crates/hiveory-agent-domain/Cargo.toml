@@ -1,0 +1,13 @@
+[package]
+name = "hiveory-agent-domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-protocol = { path = "../hiveory-protocol" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+

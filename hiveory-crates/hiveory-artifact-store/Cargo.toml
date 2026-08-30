@@ -1,0 +1,12 @@
+[package]
+name = "hiveory-artifact-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-protocol = { path = "../hiveory-protocol" }
+sha2 = "0.10"
+thiserror.workspace = true
+uuid.workspace = true
+zip.workspace = true

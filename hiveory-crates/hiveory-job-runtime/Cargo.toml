@@ -1,0 +1,13 @@
+[package]
+name = "hiveory-job-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-persistence = { path = "../hiveory-persistence" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+sqlx.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

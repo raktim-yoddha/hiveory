@@ -65,8 +65,8 @@
 ## 4. Verification Results
 
 - **Rust Workspace Unit & Integration Tests:** 231 passed, 0 failed (`cargo test --all`).
-- **Code Domain Unit Tests:** 12 passed, 0 failed (`cargo test -p agentic-super-app-code-domain`).
-- **Code Runtime Tests:** 3 passed, 0 failed (`cargo test -p agentic-super-app-code-runtime`).
+- **Code Domain Unit Tests:** 12 passed, 0 failed (`cargo test -p hiveory-code-domain`).
+- **Code Runtime Tests:** 3 passed, 0 failed (`cargo test -p hiveory-code-runtime`).
 - **Renderer Unit Tests:** 9 passed, 0 failed (`pnpm test`).
 - **Renderer Lint & Typecheck:** 0 errors (`pnpm check`).
 - **Prohibited Identity Audit:** Passed (`pnpm audit:identity`).

@@ -17,11 +17,11 @@ The implementation gate for this checkout is:
 
 ```text
 cargo fmt --all
-cargo check -p agentic-super-app-persistence -p agentic-super-app-code-orchestration -p agentic-super-app-app-host
-cargo test -p agentic-super-app-persistence -p agentic-super-app-git-service -p agentic-super-app-code-orchestration
-pnpm --dir agentic-super-app-renderer check
-pnpm --dir agentic-super-app-renderer test
-cargo run -p agentic-super-app-tooling
+cargo check -p hiveory-persistence -p hiveory-code-orchestration -p hiveory-app-host
+cargo test -p hiveory-persistence -p hiveory-git-service -p hiveory-code-orchestration
+pnpm --dir hiveory-renderer check
+pnpm --dir hiveory-renderer test
+cargo run -p hiveory-tooling
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 pnpm audit:identity

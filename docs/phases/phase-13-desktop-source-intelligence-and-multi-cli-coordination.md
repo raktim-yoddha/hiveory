@@ -108,7 +108,7 @@ The title bar must reserve a non-drag interaction zone around all buttons. Doubl
 
 ### 2. Source intelligence boundary
 
-Expand `agentic-super-app-git-service` for local repository operations and add a separate hosted-source service for GitHub data. The application protocol remains provider-neutral even though GitHub is the only hosted provider in this phase.
+Expand `hiveory-git-service` for local repository operations and add a separate hosted-source service for GitHub data. The application protocol remains provider-neutral even though GitHub is the only hosted provider in this phase.
 
 Local Git capabilities:
 
@@ -252,7 +252,7 @@ The canvas remains usable while these surfaces are open. Drawers must be resizab
 
 ## Protocol additions
 
-Add versioned DTOs and commands in `agentic-super-app-protocol` for:
+Add versioned DTOs and commands in `hiveory-protocol` for:
 
 - local repository summary, remote, branch, worktree, change, diff, commit, compare, conflict, and operation result;
 - hosted repository, issue, pull request, check, review, comment, pagination cursor, sync state, rate limit, and auth diagnostic;
@@ -401,26 +401,26 @@ Gate: all automated suites, identity audits, packaged-app checks, and recovery s
 
 Expected existing areas to change:
 
-- `agentic-super-app-renderer/src/agentic-super-app-shell.tsx`
-- `agentic-super-app-renderer/src/styles.css`
-- `agentic-super-app-renderer/src/code-workspace/`
-- `agentic-super-app-renderer/src/code/agentic-super-app-code-runs.tsx`
-- `agentic-super-app-desktop/src-tauri/capabilities/default.json`
-- `agentic-super-app-desktop/src-tauri/src/`
-- `agentic-super-app-crates/agentic-super-app-protocol/`
-- `agentic-super-app-crates/agentic-super-app-persistence/`
-- `agentic-super-app-crates/agentic-super-app-git-service/`
-- `agentic-super-app-crates/agentic-super-app-code-runtime/`
-- `agentic-super-app-crates/agentic-super-app-code-orchestration/`
-- `agentic-super-app-crates/agentic-super-app-dispatch-bridge/`
-- `agentic-super-app-tooling/`
+- `hiveory-renderer/src/hiveory-shell.tsx`
+- `hiveory-renderer/src/styles.css`
+- `hiveory-renderer/src/code-workspace/`
+- `hiveory-renderer/src/code/hiveory-code-runs.tsx`
+- `hiveory-desktop/src-tauri/capabilities/default.json`
+- `hiveory-desktop/src-tauri/src/`
+- `hiveory-crates/hiveory-protocol/`
+- `hiveory-crates/hiveory-persistence/`
+- `hiveory-crates/hiveory-git-service/`
+- `hiveory-crates/hiveory-code-runtime/`
+- `hiveory-crates/hiveory-code-orchestration/`
+- `hiveory-crates/hiveory-dispatch-bridge/`
+- `hiveory-tooling/`
 
 Expected new cohesive areas:
 
-- `agentic-super-app-crates/agentic-super-app-hosted-source-service/`
-- `agentic-super-app-crates/agentic-super-app-control-plane/`
-- `agentic-super-app-renderer/src/source-control/`
-- `agentic-super-app-renderer/src/orchestration/`
+- `hiveory-crates/hiveory-hosted-source-service/`
+- `hiveory-crates/hiveory-control-plane/`
+- `hiveory-renderer/src/source-control/`
+- `hiveory-renderer/src/orchestration/`
 - `docs/architecture/source-intelligence.md`
 - `docs/architecture/app-control-plane.md`
 - `docs/architecture/code-orchestration.md`
@@ -490,12 +490,12 @@ Phase 13 is complete only when all statements below are true:
 The exact package-level commands may expand as new crates are added, but the final gate must include:
 
 ~~~powershell
-pnpm --dir agentic-super-app-renderer test
-pnpm --dir agentic-super-app-renderer check
+pnpm --dir hiveory-renderer test
+pnpm --dir hiveory-renderer check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo check -p agentic-super-app-app-host
+cargo check -p hiveory-app-host
 pnpm audit:identity
 pnpm audit:references
 pnpm verify

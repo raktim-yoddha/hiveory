@@ -20,321 +20,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentic-super-app-agent-domain"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-agent-runtime"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-agent-domain",
- "agentic-super-app-artifact-store",
- "agentic-super-app-model-gateway",
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "agentic-super-app-secret-store",
- "agentic-super-app-tool-runtime",
- "async-trait",
- "cap-std",
- "futures-util",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-app-host"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-agent-runtime",
- "agentic-super-app-artifact-store",
- "agentic-super-app-chat-domain",
- "agentic-super-app-code-domain",
- "agentic-super-app-code-orchestration",
- "agentic-super-app-code-runtime",
- "agentic-super-app-git-service",
- "agentic-super-app-job-runtime",
- "agentic-super-app-model-gateway",
- "agentic-super-app-notification-service",
- "agentic-super-app-persistence",
- "agentic-super-app-plugin-runtime",
- "agentic-super-app-protocol",
- "agentic-super-app-routine-scheduler",
- "agentic-super-app-secret-store",
- "agentic-super-app-tool-runtime",
- "agentic-super-app-workspace-service",
- "base64 0.22.1",
- "serde",
- "serde_json",
- "sqlx",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "tauri-plugin-updater",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "url",
- "uuid",
- "zip 2.4.2",
-]
-
-[[package]]
-name = "agentic-super-app-artifact-store"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "uuid",
- "zip 2.4.2",
-]
-
-[[package]]
-name = "agentic-super-app-chat-domain"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "agentic-super-app-code-domain"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "agentic-super-app-code-orchestration"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-code-domain",
- "agentic-super-app-git-service",
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "agentic-super-app-workspace-service",
- "hmac 0.12.1",
- "libc",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "tempfile",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-code-runtime"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "base64 0.22.1",
- "libc",
- "portable-pty",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-dispatch-bridge"
-version = "1.0.0"
-dependencies = [
- "hmac 0.12.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-domain-common"
-version = "1.0.0"
-dependencies = [
- "serde",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-git-service"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-code-domain",
- "agentic-super-app-protocol",
- "git2",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-job-runtime"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "sqlx",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-model-gateway"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
- "agentic-super-app-secret-store",
- "async-trait",
- "futures-util",
- "reqwest 0.12.28",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
-name = "agentic-super-app-notification-service"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-job-runtime",
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "sqlx",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "agentic-super-app-persistence"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-agent-domain",
- "agentic-super-app-code-domain",
- "agentic-super-app-protocol",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.20",
- "tokio",
- "url",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-plugin-runtime"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "agentic-super-app-secret-store",
- "agentic-super-app-tool-runtime",
- "async-trait",
- "futures-util",
- "reqwest 0.12.28",
- "serde_json",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "agentic-super-app-protocol"
-version = "1.0.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "ts-rs",
-]
-
-[[package]]
-name = "agentic-super-app-routine-scheduler"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-agent-runtime",
- "agentic-super-app-notification-service",
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "async-trait",
- "chrono",
- "chrono-tz",
- "serde_json",
- "thiserror 2.0.20",
- "tokio",
- "tokio-util",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-secret-store"
-version = "1.0.0"
-dependencies = [
- "keyring",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
-name = "agentic-super-app-security"
-version = "1.0.0"
-dependencies = [
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "agentic-super-app-tool-runtime"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-persistence",
- "agentic-super-app-protocol",
- "async-trait",
- "serde_json",
- "sha2 0.10.9",
- "sqlx",
- "thiserror 2.0.20",
-]
-
-[[package]]
-name = "agentic-super-app-tooling"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-protocol",
-]
-
-[[package]]
-name = "agentic-super-app-workspace-service"
-version = "1.0.0"
-dependencies = [
- "agentic-super-app-code-domain",
- "agentic-super-app-protocol",
- "cap-std",
- "sha2 0.10.9",
- "thiserror 2.0.20",
- "uuid",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2171,6 +1856,321 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "hiveory-agent-domain"
+version = "1.0.0"
+dependencies = [
+ "hiveory-protocol",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-agent-runtime"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "cap-std",
+ "futures-util",
+ "hiveory-agent-domain",
+ "hiveory-artifact-store",
+ "hiveory-model-gateway",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "hiveory-secret-store",
+ "hiveory-tool-runtime",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-app-host"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "hiveory-agent-runtime",
+ "hiveory-artifact-store",
+ "hiveory-chat-domain",
+ "hiveory-code-domain",
+ "hiveory-code-orchestration",
+ "hiveory-code-runtime",
+ "hiveory-git-service",
+ "hiveory-job-runtime",
+ "hiveory-model-gateway",
+ "hiveory-notification-service",
+ "hiveory-persistence",
+ "hiveory-plugin-runtime",
+ "hiveory-protocol",
+ "hiveory-routine-scheduler",
+ "hiveory-secret-store",
+ "hiveory-tool-runtime",
+ "hiveory-workspace-service",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "tauri-plugin-updater",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "url",
+ "uuid",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "hiveory-artifact-store"
+version = "1.0.0"
+dependencies = [
+ "hiveory-protocol",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "uuid",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "hiveory-chat-domain"
+version = "1.0.0"
+dependencies = [
+ "hiveory-protocol",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "hiveory-code-domain"
+version = "1.0.0"
+dependencies = [
+ "hiveory-protocol",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "hiveory-code-orchestration"
+version = "1.0.0"
+dependencies = [
+ "hiveory-code-domain",
+ "hiveory-git-service",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "hiveory-workspace-service",
+ "hmac 0.12.1",
+ "libc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-code-runtime"
+version = "1.0.0"
+dependencies = [
+ "base64 0.22.1",
+ "hiveory-protocol",
+ "libc",
+ "portable-pty",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-dispatch-bridge"
+version = "1.0.0"
+dependencies = [
+ "hmac 0.12.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-domain-common"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-git-service"
+version = "1.0.0"
+dependencies = [
+ "git2",
+ "hiveory-code-domain",
+ "hiveory-protocol",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-job-runtime"
+version = "1.0.0"
+dependencies = [
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-model-gateway"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "hiveory-protocol",
+ "hiveory-secret-store",
+ "reqwest 0.12.28",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "hiveory-notification-service"
+version = "1.0.0"
+dependencies = [
+ "hiveory-job-runtime",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "sqlx",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "hiveory-persistence"
+version = "1.0.0"
+dependencies = [
+ "hiveory-agent-domain",
+ "hiveory-code-domain",
+ "hiveory-protocol",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-plugin-runtime"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "hiveory-secret-store",
+ "hiveory-tool-runtime",
+ "reqwest 0.12.28",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "hiveory-protocol"
+version = "1.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "ts-rs",
+]
+
+[[package]]
+name = "hiveory-routine-scheduler"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "chrono-tz",
+ "hiveory-agent-runtime",
+ "hiveory-notification-service",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "tokio-util",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-secret-store"
+version = "1.0.0"
+dependencies = [
+ "keyring",
+ "thiserror 2.0.20",
+ "uuid",
+]
+
+[[package]]
+name = "hiveory-security"
+version = "1.0.0"
+dependencies = [
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "hiveory-tool-runtime"
+version = "1.0.0"
+dependencies = [
+ "async-trait",
+ "hiveory-persistence",
+ "hiveory-protocol",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror 2.0.20",
+]
+
+[[package]]
+name = "hiveory-tooling"
+version = "1.0.0"
+dependencies = [
+ "hiveory-protocol",
+]
+
+[[package]]
+name = "hiveory-workspace-service"
+version = "1.0.0"
+dependencies = [
+ "cap-std",
+ "hiveory-code-domain",
+ "hiveory-protocol",
+ "sha2 0.10.9",
+ "thiserror 2.0.20",
+ "uuid",
+]
 
 [[package]]
 name = "hkdf"

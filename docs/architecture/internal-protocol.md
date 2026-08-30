@@ -1,6 +1,6 @@
 # Internal Protocol v2
 
-All renderer-to-host requests use original `agentic_super_app_*` command names. DTOs are owned by `agentic-super-app-protocol` and exported to TypeScript through `agentic-super-app-tooling`.
+All renderer-to-host requests use original `hiveory_*` command names. DTOs are owned by `hiveory-protocol` and exported to TypeScript through `hiveory-tooling`.
 
 | Contract | Rule |
 | --- | --- |
@@ -25,4 +25,4 @@ All renderer-to-host requests use original `agentic_super_app_*` command names. 
 | Release and recovery | Release metadata records protocol/product versions and clean-start markers. Backups are ZIP archives containing a manifest, consistent SQLite snapshot, and managed artifacts. Restore is staged, validated, atomic at the database/artifact-root boundary, and followed by an application restart. |
 | Updates | The host owns update discovery and installation. The updater remains inert unless an HTTPS endpoint and signing public key are configured; installation is delegated to Tauri's signature-verified updater path. |
 
-Run `cargo run -p agentic-super-app-tooling` to refresh generated DTO definitions after protocol changes. CI must fail if generated output drifts.
+Run `cargo run -p hiveory-tooling` to refresh generated DTO definitions after protocol changes. CI must fail if generated output drifts.

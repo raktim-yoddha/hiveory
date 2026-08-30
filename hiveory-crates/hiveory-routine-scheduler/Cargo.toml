@@ -1,0 +1,19 @@
+[package]
+name = "hiveory-routine-scheduler"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-agent-runtime = { path = "../hiveory-agent-runtime" }
+hiveory-notification-service = { path = "../hiveory-notification-service" }
+hiveory-persistence = { path = "../hiveory-persistence" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+async-trait.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true

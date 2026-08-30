@@ -1,0 +1,9 @@
+[package]
+name = "hiveory-chat-domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-protocol = { path = "../hiveory-protocol" }
+thiserror.workspace = true

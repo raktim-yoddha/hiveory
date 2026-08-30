@@ -1,4 +1,4 @@
-# Agentic Super App
+# Hiveory
 
 A local-first Tauri 2 desktop application with three deliberately separate contexts: named agents, an agentic coding workbench, and standalone AI chat.
 
@@ -11,7 +11,7 @@ pnpm install
 pnpm app:dev
 ```
 
-The browser-only renderer is still available with `pnpm --dir agentic-super-app-renderer dev`. Build a native package with `pnpm app:build`; inspect the local toolchain with `pnpm app:doctor`.
+The browser-only renderer is still available with `pnpm --dir hiveory-renderer dev`. Build a native package with `pnpm app:build`; inspect the local toolchain with `pnpm app:doctor`.
 
 Before opening a provider workflow, configure a model and store its key from Diagnostics. Keys are handed to the operating-system credential manager and are never returned to the renderer.
 
@@ -22,6 +22,6 @@ pnpm verify
 pnpm release:check
 ```
 
-`pnpm release:check` includes the identity and reference guards. A signed update channel is opt-in: set `AGENTIC_SUPER_APP_UPDATER_ENDPOINT` and `AGENTIC_SUPER_APP_UPDATER_PUBKEY` for runtime checks, and provide the Tauri signing credentials when producing updater artifacts. Local builds remain usable without a configured release server.
+`pnpm release:check` includes the identity and reference guards. A signed update channel is opt-in: set `HIVEORY_UPDATER_ENDPOINT` and `HIVEORY_UPDATER_PUBKEY` for runtime checks, and provide the Tauri signing credentials when producing updater artifacts. Local builds remain usable without a configured release server.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture/agentic-super-app-foundation.md](docs/architecture/agentic-super-app-foundation.md), [docs/architecture/terminal-pane-workspace.md](docs/architecture/terminal-pane-workspace.md), and [docs/phases/phase-10-terminal-pane-workspace.md](docs/phases/phase-10-terminal-pane-workspace.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture/hiveory-foundation.md](docs/architecture/hiveory-foundation.md), [docs/architecture/terminal-pane-workspace.md](docs/architecture/terminal-pane-workspace.md), and [docs/phases/phase-10-terminal-pane-workspace.md](docs/phases/phase-10-terminal-pane-workspace.md).

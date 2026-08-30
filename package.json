@@ -1,19 +1,19 @@
 {
-  "name": "agentic-super-app-workspace",
+  "name": "hiveory-workspace",
   "version": "1.0.0",
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "app:dev": "pnpm exec tauri dev --config agentic-super-app-desktop/src-tauri/tauri.conf.json",
-    "app:build": "node agentic-super-app-tooling/scripts/build-release.mjs",
+    "app:dev": "pnpm exec tauri dev --config hiveory-desktop/src-tauri/tauri.conf.json",
+    "app:build": "node hiveory-tooling/scripts/build-release.mjs",
     "app:doctor": "pnpm exec tauri info",
-    "build": "pnpm --dir agentic-super-app-renderer build",
-    "check": "pnpm --dir agentic-super-app-renderer check",
-    "test": "pnpm --dir agentic-super-app-renderer test",
+    "build": "pnpm --dir hiveory-renderer build",
+    "check": "pnpm --dir hiveory-renderer check",
+    "test": "pnpm --dir hiveory-renderer test",
     "verify": "pnpm check && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "release:check": "pnpm verify && pnpm audit:identity && pnpm audit:references",
-    "audit:identity": "node agentic-super-app-tooling/scripts/agentic-super-app-prohibited-name-scan.mjs",
-    "audit:references": "node agentic-super-app-tooling/scripts/agentic-super-app-reference-guard.mjs"
+    "audit:identity": "node hiveory-tooling/scripts/hiveory-prohibited-name-scan.mjs",
+    "audit:references": "node hiveory-tooling/scripts/hiveory-reference-guard.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0"

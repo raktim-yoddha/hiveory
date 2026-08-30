@@ -32,8 +32,8 @@ Smoke-test all three modes in the native window:
 Runtime update checks are intentionally disabled until both variables are set:
 
 ```text
-AGENTIC_SUPER_APP_UPDATER_ENDPOINT=https://updates.example.invalid/{{target}}/{{current_version}}
-AGENTIC_SUPER_APP_UPDATER_PUBKEY=<minisign-public-key>
+HIVEORY_UPDATER_ENDPOINT=https://updates.example.invalid/{{target}}/{{current_version}}
+HIVEORY_UPDATER_PUBKEY=<minisign-public-key>
 ```
 
 Publishing also requires the Tauri signing private key in the build environment. Do not commit keys, endpoint credentials, or generated signing material. Test one update against each target platform before enabling the channel for users.

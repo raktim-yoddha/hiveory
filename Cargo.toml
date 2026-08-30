@@ -1,28 +1,28 @@
 [workspace]
 members = [
-  "agentic-super-app-desktop/src-tauri",
-  "agentic-super-app-crates/agentic-super-app-protocol",
-  "agentic-super-app-crates/agentic-super-app-domain-common",
-  "agentic-super-app-crates/agentic-super-app-security",
-  "agentic-super-app-crates/agentic-super-app-persistence",
-  "agentic-super-app-crates/agentic-super-app-secret-store",
-  "agentic-super-app-crates/agentic-super-app-model-gateway",
-  "agentic-super-app-crates/agentic-super-app-job-runtime",
-  "agentic-super-app-crates/agentic-super-app-tool-runtime",
-  "agentic-super-app-crates/agentic-super-app-notification-service",
-  "agentic-super-app-crates/agentic-super-app-artifact-store",
-  "agentic-super-app-crates/agentic-super-app-chat-domain",
-  "agentic-super-app-crates/agentic-super-app-code-domain",
-  "agentic-super-app-crates/agentic-super-app-code-runtime",
-  "agentic-super-app-crates/agentic-super-app-code-orchestration",
-  "agentic-super-app-crates/agentic-super-app-agent-domain",
-  "agentic-super-app-crates/agentic-super-app-agent-runtime",
-  "agentic-super-app-crates/agentic-super-app-plugin-runtime",
-  "agentic-super-app-crates/agentic-super-app-routine-scheduler",
-  "agentic-super-app-crates/agentic-super-app-dispatch-bridge",
-  "agentic-super-app-crates/agentic-super-app-git-service",
-  "agentic-super-app-crates/agentic-super-app-workspace-service",
-  "agentic-super-app-tooling",
+  "hiveory-desktop/src-tauri",
+  "hiveory-crates/hiveory-protocol",
+  "hiveory-crates/hiveory-domain-common",
+  "hiveory-crates/hiveory-security",
+  "hiveory-crates/hiveory-persistence",
+  "hiveory-crates/hiveory-secret-store",
+  "hiveory-crates/hiveory-model-gateway",
+  "hiveory-crates/hiveory-job-runtime",
+  "hiveory-crates/hiveory-tool-runtime",
+  "hiveory-crates/hiveory-notification-service",
+  "hiveory-crates/hiveory-artifact-store",
+  "hiveory-crates/hiveory-chat-domain",
+  "hiveory-crates/hiveory-code-domain",
+  "hiveory-crates/hiveory-code-runtime",
+  "hiveory-crates/hiveory-code-orchestration",
+  "hiveory-crates/hiveory-agent-domain",
+  "hiveory-crates/hiveory-agent-runtime",
+  "hiveory-crates/hiveory-plugin-runtime",
+  "hiveory-crates/hiveory-routine-scheduler",
+  "hiveory-crates/hiveory-dispatch-bridge",
+  "hiveory-crates/hiveory-git-service",
+  "hiveory-crates/hiveory-workspace-service",
+  "hiveory-tooling",
 ]
 resolver = "2"
 
@@ -30,7 +30,7 @@ resolver = "2"
 version = "1.0.0"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/agentic-super-app/agentic-super-app"
+repository = "https://github.com/hiveory/hiveory"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

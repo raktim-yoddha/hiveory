@@ -1,0 +1,25 @@
+[package]
+name = "hiveory-code-orchestration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-code-domain = { path = "../hiveory-code-domain" }
+hiveory-git-service = { path = "../hiveory-git-service" }
+hiveory-persistence = { path = "../hiveory-persistence" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+hiveory-workspace-service = { path = "../hiveory-workspace-service" }
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+hmac.workspace = true
+libc.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

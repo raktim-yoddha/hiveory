@@ -1,9 +1,0 @@
-[package]
-name = "agentic-super-app-chat-domain"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-agentic-super-app-protocol = { path = "../agentic-super-app-protocol" }
-thiserror.workspace = true

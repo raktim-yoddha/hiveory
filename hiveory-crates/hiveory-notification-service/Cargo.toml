@@ -1,0 +1,12 @@
+[package]
+name = "hiveory-notification-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-job-runtime = { path = "../hiveory-job-runtime" }
+hiveory-persistence = { path = "../hiveory-persistence" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+sqlx.workspace = true
+thiserror.workspace = true

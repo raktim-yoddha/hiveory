@@ -1,0 +1,94 @@
+-- Move the runtime schema to the Hiveory namespace without rewriting the
+-- historical migrations. Keeping migrations 0001-0015 byte-stable preserves
+-- SQLx checksums for existing installations; this migration upgrades both
+-- fresh databases and databases created by earlier builds.
+
+ALTER TABLE agentic_super_app_settings RENAME TO hiveory_settings;
+ALTER TABLE agentic_super_app_provider_accounts RENAME TO hiveory_provider_accounts;
+ALTER TABLE agentic_super_app_jobs RENAME TO hiveory_jobs;
+ALTER TABLE agentic_super_app_job_checkpoints RENAME TO hiveory_job_checkpoints;
+ALTER TABLE agentic_super_app_audit_entries RENAME TO hiveory_audit_entries;
+ALTER TABLE agentic_super_app_notifications RENAME TO hiveory_notifications;
+ALTER TABLE agentic_super_app_command_receipts RENAME TO hiveory_command_receipts;
+ALTER TABLE agentic_super_app_chat_conversations RENAME TO hiveory_chat_conversations;
+ALTER TABLE agentic_super_app_chat_branches RENAME TO hiveory_chat_branches;
+ALTER TABLE agentic_super_app_chat_messages RENAME TO hiveory_chat_messages;
+ALTER TABLE agentic_super_app_chat_message_parts RENAME TO hiveory_chat_message_parts;
+ALTER TABLE agentic_super_app_chat_turns RENAME TO hiveory_chat_turns;
+ALTER TABLE agentic_super_app_chat_events RENAME TO hiveory_chat_events;
+ALTER TABLE agentic_super_app_chat_attachments RENAME TO hiveory_chat_attachments;
+ALTER TABLE agentic_super_app_chat_message_attachments RENAME TO hiveory_chat_message_attachments;
+ALTER TABLE agentic_super_app_chat_drafts RENAME TO hiveory_chat_drafts;
+ALTER TABLE agentic_super_app_chat_model_budgets RENAME TO hiveory_chat_model_budgets;
+ALTER TABLE agentic_super_app_code_workspaces RENAME TO hiveory_code_workspaces;
+ALTER TABLE agentic_super_app_code_layouts RENAME TO hiveory_code_layouts;
+ALTER TABLE agentic_super_app_code_documents RENAME TO hiveory_code_documents;
+ALTER TABLE agentic_super_app_code_terminals RENAME TO hiveory_code_terminals;
+ALTER TABLE agentic_super_app_code_previews RENAME TO hiveory_code_previews;
+ALTER TABLE agentic_super_app_code_runs RENAME TO hiveory_code_runs;
+ALTER TABLE agentic_super_app_code_tasks RENAME TO hiveory_code_tasks;
+ALTER TABLE agentic_super_app_code_dispatches RENAME TO hiveory_code_dispatches;
+ALTER TABLE agentic_super_app_code_events RENAME TO hiveory_code_events;
+ALTER TABLE agentic_super_app_code_checkpoints RENAME TO hiveory_code_checkpoints;
+ALTER TABLE agentic_super_app_code_messages RENAME TO hiveory_code_messages;
+ALTER TABLE agentic_super_app_code_projects RENAME TO hiveory_code_projects;
+ALTER TABLE agentic_super_app_code_worktrees RENAME TO hiveory_code_worktrees;
+ALTER TABLE agentic_super_app_code_hosted_tracking_cache RENAME TO hiveory_code_hosted_tracking_cache;
+ALTER TABLE agentic_super_app_code_participants RENAME TO hiveory_code_participants;
+ALTER TABLE agentic_super_app_code_mailbox_deliveries RENAME TO hiveory_code_mailbox_deliveries;
+ALTER TABLE agentic_super_app_code_questions RENAME TO hiveory_code_questions;
+ALTER TABLE agentic_super_app_code_reviews RENAME TO hiveory_code_reviews;
+ALTER TABLE agentic_super_app_code_worker_resources RENAME TO hiveory_code_worker_resources;
+ALTER TABLE agentic_super_app_code_decision_gates RENAME TO hiveory_code_decision_gates;
+ALTER TABLE agentic_super_app_code_task_path_claims RENAME TO hiveory_code_task_path_claims;
+ALTER TABLE agentic_super_app_code_task_dependencies RENAME TO hiveory_code_task_dependencies;
+ALTER TABLE agentic_super_app_agent_conversations RENAME TO hiveory_agent_conversations;
+ALTER TABLE agentic_super_app_agent_messages RENAME TO hiveory_agent_messages;
+ALTER TABLE agentic_super_app_agent_events RENAME TO hiveory_agent_events;
+ALTER TABLE agentic_super_app_agent_runs RENAME TO hiveory_agent_runs;
+ALTER TABLE agentic_super_app_agents RENAME TO hiveory_agents;
+ALTER TABLE agentic_super_app_agent_versions RENAME TO hiveory_agent_versions;
+ALTER TABLE agentic_super_app_agent_approvals RENAME TO hiveory_agent_approvals;
+ALTER TABLE agentic_super_app_agent_artifacts RENAME TO hiveory_agent_artifacts;
+ALTER TABLE agentic_super_app_agent_continuations RENAME TO hiveory_agent_continuations;
+ALTER TABLE agentic_super_app_agent_folders RENAME TO hiveory_agent_folders;
+ALTER TABLE agentic_super_app_agent_memory RENAME TO hiveory_agent_memory;
+ALTER TABLE agentic_super_app_agent_memory_retrievals RENAME TO hiveory_agent_memory_retrievals;
+ALTER TABLE agentic_super_app_agent_memory_fts RENAME TO hiveory_agent_memory_fts;
+ALTER TABLE agentic_super_app_agent_skills RENAME TO hiveory_agent_skills;
+ALTER TABLE agentic_super_app_agent_tools RENAME TO hiveory_agent_tools;
+ALTER TABLE agentic_super_app_agent_tool_calls RENAME TO hiveory_agent_tool_calls;
+ALTER TABLE agentic_super_app_agent_plugin_grants RENAME TO hiveory_agent_plugin_grants;
+ALTER TABLE agentic_super_app_skill_conflicts RENAME TO hiveory_skill_conflicts;
+ALTER TABLE agentic_super_app_skill_catalog RENAME TO hiveory_skill_catalog;
+ALTER TABLE agentic_super_app_plugin_manifests RENAME TO hiveory_plugin_manifests;
+ALTER TABLE agentic_super_app_plugin_connections RENAME TO hiveory_plugin_connections;
+ALTER TABLE agentic_super_app_plugin_invocations RENAME TO hiveory_plugin_invocations;
+ALTER TABLE agentic_super_app_routines RENAME TO hiveory_routines;
+ALTER TABLE agentic_super_app_routine_executions RENAME TO hiveory_routine_executions;
+ALTER TABLE agentic_super_app_release_metadata RENAME TO hiveory_release_metadata;
+ALTER TABLE agentic_super_app_code_completion_reports RENAME TO hiveory_code_completion_reports;
+DROP INDEX IF EXISTS agentic_super_app_chat_conversations_command_request_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS hiveory_chat_conversations_command_request_idx
+  ON hiveory_chat_conversations (command_request_id);
+DROP INDEX IF EXISTS agentic_super_app_chat_branches_command_request_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS hiveory_chat_branches_command_request_idx
+  ON hiveory_chat_branches (command_request_id);
+DROP INDEX IF EXISTS agentic_super_app_chat_turns_command_request_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS hiveory_chat_turns_command_request_idx
+  ON hiveory_chat_turns (command_request_id);
+DROP INDEX IF EXISTS agentic_super_app_chat_events_provider_sequence_idx;
+CREATE UNIQUE INDEX IF NOT EXISTS hiveory_chat_events_provider_sequence_idx
+  ON hiveory_chat_events (turn_id, provider_sequence_start);
+DROP INDEX IF EXISTS agentic_super_app_chat_conversations_updated_idx;
+CREATE INDEX IF NOT EXISTS hiveory_chat_conversations_updated_idx
+  ON hiveory_chat_conversations (archived, pinned, updated_at_unix_ms DESC);
+DROP INDEX IF EXISTS agentic_super_app_chat_messages_branch_idx;
+CREATE INDEX IF NOT EXISTS hiveory_chat_messages_branch_idx
+  ON hiveory_chat_messages (conversation_id, branch_id, branch_position);
+DROP INDEX IF EXISTS agentic_super_app_chat_events_conversation_idx;
+CREATE INDEX IF NOT EXISTS hiveory_chat_events_conversation_idx
+  ON hiveory_chat_events (conversation_id, global_sequence);
+DROP INDEX IF EXISTS agentic_super_app_chat_events_turn_idx;
+CREATE INDEX IF NOT EXISTS hiveory_chat_events_turn_idx
+  ON hiveory_chat_events (turn_id, provider_sequence_start);

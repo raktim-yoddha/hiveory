@@ -1,0 +1,19 @@
+[package]
+name = "hiveory-plugin-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-persistence = { path = "../hiveory-persistence" }
+hiveory-protocol = { path = "../hiveory-protocol" }
+hiveory-secret-store = { path = "../hiveory-secret-store" }
+hiveory-tool-runtime = { path = "../hiveory-tool-runtime" }
+async-trait.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+url.workspace = true

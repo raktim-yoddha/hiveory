@@ -32,12 +32,12 @@
 Run these from the repository root:
 
 ```powershell
-pnpm --dir agentic-super-app-renderer check
-pnpm --dir agentic-super-app-renderer test
-cargo test -p agentic-super-app-code-runtime
-cargo test -p agentic-super-app-code-domain
-cargo test -p agentic-super-app-protocol
-cargo check -p agentic-super-app-app-host
+pnpm --dir hiveory-renderer check
+pnpm --dir hiveory-renderer test
+cargo test -p hiveory-code-runtime
+cargo test -p hiveory-code-domain
+cargo test -p hiveory-protocol
+cargo check -p hiveory-app-host
 pnpm audit:identity
 pnpm audit:references
 ```

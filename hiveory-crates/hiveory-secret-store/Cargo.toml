@@ -1,0 +1,10 @@
+[package]
+name = "hiveory-secret-store"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+keyring = "4"
+thiserror.workspace = true
+uuid.workspace = true

@@ -41,12 +41,12 @@ Opening Code mode now presents one compact application rail and one bounded canv
 
 ## Files changed
 
-- `agentic-super-app-renderer/src/agentic-super-app-shell.tsx`: Code mode gets the dedicated single-rail shell.
-- `agentic-super-app-renderer/src/code-workspace/`: pane canvas, launchers, interactions, layout presets, terminal projection, and CSS.
-- `agentic-super-app-renderer/src/api/agentic-super-app-client.ts`: preview and native terminal transport contract.
-- `agentic-super-app-crates/agentic-super-app-protocol/src/lib.rs`: terminal input and event sequence fields.
-- `agentic-super-app-crates/agentic-super-app-code-runtime/src/lib.rs`: PTY stream, executable resolution, and sequence assignment.
-- `agentic-super-app-desktop/src-tauri/src/lib.rs`: stream filtering and lag recovery behavior.
+- `hiveory-renderer/src/hiveory-shell.tsx`: Code mode gets the dedicated single-rail shell.
+- `hiveory-renderer/src/code-workspace/`: pane canvas, launchers, interactions, layout presets, terminal projection, and CSS.
+- `hiveory-renderer/src/api/hiveory-client.ts`: preview and native terminal transport contract.
+- `hiveory-crates/hiveory-protocol/src/lib.rs`: terminal input and event sequence fields.
+- `hiveory-crates/hiveory-code-runtime/src/lib.rs`: PTY stream, executable resolution, and sequence assignment.
+- `hiveory-desktop/src-tauri/src/lib.rs`: stream filtering and lag recovery behavior.
 
 ## Scope boundary
 

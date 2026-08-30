@@ -7,9 +7,9 @@ The Code Workspace delivers a native, host-authoritative terminal-first multipan
 ```mermaid
 graph TD
     Renderer[React Renderer Canvas] -->|Tauri IPC Commands| Host[Rust Tauri App Host]
-    Host -->|Mutations & Invariants| Domain[agentic-super-app-code-domain]
-    Host -->|PTY & Ring Buffer| Runtime[agentic-super-app-code-runtime]
-    Host -->|Atomic Transactions| Persistence[agentic-super-app-persistence SQLite]
+    Host -->|Mutations & Invariants| Domain[hiveory-code-domain]
+    Host -->|PTY & Ring Buffer| Runtime[hiveory-code-runtime]
+    Host -->|Atomic Transactions| Persistence[hiveory-persistence SQLite]
 
     subgraph Runtime PTY Lifecycle
         PTY[OS ConPTY / PseudoTerminal] -->|Stdout Stream| RingBuffer[1 MiB Circular Ring Buffer]
@@ -50,7 +50,7 @@ pub struct CodePaneNode {
 All layout mutations (`Split`, `Rename`, `Move`, `Resize`, `Focus`, `Maximize`, `ApplyPreset`) require `expected_revision`.
 The host applies:
 ```sql
-UPDATE agentic_super_app_code_layouts
+UPDATE hiveory_code_layouts
 SET layout_json = ?, revision = revision + 1, updated_at_unix_ms = ?
 WHERE workspace_id = ? AND revision = ?;
 ```
@@ -89,13 +89,13 @@ In the UI, incompatible preset cards are visually muted, marked with `aria-disab
 
 ## 4. Reconnectable PTY Runtime & Ring Buffer
 
-Each terminal session (`TerminalSession`) is owned in-memory by `agentic-super-app-code-runtime`:
+Each terminal session (`TerminalSession`) is owned in-memory by `hiveory-code-runtime`:
 
 - **Circular Ring Buffer:** A bounded `VecDeque<u8>` preserving the most recent 1 MiB of terminal output.
 - **Sequence Counter:** Atomic monotonically increasing sequence counter incremented on each chunk.
 - **Broadcast Channel:** `tokio::sync::broadcast` emitting live `CodeTerminalEvent`s to subscribers.
-- **Snapshot Query:** `agentic_super_app_query_code_terminal_snapshot` fetches the full 1 MiB backlog and latest sequence number on mount or remount.
-- **Event Streaming:** `agentic_super_app_stream_code_terminal_events` streams live chunks emitted after the snapshot sequence.
+- **Snapshot Query:** `hiveory_query_code_terminal_snapshot` fetches the full 1 MiB backlog and latest sequence number on mount or remount.
+- **Event Streaming:** `hiveory_stream_code_terminal_events` streams live chunks emitted after the snapshot sequence.
 
 ---
 
