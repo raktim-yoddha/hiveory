@@ -22,6 +22,6 @@ pnpm verify
 pnpm release:check
 ```
 
-`pnpm release:check` includes the identity and reference guards. A signed update channel is opt-in: set `HIVEORY_UPDATER_ENDPOINT` and `HIVEORY_UPDATER_PUBKEY` for runtime checks, and provide the Tauri signing credentials when producing updater artifacts. Local builds remain usable without a configured release server.
+`pnpm release:check` includes the identity and reference guards. Production builds use the signed GitHub Releases update channel configured in `hiveory-desktop/src-tauri/tauri.conf.json`. The updater public key is safe to ship with the application; the private signing key must remain in the `TAURI_SIGNING_PRIVATE_KEY` GitHub Actions secret. Local builds can still be produced without publishing a release, but signed updater artifacts require that credential.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture/hiveory-foundation.md](docs/architecture/hiveory-foundation.md), [docs/architecture/terminal-pane-workspace.md](docs/architecture/terminal-pane-workspace.md), and [docs/phases/phase-10-terminal-pane-workspace.md](docs/phases/phase-10-terminal-pane-workspace.md).

@@ -611,9 +611,9 @@ async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Prom
 export const hiveoryClient = {
   async bootstrap(): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? tauriQuery<BootstrapSnapshot>('hiveory_query_bootstrap') : { protocol, active_mode: 'agent', product_name: 'Hiveory' } },
   async setActiveMode(mode: ApplicationMode): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? invoke<BootstrapSnapshot>('hiveory_command_set_active_mode', { command: { mode } }) : { protocol, active_mode: mode, product_name: 'Hiveory' } },
-  async buildInformation(): Promise<BuildInformation> { return hiveoryIsTauri ? tauriQuery<BuildInformation>('hiveory_query_build_information') : { product_name: 'Hiveory', version: '1.0.0', protocol: { major: 2 } } },
+  async buildInformation(): Promise<BuildInformation> { return hiveoryIsTauri ? tauriQuery<BuildInformation>('hiveory_query_build_information') : { product_name: 'Hiveory', version: '1.1.0', protocol: { major: 2 } } },
   async diagnostics(): Promise<DiagnosticSnapshot> { return hiveoryIsTauri ? tauriQuery<DiagnosticSnapshot>('hiveory_query_diagnostic_snapshot') : { providers: [previewProvider], recent_jobs: [], notifications: [], recovery_message: null } },
-  async checkForUpdate(): Promise<UpdateSnapshot> { return hiveoryIsTauri ? tauriQuery<UpdateSnapshot>('hiveory_query_update') : { configured: false, current_version: '1.0.0', available_version: null, notes: null, published_at: null, status: 'not_configured' } },
+  async checkForUpdate(): Promise<UpdateSnapshot> { return hiveoryIsTauri ? tauriQuery<UpdateSnapshot>('hiveory_query_update') : { configured: false, current_version: '1.1.0', available_version: null, notes: null, published_at: null, status: 'not_configured' } },
   async installUpdate(): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_install_update') },
   async createBackup(destination: string): Promise<BackupSummary> { return hiveoryIsTauri ? invoke<BackupSummary>('hiveory_command_create_backup', { destination }) : { path: destination, bytes: 0, created_at_unix_ms: Date.now(), includes_database: true, artifact_count: 0 } },
   async prepareRestore(source: string): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_prepare_restore', { source }) },

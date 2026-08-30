@@ -18,7 +18,7 @@ import {
   X,
   Square as SquareIcon,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   hiveoryClient,
@@ -82,6 +82,8 @@ type CommandAction = {
 }
 
 const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false, sidebarCollapsed: false }
+const updateCheckIntervalMs = 24 * 60 * 60 * 1000
+const dismissedUpdateStorageKey = 'hiveory.dismissed-update-version'
 
 function readPreferences(): ShellPreferences {
   if (typeof window === 'undefined') return defaultPreferences
@@ -104,6 +106,23 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function readDismissedUpdateVersion(): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage.getItem(dismissedUpdateStorageKey)
+  } catch {
+    return null
+  }
+}
+
+function rememberDismissedUpdateVersion(version: string): void {
+  try {
+    window.localStorage.setItem(dismissedUpdateStorageKey, version)
+  } catch {
+    // Optional; the prompt can still be dismissed for the current session.
+  }
+}
+
 export function HiveoryShell() {
   const [activeMode, setActiveMode] = useState<ApplicationMode>('code')
   const [screen, setScreen] = useState<ShellScreen>('workspace')
@@ -114,6 +133,10 @@ export function HiveoryShell() {
   const [codeLayoutMenuOpen, setCodeLayoutMenuOpen] = useState(false)
   const [windowMaximized, setWindowMaximized] = useState(false)
   const [windowControlError, setWindowControlError] = useState<string | null>(null)
+  const [update, setUpdate] = useState<UpdateSnapshot | null>(null)
+  const [updatePromptOpen, setUpdatePromptOpen] = useState(false)
+  const [updateInstalling, setUpdateInstalling] = useState(false)
+  const [updatePromptError, setUpdatePromptError] = useState<string | null>(null)
 
   const refresh = async () => {
     try {
@@ -146,6 +169,69 @@ export function HiveoryShell() {
       // optional
     }
   }, [preferences])
+
+  const checkForUpdates = useCallback(async (showPrompt: boolean): Promise<UpdateSnapshot> => {
+    const next = await hiveoryClient.checkForUpdate()
+    setUpdate(next)
+    if (
+      showPrompt &&
+      next.status === 'available' &&
+      next.available_version &&
+      readDismissedUpdateVersion() !== next.available_version
+    ) {
+      setUpdatePromptError(null)
+      setUpdatePromptOpen(true)
+    }
+    return next
+  }, [])
+
+  const installUpdate = useCallback(async (): Promise<void> => {
+    setUpdateInstalling(true)
+    setUpdatePromptError(null)
+    try {
+      await hiveoryClient.installUpdate()
+      setUpdatePromptOpen(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The update could not be installed.'
+      setUpdatePromptError(message)
+      throw error
+    } finally {
+      setUpdateInstalling(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    let disposed = false
+    const check = async () => {
+      try {
+        const next = await checkForUpdates(true)
+        if (disposed) return
+        setUpdate(next)
+      } catch {
+        // Background update checks stay quiet; Settings exposes manual errors.
+      }
+    }
+
+    void check()
+    const interval = window.setInterval(() => void check(), updateCheckIntervalMs)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+    }
+  }, [checkForUpdates])
+
+  const dismissUpdatePrompt = () => {
+    if (update?.available_version) rememberDismissedUpdateVersion(update.available_version)
+    setUpdatePromptOpen(false)
+    setUpdatePromptError(null)
+  }
+
+  const openUpdateSettings = () => {
+    setUpdatePromptOpen(false)
+    setCommandOpen(false)
+    setNotificationsOpen(false)
+    setScreen('settings')
+  }
 
   useEffect(() => {
     if (!('__TAURI_INTERNALS__' in window)) return
@@ -527,6 +613,10 @@ export function HiveoryShell() {
             <HiveorySettings
               preferences={preferences}
               setPreferences={setPreferences}
+              update={update}
+              onCheckUpdate={() => checkForUpdates(false)}
+              onInstallUpdate={installUpdate}
+              updateInstalling={updateInstalling}
               onOpenDiagnostics={() => {
                 setScreen('diagnostics')
                 void refresh()
@@ -540,6 +630,17 @@ export function HiveoryShell() {
             <HiveoryCodeWorkspace />
           )}
         </section>
+
+        {updatePromptOpen && update?.status === 'available' && update.available_version && (
+          <HiveoryUpdatePrompt
+            update={update}
+            busy={updateInstalling}
+            error={updatePromptError}
+            onDismiss={dismissUpdatePrompt}
+            onOpenSettings={openUpdateSettings}
+            onInstall={() => void installUpdate().catch(() => undefined)}
+          />
+        )}
 
         {notificationsOpen && (
           <HiveoryNotificationCenter
@@ -752,17 +853,76 @@ function HiveoryNotificationCenter({
   )
 }
 
+function HiveoryUpdatePrompt({
+  update,
+  busy,
+  error,
+  onDismiss,
+  onOpenSettings,
+  onInstall,
+}: {
+  update: UpdateSnapshot
+  busy: boolean
+  error: string | null
+  onDismiss: () => void
+  onOpenSettings: () => void
+  onInstall: () => void
+}) {
+  return (
+    <aside
+      className="hiveory-update-prompt"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="hiveory-update-prompt-title"
+      aria-describedby="hiveory-update-prompt-description"
+    >
+      <div className="hiveory-update-prompt-heading">
+        <div>
+          <p className="hiveory-eyebrow">Software update</p>
+          <h2 id="hiveory-update-prompt-title">Hiveory {update.available_version} is ready</h2>
+        </div>
+        <button type="button" className="hiveory-icon-button" onClick={onDismiss} disabled={busy} aria-label="Dismiss update">
+          <X size={16} />
+        </button>
+      </div>
+      <p id="hiveory-update-prompt-description">
+        {update.notes || 'A newer signed version is available. Install it now and Hiveory will restart when ready.'}
+      </p>
+      {error && <p className="hiveory-update-error" role="alert">{error}</p>}
+      <div className="hiveory-update-actions">
+        <button type="button" className="is-secondary" onClick={onOpenSettings} disabled={busy}>
+          View in Settings
+        </button>
+        <button type="button" className="is-secondary" onClick={onDismiss} disabled={busy}>
+          Later
+        </button>
+        <button type="button" onClick={onInstall} disabled={busy}>
+          <Download size={14} aria-hidden="true" />
+          {busy ? 'Installing…' : 'Install now'}
+        </button>
+      </div>
+    </aside>
+  )
+}
+
 function HiveorySettings({
   preferences,
   setPreferences,
+  update,
+  onCheckUpdate,
+  onInstallUpdate,
+  updateInstalling,
   onOpenDiagnostics,
 }: {
   preferences: ShellPreferences
   setPreferences: React.Dispatch<React.SetStateAction<ShellPreferences>>
+  update: UpdateSnapshot | null
+  onCheckUpdate: () => Promise<UpdateSnapshot>
+  onInstallUpdate: () => Promise<void>
+  updateInstalling: boolean
   onOpenDiagnostics: () => void
 }) {
-  const [update, setUpdate] = useState<UpdateSnapshot | null>(null)
-  const [version, setVersion] = useState('1.0.0')
+  const [version, setVersion] = useState('1.1.0')
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -784,8 +944,7 @@ function HiveorySettings({
 
   const checkUpdate = () =>
     action('update', async () => {
-      const next = await hiveoryClient.checkForUpdate()
-      setUpdate(next)
+      const next = await onCheckUpdate()
       return next.status === 'available'
         ? `Version ${next.available_version} is ready to install.`
         : next.status === 'not_configured'
@@ -795,7 +954,7 @@ function HiveorySettings({
 
   const installUpdate = () =>
     action('install', async () => {
-      await hiveoryClient.installUpdate()
+      await onInstallUpdate()
       return 'Update installation started. The application will restart when ready.'
     })
 
@@ -898,13 +1057,19 @@ function HiveorySettings({
             <span>Installed version</span>
             <strong>{version}</strong>
           </div>
-          <button type="button" disabled={busy !== null} onClick={checkUpdate}>
+          <button type="button" disabled={busy !== null || updateInstalling} onClick={checkUpdate}>
             {busy === 'update' ? 'Checking…' : 'Check for updates'}
           </button>
-          {update?.status === 'available' && (
-            <button type="button" disabled={busy !== null} onClick={installUpdate}>
+          {update?.status === 'available' && update.available_version && (
+            <>
+              <div className="hiveory-update-status available" role="status">
+                Version {update.available_version} is ready to install.
+              </div>
+              {update.notes && <p>{update.notes}</p>}
+            <button type="button" disabled={busy !== null || updateInstalling} onClick={installUpdate}>
               {busy === 'install' ? 'Installing…' : `Install ${update.available_version}`}
             </button>
+            </>
           )}
         </section>
       </div>

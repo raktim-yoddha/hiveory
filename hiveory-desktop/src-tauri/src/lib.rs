@@ -1223,48 +1223,13 @@ async fn hiveory_query_diagnostic_snapshot(
     foundation.diagnostic_snapshot().await
 }
 
-fn update_configuration() -> Result<Option<(url::Url, String)>, ApiError> {
-    let endpoint = match std::env::var("HIVEORY_UPDATER_ENDPOINT") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return Ok(None),
-    };
-    let public_key = match std::env::var("HIVEORY_UPDATER_PUBKEY") {
-        Ok(value) if !value.trim().is_empty() => value,
-        _ => return Ok(None),
-    };
-    let endpoint = url::Url::parse(endpoint.trim())
-        .map_err(|error| updater_error(format!("Invalid updater endpoint: {error}")))?;
-    if endpoint.scheme() != "https" {
-        return Err(updater_error(
-            "Updater endpoints must use HTTPS for signed release metadata.",
-        ));
-    }
-    Ok(Some((endpoint, public_key)))
-}
-
 #[tauri::command]
 async fn hiveory_query_update(
     app: tauri::AppHandle,
     state: State<'_, HiveoryUpdateState>,
 ) -> Result<UpdateSnapshot, ApiError> {
-    let current_version = env!("CARGO_PKG_VERSION").to_owned();
-    let Some((endpoint, public_key)) = update_configuration()? else {
-        return Ok(UpdateSnapshot {
-            configured: false,
-            current_version,
-            available_version: None,
-            notes: None,
-            published_at: None,
-            status: "not_configured".to_owned(),
-        });
-    };
-    let updater = app
-        .updater_builder()
-        .endpoints(vec![endpoint])
-        .map_err(updater_error)?
-        .pubkey(public_key)
-        .build()
-        .map_err(updater_error)?;
+    let current_version = app.package_info().version.to_string();
+    let updater = app.updater().map_err(updater_error)?;
     let update = updater.check().await.map_err(updater_error)?;
     let mut pending = state.pending.lock().map_err(|_| unavailable_error())?;
     let Some(update) = update else {
