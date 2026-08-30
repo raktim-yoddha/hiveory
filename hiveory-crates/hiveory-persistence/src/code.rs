@@ -80,7 +80,7 @@ impl HiveoryPersistence {
 
     pub async fn code_workspaces(&self) -> Result<Vec<CodeWorkspaceSummary>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason FROM hiveory_code_workspaces ORDER BY updated_at_unix_ms DESC",
+            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, parent_workspace_id, managed_by_app, available, unavailable_reason FROM hiveory_code_workspaces ORDER BY updated_at_unix_ms DESC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -92,7 +92,7 @@ impl HiveoryPersistence {
         workspace_id: &str,
     ) -> Result<Option<CodeWorkspaceSummary>, sqlx::Error> {
         Ok(sqlx::query(
-            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason FROM hiveory_code_workspaces WHERE id=?",
+            "SELECT id, host_id, display_name, root_path, repository_name, branch, is_git_repository, trust_state, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, parent_workspace_id, managed_by_app, available, unavailable_reason FROM hiveory_code_workspaces WHERE id=?",
         )
         .bind(workspace_id)
         .fetch_optional(&self.pool)
@@ -110,7 +110,7 @@ impl HiveoryPersistence {
         };
         let trusted_at = matches!(summary.trust, CodeWorkspaceTrust::Trusted).then_some(now_ms());
         sqlx::query(
-            "INSERT INTO hiveory_code_workspaces (id, host_id, root_path, canonical_root_path, display_name, repository_name, branch, is_git_repository, trust_state, trusted_at_unix_ms, created_at_unix_ms, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, managed_by_app, available, unavailable_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, root_path=excluded.root_path, canonical_root_path=excluded.canonical_root_path, display_name=excluded.display_name, repository_name=excluded.repository_name, branch=excluded.branch, is_git_repository=excluded.is_git_repository, trust_state=excluded.trust_state, trusted_at_unix_ms=excluded.trusted_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, project_id=excluded.project_id, workspace_kind=excluded.workspace_kind, worktree_name=excluded.worktree_name, base_ref=excluded.base_ref, managed_by_app=excluded.managed_by_app, available=excluded.available, unavailable_reason=excluded.unavailable_reason",
+            "INSERT INTO hiveory_code_workspaces (id, host_id, root_path, canonical_root_path, display_name, repository_name, branch, is_git_repository, trust_state, trusted_at_unix_ms, created_at_unix_ms, updated_at_unix_ms, project_id, workspace_kind, worktree_name, base_ref, parent_workspace_id, managed_by_app, available, unavailable_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET host_id=excluded.host_id, root_path=excluded.root_path, canonical_root_path=excluded.canonical_root_path, display_name=excluded.display_name, repository_name=excluded.repository_name, branch=excluded.branch, is_git_repository=excluded.is_git_repository, trust_state=excluded.trust_state, trusted_at_unix_ms=excluded.trusted_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, project_id=excluded.project_id, workspace_kind=excluded.workspace_kind, worktree_name=excluded.worktree_name, base_ref=excluded.base_ref, parent_workspace_id=excluded.parent_workspace_id, managed_by_app=excluded.managed_by_app, available=excluded.available, unavailable_reason=excluded.unavailable_reason",
         )
         .bind(&summary.id)
         .bind(&summary.host_id)
@@ -128,6 +128,7 @@ impl HiveoryPersistence {
         .bind(workspace_kind_value(summary.workspace_kind))
         .bind(&summary.worktree_name)
         .bind(&summary.base_ref)
+        .bind(&summary.parent_workspace_id)
         .bind(summary.managed_by_app as i64)
         .bind(summary.available as i64)
         .bind(&summary.unavailable_reason)
@@ -431,9 +432,10 @@ fn workspace_from_row(row: sqlx::sqlite::SqliteRow) -> CodeWorkspaceSummary {
         },
         worktree_name: row.try_get(11).unwrap_or(None),
         base_ref: row.try_get(12).unwrap_or(None),
-        managed_by_app: row.try_get::<i64, _>(13).unwrap_or(0) != 0,
-        available: row.try_get::<i64, _>(14).unwrap_or(1) != 0,
-        unavailable_reason: row.try_get(15).unwrap_or(None),
+        parent_workspace_id: row.try_get(13).unwrap_or(None),
+        managed_by_app: row.try_get::<i64, _>(14).unwrap_or(0) != 0,
+        available: row.try_get::<i64, _>(15).unwrap_or(1) != 0,
+        unavailable_reason: row.try_get(16).unwrap_or(None),
         updated_at_unix_ms: row.get(8),
     }
 }

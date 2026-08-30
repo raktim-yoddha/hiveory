@@ -55,9 +55,11 @@ use hiveory_protocol::{
     CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent, CodeTerminalInputRequest,
     CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot, CodeTerminalSnapshotQuery,
     CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSubscribeRequest,
-    CodeTerminalSummary, CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenRequest,
-    CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
-    CodeWorkspaceTrustRequest, CommandEnvelope, CreateCodePaneThreadRequest,
+    CodeTerminalSummary, CodeWorkspaceCreateRequest, CodeWorkspaceDetail,
+    CodeWorkspaceOpenInRequest, CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget,
+    CodeWorkspaceParentRequest, CodeWorkspaceQuery, CodeWorkspaceRemoveRequest,
+    CodeWorkspaceSummary, CodeWorkspaceTrust, CodeWorkspaceTrustRequest,
+    CodeWorkspaceUpdateRequest, CommandEnvelope, CreateCodePaneThreadRequest,
     CreateCodePaneThreadResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
     LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
     PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
@@ -77,6 +79,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    process::Command,
     sync::{Arc, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -186,6 +189,7 @@ impl HiveoryFoundation {
                         workspace_kind: summary.workspace_kind,
                         worktree_name: summary.worktree_name.clone(),
                         base_ref: summary.base_ref.clone(),
+                        parent_workspace_id: summary.parent_workspace_id.clone(),
                         branch: summary.branch.clone(),
                         managed_by_app: summary.managed_by_app,
                         available: summary.available,
@@ -348,6 +352,7 @@ impl HiveoryFoundation {
                     workspace_kind: persisted.workspace_kind,
                     worktree_name: persisted.worktree_name.clone(),
                     base_ref: persisted.base_ref.clone(),
+                    parent_workspace_id: persisted.parent_workspace_id.clone(),
                     branch: persisted.branch.clone(),
                     managed_by_app: persisted.managed_by_app,
                     available: true,
@@ -499,6 +504,7 @@ impl HiveoryFoundation {
                     workspace_kind: hiveory_protocol::CodeWorkspaceKind::Primary,
                     worktree_name: None,
                     base_ref: None,
+                    parent_workspace_id: None,
                     branch: branch.clone(),
                     managed_by_app: false,
                     available: true,
@@ -574,7 +580,10 @@ impl HiveoryFoundation {
             .unwrap_or("HEAD")
             .to_owned();
         let base_oid = if !matches!(project.kind, CodeProjectKind::Git) {
-            let oid = self.code_git.ensure_repository(&project_root).map_err(git_error)?;
+            let oid = self
+                .code_git
+                .ensure_repository(&project_root)
+                .map_err(git_error)?;
             let mut updated_project = project.clone();
             updated_project.kind = CodeProjectKind::Git;
             self.persistence
@@ -641,6 +650,7 @@ impl HiveoryFoundation {
                     workspace_kind: hiveory_protocol::CodeWorkspaceKind::ManagedWorktree,
                     worktree_name: Some(created.name),
                     base_ref: Some(base_ref),
+                    parent_workspace_id: None,
                     branch: Some(created.branch),
                     managed_by_app: true,
                     available: true,
@@ -675,6 +685,212 @@ impl HiveoryFoundation {
             .await
             .map_err(database_error)?;
         self.code_detail(&summary.id).await
+    }
+
+    async fn update_code_workspace(
+        &self,
+        request: &CodeWorkspaceUpdateRequest,
+    ) -> Result<CodeWorkspaceDetail, ApiError> {
+        let workspace_id = request.workspace_id.trim();
+        if workspace_id.is_empty() {
+            return Err(validation_error("A workspace is required."));
+        }
+        let display_name = validate_workspace_display_name(&request.display_name)?;
+        let current = self
+            .persistence
+            .code_workspace(workspace_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The selected workspace no longer exists."))?;
+        let summary = self
+            .code_workspaces
+            .rename_workspace(workspace_id, display_name)
+            .map_err(workspace_error)?;
+        self.persistence
+            .save_code_workspace(&summary)
+            .await
+            .map_err(database_error)?;
+
+        if matches!(
+            current.workspace_kind,
+            hiveory_protocol::CodeWorkspaceKind::Primary
+        ) {
+            if let Some(mut project) = self
+                .persistence
+                .code_project(&current.project_id)
+                .await
+                .map_err(database_error)?
+            {
+                project.display_name = summary.display_name.clone();
+                project.updated_at_unix_ms = summary.updated_at_unix_ms;
+                self.persistence
+                    .save_code_project(&project)
+                    .await
+                    .map_err(database_error)?;
+            }
+        }
+        self.audit
+            .record(
+                "code.workspace.update",
+                "success",
+                "info",
+                Some(&summary.id),
+                Some("workspace display name updated"),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_detail(&summary.id).await
+    }
+
+    async fn set_code_workspace_parent(
+        &self,
+        request: &CodeWorkspaceParentRequest,
+    ) -> Result<CodeWorkspaceDetail, ApiError> {
+        let workspace_id = request.workspace_id.trim();
+        if workspace_id.is_empty() {
+            return Err(validation_error("A workspace is required."));
+        }
+        let child = self
+            .persistence
+            .code_workspace(workspace_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The selected workspace no longer exists."))?;
+        let parent_workspace_id = request
+            .parent_workspace_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        if matches!(
+            child.workspace_kind,
+            hiveory_protocol::CodeWorkspaceKind::Primary
+        ) && parent_workspace_id.is_some()
+        {
+            return Err(validation_error(
+                "The primary workspace is the root and cannot have a parent.",
+            ));
+        }
+        if let Some(parent_id) = parent_workspace_id.as_deref() {
+            let parent = self
+                .persistence
+                .code_workspace(parent_id)
+                .await
+                .map_err(database_error)?
+                .ok_or_else(|| {
+                    validation_error("The selected parent workspace no longer exists.")
+                })?;
+            if !parent.available {
+                return Err(validation_error(
+                    "The selected parent workspace is unavailable.",
+                ));
+            }
+            if parent.project_id != child.project_id {
+                return Err(validation_error(
+                    "Parent and child workspaces must belong to the same project.",
+                ));
+            }
+        }
+        let summary = self
+            .code_workspaces
+            .set_parent_workspace(workspace_id, parent_workspace_id)
+            .map_err(workspace_error)?;
+        self.persistence
+            .save_code_workspace(&summary)
+            .await
+            .map_err(database_error)?;
+        self.audit
+            .record(
+                "code.workspace.parent.update",
+                "success",
+                "info",
+                Some(&summary.id),
+                Some(if summary.parent_workspace_id.is_some() {
+                    "workspace parent relationship updated"
+                } else {
+                    "workspace parent relationship cleared"
+                }),
+            )
+            .await
+            .map_err(database_error)?;
+        self.code_detail(&summary.id).await
+    }
+
+    async fn open_code_workspace_in(
+        &self,
+        request: &CodeWorkspaceOpenInRequest,
+    ) -> Result<bool, ApiError> {
+        let workspace_id = request.workspace_id.trim();
+        if workspace_id.is_empty() {
+            return Err(validation_error("A workspace is required."));
+        }
+        let summary = self
+            .persistence
+            .code_workspace(workspace_id)
+            .await
+            .map_err(database_error)?
+            .ok_or_else(|| validation_error("The selected workspace no longer exists."))?;
+        let path = PathBuf::from(&summary.root_path);
+        if !path.is_dir() {
+            return Err(validation_error(
+                "The workspace folder is unavailable on this device.",
+            ));
+        }
+
+        #[cfg(target_os = "windows")]
+        let spawn_result = match request.target {
+            CodeWorkspaceOpenTarget::FileManager => Command::new("explorer.exe").arg(&path).spawn(),
+            CodeWorkspaceOpenTarget::Terminal => Command::new("wt.exe")
+                .arg("-d")
+                .arg(&path)
+                .current_dir(&path)
+                .spawn()
+                .or_else(|_| Command::new("cmd.exe").arg("/K").current_dir(&path).spawn()),
+        };
+        #[cfg(target_os = "macos")]
+        let spawn_result = match request.target {
+            CodeWorkspaceOpenTarget::FileManager => Command::new("open").arg(&path).spawn(),
+            CodeWorkspaceOpenTarget::Terminal => Command::new("open")
+                .arg("-a")
+                .arg("Terminal")
+                .arg(&path)
+                .spawn(),
+        };
+        #[cfg(all(unix, not(target_os = "macos")))]
+        let spawn_result = match request.target {
+            CodeWorkspaceOpenTarget::FileManager => Command::new("xdg-open").arg(&path).spawn(),
+            CodeWorkspaceOpenTarget::Terminal => Command::new("x-terminal-emulator")
+                .current_dir(&path)
+                .spawn()
+                .or_else(|_| Command::new("xterm").current_dir(&path).spawn()),
+        };
+        #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
+        let spawn_result: Result<std::process::Child, std::io::Error> = Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "opening external workspace applications is not supported on this platform",
+        ));
+
+        spawn_result.map_err(|error| {
+            application_error(
+                "workspace_open_failed",
+                format!("The workspace could not be opened externally: {error}"),
+                RetryClass::AfterUserAction,
+            )
+        })?;
+        self.audit
+            .record(
+                "code.workspace.open_in",
+                "success",
+                "info",
+                Some(&summary.id),
+                Some(match request.target {
+                    CodeWorkspaceOpenTarget::FileManager => "workspace opened in the file manager",
+                    CodeWorkspaceOpenTarget::Terminal => "workspace opened in an external terminal",
+                }),
+            )
+            .await
+            .map_err(database_error)?;
+        Ok(true)
     }
 
     async fn stop_code_workspace_terminals(&self, workspace_id: &str) -> Result<(), ApiError> {
@@ -756,6 +972,28 @@ impl HiveoryFoundation {
                     request.force,
                 )
                 .map_err(git_error)?;
+        }
+
+        // Removing a parent must not leave dangling hierarchy metadata in the
+        // in-memory service. SQLite also clears the foreign key on delete, but
+        // the service needs the same update before the next snapshot.
+        let children = self
+            .persistence
+            .code_workspaces()
+            .await
+            .map_err(database_error)?
+            .into_iter()
+            .filter(|workspace| {
+                workspace.parent_workspace_id.as_deref() == Some(summary.id.as_str())
+            })
+            .collect::<Vec<_>>();
+        for child in children {
+            if let Ok(updated) = self.code_workspaces.set_parent_workspace(&child.id, None) {
+                self.persistence
+                    .save_code_workspace(&updated)
+                    .await
+                    .map_err(database_error)?;
+            }
         }
 
         let _ = self.code_workspaces.close_workspace(&summary.id);
@@ -2253,6 +2491,44 @@ async fn hiveory_command_create_code_workspace(
     Ok(response(
         &command.request_id,
         foundation.create_code_workspace(&command.payload).await?,
+    ))
+}
+
+#[tauri::command]
+async fn hiveory_command_update_code_workspace(
+    command: CommandEnvelope<CodeWorkspaceUpdateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation.update_code_workspace(&command.payload).await?,
+    ))
+}
+
+#[tauri::command]
+async fn hiveory_command_set_code_workspace_parent(
+    command: CommandEnvelope<CodeWorkspaceParentRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceDetail>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation
+            .set_code_workspace_parent(&command.payload)
+            .await?,
+    ))
+}
+
+#[tauri::command]
+async fn hiveory_command_open_code_workspace_in(
+    command: CommandEnvelope<CodeWorkspaceOpenInRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation.open_code_workspace_in(&command.payload).await?,
     ))
 }
 
@@ -4289,6 +4565,11 @@ fn workspace_error(error: HiveoryWorkspaceError) -> ApiError {
             "That path is outside the approved workspace policy.",
             RetryClass::AfterUserAction,
         ),
+        HiveoryWorkspaceError::InvalidRelationship(_) => (
+            "workspace_relationship_invalid",
+            "That workspace parent relationship is not valid.",
+            RetryClass::AfterUserAction,
+        ),
         HiveoryWorkspaceError::FileTooLarge => (
             "code_file_too_large",
             "The file is too large for the inline editor.",
@@ -5166,6 +5447,9 @@ pub fn run() {
             hiveory_command_add_code_project,
             hiveory_command_open_code_workspace,
             hiveory_command_create_code_workspace,
+            hiveory_command_update_code_workspace,
+            hiveory_command_set_code_workspace_parent,
+            hiveory_command_open_code_workspace_in,
             hiveory_command_remove_code_workspace,
             hiveory_command_remove_code_project,
             hiveory_command_trust_code_workspace,

@@ -3314,6 +3314,28 @@
   color: #a1a1aa;
 }
 
+.code-rail-context-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 1px 5px 4px 27px;
+  padding: 3px;
+  border-left: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.code-rail-context-submenu button {
+  min-height: 28px;
+  padding: 5px 7px;
+  color: #b8bec9;
+  font-size: 11px;
+}
+
+.code-rail-context-submenu button > svg {
+  color: #8993a2;
+}
+
 .code-rail-context-menu button.is-danger {
   color: #f87171 !important;
 }
@@ -3432,6 +3454,39 @@
   margin-left: auto;
   color: #72d391;
   font-size: 9px;
+}
+
+.code-rail-workspace-pin {
+  flex: 0 0 auto;
+  color: #aeb7c6;
+  fill: rgba(174, 183, 198, 0.18);
+}
+
+.code-rail-unread-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7dd3fc;
+  box-shadow: 0 0 7px rgba(125, 211, 252, 0.55);
+}
+
+.code-rail-action-notice {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100001;
+  max-width: min(320px, calc(100vw - 36px));
+  padding: 9px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 8px;
+  background: #17191e;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  color: #dce2eb;
+  font-size: 11px;
+  line-height: 1.35;
+  pointer-events: none;
 }
 
 /* Add-workspace dialog */

@@ -33,6 +33,7 @@ export interface CodeWorkspaceController {
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   createThread: (paneId: string) => Promise<void>
+  sleepWorkspace: (workspaceId?: string) => Promise<boolean>
   requestClosePane: (paneId: string) => Promise<void>
   confirmClose: (terminateRunning: boolean) => Promise<void>
   dismissConfirmClose: () => void
@@ -417,6 +418,29 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     []
   )
 
+  const sleepWorkspace = useCallback(
+    async (requestedWorkspaceId?: string) => {
+      const workspaceId = requestedWorkspaceId ?? stateRef.current.workspaceId
+      if (!workspaceId) return false
+      try {
+        dispatch({ type: 'SET_MUTATING', isMutating: true })
+        const detail = await hiveoryClient.codeWorkspace(workspaceId)
+        const activeTerminals = detail.terminals.filter((terminal) => terminal.state === 'running' || terminal.state === 'starting')
+        await Promise.all(activeTerminals.map((terminal) => hiveoryClient.stopCodeTerminal({ terminal_id: terminal.id, force: true })))
+        if (stateRef.current.workspaceId === workspaceId) {
+          await loadWorkspace(workspaceId)
+        }
+        return true
+      } catch (err: unknown) {
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
+        return false
+      } finally {
+        dispatch({ type: 'SET_MUTATING', isMutating: false })
+      }
+    },
+    [loadWorkspace]
+  )
+
   const requestClosePane = useCallback(
     async (paneId: string) => {
       const { layout, terminals, workspaceId, revision } = stateRef.current
@@ -513,6 +537,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     launchTerminal,
     openPreview,
     createThread,
+    sleepWorkspace,
     requestClosePane,
     confirmClose,
     dismissConfirmClose,

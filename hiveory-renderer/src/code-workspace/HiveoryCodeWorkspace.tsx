@@ -5,7 +5,9 @@ import {
   type CodeProjectSummary,
   type CodeSnapshot,
   type CodeWorkspaceCreateRequest,
+  type CodeWorkspaceParentRequest,
   type CodeWorkspaceSummary,
+  type CodeWorkspaceUpdateRequest,
 } from '../api/hiveory-client'
 import { useCodeWorkspaceController } from './state/use-code-workspace-controller'
 import { CodeWorkspaceRail } from './CodeWorkspaceRail'
@@ -14,7 +16,8 @@ import { HiveoryCodeDashboard } from './HiveoryCodeDashboard'
 import { HiveoryCodeRoutines } from './HiveoryCodeRoutines'
 import { HiveoryCodePlugins } from './HiveoryCodePlugins'
 import { HiveoryCodeSkills } from './HiveoryCodeSkills'
-import { CodeProjectSettingsDialog, CodeWorkspaceCreateDialog } from './CodeWorkspaceDialogs'
+import { CodeParentWorkspaceDialog, CodeProjectSettingsDialog, CodeWorkspaceCreateDialog, CodeWorkspaceRenameDialog } from './CodeWorkspaceDialogs'
+import { eligibleParentWorkspaces } from './code-workspace-rail-utils'
 import { CodeSourcePanel } from './CodeSourcePanel'
 import { CodeCoordinationPanel } from './CodeCoordinationPanel'
 import './code-workspace.css'
@@ -48,6 +51,12 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [createWorkspaceBusy, setCreateWorkspaceBusy] = useState(false)
   const [createWorkspaceError, setCreateWorkspaceError] = useState<string | null>(null)
   const [projectSettingsProjectId, setProjectSettingsProjectId] = useState<string | null>(null)
+  const [renameWorkspaceId, setRenameWorkspaceId] = useState<string | null>(null)
+  const [renameWorkspaceBusy, setRenameWorkspaceBusy] = useState(false)
+  const [renameWorkspaceError, setRenameWorkspaceError] = useState<string | null>(null)
+  const [parentWorkspaceId, setParentWorkspaceId] = useState<string | null>(null)
+  const [parentWorkspaceBusy, setParentWorkspaceBusy] = useState(false)
+  const [parentWorkspaceError, setParentWorkspaceError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
   const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
@@ -55,6 +64,9 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
+  const renameWorkspace = workspaces.find((workspace) => workspace.id === renameWorkspaceId) ?? null
+  const parentWorkspace = workspaces.find((workspace) => workspace.id === parentWorkspaceId) ?? null
+  const parentWorkspaceCandidates = parentWorkspace ? eligibleParentWorkspaces(parentWorkspace, workspaces) : []
 
   const refreshWorkspaces = useCallback(async (): Promise<CodeSnapshot | null> => {
     try {
@@ -134,6 +146,50 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       setError(message)
     } finally {
       setCreateWorkspaceBusy(false)
+    }
+  }
+
+  const handleOpenRenameWorkspace = (workspace: CodeWorkspaceSummary) => {
+    setRenameWorkspaceError(null)
+    setRenameWorkspaceId(workspace.id)
+  }
+
+  const handleUpdateWorkspace = async (request: CodeWorkspaceUpdateRequest) => {
+    setRenameWorkspaceBusy(true)
+    setRenameWorkspaceError(null)
+    try {
+      await hiveoryClient.updateCodeWorkspace(request)
+      setRenameWorkspaceId(null)
+      await refreshWorkspaces()
+      if (activeWorkspaceId === request.workspace_id) await loadWorkspace(request.workspace_id)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setRenameWorkspaceError(message)
+      setError(message)
+    } finally {
+      setRenameWorkspaceBusy(false)
+    }
+  }
+
+  const handleOpenParentWorkspace = (workspace: CodeWorkspaceSummary) => {
+    setParentWorkspaceError(null)
+    setParentWorkspaceId(workspace.id)
+  }
+
+  const handleSetParentWorkspace = async (request: CodeWorkspaceParentRequest) => {
+    setParentWorkspaceBusy(true)
+    setParentWorkspaceError(null)
+    try {
+      await hiveoryClient.setCodeWorkspaceParent(request)
+      setParentWorkspaceId(null)
+      await refreshWorkspaces()
+      if (activeWorkspaceId === request.workspace_id) await loadWorkspace(request.workspace_id)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      setParentWorkspaceError(message)
+      setError(message)
+    } finally {
+      setParentWorkspaceBusy(false)
     }
   }
 
@@ -276,6 +332,8 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         onAddProject={() => void handleAddProject()}
         onAddWorkspace={handleAddWorkspace}
         onOpenProjectSettings={setProjectSettingsProjectId}
+        onRenameWorkspace={handleOpenRenameWorkspace}
+        onOpenParentWorkspaceDialog={handleOpenParentWorkspace}
         onRemoveProject={(projectId) => void handleRemoveProject(projectId)}
         onRemoveWorkspace={(workspaceId) => void handleRemoveWorkspace(workspaceId)}
         onSelectGlobalSection={(section) => setActiveSection(section)}
@@ -315,6 +373,25 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         open={projectSettingsProjectId !== null}
         project={projects.find((project) => project.id === projectSettingsProjectId) ?? null}
         onClose={() => setProjectSettingsProjectId(null)}
+      />
+
+      <CodeWorkspaceRenameDialog
+        open={renameWorkspaceId !== null}
+        workspace={renameWorkspace}
+        busy={renameWorkspaceBusy}
+        error={renameWorkspaceError}
+        onClose={() => { if (!renameWorkspaceBusy) setRenameWorkspaceId(null) }}
+        onSubmit={(request) => void handleUpdateWorkspace(request)}
+      />
+
+      <CodeParentWorkspaceDialog
+        open={parentWorkspaceId !== null}
+        workspace={parentWorkspace}
+        candidates={parentWorkspaceCandidates}
+        busy={parentWorkspaceBusy}
+        error={parentWorkspaceError}
+        onClose={() => { if (!parentWorkspaceBusy) setParentWorkspaceId(null) }}
+        onSubmit={(request) => void handleSetParentWorkspace(request)}
       />
 
     </div>

@@ -309,6 +309,7 @@ mod tests {
                 workspace_kind: CodeWorkspaceKind::Primary,
                 worktree_name: None,
                 base_ref: None,
+                parent_workspace_id: None,
                 managed_by_app: false,
                 available: true,
                 unavailable_reason: None,

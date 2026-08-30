@@ -39,6 +39,8 @@ pub enum HiveoryWorkspaceError {
     Untrusted,
     #[error("workspace path is invalid: {0}")]
     InvalidPath(String),
+    #[error("workspace relationship is invalid: {0}")]
+    InvalidRelationship(String),
     #[error("file is too large for the inline editor")]
     FileTooLarge,
     #[error("binary files are read-only in the inline editor")]
@@ -65,6 +67,7 @@ pub struct HiveoryWorkspaceMetadata {
     pub workspace_kind: CodeWorkspaceKind,
     pub worktree_name: Option<String>,
     pub base_ref: Option<String>,
+    pub parent_workspace_id: Option<String>,
     pub branch: Option<String>,
     pub managed_by_app: bool,
     pub available: bool,
@@ -140,6 +143,7 @@ impl HiveoryWorkspaceService {
             workspace_kind: CodeWorkspaceKind::Primary,
             worktree_name: None,
             base_ref: None,
+            parent_workspace_id: None,
             managed_by_app: false,
             available: true,
             unavailable_reason: None,
@@ -197,6 +201,7 @@ impl HiveoryWorkspaceService {
         handle.summary.workspace_kind = metadata.workspace_kind;
         handle.summary.worktree_name = metadata.worktree_name;
         handle.summary.base_ref = metadata.base_ref;
+        handle.summary.parent_workspace_id = metadata.parent_workspace_id;
         handle.summary.branch = metadata.branch;
         handle.summary.managed_by_app = metadata.managed_by_app;
         handle.summary.available = metadata.available;
@@ -218,6 +223,70 @@ impl HiveoryWorkspaceService {
             .get_mut(workspace_id)
             .ok_or(HiveoryWorkspaceError::NotFound)?;
         handle.summary.display_name = display_name;
+        handle.summary.updated_at_unix_ms = now_ms();
+        Ok(handle.summary.clone())
+    }
+
+    pub fn set_parent_workspace(
+        &self,
+        workspace_id: &str,
+        parent_workspace_id: Option<String>,
+    ) -> Result<CodeWorkspaceSummary, HiveoryWorkspaceError> {
+        let mut workspaces = self
+            .workspaces
+            .write()
+            .map_err(|_| HiveoryWorkspaceError::NotFound)?;
+        let child = workspaces
+            .get(workspace_id)
+            .ok_or(HiveoryWorkspaceError::NotFound)?
+            .summary
+            .clone();
+
+        let parent_workspace_id = parent_workspace_id
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty());
+        if parent_workspace_id.as_deref() == Some(workspace_id) {
+            return Err(HiveoryWorkspaceError::InvalidRelationship(
+                "a workspace cannot be its own parent".to_owned(),
+            ));
+        }
+
+        if let Some(parent_id) = parent_workspace_id.as_deref() {
+            let parent =
+                workspaces
+                    .get(parent_id)
+                    .ok_or(HiveoryWorkspaceError::InvalidRelationship(
+                        "the selected parent workspace is not available".to_owned(),
+                    ))?;
+            if parent.summary.project_id != child.project_id {
+                return Err(HiveoryWorkspaceError::InvalidRelationship(
+                    "parent and child workspaces must belong to the same project".to_owned(),
+                ));
+            }
+
+            let mut cursor = Some(parent_id.to_owned());
+            let mut visited = std::collections::HashSet::new();
+            while let Some(current_id) = cursor {
+                if !visited.insert(current_id.clone()) {
+                    return Err(HiveoryWorkspaceError::InvalidRelationship(
+                        "the workspace hierarchy already contains a cycle".to_owned(),
+                    ));
+                }
+                if current_id == workspace_id {
+                    return Err(HiveoryWorkspaceError::InvalidRelationship(
+                        "a workspace cannot become a descendant of itself".to_owned(),
+                    ));
+                }
+                cursor = workspaces
+                    .get(&current_id)
+                    .and_then(|item| item.summary.parent_workspace_id.clone());
+            }
+        }
+
+        let handle = workspaces
+            .get_mut(workspace_id)
+            .ok_or(HiveoryWorkspaceError::NotFound)?;
+        handle.summary.parent_workspace_id = parent_workspace_id;
         handle.summary.updated_at_unix_ms = now_ms();
         Ok(handle.summary.clone())
     }

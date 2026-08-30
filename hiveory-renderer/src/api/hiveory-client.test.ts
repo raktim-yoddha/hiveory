@@ -85,12 +85,43 @@ test('preview removes secondary workspaces without allowing primary deletion', a
     base_ref: 'HEAD',
     branch_name: 'feature/removal-hierarchy-demo',
   })
+  const child = await hiveoryClient.createCodeWorkspace({
+    project_id: primary.summary.project_id,
+    name: 'Nested workspace',
+    base_ref: 'HEAD',
+    branch_name: 'feature/nested-removal-hierarchy-demo',
+  })
+  await hiveoryClient.setCodeWorkspaceParent({ workspace_id: child.summary.id, parent_workspace_id: isolated.summary.id })
 
   const afterWorkspaceRemoval = await hiveoryClient.removeCodeWorkspace({ workspace_id: isolated.summary.id, force: true })
   expect(afterWorkspaceRemoval.workspaces.map((workspace) => workspace.id)).not.toContain(isolated.summary.id)
-  expect(afterWorkspaceRemoval.projects.find((project) => project.id === primary.summary.project_id)?.workspace_count).toBe(1)
+  expect(afterWorkspaceRemoval.workspaces.find((workspace) => workspace.id === child.summary.id)?.parent_workspace_id).toBeNull()
+  expect(afterWorkspaceRemoval.projects.find((project) => project.id === primary.summary.project_id)?.workspace_count).toBe(2)
   await expect(hiveoryClient.removeCodeWorkspace({ workspace_id: primary.summary.id, force: true })).rejects.toThrow('primary workspace')
 
   const afterProjectRemoval = await hiveoryClient.removeCodeProject({ project_id: primary.summary.project_id, force: true })
   expect(afterProjectRemoval.projects.map((project) => project.id)).not.toContain(primary.summary.project_id)
+})
+
+test('preview makes workspace menu mutations durable and rejects hierarchy cycles', async () => {
+  const primary = await hiveoryClient.addCodeProject('~/menu-actions-demo')
+  const child = await hiveoryClient.createCodeWorkspace({
+    project_id: primary.summary.project_id,
+    name: 'Menu child',
+    base_ref: 'HEAD',
+    branch_name: 'feature/menu-child',
+  })
+
+  const renamed = await hiveoryClient.updateCodeWorkspace({ workspace_id: child.summary.id, display_name: 'Renamed child' })
+  expect(renamed.summary.display_name).toBe('Renamed child')
+  const linked = await hiveoryClient.setCodeWorkspaceParent({ workspace_id: child.summary.id, parent_workspace_id: primary.summary.id })
+  expect(linked.summary.parent_workspace_id).toBe(primary.summary.id)
+  await expect(hiveoryClient.setCodeWorkspaceParent({ workspace_id: primary.summary.id, parent_workspace_id: child.summary.id })).rejects.toThrow()
+
+  const trusted = await hiveoryClient.trustCodeWorkspace(child.summary.id, true)
+  const terminal = await hiveoryClient.startCodeTerminal({ workspace_id: child.summary.id, kind: 'shell', cols: 80, rows: 24, adapter_id: null, model: null, resume_session_id: null }, () => undefined)
+  expect(terminal.state).toBe('running')
+  await expect(hiveoryClient.stopCodeTerminal({ terminal_id: terminal.id, force: true })).resolves.toBe(true)
+  const slept = await hiveoryClient.codeWorkspace(trusted.summary.id)
+  expect(slept.terminals[0]?.state).toBe('interrupted')
 })

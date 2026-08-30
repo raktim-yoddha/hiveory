@@ -12,7 +12,6 @@ import {
   FolderOpen,
   FolderTree,
   GitBranch,
-  Layers3,
   LayoutDashboard,
   MoreVertical,
   Moon,
@@ -32,9 +31,11 @@ import type {
   CodeProjectSummary,
   CodeWorkspaceSummary,
 } from '../api/hiveory-client'
+import { hiveoryClient, type CodeWorkspaceOpenTarget } from '../api/hiveory-client'
 import type { CodeWorkspaceController } from './state/use-code-workspace-controller'
 import { CliBrandIcon } from './CliIcons'
-import { shouldShowProjectWorkspaceRows } from './code-workspace-rail-utils'
+import { CodeProjectGroupDialog } from './CodeWorkspaceDialogs'
+import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows } from './code-workspace-rail-utils'
 
 interface CodeWorkspaceRailProps {
   controller: CodeWorkspaceController
@@ -46,6 +47,8 @@ interface CodeWorkspaceRailProps {
   onAddProject: () => void
   onAddWorkspace: (projectId?: string) => void
   onOpenProjectSettings?: (projectId: string) => void
+  onRenameWorkspace: (workspace: CodeWorkspaceSummary) => void
+  onOpenParentWorkspaceDialog: (workspace: CodeWorkspaceSummary) => void
   onRemoveProject: (projectId: string) => void
   onRemoveWorkspace: (workspaceId: string) => void
   onSelectGlobalSection?: (section: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace') => void
@@ -58,6 +61,25 @@ interface CodeWorkspaceRailProps {
 type ProjectIconId = 'folder' | 'git' | 'briefcase' | 'package'
 type ContextMenuState = { kind: 'project' | 'workspace'; id: string } | null
 type WorkspaceRailFlags = { pinned?: boolean; unread?: boolean; sleeping?: boolean }
+type RailPreferences = {
+  projectIcons?: Record<string, ProjectIconId>
+  projectGroups?: Record<string, string>
+  workspaceFlags?: Record<string, WorkspaceRailFlags>
+}
+
+function readRailPreferences(): Required<RailPreferences> {
+  if (typeof window === 'undefined') return { projectIcons: {}, projectGroups: {}, workspaceFlags: {} }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem('hiveory.code.rail.preferences') ?? '{}') as RailPreferences
+    return {
+      projectIcons: parsed.projectIcons ?? {},
+      projectGroups: parsed.projectGroups ?? {},
+      workspaceFlags: parsed.workspaceFlags ?? {},
+    }
+  } catch {
+    return { projectIcons: {}, projectGroups: {}, workspaceFlags: {} }
+  }
+}
 
 const PROJECT_ICON_OPTIONS: { id: ProjectIconId; label: string }[] = [
   { id: 'folder', label: 'Folder' },
@@ -98,6 +120,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   onAddProject,
   onAddWorkspace,
   onOpenProjectSettings,
+  onRenameWorkspace,
+  onOpenParentWorkspaceDialog,
   onRemoveProject,
   onRemoveWorkspace,
   onSelectGlobalSection,
@@ -172,13 +196,29 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const [openContextMenu, setOpenContextMenu] = useState<ContextMenuState>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState<{ top: number; left: number } | null>(null)
   const [openProjectIconMenuId, setOpenProjectIconMenuId] = useState<string | null>(null)
-  const [projectIcons, setProjectIcons] = useState<Record<string, ProjectIconId>>({})
-  const [groupedProjects, setGroupedProjects] = useState<Set<string>>(new Set())
-  const [workspaceFlags, setWorkspaceFlags] = useState<Record<string, WorkspaceRailFlags>>({})
+  const [openWorkspaceSubmenuId, setOpenWorkspaceSubmenuId] = useState<string | null>(null)
+  const [projectGroupDialogId, setProjectGroupDialogId] = useState<string | null>(null)
+  const [projectIcons, setProjectIcons] = useState<Record<string, ProjectIconId>>(() => readRailPreferences().projectIcons)
+  const [projectGroups, setProjectGroups] = useState<Record<string, string>>(() => readRailPreferences().projectGroups)
+  const [workspaceFlags, setWorkspaceFlags] = useState<Record<string, WorkspaceRailFlags>>(() => readRailPreferences().workspaceFlags)
+  const [actionNotice, setActionNotice] = useState<string | null>(null)
+  const actionNoticeTimerRef = useRef<number | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const addMenuRef = useRef<HTMLDivElement | null>(null)
   const leaves = state.layout?.nodes.filter((node) => node.children.length === 0) ?? []
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hiveory.code.rail.preferences', JSON.stringify({ projectIcons, projectGroups, workspaceFlags }))
+    } catch {
+      // Browser preview storage is optional.
+    }
+  }, [projectGroups, projectIcons, workspaceFlags])
+
+  useEffect(() => () => {
+    if (actionNoticeTimerRef.current !== null) window.clearTimeout(actionNoticeTimerRef.current)
+  }, [])
   const projectRows = useMemo(() => {
     if (projects.length > 0) return projects
     const fallback = new Map<string, CodeProjectSummary>()
@@ -217,6 +257,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         setOpenContextMenu(null)
         setContextMenuPosition(null)
         setOpenProjectIconMenuId(null)
+        setOpenWorkspaceSubmenuId(null)
       }
       if (
         isAddMenuOpen &&
@@ -232,6 +273,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         setOpenContextMenu(null)
         setContextMenuPosition(null)
         setOpenProjectIconMenuId(null)
+        setOpenWorkspaceSubmenuId(null)
         setIsAddMenuOpen(false)
       }
     }
@@ -240,6 +282,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         setOpenContextMenu(null)
         setContextMenuPosition(null)
         setOpenProjectIconMenuId(null)
+        setOpenWorkspaceSubmenuId(null)
       }
     }
 
@@ -273,6 +316,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     setOpenContextMenu(null)
     setContextMenuPosition(null)
     setOpenProjectIconMenuId(null)
+    setOpenWorkspaceSubmenuId(null)
     onSelectWorkspace(workspaceId)
     onSelectGlobalSection?.('workspace')
   }
@@ -281,6 +325,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     setOpenContextMenu(null)
     setContextMenuPosition(null)
     setOpenProjectIconMenuId(null)
+    setOpenWorkspaceSubmenuId(null)
     onSelectWorkspace(workspaceId)
     onSelectGlobalSection?.('workspace')
     if (panel === 'source') {
@@ -304,6 +349,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
       setOpenContextMenu(null)
       setContextMenuPosition(null)
       setOpenProjectIconMenuId(null)
+      setOpenWorkspaceSubmenuId(null)
       return
     }
     const rect = event.currentTarget.getBoundingClientRect()
@@ -320,6 +366,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     }
     setContextMenuPosition({ top, left })
     setOpenProjectIconMenuId(null)
+    setOpenWorkspaceSubmenuId(null)
     setOpenContextMenu({ kind, id })
   }
 
@@ -327,9 +374,20 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     setOpenContextMenu(null)
     setContextMenuPosition(null)
     setOpenProjectIconMenuId(null)
+    setOpenWorkspaceSubmenuId(null)
+  }
+
+  const announce = (message: string) => {
+    if (actionNoticeTimerRef.current !== null) window.clearTimeout(actionNoticeTimerRef.current)
+    setActionNotice(message)
+    actionNoticeTimerRef.current = window.setTimeout(() => {
+      setActionNotice(null)
+      actionNoticeTimerRef.current = null
+    }, 2600)
   }
 
   const toggleWorkspaceFlag = (workspaceId: string, flag: keyof WorkspaceRailFlags) => {
+    const nextValue = !workspaceFlags[workspaceId]?.[flag]
     setWorkspaceFlags((current) => ({
       ...current,
       [workspaceId]: {
@@ -337,30 +395,86 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         [flag]: !current[workspaceId]?.[flag],
       },
     }))
+    announce(nextValue ? `${flag === 'pinned' ? 'Workspace pinned' : flag === 'unread' ? 'Workspace marked unread' : 'Workspace put to sleep'}` : `${flag === 'pinned' ? 'Workspace unpinned' : flag === 'unread' ? 'Workspace marked read' : 'Workspace awakened'}`)
     closeContextMenu()
   }
 
   const toggleProjectGroup = (projectId: string) => {
-    setGroupedProjects((current) => {
-      const next = new Set(current)
-      if (next.has(projectId)) next.delete(projectId)
-      else next.add(projectId)
+    closeContextMenu()
+    setProjectGroupDialogId(projectId)
+  }
+
+  const saveProjectGroup = (projectId: string, groupName: string | null) => {
+    setProjectGroups((current) => {
+      const next = { ...current }
+      if (groupName?.trim()) next[projectId] = groupName.trim()
+      else delete next[projectId]
       return next
     })
-    closeContextMenu()
+    setProjectGroupDialogId(null)
+    announce(groupName?.trim() ? 'Project group saved' : 'Project removed from its group')
   }
 
   const setProjectIcon = (projectId: string, icon: ProjectIconId) => {
     setProjectIcons((current) => ({ ...current, [projectId]: icon }))
+    announce('Project icon updated')
     closeContextMenu()
   }
 
   const copyWorkspacePath = async (workspace: CodeWorkspaceSummary) => {
+    let copied = false
     try {
-      await navigator.clipboard?.writeText(workspace.root_path)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(workspace.root_path)
+        copied = true
+      }
+    } catch {
+      copied = false
+    }
+    if (!copied) {
+      const textarea = document.createElement('textarea')
+      textarea.value = workspace.root_path
+      textarea.setAttribute('readonly', 'true')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        copied = document.execCommand('copy')
+      } catch {
+        copied = false
+      } finally {
+        textarea.remove()
+      }
+    }
+    announce(copied ? 'Workspace path copied' : 'Clipboard access was blocked')
+    closeContextMenu()
+  }
+
+  const openWorkspaceIn = async (workspace: CodeWorkspaceSummary, target: CodeWorkspaceOpenTarget) => {
+    try {
+      await hiveoryClient.openCodeWorkspaceIn({ workspace_id: workspace.id, target })
+      announce(target === 'file_manager' ? 'Opened in File Explorer' : 'Opened in external terminal')
+    } catch (err: unknown) {
+      controller.setError(err instanceof Error ? err.message : String(err))
     } finally {
       closeContextMenu()
     }
+  }
+
+  const sleepWorkspace = async (workspace: CodeWorkspaceSummary) => {
+    const isSleeping = workspaceFlags[workspace.id]?.sleeping === true
+    if (isSleeping) {
+      setWorkspaceFlags((current) => ({ ...current, [workspace.id]: { ...current[workspace.id], sleeping: false } }))
+      announce('Workspace awake; no panes were restarted')
+      closeContextMenu()
+      return
+    }
+    const completed = await controller.sleepWorkspace(workspace.id)
+    if (!completed) return
+    setWorkspaceFlags((current) => ({ ...current, [workspace.id]: { ...current[workspace.id], sleeping: true } }))
+    announce('Workspace slept; active terminals were stopped')
+    closeContextMenu()
   }
 
   const renderWorkspaceActions = (workspace: CodeWorkspaceSummary) => {
@@ -371,7 +485,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         <button
           type="button"
           className={`code-rail-workspace-menu-trigger ${isOpen ? 'is-open' : ''}`}
-          onClick={(event) => openContextMenuAt(event, 'workspace', workspace.id, isPrimary ? 470 : 500)}
+          onClick={(event) => openContextMenuAt(event, 'workspace', workspace.id, isPrimary ? 470 : 520)}
           aria-label={`Workspace actions for ${workspace.display_name}`}
           aria-haspopup="menu"
           aria-expanded={isOpen}
@@ -411,6 +525,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
       const isPrimary = workspace.workspace_kind === 'primary'
       const flags = workspaceFlags[workspace.id] ?? {}
       const cleanPath = workspace.root_path.replace(/^\\\\\?\\/, '')
+      const parentCandidates = eligibleParentWorkspaces(workspace, workspaces)
+      const parentActionDisabled = isPrimary || (parentCandidates.length === 0 && !workspace.parent_workspace_id)
 
       return (
         <div
@@ -440,21 +556,28 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
             <span>{coordinationPanelOpen && activeWorkspaceId === workspace.id ? 'Hide coordination panel' : 'Open coordination panel'}</span>
           </button>
           <div className="code-rail-context-menu-separator" />
-          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+          <button type="button" role="menuitem" onClick={() => { closeContextMenu(); onRenameWorkspace(workspace) }}>
             <Pencil size={14} aria-hidden="true" />
             <span>Update</span>
           </button>
-          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
-            <Layers3 size={14} aria-hidden="true" />
-            <span>Move to Status</span>
-            <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
-          </button>
           <div className="code-rail-context-menu-separator" />
-          <button type="button" role="menuitem" onClick={() => activateWorkspace(workspace.id)}>
+          <button type="button" role="menuitem" onClick={() => setOpenWorkspaceSubmenuId((current) => current === workspace.id ? null : workspace.id)} aria-haspopup="menu" aria-expanded={openWorkspaceSubmenuId === workspace.id}>
             <ExternalLink size={14} aria-hidden="true" />
             <span>Open in</span>
             <ChevronRight size={13} className="code-rail-menu-chevron" aria-hidden="true" />
           </button>
+          {openWorkspaceSubmenuId === workspace.id && (
+            <div className="code-rail-context-submenu" role="group" aria-label="Open workspace in">
+              <button type="button" role="menuitem" onClick={() => void openWorkspaceIn(workspace, 'file_manager')}>
+                <FolderOpen size={13} aria-hidden="true" />
+                <span>File Explorer</span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => void openWorkspaceIn(workspace, 'terminal')}>
+                <SquareTerminal size={13} aria-hidden="true" />
+                <span>Terminal</span>
+              </button>
+            </div>
+          )}
           <button type="button" role="menuitem" onClick={() => void copyWorkspacePath(workspace)}>
             <Copy size={14} aria-hidden="true" />
             <span>Copy Path</span>
@@ -471,14 +594,14 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           <div className="code-rail-context-menu-separator" />
           <button type="button" role="menuitem" onClick={() => toggleProjectGroup(workspace.project_id)}>
             <FolderTree size={14} aria-hidden="true" />
-            <span>New group from project</span>
+            <span>{projectGroups[workspace.project_id] ? 'Edit project group' : 'New group from project'}</span>
           </button>
           <div className="code-rail-context-menu-separator" />
-          <button type="button" role="menuitem" className="is-disabled" disabled title="Parent worktree relationships are managed by the project">
+          <button type="button" role="menuitem" className={parentActionDisabled ? 'is-disabled' : ''} disabled={parentActionDisabled} onClick={() => { closeContextMenu(); onOpenParentWorkspaceDialog(workspace) }} title={isPrimary ? 'The primary workspace is the project root' : parentActionDisabled ? 'No eligible parent workspace is available' : 'Set or clear the parent workspace'}>
             <GitBranch size={14} aria-hidden="true" />
-            <span>Set Parent Worktree…</span>
+            <span>{workspace.parent_workspace_id ? 'Change Parent Worktree…' : 'Set Parent Worktree…'}</span>
           </button>
-          <button type="button" role="menuitem" onClick={() => toggleWorkspaceFlag(workspace.id, 'sleeping')}>
+          <button type="button" role="menuitem" onClick={() => void sleepWorkspace(workspace)}>
             <Moon size={14} aria-hidden="true" />
             <span>{flags.sleeping ? 'Wake' : 'Sleep'}</span>
           </button>
@@ -538,7 +661,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           )}
           <button type="button" role="menuitem" onClick={() => toggleProjectGroup(project.id)}>
             <FolderTree size={14} aria-hidden="true" />
-            <span>{groupedProjects.has(project.id) ? 'Remove project group' : 'New group from project'}</span>
+            <span>{projectGroups[project.id] ? 'Edit project group' : 'New group from project'}</span>
           </button>
           <div className="code-rail-context-menu-separator" />
           <button type="button" role="menuitem" className="is-danger" onClick={() => { closeContextMenu(); onRemoveProject(project.id) }}>
@@ -645,6 +768,9 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
             .sort((left, right) => {
               if (left.id === project.primary_workspace_id) return -1
               if (right.id === project.primary_workspace_id) return 1
+              const leftPinned = workspaceFlags[left.id]?.pinned ? 0 : 1
+              const rightPinned = workspaceFlags[right.id]?.pinned ? 0 : 1
+              if (leftPinned !== rightPinned) return leftPinned - rightPinned
               return left.display_name.localeCompare(right.display_name)
             })
           const isCollapsed = collapsedProjects.has(project.id)
@@ -681,7 +807,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                 >
                   {renderProjectIcon(projectIcons[project.id] ?? (project.kind === 'git' ? 'git' : 'folder'))}
                   <span className="code-rail-project-name">{project.display_name}</span>
-                  {groupedProjects.has(project.id) && <span className="code-rail-project-group-badge">Group</span>}
+                  {projectGroups[project.id] && <span className="code-rail-project-group-badge" title={`Group: ${projectGroups[project.id]}`}>{projectGroups[project.id]}</span>}
                   <span className={`code-live-dot ${primaryWorkspace?.available ? '' : 'is-offline'}`} aria-label={primaryWorkspace?.available ? 'Available' : 'Unavailable'} />
                 </button>
                 <div className="code-rail-project-actions">
@@ -701,6 +827,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                 <div className="code-rail-project-children">
                   {showWorkspaceRows ? projectWorkspaces.map((workspace) => {
                     const isActive = workspace.id === activeWorkspaceId
+                    const flags = workspaceFlags[workspace.id] ?? {}
                     return (
                       <div key={workspace.id} className="code-rail-workspace-group">
                         <div className={`code-rail-workspace-row-shell ${isActive && activeGlobalSection === 'workspace' ? 'is-active' : ''}`}>
@@ -709,7 +836,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                             className={`code-rail-workspace-row ${isActive && activeGlobalSection === 'workspace' ? 'is-active' : ''} ${!workspace.available ? 'is-unavailable' : ''}`}
                             onContextMenu={(event) => {
                               event.preventDefault()
-                              openContextMenuAt(event, 'workspace', workspace.id, workspace.workspace_kind === 'primary' ? 470 : 500, true)
+                              openContextMenuAt(event, 'workspace', workspace.id, workspace.workspace_kind === 'primary' ? 470 : 520, true)
                             }}
                             onClick={() => {
                               onSelectWorkspace(workspace.id)
@@ -718,6 +845,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                             title={workspace.available ? workspace.root_path : `${workspace.unavailable_reason ?? 'Workspace unavailable'} — click to retry`}
                             aria-disabled={!workspace.available}
                           >
+                            {flags.pinned && <Pin size={11} className="code-rail-workspace-pin" aria-label="Pinned workspace" />}
+                            {flags.unread && <span className="code-rail-unread-dot" aria-label="Unread workspace" />}
                             <span className="code-rail-workspace-kind-icon">
                               {workspace.workspace_kind === 'managed_worktree' ? <GitBranch size={13} aria-hidden="true" /> : <Folder size={13} aria-hidden="true" />}
                             </span>
@@ -754,6 +883,18 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
       </footer>
 
       {renderActiveContextMenu()}
+
+      <CodeProjectGroupDialog
+        open={projectGroupDialogId !== null}
+        project={projectRows.find((project) => project.id === projectGroupDialogId) ?? null}
+        currentGroup={projectGroupDialogId ? projectGroups[projectGroupDialogId] ?? null : null}
+        onClose={() => setProjectGroupDialogId(null)}
+        onSubmit={(groupName) => {
+          if (projectGroupDialogId) saveProjectGroup(projectGroupDialogId, groupName)
+        }}
+      />
+
+      {actionNotice && <div className="code-rail-action-notice" role="status" aria-live="polite">{actionNotice}</div>}
 
       <div
         className="code-workspace-rail-resizer"

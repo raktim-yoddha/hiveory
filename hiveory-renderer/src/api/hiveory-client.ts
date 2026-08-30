@@ -96,9 +96,13 @@ export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_pr
 export type CodeProjectKind = 'git' | 'folder'
 export type CodeWorkspaceKind = 'primary' | 'managed_worktree' | 'external_worktree'
 export type CodeProjectSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; kind: CodeProjectKind; primary_workspace_id: string; current_branch: string | null; workspace_count: number; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
-export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; project_id: string; workspace_kind: CodeWorkspaceKind; worktree_name: string | null; base_ref: string | null; managed_by_app: boolean; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
+export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; project_id: string; workspace_kind: CodeWorkspaceKind; worktree_name: string | null; base_ref: string | null; parent_workspace_id: string | null; managed_by_app: boolean; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
 export type CodeProjectRemoveRequest = { project_id: string; force: boolean }
 export type CodeWorkspaceRemoveRequest = { workspace_id: string; force: boolean }
+export type CodeWorkspaceUpdateRequest = { workspace_id: string; display_name: string }
+export type CodeWorkspaceParentRequest = { workspace_id: string; parent_workspace_id: string | null }
+export type CodeWorkspaceOpenTarget = 'file_manager' | 'terminal'
+export type CodeWorkspaceOpenInRequest = { workspace_id: string; target: CodeWorkspaceOpenTarget }
 export type CodeWorkspaceDetail = { summary: CodeWorkspaceSummary; layout: CodePaneLayout; open_documents: CodeDocumentSummary[]; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
 export type CodeSnapshot = { projects: CodeProjectSummary[]; workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
 export type CodeFileKind = 'file' | 'directory' | 'symlink' | 'binary'
@@ -467,7 +471,7 @@ function previewCodeWorkspace(
   seed('README.md', '# Hiveory\n\nThis is the Phase 4 browser preview workspace.\n', 'markdown')
   seed('src/main.tsx', "export function main() {\n  return 'Code mode is ready'\n}\n", 'typescript')
   const displayName = path.split(/[\\/]/).filter(Boolean).pop() || 'Preview workspace'
-  const summary: CodeWorkspaceSummary = { id, host_id: 'browser-preview', display_name: displayName, root_path: path || '~/hiveory-demo', repository_name: 'hiveory-demo', branch, is_git_repository: true, trust: 'untrusted', capabilities: ['read_files'], project_id: projectId, workspace_kind: workspaceKind, worktree_name: workspaceKind === 'primary' ? null : displayName.toLowerCase().replaceAll(' ', '-'), base_ref: workspaceKind === 'primary' ? null : 'HEAD', managed_by_app: workspaceKind === 'managed_worktree', available: true, unavailable_reason: null, updated_at_unix_ms: now }
+  const summary: CodeWorkspaceSummary = { id, host_id: 'browser-preview', display_name: displayName, root_path: path || '~/hiveory-demo', repository_name: 'hiveory-demo', branch, is_git_repository: true, trust: 'untrusted', capabilities: ['read_files'], project_id: projectId, workspace_kind: workspaceKind, worktree_name: workspaceKind === 'primary' ? null : displayName.toLowerCase().replaceAll(' ', '-'), base_ref: workspaceKind === 'primary' ? null : 'HEAD', parent_workspace_id: null, managed_by_app: workspaceKind === 'managed_worktree', available: true, unavailable_reason: null, updated_at_unix_ms: now }
   const detail: CodeWorkspaceDetail = { summary, layout: previewCodeLayout(id), open_documents: [], terminals: [], previews: [] }
   const value = { detail, files }
   previewCodeWorkspaces.set(id, value)
@@ -755,6 +759,47 @@ export const hiveoryClient = {
     workspace.detail.summary.worktree_name = name.toLowerCase().replaceAll(' ', '-')
     return workspace.detail
   },
+  async updateCodeWorkspace(request: CodeWorkspaceUpdateRequest): Promise<CodeWorkspaceDetail> {
+    if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceUpdateRequest, CodeWorkspaceDetail>('hiveory_command_update_code_workspace', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    const name = request.display_name.trim()
+    if (!name) throw new Error('Workspace name is required.')
+    workspace.detail.summary.display_name = name
+    workspace.detail.summary.updated_at_unix_ms = previewNow()
+    const project = previewCodeProjects.get(workspace.detail.summary.project_id)
+    if (project && workspace.detail.summary.workspace_kind === 'primary') {
+      project.display_name = name
+      project.updated_at_unix_ms = workspace.detail.summary.updated_at_unix_ms
+    }
+    return previewCodeDetail(request.workspace_id)
+  },
+  async setCodeWorkspaceParent(request: CodeWorkspaceParentRequest): Promise<CodeWorkspaceDetail> {
+    if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceParentRequest, CodeWorkspaceDetail>('hiveory_command_set_code_workspace_parent', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.workspace_kind === 'primary' && request.parent_workspace_id) throw new Error('The primary workspace cannot have a parent.')
+    if (request.parent_workspace_id === request.workspace_id) throw new Error('A workspace cannot be its own parent.')
+    if (request.parent_workspace_id) {
+      const parent = previewCodeWorkspaces.get(request.parent_workspace_id)
+      if (!parent || parent.detail.summary.project_id !== workspace.detail.summary.project_id) throw new Error('Parent and child workspaces must belong to the same project.')
+      const seen = new Set<string>()
+      let cursor: string | null = request.parent_workspace_id
+      while (cursor) {
+        if (!seen.add(cursor)) throw new Error('The workspace hierarchy already contains a cycle.')
+        if (cursor === request.workspace_id) throw new Error('A workspace cannot become a descendant of itself.')
+        cursor = previewCodeWorkspaces.get(cursor)?.detail.summary.parent_workspace_id ?? null
+      }
+    }
+    workspace.detail.summary.parent_workspace_id = request.parent_workspace_id
+    workspace.detail.summary.updated_at_unix_ms = previewNow()
+    return previewCodeDetail(request.workspace_id)
+  },
+  async openCodeWorkspaceIn(request: CodeWorkspaceOpenInRequest): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceOpenInRequest, boolean>('hiveory_command_open_code_workspace_in', request)
+    if (!previewCodeWorkspaces.has(request.workspace_id)) throw new Error('Workspace was not found.')
+    throw new Error('Open in is available in the desktop app.')
+  },
   async removeCodeWorkspace(request: CodeWorkspaceRemoveRequest): Promise<CodeSnapshot> {
     if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceRemoveRequest, CodeSnapshot>('hiveory_command_remove_code_workspace', request)
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
@@ -762,6 +807,11 @@ export const hiveoryClient = {
     if (workspace.detail.summary.workspace_kind === 'primary') throw new Error('The primary workspace cannot be deleted. Remove the project instead.')
     const project = previewCodeProjects.get(workspace.detail.summary.project_id)
     previewCodeWorkspaces.delete(request.workspace_id)
+    for (const child of previewCodeWorkspaces.values()) {
+      if (child.detail.summary.parent_workspace_id !== request.workspace_id) continue
+      child.detail.summary.parent_workspace_id = null
+      child.detail.summary.updated_at_unix_ms = previewNow()
+    }
     if (project) project.workspace_count = Math.max(1, project.workspace_count - 1)
     return previewCodeSummary()
   },
@@ -1022,7 +1072,20 @@ export const hiveoryClient = {
     return hiveoryIsTauri ? tauriCommand<CodeTerminalInputRequest, boolean>('hiveory_command_write_code_terminal', payload) : true
   },
   async resizeCodeTerminal(request: CodeTerminalResizeRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<CodeTerminalResizeRequest, boolean>('hiveory_command_resize_code_terminal', request) : true },
-  async stopCodeTerminal(request: CodeTerminalStopRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<CodeTerminalStopRequest, boolean>('hiveory_command_stop_code_terminal', request) : true },
+  async stopCodeTerminal(request: CodeTerminalStopRequest): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<CodeTerminalStopRequest, boolean>('hiveory_command_stop_code_terminal', request)
+    for (const workspace of previewCodeWorkspaces.values()) {
+      const terminal = workspace.detail.terminals.find((item) => item.id === request.terminal_id)
+      if (!terminal) continue
+      if (terminal.state === 'running' || terminal.state === 'starting') {
+        terminal.state = 'interrupted'
+        terminal.exit_code = null
+        terminal.updated_at_unix_ms = previewNow()
+      }
+      return true
+    }
+    return false
+  },
   async openCodePreview(request: CodePreviewRequest): Promise<CodePreviewSummary> {
     if (hiveoryIsTauri) return tauriCommand<CodePreviewRequest, CodePreviewSummary>('hiveory_command_open_code_preview', request)
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before opening a preview.')

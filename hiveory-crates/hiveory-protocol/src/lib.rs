@@ -558,6 +558,7 @@ pub struct CodeWorkspaceSummary {
     pub workspace_kind: CodeWorkspaceKind,
     pub worktree_name: Option<String>,
     pub base_ref: Option<String>,
+    pub parent_workspace_id: Option<String>,
     pub managed_by_app: bool,
     pub available: bool,
     pub unavailable_reason: Option<String>,
@@ -597,6 +598,35 @@ pub struct CodeWorkspaceCreateRequest {
 pub struct CodeWorkspaceRemoveRequest {
     pub workspace_id: String,
     pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceUpdateRequest {
+    pub workspace_id: String,
+    pub display_name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceParentRequest {
+    pub workspace_id: String,
+    pub parent_workspace_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeWorkspaceOpenTarget {
+    FileManager,
+    Terminal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeWorkspaceOpenInRequest {
+    pub workspace_id: String,
+    pub target: CodeWorkspaceOpenTarget,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2867,6 +2897,10 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeProjectAddRequest::export_all(&config)?;
     CodeWorkspaceCreateRequest::export_all(&config)?;
     CodeWorkspaceTrustRequest::export_all(&config)?;
+    CodeWorkspaceUpdateRequest::export_all(&config)?;
+    CodeWorkspaceParentRequest::export_all(&config)?;
+    CodeWorkspaceOpenTarget::export_all(&config)?;
+    CodeWorkspaceOpenInRequest::export_all(&config)?;
     CodeWorkspaceQuery::export_all(&config)?;
     CodeWorkspaceDetail::export_all(&config)?;
     CodeSnapshot::export_all(&config)?;
