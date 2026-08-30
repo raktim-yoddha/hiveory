@@ -22,6 +22,6 @@ pnpm verify
 pnpm release:check
 ```
 
-`pnpm release:check` includes the identity and reference guards. Production builds use the signed GitHub Releases update channel configured in `hiveory-desktop/src-tauri/tauri.conf.json`. The updater public key is safe to ship with the application; the private signing key must remain in the `TAURI_SIGNING_PRIVATE_KEY` GitHub Actions secret. Local builds can still be produced without publishing a release, but signed updater artifacts require that credential.
+`pnpm release:check` includes the identity and reference guards. Production builds use the signed GitHub Releases update channel configured in `hiveory-desktop/src-tauri/tauri.conf.json`. The updater public key is safe to ship with the application; the private signing key must remain in the `TAURI_SIGNING_PRIVATE_KEY` GitHub Actions secret. Local `pnpm app:build` runs without that secret by producing unsigned installers without updater artifacts. To build signed updater artifacts locally, set `TAURI_SIGNING_PRIVATE_KEY` to the paired private key; never commit it. CI release builds fail fast when that key is missing.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [docs/architecture/hiveory-foundation.md](docs/architecture/hiveory-foundation.md), [docs/architecture/terminal-pane-workspace.md](docs/architecture/terminal-pane-workspace.md), and [docs/phases/phase-10-terminal-pane-workspace.md](docs/phases/phase-10-terminal-pane-workspace.md).

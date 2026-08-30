@@ -56,7 +56,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
       <div className="code-launcher-container">
         <div className="code-launcher-header">
           <h2>Start a workspace pane</h2>
-          <p>Open a shell, coding agent, local preview, or focused thread.</p>
+          <p>Open a shell, coding agent, Browser, or focused thread.</p>
         </div>
 
         <div className="code-launcher-grid">
@@ -95,7 +95,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
             </span>
           </button>
 
-          {/* 4. Preview */}
+          {/* 4. Browser */}
           {showUrlInput ? (
             <form
               className="code-launcher-card code-launcher-url-card"
@@ -110,7 +110,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
                 value={previewUrl}
                 onChange={(event) => setPreviewUrl(event.target.value)}
                 placeholder="http://localhost:3000"
-                aria-label="Preview URL"
+                aria-label="Browser address"
                 autoFocus
               />
               <button type="submit" className="code-primary-button">Open</button>
@@ -119,8 +119,8 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
             <button type="button" className="code-launcher-card" onClick={() => setShowUrlInput(true)}>
               <span className="code-launcher-icon"><Globe size={17} aria-hidden="true" /></span>
               <span>
-                <span className="code-launcher-card-title">Preview</span>
-                <span className="code-launcher-card-desc">Open a local web app</span>
+                <span className="code-launcher-card-title">Browser</span>
+                <span className="code-launcher-card-desc">Browse a local app or the web</span>
               </span>
             </button>
           )}

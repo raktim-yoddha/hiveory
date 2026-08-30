@@ -1,5 +1,15 @@
 import { expect, test } from 'vitest'
-import { hiveoryClient } from './hiveory-client'
+import { hiveoryClient, normalizeBrowserInput } from './hiveory-client'
+
+test('normalizes browser addresses and uses Google for search text', () => {
+  expect(normalizeBrowserInput('localhost:5173/dashboard')).toBe('http://localhost:5173/dashboard')
+  expect(normalizeBrowserInput('localhost/dashboard')).toBe('http://localhost/dashboard')
+  expect(normalizeBrowserInput('example.com:8443')).toBe('https://example.com:8443/')
+  expect(normalizeBrowserInput('https://example.com/docs')).toBe('https://example.com/docs')
+  expect(normalizeBrowserInput('tauri webview')).toBe('https://www.google.com/search?q=tauri%20webview')
+  expect(() => normalizeBrowserInput('file:///tmp/index.html')).toThrow('HTTP and HTTPS')
+  expect(() => normalizeBrowserInput('mailto:user@example.com')).toThrow('HTTP and HTTPS')
+})
 
 test('uses an in-browser preview snapshot when no desktop host is present', async () => {
   await expect(hiveoryClient.setActiveMode('code')).resolves.toMatchObject({ active_mode: 'code', protocol: { major: 2 } })

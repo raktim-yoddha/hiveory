@@ -1,9 +1,14 @@
 #![allow(clippy::result_large_err)]
 
+mod browser;
 mod hosted_source;
 mod release;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
+use browser::{
+    BrowserBoundsRequest, BrowserIdRequest, BrowserManager, BrowserNavigationRequest,
+    BrowserOpenRequest, BrowserRuntimeState,
+};
 use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, HiveoryStoredAttachment};
 use hiveory_chat_domain::{estimate_context_tokens, validate_send_request};
@@ -2869,6 +2874,132 @@ async fn hiveory_command_stop_code_terminal(
 }
 
 #[tauri::command]
+async fn hiveory_command_browser_open(
+    command: CommandEnvelope<BrowserOpenRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::OpenPreview,
+        )
+        .map_err(workspace_error)?;
+    if command.payload.browser_id.trim().is_empty() {
+        return Err(validation_error("A browser resource is required."));
+    }
+    browser
+        .open(&app, &command.payload)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_navigate(
+    command: CommandEnvelope<BrowserNavigationRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .navigate(&app, &command.payload)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_back(
+    command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .back(&app, &command.payload.browser_id)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_forward(
+    command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .forward(&app, &command.payload.browser_id)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_reload(
+    command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .reload(&app, &command.payload.browser_id)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_set_bounds(
+    command: CommandEnvelope<BrowserBoundsRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    let bounds = &command.payload;
+    if !bounds.x.is_finite()
+        || !bounds.y.is_finite()
+        || !bounds.width.is_finite()
+        || !bounds.height.is_finite()
+        || bounds.x < 0.0
+        || bounds.y < 0.0
+        || bounds.width < 0.0
+        || bounds.height < 0.0
+    {
+        return Err(validation_error(
+            "Browser bounds must be finite and non-negative.",
+        ));
+    }
+    browser
+        .set_bounds(bounds)
+        .map(|_| response(&command.request_id, true))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_focus(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .focus(&command.payload.browser_id)
+        .map(|_| response(&command.request_id, true))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_close(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .close(&command.payload.browser_id)
+        .map(|_| response(&command.request_id, true))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
 async fn hiveory_command_open_code_preview(
     command: CommandEnvelope<CodePreviewRequest>,
     foundation: State<'_, HiveoryFoundation>,
@@ -2903,7 +3034,7 @@ async fn hiveory_command_open_code_preview(
             "success",
             "info",
             Some(&preview.origin),
-            Some("host-validated sandboxed renderer iframe with credential-free URL policy"),
+            Some("host-validated native child webview with credential-free HTTP and HTTPS URL policy"),
         )
         .await
         .map_err(database_error)?;
@@ -4489,23 +4620,11 @@ fn now_ms() -> i64 {
 }
 
 fn validate_preview_url(value: &str) -> Result<url::Url, ApiError> {
-    let url = url::Url::parse(value.trim())
-        .map_err(|_| validation_error("Preview URL must be a valid HTTP or HTTPS URL."))?;
-    if !url.username().is_empty() || url.password().is_some() {
-        return Err(validation_error(
-            "Preview URLs cannot contain embedded credentials.",
-        ));
-    }
-    let host = url
-        .host_str()
-        .ok_or_else(|| validation_error("Preview URL must include a host."))?;
-    match url.scheme() {
-        "http" if matches!(host, "localhost" | "127.0.0.1" | "::1") => Ok(url),
-        "https" => Ok(url),
-        _ => Err(validation_error(
-            "Preview allows localhost HTTP or explicitly approved HTTPS origins only.",
-        )),
-    }
+    browser::normalize_browser_input(value).map_err(validation_error)
+}
+
+fn browser_error(message: String) -> ApiError {
+    application_error("browser_error", message, RetryClass::AfterUserAction)
 }
 
 fn workspace_error(error: HiveoryWorkspaceError) -> ApiError {
@@ -5267,6 +5386,13 @@ pub fn run() {
                 orchestration_root,
             ))
             .map_err(Box::<dyn std::error::Error>::from)?;
+            let browser_manager = BrowserManager::new(
+                app_data_dir.join("browser-profile"),
+                app.path()
+                    .download_dir()
+                    .unwrap_or_else(|_| app_data_dir.join("downloads")),
+                foundation.persistence.clone(),
+            );
             tauri::async_runtime::block_on(
                 foundation
                     .persistence
@@ -5311,11 +5437,15 @@ pub fn run() {
                 routine_scheduler.run().await;
             });
             start_native_notification_bridge(app.handle().clone(), foundation.jobs.clone());
+            app.manage(browser_manager);
             app.manage(foundation);
             Ok(())
         })
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                if let Some(browser) = window.app_handle().try_state::<BrowserManager>() {
+                    browser.close_all();
+                }
                 if let Some(foundation) = window.app_handle().try_state::<HiveoryFoundation>() {
                     if let (Ok(position), Ok(size), Ok(maximized)) = (
                         window.outer_position(),
@@ -5343,6 +5473,14 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            hiveory_command_browser_open,
+            hiveory_command_browser_navigate,
+            hiveory_command_browser_back,
+            hiveory_command_browser_forward,
+            hiveory_command_browser_reload,
+            hiveory_command_browser_set_bounds,
+            hiveory_command_browser_focus,
+            hiveory_command_browser_close,
             hiveory_query_bootstrap,
             hiveory_command_set_active_mode,
             hiveory_query_build_information,

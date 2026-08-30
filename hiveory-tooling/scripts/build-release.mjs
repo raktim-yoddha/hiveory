@@ -1,4 +1,4 @@
-import { existsSync, copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +9,23 @@ const releaseDir = resolve(projectRoot, 'releases')
 const tauriConfig = resolve(projectRoot, 'hiveory-desktop', 'src-tauri', 'tauri.conf.json')
 const packageManager = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const buildDir = mkdtempSync(join(tmpdir(), 'hiveory-build-'))
+const signingKey = process.env.TAURI_SIGNING_PRIVATE_KEY?.trim()
+const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true'
+let temporaryConfigPath = null
+
+function resolveBuildConfig() {
+  if (signingKey) return tauriConfig
+  if (isCi) {
+    throw new Error('TAURI_SIGNING_PRIVATE_KEY is required for CI release builds. Configure the paired private key as a secret.')
+  }
+
+  const config = JSON.parse(readFileSync(tauriConfig, 'utf8'))
+  config.bundle = { ...(config.bundle ?? {}), createUpdaterArtifacts: false }
+  temporaryConfigPath = join(dirname(tauriConfig), `.tauri.conf.local-${process.pid}-${Date.now()}.json`)
+  writeFileSync(temporaryConfigPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8')
+  console.warn('TAURI_SIGNING_PRIVATE_KEY is not set; building unsigned installers without updater artifacts. Set it to produce signed updater artifacts.')
+  return temporaryConfigPath
+}
 
 function requiredFile(path, description) {
   if (!existsSync(path)) throw new Error(`${description} was not produced: ${path}`)
@@ -23,7 +40,8 @@ function findArtifact(directory, suffix, description) {
 
 try {
   console.log('Building the desktop application in a temporary directory outside the project …')
-  const result = spawnSync(packageManager, ['exec', 'tauri', 'build', '--config', tauriConfig], {
+  const configPath = resolveBuildConfig()
+  const result = spawnSync(packageManager, ['exec', 'tauri', 'build', '--config', configPath], {
     cwd: projectRoot,
     env: { ...process.env, CARGO_TARGET_DIR: buildDir },
     shell: process.platform === 'win32',
@@ -81,6 +99,15 @@ try {
     process.exitCode = 1
   }
 } finally {
+  if (temporaryConfigPath) {
+    try {
+      rmSync(temporaryConfigPath, { force: true })
+    } catch (error) {
+      console.error(`Temporary Tauri configuration could not be removed: ${temporaryConfigPath}`)
+      console.error(error)
+      process.exitCode = 1
+    }
+  }
   try {
     rmSync(buildDir, { force: true, recursive: true })
   } catch (error) {

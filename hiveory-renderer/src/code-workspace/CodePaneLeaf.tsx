@@ -111,7 +111,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           />
         )
       case 'preview':
-        return <CodePreviewPane preview={previewSummary} />
+        if (!previewSummary) return <div className="code-preview-native-placeholder">Loading Browser…</div>
+        return <CodePreviewPane key={previewSummary.id} workspaceId={state.workspaceId ?? previewSummary.workspace_id} preview={previewSummary} />
       case 'thread':
         if (!node.resource_id) return <div>No thread bound</div>
         return <CodeThreadPane conversationId={node.resource_id} />

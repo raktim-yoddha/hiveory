@@ -173,6 +173,12 @@ export type CodeHostedPullRequest = { number: number; title: string; state: stri
 export type CodeHostedTracking = { workspace_id: string; repository: CodeHostedRepository | null; auth_state: CodeHostedAuthState; message: string | null; issues: CodeHostedIssue[]; pull_requests: CodeHostedPullRequest[]; refreshed_at_unix_ms: number; stale: boolean }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
+export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null }
+export type BrowserEvent = { event: 'state' | 'popup_routed' | 'download_started' | 'download_finished' | 'error'; state: BrowserRuntimeState; notice: string | null }
+export type BrowserOpenRequest = { browser_id: string; workspace_id: string; url: string }
+export type BrowserNavigationRequest = { browser_id: string; url: string }
+export type BrowserIdRequest = { browser_id: string }
+export type BrowserBoundsRequest = { browser_id: string; x: number; y: number; width: number; height: number; visible: boolean }
 export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 export type CodeTaskState = 'draft' | 'blocked' | 'ready' | 'preparing' | 'running' | 'awaiting_input' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled'
 export type CodeDispatchState = 'preparing' | 'running' | 'awaiting_input' | 'checkpointing' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted' | 'stale'
@@ -286,6 +292,24 @@ export type CodeCheckpointDiffRequest = { run_id: string; checkpoint_id: string;
 const protocol: ProtocolVersion = { major: 2, minor: 0, patch: 0 }
 const hiveoryIsTauri = '__TAURI_INTERNALS__' in window
 const previewProvider: ProviderAccountSummary = { id: 'hiveory-openai', display_name: 'OpenAI Responses', default_model: 'gpt-5.6-mini', secret_configured: false, enabled: true }
+
+export function normalizeBrowserInput(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) return 'https://www.google.com/'
+  if (/^(https?):\/\//i.test(trimmed)) {
+    const url = new URL(trimmed)
+    if (url.username || url.password || !url.hostname) throw new Error('Browser URLs must be valid HTTP or HTTPS URLs without credentials.')
+    return url.toString()
+  }
+  const bareHost = !/[\s\\]/.test(trimmed) && /^(localhost(?::\d+)?|\[::1\](?::\d+)?|(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?|[^/?#:@]+\.[^/?#:@]+(?::\d+)?)(?:\/[^?#]*)?$/i.test(trimmed)
+  if (bareHost) {
+    const local = /^(localhost|127\.0\.0\.1|\[::1\])(?::|\/|$)/i.test(trimmed)
+    const url = new URL((local ? 'http' : 'https') + '://' + trimmed)
+    return url.toString()
+  }
+  if (/^[a-z][a-z\d+.-]*:/i.test(trimmed)) throw new Error('Browser supports only HTTP and HTTPS URLs.')
+  return 'https://www.google.com/search?q=' + encodeURIComponent(trimmed)
+}
 
 function encodeTerminalInput(data: string): string {
   const bytes = new TextEncoder().encode(data)
@@ -607,6 +631,19 @@ async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload
   return unwrap(result)
 }
 async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Promise<T> { return invoke<T>(name, args) }
+
+function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowserInput(request.url)): BrowserRuntimeState {
+  return {
+    browser_id: request.browser_id,
+    workspace_id: request.workspace_id,
+    url,
+    title: '',
+    loading: false,
+    can_go_back: false,
+    can_go_forward: false,
+    error: null,
+  }
+}
 
 export const hiveoryClient = {
   async bootstrap(): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? tauriQuery<BootstrapSnapshot>('hiveory_query_bootstrap') : { protocol, active_mode: 'agent', product_name: 'Hiveory' } },
@@ -947,15 +984,39 @@ export const hiveoryClient = {
     onEvent?.({ terminal_id: id, sequence: 2, kind: 'output', data_base64: btoa('Preview terminal ready.\r\n'), exit_code: null, message: null, emitted_at_unix_ms: now })
     return { layout, terminal: summary }
   },
+  async browserOpen(request: BrowserOpenRequest): Promise<BrowserRuntimeState> {
+    return hiveoryIsTauri ? tauriCommand<BrowserOpenRequest, BrowserRuntimeState>('hiveory_command_browser_open', request) : browserPreviewState(request)
+  },
+  async browserNavigate(request: BrowserNavigationRequest): Promise<BrowserRuntimeState> {
+    return hiveoryIsTauri ? tauriCommand<BrowserNavigationRequest, BrowserRuntimeState>('hiveory_command_browser_navigate', request) : browserPreviewState({ ...request, workspace_id: '' })
+  },
+  async browserBack(request: BrowserIdRequest): Promise<BrowserRuntimeState | null> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, BrowserRuntimeState>('hiveory_command_browser_back', request) : null
+  },
+  async browserForward(request: BrowserIdRequest): Promise<BrowserRuntimeState | null> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, BrowserRuntimeState>('hiveory_command_browser_forward', request) : null
+  },
+  async browserReload(request: BrowserIdRequest): Promise<BrowserRuntimeState | null> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, BrowserRuntimeState>('hiveory_command_browser_reload', request) : null
+  },
+  async browserSetBounds(request: BrowserBoundsRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserBoundsRequest, boolean>('hiveory_command_browser_set_bounds', request) : true
+  },
+  async browserFocus(request: BrowserIdRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_focus', request) : true
+  },
+  async browserClose(request: BrowserIdRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_close', request) : true
+  },
   async openCodePanePreview(request: OpenCodePanePreviewRequest): Promise<OpenCodePanePreviewResult> {
     if (hiveoryIsTauri) return tauriCommand<OpenCodePanePreviewRequest, OpenCodePanePreviewResult>('hiveory_command_open_code_pane_preview', request)
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (!workspace) throw new Error('Workspace was not found.')
     if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before opening a preview.')
-    const url = new URL(request.url)
+    const url = new URL(normalizeBrowserInput(request.url))
     const preview: CodePreviewSummary = { id: previewId('preview'), workspace_id: request.workspace_id, url: url.toString(), origin: url.origin, state: 'open' }
     workspace.detail.previews = [preview, ...workspace.detail.previews]
-    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'preview', preview.id, 'Preview'))
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'preview', preview.id, 'Browser'))
     return { layout, preview }
   },
   async createCodePaneThread(request: CreateCodePaneThreadRequest): Promise<CreateCodePaneThreadResult> {
@@ -1089,7 +1150,7 @@ export const hiveoryClient = {
   async openCodePreview(request: CodePreviewRequest): Promise<CodePreviewSummary> {
     if (hiveoryIsTauri) return tauriCommand<CodePreviewRequest, CodePreviewSummary>('hiveory_command_open_code_preview', request)
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before opening a preview.')
-    const url = new URL(request.url)
+    const url = new URL(normalizeBrowserInput(request.url))
     const preview: CodePreviewSummary = { id: previewId('preview'), workspace_id: request.workspace_id, url: url.toString(), origin: url.origin, state: 'open' }
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.previews = [preview, ...workspace.detail.previews]

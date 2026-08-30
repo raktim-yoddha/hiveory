@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "hiveory-default",
   "description": "Minimum bootstrap permissions for the single trusted local renderer.",
-  "windows": ["main"],
+  "webviews": ["main"],
   "permissions": [
     "core:default",
     "core:window:allow-close",

@@ -140,7 +140,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       case 'terminal':
         return 'zsh'
       case 'preview':
-        return 'localhost:3000'
+        return 'Browser'
       case 'thread':
         return 'Thread'
       default:
@@ -363,8 +363,8 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                   <Globe size={16} />
                 </span>
                 <div className="code-split-item-text">
-                  <span className="code-split-item-title">Preview</span>
-                  <span className="code-split-item-desc">Open local web app</span>
+                  <span className="code-split-item-title">Browser</span>
+                  <span className="code-split-item-desc">Open a local app or the web</span>
                 </div>
               </button>
             </div>
