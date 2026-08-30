@@ -6,8 +6,11 @@ mod release;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use browser::{
-    BrowserBoundsRequest, BrowserIdRequest, BrowserManager, BrowserNavigationRequest,
-    BrowserOpenRequest, BrowserRuntimeState,
+    BrowserBoundsRequest, BrowserCaptureRequest, BrowserConfiguration, BrowserCookieFileRequest,
+    BrowserCookieSourceRequest, BrowserFrame, BrowserIdRequest, BrowserManager,
+    BrowserNavigationRequest, BrowserOpenRequest, BrowserProfileIdRequest, BrowserProfileRequest,
+    BrowserRuntimeState, BrowserSettingsRequest, BrowserSwitchProfileRequest,
+    BrowserViewportRequest,
 };
 use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, HiveoryStoredAttachment};
@@ -3000,6 +3003,159 @@ async fn hiveory_command_browser_close(
 }
 
 #[tauri::command]
+fn hiveory_query_browser_configuration(
+    browser: State<'_, BrowserManager>,
+) -> Result<BrowserConfiguration, ApiError> {
+    browser.configuration().map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_create_profile(
+    command: CommandEnvelope<BrowserProfileRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserConfiguration>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .create_profile(&command.payload)
+        .map(|configuration| response(&command.request_id, configuration))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_delete_profile(
+    command: CommandEnvelope<BrowserProfileIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserConfiguration>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .delete_profile(&command.payload)
+        .map(|configuration| response(&command.request_id, configuration))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_update_settings(
+    command: CommandEnvelope<BrowserSettingsRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserConfiguration>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .update_settings(&command.payload)
+        .map(|configuration| response(&command.request_id, configuration))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_switch_profile(
+    command: CommandEnvelope<BrowserSwitchProfileRequest>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .switch_profile(&app, &command.payload)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_start_capture(
+    command: CommandEnvelope<BrowserCaptureRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .start_capture(&command.payload)
+        .map(|started| response(&command.request_id, started))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_cancel_capture(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .cancel_capture(&command.payload)
+        .map(|cancelled| response(&command.request_id, cancelled))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_capture_frame(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserFrame>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .capture_frame(&command.payload)
+        .map(|frame| response(&command.request_id, frame))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_set_viewport(
+    command: CommandEnvelope<BrowserViewportRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .set_viewport(&command.payload)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_open_devtools(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .open_devtools(&command.payload)
+        .map(|opened| response(&command.request_id, opened))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_open_external(
+    command: CommandEnvelope<BrowserIdRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .open_external(&command.payload)
+        .map(|opened| response(&command.request_id, opened))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_import_cookie_file(
+    command: CommandEnvelope<BrowserCookieFileRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<browser::BrowserImportReport>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .import_cookie_file(&command.payload)
+        .map(|report| response(&command.request_id, report))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_import_cookie_source(
+    command: CommandEnvelope<BrowserCookieSourceRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<browser::BrowserImportReport>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .import_cookie_source(&command.payload)
+        .await
+        .map(|report| response(&command.request_id, report))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
 async fn hiveory_command_open_code_preview(
     command: CommandEnvelope<CodePreviewRequest>,
     foundation: State<'_, HiveoryFoundation>,
@@ -5386,12 +5542,18 @@ pub fn run() {
                 orchestration_root,
             ))
             .map_err(Box::<dyn std::error::Error>::from)?;
+            let browser_configuration = tauri::async_runtime::block_on(
+                browser::load_browser_configuration(&foundation.persistence),
+            )
+            .unwrap_or_default();
             let browser_manager = BrowserManager::new(
                 app_data_dir.join("browser-profile"),
+                app_data_dir.join("browser-profiles"),
                 app.path()
                     .download_dir()
                     .unwrap_or_else(|_| app_data_dir.join("downloads")),
                 foundation.persistence.clone(),
+                browser_configuration,
             );
             tauri::async_runtime::block_on(
                 foundation
@@ -5481,6 +5643,19 @@ pub fn run() {
             hiveory_command_browser_set_bounds,
             hiveory_command_browser_focus,
             hiveory_command_browser_close,
+            hiveory_query_browser_configuration,
+            hiveory_command_browser_create_profile,
+            hiveory_command_browser_delete_profile,
+            hiveory_command_browser_update_settings,
+            hiveory_command_browser_switch_profile,
+            hiveory_command_browser_start_capture,
+            hiveory_command_browser_cancel_capture,
+            hiveory_command_browser_capture_frame,
+            hiveory_command_browser_set_viewport,
+            hiveory_command_browser_open_devtools,
+            hiveory_command_browser_open_external,
+            hiveory_command_browser_import_cookie_file,
+            hiveory_command_browser_import_cookie_source,
             hiveory_query_bootstrap,
             hiveory_command_set_active_mode,
             hiveory_query_build_information,

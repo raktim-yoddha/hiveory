@@ -270,6 +270,92 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
 @media (max-width: 860px) { .hiveory-settings-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .hiveory-title-actions { gap: 4px; }.hiveory-title-actions .hiveory-connection { display: none; }.hiveory-title-actions .hiveory-icon-button { width: 29px; height: 29px; }.hiveory-settings { padding: 34px 18px 42px; }.hiveory-overlay { padding: 66px 10px 10px; }.hiveory-notification-center, .hiveory-update-prompt { top: 58px; right: 8px; width: calc(100vw - 16px); } }
 
+.hiveory-browser-settings-card {
+  outline: none;
+}
+
+.hiveory-browser-settings-card:focus-visible {
+  border-color: #5e8aad;
+  box-shadow: 0 0 0 2px rgba(94, 138, 173, .25);
+}
+
+.hiveory-browser-settings-card > input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #3a4e5d;
+  border-radius: 6px;
+  padding: 8px 9px;
+  color: #e9f3f8;
+  background: #0d151c;
+  font: 11px "JetBrains Mono", ui-monospace, monospace;
+  outline: none;
+}
+
+.hiveory-browser-settings-card > input:focus {
+  border-color: #6296c1;
+}
+
+.hiveory-browser-profile-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.hiveory-browser-profile-list-heading,
+.hiveory-browser-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hiveory-browser-profile-list-heading {
+  justify-content: space-between;
+  color: #aab9c4;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hiveory-browser-profile-list-heading button {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.hiveory-browser-profile-row {
+  min-height: 30px;
+  border: 1px solid #283b49;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #d7e2e9;
+  background: #101a22;
+  font-size: 11px;
+}
+
+.hiveory-browser-profile-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveory-browser-profile-row small {
+  margin-left: auto;
+  color: #7f96a5;
+  font-size: 9px;
+}
+
+.hiveory-browser-profile-delete {
+  display: inline-grid !important;
+  width: 25px;
+  min-height: 25px !important;
+  margin-left: auto;
+  place-items: center;
+  border-color: #5d3e44 !important;
+  padding: 0 !important;
+  color: #eaa5aa !important;
+  background: #352327 !important;
+}
+
 /* Phase 13 shell controls: title-bar children are explicit no-drag targets. */
 .hiveory-titlebar .hiveory-brand,
 .hiveory-titlebar .hiveory-mode-switch,

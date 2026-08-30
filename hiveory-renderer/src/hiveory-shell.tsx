@@ -7,14 +7,18 @@ import {
   Command,
   Download,
   FolderArchive,
+  Globe2,
   KeyRound,
   Keyboard,
   MessageSquare,
   Minimize2,
   Minus,
   PanelLeft,
+  Plus,
   Settings2,
   Sparkles,
+  Trash2,
+  UserRound,
   X,
   Square as SquareIcon,
 } from 'lucide-react'
@@ -23,6 +27,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   hiveoryClient,
   type ApplicationMode,
+  type BrowserConfiguration,
+  type BrowserSettings,
   type DiagnosticSnapshot,
   type UpdateSnapshot,
 } from './api/hiveory-client'
@@ -30,6 +36,7 @@ import { HiveoryChat } from './chat/hiveory-chat'
 import { HiveoryCodeWorkspace } from './code-workspace/HiveoryCodeWorkspace'
 import { HiveoryAgent } from './agent/hiveory-agent'
 import { PRIMARY_PRESETS } from './code-workspace/code-layout-presets-meta'
+import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from './browser/browser-models'
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -157,6 +164,17 @@ export function HiveoryShell() {
     hiveoryClient.subscribe(() => {
       void refresh()
     })
+  }, [])
+
+  useEffect(() => {
+    const openBrowserSettings = () => {
+      setScreen('settings')
+      setCommandOpen(false)
+      setNotificationsOpen(false)
+      window.setTimeout(() => document.getElementById('hiveory-browser-settings')?.focus(), 0)
+    }
+    window.addEventListener('hiveory-open-browser-settings', openBrowserSettings)
+    return () => window.removeEventListener('hiveory-open-browser-settings', openBrowserSettings)
   }, [])
 
   useEffect(() => {
@@ -925,9 +943,22 @@ function HiveorySettings({
   const [version, setVersion] = useState('1.1.0')
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [browserConfiguration, setBrowserConfiguration] = useState<BrowserConfiguration | null>(null)
+  const [browserSettings, setBrowserSettings] = useState<BrowserSettings | null>(null)
 
   useEffect(() => {
     void hiveoryClient.buildInformation().then((info) => setVersion(info.version)).catch(() => undefined)
+    void hiveoryClient.browserConfiguration().then((configuration) => {
+      setBrowserConfiguration(configuration)
+      setBrowserSettings(configuration.settings)
+    }).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    const focusBrowserSettings = () => document.getElementById('hiveory-browser-settings')?.focus()
+    window.addEventListener('hiveory-focus-browser-settings', focusBrowserSettings)
+    window.requestAnimationFrame(focusBrowserSettings)
+    return () => window.removeEventListener('hiveory-focus-browser-settings', focusBrowserSettings)
   }, [])
 
   const action = async (name: string, work: () => Promise<string | void>) => {
@@ -976,6 +1007,35 @@ function HiveorySettings({
       await hiveoryClient.prepareRestore(source)
       return 'Restore staged. The application will restart.'
     })
+
+  const saveBrowserSettings = () =>
+    action('browser-settings', async () => {
+      if (!browserSettings) return 'Browser settings are still loading.'
+      const next = await hiveoryClient.browserUpdateSettings({ settings: browserSettings })
+      setBrowserConfiguration(next)
+      setBrowserSettings(next.settings)
+      return 'Browser settings saved.'
+    })
+
+  const createBrowserProfile = () => {
+    const name = window.prompt('Name for the new browser profile')?.trim()
+    if (!name) return
+    void action('browser-profile', async () => {
+      const next = await hiveoryClient.browserCreateProfile({ name })
+      setBrowserConfiguration(next)
+      return `Profile “${name}” created.`
+    })
+  }
+
+  const deleteBrowserProfile = (profileId: string, profileName: string) => {
+    if (!window.confirm(`Remove the ${profileName} profile and its local browser data?`)) return
+    void action('browser-profile-delete', async () => {
+      const next = await hiveoryClient.browserDeleteProfile({ profile_id: profileId })
+      setBrowserConfiguration(next)
+      if (browserSettings?.default_profile_id === profileId) setBrowserSettings({ ...next.settings, default_profile_id: next.profiles[0]?.id ?? 'default' })
+      return `Profile “${profileName}” removed.`
+    })
+  }
 
   return (
     <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
@@ -1027,6 +1087,44 @@ function HiveorySettings({
             Reduce interface motion
           </label>
           <p>Keyboard shortcuts: <kbd>Ctrl K</kbd> palette, <kbd>Ctrl 1–3</kbd> modes, <kbd>Ctrl ,</kbd> settings.</p>
+        </section>
+        <section id="hiveory-browser-settings" className="hiveory-settings-card hiveory-browser-settings-card" tabIndex={-1}>
+          <div className="hiveory-card-heading">
+            <Globe2 size={17} aria-hidden="true" />
+            <h2>Browser</h2>
+          </div>
+          <p>The Browser pane uses one embedded page surface. Google is the default search engine and local HTTP links remain supported.</p>
+          {browserSettings && (
+            <>
+              <label htmlFor="hiveory-browser-home">Home page</label>
+              <input id="hiveory-browser-home" value={browserSettings.home_url} onChange={(event) => setBrowserSettings({ ...browserSettings, home_url: event.target.value })} spellCheck={false} />
+              <label htmlFor="hiveory-browser-search">Search engine</label>
+              <select id="hiveory-browser-search" value={browserSettings.search_engine} onChange={(event) => setBrowserSettings({ ...browserSettings, search_engine: event.target.value })}>
+                <option value="google">Google</option>
+              </select>
+              <label htmlFor="hiveory-browser-profile">Default profile</label>
+              <select id="hiveory-browser-profile" value={browserSettings.default_profile_id} onChange={(event) => setBrowserSettings({ ...browserSettings, default_profile_id: event.target.value })}>
+                {browserConfiguration?.profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+              </select>
+              <label htmlFor="hiveory-browser-viewport">Default viewport</label>
+              <select id="hiveory-browser-viewport" value={browserSettings.default_viewport_id} onChange={(event) => setBrowserSettings({ ...browserSettings, default_viewport_id: event.target.value })}>
+                {BROWSER_VIEWPORT_PRESETS.map((viewport) => <option key={viewport.id} value={viewport.id}>{browserViewportLabel(viewport.id)}</option>)}
+              </select>
+              <button type="button" disabled={busy !== null} onClick={saveBrowserSettings}>{busy === 'browser-settings' ? 'Saving…' : 'Save browser settings'}</button>
+              <div className="hiveory-browser-profile-list" aria-label="Browser profiles">
+                <div className="hiveory-browser-profile-list-heading"><span>Profiles</span><button type="button" className="is-secondary" disabled={busy !== null} onClick={createBrowserProfile}><Plus size={14} /> New profile</button></div>
+                {browserConfiguration?.profiles.map((profile) => (
+                  <div className="hiveory-browser-profile-row" key={profile.id}>
+                    <UserRound size={14} aria-hidden="true" />
+                    <span>{profile.name}</span>
+                    {profile.built_in ? <small>Built in</small> : <button type="button" className="hiveory-browser-profile-delete" disabled={busy !== null} onClick={() => deleteBrowserProfile(profile.id, profile.name)} aria-label={`Remove ${profile.name} profile`} title={`Remove ${profile.name} profile`}><Trash2 size={13} /></button>}
+                  </div>
+                ))}
+              </div>
+              <p>Cookie import is available from the Browser toolbar’s three-dots menu. Use a JSON export so credentials stay local to this app.</p>
+            </>
+          )}
+          {!browserSettings && <p>Loading Browser settings…</p>}
         </section>
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">

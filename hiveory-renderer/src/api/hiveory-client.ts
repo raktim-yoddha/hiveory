@@ -173,12 +173,26 @@ export type CodeHostedPullRequest = { number: number; title: string; state: stri
 export type CodeHostedTracking = { workspace_id: string; repository: CodeHostedRepository | null; auth_state: CodeHostedAuthState; message: string | null; issues: CodeHostedIssue[]; pull_requests: CodeHostedPullRequest[]; refreshed_at_unix_ms: number; stale: boolean }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
-export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null }
+export type BrowserProfile = { id: string; name: string; built_in: boolean }
+export type BrowserSettings = { home_url: string; search_engine: string; default_profile_id: string; default_viewport_id: string }
+export type BrowserConfiguration = { profiles: BrowserProfile[]; settings: BrowserSettings }
+export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null; profile_id: string; viewport_id: string }
 export type BrowserEvent = { event: 'state' | 'popup_routed' | 'download_started' | 'download_finished' | 'error'; state: BrowserRuntimeState; notice: string | null }
+export type BrowserCaptureEvent = { browser_id: string; action: 'grab' | 'annotate' | 'cancel'; payload: Record<string, unknown> }
+export type BrowserFrame = { png_base64: string; width: number; height: number }
+export type BrowserImportReport = { imported: number; skipped: number; source: string; message: string }
 export type BrowserOpenRequest = { browser_id: string; workspace_id: string; url: string }
 export type BrowserNavigationRequest = { browser_id: string; url: string }
 export type BrowserIdRequest = { browser_id: string }
 export type BrowserBoundsRequest = { browser_id: string; x: number; y: number; width: number; height: number; visible: boolean }
+export type BrowserProfileRequest = { name: string }
+export type BrowserProfileIdRequest = { profile_id: string }
+export type BrowserSwitchProfileRequest = { browser_id: string; profile_id: string }
+export type BrowserSettingsRequest = { settings: BrowserSettings }
+export type BrowserViewportRequest = { browser_id: string; viewport_id: string }
+export type BrowserCaptureRequest = { browser_id: string; action: 'grab' | 'annotate' }
+export type BrowserCookieFileRequest = { browser_id: string; path: string }
+export type BrowserCookieSourceRequest = { browser_id: string; source: 'chrome' | 'edge' | 'brave' }
 export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 export type CodeTaskState = 'draft' | 'blocked' | 'ready' | 'preparing' | 'running' | 'awaiting_input' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled'
 export type CodeDispatchState = 'preparing' | 'running' | 'awaiting_input' | 'checkpointing' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted' | 'stale'
@@ -642,7 +656,19 @@ function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowser
     can_go_back: false,
     can_go_forward: false,
     error: null,
+    profile_id: 'default',
+    viewport_id: 'default',
   }
+}
+
+const previewBrowserConfiguration: BrowserConfiguration = {
+  profiles: [{ id: 'default', name: 'Default', built_in: true }],
+  settings: {
+    home_url: 'https://www.google.com/',
+    search_engine: 'google',
+    default_profile_id: 'default',
+    default_viewport_id: 'default',
+  },
 }
 
 export const hiveoryClient = {
@@ -1007,6 +1033,65 @@ export const hiveoryClient = {
   },
   async browserClose(request: BrowserIdRequest): Promise<boolean> {
     return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_close', request) : true
+  },
+  async browserConfiguration(): Promise<BrowserConfiguration> {
+    return hiveoryIsTauri ? tauriQuery<BrowserConfiguration>('hiveory_query_browser_configuration') : structuredClone(previewBrowserConfiguration)
+  },
+  async browserCreateProfile(request: BrowserProfileRequest): Promise<BrowserConfiguration> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserProfileRequest, BrowserConfiguration>('hiveory_command_browser_create_profile', request)
+    const name = request.name.trim()
+    if (!name || previewBrowserConfiguration.profiles.some((profile) => profile.name.toLowerCase() === name.toLowerCase())) throw new Error('Choose a unique browser profile name.')
+    previewBrowserConfiguration.profiles.push({ id: previewId('browser-profile'), name, built_in: false })
+    return structuredClone(previewBrowserConfiguration)
+  },
+  async browserDeleteProfile(request: BrowserProfileIdRequest): Promise<BrowserConfiguration> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserProfileIdRequest, BrowserConfiguration>('hiveory_command_browser_delete_profile', request)
+    if (request.profile_id === 'default') throw new Error('The Default profile cannot be removed.')
+    previewBrowserConfiguration.profiles = previewBrowserConfiguration.profiles.filter((profile) => profile.id !== request.profile_id)
+    return structuredClone(previewBrowserConfiguration)
+  },
+  async browserUpdateSettings(request: BrowserSettingsRequest): Promise<BrowserConfiguration> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserSettingsRequest, BrowserConfiguration>('hiveory_command_browser_update_settings', request)
+    previewBrowserConfiguration.settings = structuredClone(request.settings)
+    return structuredClone(previewBrowserConfiguration)
+  },
+  async browserSwitchProfile(request: BrowserSwitchProfileRequest): Promise<BrowserRuntimeState> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserSwitchProfileRequest, BrowserRuntimeState>('hiveory_command_browser_switch_profile', request)
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    state.profile_id = request.profile_id
+    return state
+  },
+  async browserStartCapture(request: BrowserCaptureRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserCaptureRequest, boolean>('hiveory_command_browser_start_capture', request) : false
+  },
+  async browserCancelCapture(request: BrowserIdRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_cancel_capture', request) : false
+  },
+  async browserCaptureFrame(request: BrowserIdRequest): Promise<BrowserFrame> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserIdRequest, BrowserFrame>('hiveory_command_browser_capture_frame', request)
+    throw new Error('Screenshot tools are available in the desktop app.')
+  },
+  async browserSetViewport(request: BrowserViewportRequest): Promise<BrowserRuntimeState> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserViewportRequest, BrowserRuntimeState>('hiveory_command_browser_set_viewport', request)
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    state.viewport_id = request.viewport_id
+    return state
+  },
+  async browserOpenDevtools(request: BrowserIdRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_open_devtools', request) : false
+  },
+  async browserOpenExternal(request: BrowserIdRequest): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_open_external', request)
+    window.open('https://www.google.com/', '_blank', 'noopener,noreferrer')
+    return true
+  },
+  async browserImportCookieFile(request: BrowserCookieFileRequest): Promise<BrowserImportReport> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserCookieFileRequest, BrowserImportReport>('hiveory_command_browser_import_cookie_file', request)
+    return { imported: 0, skipped: 0, source: request.path, message: 'Cookie import is available in the desktop app.' }
+  },
+  async browserImportCookieSource(request: BrowserCookieSourceRequest): Promise<BrowserImportReport> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserCookieSourceRequest, BrowserImportReport>('hiveory_command_browser_import_cookie_source', request)
+    return { imported: 0, skipped: 0, source: request.source, message: 'Direct browser cookie import is available in the desktop app.' }
   },
   async openCodePanePreview(request: OpenCodePanePreviewRequest): Promise<OpenCodePanePreviewResult> {
     if (hiveoryIsTauri) return tauriCommand<OpenCodePanePreviewRequest, OpenCodePanePreviewResult>('hiveory_command_open_code_pane_preview', request)
@@ -1453,6 +1538,11 @@ export const hiveoryClient = {
   async chooseBackupSource(): Promise<string | null> {
     if (!hiveoryIsTauri) return null
     const selected = await openDialog({ multiple: false, directory: false, title: 'Choose an application backup', filters: [{ name: 'Application backup', extensions: ['zip'] }] })
+    return typeof selected === 'string' ? selected : null
+  },
+  async chooseBrowserCookieFile(): Promise<string | null> {
+    if (!hiveoryIsTauri) return null
+    const selected = await openDialog({ multiple: false, directory: false, title: 'Import browser cookies', filters: [{ name: 'Cookie JSON', extensions: ['json'] }] })
     return typeof selected === 'string' ? selected : null
   },
   isTauri: hiveoryIsTauri,

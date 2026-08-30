@@ -41,6 +41,7 @@ async-trait = "0.1"
 chrono = { version = "0.4", features = ["clock"] }
 chrono-tz = "0.10"
 base64 = "0.22"
+aes-gcm = "0.10"
 cap-std = "4"
 futures-util = "0.3"
 git2 = "0.21"
