@@ -3157,7 +3157,8 @@ fn available_memory_bytes() -> Option<u64> {
             .find(|line| line.starts_with("MemAvailable:"))?
             .split_whitespace()
             .nth(1)?
-            .parse::<u64>()?;
+            .parse::<u64>()
+            .ok()?;
         return Some(kib.saturating_mul(1024));
     }
     #[cfg(target_os = "windows")]

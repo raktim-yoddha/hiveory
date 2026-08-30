@@ -13,9 +13,11 @@ use hiveory_protocol::{
 };
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde_json::Value;
+#[cfg(windows)]
+use std::ffi::OsStr;
 use std::{
     collections::HashMap,
-    ffi::{OsStr, OsString},
+    ffi::OsString,
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command as StdCommand, Stdio},

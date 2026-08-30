@@ -52,5 +52,5 @@ jobs:
             See the commit history for the complete change list.
           releaseDraft: false
           prerelease: false
-          uploadUpdaterJson: true
+          includeUpdaterJson: true
           updaterJsonPreferNsis: true
