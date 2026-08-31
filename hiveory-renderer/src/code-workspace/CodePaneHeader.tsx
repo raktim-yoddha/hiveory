@@ -10,8 +10,7 @@ import {
   Columns,
   Rows,
   Terminal,
-  MessageSquare,
-  Settings2,
+  FileText,
   LayoutTemplate,
 } from 'lucide-react'
 import {
@@ -33,7 +32,7 @@ interface CodePaneHeaderProps {
   onRename: (newTitle: string) => void
   onSplitAndLaunch: (
     placement: CodePanePlacement,
-    kind: 'shell' | 'coding_agent' | 'thread' | 'preview',
+    kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     model?: string | null,
     url?: string
@@ -126,8 +125,8 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
         return <Terminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       case 'preview':
         return <Globe size={13} style={{ color: '#aeb7c2' }} />
-      case 'thread':
-        return <Settings2 size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+      case 'markdown':
+        return <FileText size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       default:
         return <LayoutTemplate size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     }
@@ -141,8 +140,8 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
         return 'zsh'
       case 'preview':
         return 'Browser'
-      case 'thread':
-        return 'Thread'
+      case 'markdown':
+        return 'Markdown'
       default:
         return 'New pane'
     }
@@ -338,16 +337,16 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 type="button"
                 className="code-split-modal-item"
                 onClick={() => {
-                  onSplitAndLaunch(splitSide, 'thread')
+                  onSplitAndLaunch(splitSide, 'markdown')
                   setSplitModalOpen(false)
                 }}
               >
                 <span className="code-split-item-icon">
-                  <MessageSquare size={16} />
+                  <FileText size={16} />
                 </span>
                 <div className="code-split-item-text">
-                  <span className="code-split-item-title">Thread</span>
-                  <span className="code-split-item-desc">Docked workspace conversation</span>
+                  <span className="code-split-item-title">Markdown</span>
+                  <span className="code-split-item-desc">Create a Markdown document</span>
                 </div>
               </button>
 

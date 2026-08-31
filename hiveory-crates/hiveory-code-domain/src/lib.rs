@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Component, Path};
 use thiserror::Error;
 
-pub const CODE_LAYOUT_VERSION: u32 = 2;
+pub const CODE_LAYOUT_VERSION: u32 = 3;
 pub const CODE_MAX_PANES: usize = 17;
 pub const CODE_MAX_FILE_BYTES: u64 = 5 * 1024 * 1024;
 pub const CODE_MAX_TREE_ENTRIES: usize = 5_000;
@@ -200,6 +200,7 @@ pub fn capabilities_for_trust(trust: CodeWorkspaceTrust) -> Vec<CodeWorkspaceCap
             CodeWorkspaceCapability::WriteFiles,
             CodeWorkspaceCapability::ExecuteProcesses,
             CodeWorkspaceCapability::ReadGit,
+            CodeWorkspaceCapability::WriteGit,
             CodeWorkspaceCapability::OpenPreview,
         ],
     }
@@ -535,27 +536,21 @@ pub fn visual_leaf_order(layout: &CodePaneLayout) -> Vec<String> {
     leaves
 }
 
-/// Converts a v1 layout to v2, pruning unbound legacy editor/diff leaves while preserving active terminals/previews.
+/// Converts a legacy layout to the current layout shape, pruning unbound
+/// editor leaves while preserving bound resources and pane geometry where the
+/// legacy shape can represent it.
 pub fn migrate_layout_v1(v1_layout: &CodePaneLayout) -> CodePaneLayout {
     if v1_layout.version == CODE_LAYOUT_VERSION && validate_layout(v1_layout).is_ok() {
         return v1_layout.clone();
     }
 
-    // Collect bound resources (terminals, previews, threads, or leaves with resource_id)
+    // A resource binding is the durable signal that a legacy leaf can be
+    // restored. Unbound editor-like leaves are intentionally discarded.
     let bound_leaves = v1_layout
         .nodes
         .iter()
         .filter(|n| n.children.is_empty())
-        .filter(|n| {
-            n.resource_id.is_some()
-                || matches!(
-                    n.kind,
-                    CodePaneKind::Terminal
-                        | CodePaneKind::CodingAgent
-                        | CodePaneKind::Preview
-                        | CodePaneKind::Thread
-                ) && n.resource_id.is_some()
-        })
+        .filter(|n| n.resource_id.is_some())
         .cloned()
         .collect::<Vec<_>>();
 
@@ -576,7 +571,7 @@ pub fn migrate_layout_v1(v1_layout: &CodePaneLayout) -> CodePaneLayout {
             title: leaf.title.clone().or_else(|| match leaf.kind {
                 CodePaneKind::Terminal | CodePaneKind::CodingAgent => Some("Terminal".to_owned()),
                 CodePaneKind::Preview => Some("Preview".to_owned()),
-                CodePaneKind::Thread => Some("Thread".to_owned()),
+                CodePaneKind::Markdown => Some("Markdown".to_owned()),
                 _ => None,
             }),
         };
@@ -619,6 +614,14 @@ pub fn migrate_layout_v1(v1_layout: &CodePaneLayout) -> CodePaneLayout {
     }
 
     default_layout(&v1_layout.workspace_id)
+}
+
+/// Upgrades a valid v2 layout to the current persisted version without
+/// changing its pane tree or resource bindings.
+pub fn migrate_layout_v2(v2_layout: &CodePaneLayout) -> CodePaneLayout {
+    let mut migrated = v2_layout.clone();
+    migrated.version = CODE_LAYOUT_VERSION;
+    migrated
 }
 
 fn next_generated_id(prefix: &str, existing: &HashSet<&str>) -> String {
@@ -1890,7 +1893,7 @@ mod tests {
     #[test]
     fn default_layout_is_empty_leaf_root_and_valid() {
         let layout = default_layout("ws_1");
-        assert_eq!(layout.version, 2);
+        assert_eq!(layout.version, 3);
         assert_eq!(layout.root_id, "root");
         assert_eq!(layout.nodes.len(), 1);
         assert_eq!(layout.nodes[0].kind, CodePaneKind::Empty);
@@ -2215,7 +2218,7 @@ mod tests {
 
         // Unbound standard layout migrates to single Empty leaf
         let migrated = migrate_layout_v1(&v1_empty);
-        assert_eq!(migrated.version, 2);
+        assert_eq!(migrated.version, 3);
         assert_eq!(migrated.nodes.len(), 1);
         assert_eq!(migrated.nodes[0].kind, CodePaneKind::Empty);
         validate_layout(&migrated).unwrap();
@@ -2224,7 +2227,7 @@ mod tests {
         let mut v1_bound = v1_empty.clone();
         v1_bound.nodes[2].resource_id = Some("term_123".to_owned());
         let migrated_bound = migrate_layout_v1(&v1_bound);
-        assert_eq!(migrated_bound.version, 2);
+        assert_eq!(migrated_bound.version, 3);
         assert_eq!(migrated_bound.nodes.len(), 1);
         assert_eq!(
             migrated_bound.nodes[0].resource_id.as_deref(),

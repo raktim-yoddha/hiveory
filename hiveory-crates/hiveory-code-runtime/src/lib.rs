@@ -6,9 +6,10 @@
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use hiveory_protocol::{
-    ChatProviderStreamEvent, ChatProviderStreamEventKind, CodeAdapterCapability,
-    CodeAdapterSummary, CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest,
-    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
+    ChatEngineAvailability, ChatEngineSummary, ChatModelSummary, ChatProviderStreamEvent,
+    ChatProviderStreamEventKind, ChatReasoningEffort, CodeAdapterCapability, CodeAdapterSummary,
+    CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest, CodeTerminalKind,
+    CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
     CodeTerminalStopRequest, CodeTerminalSummary,
 };
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
@@ -26,8 +27,9 @@ use std::{
 };
 use thiserror::Error;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command as TokioCommand,
+    time::{timeout, Duration},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -228,6 +230,439 @@ fn adapter_capabilities(id: &str) -> Vec<CodeAdapterCapability> {
     capabilities
 }
 
+async fn discover_chat_engine(spec: AdapterSpec) -> ChatEngineSummary {
+    let detected = probe_adapter(spec);
+    if !detected {
+        return ChatEngineSummary {
+            id: spec.id.to_owned(),
+            display_name: spec.display_name.to_owned(),
+            executable: spec.executable.to_owned(),
+            availability: ChatEngineAvailability::Missing,
+            detected: false,
+            authenticated: false,
+            models: Vec::new(),
+            capabilities: adapter_capabilities(spec.id),
+            message: Some(format!("{} was not found on this host.", spec.executable)),
+            recovery_action: Some(format!(
+                "Install {} and restart Hiveory.",
+                spec.display_name
+            )),
+        };
+    }
+
+    let (authenticated, auth_message) = chat_authentication(spec).await;
+    let models = match spec.id {
+        CLAUDE_CODE_ADAPTER_ID if authenticated => claude_models(),
+        ANTIGRAVITY_ADAPTER_ID if authenticated => {
+            discover_antigravity_models(spec).await.unwrap_or_default()
+        }
+        _ if authenticated => discover_cli_models(spec).await.unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let catalog_failed = authenticated && models.is_empty();
+    let availability = if !authenticated {
+        ChatEngineAvailability::Unauthenticated
+    } else if catalog_failed {
+        ChatEngineAvailability::Unavailable
+    } else {
+        ChatEngineAvailability::Ready
+    };
+    let message = if !authenticated {
+        auth_message.or_else(|| {
+            Some(format!(
+                "{} is installed but not signed in.",
+                spec.display_name
+            ))
+        })
+    } else if catalog_failed {
+        Some(format!(
+            "{} could not provide a usable model list.",
+            spec.display_name
+        ))
+    } else {
+        None
+    };
+    let recovery_action = if !authenticated {
+        Some(authentication_recovery(spec.id).to_owned())
+    } else if catalog_failed {
+        Some(
+            "Check the CLI installation and run its model command once, then refresh Chat."
+                .to_owned(),
+        )
+    } else {
+        None
+    };
+    ChatEngineSummary {
+        id: spec.id.to_owned(),
+        display_name: spec.display_name.to_owned(),
+        executable: spec.executable.to_owned(),
+        availability,
+        detected: true,
+        authenticated,
+        models,
+        capabilities: adapter_capabilities(spec.id),
+        message,
+        recovery_action,
+    }
+}
+
+async fn chat_authentication(spec: AdapterSpec) -> (bool, Option<String>) {
+    match spec.id {
+        CODEX_ADAPTER_ID => {
+            if probe_codex_authentication(true) {
+                (true, None)
+            } else {
+                (
+                    false,
+                    Some("Sign in with the CLI before using it in Chat.".to_owned()),
+                )
+            }
+        }
+        CLAUDE_CODE_ADAPTER_ID => {
+            match run_cli_capture(spec, &["auth", "status", "--json"]).await {
+                Ok(output) => {
+                    let logged_in = serde_json::from_str::<Value>(&output)
+                        .ok()
+                        .and_then(|value| value.get("loggedIn").and_then(Value::as_bool))
+                        .unwrap_or(false);
+                    if logged_in {
+                        (true, None)
+                    } else {
+                        (
+                            false,
+                            Some("Sign in with the CLI before using it in Chat.".to_owned()),
+                        )
+                    }
+                }
+                Err(error) => (false, Some(sanitize_cli_error(&error))),
+            }
+        }
+        OPENCODE_ADAPTER_ID => match run_cli_capture(spec, &["auth", "list"]).await {
+            Ok(output) if output.lines().any(|line| !line.trim().is_empty()) => (true, None),
+            Ok(_) => (
+                false,
+                Some("Add a provider credential before using this CLI in Chat.".to_owned()),
+            ),
+            Err(error) => (false, Some(sanitize_cli_error(&error))),
+        },
+        // This CLI exposes a working model inventory rather than a separate
+        // login-status command, so a successful inventory is its usability
+        // check.
+        ANTIGRAVITY_ADAPTER_ID => match run_cli_capture(spec, &["models"]).await {
+            Ok(_) => (true, None),
+            Err(error) => (false, Some(sanitize_cli_error(&error))),
+        },
+        _ => (false, Some("This CLI is not supported by Chat.".to_owned())),
+    }
+}
+
+fn authentication_recovery(id: &str) -> &'static str {
+    match id {
+        CODEX_ADAPTER_ID => "Run `codex login` in a terminal, then refresh Chat.",
+        CLAUDE_CODE_ADAPTER_ID => "Run `claude login` in a terminal, then refresh Chat.",
+        OPENCODE_ADAPTER_ID => "Configure a provider with `opencode auth`, then refresh Chat.",
+        ANTIGRAVITY_ADAPTER_ID => {
+            "Open the CLI once and complete its sign-in flow, then refresh Chat."
+        }
+        _ => "Check the CLI configuration and refresh Chat.",
+    }
+}
+
+fn claude_models() -> Vec<ChatModelSummary> {
+    let effort_levels = vec![
+        ChatReasoningEffort::Low,
+        ChatReasoningEffort::Medium,
+        ChatReasoningEffort::High,
+        ChatReasoningEffort::Xhigh,
+        ChatReasoningEffort::Max,
+    ];
+    [
+        ("default", "CLI default"),
+        ("sonnet", "Sonnet"),
+        ("opus", "Opus"),
+        ("haiku", "Haiku"),
+    ]
+    .into_iter()
+    .map(|(id, display_name)| ChatModelSummary {
+        id: id.to_owned(),
+        display_name: display_name.to_owned(),
+        effort_levels: effort_levels.clone(),
+        default_effort: ChatReasoningEffort::Medium,
+    })
+    .collect()
+}
+
+async fn discover_antigravity_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
+    let output = run_cli_capture(spec, &["models"]).await?;
+    let models = output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(2, '\t');
+            let id = fields.next()?.trim();
+            let display_name = fields.next().unwrap_or(id).trim();
+            if id.is_empty() || id.eq_ignore_ascii_case("fetching available models...") {
+                return None;
+            }
+            Some(ChatModelSummary {
+                id: id.to_owned(),
+                display_name: display_name.to_owned(),
+                effort_levels: vec![
+                    ChatReasoningEffort::Auto,
+                    ChatReasoningEffort::Low,
+                    ChatReasoningEffort::Medium,
+                    ChatReasoningEffort::High,
+                ],
+                default_effort: ChatReasoningEffort::Auto,
+            })
+        })
+        .collect::<Vec<_>>();
+    (!models.is_empty())
+        .then_some(models)
+        .ok_or_else(|| "No models were returned by the CLI.".to_owned())
+}
+
+async fn discover_cli_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
+    match spec.id {
+        OPENCODE_ADAPTER_ID => {
+            let output = run_cli_capture(spec, &["models", "--pure"]).await?;
+            let models = output
+                .lines()
+                .filter_map(|line| {
+                    let line = line.trim();
+                    if line.is_empty() {
+                        return None;
+                    }
+                    let mut fields = line.splitn(2, char::is_whitespace);
+                    let id = fields.next()?.trim();
+                    let display_name = fields.next().unwrap_or(id).trim();
+                    Some(ChatModelSummary {
+                        id: id.to_owned(),
+                        display_name: if display_name.is_empty() {
+                            id.to_owned()
+                        } else {
+                            display_name.to_owned()
+                        },
+                        effort_levels: vec![ChatReasoningEffort::Auto],
+                        default_effort: ChatReasoningEffort::Auto,
+                    })
+                })
+                .collect::<Vec<_>>();
+            (!models.is_empty())
+                .then_some(models)
+                .ok_or_else(|| "No models were returned by the CLI.".to_owned())
+        }
+        CODEX_ADAPTER_ID => discover_codex_models(spec).await,
+        _ => Err("This CLI does not expose a model catalog.".to_owned()),
+    }
+}
+
+async fn discover_codex_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
+    let resolved = resolve_executable(spec.executable);
+    let mut command = TokioCommand::new(resolved.program);
+    command
+        .args(resolved.prefix)
+        .args(["app-server", "--stdio"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let mut input = child
+        .stdin
+        .take()
+        .ok_or_else(|| "The CLI did not expose stdin.".to_owned())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "The CLI did not expose stdout.".to_owned())?;
+    let mut lines = BufReader::new(stdout).lines();
+    write_json_line(
+        &mut input,
+        &serde_json::json!({
+            "method": "initialize",
+            "id": 1,
+            "params": {
+                "clientInfo": { "name": "hiveory-chat", "title": "Hiveory Chat", "version": "1" },
+                "capabilities": { "experimentalApi": true }
+            }
+        }),
+    )
+    .await?;
+    let _ = read_json_rpc_response(&mut lines, 1).await?;
+    write_json_line(
+        &mut input,
+        &serde_json::json!({ "method": "initialized", "params": {} }),
+    )
+    .await?;
+    let mut cursor: Option<String> = None;
+    let mut request_id = 2_i64;
+    let mut models = Vec::new();
+    loop {
+        let params = cursor
+            .as_ref()
+            .map(|value| serde_json::json!({ "cursor": value }))
+            .unwrap_or_else(|| serde_json::json!({}));
+        write_json_line(
+            &mut input,
+            &serde_json::json!({ "method": "model/list", "id": request_id, "params": params }),
+        )
+        .await?;
+        let response = read_json_rpc_response(&mut lines, request_id).await?;
+        if let Some(error) = response.get("error").and_then(value_text) {
+            return Err(error);
+        }
+        let result = response
+            .get("result")
+            .ok_or_else(|| "The model catalog response was incomplete.".to_owned())?;
+        if let Some(items) = result.get("data").and_then(Value::as_array) {
+            for item in items {
+                if let Some(model) = codex_model(item) {
+                    models.push(model);
+                }
+            }
+        }
+        cursor = result
+            .get("nextCursor")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .filter(|value| !value.is_empty());
+        if cursor.is_none() {
+            break;
+        }
+        request_id += 1;
+        if request_id > 32 {
+            break;
+        }
+    }
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+    (!models.is_empty())
+        .then_some(models)
+        .ok_or_else(|| "No models were returned by the CLI.".to_owned())
+}
+
+fn codex_model(value: &Value) -> Option<ChatModelSummary> {
+    let id = value
+        .get("model")
+        .or_else(|| value.get("id"))
+        .and_then(Value::as_str)?
+        .trim();
+    if id.is_empty() {
+        return None;
+    }
+    let display_name = value
+        .get("displayName")
+        .and_then(Value::as_str)
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or(id)
+        .to_owned();
+    let effort_levels = value
+        .get("supportedReasoningEfforts")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    item.get("reasoningEffort")
+                        .and_then(Value::as_str)
+                        .and_then(parse_reasoning_effort)
+                })
+                .collect::<Vec<_>>()
+        })
+        .filter(|items| !items.is_empty())
+        .unwrap_or_else(|| vec![ChatReasoningEffort::Auto]);
+    let default_effort = value
+        .get("defaultReasoningEffort")
+        .and_then(Value::as_str)
+        .and_then(parse_reasoning_effort)
+        .unwrap_or(ChatReasoningEffort::Auto);
+    Some(ChatModelSummary {
+        id: id.to_owned(),
+        display_name,
+        effort_levels,
+        default_effort,
+    })
+}
+
+fn parse_reasoning_effort(value: &str) -> Option<ChatReasoningEffort> {
+    match value {
+        "auto" => Some(ChatReasoningEffort::Auto),
+        "low" => Some(ChatReasoningEffort::Low),
+        "medium" => Some(ChatReasoningEffort::Medium),
+        "high" => Some(ChatReasoningEffort::High),
+        "xhigh" => Some(ChatReasoningEffort::Xhigh),
+        "max" => Some(ChatReasoningEffort::Max),
+        "ultra" => Some(ChatReasoningEffort::Ultra),
+        _ => None,
+    }
+}
+
+async fn write_json_line(
+    input: &mut tokio::process::ChildStdin,
+    value: &Value,
+) -> Result<(), String> {
+    let mut line = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+    line.push(b'\n');
+    input
+        .write_all(&line)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+async fn read_json_rpc_response(
+    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    request_id: i64,
+) -> Result<Value, String> {
+    loop {
+        let line = timeout(Duration::from_secs(12), lines.next_line())
+            .await
+            .map_err(|_| "The CLI model catalog timed out.".to_owned())?
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "The CLI closed before returning its model catalog.".to_owned())?;
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        let matches_id = value
+            .get("id")
+            .and_then(Value::as_i64)
+            .map(|value| value == request_id)
+            .unwrap_or(false);
+        if matches_id {
+            return Ok(value);
+        }
+    }
+}
+
+async fn run_cli_capture(spec: AdapterSpec, args: &[&str]) -> Result<String, String> {
+    let resolved = resolve_executable(spec.executable);
+    let mut command = TokioCommand::new(resolved.program);
+    command
+        .args(resolved.prefix)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    let output = timeout(Duration::from_secs(12), command.output())
+        .await
+        .map_err(|_| format!("{} did not respond in time.", spec.display_name))?
+        .map_err(|error| error.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        let stderr = sanitize_cli_error(&String::from_utf8_lossy(&output.stderr));
+        Err(if stderr.is_empty() {
+            format!(
+                "{} exited with status {}.",
+                spec.display_name, output.status
+            )
+        } else {
+            stderr
+        })
+    }
+}
+
 const MAX_RING_BUFFER_BYTES: usize = 1024 * 1024; // 1 MiB
 
 struct TerminalSession {
@@ -271,6 +706,18 @@ impl HiveoryCodeRuntime {
                 }
             })
             .collect()
+    }
+
+    /// Discovers the models and usability of every supported local CLI. The
+    /// list is intentionally built at query time so the Chat picker reflects
+    /// changes made outside the application without copying CLI-specific
+    /// configuration into the database.
+    pub async fn chat_engines(&self) -> Vec<ChatEngineSummary> {
+        let mut engines = Vec::with_capacity(ADAPTER_SPECS.len());
+        for spec in ADAPTER_SPECS {
+            engines.push(discover_chat_engine(*spec).await);
+        }
+        engines
     }
 
     pub fn list(&self) -> Result<Vec<CodeTerminalSummary>, HiveoryCodeRuntimeError> {
@@ -702,6 +1149,7 @@ fn command_for(
 pub async fn stream_cli_chat_turn(
     adapter_id: &str,
     model: &str,
+    reasoning_effort: ChatReasoningEffort,
     prompt: &str,
     cancellation: CancellationToken,
     on_event: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static>,
@@ -711,7 +1159,7 @@ pub async fn stream_cli_chat_turn(
     std::fs::create_dir_all(&chat_root)
         .map_err(|error| HiveoryCodeRuntimeError::Operation(error.to_string()))?;
 
-    let mut command = cli_chat_command(spec, model, prompt, &chat_root);
+    let mut command = cli_chat_command(spec, model, reasoning_effort, prompt, &chat_root);
     let child_result = command.spawn();
     let mut child = match child_result {
         Ok(child) => child,
@@ -799,6 +1247,7 @@ pub async fn stream_cli_chat_turn(
 fn cli_chat_command(
     spec: AdapterSpec,
     model: &str,
+    reasoning_effort: ChatReasoningEffort,
     prompt: &str,
     chat_root: &Path,
 ) -> TokioCommand {
@@ -826,6 +1275,7 @@ fn cli_chat_command(
             ]);
             command.arg(chat_root);
             append_model_arg(&mut command, model);
+            append_effort_arg(&mut command, spec.id, reasoning_effort);
             command.arg(prompt);
         }
         CLAUDE_CODE_ADAPTER_ID => {
@@ -840,6 +1290,7 @@ fn cli_chat_command(
                 "",
             ]);
             append_model_arg(&mut command, model);
+            append_effort_arg(&mut command, spec.id, reasoning_effort);
         }
         ANTIGRAVITY_ADAPTER_ID => {
             command.args([
@@ -850,6 +1301,7 @@ fn cli_chat_command(
                 "--disable-slash-commands",
             ]);
             append_model_arg(&mut command, model);
+            append_effort_arg(&mut command, spec.id, reasoning_effort);
         }
         OPENCODE_ADAPTER_ID => {
             command.args(["run", "--format", "json", "--pure", "--dir"]);
@@ -860,6 +1312,33 @@ fn cli_chat_command(
         _ => {}
     }
     command
+}
+
+fn append_effort_arg(command: &mut TokioCommand, adapter_id: &str, effort: ChatReasoningEffort) {
+    let Some(value) = reasoning_effort_value(effort) else {
+        return;
+    };
+    match adapter_id {
+        CODEX_ADAPTER_ID => {
+            command.args(["--config", &format!("model_reasoning_effort={value}")]);
+        }
+        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID => {
+            command.args(["--effort", value]);
+        }
+        _ => {}
+    }
+}
+
+fn reasoning_effort_value(effort: ChatReasoningEffort) -> Option<&'static str> {
+    match effort {
+        ChatReasoningEffort::Auto => None,
+        ChatReasoningEffort::Low => Some("low"),
+        ChatReasoningEffort::Medium => Some("medium"),
+        ChatReasoningEffort::High => Some("high"),
+        ChatReasoningEffort::Xhigh => Some("xhigh"),
+        ChatReasoningEffort::Max => Some("max"),
+        ChatReasoningEffort::Ultra => Some("ultra"),
+    }
 }
 
 fn append_model_arg(command: &mut TokioCommand, model: &str) {

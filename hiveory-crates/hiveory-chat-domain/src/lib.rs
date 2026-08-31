@@ -70,6 +70,9 @@ pub fn reasoning_value(value: ChatReasoningEffort) -> &'static str {
         ChatReasoningEffort::Low => "low",
         ChatReasoningEffort::Medium => "medium",
         ChatReasoningEffort::High => "high",
+        ChatReasoningEffort::Xhigh => "xhigh",
+        ChatReasoningEffort::Max => "max",
+        ChatReasoningEffort::Ultra => "ultra",
     }
 }
 

@@ -1,10 +1,12 @@
 use super::HiveoryPersistence;
 use hiveory_protocol::{
-    ChatAttachmentSummary, ChatBranchSummary, ChatConversationDetail, ChatConversationSummary,
-    ChatCreateRequest, ChatDraftRequest, ChatEventEnvelope, ChatMessage, ChatMessagePart,
-    ChatMessageRole, ChatMetadataRequest, ChatProviderStreamEvent, ChatProviderStreamEventKind,
-    ChatReasoningEffort, ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatTurnState,
-    ChatTurnSummary,
+    ChatAttachmentSummary, ChatBranchSummary, ChatConversationDetail,
+    ChatConversationFolderRequest, ChatConversationSummary, ChatCreateRequest,
+    ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEventEnvelope, ChatFolderCreateRequest,
+    ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest, ChatMessage,
+    ChatMessagePart, ChatMessageRole, ChatMetadataRequest, ChatProviderStreamEvent,
+    ChatProviderStreamEventKind, ChatReasoningEffort, ChatSendRequest, ChatSidebarPage,
+    ChatSidebarQuery, ChatTurnState, ChatTurnSummary,
 };
 use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteRow, Row, Sqlite, Transaction};
@@ -115,29 +117,46 @@ impl HiveoryChatStore {
         let search = query.search.clone().unwrap_or_default().trim().to_owned();
         let pattern = format!("%{}%", search.replace('%', "\\%").replace('_', "\\_"));
         let rows = sqlx::query(
-            "SELECT c.id, c.title, c.active_branch_id, c.pinned, c.archived, c.updated_at_unix_ms,
+            "SELECT c.id, c.title, c.active_branch_id, c.pinned, c.archived, c.folder_id, c.folder_position, c.updated_at_unix_ms,
                 (SELECT substr(json_extract(p.payload_json, '$.text'), 1, 160)
                  FROM hiveory_chat_messages m
                  JOIN hiveory_chat_message_parts p ON p.message_id=m.id AND p.kind='text'
                  WHERE m.conversation_id=c.id ORDER BY m.created_at_unix_ms DESC LIMIT 1) AS preview
              FROM hiveory_chat_conversations c
-             WHERE c.archived=? AND (c.title LIKE ? ESCAPE '\\' OR EXISTS (
+             WHERE c.archived=? AND (? IS NULL OR c.folder_id=?) AND (c.title LIKE ? ESCAPE '\\' OR EXISTS (
                  SELECT 1 FROM hiveory_chat_messages sm
                  JOIN hiveory_chat_message_parts sp ON sp.message_id=sm.id AND sp.kind='text'
                  WHERE sm.conversation_id=c.id AND sp.payload_json LIKE ? ESCAPE '\\'))
              ORDER BY c.pinned DESC, c.updated_at_unix_ms DESC LIMIT ?",
         )
         .bind(if query.archived { 1 } else { 0 })
+        .bind(&query.folder_id)
+        .bind(&query.folder_id)
         .bind(&pattern)
         .bind(&pattern)
         .bind(limit)
         .fetch_all(self.persistence.pool())
         .await?;
+        let folders = sqlx::query(
+            "SELECT f.id, f.name, f.position, COUNT(c.id)
+             FROM hiveory_chat_folders f
+             LEFT JOIN hiveory_chat_conversations c
+               ON c.folder_id=f.id AND c.archived=?
+             GROUP BY f.id, f.name, f.position
+             ORDER BY f.position, f.created_at_unix_ms",
+        )
+        .bind(if query.archived { 1 } else { 0 })
+        .fetch_all(self.persistence.pool())
+        .await?
+        .into_iter()
+        .map(folder_from_row)
+        .collect();
         Ok(ChatSidebarPage {
             conversations: rows
                 .into_iter()
                 .map(conversation_summary_from_row)
                 .collect(),
+            folders,
             next_cursor: None,
         })
     }
@@ -146,7 +165,7 @@ impl HiveoryChatStore {
         &self,
         conversation_id: &str,
     ) -> Result<ChatConversationDetail, HiveoryChatStoreError> {
-        let conversation = sqlx::query("SELECT id, title, active_branch_id, pinned, archived, created_at_unix_ms, updated_at_unix_ms FROM hiveory_chat_conversations WHERE id=?")
+        let conversation = sqlx::query("SELECT id, title, active_branch_id, pinned, archived, folder_id, folder_position, created_at_unix_ms, updated_at_unix_ms FROM hiveory_chat_conversations WHERE id=?")
             .bind(conversation_id).fetch_optional(self.persistence.pool()).await?
             .ok_or(HiveoryChatStoreError::NotFound)?;
         let branches = sqlx::query("SELECT b.id, b.parent_branch_id, b.forked_after_message_id, b.label, b.created_at_unix_ms, c.active_branch_id FROM hiveory_chat_branches b JOIN hiveory_chat_conversations c ON c.id=b.conversation_id WHERE b.conversation_id=? ORDER BY b.created_at_unix_ms")
@@ -171,14 +190,124 @@ impl HiveoryChatStore {
             active_branch_id,
             pinned: conversation.get::<i64, _>(3) != 0,
             archived: conversation.get::<i64, _>(4) != 0,
+            folder_id: conversation.get(5),
+            folder_position: conversation.get(6),
             branches,
             messages,
             turns,
             draft,
             event_cursor,
-            created_at_unix_ms: conversation.get(5),
-            updated_at_unix_ms: conversation.get(6),
+            created_at_unix_ms: conversation.get(7),
+            updated_at_unix_ms: conversation.get(8),
         })
+    }
+
+    pub async fn create_folder(
+        &self,
+        request: &ChatFolderCreateRequest,
+    ) -> Result<ChatFolderSummary, HiveoryChatStoreError> {
+        let name = normalized_folder_name(&request.name)?;
+        let id = Uuid::now_v7().to_string();
+        let now = now_ms();
+        let position: i64 =
+            sqlx::query_scalar("SELECT COALESCE(MAX(position), -1) + 1 FROM hiveory_chat_folders")
+                .fetch_one(self.persistence.pool())
+                .await?;
+        sqlx::query("INSERT INTO hiveory_chat_folders (id, name, position, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?)")
+            .bind(&id)
+            .bind(&name)
+            .bind(position)
+            .bind(now)
+            .bind(now)
+            .execute(self.persistence.pool())
+            .await?;
+        Ok(ChatFolderSummary {
+            id,
+            name,
+            position,
+            conversation_count: 0,
+        })
+    }
+
+    pub async fn update_folder(
+        &self,
+        request: &ChatFolderUpdateRequest,
+    ) -> Result<ChatFolderSummary, HiveoryChatStoreError> {
+        let current = sqlx::query("SELECT name, position FROM hiveory_chat_folders WHERE id=?")
+            .bind(&request.folder_id)
+            .fetch_optional(self.persistence.pool())
+            .await?
+            .ok_or(HiveoryChatStoreError::NotFound)?;
+        let name = request
+            .name
+            .as_deref()
+            .map(normalized_folder_name)
+            .transpose()?
+            .unwrap_or_else(|| current.get(0));
+        let position = request.position.unwrap_or_else(|| current.get(1)).max(0);
+        sqlx::query(
+            "UPDATE hiveory_chat_folders SET name=?, position=?, updated_at_unix_ms=? WHERE id=?",
+        )
+        .bind(&name)
+        .bind(position)
+        .bind(now_ms())
+        .bind(&request.folder_id)
+        .execute(self.persistence.pool())
+        .await?;
+        self.folder(&request.folder_id).await
+    }
+
+    pub async fn delete_folder(
+        &self,
+        request: &ChatFolderDeleteRequest,
+    ) -> Result<(), HiveoryChatStoreError> {
+        let deleted = sqlx::query("DELETE FROM hiveory_chat_folders WHERE id=?")
+            .bind(&request.folder_id)
+            .execute(self.persistence.pool())
+            .await?;
+        if deleted.rows_affected() == 0 {
+            return Err(HiveoryChatStoreError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub async fn move_to_folder(
+        &self,
+        request: &ChatConversationFolderRequest,
+    ) -> Result<ChatConversationDetail, HiveoryChatStoreError> {
+        self.require_conversation(&request.conversation_id).await?;
+        if let Some(folder_id) = request.folder_id.as_deref() {
+            let exists: bool =
+                sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM hiveory_chat_folders WHERE id=?)")
+                    .bind(folder_id)
+                    .fetch_one(self.persistence.pool())
+                    .await?;
+            if !exists {
+                return Err(HiveoryChatStoreError::NotFound);
+            }
+        }
+        sqlx::query("UPDATE hiveory_chat_conversations SET folder_id=?, folder_position=?, updated_at_unix_ms=? WHERE id=?")
+            .bind(&request.folder_id)
+            .bind(request.position.unwrap_or(0).max(0))
+            .bind(now_ms())
+            .bind(&request.conversation_id)
+            .execute(self.persistence.pool())
+            .await?;
+        self.detail(&request.conversation_id).await
+    }
+
+    async fn folder(&self, folder_id: &str) -> Result<ChatFolderSummary, HiveoryChatStoreError> {
+        sqlx::query(
+            "SELECT f.id, f.name, f.position, COUNT(c.id)
+             FROM hiveory_chat_folders f
+             LEFT JOIN hiveory_chat_conversations c ON c.folder_id=f.id AND c.archived=0
+             WHERE f.id=? GROUP BY f.id, f.name, f.position",
+        )
+        .bind(folder_id)
+        .fetch_optional(self.persistence.pool())
+        .await?
+        .map(folder_from_row)
+        .ok_or(HiveoryChatStoreError::NotFound)
     }
 
     async fn messages(
@@ -339,6 +468,37 @@ impl HiveoryChatStore {
         }
         tx.commit().await?;
         Ok((remaining == 0).then_some(relative_path))
+    }
+
+    pub async fn discard_attachment(
+        &self,
+        request: &ChatDiscardAttachmentRequest,
+    ) -> Result<Option<String>, HiveoryChatStoreError> {
+        self.require_conversation(&request.conversation_id).await?;
+        let linked: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM hiveory_chat_message_attachments WHERE attachment_id=?",
+        )
+        .bind(&request.attachment_id)
+        .fetch_one(self.persistence.pool())
+        .await?;
+        if linked > 0 {
+            return Err(HiveoryChatStoreError::InvalidInput(
+                "This attachment is already part of a message.".to_owned(),
+            ));
+        }
+        let path: Option<String> =
+            sqlx::query_scalar("SELECT relative_path FROM hiveory_chat_attachments WHERE id=?")
+                .bind(&request.attachment_id)
+                .fetch_optional(self.persistence.pool())
+                .await?;
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        sqlx::query("DELETE FROM hiveory_chat_attachments WHERE id=?")
+            .bind(&request.attachment_id)
+            .execute(self.persistence.pool())
+            .await?;
+        Ok(Some(path))
     }
 
     pub async fn start_turn(
@@ -1083,6 +1243,16 @@ fn normalized_title(value: Option<&str>) -> String {
     }
 }
 
+fn normalized_folder_name(value: &str) -> Result<String, HiveoryChatStoreError> {
+    let name = value.trim();
+    if name.is_empty() {
+        return Err(HiveoryChatStoreError::InvalidInput(
+            "Folder name cannot be empty.".to_owned(),
+        ));
+    }
+    Ok(name.chars().take(80).collect())
+}
+
 fn conversation_summary_from_row(row: SqliteRow) -> ChatConversationSummary {
     ChatConversationSummary {
         id: row.get(0),
@@ -1090,8 +1260,19 @@ fn conversation_summary_from_row(row: SqliteRow) -> ChatConversationSummary {
         active_branch_id: row.get(2),
         pinned: row.get::<i64, _>(3) != 0,
         archived: row.get::<i64, _>(4) != 0,
-        updated_at_unix_ms: row.get(5),
-        preview: row.get(6),
+        folder_id: row.get(5),
+        folder_position: row.get(6),
+        updated_at_unix_ms: row.get(7),
+        preview: row.get(8),
+    }
+}
+
+fn folder_from_row(row: SqliteRow) -> ChatFolderSummary {
+    ChatFolderSummary {
+        id: row.get(0),
+        name: row.get(1),
+        position: row.get(2),
+        conversation_count: row.get::<i64, _>(3).max(0) as u32,
     }
 }
 fn branch_from_row(row: SqliteRow) -> ChatBranchSummary {
@@ -1239,6 +1420,9 @@ fn reasoning_value(value: &ChatReasoningEffort) -> &'static str {
         ChatReasoningEffort::Low => "low",
         ChatReasoningEffort::Medium => "medium",
         ChatReasoningEffort::High => "high",
+        ChatReasoningEffort::Xhigh => "xhigh",
+        ChatReasoningEffort::Max => "max",
+        ChatReasoningEffort::Ultra => "ultra",
     }
 }
 fn reasoning_from_value(value: &str) -> Result<ChatReasoningEffort, HiveoryChatStoreError> {
@@ -1247,6 +1431,9 @@ fn reasoning_from_value(value: &str) -> Result<ChatReasoningEffort, HiveoryChatS
         "low" => Ok(ChatReasoningEffort::Low),
         "medium" => Ok(ChatReasoningEffort::Medium),
         "high" => Ok(ChatReasoningEffort::High),
+        "xhigh" => Ok(ChatReasoningEffort::Xhigh),
+        "max" => Ok(ChatReasoningEffort::Max),
+        "ultra" => Ok(ChatReasoningEffort::Ultra),
         _ => Err(HiveoryChatStoreError::Inconsistent),
     }
 }

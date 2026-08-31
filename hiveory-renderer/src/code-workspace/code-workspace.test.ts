@@ -10,7 +10,7 @@ import { shouldShowProjectWorkspaceRows } from './code-workspace-rail-utils'
 describe('codeWorkspaceReducer', () => {
   const sampleLayout: CodePaneLayout = {
     workspace_id: 'ws_1',
-    version: 2,
+    version: 3,
     root_id: 'root',
     nodes: [
       {

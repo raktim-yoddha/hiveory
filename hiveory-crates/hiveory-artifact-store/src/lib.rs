@@ -69,22 +69,40 @@ impl HiveoryArtifactStore {
         &self,
         paths: &[PathBuf],
     ) -> Result<Vec<HiveoryStoredAttachment>, HiveoryArtifactError> {
-        if paths.len() > MAX_ATTACHMENTS_PER_TURN {
+        let mut files = Vec::new();
+        for path in paths {
+            collect_attachment_files(path, &mut files)?;
+        }
+        if files.len() > MAX_ATTACHMENTS_PER_TURN {
             return Err(HiveoryArtifactError::TooLarge);
         }
-        let mut total = 0u64;
-        let mut imported = Vec::with_capacity(paths.len());
-        for path in paths {
-            let attachment = self.import_one(path)?;
-            total = total
-                .checked_add(attachment.summary.bytes as u64)
-                .ok_or(HiveoryArtifactError::TooLarge)?;
-            if total > MAX_ATTACHMENTS_BYTES_PER_TURN {
-                return Err(HiveoryArtifactError::TooLarge);
-            }
+        let mut imported = Vec::with_capacity(files.len());
+        for path in files {
+            let attachment = self.import_one(&path)?;
             imported.push(attachment);
         }
+        enforce_attachment_total(&imported)?;
         Ok(imported)
+    }
+
+    pub fn import_bytes(
+        &self,
+        display_name: &str,
+        declared_mime_type: &str,
+        content: &[u8],
+    ) -> Result<HiveoryStoredAttachment, HiveoryArtifactError> {
+        let display_name = display_name
+            .rsplit(['/', '\\'])
+            .next()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or("attachment")
+            .to_owned();
+        let (mime_type, limit) = classify_bytes(&display_name, content, declared_mime_type)?;
+        if content.len() as u64 > limit {
+            return Err(HiveoryArtifactError::TooLarge);
+        }
+        validate_content(&mime_type, content)?;
+        self.store_content(display_name, mime_type, content)
     }
 
     fn import_one(&self, source: &Path) -> Result<HiveoryStoredAttachment, HiveoryArtifactError> {
@@ -121,7 +139,20 @@ impl HiveoryArtifactStore {
             return Err(HiveoryArtifactError::Storage);
         }
         validate_content(&mime_type, &content)?;
-        let sha256 = hex_digest(&content);
+        self.store_content(display_name, mime_type, &content)
+    }
+
+    fn store_content(
+        &self,
+        display_name: String,
+        mime_type: String,
+        content: &[u8],
+    ) -> Result<HiveoryStoredAttachment, HiveoryArtifactError> {
+        let bytes = content.len() as u64;
+        if bytes > MAX_ATTACHMENTS_BYTES_PER_TURN {
+            return Err(HiveoryArtifactError::TooLarge);
+        }
+        let sha256 = hex_digest(content);
         let relative_path = PathBuf::from("attachments")
             .join(&sha256[..2])
             .join(&sha256);
@@ -139,7 +170,7 @@ impl HiveoryArtifactStore {
             }
             let mut output = File::create(&temporary).map_err(|_| HiveoryArtifactError::Storage)?;
             output
-                .write_all(&content)
+                .write_all(content)
                 .and_then(|_| output.sync_all())
                 .map_err(|_| HiveoryArtifactError::Storage)?;
             if fs::rename(&temporary, &destination).is_err() {
@@ -298,27 +329,82 @@ fn classify(display_name: &str, path: &Path) -> Result<(String, u64), HiveoryArt
     let read = file
         .read(&mut header)
         .map_err(|_| HiveoryArtifactError::Storage)?;
-    if read >= 5 && &header[..5] == b"%PDF-" {
-        return Ok(("application/pdf".to_owned(), PDF_LIMIT));
+    classify_bytes(display_name, &header[..read], "")
+}
+
+fn classify_bytes(
+    display_name: &str,
+    content: &[u8],
+    declared_mime_type: &str,
+) -> Result<(String, u64), HiveoryArtifactError> {
+    let detected = if content.len() >= 5 && &content[..5] == b"%PDF-" {
+        Some(("application/pdf", PDF_LIMIT))
+    } else if content.len() >= 8 && content[..8] == [137, 80, 78, 71, 13, 10, 26, 10] {
+        Some(("image/png", IMAGE_LIMIT))
+    } else if content.len() >= 3 && content[..3] == [0xff, 0xd8, 0xff] {
+        Some(("image/jpeg", IMAGE_LIMIT))
+    } else if content.len() >= 12 && &content[..4] == b"RIFF" && &content[8..12] == b"WEBP" {
+        Some(("image/webp", IMAGE_LIMIT))
+    } else {
+        let extension = Path::new(display_name)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        matches!(extension.as_str(), "txt" | "md" | "markdown")
+            .then_some(("text/plain", TEXT_LIMIT))
+    };
+    let Some((mime_type, limit)) = detected else {
+        return Err(HiveoryArtifactError::UnsupportedType);
+    };
+    if !declared_mime_type.trim().is_empty() && declared_mime_type != mime_type {
+        return Err(HiveoryArtifactError::InvalidContent);
     }
-    if read >= 8 && header[..8] == [137, 80, 78, 71, 13, 10, 26, 10] {
-        return Ok(("image/png".to_owned(), IMAGE_LIMIT));
+    Ok((mime_type.to_owned(), limit))
+}
+
+fn collect_attachment_files(
+    path: &Path,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), HiveoryArtifactError> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| HiveoryArtifactError::Storage)?;
+    if metadata.file_type().is_symlink() {
+        return Err(HiveoryArtifactError::NotAFile);
     }
-    if read >= 3 && header[..3] == [0xff, 0xd8, 0xff] {
-        return Ok(("image/jpeg".to_owned(), IMAGE_LIMIT));
+    if metadata.is_file() {
+        files.push(path.to_owned());
+        return Ok(());
     }
-    if read >= 12 && &header[..4] == b"RIFF" && &header[8..12] == b"WEBP" {
-        return Ok(("image/webp".to_owned(), IMAGE_LIMIT));
+    if !metadata.is_dir() {
+        return Err(HiveoryArtifactError::NotAFile);
     }
-    let extension = Path::new(display_name)
-        .extension()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if matches!(extension.as_str(), "txt" | "md" | "markdown") {
-        return Ok(("text/plain".to_owned(), TEXT_LIMIT));
+    let mut entries = fs::read_dir(path)
+        .map_err(|_| HiveoryArtifactError::Storage)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| HiveoryArtifactError::Storage)?;
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        collect_attachment_files(&entry.path(), files)?;
+        if files.len() > MAX_ATTACHMENTS_PER_TURN {
+            return Err(HiveoryArtifactError::TooLarge);
+        }
     }
-    Err(HiveoryArtifactError::UnsupportedType)
+    Ok(())
+}
+
+fn enforce_attachment_total(
+    attachments: &[HiveoryStoredAttachment],
+) -> Result<(), HiveoryArtifactError> {
+    let total = attachments.iter().try_fold(0u64, |total, attachment| {
+        total
+            .checked_add(attachment.summary.bytes.max(0) as u64)
+            .ok_or(HiveoryArtifactError::TooLarge)
+    })?;
+    if total > MAX_ATTACHMENTS_BYTES_PER_TURN {
+        Err(HiveoryArtifactError::TooLarge)
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_content(mime_type: &str, content: &[u8]) -> Result<(), HiveoryArtifactError> {

@@ -57,6 +57,44 @@ test('preview Code enforces trust before saving and preserves the pane contract'
   expect(saved.content).toContain('Saved from preview')
 })
 
+test('preview creates root Markdown documents with unique names and keeps them writable', async () => {
+  const detail = await hiveoryClient.openCodeWorkspace('~/markdown-document-demo')
+  const trusted = await hiveoryClient.trustCodeWorkspace(detail.summary.id, true)
+  const first = await hiveoryClient.createCodePaneMarkdown({
+    workspace_id: trusted.summary.id,
+    pane_id: trusted.layout.root_id,
+    expected_revision: trusted.layout.revision ?? 0,
+  })
+
+  expect(first.document.relative_path).toBe('untitled.md')
+  expect(first.document.language).toBe('markdown')
+  expect(first.layout.nodes.find((node) => node.pane_id === first.layout.root_id)).toMatchObject({
+    kind: 'markdown',
+    resource_id: 'untitled.md',
+    title: 'untitled.md',
+  })
+
+  const secondPane = await hiveoryClient.applyCodePaneMutation({
+    workspace_id: trusted.summary.id,
+    expected_revision: first.layout.revision ?? 0,
+    mutation: { type: 'split', pane_id: first.layout.root_id, placement: 'right' },
+  })
+  const second = await hiveoryClient.createCodePaneMarkdown({
+    workspace_id: trusted.summary.id,
+    pane_id: secondPane.layout.nodes.find((node) => node.children.length === 0 && node.kind === 'empty')?.pane_id ?? '',
+    expected_revision: secondPane.layout.revision ?? 0,
+  })
+
+  expect(second.document.relative_path).toBe('untitled-2.md')
+  const saved = await hiveoryClient.saveCodeFile({
+    workspace_id: trusted.summary.id,
+    relative_path: second.document.relative_path,
+    content: '# Markdown from preview\n',
+    expected_fingerprint: second.document.fingerprint,
+  })
+  expect(saved.content).toBe('# Markdown from preview\n')
+})
+
 test('preview keeps projects as parents of primary and isolated workspaces', async () => {
   const primary = await hiveoryClient.addCodeProject('~/hierarchy-demo')
   const before = await hiveoryClient.codeSnapshot()

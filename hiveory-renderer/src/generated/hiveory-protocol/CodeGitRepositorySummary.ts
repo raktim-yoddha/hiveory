@@ -2,6 +2,7 @@
 import type { CodeGitBranch } from "./CodeGitBranch";
 import type { CodeGitCommit } from "./CodeGitCommit";
 import type { CodeGitRemote } from "./CodeGitRemote";
+import type { CodeGitStash } from "./CodeGitStash";
 import type { CodeGitWorktree } from "./CodeGitWorktree";
 
-export type CodeGitRepositorySummary = { workspace_id: string, root_path: string, repository_name: string | null, head_oid: string | null, branch: string | null, detached: boolean, upstream: string | null, remotes: Array<CodeGitRemote>, branches: Array<CodeGitBranch>, worktrees: Array<CodeGitWorktree>, commits: Array<CodeGitCommit>, has_conflicts: boolean, };
+export type CodeGitRepositorySummary = { workspace_id: string, root_path: string, repository_name: string | null, head_oid: string | null, branch: string | null, detached: boolean, upstream: string | null, remotes: Array<CodeGitRemote>, branches: Array<CodeGitBranch>, worktrees: Array<CodeGitWorktree>, commits: Array<CodeGitCommit>, stashes: Array<CodeGitStash>, has_conflicts: boolean, };

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { CheckCircle2, ChevronRight, Globe, MessageSquare, Terminal, X } from 'lucide-react'
+import { CheckCircle2, ChevronRight, FileText, Globe, Terminal, X } from 'lucide-react'
 import { hiveoryClient, type CodeAdapterSummary } from '../api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
 
@@ -8,14 +8,14 @@ interface CodePaneLauncherProps {
   onLaunchShell: () => void
   onLaunchAgent: (adapterId: string, model: string | null) => void
   onOpenPreview: (url: string) => void
-  onCreateThread: () => void
+  onCreateMarkdown: () => void
 }
 
 export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   onLaunchShell,
   onLaunchAgent,
   onOpenPreview,
-  onCreateThread,
+  onCreateMarkdown,
 }) => {
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const [showCliModal, setShowCliModal] = useState(false)
@@ -56,7 +56,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
       <div className="code-launcher-container">
         <div className="code-launcher-header">
           <h2>Start a workspace pane</h2>
-          <p>Open a shell, coding agent, Browser, or focused thread.</p>
+          <p>Open a shell, coding agent, Browser, or Markdown document.</p>
         </div>
 
         <div className="code-launcher-grid">
@@ -86,12 +86,12 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
             </span>
           </button>
 
-          {/* 3. Thread */}
-          <button type="button" className="code-launcher-card" onClick={onCreateThread}>
-            <span className="code-launcher-icon"><MessageSquare size={17} aria-hidden="true" /></span>
+          {/* 3. Markdown */}
+          <button type="button" className="code-launcher-card" onClick={onCreateMarkdown}>
+            <span className="code-launcher-icon"><FileText size={17} aria-hidden="true" /></span>
             <span>
-              <span className="code-launcher-card-title">Thread</span>
-              <span className="code-launcher-card-desc">Docked workspace conversation</span>
+              <span className="code-launcher-card-title">Markdown</span>
+              <span className="code-launcher-card-desc">Create a Markdown document</span>
             </span>
           </button>
 

@@ -42,18 +42,28 @@ use hiveory_protocol::{
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
     AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest, ApiError,
     ApplicationMode, BackupSummary, BootstrapSnapshot, BuildInformation,
-    ChatAttachmentImportRequest, ChatBranchRequest, ChatConversationDetail, ChatCreateRequest,
-    ChatDeleteRequest, ChatDraftRequest, ChatEditRequest, ChatEventEnvelope, ChatEventsQuery,
-    ChatExportRequest, ChatMessagePart, ChatMetadataRequest, ChatModelTurnRequest,
-    ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
-    ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
-    CloseCodePaneRequest, CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
+    ChatAttachmentBytesRequest, ChatAttachmentImportRequest, ChatAttachmentSummary,
+    ChatBranchRequest, ChatConversationDetail, ChatConversationFolderRequest, ChatCreateRequest,
+    ChatDeleteRequest, ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest,
+    ChatEngineAvailability, ChatEngineCatalog, ChatEngineSummary, ChatEventEnvelope,
+    ChatEventsQuery, ChatExportRequest, ChatFolderCreateRequest, ChatFolderDeleteRequest,
+    ChatFolderSummary, ChatFolderUpdateRequest, ChatMessagePart, ChatMetadataRequest,
+    ChatModelSummary, ChatModelTurnRequest, ChatProviderMessage, ChatProviderPart,
+    ChatProviderStreamEvent, ChatReasoningEffort, ChatSendRequest, ChatSidebarPage,
+    ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest, CloseCodePaneRequest,
+    CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDecisionGate, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
     CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery,
-    CodeGateCreateRequest, CodeGateResolveRequest, CodeGatesQuery, CodeGitDiff, CodeGitDiffRequest,
-    CodeGitRepositoryRequest, CodeGitRepositorySummary, CodeGitStatus, CodeGitStatusRequest,
-    CodeHostedTracking, CodeHostedTrackingRequest, CodeMailboxAckRequest, CodeMailboxDelivery,
+    CodeGateCreateRequest, CodeGateResolveRequest, CodeGatesQuery, CodeGitBranchCheckoutRequest,
+    CodeGitBranchCreateRequest, CodeGitBranchDeleteRequest, CodeGitCommitRequest, CodeGitDiff,
+    CodeGitDiffRequest, CodeGitDiscardRequest, CodeGitOperationResult, CodeGitRemoteRequest,
+    CodeGitRepositoryRequest, CodeGitRepositorySummary, CodeGitStageRequest, CodeGitStashIndexRequest,
+    CodeGitStashSaveRequest, CodeGitStatus, CodeGitStatusRequest, CodeHostedIssueActionRequest,
+    CodeHostedIssueCreateRequest, CodeHostedIssueUpdateRequest, CodeHostedOperationResult,
+    CodeHostedPullRequestActionRequest,
+    CodeHostedPullRequestCreateRequest, CodeHostedTracking, CodeHostedTrackingRequest,
+    CodeMailboxAckRequest, CodeMailboxDelivery,
     CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
     CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
     CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
@@ -68,8 +78,8 @@ use hiveory_protocol::{
     CodeWorkspaceOpenInRequest, CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget,
     CodeWorkspaceParentRequest, CodeWorkspaceQuery, CodeWorkspaceRemoveRequest,
     CodeWorkspaceSummary, CodeWorkspaceTrust, CodeWorkspaceTrustRequest,
-    CodeWorkspaceUpdateRequest, CommandEnvelope, CreateCodePaneThreadRequest,
-    CreateCodePaneThreadResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
+    CodeWorkspaceUpdateRequest, CommandEnvelope, CreateCodePaneMarkdownRequest,
+    CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
     LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
     PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
     PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
@@ -87,6 +97,7 @@ use hiveory_workspace_service::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    io,
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, RwLock},
@@ -2720,6 +2731,7 @@ async fn hiveory_query_code_git_diff(
             &request.workspace_id,
             &root,
             request.relative_path.as_deref(),
+            request.staged,
         )
         .map_err(git_error)
 }
@@ -2763,6 +2775,428 @@ async fn hiveory_query_code_hosted_tracking(
         .root_path(&request.workspace_id)
         .map_err(workspace_error)?;
     Ok(hosted_source::load_tracking(&foundation.persistence, &request.workspace_id, &root).await)
+}
+
+#[tauri::command]
+async fn hiveory_command_stage_code_git(
+    command: CommandEnvelope<CodeGitStageRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .stage(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.relative_paths,
+            command.payload.stage,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_discard_code_git(
+    command: CommandEnvelope<CodeGitDiscardRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .discard(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.relative_paths,
+            command.payload.include_untracked,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_commit_code_git(
+    command: CommandEnvelope<CodeGitCommitRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .commit(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.message,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_create_code_git_branch(
+    command: CommandEnvelope<CodeGitBranchCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .create_branch(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.name,
+            command.payload.start_point.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_checkout_code_git_branch(
+    command: CommandEnvelope<CodeGitBranchCheckoutRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .checkout_branch(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.name,
+            command.payload.create,
+            command.payload.start_point.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_delete_code_git_branch(
+    command: CommandEnvelope<CodeGitBranchDeleteRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .delete_branch(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            &command.payload.name,
+            command.payload.force,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_fetch_code_git(
+    command: CommandEnvelope<CodeGitRemoteRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .fetch(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.remote.as_deref(),
+            command.payload.branch.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_pull_code_git(
+    command: CommandEnvelope<CodeGitRemoteRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .pull(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.remote.as_deref(),
+            command.payload.branch.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_push_code_git(
+    command: CommandEnvelope<CodeGitRemoteRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .push(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.remote.as_deref(),
+            command.payload.branch.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_save_code_git_stash(
+    command: CommandEnvelope<CodeGitStashSaveRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .stash_save(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.message.as_deref(),
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_pop_code_git_stash(
+    command: CommandEnvelope<CodeGitStashIndexRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .stash_pop(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.index,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_drop_code_git_stash(
+    command: CommandEnvelope<CodeGitStashIndexRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeGitOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = foundation
+        .code_git
+        .stash_drop(
+            &command.payload.workspace_id,
+            Path::new(&workspace.root_path),
+            command.payload.index,
+        )
+        .map_err(git_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_create_code_hosted_issue(
+    command: CommandEnvelope<CodeHostedIssueCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeHostedOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = hosted_source::create_issue(
+        &command.payload.workspace_id,
+        Path::new(&workspace.root_path),
+        &command.payload.title,
+        &command.payload.body,
+        &command.payload.labels,
+    )
+    .await
+    .map_err(hosted_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_update_code_hosted_issue(
+    command: CommandEnvelope<CodeHostedIssueUpdateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeHostedOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = hosted_source::update_issue(
+        &command.payload.workspace_id,
+        Path::new(&workspace.root_path),
+        command.payload.number,
+        command.payload.title.as_deref(),
+        command.payload.body.as_deref(),
+        command.payload.state,
+    )
+    .await
+    .map_err(hosted_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_action_code_hosted_issue(
+    command: CommandEnvelope<CodeHostedIssueActionRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeHostedOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = hosted_source::issue_action(
+        &command.payload.workspace_id,
+        Path::new(&workspace.root_path),
+        command.payload.number,
+        command.payload.action,
+    )
+    .await
+    .map_err(hosted_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_create_code_hosted_pull_request(
+    command: CommandEnvelope<CodeHostedPullRequestCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeHostedOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = hosted_source::create_pull_request(
+        &command.payload.workspace_id,
+        Path::new(&workspace.root_path),
+        &command.payload.title,
+        &command.payload.body,
+        command.payload.base_branch.as_deref(),
+        command.payload.draft,
+    )
+    .await
+    .map_err(hosted_error)?;
+    Ok(response(&command.request_id, result))
+}
+
+#[tauri::command]
+async fn hiveory_command_action_code_hosted_pull_request(
+    command: CommandEnvelope<CodeHostedPullRequestActionRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeHostedOperationResult>, ApiError> {
+    validate_code_command(&command)?;
+    let workspace = foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteGit,
+        )
+        .map_err(workspace_error)?;
+    let result = hosted_source::pull_request_action(
+        &command.payload.workspace_id,
+        Path::new(&workspace.root_path),
+        command.payload.number,
+        command.payload.action,
+    )
+    .await
+    .map_err(hosted_error)?;
+    Ok(response(&command.request_id, result))
 }
 
 #[tauri::command]
@@ -3579,20 +4013,18 @@ async fn hiveory_command_open_code_pane_preview(
 }
 
 #[tauri::command]
-async fn hiveory_command_create_code_pane_thread(
-    command: CommandEnvelope<CreateCodePaneThreadRequest>,
+async fn hiveory_command_create_code_pane_markdown(
+    command: CommandEnvelope<CreateCodePaneMarkdownRequest>,
     foundation: State<'_, HiveoryFoundation>,
-) -> Result<ResponseEnvelope<CreateCodePaneThreadResult>, ApiError> {
+) -> Result<ResponseEnvelope<CreateCodePaneMarkdownResult>, ApiError> {
     validate_code_command(&command)?;
-
-    let create_req = ChatCreateRequest {
-        title: Some("Workspace Thread".to_owned()),
-    };
-    let detail = foundation
-        .chat
-        .create(&create_req, Some(&command.request_id))
-        .await
-        .map_err(chat_error)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::WriteFiles,
+        )
+        .map_err(workspace_error)?;
 
     let current_layout = match foundation
         .persistence
@@ -3615,18 +4047,37 @@ async fn hiveory_command_create_code_pane_thread(
         ));
     }
 
-    let mut new_layout = current_layout.clone();
-    let thread_title = detail.title.clone();
+    let target = current_layout
+        .nodes
+        .iter()
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .ok_or_else(|| validation_error("Target pane was not found."))?;
+    if !target.children.is_empty() {
+        return Err(validation_error(
+            "Only leaf panes can hold a Markdown document.",
+        ));
+    }
+
+    let document =
+        create_new_markdown_document(&foundation.code_workspaces, &command.payload.workspace_id)
+            .map_err(workspace_error)?;
+
+    let mut new_layout = current_layout;
     if let Some(node) = new_layout
         .nodes
         .iter_mut()
-        .find(|n| n.pane_id == command.payload.pane_id)
+        .find(|node| node.pane_id == command.payload.pane_id)
     {
-        node.kind = hiveory_protocol::CodePaneKind::Thread;
-        node.resource_id = Some(detail.id.clone());
-        node.title = Some(thread_title);
-    } else {
-        return Err(validation_error("Target pane was not found."));
+        node.kind = hiveory_protocol::CodePaneKind::Markdown;
+        node.resource_id = Some(document.relative_path.clone());
+        node.title = Some(
+            document
+                .relative_path
+                .rsplit('/')
+                .next()
+                .unwrap_or("untitled.md")
+                .to_owned(),
+        );
     }
     new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
 
@@ -3650,13 +4101,64 @@ async fn hiveory_command_create_code_pane_thread(
             }
         })?;
 
+    foundation
+        .persistence
+        .save_code_document(
+            &command.payload.workspace_id,
+            &hiveory_protocol::CodeDocumentSummary {
+                relative_path: document.relative_path.clone(),
+                language: document.language.clone(),
+                last_fingerprint: Some(document.fingerprint.clone()),
+                last_opened_at_unix_ms: now_ms(),
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.markdown.create",
+            "success",
+            "info",
+            Some(&command.payload.workspace_id),
+            Some("created a new Markdown document pane"),
+        )
+        .await
+        .map_err(database_error)?;
+
     Ok(response(
         &command.request_id,
-        CreateCodePaneThreadResult {
+        CreateCodePaneMarkdownResult {
             layout: saved_layout,
-            conversation: detail,
+            document,
         },
     ))
+}
+
+fn create_new_markdown_document(
+    workspaces: &HiveoryWorkspaceService,
+    workspace_id: &str,
+) -> Result<CodeDocument, HiveoryWorkspaceError> {
+    for index in 1..=100 {
+        let relative_path = if index == 1 {
+            "untitled.md".to_owned()
+        } else {
+            format!("untitled-{index}.md")
+        };
+        match workspaces.create_file(workspace_id, &relative_path, "") {
+            Ok(document) => return Ok(document),
+            Err(HiveoryWorkspaceError::Io(error))
+                if error.kind() == io::ErrorKind::AlreadyExists =>
+            {
+                continue
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(HiveoryWorkspaceError::Io(io::Error::new(
+        io::ErrorKind::AlreadyExists,
+        "no available untitled Markdown filename was found",
+    )))
 }
 
 #[tauri::command]
@@ -3821,6 +4323,131 @@ async fn hiveory_query_chat_sidebar(
 }
 
 #[tauri::command]
+async fn hiveory_query_chat_engines(
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ChatEngineCatalog, ApiError> {
+    let mut engines = foundation.code_runtime.chat_engines().await;
+    let provider = foundation
+        .persistence
+        .provider_accounts()
+        .await
+        .map_err(database_error)?
+        .into_iter()
+        .find(|account| account.id == HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID);
+    let provider = provider.unwrap_or_else(|| hiveory_protocol::ProviderAccountSummary {
+        id: HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
+        kind: hiveory_protocol::ProviderKind::OpenAiResponses,
+        display_name: "OpenAI Responses".to_owned(),
+        default_model: None,
+        secret_configured: false,
+        enabled: false,
+    });
+    let provider_ready = provider.enabled && provider.secret_configured;
+    let provider_models = vec![ChatModelSummary {
+        id: provider
+            .default_model
+            .clone()
+            .unwrap_or_else(|| "default".to_owned()),
+        display_name: provider
+            .default_model
+            .clone()
+            .unwrap_or_else(|| "Configured model".to_owned()),
+        effort_levels: vec![
+            ChatReasoningEffort::Auto,
+            ChatReasoningEffort::Low,
+            ChatReasoningEffort::Medium,
+            ChatReasoningEffort::High,
+        ],
+        default_effort: ChatReasoningEffort::Auto,
+    }];
+    engines.insert(
+        0,
+        ChatEngineSummary {
+            id: HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
+            display_name: provider.display_name,
+            executable: "Hosted provider".to_owned(),
+            availability: if provider_ready {
+                ChatEngineAvailability::Ready
+            } else {
+                ChatEngineAvailability::Unauthenticated
+            },
+            detected: true,
+            authenticated: provider_ready,
+            models: provider_models,
+            capabilities: vec![
+                hiveory_protocol::CodeAdapterCapability::ModelSelection,
+                hiveory_protocol::CodeAdapterCapability::ReasoningEffort,
+            ],
+            message: (!provider_ready).then_some(
+                "Configure an API key in Settings before using the hosted provider.".to_owned(),
+            ),
+            recovery_action: (!provider_ready)
+                .then_some("Open Settings → Provider and save an API key.".to_owned()),
+        },
+    );
+    Ok(ChatEngineCatalog {
+        engines,
+        generated_at_unix_ms: now_ms(),
+    })
+}
+
+#[tauri::command]
+async fn hiveory_command_create_chat_folder(
+    command: CommandEnvelope<ChatFolderCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<ChatFolderSummary>, ApiError> {
+    validate_chat_command(&command)?;
+    let folder = foundation
+        .chat
+        .create_folder(&command.payload)
+        .await
+        .map_err(chat_error)?;
+    Ok(response(&command.request_id, folder))
+}
+
+#[tauri::command]
+async fn hiveory_command_update_chat_folder(
+    command: CommandEnvelope<ChatFolderUpdateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<ChatFolderSummary>, ApiError> {
+    validate_chat_command(&command)?;
+    let folder = foundation
+        .chat
+        .update_folder(&command.payload)
+        .await
+        .map_err(chat_error)?;
+    Ok(response(&command.request_id, folder))
+}
+
+#[tauri::command]
+async fn hiveory_command_delete_chat_folder(
+    command: CommandEnvelope<ChatFolderDeleteRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_chat_command(&command)?;
+    foundation
+        .chat
+        .delete_folder(&command.payload)
+        .await
+        .map_err(chat_error)?;
+    Ok(response(&command.request_id, true))
+}
+
+#[tauri::command]
+async fn hiveory_command_move_chat_to_folder(
+    command: CommandEnvelope<ChatConversationFolderRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<ChatConversationDetail>, ApiError> {
+    validate_chat_command(&command)?;
+    let detail = foundation
+        .chat
+        .move_to_folder(&command.payload)
+        .await
+        .map_err(chat_error)?;
+    Ok(response(&command.request_id, detail))
+}
+
+#[tauri::command]
 async fn hiveory_query_chat_conversation(
     conversation_id: String,
     foundation: State<'_, HiveoryFoundation>,
@@ -3969,6 +4596,53 @@ async fn hiveory_command_import_chat_attachments(
 }
 
 #[tauri::command]
+async fn hiveory_command_import_chat_attachment_bytes(
+    command: CommandEnvelope<ChatAttachmentBytesRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<ChatAttachmentSummary>, ApiError> {
+    validate_chat_command(&command)?;
+    foundation
+        .chat
+        .detail(&command.payload.conversation_id)
+        .await
+        .map_err(chat_error)?;
+    if command.payload.data_base64.len() > 32 * 1024 * 1024 {
+        return Err(validation_error("The pasted image is too large."));
+    }
+    let bytes = STANDARD
+        .decode(&command.payload.data_base64)
+        .map_err(|_| validation_error("The pasted image data is invalid."))?;
+    let stored = foundation
+        .artifacts
+        .import_bytes(
+            &command.payload.display_name,
+            &command.payload.mime_type,
+            &bytes,
+        )
+        .map_err(artifact_error)?;
+    let summary = foundation
+        .chat
+        .register_attachment(
+            &stored.summary,
+            &relative_artifact_path(&stored, &foundation.artifacts),
+        )
+        .await
+        .map_err(chat_error)?;
+    if let Some(message_id) = command.payload.message_id.as_deref() {
+        foundation
+            .chat
+            .attach_to_message(
+                &command.payload.conversation_id,
+                message_id,
+                std::slice::from_ref(&summary.id),
+            )
+            .await
+            .map_err(chat_error)?;
+    }
+    Ok(response(&command.request_id, summary))
+}
+
+#[tauri::command]
 async fn hiveory_command_delete_chat_attachment(
     command: CommandEnvelope<hiveory_protocol::ChatDeleteAttachmentRequest>,
     foundation: State<'_, HiveoryFoundation>,
@@ -3981,6 +4655,23 @@ async fn hiveory_command_delete_chat_attachment(
             &command.payload.message_id,
             &command.payload.attachment_id,
         )
+        .await
+        .map_err(chat_error)?;
+    if let Some(path) = path {
+        let _ = foundation.artifacts.remove_relative_path(&path);
+    }
+    Ok(response(&command.request_id, true))
+}
+
+#[tauri::command]
+async fn hiveory_command_discard_chat_attachment(
+    command: CommandEnvelope<ChatDiscardAttachmentRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_chat_command(&command)?;
+    let path = foundation
+        .chat
+        .discard_attachment(&command.payload)
         .await
         .map_err(chat_error)?;
     if let Some(path) = path {
@@ -4622,12 +5313,19 @@ async fn stream_chat_engine(
             .await;
     }
     let prompt = render_chat_cli_prompt(&request);
-    stream_cli_chat_turn(engine_id, &request.model, &prompt, cancellation, callback)
-        .await
-        .map_err(|error| match error {
-            HiveoryCodeRuntimeError::Cancelled => HiveoryProviderError::Cancelled,
-            other => HiveoryProviderError::Request(other.to_string()),
-        })
+    stream_cli_chat_turn(
+        engine_id,
+        &request.model,
+        request.reasoning_effort,
+        &prompt,
+        cancellation,
+        callback,
+    )
+    .await
+    .map_err(|error| match error {
+        HiveoryCodeRuntimeError::Cancelled => HiveoryProviderError::Cancelled,
+        other => HiveoryProviderError::Request(other.to_string()),
+    })
 }
 
 async fn finish_chat_turn_with_error(
@@ -4908,12 +5606,12 @@ fn git_error(error: HiveoryGitError) -> ApiError {
         ),
         HiveoryGitError::InvalidPath(_) => application_error(
             "git_path_denied",
-            "The requested diff path is outside the workspace policy.",
+            "The requested Git path is outside the workspace policy.",
             RetryClass::AfterUserAction,
         ),
         HiveoryGitError::Git(_) => application_error(
             "git_read_failed",
-            "Git status or diff could not be read.",
+            "The Git operation could not be completed.",
             RetryClass::Safe,
         ),
         HiveoryGitError::Io(_) => application_error(
@@ -4951,7 +5649,58 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "Dependency checkpoints conflict and were not integrated.",
             RetryClass::AfterUserAction,
         ),
+        HiveoryGitError::InvalidInput(message) => application_error(
+            "git_request_invalid",
+            message,
+            RetryClass::AfterUserAction,
+        ),
+        HiveoryGitError::Command { operation, .. } => application_error(
+            "git_command_failed",
+            format!("The Git {operation} operation failed. Check the repository and try again."),
+            RetryClass::AfterUserAction,
+        ),
+        HiveoryGitError::NoStagedChanges => application_error(
+            "git_nothing_to_commit",
+            "There are no staged changes to commit.",
+            RetryClass::AfterUserAction,
+        ),
     }
+}
+
+fn hosted_error(error: hosted_source::HostedCommandError) -> ApiError {
+    let (code, message, retry) = match error.auth_state() {
+        hiveory_protocol::CodeHostedAuthState::MissingCli => (
+            "hosted_cli_missing",
+            error.message(),
+            RetryClass::AfterUserAction,
+        ),
+        hiveory_protocol::CodeHostedAuthState::NotAuthenticated => (
+            "hosted_auth_required",
+            error.message(),
+            RetryClass::AfterUserAction,
+        ),
+        hiveory_protocol::CodeHostedAuthState::NoRepository => (
+            "hosted_repository_missing",
+            error.message(),
+            RetryClass::AfterUserAction,
+        ),
+        hiveory_protocol::CodeHostedAuthState::Offline => (
+            "hosted_offline",
+            error.message(),
+            RetryClass::Safe,
+        ),
+        hiveory_protocol::CodeHostedAuthState::RateLimited => (
+            "hosted_rate_limited",
+            error.message(),
+            RetryClass::AfterUserAction,
+        ),
+        _ => (
+            "hosted_operation_failed",
+            "The hosted source-control operation failed. Refresh and try again.",
+            RetryClass::AfterUserAction,
+        ),
+    };
+    application_error(code, message, retry)
 }
 
 fn orchestration_error(error: HiveoryCodeOrchestrationError) -> ApiError {
@@ -5793,7 +6542,7 @@ pub fn run() {
             hiveory_command_apply_code_pane_mutation,
             hiveory_command_launch_code_pane_terminal,
             hiveory_command_open_code_pane_preview,
-            hiveory_command_create_code_pane_thread,
+            hiveory_command_create_code_pane_markdown,
             hiveory_command_close_code_pane,
             hiveory_query_code_terminal_snapshot,
             hiveory_stream_code_terminal_events,
@@ -5801,20 +6550,44 @@ pub fn run() {
             hiveory_query_code_git_diff,
             hiveory_query_code_git_repository,
             hiveory_query_code_hosted_tracking,
+            hiveory_command_stage_code_git,
+            hiveory_command_discard_code_git,
+            hiveory_command_commit_code_git,
+            hiveory_command_create_code_git_branch,
+            hiveory_command_checkout_code_git_branch,
+            hiveory_command_delete_code_git_branch,
+            hiveory_command_fetch_code_git,
+            hiveory_command_pull_code_git,
+            hiveory_command_push_code_git,
+            hiveory_command_save_code_git_stash,
+            hiveory_command_pop_code_git_stash,
+            hiveory_command_drop_code_git_stash,
+            hiveory_command_create_code_hosted_issue,
+            hiveory_command_update_code_hosted_issue,
+            hiveory_command_action_code_hosted_issue,
+            hiveory_command_create_code_hosted_pull_request,
+            hiveory_command_action_code_hosted_pull_request,
             hiveory_command_start_code_terminal,
             hiveory_command_write_code_terminal,
             hiveory_command_resize_code_terminal,
             hiveory_command_stop_code_terminal,
             hiveory_command_open_code_preview,
             hiveory_query_chat_sidebar,
+            hiveory_query_chat_engines,
             hiveory_query_chat_conversation,
             hiveory_query_chat_events,
             hiveory_command_create_chat,
             hiveory_command_update_chat,
             hiveory_command_delete_chat,
+            hiveory_command_create_chat_folder,
+            hiveory_command_update_chat_folder,
+            hiveory_command_delete_chat_folder,
+            hiveory_command_move_chat_to_folder,
             hiveory_command_save_chat_draft,
             hiveory_command_import_chat_attachments,
+            hiveory_command_import_chat_attachment_bytes,
             hiveory_command_delete_chat_attachment,
+            hiveory_command_discard_chat_attachment,
             hiveory_command_start_chat_turn,
             hiveory_command_cancel_chat_turn,
             hiveory_command_retry_chat_turn,
