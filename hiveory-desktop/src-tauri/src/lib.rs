@@ -6,7 +6,8 @@ mod release;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use browser::{
-    BrowserBoundsRequest, BrowserCaptureRequest, BrowserConfiguration, BrowserCookieFileRequest,
+    BrowserAnnotationSyncRequest, BrowserBoundsRequest, BrowserCaptureRequest,
+    BrowserClipboardRequest, BrowserConfiguration, BrowserCookieFileRequest,
     BrowserCookieSourceRequest, BrowserFrame, BrowserIdRequest, BrowserManager,
     BrowserNavigationRequest, BrowserOpenRequest, BrowserProfileIdRequest, BrowserProfileRequest,
     BrowserRuntimeState, BrowserSettingsRequest, BrowserSwitchProfileRequest,
@@ -3071,6 +3072,27 @@ async fn hiveory_command_browser_start_capture(
 }
 
 #[tauri::command]
+fn hiveory_command_browser_copy_text(
+    command: CommandEnvelope<BrowserClipboardRequest>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    if command.payload.text.len() > 4 * 1024 * 1024 {
+        return Err(validation_error(
+            "The copied Browser text is larger than 4 MB.",
+        ));
+    }
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| {
+        browser_error(format!("The system clipboard could not be opened: {error}"))
+    })?;
+    clipboard.set_text(command.payload.text).map_err(|error| {
+        browser_error(format!(
+            "The system clipboard could not be written: {error}"
+        ))
+    })?;
+    Ok(response(&command.request_id, true))
+}
+
+#[tauri::command]
 async fn hiveory_command_browser_cancel_capture(
     command: CommandEnvelope<BrowserIdRequest>,
     browser: State<'_, BrowserManager>,
@@ -3079,6 +3101,18 @@ async fn hiveory_command_browser_cancel_capture(
     browser
         .cancel_capture(&command.payload)
         .map(|cancelled| response(&command.request_id, cancelled))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_browser_sync_annotations(
+    command: CommandEnvelope<BrowserAnnotationSyncRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .sync_annotations(&command.payload)
+        .map(|synced| response(&command.request_id, synced))
         .map_err(browser_error)
 }
 
@@ -5649,7 +5683,9 @@ pub fn run() {
             hiveory_command_browser_update_settings,
             hiveory_command_browser_switch_profile,
             hiveory_command_browser_start_capture,
+            hiveory_command_browser_copy_text,
             hiveory_command_browser_cancel_capture,
+            hiveory_command_browser_sync_annotations,
             hiveory_command_browser_capture_frame,
             hiveory_command_browser_set_viewport,
             hiveory_command_browser_open_devtools,

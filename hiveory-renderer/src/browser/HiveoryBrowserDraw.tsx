@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react'
-import { ArrowUpRight, Check, Eraser, MousePointer2, PenLine, Redo2, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowUpRight, Check, Circle, Eraser, Highlighter, PenLine, Redo2, Square, Type, Undo2, X } from 'lucide-react'
 import type { BrowserFrame } from '../api/hiveory-client'
 import { browserFrameUrl } from './browser-models'
 
-type DrawTool = 'pointer' | 'pen' | 'highlight' | 'rectangle' | 'arrow' | 'text'
+type DrawTool = 'pen' | 'highlight' | 'arrow' | 'rectangle' | 'ellipse' | 'text'
 type DrawPoint = { x: number; y: number }
 type DrawStroke = {
-  tool: Exclude<DrawTool, 'pointer'>
+  tool: DrawTool
   start: DrawPoint
   end?: DrawPoint
   points?: DrawPoint[]
   text?: string
   color: string
   width: number
+  fontSize: number
 }
 
 interface HiveoryBrowserDrawProps {
@@ -22,9 +23,11 @@ interface HiveoryBrowserDrawProps {
   onError: (message: string) => void
 }
 
-const colors = ['#ff5d73', '#ffd166', '#57d3ff', '#ffffff', '#73e09b']
+const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#111827', '#ffffff']
+const widths = [2, 4, 8]
+const fontSizes = [14, 18, 24, 32, 48]
 
-function imageBounds(width: number, height: number, frame: BrowserFrame): { left: number; top: number; width: number; height: number; scale: number } {
+function imageBounds(width: number, height: number, frame: BrowserFrame) {
   const scale = Math.min(width / frame.width, height / frame.height)
   const imageWidth = frame.width * scale
   const imageHeight = frame.height * scale
@@ -50,29 +53,40 @@ function drawStroke(context: CanvasRenderingContext2D, stroke: DrawStroke, scale
   context.lineWidth = stroke.width * scale
   context.lineCap = 'round'
   context.lineJoin = 'round'
-  if (stroke.tool === 'highlight') context.globalAlpha = 0.32
+  if (stroke.tool === 'highlight') context.globalAlpha = 0.35
   if (stroke.tool === 'pen' || stroke.tool === 'highlight') {
     const points = stroke.points?.length ? stroke.points.map(map) : [start, end]
     context.beginPath()
     context.moveTo(points[0].x, points[0].y)
     points.slice(1).forEach((point) => context.lineTo(point.x, point.y))
+    context.lineWidth = stroke.tool === 'highlight' ? stroke.width * 4 * scale : stroke.width * scale
     context.stroke()
   } else if (stroke.tool === 'rectangle') {
     context.strokeRect(start.x, start.y, end.x - start.x, end.y - start.y)
+  } else if (stroke.tool === 'ellipse') {
+    const centerX = (start.x + end.x) / 2
+    const centerY = (start.y + end.y) / 2
+    context.beginPath()
+    context.ellipse(centerX, centerY, Math.abs(end.x - start.x) / 2, Math.abs(end.y - start.y) / 2, 0, 0, Math.PI * 2)
+    context.stroke()
   } else if (stroke.tool === 'arrow') {
     const angle = Math.atan2(end.y - start.y, end.x - start.x)
-    const head = Math.max(8, stroke.width * scale * 4)
+    const head = Math.max(10, stroke.width * scale * 3.5)
     context.beginPath()
     context.moveTo(start.x, start.y)
     context.lineTo(end.x, end.y)
     context.moveTo(end.x, end.y)
-    context.lineTo(end.x - head * Math.cos(angle - Math.PI / 6), end.y - head * Math.sin(angle - Math.PI / 6))
+    context.lineTo(end.x - head * Math.cos(angle - 0.45), end.y - head * Math.sin(angle - 0.45))
     context.moveTo(end.x, end.y)
-    context.lineTo(end.x - head * Math.cos(angle + Math.PI / 6), end.y - head * Math.sin(angle + Math.PI / 6))
+    context.lineTo(end.x - head * Math.cos(angle + 0.45), end.y - head * Math.sin(angle + 0.45))
     context.stroke()
   } else if (stroke.tool === 'text' && stroke.text) {
-    context.font = `${Math.max(12, stroke.width * 5 * scale)}px Inter, Segoe UI, sans-serif`
-    context.fillText(stroke.text, start.x, start.y)
+    context.font = `600 ${stroke.fontSize * scale}px Inter, Segoe UI, sans-serif`
+    if (stroke.color.toLowerCase() === '#ffffff') {
+      context.shadowColor = 'rgba(0,0,0,.72)'
+      context.shadowBlur = 3 * scale
+    }
+    context.fillText(stroke.text, start.x, start.y + stroke.fontSize * scale)
   }
   context.restore()
 }
@@ -100,9 +114,12 @@ export function HiveoryBrowserDraw({ frame, onCancel, onCopied, onError }: Hiveo
   const [tool, setTool] = useState<DrawTool>('pen')
   const [color, setColor] = useState(colors[0])
   const [width, setWidth] = useState(4)
+  const [fontSize, setFontSize] = useState(18)
   const [strokes, setStrokes] = useState<DrawStroke[]>([])
   const [redo, setRedo] = useState<DrawStroke[]>([])
   const [draft, setDraft] = useState<DrawStroke | null>(null)
+  const [pendingText, setPendingText] = useState<{ point: DrawPoint; display: DrawPoint } | null>(null)
+  const [copying, setCopying] = useState(false)
   const image = useMemo(() => browserFrameUrl(frame), [frame])
 
   const render = useCallback(() => {
@@ -128,29 +145,56 @@ export function HiveoryBrowserDraw({ frame, onCancel, onCopied, onError }: Hiveo
     const observer = typeof ResizeObserver === 'undefined' || !stageRef.current ? null : new ResizeObserver(render)
     if (stageRef.current) observer?.observe(stageRef.current)
     window.addEventListener('resize', render)
-    return () => {
-      observer?.disconnect()
-      window.removeEventListener('resize', render)
-    }
+    return () => { observer?.disconnect(); window.removeEventListener('resize', render) }
   }, [render])
 
-  const finishStroke = (stroke: DrawStroke | null) => {
+  const finishStroke = useCallback((stroke: DrawStroke | null) => {
     if (!stroke) return
     setStrokes((current) => [...current, stroke])
     setRedo([])
     setDraft(null)
-  }
+  }, [])
+
+  const undo = useCallback(() => {
+    setStrokes((current) => {
+      const item = current.at(-1)
+      if (item) setRedo((items) => [...items, item])
+      return current.slice(0, -1)
+    })
+  }, [])
+
+  const redoLast = useCallback(() => {
+    setRedo((current) => {
+      const item = current.at(-1)
+      if (item) setStrokes((items) => [...items, item])
+      return current.slice(0, -1)
+    })
+  }, [])
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (pendingText) setPendingText(null)
+        else onCancel()
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+        event.preventDefault()
+        if (event.shiftKey) redoLast(); else undo()
+      }
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [onCancel, pendingText, redoLast, undo])
 
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
-    if (tool === 'pointer') return
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (copying) return
     const point = pointFromEvent(event, event.currentTarget, frame)
     if (tool === 'text') {
-      const label = window.prompt('Text for the screenshot')?.trim()
-      if (label) finishStroke({ tool, start: point, text: label.slice(0, 200), color, width })
+      const canvasBounds = event.currentTarget.getBoundingClientRect()
+      setPendingText({ point, display: { x: event.clientX - canvasBounds.left, y: event.clientY - canvasBounds.top } })
       return
     }
-    setDraft({ tool, start: point, end: point, points: [point], color, width })
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setDraft({ tool, start: point, end: point, points: [point], color, width, fontSize })
   }
 
   const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
@@ -162,67 +206,54 @@ export function HiveoryBrowserDraw({ frame, onCancel, onCopied, onError }: Hiveo
   const handlePointerUp = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!draft) return
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-    const point = pointFromEvent(event, event.currentTarget, frame)
-    finishStroke({ ...draft, end: point })
+    finishStroke({ ...draft, end: pointFromEvent(event, event.currentTarget, frame) })
   }
 
-  const undo = () => {
-    setStrokes((current) => {
-      const item = current[current.length - 1]
-      if (item) setRedo((redoItems) => [...redoItems, item])
-      return current.slice(0, -1)
-    })
-  }
-
-  const redoLast = () => {
-    setRedo((current) => {
-      const item = current[current.length - 1]
-      if (item) setStrokes((items) => [...items, item])
-      return current.slice(0, -1)
-    })
+  const commitText = (value: string) => {
+    const text = value.trim().slice(0, 300)
+    if (pendingText && text) finishStroke({ tool: 'text', start: pendingText.point, color, width, fontSize, text })
+    setPendingText(null)
   }
 
   const copy = async () => {
+    setCopying(true)
     try {
       await copyMarkedPng(frame, strokes)
       onCopied()
     } catch (error) {
       onError(error instanceof Error ? error.message : 'The marked screenshot could not be copied.')
+    } finally {
+      setCopying(false)
     }
   }
 
+  const tools: Array<{ id: DrawTool; label: string; icon: typeof PenLine }> = [
+    { id: 'pen', label: 'Pen', icon: PenLine },
+    { id: 'highlight', label: 'Highlighter', icon: Highlighter },
+    { id: 'arrow', label: 'Arrow', icon: ArrowUpRight },
+    { id: 'rectangle', label: 'Rectangle', icon: Square },
+    { id: 'ellipse', label: 'Ellipse', icon: Circle },
+    { id: 'text', label: 'Text', icon: Type },
+  ]
+
   return (
-    <div className="hiveory-browser-draw" ref={stageRef}>
+    <div className="hiveory-browser-draw" ref={stageRef} aria-busy={copying}>
       <img className="hiveory-browser-draw-image" src={image} alt="Current browser page" />
-      <canvas
-        ref={canvasRef}
-        className={tool === 'pointer' ? 'hiveory-browser-draw-canvas is-pointer' : 'hiveory-browser-draw-canvas'}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={() => finishStroke(draft)}
-      />
-      <div className="hiveory-browser-draw-toolbar" role="toolbar" aria-label="Screenshot drawing tools">
-        <button type="button" className={tool === 'pointer' ? 'is-active' : ''} onClick={() => setTool('pointer')} aria-label="Pointer" title="Pointer"><MousePointer2 size={14} /></button>
-        <button type="button" className={tool === 'pen' ? 'is-active' : ''} onClick={() => setTool('pen')} aria-label="Pen" title="Pen"><PenLine size={14} /></button>
-        <button type="button" className={tool === 'highlight' ? 'is-active' : ''} onClick={() => setTool('highlight')} aria-label="Highlighter" title="Highlighter"><span className="hiveory-browser-highlight-swatch" /></button>
-        <button type="button" className={tool === 'rectangle' ? 'is-active' : ''} onClick={() => setTool('rectangle')} aria-label="Rectangle" title="Rectangle"><Square size={14} /></button>
-        <button type="button" className={tool === 'arrow' ? 'is-active' : ''} onClick={() => setTool('arrow')} aria-label="Arrow" title="Arrow"><ArrowUpRight size={14} /></button>
-        <button type="button" className={tool === 'text' ? 'is-active' : ''} onClick={() => setTool('text')} aria-label="Text" title="Text"><Type size={14} /></button>
-        <span className="hiveory-browser-draw-separator" />
-        <div className="hiveory-browser-color-row" aria-label="Drawing color">
-          {colors.map((item) => <button key={item} type="button" className={color === item ? 'is-active' : ''} style={{ '--hiveory-draw-color': item } as CSSProperties} onClick={() => setColor(item)} aria-label={`Use ${item}`} title={`Color ${item}`} />)}
+      <canvas ref={canvasRef} className={copying ? 'hiveory-browser-draw-canvas is-busy' : 'hiveory-browser-draw-canvas'} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerUp} onPointerCancel={handlePointerUp} />
+      {pendingText && <input autoFocus className="hiveory-browser-draw-text" aria-label="Annotation text" style={{ left: pendingText.display.x, top: pendingText.display.y, color, fontSize }} onBlur={(event) => commitText(event.currentTarget.value)} onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); commitText(event.currentTarget.value) } else if (event.key === 'Escape') { event.preventDefault(); setPendingText(null) } }} />}
+      <div className="hiveory-browser-draw-controls">
+        <div className="hiveory-browser-draw-toolbar" role="toolbar" aria-label="Screenshot drawing tools">
+          {tools.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={tool === id ? 'is-active' : ''} onClick={() => setTool(id)} aria-label={label} title={label}><Icon size={14} /></button>)}
+          <span className="hiveory-browser-draw-separator" />
+          <div className="hiveory-browser-color-row" aria-label="Drawing color">{colors.map((item) => <button key={item} type="button" className={color === item ? 'is-active' : ''} style={{ '--hiveory-draw-color': item } as CSSProperties} onClick={() => setColor(item)} aria-label={`Use ${item}`} title={`Color ${item}`} />)}</div>
+          <div className="hiveory-browser-draw-options" aria-label="Line width">{widths.map((item) => <button key={item} type="button" className={width === item ? 'is-active' : ''} onClick={() => setWidth(item)} aria-label={`${item} px line`}><span style={{ width: item + 2, height: item + 2 }} /></button>)}</div>
+          <div className="hiveory-browser-draw-font" aria-label="Font size"><Type size={12} />{fontSizes.map((item) => <button key={item} type="button" className={fontSize === item ? 'is-active' : ''} onClick={() => setFontSize(item)} aria-label={`${item} px text`}>{item}</button>)}</div>
+          <span className="hiveory-browser-draw-separator" />
+          <button type="button" onClick={undo} disabled={!strokes.length} aria-label="Undo" title="Undo"><Undo2 size={14} /></button>
+          <button type="button" onClick={redoLast} disabled={!redo.length} aria-label="Redo" title="Redo"><Redo2 size={14} /></button>
+          <button type="button" onClick={() => { setStrokes([]); setRedo([]); setDraft(null) }} disabled={!strokes.length} aria-label="Clear all" title="Clear all"><Eraser size={14} /></button>
         </div>
-        <label className="hiveory-browser-draw-width" title="Line width">
-          <span>Width</span>
-          <input type="range" min={1} max={16} value={width} onChange={(event) => setWidth(Number(event.target.value))} aria-label="Line width" />
-        </label>
-        <span className="hiveory-browser-draw-separator" />
-        <button type="button" onClick={undo} disabled={!strokes.length} aria-label="Undo" title="Undo"><Undo2 size={14} /></button>
-        <button type="button" onClick={redoLast} disabled={!redo.length} aria-label="Redo" title="Redo"><Redo2 size={14} /></button>
-        <button type="button" onClick={() => { setStrokes([]); setRedo([]); setDraft(null) }} disabled={!strokes.length} aria-label="Clear drawing" title="Clear drawing"><Eraser size={14} /></button>
-        <button type="button" onClick={onCancel} aria-label="Cancel drawing" title="Cancel"><X size={14} /></button>
-        <button type="button" className="is-confirm" onClick={() => void copy()} aria-label="Copy marked screenshot" title="Copy marked screenshot"><Check size={14} /> Copy PNG</button>
+        <div className="hiveory-browser-draw-actions"><span>Draw on the page, then copy the markup to paste into your agent.</span><button type="button" onClick={onCancel} disabled={copying}><X size={14} /> Cancel</button><button type="button" className="is-confirm" onClick={() => void copy()} disabled={copying}><Check size={14} /> {copying ? 'Copying…' : 'Copy Markup'}</button></div>
       </div>
     </div>
   )

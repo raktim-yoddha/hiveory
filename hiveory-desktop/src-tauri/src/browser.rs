@@ -166,6 +166,18 @@ pub(crate) struct BrowserCaptureRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BrowserClipboardRequest {
+    pub text: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BrowserAnnotationSyncRequest {
+    pub browser_id: String,
+    #[serde(default)]
+    pub annotations: Vec<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BrowserCookieFileRequest {
     pub browser_id: String,
     pub path: String,
@@ -276,6 +288,7 @@ struct BrowserEntry {
     history_index: usize,
     pending_history_action: Option<HistoryAction>,
     active_interaction: Option<String>,
+    annotation_channel: Option<String>,
 }
 
 struct BrowserManagerInner {
@@ -378,6 +391,7 @@ impl BrowserManager {
             history_index: 0,
             pending_history_action: None,
             active_interaction: None,
+            annotation_channel: None,
         };
         let webview_for_messages = entry.webview.clone();
         self.inner
@@ -638,6 +652,7 @@ impl BrowserManager {
             history_index: 0,
             pending_history_action: None,
             active_interaction: None,
+            annotation_channel: None,
         };
         let message_webview = replacement.webview.clone();
         let previous = self
@@ -685,6 +700,41 @@ impl BrowserManager {
         webview
             .eval("window.__hiveoryBrowserPickerCleanup?.();")
             .map_err(|error| format!("The page picker could not close: {error}"))?;
+        Ok(true)
+    }
+
+    pub(crate) fn sync_annotations(
+        &self,
+        request: &BrowserAnnotationSyncRequest,
+    ) -> Result<bool, String> {
+        if request.annotations.len() > 20 {
+            return Err("A Browser pane can keep at most 20 annotations.".to_owned());
+        }
+        let encoded = serde_json::to_string(&request.annotations)
+            .map_err(|error| format!("Browser annotations could not be encoded: {error}"))?;
+        if encoded.len() > 512 * 1024 {
+            return Err("The Browser annotation payload is too large.".to_owned());
+        }
+        let nonce = uuid::Uuid::now_v7().to_string();
+        let webview = {
+            let mut entries = self
+                .inner
+                .entries
+                .lock()
+                .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
+            let entry = entries
+                .get_mut(&request.browser_id)
+                .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?;
+            entry.annotation_channel = if request.annotations.is_empty() {
+                None
+            } else {
+                Some(nonce.clone())
+            };
+            entry.webview.clone()
+        };
+        webview
+            .eval(build_annotation_overlay_script(&encoded, &nonce))
+            .map_err(|error| format!("Browser annotations could not be displayed: {error}"))?;
         Ok(true)
     }
 
@@ -965,10 +1015,19 @@ impl BrowserManager {
                                             .and_then(Value::as_str)
                                             .unwrap_or("grab")
                                             .to_owned();
-                                        if !matches!(
+                                        let annotation_control = matches!(
                                             action.as_str(),
-                                            "grab" | "annotate" | "cancel"
-                                        ) {
+                                            "annotation-copy"
+                                                | "annotation-send"
+                                                | "annotation-delete"
+                                                | "annotation-clear"
+                                        );
+                                        if !annotation_control
+                                            && !matches!(
+                                                action.as_str(),
+                                                "grab" | "annotate" | "cancel"
+                                            )
+                                        {
                                             return Ok(());
                                         }
                                         let nonce = value
@@ -982,12 +1041,20 @@ impl BrowserManager {
                                             .and_then(|mut entries| {
                                                 let entry =
                                                     entries.get_mut(&browser_id_for_callback)?;
-                                                if entry.active_interaction.as_deref()
-                                                    != Some(nonce)
-                                                {
-                                                    return None;
+                                                if annotation_control {
+                                                    if entry.annotation_channel.as_deref()
+                                                        != Some(nonce)
+                                                    {
+                                                        return None;
+                                                    }
+                                                } else {
+                                                    if entry.active_interaction.as_deref()
+                                                        != Some(nonce)
+                                                    {
+                                                        return None;
+                                                    }
+                                                    entry.active_interaction = None;
                                                 }
-                                                entry.active_interaction = None;
                                                 Some(())
                                             })
                                             .is_some();
@@ -1734,40 +1801,189 @@ fn viewport_preset(id: &str) -> Option<BrowserViewportPreset> {
     Some(preset)
 }
 
+fn build_annotation_overlay_script(annotations: &str, nonce: &str) -> String {
+    let nonce = serde_json::to_string(nonce).unwrap_or_else(|_| "\"\"".to_owned());
+    r#"(() => {
+  const annotations = __ANNOTATIONS__;
+  const nonce = __NONCE__;
+  window.__hiveoryBrowserAnnotationCleanup?.();
+  if (!Array.isArray(annotations) || annotations.length === 0) return;
+  const host = document.createElement('div');
+  host.dataset.hiveoryBrowserLayer = 'annotations';
+  const shadow = host.attachShadow({ mode: 'closed' });
+  const style = document.createElement('style');
+  style.textContent = `
+    :host { all: initial; position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    .marker { position: fixed; display: flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,.92); border-radius: 999px; background: #626262; color: white; box-shadow: 0 2px 9px rgba(0,0,0,.38); font: 700 11px/1 Segoe UI, sans-serif; pointer-events: none; transform: translate(-50%, -50%); }
+    .tray { position: fixed; right: 12px; bottom: 12px; display: flex; width: min(320px, calc(100vw - 24px)); max-height: 45vh; flex-direction: column; overflow: hidden; border: 1px solid #38434d; border-radius: 9px; background: rgba(15,18,21,.97); color: #e8edf1; box-shadow: 0 12px 30px rgba(0,0,0,.42); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
+    .head { display: flex; align-items: center; gap: 7px; min-height: 43px; padding: 7px 8px 7px 11px; border-bottom: 1px solid #303940; }
+    .head strong { min-width: 0; flex: 1; font-size: 13px; }
+    button { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; border: 1px solid #494949; border-radius: 6px; padding: 4px 8px; background: #2f2f2f; color: #e8edf1; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
+    button:hover { background: #3b3b3b; }
+    button:focus-visible { outline: 2px solid #b8b8b8; outline-offset: 1px; }
+    button.icon { width: 28px; padding: 0; color: #aab6bf; }
+    .list { min-height: 0; overflow: auto; padding: 6px; }
+    .row { display: flex; gap: 8px; border-radius: 6px; padding: 7px 6px; }
+    .row:hover { background: #22292f; }
+    .number { display: flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; border-radius: 999px; background: #626262; color: white; font-weight: 700; }
+    .body { min-width: 0; flex: 1; }
+    .body strong, .body span, .body small { display: block; overflow: hidden; text-overflow: ellipsis; }
+    .body strong { white-space: nowrap; font-size: 12px; }
+    .body span { display: -webkit-box; margin-top: 2px; color: #aab6bf; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .body small { margin-top: 3px; color: #7f8c96; text-transform: capitalize; }
+    .delete { align-self: start; opacity: 0; }
+    .row:hover .delete, .delete:focus-visible { opacity: 1; }
+  `;
+  shadow.append(style);
+  const send = (action, payload = {}) => window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-selection', nonce, action, payload }));
+  const markerItems = [];
+  const clean = (value, fallback) => typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  annotations.forEach((annotation, index) => {
+    const marker = document.createElement('div');
+    marker.className = 'marker';
+    marker.textContent = String(index + 1);
+    marker.setAttribute('aria-hidden', 'true');
+    shadow.append(marker);
+    markerItems.push({ marker, payload: annotation.payload });
+  });
+  const tray = document.createElement('section');
+  tray.className = 'tray';
+  tray.setAttribute('aria-label', 'Browser annotations');
+  const head = document.createElement('div');
+  head.className = 'head';
+  const title = document.createElement('strong');
+  title.textContent = annotations.length === 1 ? '1 annotation' : annotations.length + ' annotations';
+  const sendButton = document.createElement('button');
+  sendButton.textContent = 'Send';
+  sendButton.addEventListener('click', () => send('annotation-send'));
+  const copyButton = document.createElement('button');
+  copyButton.textContent = 'Copy';
+  copyButton.addEventListener('click', () => send('annotation-copy'));
+  const clearButton = document.createElement('button');
+  clearButton.className = 'icon';
+  clearButton.textContent = '×';
+  clearButton.title = 'Clear annotations';
+  clearButton.setAttribute('aria-label', 'Clear annotations');
+  clearButton.addEventListener('click', () => send('annotation-clear'));
+  head.append(title, sendButton, copyButton, clearButton);
+  const list = document.createElement('div');
+  list.className = 'list';
+  annotations.forEach((annotation, index) => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const number = document.createElement('div');
+    number.className = 'number';
+    number.textContent = String(index + 1);
+    const body = document.createElement('div');
+    body.className = 'body';
+    const name = document.createElement('strong');
+    const target = annotation.payload?.target || {};
+    name.textContent = clean(target.accessibility?.label, clean(target.text, clean(target.tag, 'Element')));
+    const comment = document.createElement('span');
+    comment.textContent = clean(annotation.comment, 'No feedback');
+    const intent = document.createElement('small');
+    intent.textContent = clean(annotation.intent, 'change');
+    body.append(name, comment, intent);
+    const remove = document.createElement('button');
+    remove.className = 'icon delete';
+    remove.textContent = '×';
+    remove.title = 'Delete annotation ' + (index + 1);
+    remove.setAttribute('aria-label', remove.title);
+    remove.addEventListener('click', () => send('annotation-delete', { id: annotation.id }));
+    row.append(number, body, remove);
+    list.append(row);
+  });
+  tray.append(head, list);
+  shadow.append(tray);
+  document.documentElement.append(host);
+  const update = () => markerItems.forEach(({ marker, payload }) => {
+    const target = payload?.target || {};
+    const source = target.fixed ? target.rect : target.pageRect;
+    if (!source) { marker.hidden = true; return; }
+    const left = Number(source.x || 0) + Number(source.width || 0) - (target.fixed ? 0 : scrollX);
+    const top = Number(source.y || 0) - (target.fixed ? 0 : scrollY);
+    marker.style.left = left + 'px';
+    marker.style.top = top + 'px';
+    marker.hidden = left < -20 || top < -20 || left > innerWidth + 20 || top > innerHeight + 20;
+  });
+  let frame = 0;
+  const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(update); };
+  addEventListener('scroll', schedule, true);
+  addEventListener('resize', schedule);
+  update();
+  const cleanup = () => {
+    cancelAnimationFrame(frame);
+    removeEventListener('scroll', schedule, true);
+    removeEventListener('resize', schedule);
+    host.remove();
+    if (window.__hiveoryBrowserAnnotationCleanup === cleanup) delete window.__hiveoryBrowserAnnotationCleanup;
+  };
+  window.__hiveoryBrowserAnnotationCleanup = cleanup;
+})()"#
+        .replace("__ANNOTATIONS__", annotations)
+        .replace("__NONCE__", &nonce)
+}
+
 fn build_picker_script(action: &str, nonce: &str) -> String {
     let action = serde_json::to_string(action).unwrap_or_else(|_| "\"grab\"".to_owned());
     let nonce = serde_json::to_string(nonce).unwrap_or_else(|_| "\"\"".to_owned());
     r#"(() => {
   const action = __ACTION__;
   const nonce = __NONCE__;
-  const previous = window.__hiveoryBrowserPickerCleanup;
-  if (typeof previous === 'function') previous();
+  window.__hiveoryBrowserPickerCleanup?.();
   const host = document.createElement('div');
+  host.dataset.hiveoryBrowserLayer = 'picker';
   const shadow = host.attachShadow({ mode: 'closed' });
   const style = document.createElement('style');
   style.textContent = `
-    :host { all: initial; }
-    .box { position: fixed; z-index: 2147483647; pointer-events: none; box-sizing: border-box; border: 2px solid #69b7ff; background: rgba(105,183,255,.12); border-radius: 4px; transition: all 80ms ease-out; }
-    .panel { position: fixed; right: 18px; bottom: 18px; width: min(360px, calc(100vw - 36px)); padding: 14px; box-sizing: border-box; border: 1px solid #3f4c58; border-radius: 10px; background: #11161b; color: #e9f3f8; box-shadow: 0 14px 42px rgba(0,0,0,.42); pointer-events: auto; font: 13px/1.4 Segoe UI, sans-serif; }
-    .panel strong { display: block; margin-bottom: 5px; font-size: 13px; }
-    .panel small { display: block; margin-bottom: 9px; color: #a4b6c3; font-size: 11px; }
-    .panel textarea { width: 100%; min-height: 74px; box-sizing: border-box; resize: vertical; border: 1px solid #3f4c58; border-radius: 6px; padding: 8px; color: #e9f3f8; background: #0a0e12; outline: none; font: inherit; }
-    .panel textarea:focus { border-color: #69b7ff; box-shadow: 0 0 0 2px rgba(105,183,255,.18); }
-    .actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
-    button { border: 1px solid #45657d; border-radius: 6px; padding: 6px 10px; color: #e9f3f8; background: #21445e; cursor: pointer; font: inherit; }
-    button.secondary { color: #b5c5cf; background: #202930; border-color: #3f4c58; }
+    :host { all: initial; position: fixed; inset: 0; z-index: 2147483647; pointer-events: none; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    .box { position: fixed; pointer-events: none; border: 2px solid rgba(255,255,255,.92); background: rgba(255,255,255,.08); border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.45) inset; transition: left 55ms linear, top 55ms linear, width 55ms linear, height 55ms linear; }
+    .tag { position: fixed; max-width: min(360px, calc(100vw - 20px)); overflow: hidden; border-radius: 4px; padding: 4px 7px; background: #353535; color: white; box-shadow: 0 3px 10px rgba(0,0,0,.3); text-overflow: ellipsis; white-space: nowrap; font: 600 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; pointer-events: none; }
+    .hint { position: fixed; top: 10px; left: 50%; display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid #3c4650; border-radius: 7px; padding: 7px 10px; background: rgba(17,20,23,.96); color: #dbe4ea; box-shadow: 0 7px 20px rgba(0,0,0,.32); font: 12px/1 Segoe UI, sans-serif; pointer-events: none; }
+    .hint b { color: white; font-weight: 650; }
+    .hint kbd { border: 1px solid #4b5660; border-radius: 4px; padding: 2px 4px; background: #252b30; color: #b8c4cc; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .menu, .panel { position: fixed; border: 1px solid #3b454d; border-radius: 9px; background: rgba(15,18,21,.98); color: #e9eef2; box-shadow: 0 14px 36px rgba(0,0,0,.45); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
+    .menu { min-width: 184px; padding: 5px; }
+    .menu button { display: flex; width: 100%; min-height: 32px; align-items: center; justify-content: space-between; border: 0; border-radius: 5px; padding: 6px 8px; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
+    .menu button:hover, .menu button:focus-visible { background: #2a3035; outline: none; }
+    .menu button:last-child { margin-top: 4px; border-top: 1px solid #313940; border-radius: 0 0 5px 5px; color: #aeb9c1; }
+    .menu kbd { color: #86949e; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .panel { width: min(352px, calc(100vw - 24px)); padding: 12px; }
+    .panel strong { display: block; overflow: hidden; margin-bottom: 2px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+    .panel small { display: block; overflow: hidden; margin-bottom: 9px; color: #96a4ae; text-overflow: ellipsis; white-space: nowrap; font: 10px/1.4 ui-monospace, Consolas, monospace; }
+    .panel textarea { width: 100%; min-height: 84px; resize: none; border: 1px solid #3d4851; border-radius: 6px; padding: 8px 9px; color: #edf2f5; background: #0b0e10; outline: none; font: 12px/1.45 Segoe UI, sans-serif; }
+    .panel textarea:focus { border-color: #a2a2a2; box-shadow: 0 0 0 2px rgba(162,162,162,.2); }
+    .intent-label { display: block; margin: 8px 0 5px; color: #96a4ae; font-size: 11px; }
+    .intents { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .intents button, .actions button { min-height: 30px; border: 1px solid #3d4851; border-radius: 6px; padding: 5px 9px; color: #dce5ea; background: #20262b; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
+    .intents button.active { border-color: #777; background: #464646; color: white; }
+    .actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }
+    .actions button.primary { border-color: #d8d8d8; background: #d8d8d8; color: #171717; }
+    button:focus-visible { outline: 2px solid #b8b8b8; outline-offset: 1px; }
   `;
   shadow.append(style);
   const highlight = document.createElement('div');
   highlight.className = 'box';
   highlight.hidden = true;
-  shadow.append(highlight);
+  const label = document.createElement('div');
+  label.className = 'tag';
+  label.hidden = true;
+  const hint = document.createElement('div');
+  hint.className = 'hint';
+  hint.innerHTML = action === 'annotate'
+    ? '<b>Annotate page element</b><span>Click an element</span><kbd>Esc</kbd>'
+    : '<b>Grab page element</b><span>Click or hover</span><kbd>C</kbd><kbd>S</kbd><kbd>Esc</kbd>';
+  shadow.append(highlight, label, hint);
   let editor = null;
-  let selected = null;
+  let menu = null;
+  let currentNode = null;
   const cleanup = () => {
-    document.removeEventListener('mousemove', onMove, true);
+    document.removeEventListener('pointermove', onMove, true);
     document.removeEventListener('click', onClick, true);
-    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('contextmenu', onContextMenu, true);
+    window.removeEventListener('keydown', onKeyDown, true);
     host.remove();
     if (window.__hiveoryBrowserPickerCleanup === cleanup) delete window.__hiveoryBrowserPickerCleanup;
   };
@@ -1775,95 +1991,218 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
   document.documentElement.append(host);
   const inTool = (event) => event.composedPath().includes(host);
   const text = (value, length) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, length);
-  const cssPath = (node) => {
+  const secret = /(access[_-]?token|auth[_-]?token|api[_-]?key|client[_-]?secret|session[_-]?id|csrf|password|passwd|x-amz-)/i;
+  const segment = (node, useNth) => {
+    let value = node.tagName.toLowerCase();
+    if (node.id) return value + '#' + CSS.escape(node.id).slice(0, 80);
+    const classes = [...node.classList].filter(Boolean).slice(0, 2);
+    if (classes.length) value += '.' + classes.map((item) => CSS.escape(item).slice(0, 40)).join('.');
+    if (useNth && node.parentElement) {
+      const siblings = [...node.parentElement.children].filter((item) => item.tagName === node.tagName);
+      if (siblings.length > 1) value += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+    }
+    return value;
+  };
+  const cssPath = (node, max = 7) => {
     const parts = [];
     let current = node;
-    for (let index = 0; current && current.nodeType === 1 && index < 7; index += 1, current = current.parentElement) {
-      let part = current.tagName.toLowerCase();
-      if (current.id) part += '#' + CSS.escape(current.id).slice(0, 80);
-      else {
-        const classes = [...current.classList].filter(Boolean).slice(0, 2);
-        if (classes.length) part += '.' + classes.map((item) => CSS.escape(item).slice(0, 40)).join('.');
-        const siblings = current.parentElement ? [...current.parentElement.children].filter((item) => item.tagName === current.tagName) : [];
-        if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
-      }
-      parts.unshift(part);
+    for (let index = 0; current && current.nodeType === 1 && index < max; index += 1, current = current.parentElement) {
+      parts.unshift(segment(current, true));
+      if (current.id) break;
     }
     return parts.join(' > ').slice(0, 1000);
+  };
+  const componentInfo = (node) => {
+    const key = Object.keys(node).find((item) => item.startsWith('__reactFiber$'));
+    let fiber = key ? node[key] : null;
+    const names = [];
+    let source = null;
+    for (let index = 0; fiber && index < 18; index += 1, fiber = fiber.return) {
+      const type = fiber.type;
+      const name = typeof type === 'function' ? (type.displayName || type.name) : typeof type === 'object' && type ? type.displayName : null;
+      if (name && !names.includes(name)) names.unshift(name);
+      const debug = fiber._debugSource;
+      if (!source && debug?.fileName) source = debug.fileName + (debug.lineNumber ? ':' + debug.lineNumber : '') + (debug.columnNumber ? ':' + debug.columnNumber : '');
+    }
+    return { path: names.length ? names.map((name) => '<' + name + '>').join(' ') : null, source };
   };
   const describe = (node) => {
     const rect = node.getBoundingClientRect();
     const styles = getComputedStyle(node);
     const attributes = {};
-    for (const name of ['id', 'role', 'name', 'type', 'placeholder', 'aria-label', 'aria-labelledby', 'data-testid']) {
-      const value = node.getAttribute(name);
-      if (value) attributes[name] = text(value, 240);
+    const allowed = new Set(['id','class','name','type','role','href','src','alt','title','placeholder','for','action','method','data-testid']);
+    for (const item of [...node.attributes]) {
+      if (!allowed.has(item.name) && !item.name.startsWith('aria-')) continue;
+      attributes[item.name] = secret.test(item.name) || secret.test(item.value) ? '[redacted]' : text(item.value, 400);
     }
+    const ancestors = [];
+    for (let parent = node.parentElement; parent && ancestors.length < 10; parent = parent.parentElement) ancestors.push(segment(parent, false));
+    const nearby = [];
+    const parent = node.parentElement;
+    if (parent) for (const child of [...parent.children]) {
+      if (child === node || nearby.length >= 10) continue;
+      const value = text(child.innerText || child.textContent, 200);
+      if (value && !nearby.includes(value)) nearby.push(value);
+    }
+    const nearbyElements = parent ? [...parent.children].filter((child) => child !== node).slice(0, 6).map((child) => segment(child, false) + (text(child.innerText || child.textContent, 80) ? ' "' + text(child.innerText || child.textContent, 80) + '"' : '')) : [];
+    const components = componentInfo(node);
+    const selected = String(getSelection?.()?.toString?.() || '');
+    const selectedText = selected && (node.contains(getSelection()?.anchorNode) || node.contains(getSelection()?.focusNode)) ? text(selected, 500) : null;
     return {
       tag: node.tagName.toLowerCase(),
       selector: cssPath(node),
+      fullPath: cssPath(node, 20),
+      classes: text(node.className, 500),
+      sourceFile: components.source,
+      componentPath: components.path,
+      selectedText,
+      fixed: styles.position === 'fixed',
       attributes,
-      accessibility: { role: text(node.getAttribute('role'), 120), label: text(node.getAttribute('aria-label'), 240) },
+      accessibility: { role: text(node.getAttribute('role') || node.getAttribute('type'), 120) || null, label: text(node.getAttribute('aria-label') || node.getAttribute('alt') || node.getAttribute('title'), 240) || null },
       rect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
-      styles: { display: styles.display, color: styles.color, backgroundColor: styles.backgroundColor, fontSize: styles.fontSize },
+      pageRect: { x: Math.round(rect.x + scrollX), y: Math.round(rect.y + scrollY), width: Math.round(rect.width), height: Math.round(rect.height) },
+      styles: { display: styles.display, position: styles.position, width: styles.width, height: styles.height, margin: styles.margin, padding: styles.padding, color: styles.color, backgroundColor: styles.backgroundColor, border: styles.border, borderRadius: styles.borderRadius, fontFamily: styles.fontFamily, fontSize: styles.fontSize, fontWeight: styles.fontWeight, lineHeight: styles.lineHeight, textAlign: styles.textAlign, zIndex: styles.zIndex },
       text: text(node.innerText || node.textContent, 4000),
       html: String(node.outerHTML || '').slice(0, 8000),
-      nearby: text(node.parentElement && node.parentElement.innerText, 1200),
+      nearbyElements,
+      nearby,
+      ancestors,
     };
   };
-  const send = (payload) => {
-    window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-selection', nonce, action, payload }));
+  const payloadFor = (node, delivery = 'text') => {
+    const target = describe(node);
+    const nearby = target.nearby;
+    const ancestors = target.ancestors;
+    delete target.nearby;
+    delete target.ancestors;
+    return { page: { url: location.href, title: document.title, viewport: { width: innerWidth, height: innerHeight }, scroll: { x: scrollX, y: scrollY }, dpr: devicePixelRatio, capturedAt: new Date().toISOString() }, target, nearby, ancestors, delivery };
+  };
+  const send = (eventAction, payload) => {
+    window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-selection', nonce, action: eventAction, payload }));
     cleanup();
   };
-  const showEditor = (payload) => {
-    selected = payload;
-    editor = document.createElement('div');
-    editor.className = 'panel';
-    const title = document.createElement('strong');
-    title.textContent = 'Annotate selected element';
-    const detail = document.createElement('small');
-    detail.textContent = payload.target.tag + (payload.target.attributes.id ? ' #' + payload.target.attributes.id : '') + ' · add a short note';
-    const input = document.createElement('textarea');
-    input.maxLength = 2000;
-    input.placeholder = 'What should be changed, checked, or remembered?';
-    const actions = document.createElement('div');
-    actions.className = 'actions';
-    const cancel = document.createElement('button');
-    cancel.className = 'secondary';
-    cancel.textContent = 'Cancel';
-    cancel.addEventListener('click', () => { window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-selection', nonce, action: 'cancel', payload: {} })); cleanup(); });
-    const save = document.createElement('button');
-    save.textContent = 'Save note';
-    save.addEventListener('click', () => { const comment = input.value.trim(); if (comment) send({ ...selected, comment }); });
-    actions.append(cancel, save);
-    editor.append(title, detail, input, actions);
-    shadow.append(editor);
-    input.focus();
-  };
-  const onMove = (event) => {
-    if (editor || inTool(event)) return;
-    const node = document.elementFromPoint(event.clientX, event.clientY);
-    if (!node || node === host || node === document.documentElement || node === document.body) return;
+  const cancel = () => send('cancel', {});
+  const placeHighlight = (node) => {
+    currentNode = node;
     const rect = node.getBoundingClientRect();
     highlight.hidden = false;
     highlight.style.left = rect.left + 'px';
     highlight.style.top = rect.top + 'px';
     highlight.style.width = rect.width + 'px';
     highlight.style.height = rect.height + 'px';
+    label.hidden = false;
+    label.textContent = node.tagName.toLowerCase() + '  ' + Math.round(rect.width) + ' × ' + Math.round(rect.height);
+    label.style.left = Math.max(5, Math.min(innerWidth - 220, rect.left)) + 'px';
+    label.style.top = Math.max(5, rect.top > 25 ? rect.top - 24 : rect.bottom + 4) + 'px';
+  };
+  const showEditor = (payload) => {
+    highlight.style.background = 'rgba(255,255,255,.14)';
+    let intent = 'change';
+    editor = document.createElement('div');
+    editor.className = 'panel';
+    const rect = payload.target.rect;
+    const panelTop = rect.y + rect.height + 330 < innerHeight ? rect.y + rect.height + 10 : Math.max(12, rect.y - 314);
+    editor.style.left = Math.max(12, Math.min(innerWidth - 364, rect.x + rect.width / 2 - 176)) + 'px';
+    editor.style.top = panelTop + 'px';
+    const title = document.createElement('strong');
+    title.textContent = payload.target.accessibility.label || payload.target.text || payload.target.tag;
+    const detail = document.createElement('small');
+    detail.textContent = payload.target.selector;
+    const input = document.createElement('textarea');
+    input.maxLength = 2000;
+    input.placeholder = 'Describe what the agent should change here…';
+    const intentLabel = document.createElement('span');
+    intentLabel.className = 'intent-label';
+    intentLabel.textContent = 'Intent';
+    const intents = document.createElement('div');
+    intents.className = 'intents';
+    const change = document.createElement('button');
+    const question = document.createElement('button');
+    change.className = 'active';
+    change.textContent = 'Change';
+    question.textContent = 'Question';
+    const choose = (value) => { intent = value; change.classList.toggle('active', value === 'change'); question.classList.toggle('active', value === 'question'); };
+    change.addEventListener('click', () => choose('change'));
+    question.addEventListener('click', () => choose('question'));
+    intents.append(change, question);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const cancel = document.createElement('button');
+    cancel.textContent = 'Cancel';
+    cancel.addEventListener('click', () => send('cancel', {}));
+    const add = document.createElement('button');
+    add.className = 'primary';
+    add.textContent = 'Add';
+    const submit = () => { const comment = input.value.trim(); if (comment) send('annotate', { ...payload, comment, intent }); };
+    add.addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); submit(); } });
+    actions.append(cancel, add);
+    editor.append(title, detail, input, intentLabel, intents, actions);
+    shadow.append(editor);
+    input.focus();
+  };
+  const showMenu = (event, node) => {
+    menu?.remove();
+    menu = document.createElement('div');
+    menu.className = 'menu';
+    menu.style.left = Math.max(8, Math.min(innerWidth - 196, event.clientX)) + 'px';
+    menu.style.top = Math.max(8, Math.min(innerHeight - 116, event.clientY)) + 'px';
+    const copy = document.createElement('button');
+    copy.innerHTML = '<span>Copy Contents</span><kbd>C</kbd>';
+    copy.addEventListener('click', () => send('grab', payloadFor(node, 'text')));
+    const screenshot = document.createElement('button');
+    screenshot.innerHTML = '<span>Copy Screenshot</span><kbd>S</kbd>';
+    screenshot.addEventListener('click', () => send('grab', payloadFor(node, 'screenshot')));
+    const stop = document.createElement('button');
+    stop.textContent = 'Cancel';
+    stop.addEventListener('click', cancel);
+    menu.append(copy, screenshot, stop);
+    shadow.append(menu);
+    copy.focus();
+  };
+  const onMove = (event) => {
+    if (editor || menu || inTool(event)) return;
+    const node = document.elementFromPoint(event.clientX, event.clientY);
+    if (!node || node === host || node === document.documentElement || node === document.body) return;
+    placeHighlight(node);
   };
   const onClick = (event) => {
-    if (editor || inTool(event)) return;
+    if (editor || menu || inTool(event)) return;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
     const node = document.elementFromPoint(event.clientX, event.clientY);
     if (!node || node === host) return;
-    const payload = { page: { url: location.href, title: document.title, viewport: { width: innerWidth, height: innerHeight }, scroll: { x: scrollX, y: scrollY }, dpr: devicePixelRatio, capturedAt: new Date().toISOString() }, target: describe(node) };
-    if (action === 'annotate') showEditor(payload); else send(payload);
+    placeHighlight(node);
+    const payload = payloadFor(node);
+    if (action === 'annotate') showEditor(payload); else send('grab', payload);
   };
-  const onKeyDown = (event) => { if (event.key === 'Escape') { event.preventDefault(); window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-selection', nonce, action: 'cancel', payload: {} })); cleanup(); } };
-  document.addEventListener('mousemove', onMove, true);
+  const onContextMenu = (event) => {
+    if (action !== 'grab' || editor || inTool(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    const node = document.elementFromPoint(event.clientX, event.clientY) || currentNode;
+    if (!node || node === host) return;
+    placeHighlight(node);
+    showMenu(event, node);
+  };
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); return; }
+    if (action !== 'grab' || editor || menu || !currentNode || event.ctrlKey || event.metaKey || event.altKey) return;
+    const key = String(event.key || '').toLowerCase();
+    const code = String(event.code || '');
+    if (key === 'c' || code === 'KeyC' || key === 's' || code === 'KeyS') {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      send('grab', payloadFor(currentNode, key === 's' || code === 'KeyS' ? 'screenshot' : 'text'));
+    }
+  };
+  document.addEventListener('pointermove', onMove, true);
   document.addEventListener('click', onClick, true);
-  document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('contextmenu', onContextMenu, true);
+  window.addEventListener('keydown', onKeyDown, true);
 })();"#
         .replace("__ACTION__", &action)
         .replace("__NONCE__", &nonce)
@@ -2683,7 +3022,10 @@ fn now_ms() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_allowed_browser_url, normalize_browser_input};
+    use super::{
+        build_annotation_overlay_script, build_picker_script, is_allowed_browser_url,
+        normalize_browser_input,
+    };
 
     #[test]
     fn plain_text_uses_google_search() {
@@ -2719,5 +3061,31 @@ mod tests {
         let url = url::Url::parse("https://user:pass@example.com").unwrap();
         assert!(!is_allowed_browser_url(&url));
         assert!(normalize_browser_input("mailto:user@example.com").is_err());
+    }
+
+    #[test]
+    fn picker_script_contains_bounded_selection_controls() {
+        let script = build_picker_script("grab", "nonce-value");
+        assert!(script.contains("Copy Contents"));
+        assert!(script.contains("Copy Screenshot"));
+        assert!(script.contains("contextmenu"));
+        assert!(script.contains("window.addEventListener('keydown'"));
+        assert!(script.contains("code === 'KeyC'"));
+        assert!(!script.contains("editable(event.target)"));
+        assert!(script.contains("'[redacted]'"));
+        assert!(script.contains("nonce-value"));
+        assert!(!script.contains("__ACTION__"));
+        assert!(!script.contains("__NONCE__"));
+    }
+
+    #[test]
+    fn annotation_overlay_embeds_only_supplied_data_and_channel() {
+        let annotations = r#"[{"id":"note-1","comment":"Review this","payload":{}}]"#;
+        let script = build_annotation_overlay_script(annotations, "annotation-channel");
+        assert!(script.contains("Review this"));
+        assert!(script.contains("annotation-channel"));
+        assert!(script.contains("annotation-send"));
+        assert!(script.contains("annotation-delete"));
+        assert!(!script.contains("__ANNOTATIONS__"));
     }
 }

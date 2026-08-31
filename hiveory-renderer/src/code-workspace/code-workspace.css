@@ -5268,9 +5268,9 @@
 
 .code-preview-tool-btn:hover:not(:disabled),
 .code-preview-tool-btn.is-active {
-  border-color: #35495a;
+  border-color: #4a4a4a;
   color: #f2f6f9;
-  background: #263440;
+  background: #383838;
 }
 
 .code-preview-tool-btn:disabled,
@@ -5284,9 +5284,9 @@
   align-items: center;
   gap: 1px;
   margin-right: 3px;
-  border: 1px solid #38566e;
+  border: 1px solid #464646;
   border-radius: 14px;
-  background: #1d3344;
+  background: #2f2f2f;
 }
 
 .code-preview-import-pill {
@@ -5297,7 +5297,7 @@
   border: 0;
   border-radius: 13px;
   padding: 0 9px;
-  color: #dcecf7;
+  color: #f0f0f0;
   background: transparent;
   font-size: 10px;
   font-weight: 700;
@@ -5305,14 +5305,14 @@
 }
 
 .code-preview-import-pill:hover {
-  background: #28475d;
+  background: #3b3b3b;
 }
 
 .code-preview-import-dismiss {
   width: 20px;
   height: 22px;
   margin-right: 2px;
-  color: #86a0b2;
+  color: #a7a7a7;
 }
 
 .code-preview-import-dismiss:hover {
@@ -5325,9 +5325,9 @@
   gap: 7px;
   min-height: 27px;
   padding: 4px 10px;
-  border-bottom: 1px solid #31516a;
-  color: #c9e9fb;
-  background: #132b3b;
+  border-bottom: 1px solid #474747;
+  color: #e2e2e2;
+  background: #2a2a2a;
   font-size: 10px;
 }
 
@@ -5341,11 +5341,11 @@
 .code-preview-picker-status button {
   flex-shrink: 0;
   margin-left: auto;
-  border: 1px solid #466f88;
+  border: 1px solid #5d5d5d;
   border-radius: 4px;
   padding: 3px 7px;
-  color: #d8f0fc;
-  background: #1b3e53;
+  color: #f0f0f0;
+  background: #3a3a3a;
   font-size: 10px;
   cursor: pointer;
 }
@@ -5377,7 +5377,9 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: contain;
+  object-position: center;
+  background: #15181d;
   user-select: none;
   pointer-events: none;
 }
@@ -5385,7 +5387,7 @@
 .code-preview-overlay-shade {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, .08);
+  background: rgba(0, 0, 0, .03);
   pointer-events: none;
 }
 
@@ -5398,10 +5400,10 @@
   width: min(280px, calc(100% - 20px));
   max-height: calc(100% - 20px);
   overflow: auto;
-  border: 1px solid #30343b;
+  border: 1px solid #363636;
   border-radius: 13px;
   padding: 7px;
-  background: rgba(12, 13, 15, .98);
+  background: rgba(18, 18, 18, .98);
   box-shadow: 0 18px 45px rgba(0, 0, 0, .5), 0 2px 8px rgba(0, 0, 0, .35);
 }
 
@@ -5435,7 +5437,7 @@
 .code-preview-menu-item:hover,
 .code-preview-menu-item.is-selected,
 .code-preview-menu-back:hover {
-  background: #303236;
+  background: #3a3a3a;
 }
 
 .code-preview-menu-item svg:first-child,
@@ -5465,7 +5467,7 @@
 .code-preview-menu-separator {
   height: 1px;
   margin: 6px 2px;
-  background: #25272b;
+  background: #2a2a2a;
 }
 
 .code-preview-menu-note {
@@ -5501,7 +5503,7 @@
 
 .code-preview-menu-close:hover {
   color: #fff;
-  background: #303236;
+  background: #3a3a3a;
 }
 
 .code-preview-draw-overlay {
@@ -5576,9 +5578,9 @@
 
 .hiveory-browser-draw-toolbar button:hover:not(:disabled),
 .hiveory-browser-draw-toolbar button.is-active {
-  border-color: #45586b;
+  border-color: #4a4a4a;
   color: #fff;
-  background: #2d3d4c;
+  background: #383838;
 }
 
 .hiveory-browser-draw-toolbar button:disabled {
@@ -5646,7 +5648,489 @@
 
 .hiveory-browser-draw-width input {
   width: 62px;
-  accent-color: #79b4de;
+  accent-color: #b8b8b8;
+}
+
+/* Browser interaction parity refinements. */
+.code-preview-tool-btn.has-badge {
+  position: relative;
+}
+
+.code-preview-tool-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  min-width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid #0b0c0f;
+  border-radius: 999px;
+  padding: 0 3px;
+  color: #fff;
+  background: #626262;
+  font-size: 8px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.code-preview-tool-btn:focus-visible,
+.code-preview-picker-status button:focus-visible,
+.code-preview-import-pill:focus-visible,
+.code-preview-import-dismiss:focus-visible {
+  outline: 2px solid #b8b8b8;
+  outline-offset: 1px;
+}
+
+.code-preview-menu-stack {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+}
+
+.code-preview-menu-stack .code-preview-menu {
+  position: static;
+  width: 224px;
+  max-height: calc(100vh - 120px);
+  border-radius: 11px;
+  padding: 5px;
+}
+
+.code-preview-menu-stack .code-preview-submenu {
+  width: 252px;
+}
+
+.code-preview-menu-stack .code-preview-menu-item {
+  min-height: 32px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.code-preview-menu-stack .code-preview-menu-separator {
+  margin: 4px 1px;
+}
+
+.code-preview-menu-disclosure {
+  display: flex;
+  gap: 8px;
+  margin: 4px 5px 2px;
+  border-top: 1px solid #282b2f;
+  padding: 9px 4px 4px;
+  color: #9aa5ad;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.code-preview-menu-disclosure p {
+  margin: 0;
+}
+
+.code-preview-menu-disclosure strong {
+  display: block;
+  color: #dce2e7;
+  font-size: 11px;
+}
+
+.code-preview-menu-dismiss {
+  display: none;
+}
+
+.hiveory-browser-profile-dialog {
+  position: fixed;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  width: min(390px, calc(100% - 28px));
+  transform: translate(-50%, -50%);
+  border: 1px solid #3a4249;
+  border-radius: 11px;
+  padding: 15px;
+  color: #e7edf1;
+  background: #121518;
+  box-shadow: 0 22px 65px rgba(0, 0, 0, .62);
+  font-size: 12px;
+}
+
+.hiveory-browser-profile-dialog-head,
+.hiveory-browser-profile-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hiveory-browser-profile-dialog-head span,
+.hiveory-browser-profile-dialog-head strong {
+  display: block;
+}
+
+.hiveory-browser-profile-dialog-head span {
+  margin-bottom: 2px;
+  color: #84929d;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.hiveory-browser-profile-dialog-head strong {
+  font-size: 14px;
+}
+
+.hiveory-browser-profile-dialog-head button,
+.hiveory-browser-profile-dialog-actions button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #3c454d;
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: #dce4e9;
+  background: #20262b;
+  cursor: pointer;
+}
+
+.hiveory-browser-profile-dialog-head button {
+  width: 30px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.hiveory-browser-profile-dialog p {
+  margin: 13px 0;
+  color: #9ba8b1;
+  line-height: 1.5;
+}
+
+.hiveory-browser-profile-dialog label {
+  display: grid;
+  gap: 6px;
+  color: #bcc6cd;
+  font-size: 11px;
+}
+
+.hiveory-browser-profile-dialog input {
+  min-height: 34px;
+  border: 1px solid #3c4851;
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: #eef3f6;
+  background: #0c0f11;
+  outline: none;
+}
+
+.hiveory-browser-profile-dialog input:focus {
+  border-color: #8d8d8d;
+  box-shadow: 0 0 0 2px rgba(141, 141, 141, .19);
+}
+
+.hiveory-browser-profile-dialog-actions {
+  justify-content: flex-end;
+  margin-top: 15px;
+}
+
+.hiveory-browser-profile-dialog-actions button.is-primary {
+  border-color: #d8d8d8;
+  background: #d8d8d8;
+  color: #171717;
+}
+
+.hiveory-browser-profile-dialog button:focus-visible,
+.hiveory-browser-agent-delivery button:focus-visible,
+.hiveory-browser-draw button:focus-visible {
+  outline: 2px solid #b8b8b8;
+  outline-offset: 1px;
+}
+
+.hiveory-browser-draw-canvas.is-busy {
+  cursor: progress;
+}
+
+.hiveory-browser-draw-text {
+  position: absolute;
+  z-index: 4;
+  min-width: 80px;
+  max-width: 360px;
+  border: 1px solid #8d8d8d;
+  border-radius: 3px;
+  padding: 2px 4px;
+  background: rgba(10, 12, 14, .78);
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-weight: 600;
+  line-height: 1;
+  outline: none;
+}
+
+.hiveory-browser-draw-controls {
+  position: absolute;
+  z-index: 3;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
+.hiveory-browser-draw-controls .hiveory-browser-draw-toolbar {
+  position: static;
+  width: max-content;
+  max-width: 100%;
+  min-height: 38px;
+  pointer-events: auto;
+}
+
+.hiveory-browser-draw-options,
+.hiveory-browser-draw-font {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.hiveory-browser-draw-options button {
+  width: 24px;
+  min-width: 24px;
+  padding: 0;
+}
+
+.hiveory-browser-draw-options button span {
+  display: block;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.hiveory-browser-draw-font {
+  color: #8e9ba7;
+}
+
+.hiveory-browser-draw-font button {
+  min-width: 25px;
+  padding: 0 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.hiveory-browser-draw-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #3a414b;
+  border-radius: 8px;
+  padding: 5px 6px 5px 10px;
+  color: #9da8b1;
+  background: rgba(15, 17, 21, .96);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, .35);
+  font-size: 10px;
+  pointer-events: auto;
+}
+
+.hiveory-browser-draw-actions button {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 4px 8px;
+  color: #c2ccd3;
+  background: transparent;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.hiveory-browser-draw-actions button:hover:not(:disabled) {
+  background: #2a3137;
+}
+
+.hiveory-browser-draw-actions button.is-confirm {
+  border-color: #397b55;
+  color: #ecfff1;
+  background: #205a38;
+}
+
+.code-preview-agent-overlay {
+  display: grid;
+  place-items: center;
+}
+
+.hiveory-browser-agent-delivery {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  width: min(670px, calc(100% - 30px));
+  max-height: min(560px, calc(100% - 30px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #3a4249;
+  border-radius: 12px;
+  color: #e8edf1;
+  background: #121518;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .62);
+}
+
+.hiveory-browser-agent-delivery-header,
+.hiveory-browser-agent-delivery-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.hiveory-browser-agent-delivery-header {
+  border-bottom: 1px solid #30373d;
+}
+
+.hiveory-browser-agent-delivery-header span,
+.hiveory-browser-agent-delivery-header strong {
+  display: block;
+}
+
+.hiveory-browser-agent-delivery-header span {
+  color: #87949e;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.hiveory-browser-agent-delivery-header strong {
+  margin-top: 2px;
+  font-size: 14px;
+}
+
+.hiveory-browser-agent-delivery-header button,
+.hiveory-browser-agent-delivery-footer button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #3b454d;
+  border-radius: 6px;
+  padding: 5px 9px;
+  color: #dce4e9;
+  background: #20262b;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.hiveory-browser-agent-delivery-header button {
+  width: 30px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.hiveory-browser-agent-delivery-body {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 10px;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.hiveory-browser-agent-delivery-body section {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.hiveory-browser-agent-delivery-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: #95a2ab;
+  font-size: 10px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.hiveory-browser-agent-delivery-list {
+  display: grid;
+  gap: 4px;
+  overflow: auto;
+}
+
+.hiveory-browser-agent-delivery-list > button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 8px;
+  color: #dde5ea;
+  background: #1a1f23;
+  cursor: pointer;
+  text-align: left;
+}
+
+.hiveory-browser-agent-delivery-list > button:hover,
+.hiveory-browser-agent-delivery-list > button.is-selected {
+  border-color: #5a5a5a;
+  background: #333;
+}
+
+.hiveory-browser-agent-delivery-list > button > span:not(.hiveory-browser-agent-dot) {
+  min-width: 0;
+  flex: 1;
+}
+
+.hiveory-browser-agent-delivery-list strong,
+.hiveory-browser-agent-delivery-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveory-browser-agent-delivery-list small {
+  margin-top: 2px;
+  color: #8d9aa4;
+  font-size: 9px;
+}
+
+.hiveory-browser-agent-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+}
+
+.hiveory-browser-agent-delivery-list p {
+  color: #8d9aa4;
+  font-size: 11px;
+}
+
+.hiveory-browser-agent-delivery-footer {
+  justify-content: flex-end;
+  border-top: 1px solid #30373d;
+}
+
+.hiveory-browser-agent-delivery-footer button.is-primary {
+  border-color: #d8d8d8;
+  color: #171717;
+  background: #d8d8d8;
+}
+
+.hiveory-browser-agent-delivery button:disabled,
+.hiveory-browser-profile-dialog button:disabled,
+.hiveory-browser-draw button:disabled {
+  cursor: not-allowed;
+  opacity: .48;
 }
 
 @media (max-width: 740px) {
@@ -5654,4 +6138,8 @@
   .code-preview-toolbar { gap: 2px; padding-right: 5px; padding-left: 5px; }
   .code-preview-tool-btn { width: 25px; height: 25px; }
   .code-preview-loading { display: none; }
+  .code-preview-menu-stack { flex-direction: column-reverse; align-items: flex-end; }
+  .code-preview-menu-stack .code-preview-submenu { display: grid; }
+  .hiveory-browser-draw-actions span { display: none; }
+  .hiveory-browser-agent-delivery-body { grid-template-columns: 1fr; overflow: auto; }
 }

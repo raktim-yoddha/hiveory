@@ -178,9 +178,10 @@ export type BrowserSettings = { home_url: string; search_engine: string; default
 export type BrowserConfiguration = { profiles: BrowserProfile[]; settings: BrowserSettings }
 export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null; profile_id: string; viewport_id: string }
 export type BrowserEvent = { event: 'state' | 'popup_routed' | 'download_started' | 'download_finished' | 'error'; state: BrowserRuntimeState; notice: string | null }
-export type BrowserCaptureEvent = { browser_id: string; action: 'grab' | 'annotate' | 'cancel'; payload: Record<string, unknown> }
+export type BrowserCaptureEvent = { browser_id: string; action: 'grab' | 'annotate' | 'cancel' | 'annotation-copy' | 'annotation-send' | 'annotation-delete' | 'annotation-clear'; payload: Record<string, unknown> }
 export type BrowserFrame = { png_base64: string; width: number; height: number }
 export type BrowserImportReport = { imported: number; skipped: number; source: string; message: string }
+export type BrowserClipboardRequest = { text: string }
 export type BrowserOpenRequest = { browser_id: string; workspace_id: string; url: string }
 export type BrowserNavigationRequest = { browser_id: string; url: string }
 export type BrowserIdRequest = { browser_id: string }
@@ -191,6 +192,7 @@ export type BrowserSwitchProfileRequest = { browser_id: string; profile_id: stri
 export type BrowserSettingsRequest = { settings: BrowserSettings }
 export type BrowserViewportRequest = { browser_id: string; viewport_id: string }
 export type BrowserCaptureRequest = { browser_id: string; action: 'grab' | 'annotate' }
+export type BrowserAnnotationSyncRequest = { browser_id: string; annotations: Record<string, unknown>[] }
 export type BrowserCookieFileRequest = { browser_id: string; path: string }
 export type BrowserCookieSourceRequest = { browser_id: string; source: 'chrome' | 'edge' | 'brave' }
 export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
@@ -1064,8 +1066,14 @@ export const hiveoryClient = {
   async browserStartCapture(request: BrowserCaptureRequest): Promise<boolean> {
     return hiveoryIsTauri ? tauriCommand<BrowserCaptureRequest, boolean>('hiveory_command_browser_start_capture', request) : false
   },
+  async browserCopyText(request: BrowserClipboardRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserClipboardRequest, boolean>('hiveory_command_browser_copy_text', request) : false
+  },
   async browserCancelCapture(request: BrowserIdRequest): Promise<boolean> {
     return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_cancel_capture', request) : false
+  },
+  async browserSyncAnnotations(request: BrowserAnnotationSyncRequest): Promise<boolean> {
+    return hiveoryIsTauri ? tauriCommand<BrowserAnnotationSyncRequest, boolean>('hiveory_command_browser_sync_annotations', request) : false
   },
   async browserCaptureFrame(request: BrowserIdRequest): Promise<BrowserFrame> {
     if (hiveoryIsTauri) return tauriCommand<BrowserIdRequest, BrowserFrame>('hiveory_command_browser_capture_frame', request)

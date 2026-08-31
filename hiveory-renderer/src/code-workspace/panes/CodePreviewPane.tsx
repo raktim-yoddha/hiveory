@@ -33,12 +33,17 @@ import {
   type CodePreviewSummary,
 } from '../../api/hiveory-client'
 import { HiveoryBrowserDraw } from '../../browser/HiveoryBrowserDraw'
+import { BrowserAgentDelivery } from '../../browser/BrowserAgentDelivery'
 import {
+  BROWSER_ANNOTATION_LIMIT,
   BROWSER_VIEWPORT_PRESETS,
   browserFrameUrl,
   browserViewportLabel,
-  formatBrowserAnnotation,
+  copyBrowserRegion,
+  formatBrowserAnnotations,
   formatBrowserGrab,
+  parseBrowserElementPayload,
+  type BrowserPageAnnotation,
 } from '../../browser/browser-models'
 
 const BROWSER_EVENT = 'hiveory-browser-event'
@@ -46,7 +51,7 @@ const BROWSER_CAPTURE_EVENT = 'hiveory-browser-capture-event'
 const GOOGLE_HOME = 'https://www.google.com/'
 const IMPORT_HINT_STORAGE_KEY = 'hiveory.browser.import-hint-dismissed'
 
-type BrowserOverlay = 'menu' | 'draw' | null
+type BrowserOverlay = 'menu' | 'draw' | 'agent' | null
 type BrowserMenuSection = 'root' | 'cookies' | 'viewport'
 type BrowserPickerAction = 'grab' | 'annotate'
 
@@ -73,8 +78,43 @@ function initialBrowserState(browserId: string, workspaceId: string, url: string
 }
 
 async function copyText(value: string): Promise<void> {
-  if (!navigator.clipboard?.writeText) throw new Error('Text clipboard access is unavailable.')
-  await navigator.clipboard.writeText(value)
+  if (hiveoryClient.isTauri) {
+    try {
+      if (await hiveoryClient.browserCopyText({ text: value })) return
+    } catch {
+      // Fall through to the renderer clipboard for hosts without native access.
+    }
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+      return
+    }
+  } catch {
+    // Tauri/WebView clipboard permissions can reject even when the API exists.
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '0'
+  textarea.style.left = '-9999px'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  const parent = document.body ?? document.documentElement
+  parent.appendChild(textarea)
+  let copied = false
+  try {
+    textarea.focus()
+    textarea.select()
+    copied = document.execCommand('copy')
+  } catch {
+    copied = false
+  } finally {
+    textarea.remove()
+  }
+  if (!copied) throw new Error('Text clipboard access is unavailable.')
 }
 
 function readImportHint(): boolean {
@@ -82,6 +122,17 @@ function readImportHint(): boolean {
     return window.localStorage.getItem(IMPORT_HINT_STORAGE_KEY) !== 'true'
   } catch {
     return true
+  }
+}
+
+function readBrowserAnnotations(browserId: string): BrowserPageAnnotation[] {
+  try {
+    const value = window.sessionStorage.getItem(`hiveory.browser.annotations.${browserId}`)
+    if (!value) return []
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed.slice(0, BROWSER_ANNOTATION_LIMIT) as BrowserPageAnnotation[] : []
+  } catch {
+    return []
   }
 }
 
@@ -110,51 +161,48 @@ function BrowserMenu({
   onViewport: (viewportId: string) => void
   onSettings: () => void
 }) {
-  if (section === 'cookies') {
-    return (
-      <div className="code-preview-menu code-preview-submenu" role="menu" aria-label="Import cookies">
-        <div className="code-preview-menu-heading"><Cookie size={14} /> Import Cookies</div>
-        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('chrome')}><span>From Google Chrome</span></button>
-        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('edge')}><span>From Microsoft Edge</span></button>
-        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('brave')}><span>From Brave</span></button>
-        <div className="code-preview-menu-separator" />
-        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('file')}><Import size={14} /><span>From File…</span></button>
-        <p className="code-preview-menu-note">Export cookies as JSON from the source browser, then import that file into the selected profile.</p>
-        <button type="button" className="code-preview-menu-back" onClick={() => onSection('root')}><ChevronRight size={13} className="is-back" /> Back</button>
-      </div>
-    )
-  }
-
-  if (section === 'viewport') {
-    return (
-      <div className="code-preview-menu code-preview-submenu" role="menu" aria-label="Viewport size">
-        <div className="code-preview-menu-heading"><Monitor size={14} /> Viewport Size</div>
-        {BROWSER_VIEWPORT_PRESETS.map((viewport) => (
-          <button type="button" key={viewport.id} className={activeViewportId === viewport.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeViewportId === viewport.id} onClick={() => onViewport(viewport.id)}>
-            {activeViewportId === viewport.id ? <Check size={14} /> : <span className="code-preview-menu-placeholder" />}
-            <span>{viewport.label}{viewport.width ? ` — ${viewport.dimensions}` : ''}</span>
+  return (
+    <div className="code-preview-menu-stack">
+      {section === 'cookies' && (
+        <div className="code-preview-menu code-preview-submenu" role="menu" aria-label="Import cookies">
+          <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('chrome')}><span>From Google Chrome</span></button>
+          <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('edge')}><span>From Microsoft Edge</span></button>
+          <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('brave')}><span>From Brave</span></button>
+          <div className="code-preview-menu-separator" />
+          <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onImport('file')}><span>From File…</span></button>
+          <div className="code-preview-menu-disclosure"><span aria-hidden="true">ⓘ</span><p><strong>Google logins aren’t imported</strong>Sign in to Google directly in this Browser profile.</p></div>
+        </div>
+      )}
+      {section === 'viewport' && (
+        <div className="code-preview-menu code-preview-submenu" role="menu" aria-label="Viewport size">
+          {BROWSER_VIEWPORT_PRESETS.map((viewport, index) => (
+            <React.Fragment key={viewport.id}>
+              {index === 1 && <div className="code-preview-menu-separator" />}
+              <button type="button" className={activeViewportId === viewport.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeViewportId === viewport.id} onClick={() => onViewport(viewport.id)}>
+                {activeViewportId === viewport.id ? <Check size={14} /> : <span className="code-preview-menu-placeholder" />}
+                <span>{viewport.label}{viewport.width ? ` — ${viewport.dimensions}` : ''}</span>
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+      <div className="code-preview-menu" role="menu" aria-label="Browser options">
+        {configuration.profiles.map((profile) => (
+          <button type="button" key={profile.id} className={activeProfileId === profile.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeProfileId === profile.id} onClick={() => onSwitchProfile(profile)}>
+            {activeProfileId === profile.id ? <Check size={14} /> : <span className="code-preview-menu-placeholder" />}
+            <span>{profile.name}</span>
           </button>
         ))}
-        <button type="button" className="code-preview-menu-back" onClick={() => onSection('root')}><ChevronRight size={13} className="is-back" /> Back</button>
+        <div className="code-preview-menu-separator" />
+        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={onNewProfile}><Plus size={14} /><span>New Profile…</span></button>
+        <div className="code-preview-menu-separator" />
+        <button type="button" className={section === 'cookies' ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitem" onMouseEnter={() => onSection('cookies')} onClick={() => onSection('cookies')}><Cookie size={14} /><span>Import Cookies</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
+        <div className="code-preview-menu-separator" />
+        <button type="button" className={section === 'viewport' ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitem" onMouseEnter={() => onSection('viewport')} onClick={() => onSection('viewport')}><Monitor size={14} /><span>Viewport Size</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
+        <div className="code-preview-menu-separator" />
+        <button type="button" className="code-preview-menu-item" role="menuitem" onClick={onSettings}><Settings2 size={14} /><span>Browser Settings…</span></button>
       </div>
-    )
-  }
-
-  return (
-    <div className="code-preview-menu" role="menu" aria-label="Browser options">
-      {configuration.profiles.map((profile) => (
-        <button type="button" key={profile.id} className={activeProfileId === profile.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeProfileId === profile.id} onClick={() => onSwitchProfile(profile)}>
-          {activeProfileId === profile.id ? <Check size={14} /> : <span className="code-preview-menu-placeholder" />}
-          <span>{profile.name}</span>
-        </button>
-      ))}
-      <div className="code-preview-menu-separator" />
-      <button type="button" className="code-preview-menu-item" role="menuitem" onClick={onNewProfile}><Plus size={14} /><span>New Profile…</span></button>
-      <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onSection('cookies')}><Cookie size={14} /><span>Import Cookies</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
-      <button type="button" className="code-preview-menu-item" role="menuitem" onClick={() => onSection('viewport')}><Monitor size={14} /><span>Viewport Size</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
-      <div className="code-preview-menu-separator" />
-      <button type="button" className="code-preview-menu-item" role="menuitem" onClick={onSettings}><Settings2 size={14} /><span>Browser Settings…</span></button>
-      <button type="button" className="code-preview-menu-close" onClick={onClose} aria-label="Close browser menu"><X size={13} /></button>
+      <button type="button" className="code-preview-menu-dismiss" onClick={onClose} aria-label="Close browser menu" />
     </div>
   )
 }
@@ -166,6 +214,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const fallbackHistoryRef = useRef({ entries: [initialUrlRef.current], index: 0 })
   const surfaceRef = useRef<HTMLDivElement>(null)
   const browserStateRef = useRef<BrowserRuntimeState>(initialBrowserState(browserId, workspaceId, initialUrlRef.current))
+  const browserOpenedRef = useRef(false)
   const captureUnlistenRef = useRef<(() => void) | null>(null)
   const closeTimersRef = useRef(new Map<string, number>())
   const [address, setAddress] = useState(initialUrlRef.current)
@@ -180,12 +229,20 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const [overlayFrame, setOverlayFrame] = useState<BrowserFrame | null>(null)
   const [menuSection, setMenuSection] = useState<BrowserMenuSection>('root')
   const [menuBusy, setMenuBusy] = useState(false)
+  const [profileDialog, setProfileDialog] = useState<'create' | 'switch' | null>(null)
+  const [profileName, setProfileName] = useState('')
+  const [pendingProfile, setPendingProfile] = useState<BrowserProfile | null>(null)
   const [pickerAction, setPickerAction] = useState<BrowserPickerAction | null>(null)
+  const pickerActionRef = useRef<BrowserPickerAction | null>(null)
+  const [annotations, setAnnotations] = useState<BrowserPageAnnotation[]>(() => readBrowserAnnotations(browserId))
+  const annotationsRef = useRef(annotations)
   const [showImportHint, setShowImportHint] = useState(readImportHint)
   const onStateChangeRef = useRef(onStateChange)
   const syncBoundsRef = useRef<() => void>(() => undefined)
   onStateChangeRef.current = onStateChange
   browserStateRef.current = browserState
+  pickerActionRef.current = pickerAction
+  annotationsRef.current = annotations
 
   const applyState = useCallback((state: BrowserRuntimeState | null) => {
     if (!state) return
@@ -208,6 +265,40 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     await hiveoryClient.browserSetBounds({ browser_id: browserId, x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(0, rect.width), height: Math.max(0, rect.height), visible: visible && rect.width >= 1 && rect.height >= 1 })
   }, [browserId])
 
+  const syncAnnotations = useCallback((items: BrowserPageAnnotation[]) => {
+    if (!hiveoryClient.isTauri || !browserOpenedRef.current) return
+    void hiveoryClient.browserSyncAnnotations({
+      browser_id: browserId,
+      annotations: items as unknown as Record<string, unknown>[],
+    }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Browser annotations could not be displayed.'))
+  }, [browserId])
+
+  useEffect(() => {
+    annotationsRef.current = annotations
+    try {
+      window.sessionStorage.setItem(`hiveory.browser.annotations.${browserId}`, JSON.stringify(annotations))
+    } catch {
+      // Session persistence is optional; the current pane still owns the annotations.
+    }
+    syncAnnotations(annotations)
+  }, [annotations, browserId, syncAnnotations])
+
+  const cancelPickerSession = useCallback((message: string) => {
+    pickerActionRef.current = null
+    setPickerAction(null)
+    void hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => undefined)
+    syncAnnotations(annotationsRef.current)
+    setNotice(message)
+  }, [browserId, syncAnnotations])
+
+  useEffect(() => {
+    if (!pickerAction || !hiveoryClient.isTauri) return
+    const timeout = window.setTimeout(() => {
+      cancelPickerSession('Page element tool timed out after two minutes.')
+    }, 120_000)
+    return () => window.clearTimeout(timeout)
+  }, [cancelPickerSession, pickerAction])
+
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
     const pendingClose = closeTimersRef.current.get(browserId)
@@ -221,6 +312,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       if (event.payload.state.browser_id !== browserId) return
       applyState(event.payload.state)
       if (event.payload.notice) setNotice(event.payload.notice)
+      if (event.payload.state.loading && pickerActionRef.current) {
+        cancelPickerSession('Page element tool cancelled because the page changed.')
+      }
+      if (!event.payload.state.loading) window.setTimeout(() => syncAnnotations(annotationsRef.current), 80)
     }).then((remove) => {
       if (disposed) remove()
       else unlisten = remove
@@ -229,7 +324,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       disposed = true
       unlisten?.()
     }
-  }, [applyState, browserId])
+  }, [applyState, browserId, cancelPickerSession, syncAnnotations])
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
@@ -237,19 +332,74 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     void listen<BrowserCaptureEvent>(BROWSER_CAPTURE_EVENT, (event) => {
       if (event.payload.browser_id !== browserId) return
       if (event.payload.action === 'cancel') {
+        pickerActionRef.current = null
         setPickerAction(null)
         setNotice('Page element tool cancelled.')
+        syncAnnotations(annotationsRef.current)
         return
       }
       void (async () => {
         try {
-          const value = event.payload.action === 'grab' ? formatBrowserGrab(event.payload.payload, browserStateRef.current) : formatBrowserAnnotation(event.payload.payload, browserStateRef.current)
-          await copyText(value)
-          setNotice(event.payload.action === 'grab' ? 'Page element context copied to the clipboard.' : 'Annotation copied to the clipboard.')
+          if (event.payload.action === 'annotation-copy') {
+            await copyText(formatBrowserAnnotations(annotationsRef.current))
+            setNotice('Browser annotations copied.')
+            return
+          }
+          if (event.payload.action === 'annotation-clear') {
+            setAnnotations([])
+            setNotice('Browser annotations cleared.')
+            return
+          }
+          if (event.payload.action === 'annotation-delete') {
+            const annotationId = typeof event.payload.payload.id === 'string' ? event.payload.payload.id : ''
+            if (annotationId) setAnnotations((items) => items.filter((item) => item.id !== annotationId))
+            return
+          }
+          if (event.payload.action === 'annotation-send') {
+            pickerActionRef.current = null
+            setPickerAction(null)
+            await hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => false)
+            const frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
+            await setNativeVisibility(false)
+            setOverlayFrame(frame)
+            setOverlayMode('agent')
+            return
+          }
+          const payload = parseBrowserElementPayload(event.payload.payload, browserStateRef.current)
+          if (event.payload.action === 'annotate') {
+            const comment = typeof event.payload.payload.comment === 'string' ? event.payload.payload.comment.trim().slice(0, 2000) : ''
+            const intent: BrowserPageAnnotation['intent'] = event.payload.payload.intent === 'question' ? 'question' : 'change'
+            if (comment) {
+              setAnnotations((items) => [...items, {
+                id: `browser-note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                browserId,
+                comment,
+                intent,
+                createdAt: new Date().toISOString(),
+                payload,
+              }].slice(-BROWSER_ANNOTATION_LIMIT))
+              setNotice('Annotation added.')
+            }
+          } else if (payload.delivery === 'screenshot') {
+            const frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
+            await copyBrowserRegion(frame, payload)
+            setNotice('Element screenshot copied.')
+          } else {
+            await copyText(formatBrowserGrab(payload))
+            setNotice('Page element context copied.')
+          }
         } catch (error) {
           setNotice(error instanceof Error ? error.message : 'The page context could not be copied.')
         } finally {
-          setPickerAction(null)
+          const activeAction = pickerActionRef.current
+          if (activeAction && event.payload.action !== 'annotation-send') {
+            try {
+              await hiveoryClient.browserStartCapture({ browser_id: browserId, action: activeAction })
+            } catch (error) {
+              setPickerAction(null)
+              setNotice(error instanceof Error ? error.message : 'The page element tool could not continue.')
+            }
+          }
         }
       })()
     }).then((remove) => {
@@ -261,7 +411,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       captureUnlistenRef.current?.()
       captureUnlistenRef.current = null
     }
-  }, [browserId])
+  }, [browserId, setNativeVisibility, syncAnnotations])
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
@@ -278,7 +428,9 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         }
         const state = await hiveoryClient.browserOpen({ browser_id: browserId, workspace_id: workspaceId, url: initialUrlRef.current })
         if (disposed) return
+        browserOpenedRef.current = true
         applyState(state)
+        syncAnnotations(annotationsRef.current)
         requestAnimationFrame(() => syncBoundsRef.current())
       } catch (error: unknown) {
         if (!disposed) setNotice(error instanceof Error ? error.message : 'The Browser could not be opened.')
@@ -288,11 +440,14 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       disposed = true
       const closeTimer = window.setTimeout(() => {
         closeTimers.delete(browserId)
-        if (disposed) void hiveoryClient.browserClose({ browser_id: browserId }).catch(() => undefined)
+        if (disposed) {
+          browserOpenedRef.current = false
+          void hiveoryClient.browserClose({ browser_id: browserId }).catch(() => undefined)
+        }
       }, 0)
       closeTimers.set(browserId, closeTimer)
     }
-  }, [applyState, browserId, workspaceId])
+  }, [applyState, browserId, syncAnnotations, workspaceId])
 
   useLayoutEffect(() => {
     if (!hiveoryClient.isTauri || !surfaceRef.current) return
@@ -370,13 +525,30 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     setOverlayMode(null)
     setOverlayFrame(null)
     setMenuSection('root')
-    window.requestAnimationFrame(() => syncBoundsRef.current())
-  }, [])
+    window.requestAnimationFrame(() => {
+      void setNativeVisibility(true).catch(() => undefined)
+      syncBoundsRef.current()
+      window.setTimeout(() => syncAnnotations(annotationsRef.current), 50)
+    })
+  }, [setNativeVisibility, syncAnnotations])
+
+  const handleAgentDelivery = useCallback((message: string) => {
+    setPickerAction(null)
+    closeOverlay()
+    setNotice(message)
+  }, [closeOverlay])
+
+  const handleAgentDeliveryError = useCallback((message: string) => setNotice(message), [])
 
   const openMenu = async (section: BrowserMenuSection = 'root') => {
     if (overlayMode === 'menu') {
       setMenuSection(section)
       return
+    }
+    if (pickerActionRef.current) {
+      pickerActionRef.current = null
+      setPickerAction(null)
+      await hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => false)
     }
     setMenuBusy(true)
     let frame: BrowserFrame | null = null
@@ -403,13 +575,28 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       setNotice('Page element tools are available in the desktop app.')
       return
     }
-    if (overlayMode) closeOverlay()
+    if (pickerActionRef.current === action) {
+      cancelPickerSession('Page element tool cancelled.')
+      return
+    }
+    if (pickerActionRef.current) await hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => false)
+    if (overlayMode) {
+      closeOverlay()
+      await setNativeVisibility(true).catch(() => undefined)
+    }
+    pickerActionRef.current = action
     setPickerAction(action)
     setNotice(action === 'grab' ? 'Move over the page and click an element. Press Escape to cancel.' : 'Move over the page and click an element to annotate it.')
     try {
       const started = await hiveoryClient.browserStartCapture({ browser_id: browserId, action })
-      if (!started) setPickerAction(null)
+      if (!started) {
+        pickerActionRef.current = null
+        setPickerAction(null)
+        return
+      }
+      await hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => false)
     } catch (error) {
+      pickerActionRef.current = null
       setPickerAction(null)
       setNotice(error instanceof Error ? error.message : 'The page element tool could not start.')
     }
@@ -417,15 +604,18 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
   const cancelPicker = () => {
     if (!pickerAction) return
-    setPickerAction(null)
-    void hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => undefined)
-    setNotice('Page element tool cancelled.')
+    cancelPickerSession('Page element tool cancelled.')
   }
 
   const drawScreenshot = async () => {
     if (!hiveoryClient.isTauri) {
       setNotice('Screenshot drawing is available in the desktop app.')
       return
+    }
+    if (pickerActionRef.current) {
+      pickerActionRef.current = null
+      setPickerAction(null)
+      await hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => false)
     }
     setMenuBusy(true)
     try {
@@ -445,18 +635,38 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   }
 
   const newProfile = async () => {
-    const name = window.prompt('Name for the new browser profile')?.trim()
+    const name = profileName.trim()
     if (!name) return
+    setMenuBusy(true)
     try {
       const next = await hiveoryClient.browserCreateProfile({ name })
       setConfiguration(next)
-      setNotice(`Profile “${name}” created.`)
+      const created = next.profiles.find((profile) => profile.name === name)
+      if (created) {
+        const state = await hiveoryClient.browserSwitchProfile({ browser_id: browserId, profile_id: created.id })
+        applyState(state)
+      }
+      setProfileDialog(null)
+      setProfileName('')
+      closeOverlay()
+      setNotice(`Created and switched to ${name}.`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The profile could not be created.')
+    } finally {
+      setMenuBusy(false)
     }
   }
 
-  const switchProfile = async (profile: BrowserProfile) => {
+  const switchProfile = (profile: BrowserProfile) => {
+    if (profile.id === browserStateRef.current.profile_id) return
+    setPendingProfile(profile)
+    setProfileDialog('switch')
+  }
+
+  const confirmSwitchProfile = async () => {
+    const profile = pendingProfile
+    if (!profile) return
+    setMenuBusy(true)
     closeOverlay()
     try {
       const next = await hiveoryClient.browserSwitchProfile({ browser_id: browserId, profile_id: profile.id })
@@ -464,6 +674,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       setNotice(`Switched to ${profile.name}.`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The profile could not be selected.')
+    } finally {
+      setPendingProfile(null)
+      setProfileDialog(null)
+      setMenuBusy(false)
     }
   }
 
@@ -538,8 +752,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
             </span>
           )}
           <button type="button" className={pickerAction === 'grab' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => void startPicker('grab')} title="Grab page element" aria-label="Grab page element" disabled={menuBusy}><Crosshair size={14} /></button>
-          <button type="button" className={pickerAction === 'annotate' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => void startPicker('annotate')} title="Annotate page element" aria-label="Annotate page element" disabled={menuBusy}><MessageSquarePlus size={14} /></button>
-          <button type="button" className="code-preview-tool-btn" onClick={() => void drawScreenshot()} title="Draw in screenshot" aria-label="Draw in screenshot" disabled={menuBusy}><PenLine size={14} /></button>
+          <button type="button" className={pickerAction === 'annotate' ? 'code-preview-tool-btn is-active has-badge' : 'code-preview-tool-btn has-badge'} onClick={() => void startPicker('annotate')} title="Annotate page element" aria-label="Annotate page element" disabled={menuBusy}>{annotations.length > 0 && <span className="code-preview-tool-badge">{annotations.length}</span>}<MessageSquarePlus size={14} /></button>
+          <button type="button" className={overlayMode === 'draw' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => overlayMode === 'draw' ? closeOverlay() : void drawScreenshot()} title="Draw on screenshot" aria-label="Draw on screenshot" disabled={menuBusy || pickerAction !== null}><PenLine size={14} /></button>
           <button type="button" className="code-preview-tool-btn" onClick={() => { closeOverlay(); void hiveoryClient.browserOpenDevtools({ browser_id: browserId }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Developer tools could not open.')) }} title="Open developer tools" aria-label="Open developer tools" disabled={menuBusy}><Code2 size={14} /></button>
           <button type="button" className="code-preview-tool-btn" onClick={() => void hiveoryClient.browserOpenExternal({ browser_id: browserId }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'The page could not open externally.'))} title="Open in default browser" aria-label="Open in default browser" disabled={menuBusy}><ExternalLink size={14} /></button>
           <button type="button" className={overlayMode === 'menu' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => overlayMode === 'menu' ? closeOverlay() : void openMenu()} title="Browser options" aria-label="Browser options" aria-haspopup="menu" aria-expanded={overlayMode === 'menu'} disabled={menuBusy}><Ellipsis size={16} /></button>
@@ -547,7 +761,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         {browserState.loading && <span className="code-preview-loading" aria-label="Loading">Loading…</span>}
       </div>
 
-      {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{browserState.url}</span> <button type="button" onClick={cancelPicker}>Cancel</button></div>}
+      {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{pickerAction === 'annotate' ? annotations.length ? `${annotations.length} annotations ready. Select another element or send the feedback.` : 'Click an element to add feedback for an agent.' : 'Click or hover an element, then press C to copy or S to screenshot.'}</span><button type="button" onClick={cancelPicker}>Cancel</button></div>}
       {notice && <div className="code-preview-notice" role="status">{notice}</div>}
       <div className="code-preview-stage">
         <div className="code-preview-native-surface" ref={surfaceRef} aria-busy={browserState.loading} onMouseDown={() => { if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined) }}>
@@ -558,14 +772,40 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         {overlayMode === 'menu' && (
           <div className="code-preview-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeOverlay() }}>
             {overlayFrame && <img className="code-preview-overlay-image" src={browserFrameUrl(overlayFrame)} alt="Current browser page" />}
-            <div className="code-preview-overlay-shade" />
-            <BrowserMenu section={menuSection} configuration={configuration} activeProfileId={browserState.profile_id} activeViewportId={browserState.viewport_id} onSection={setMenuSection} onClose={closeOverlay} onNewProfile={() => void newProfile()} onSwitchProfile={(profile) => void switchProfile(profile)} onImport={(source) => void importCookies(source)} onViewport={(viewportId) => void selectViewport(viewportId)} onSettings={openSettings} />
+            <BrowserMenu section={menuSection} configuration={configuration} activeProfileId={browserState.profile_id} activeViewportId={browserState.viewport_id} onSection={setMenuSection} onClose={closeOverlay} onNewProfile={() => setProfileDialog('create')} onSwitchProfile={switchProfile} onImport={(source) => void importCookies(source)} onViewport={(viewportId) => void selectViewport(viewportId)} onSettings={openSettings} />
+            {profileDialog === 'create' && (
+              <form className="hiveory-browser-profile-dialog" onSubmit={(event) => { event.preventDefault(); void newProfile() }}>
+                <div className="hiveory-browser-profile-dialog-head"><div><span>Browser profile</span><strong>Create a separate profile</strong></div><button type="button" onClick={() => { setProfileDialog(null); setProfileName('') }} aria-label="Close profile dialog"><X size={15} /></button></div>
+                <p>Profiles keep cookies, logins, and site storage isolated from one another.</p>
+                <label>Profile name<input autoFocus maxLength={80} value={profileName} onChange={(event) => setProfileName(event.target.value)} placeholder="Work, Personal, Testing…" /></label>
+                <div className="hiveory-browser-profile-dialog-actions"><button type="button" onClick={() => { setProfileDialog(null); setProfileName('') }}>Cancel</button><button type="submit" className="is-primary" disabled={!profileName.trim() || menuBusy}>{menuBusy ? 'Creating…' : 'Create'}</button></div>
+              </form>
+            )}
+            {profileDialog === 'switch' && pendingProfile && (
+              <div className="hiveory-browser-profile-dialog" role="alertdialog" aria-modal="true" aria-labelledby="browser-switch-profile-title">
+                <div className="hiveory-browser-profile-dialog-head"><div><span>Switch profile</span><strong id="browser-switch-profile-title">Reload this page with {pendingProfile.name}?</strong></div><button type="button" onClick={() => { setProfileDialog(null); setPendingProfile(null) }} aria-label="Close profile dialog"><X size={15} /></button></div>
+                <p>The current page will reload using that profile’s separate cookies and site storage.</p>
+                <div className="hiveory-browser-profile-dialog-actions"><button type="button" onClick={() => { setProfileDialog(null); setPendingProfile(null) }}>Cancel</button><button type="button" className="is-primary" onClick={() => void confirmSwitchProfile()} disabled={menuBusy}>Switch profile</button></div>
+              </div>
+            )}
           </div>
         )}
 
         {overlayMode === 'draw' && overlayFrame && (
           <div className="code-preview-overlay code-preview-draw-overlay">
             <HiveoryBrowserDraw frame={overlayFrame} onCancel={closeOverlay} onCopied={() => setNotice('Marked screenshot copied to the clipboard.')} onError={setNotice} />
+          </div>
+        )}
+
+        {overlayMode === 'agent' && (
+          <div className="code-preview-overlay code-preview-agent-overlay">
+            {overlayFrame && <img className="code-preview-overlay-image" src={browserFrameUrl(overlayFrame)} alt="Current browser page" />}
+            <BrowserAgentDelivery
+              prompt={formatBrowserAnnotations(annotations)}
+              onCancel={closeOverlay}
+              onDelivered={handleAgentDelivery}
+              onError={handleAgentDeliveryError}
+            />
           </div>
         )}
       </div>
