@@ -230,6 +230,9 @@ impl HiveoryModelProvider for HiveoryOpenAiResponsesProvider {
                 hiveory_protocol::ChatReasoningEffort::Low => "low",
                 hiveory_protocol::ChatReasoningEffort::Medium => "medium",
                 hiveory_protocol::ChatReasoningEffort::High => "high",
+                hiveory_protocol::ChatReasoningEffort::Xhigh => "xhigh",
+                hiveory_protocol::ChatReasoningEffort::Max => "max",
+                hiveory_protocol::ChatReasoningEffort::Ultra => "ultra",
                 hiveory_protocol::ChatReasoningEffort::Auto => "auto",
             }});
         }

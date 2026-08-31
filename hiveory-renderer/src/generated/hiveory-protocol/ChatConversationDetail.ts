@@ -3,4 +3,4 @@ import type { ChatBranchSummary } from "./ChatBranchSummary";
 import type { ChatMessage } from "./ChatMessage";
 import type { ChatTurnSummary } from "./ChatTurnSummary";
 
-export type ChatConversationDetail = { id: string, title: string, active_branch_id: string, pinned: boolean, archived: boolean, branches: Array<ChatBranchSummary>, messages: Array<ChatMessage>, turns: Array<ChatTurnSummary>, draft: string, event_cursor: bigint, created_at_unix_ms: bigint, updated_at_unix_ms: bigint, };
+export type ChatConversationDetail = { id: string, title: string, active_branch_id: string, pinned: boolean, archived: boolean, folder_id: string | null, folder_position: bigint, branches: Array<ChatBranchSummary>, messages: Array<ChatMessage>, turns: Array<ChatTurnSummary>, draft: string, event_cursor: bigint, created_at_unix_ms: bigint, updated_at_unix_ms: bigint, };

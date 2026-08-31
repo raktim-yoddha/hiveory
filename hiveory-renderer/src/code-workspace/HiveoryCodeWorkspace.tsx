@@ -352,7 +352,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
           <div className="code-workspace-workspace-view">
             <div className={`code-workspace-canvas-shell ${sourcePanelOpen && activeWorkspace ? 'has-source-panel' : ''} ${coordinationPanelOpen && activeWorkspace ? 'has-coordination-panel' : ''}`}>
               <CodePaneCanvas controller={controller} onOpenFolder={() => void handleAddProject()} />
-              {sourcePanelOpen && activeWorkspace && <CodeSourcePanel workspace={activeWorkspace} onClose={() => setSourcePanelOpen(false)} />}
+              {sourcePanelOpen && activeWorkspace && <CodeSourcePanel workspace={activeWorkspace} onClose={() => setSourcePanelOpen(false)} onWorkspaceChanged={refreshWorkspaces} />}
               {coordinationPanelOpen && activeWorkspace && <CodeCoordinationPanel workspace={activeWorkspace} onClose={() => setCoordinationPanelOpen(false)} />}
             </div>
           </div>

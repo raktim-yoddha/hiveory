@@ -4,18 +4,21 @@
 //! operations remain explicit and are called only by trusted host commands.
 
 use git2::{
-    BranchType, DiffFormat, DiffOptions, Index, IndexEntry, IndexTime, MergeOptions, Repository,
-    Signature, Status, StatusOptions, WorktreeAddOptions, WorktreeLockStatus, WorktreePruneOptions,
+    build::CheckoutBuilder,
+    BranchType, DiffFormat, DiffOptions, Index, IndexAddOption, IndexEntry,
+    IndexTime, MergeOptions, Reference, Remote, Repository, Signature, StashFlags, Status,
+    StatusOptions, WorktreeAddOptions, WorktreeLockStatus, WorktreePruneOptions,
 };
 use hiveory_code_domain::validate_relative_path;
 use hiveory_protocol::{
-    CodeGitBranch, CodeGitCommit, CodeGitDiff, CodeGitFileStatus, CodeGitRemote,
-    CodeGitRepositorySummary, CodeGitStatus, CodeGitWorktree,
+    CodeGitBranch, CodeGitCommit, CodeGitDiff, CodeGitFileStatus, CodeGitOperationResult,
+    CodeGitRemote, CodeGitRepositorySummary, CodeGitStash, CodeGitStatus, CodeGitWorktree,
 };
 use std::{
     collections::BTreeSet,
     fs, io,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
 };
 use thiserror::Error;
 
@@ -43,6 +46,12 @@ pub enum HiveoryGitError {
     MissingHead,
     #[error("the checkpoint merge has conflicts in: {0}")]
     MergeConflict(String),
+    #[error("the Git request is invalid: {0}")]
+    InvalidInput(String),
+    #[error("Git {operation} failed: {detail}")]
+    Command { operation: String, detail: String },
+    #[error("there are no staged changes to commit")]
+    NoStagedChanges,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,6 +123,7 @@ impl HiveoryGitService {
                     relative_path: path,
                     status: status_label(status).to_owned(),
                     staged: is_staged(status),
+                    unstaged: is_unstaged(status),
                     conflict: status.is_conflicted(),
                 })
             })
@@ -132,6 +142,7 @@ impl HiveoryGitService {
         workspace_id: &str,
         root: &Path,
         relative_path: Option<&str>,
+        staged: bool,
     ) -> Result<CodeGitDiff, HiveoryGitError> {
         let repository = Repository::discover(root).map_err(|error| {
             if error.code() == git2::ErrorCode::NotFound {
@@ -152,7 +163,20 @@ impl HiveoryGitService {
         if let Some(path) = normalized_path.as_deref() {
             options.pathspec(path);
         }
-        let diff = repository.diff_index_to_workdir(None, Some(&mut options))?;
+        let diff = if staged {
+            let index = repository.index()?;
+            let head_tree = repository
+                .head()
+                .ok()
+                .and_then(|head| head.peel_to_tree().ok());
+            repository.diff_tree_to_index(
+                head_tree.as_ref(),
+                Some(&index),
+                Some(&mut options),
+            )?
+        } else {
+            repository.diff_index_to_workdir(None, Some(&mut options))?
+        };
         let mut bytes = Vec::new();
         diff.print(DiffFormat::Patch, |delta, _hunk, line| {
             binary.set(binary.get() || delta.flags().is_binary());
@@ -170,6 +194,492 @@ impl HiveoryGitService {
             binary: binary.get(),
             truncated: truncated.get(),
         })
+    }
+
+    pub fn stage(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        relative_paths: &[String],
+        stage: bool,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let paths = normalized_paths(relative_paths)?;
+        if stage {
+            let mut index = repository.index()?;
+            if paths.is_empty() {
+                index.add_all([Path::new(".")], IndexAddOption::DEFAULT, None)?;
+            } else {
+                let worktree = repository.workdir().unwrap_or(root);
+                for path in &paths {
+                    let relative = Path::new(path);
+                    if fs::symlink_metadata(worktree.join(relative)).is_ok() {
+                        index.add_path(relative)?;
+                    } else {
+                        index.remove_path(relative)?;
+                    }
+                }
+            }
+            index.write()?;
+        } else {
+            let paths = if paths.is_empty() {
+                self.dirty_paths(root)?
+            } else {
+                paths
+            };
+            if !paths.is_empty() {
+                let head = repository
+                    .head()
+                    .ok()
+                    .and_then(|reference| reference.peel_to_commit().ok());
+                if let Some(head) = head {
+                    repository.reset_default(
+                        Some(head.as_object()),
+                        paths.iter().map(String::as_str),
+                    )?;
+                } else {
+                    let mut index = repository.index()?;
+                    for path in &paths {
+                        let _ = index.remove_path(Path::new(path));
+                    }
+                    index.write()?;
+                }
+            }
+        }
+        Ok(operation_result(
+            workspace_id,
+            if stage { "stage" } else { "unstage" },
+            if relative_paths.is_empty() {
+                if stage {
+                    "Staged all changes.".to_owned()
+                } else {
+                    "Unstaged all changes.".to_owned()
+                }
+            } else {
+                format!(
+                    "{} {} path{}.",
+                    if stage { "Staged" } else { "Unstaged" },
+                    relative_paths.len(),
+                    if relative_paths.len() == 1 { "" } else { "s" }
+                )
+            },
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn discard(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        relative_paths: &[String],
+        include_untracked: bool,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let paths = if relative_paths.is_empty() {
+            self.dirty_paths(root)?
+        } else {
+            normalized_paths(relative_paths)?
+        };
+        if paths.is_empty() {
+            return Ok(operation_result(
+                workspace_id,
+                "discard",
+                "There are no changes to discard.",
+                None,
+                self.current_branch(root)?,
+            ));
+        }
+
+        let has_head = repository
+            .head()
+            .ok()
+            .and_then(|reference| reference.target())
+            .is_some();
+        let worktree = repository.workdir().unwrap_or(root).to_path_buf();
+        let mut checkout = CheckoutBuilder::new();
+        checkout.force().update_index(true);
+        let mut remove_paths = Vec::new();
+        for path in &paths {
+            let relative = Path::new(path);
+            let status = repository.status_file(relative).unwrap_or(Status::CURRENT);
+            let untracked = !has_head
+                || (status.is_wt_new()
+                    && !status.is_wt_modified()
+                    && !status.is_wt_deleted()
+                    && !status.is_index_modified()
+                    && !status.is_index_deleted()
+                    && !status.is_index_renamed()
+                    && !status.is_index_typechange());
+            if untracked {
+                if !include_untracked {
+                    return Err(HiveoryGitError::InvalidInput(format!(
+                        "'{path}' is untracked; enable untracked-file removal to discard it"
+                    )));
+                }
+                remove_paths.push(path.clone());
+            } else {
+                checkout.path(relative);
+            }
+        }
+        if has_head && !remove_paths.is_empty() && remove_paths.len() == paths.len() {
+            // No checkout is needed when every selected path is untracked.
+        } else if has_head {
+            repository.checkout_head(Some(&mut checkout))?;
+        }
+
+        let mut index = repository.index()?;
+        for path in remove_paths {
+            let absolute = worktree.join(Path::new(&path));
+            remove_untracked_path(&absolute)?;
+            let _ = index.remove_path(Path::new(&path));
+        }
+        index.write()?;
+        Ok(operation_result(
+            workspace_id,
+            "discard",
+            format!("Discarded {} path{}.", paths.len(), if paths.len() == 1 { "" } else { "s" }),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn commit(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        message: &str,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let message = message.trim();
+        if message.is_empty() {
+            return Err(HiveoryGitError::InvalidInput(
+                "A commit message is required.".to_owned(),
+            ));
+        }
+        let mut index = repository.index()?;
+        if index.has_conflicts() {
+            return Err(HiveoryGitError::MergeConflict(
+                "Resolve conflicts before committing.".to_owned(),
+            ));
+        }
+        let tree_oid = index.write_tree()?;
+        let head = repository.head().ok().and_then(|reference| reference.target());
+        let same_as_head = head
+            .and_then(|oid| repository.find_commit(oid).ok())
+            .is_some_and(|commit| commit.tree_id() == tree_oid);
+        if same_as_head || (head.is_none() && index.is_empty()) {
+            return Err(HiveoryGitError::NoStagedChanges);
+        }
+        let signature = repository.signature().map_err(|error| {
+            HiveoryGitError::InvalidInput(format!(
+                "Configure Git user.name and user.email before committing ({error})."
+            ))
+        })?;
+        let tree = repository.find_tree(tree_oid)?;
+        let oid = if let Some(parent_oid) = head {
+            let parent = repository.find_commit(parent_oid)?;
+            repository.commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                message,
+                &tree,
+                &[&parent],
+            )?
+        } else {
+            repository.commit(
+                Some("HEAD"),
+                &signature,
+                &signature,
+                message,
+                &tree,
+                &[],
+            )?
+        };
+        Ok(operation_result(
+            workspace_id,
+            "commit",
+            format!("Created commit {}.", oid.to_string().chars().take(8).collect::<String>()),
+            Some(oid.to_string()),
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn create_branch(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        name: &str,
+        start_point: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let name = validate_branch_name(name)?;
+        if repository.find_branch(&name, BranchType::Local).is_ok() {
+            return Err(HiveoryGitError::InvalidInput(format!(
+                "The branch '{name}' already exists."
+            )));
+        }
+        let reference = start_point.unwrap_or("HEAD").trim();
+        let object = repository.revparse_single(reference)?;
+        let commit = object.peel_to_commit()?;
+        repository.branch(&name, &commit, false)?;
+        Ok(operation_result(
+            workspace_id,
+            "branch_create",
+            format!("Created branch '{name}'."),
+            Some(commit.id().to_string()),
+            Some(name),
+        ))
+    }
+
+    pub fn checkout_branch(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        name: &str,
+        create: bool,
+        start_point: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let name = validate_branch_name(name)?;
+        let existing = repository.find_branch(&name, BranchType::Local);
+        if existing.is_err() {
+            if !create {
+                return Err(HiveoryGitError::InvalidInput(format!(
+                    "The branch '{name}' does not exist."
+                )));
+            }
+            let reference = start_point.unwrap_or("HEAD").trim();
+            let object = repository.revparse_single(reference)?;
+            let commit = object.peel_to_commit()?;
+            repository.branch(&name, &commit, false)?;
+        } else if create {
+            return Err(HiveoryGitError::InvalidInput(format!(
+                "The branch '{name}' already exists."
+            )));
+        }
+        let branch = repository.find_branch(&name, BranchType::Local)?;
+        let current = repository
+            .head()
+            .ok()
+            .and_then(|head| head.shorthand().ok().map(ToOwned::to_owned));
+        if current.as_deref() != Some(name.as_str()) {
+            let mut checkout = CheckoutBuilder::new();
+            checkout.safe().update_index(true);
+            let target = branch.get().peel(git2::ObjectType::Commit)?;
+            repository.checkout_tree(&target, Some(&mut checkout))?;
+            repository.set_head(&format!("refs/heads/{name}"))?;
+        }
+        Ok(operation_result(
+            workspace_id,
+            "branch_checkout",
+            format!("Checked out '{name}'."),
+            branch.get().target().map(|oid| oid.to_string()),
+            Some(name),
+        ))
+    }
+
+    pub fn delete_branch(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        name: &str,
+        force: bool,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let repository = self.open_repository(root)?;
+        let name = validate_branch_name(name)?;
+        let mut branch = repository.find_branch(&name, BranchType::Local)?;
+        if branch.is_head() {
+            return Err(HiveoryGitError::InvalidInput(
+                "The current branch cannot be deleted.".to_owned(),
+            ));
+        }
+        if force {
+            self.run_git(root, "branch delete", &["branch".to_owned(), "-D".to_owned(), name.clone()])?;
+        } else {
+            branch.delete()?;
+        }
+        Ok(operation_result(
+            workspace_id,
+            "branch_delete",
+            format!("Deleted branch '{name}'."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn fetch(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        remote: Option<&str>,
+        branch: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let remote = validate_remote(remote)?;
+        let branch = validate_optional_branch(branch)?;
+        let mut args = vec!["fetch".to_owned()];
+        if let Some(remote) = remote {
+            args.push(remote);
+            if let Some(branch) = branch {
+                args.push(branch);
+            }
+        } else {
+            args.extend(["--all".to_owned(), "--prune".to_owned()]);
+        }
+        let output = self.run_git(root, "fetch", &args)?;
+        Ok(operation_result(
+            workspace_id,
+            "fetch",
+            command_message(output, "Fetched remote changes."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn pull(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        remote: Option<&str>,
+        branch: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let remote = validate_remote(remote)?;
+        let branch = validate_optional_branch(branch)?;
+        let mut args = vec!["pull".to_owned(), "--ff-only".to_owned()];
+        if let Some(remote) = remote {
+            args.push(remote);
+            if let Some(branch) = branch {
+                args.push(branch);
+            }
+        }
+        let output = self.run_git(root, "pull", &args)?;
+        Ok(operation_result(
+            workspace_id,
+            "pull",
+            command_message(output, "Pulled remote changes."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn push(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        remote: Option<&str>,
+        branch: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let remote = validate_remote(remote)?;
+        let branch = validate_optional_branch(branch)?;
+        let mut args = vec!["push".to_owned()];
+        if let Some(remote) = remote {
+            args.push(remote);
+            if let Some(branch) = branch {
+                args.push(branch);
+            }
+        }
+        let output = self.run_git(root, "push", &args)?;
+        Ok(operation_result(
+            workspace_id,
+            "push",
+            command_message(output, "Pushed local changes."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn stash_save(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        message: Option<&str>,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let mut repository = self.open_repository(root)?;
+        let signature = repository.signature().map_err(|error| {
+            HiveoryGitError::InvalidInput(format!(
+                "Configure Git user.name and user.email before stashing ({error})."
+            ))
+        })?;
+        let message = message.map(str::trim).filter(|value| !value.is_empty());
+        let oid = repository.stash_save2(
+            &signature,
+            message.or(Some("Hiveory source-control stash")),
+            Some(StashFlags::INCLUDE_UNTRACKED),
+        )?;
+        Ok(operation_result(
+            workspace_id,
+            "stash_save",
+            format!("Saved stash {}.", oid.to_string().chars().take(8).collect::<String>()),
+            Some(oid.to_string()),
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn stash_pop(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        index: u32,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let mut repository = self.open_repository(root)?;
+        repository.stash_pop(index as usize, None)?;
+        Ok(operation_result(
+            workspace_id,
+            "stash_pop",
+            format!("Applied stash {index}."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    pub fn stash_drop(
+        &self,
+        workspace_id: &str,
+        root: &Path,
+        index: u32,
+    ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let mut repository = self.open_repository(root)?;
+        repository.stash_drop(index as usize)?;
+        Ok(operation_result(
+            workspace_id,
+            "stash_drop",
+            format!("Dropped stash {index}."),
+            None,
+            self.current_branch(root)?,
+        ))
+    }
+
+    fn run_git(
+        &self,
+        root: &Path,
+        operation: &str,
+        args: &[String],
+    ) -> Result<String, HiveoryGitError> {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|error| HiveoryGitError::Command {
+                operation: operation.to_owned(),
+                detail: if error.kind() == io::ErrorKind::NotFound {
+                    "Git is not installed or is not available on PATH.".to_owned()
+                } else {
+                    error.to_string()
+                },
+            })?;
+        if !output.status.success() {
+            let detail = String::from_utf8_lossy(&output.stderr);
+            return Err(HiveoryGitError::Command {
+                operation: operation.to_owned(),
+                detail: sanitize_command_detail(&detail),
+            });
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
     }
 
     pub fn head_oid(&self, root: &Path) -> Result<String, HiveoryGitError> {
@@ -195,7 +705,8 @@ impl HiveoryGitService {
         workspace_id: &str,
         root: &Path,
     ) -> Result<CodeGitRepositorySummary, HiveoryGitError> {
-        let repository = self.open_repository(root)?;
+        let mut repository = self.open_repository(root)?;
+        let stashes = list_stashes(&mut repository)?;
         let head = repository.head().ok();
         let branch = head
             .as_ref()
@@ -328,6 +839,7 @@ impl HiveoryGitService {
             branches,
             worktrees,
             commits,
+            stashes,
             has_conflicts: status.files.iter().any(|file| file.conflict),
         })
     }
@@ -726,6 +1238,118 @@ fn checkpoint_signature() -> Result<Signature<'static>, HiveoryGitError> {
     Signature::now("Hiveory", "checkpoint@localhost.invalid").map_err(HiveoryGitError::Git)
 }
 
+fn operation_result(
+    workspace_id: &str,
+    operation: &str,
+    message: impl Into<String>,
+    oid: Option<String>,
+    branch: Option<String>,
+) -> CodeGitOperationResult {
+    CodeGitOperationResult {
+        workspace_id: workspace_id.to_owned(),
+        operation: operation.to_owned(),
+        message: message.into(),
+        oid,
+        branch,
+    }
+}
+
+fn normalized_paths(paths: &[String]) -> Result<Vec<String>, HiveoryGitError> {
+    let mut normalized = BTreeSet::new();
+    for path in paths {
+        let path = validate_relative_path(path.trim(), false)
+            .map_err(|error| HiveoryGitError::InvalidPath(error.to_string()))?;
+        normalized.insert(path);
+    }
+    Ok(normalized.into_iter().collect())
+}
+
+fn validate_branch_name(value: &str) -> Result<String, HiveoryGitError> {
+    let value = value.trim();
+    if value.is_empty() || value.len() > 240 || value.starts_with('-') {
+        return Err(HiveoryGitError::InvalidInput(
+            "Branch names must be 1-240 characters and cannot start with '-'.".to_owned(),
+        ));
+    }
+    let reference = format!("refs/heads/{value}");
+    if !Reference::is_valid_name(&reference) {
+        return Err(HiveoryGitError::InvalidInput(
+            "The branch name contains characters Git does not allow.".to_owned(),
+        ));
+    }
+    Ok(value.to_owned())
+}
+
+fn validate_remote(remote: Option<&str>) -> Result<Option<String>, HiveoryGitError> {
+    let Some(value) = remote.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    if !Remote::is_valid_name(value) || value.starts_with('-') {
+        return Err(HiveoryGitError::InvalidInput(
+            "The remote name is invalid.".to_owned(),
+        ));
+    }
+    Ok(Some(value.to_owned()))
+}
+
+fn validate_optional_branch(branch: Option<&str>) -> Result<Option<String>, HiveoryGitError> {
+    let Some(value) = branch.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    validate_branch_name(value).map(Some)
+}
+
+fn list_stashes(repository: &mut Repository) -> Result<Vec<CodeGitStash>, HiveoryGitError> {
+    let mut stashes = Vec::new();
+    repository.stash_foreach(|index, message, oid| {
+        stashes.push(CodeGitStash {
+            index: index.min(u32::MAX as usize) as u32,
+            oid: oid.to_string(),
+            message: message.to_owned(),
+        });
+        true
+    })?;
+    Ok(stashes)
+}
+
+fn remove_untracked_path(path: &Path) -> Result<(), HiveoryGitError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(HiveoryGitError::Io(error)),
+    };
+    if metadata.file_type().is_symlink() || metadata.is_file() {
+        fs::remove_file(path)?;
+        return Ok(());
+    }
+    Err(HiveoryGitError::InvalidInput(
+        "Discarding directories is disabled; select the files inside the directory instead."
+            .to_owned(),
+    ))
+}
+
+fn command_message(output: String, fallback: &str) -> String {
+    let output = output.trim();
+    if output.is_empty() {
+        fallback.to_owned()
+    } else {
+        output.chars().take(6000).collect()
+    }
+}
+
+fn sanitize_command_detail(value: &str) -> String {
+    value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(8)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(2000)
+        .collect()
+}
+
 fn file_mode(path: &Path) -> u32 {
     #[cfg(unix)]
     {
@@ -754,6 +1378,15 @@ fn is_staged(status: Status) -> bool {
         || status.is_index_deleted()
         || status.is_index_renamed()
         || status.is_index_typechange()
+}
+
+fn is_unstaged(status: Status) -> bool {
+    status.is_conflicted()
+        || status.is_wt_new()
+        || status.is_wt_modified()
+        || status.is_wt_deleted()
+        || status.is_wt_renamed()
+        || status.is_wt_typechange()
 }
 
 fn status_label(status: Status) -> &'static str {
@@ -826,7 +1459,7 @@ mod tests {
         assert_eq!(status.files[0].relative_path, "README.md");
         assert_eq!(status.files[0].status, "modified");
         let diff = HiveoryGitService
-            .diff("workspace", &root, Some("README.md"))
+            .diff("workspace", &root, Some("README.md"), false)
             .unwrap();
         assert!(diff.content.contains("changed"));
         let _ = fs::remove_dir_all(root);
@@ -865,6 +1498,202 @@ mod tests {
         assert_eq!(summary.commits.len(), 1);
         assert_eq!(summary.commits[0].message, "initial commit");
         assert!(!summary.detached);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn stages_unstages_and_commits_partial_changes() {
+        let root = std::env::temp_dir().join(format!(
+            "hiveory-code-git-operations-{}",
+            uuid::Uuid::now_v7()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.name", "Hiveory test")
+            .unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.email", "hiveory-test@example.invalid")
+            .unwrap();
+        fs::write(root.join("README.md"), "one\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        repository
+            .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .unwrap();
+        drop(tree);
+        drop(repository);
+
+        let service = HiveoryGitService;
+        fs::write(root.join("README.md"), "two\n").unwrap();
+        service
+            .stage(
+                "workspace",
+                &root,
+                &["README.md".to_owned()],
+                true,
+            )
+            .unwrap();
+        let status = service.status("workspace", &root).unwrap();
+        let readme = status
+            .files
+            .iter()
+            .find(|file| file.relative_path == "README.md")
+            .unwrap();
+        assert!(readme.staged);
+        assert!(!readme.unstaged);
+
+        fs::write(root.join("README.md"), "three\n").unwrap();
+        let status = service.status("workspace", &root).unwrap();
+        let readme = status
+            .files
+            .iter()
+            .find(|file| file.relative_path == "README.md")
+            .unwrap();
+        assert!(readme.staged);
+        assert!(readme.unstaged);
+
+        service
+            .stage(
+                "workspace",
+                &root,
+                &["README.md".to_owned()],
+                true,
+            )
+            .unwrap();
+        let status = service.status("workspace", &root).unwrap();
+        let readme = status
+            .files
+            .iter()
+            .find(|file| file.relative_path == "README.md")
+            .unwrap();
+        assert!(readme.staged);
+        assert!(!readme.unstaged);
+
+        service
+            .stage(
+                "workspace",
+                &root,
+                &["README.md".to_owned()],
+                false,
+            )
+            .unwrap();
+        let status = service.status("workspace", &root).unwrap();
+        let readme = status
+            .files
+            .iter()
+            .find(|file| file.relative_path == "README.md")
+            .unwrap();
+        assert!(!readme.staged);
+        assert!(readme.unstaged);
+
+        service
+            .stage(
+                "workspace",
+                &root,
+                &["README.md".to_owned()],
+                true,
+            )
+            .unwrap();
+        let result = service.commit("workspace", &root, "update README").unwrap();
+        assert!(result.oid.is_some());
+        assert!(service.status("workspace", &root).unwrap().files.is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn branch_stash_and_discard_operations_preserve_explicit_boundaries() {
+        let root = std::env::temp_dir().join(format!(
+            "hiveory-code-git-boundaries-{}",
+            uuid::Uuid::now_v7()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.name", "Hiveory test")
+            .unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.email", "hiveory-test@example.invalid")
+            .unwrap();
+        fs::write(root.join("README.md"), "original\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        repository
+            .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .unwrap();
+        let base_branch = repository
+            .head()
+            .unwrap()
+            .shorthand()
+            .unwrap()
+            .to_owned();
+        drop(tree);
+        drop(repository);
+
+        let service = HiveoryGitService;
+        service
+            .checkout_branch("workspace", &root, "feature/test", true, None)
+            .unwrap();
+        assert_eq!(service.current_branch(&root).unwrap().as_deref(), Some("feature/test"));
+        service
+            .checkout_branch("workspace", &root, &base_branch, false, None)
+            .unwrap();
+        service
+            .create_branch("workspace", &root, "feature/second", None)
+            .unwrap();
+        service
+            .delete_branch("workspace", &root, "feature/second", false)
+            .unwrap();
+
+        fs::write(root.join("README.md"), "stashed\n").unwrap();
+        service
+            .stash_save("workspace", &root, Some("before review"))
+            .unwrap();
+        assert!(service.status("workspace", &root).unwrap().files.is_empty());
+        let summary = service.repository_summary("workspace", &root).unwrap();
+        assert_eq!(summary.stashes.len(), 1);
+        service.stash_pop("workspace", &root, 0).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("README.md"))
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "stashed\n"
+        );
+
+        fs::write(root.join("README.md"), "discarded\n").unwrap();
+        fs::write(root.join("scratch.txt"), "temporary\n").unwrap();
+        service
+            .discard(
+                "workspace",
+                &root,
+                &["README.md".to_owned(), "scratch.txt".to_owned()],
+                true,
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("README.md"))
+                .unwrap()
+                .replace("\r\n", "\n"),
+            "original\n"
+        );
+        assert!(!root.join("scratch.txt").exists());
+        assert!(service.status("workspace", &root).unwrap().files.is_empty());
         let _ = fs::remove_dir_all(root);
     }
 

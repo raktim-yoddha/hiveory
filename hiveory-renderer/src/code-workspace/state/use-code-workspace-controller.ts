@@ -19,7 +19,7 @@ export interface CodeWorkspaceController {
   splitAndLaunch: (
     paneId: string,
     placement: CodePanePlacement,
-    kind: 'shell' | 'coding_agent' | 'thread' | 'preview',
+    kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     model?: string | null,
     url?: string
@@ -32,7 +32,7 @@ export interface CodeWorkspaceController {
   applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
-  createThread: (paneId: string) => Promise<void>
+  createMarkdown: (paneId: string) => Promise<void>
   sleepWorkspace: (workspaceId?: string) => Promise<boolean>
   requestClosePane: (paneId: string) => Promise<void>
   confirmClose: (terminateRunning: boolean) => Promise<void>
@@ -148,7 +148,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     async (
       paneId: string,
       placement: CodePanePlacement,
-      kind: 'shell' | 'coding_agent' | 'thread' | 'preview',
+      kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
       adapterId?: string | null,
       model?: string | null,
       url?: string
@@ -214,13 +214,30 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           })
           dispatch({ type: 'SET_PREVIEW', preview: prevRes.preview })
           dispatch({ type: 'SET_LAYOUT', layout: prevRes.layout })
-        } else if (kind === 'thread') {
-          const threadRes = await hiveoryClient.createCodePaneThread({
-            workspace_id: workspaceId,
-            pane_id: newPaneId,
-            expected_revision: curRev,
-          })
-          dispatch({ type: 'SET_LAYOUT', layout: threadRes.layout })
+        } else if (kind === 'markdown') {
+          try {
+            const markdownRes = await hiveoryClient.createCodePaneMarkdown({
+              workspace_id: workspaceId,
+              pane_id: newPaneId,
+              expected_revision: curRev,
+            })
+            dispatch({ type: 'SET_LAYOUT', layout: markdownRes.layout })
+          } catch (markdownErr: unknown) {
+            const innerMsg = formatError(markdownErr)
+            if (innerMsg.toLowerCase().includes('trust')) {
+              await hiveoryClient.trustCodeWorkspace(workspaceId, true)
+              const detail = await hiveoryClient.codeWorkspace(workspaceId)
+              curRev = detail.layout.revision ?? 0
+              const markdownRes = await hiveoryClient.createCodePaneMarkdown({
+                workspace_id: workspaceId,
+                pane_id: newPaneId,
+                expected_revision: curRev,
+              })
+              dispatch({ type: 'SET_LAYOUT', layout: markdownRes.layout })
+            } else {
+              throw markdownErr
+            }
+          }
         }
       } catch (err: unknown) {
         dispatch({ type: 'SET_ERROR', error: formatError(err) })
@@ -378,7 +395,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     []
   )
 
-  const createThread = useCallback(
+  const createMarkdown = useCallback(
     async (paneId: string) => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
@@ -386,7 +403,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         dispatch({ type: 'SET_MUTATING', isMutating: true })
         let curRev = revision
         try {
-          const res = await hiveoryClient.createCodePaneThread({
+          const res = await hiveoryClient.createCodePaneMarkdown({
             workspace_id: workspaceId,
             pane_id: paneId,
             expected_revision: curRev,
@@ -399,7 +416,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             await hiveoryClient.trustCodeWorkspace(workspaceId, true)
             const detail = await hiveoryClient.codeWorkspace(workspaceId)
             curRev = detail.layout.revision ?? 0
-            const res = await hiveoryClient.createCodePaneThread({
+            const res = await hiveoryClient.createCodePaneMarkdown({
               workspace_id: workspaceId,
               pane_id: paneId,
               expected_revision: curRev,
@@ -536,7 +553,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     applyPreset,
     launchTerminal,
     openPreview,
-    createThread,
+    createMarkdown,
     sleepWorkspace,
     requestClosePane,
     confirmClose,

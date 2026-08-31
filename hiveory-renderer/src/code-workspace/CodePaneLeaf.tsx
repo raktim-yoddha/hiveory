@@ -6,7 +6,7 @@ import { CodePaneDropTargets } from './CodePaneDropTargets'
 import { CodePaneLauncher } from './CodePaneLauncher'
 import { CodeTerminalPane } from './panes/CodeTerminalPane'
 import { CodePreviewPane } from './panes/CodePreviewPane'
-import { CodeThreadPane } from './panes/CodeThreadPane'
+import { CodeMarkdownPane } from './panes/CodeMarkdownPane'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -68,7 +68,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
     requestClosePane,
     launchTerminal,
     openPreview,
-    createThread,
+    createMarkdown,
   } = controller
   const isFocused = state.focusedPaneId === node.pane_id
   const isMaximized = state.maximizedPaneId === node.pane_id
@@ -85,7 +85,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
             onLaunchShell={() => void launchTerminal(node.pane_id, 'shell')}
             onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
             onOpenPreview={(url) => void openPreview(node.pane_id, url)}
-            onCreateThread={() => void createThread(node.pane_id)}
+            onCreateMarkdown={() => void createMarkdown(node.pane_id)}
           />
         )
       case 'terminal':
@@ -97,7 +97,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
               onLaunchShell={() => void launchTerminal(node.pane_id, 'shell')}
               onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
               onOpenPreview={(url) => void openPreview(node.pane_id, url)}
-              onCreateThread={() => void createThread(node.pane_id)}
+              onCreateMarkdown={() => void createMarkdown(node.pane_id)}
             />
           )
         }
@@ -113,9 +113,9 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
       case 'preview':
         if (!previewSummary) return <div className="code-preview-native-placeholder">Loading Browser…</div>
         return <CodePreviewPane key={previewSummary.id} workspaceId={state.workspaceId ?? previewSummary.workspace_id} preview={previewSummary} />
-      case 'thread':
-        if (!node.resource_id) return <div>No thread bound</div>
-        return <CodeThreadPane conversationId={node.resource_id} />
+      case 'markdown':
+        if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
+        return <CodeMarkdownPane workspaceId={state.workspaceId} relativePath={node.resource_id} />
       default:
         return <div>Unsupported pane type</div>
     }

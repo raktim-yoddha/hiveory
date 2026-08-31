@@ -8,6 +8,7 @@ import {
   Copy,
   Clock3,
   ExternalLink,
+  FileText,
   Folder,
   FolderOpen,
   FolderTree,
@@ -101,8 +102,8 @@ function renderPaneRailIcon(node: CodePaneNode) {
       return <CliBrandIcon identifier={node.title} size={13} />
     case 'preview':
       return <FolderOpen size={13} style={{ color: '#aeb7c2' }} aria-hidden="true" />
-    case 'thread':
-      return <Settings2 size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+    case 'markdown':
+      return <FileText size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     case 'terminal':
       return <SquareTerminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     default:

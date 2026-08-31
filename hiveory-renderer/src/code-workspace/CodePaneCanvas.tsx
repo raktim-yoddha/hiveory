@@ -237,7 +237,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
         <div className="code-empty-workspace-card">
           <div className="code-empty-workspace-icon"><FolderOpen size={22} aria-hidden="true" /></div>
           <h2>Open a workspace</h2>
-          <p>Select a folder to launch terminals, coding agents, a browser, and threads in docked panes.</p>
+          <p>Select a folder to launch terminals, coding agents, a browser, and Markdown documents in docked panes.</p>
           <button type="button" className="code-primary-button" onClick={onOpenFolder}><FolderOpen size={14} aria-hidden="true" />Open folder</button>
         </div>
       </main>

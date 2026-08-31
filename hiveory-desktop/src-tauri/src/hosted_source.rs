@@ -1,7 +1,8 @@
 use hiveory_persistence::HiveoryPersistence;
 use hiveory_protocol::{
-    CodeHostedAuthState, CodeHostedIssue, CodeHostedPullRequest, CodeHostedRepository,
-    CodeHostedTracking,
+    CodeHostedAuthState, CodeHostedIssue, CodeHostedIssueAction, CodeHostedIssueState,
+    CodeHostedOperationResult, CodeHostedPullRequest, CodeHostedPullRequestAction,
+    CodeHostedRepository, CodeHostedTracking,
 };
 use serde_json::Value;
 use std::{
@@ -19,13 +20,169 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_JSON_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug)]
-enum HostedCommandError {
+pub(crate) enum HostedCommandError {
     MissingCli,
     NotAuthenticated,
     NoRepository,
     Offline,
     RateLimited,
     Failed,
+}
+
+pub(crate) async fn create_issue(
+    workspace_id: &str,
+    root: &Path,
+    title: &str,
+    body: &str,
+    labels: &[String],
+) -> Result<CodeHostedOperationResult, HostedCommandError> {
+    let title = validate_text(title, "issue title")?;
+    let body = body.trim();
+    let mut args = vec![
+        "issue".to_owned(),
+        "create".to_owned(),
+        "--title".to_owned(),
+        title,
+        "--body".to_owned(),
+        body.to_owned(),
+    ];
+    for label in labels {
+        let label = validate_text(label, "issue label")?;
+        args.extend(["--label".to_owned(), label]);
+    }
+    let output = run_text(root, &args).await?;
+    let url = first_url(&output);
+    Ok(hosted_result(
+        workspace_id,
+        "issue_create",
+        command_message(output, "Issue created."),
+        url,
+    ))
+}
+
+pub(crate) async fn update_issue(
+    workspace_id: &str,
+    root: &Path,
+    number: u64,
+    title: Option<&str>,
+    body: Option<&str>,
+    state: Option<CodeHostedIssueState>,
+) -> Result<CodeHostedOperationResult, HostedCommandError> {
+    let number = number.to_string();
+    let mut output = String::new();
+    if title.is_some() || body.is_some() {
+        let mut args = vec!["issue".to_owned(), "edit".to_owned(), number.clone()];
+        if let Some(title) = title {
+            args.extend(["--title".to_owned(), validate_text(title, "issue title")?]);
+        }
+        if let Some(body) = body {
+            args.extend(["--body".to_owned(), body.trim().to_owned()]);
+        }
+        output = run_text(root, &args).await?;
+    }
+    if let Some(state) = state {
+        let verb = match state {
+            CodeHostedIssueState::Open => "reopen",
+            CodeHostedIssueState::Closed => "close",
+        };
+        output = run_text(
+            root,
+            &["issue".to_owned(), verb.to_owned(), number.clone()],
+        )
+        .await?;
+    }
+    Ok(hosted_result(
+        workspace_id,
+        "issue_update",
+        command_message(output, "Issue updated."),
+        None,
+    ))
+}
+
+pub(crate) async fn issue_action(
+    workspace_id: &str,
+    root: &Path,
+    number: u64,
+    action: CodeHostedIssueAction,
+) -> Result<CodeHostedOperationResult, HostedCommandError> {
+    let verb = match action {
+        CodeHostedIssueAction::Close => "close",
+        CodeHostedIssueAction::Reopen => "reopen",
+    };
+    let output = run_text(
+        root,
+        &["issue".to_owned(), verb.to_owned(), number.to_string()],
+    )
+    .await?;
+    Ok(hosted_result(
+        workspace_id,
+        "issue_action",
+        command_message(output, "Issue state updated."),
+        None,
+    ))
+}
+
+pub(crate) async fn create_pull_request(
+    workspace_id: &str,
+    root: &Path,
+    title: &str,
+    body: &str,
+    base_branch: Option<&str>,
+    draft: bool,
+) -> Result<CodeHostedOperationResult, HostedCommandError> {
+    let title = validate_text(title, "pull request title")?;
+    let mut args = vec![
+        "pr".to_owned(),
+        "create".to_owned(),
+        "--title".to_owned(),
+        title,
+        "--body".to_owned(),
+        body.trim().to_owned(),
+    ];
+    if let Some(base_branch) = base_branch.map(str::trim).filter(|value| !value.is_empty()) {
+        args.extend(["--base".to_owned(), validate_branch(base_branch)?]);
+    }
+    if draft {
+        args.push("--draft".to_owned());
+    }
+    let output = run_text(root, &args).await?;
+    let url = first_url(&output);
+    Ok(hosted_result(
+        workspace_id,
+        "pull_request_create",
+        command_message(output, "Pull request created."),
+        url,
+    ))
+}
+
+pub(crate) async fn pull_request_action(
+    workspace_id: &str,
+    root: &Path,
+    number: u64,
+    action: CodeHostedPullRequestAction,
+) -> Result<CodeHostedOperationResult, HostedCommandError> {
+    let number = number.to_string();
+    let args = match action {
+        CodeHostedPullRequestAction::Close => {
+            vec!["pr".to_owned(), "close".to_owned(), number]
+        }
+        CodeHostedPullRequestAction::Reopen => {
+            vec!["pr".to_owned(), "reopen".to_owned(), number]
+        }
+        CodeHostedPullRequestAction::Merge => vec![
+            "pr".to_owned(),
+            "merge".to_owned(),
+            number,
+            "--merge".to_owned(),
+        ],
+    };
+    let output = run_text(root, &args).await?;
+    Ok(hosted_result(
+        workspace_id,
+        "pull_request_action",
+        command_message(output, "Pull request updated."),
+        None,
+    ))
 }
 
 pub async fn load_tracking(
@@ -153,6 +310,92 @@ async fn run_json(root: &Path, args: &[&str]) -> Result<Value, HostedCommandErro
         return Err(HostedCommandError::Failed);
     }
     serde_json::from_slice(&output.stdout).map_err(|_| HostedCommandError::Failed)
+}
+
+async fn run_text(root: &Path, args: &[String]) -> Result<String, HostedCommandError> {
+    let result = timeout(
+        COMMAND_TIMEOUT,
+        Command::new("gh")
+            .args(args)
+            .current_dir(root)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output(),
+    )
+    .await;
+    let output = match result {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(HostedCommandError::MissingCli)
+        }
+        Ok(Err(_)) => return Err(HostedCommandError::Offline),
+        Err(_) => return Err(HostedCommandError::Offline),
+    };
+    if !output.status.success() {
+        return Err(classify_error(&String::from_utf8_lossy(&output.stderr)));
+    }
+    if output.stdout.len() > MAX_JSON_BYTES {
+        return Err(HostedCommandError::Failed);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn hosted_result(
+    workspace_id: &str,
+    operation: &str,
+    message: String,
+    url: Option<String>,
+) -> CodeHostedOperationResult {
+    CodeHostedOperationResult {
+        workspace_id: workspace_id.to_owned(),
+        operation: operation.to_owned(),
+        message,
+        url,
+    }
+}
+
+fn validate_text(value: &str, field: &str) -> Result<String, HostedCommandError> {
+    let value = value.trim();
+    if value.is_empty() || value.chars().any(char::is_control) {
+        return Err(HostedCommandError::Failed);
+    }
+    if value.len() > 5000 {
+        return Err(HostedCommandError::Failed);
+    }
+    let _ = field;
+    Ok(value.to_owned())
+}
+
+fn validate_branch(value: &str) -> Result<String, HostedCommandError> {
+    let value = value.trim();
+    if value.is_empty()
+        || value.len() > 240
+        || value.starts_with('-')
+        || value.contains("..")
+        || value.contains(['~', '^', ':', '\\', '?', '[', '*'])
+        || value.ends_with('.')
+        || value.ends_with('/')
+    {
+        return Err(HostedCommandError::Failed);
+    }
+    Ok(value.to_owned())
+}
+
+fn first_url(value: &str) -> Option<String> {
+    value
+        .split_whitespace()
+        .find(|part| part.starts_with("https://") || part.starts_with("http://"))
+        .map(ToOwned::to_owned)
+}
+
+fn command_message(output: String, fallback: &str) -> String {
+    let output = output.trim();
+    if output.is_empty() {
+        fallback.to_owned()
+    } else {
+        output.chars().take(6000).collect()
+    }
 }
 
 fn parse_repository(value: &Value) -> Option<CodeHostedRepository> {
@@ -337,7 +580,7 @@ fn now_ms() -> i64 {
 }
 
 impl HostedCommandError {
-    fn auth_state(&self) -> CodeHostedAuthState {
+    pub(crate) fn auth_state(&self) -> CodeHostedAuthState {
         match self {
             Self::MissingCli => CodeHostedAuthState::MissingCli,
             Self::NotAuthenticated => CodeHostedAuthState::NotAuthenticated,
@@ -348,7 +591,7 @@ impl HostedCommandError {
         }
     }
 
-    fn message(&self) -> &'static str {
+    pub(crate) fn message(&self) -> &'static str {
         match self {
             Self::MissingCli => "The hosted-source CLI is not installed or is not on PATH.",
             Self::NotAuthenticated => {

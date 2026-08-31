@@ -251,7 +251,7 @@ export function HiveoryCode() {
     if (!selectedWorkspace) return
     setBusy('diff')
     try {
-      setGitDiff(await hiveoryClient.codeGitDiff({ workspace_id: selectedWorkspace.id, relative_path: relativePath }))
+      setGitDiff(await hiveoryClient.codeGitDiff({ workspace_id: selectedWorkspace.id, relative_path: relativePath, staged: false }))
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'The Git diff could not be read.')
     } finally {

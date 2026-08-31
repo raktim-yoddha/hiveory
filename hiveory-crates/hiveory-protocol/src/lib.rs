@@ -161,6 +161,50 @@ pub enum ChatReasoningEffort {
     Low,
     Medium,
     High,
+    Xhigh,
+    Max,
+    Ultra,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatEngineAvailability {
+    Ready,
+    Missing,
+    Unauthenticated,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatModelSummary {
+    pub id: String,
+    pub display_name: String,
+    pub effort_levels: Vec<ChatReasoningEffort>,
+    pub default_effort: ChatReasoningEffort,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatEngineSummary {
+    pub id: String,
+    pub display_name: String,
+    pub executable: String,
+    pub availability: ChatEngineAvailability,
+    pub detected: bool,
+    pub authenticated: bool,
+    pub models: Vec<ChatModelSummary>,
+    pub capabilities: Vec<CodeAdapterCapability>,
+    pub message: Option<String>,
+    pub recovery_action: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatEngineCatalog {
+    pub engines: Vec<ChatEngineSummary>,
+    pub generated_at_unix_ms: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -286,6 +330,8 @@ pub struct ChatConversationSummary {
     pub active_branch_id: String,
     pub pinned: bool,
     pub archived: bool,
+    pub folder_id: Option<String>,
+    pub folder_position: i64,
     pub updated_at_unix_ms: i64,
     pub preview: Option<String>,
 }
@@ -298,6 +344,8 @@ pub struct ChatConversationDetail {
     pub active_branch_id: String,
     pub pinned: bool,
     pub archived: bool,
+    pub folder_id: Option<String>,
+    pub folder_position: i64,
     pub branches: Vec<ChatBranchSummary>,
     pub messages: Vec<ChatMessage>,
     pub turns: Vec<ChatTurnSummary>,
@@ -309,8 +357,18 @@ pub struct ChatConversationDetail {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct ChatFolderSummary {
+    pub id: String,
+    pub name: String,
+    pub position: i64,
+    pub conversation_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChatSidebarPage {
     pub conversations: Vec<ChatConversationSummary>,
+    pub folders: Vec<ChatFolderSummary>,
     pub next_cursor: Option<String>,
 }
 
@@ -393,6 +451,34 @@ pub struct ChatMetadataRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct ChatFolderCreateRequest {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatFolderUpdateRequest {
+    pub folder_id: String,
+    pub name: Option<String>,
+    pub position: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatFolderDeleteRequest {
+    pub folder_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatConversationFolderRequest {
+    pub conversation_id: String,
+    pub folder_id: Option<String>,
+    pub position: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChatDeleteRequest {
     pub conversation_id: String,
 }
@@ -410,6 +496,16 @@ pub struct ChatAttachmentImportRequest {
     pub conversation_id: String,
     pub message_id: Option<String>,
     pub paths: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatAttachmentBytesRequest {
+    pub conversation_id: String,
+    pub message_id: Option<String>,
+    pub display_name: String,
+    pub mime_type: String,
+    pub data_base64: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -461,6 +557,13 @@ pub struct ChatDeleteAttachmentRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct ChatDiscardAttachmentRequest {
+    pub conversation_id: String,
+    pub attachment_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChatExportRequest {
     pub conversation_id: String,
     pub branch_id: String,
@@ -472,6 +575,7 @@ pub struct ChatExportRequest {
 pub struct ChatSidebarQuery {
     pub search: Option<String>,
     pub archived: bool,
+    pub folder_id: Option<String>,
     pub limit: Option<u32>,
 }
 
@@ -505,6 +609,7 @@ pub enum CodeWorkspaceCapability {
     WriteFiles,
     ExecuteProcesses,
     ReadGit,
+    WriteGit,
     OpenPreview,
 }
 
@@ -747,7 +852,7 @@ pub enum CodePaneKind {
     Preview,
     Problems,
     Empty,
-    Thread,
+    Markdown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -910,7 +1015,7 @@ pub struct OpenCodePanePreviewResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct CreateCodePaneThreadRequest {
+pub struct CreateCodePaneMarkdownRequest {
     pub workspace_id: String,
     pub pane_id: String,
     pub expected_revision: u64,
@@ -918,9 +1023,9 @@ pub struct CreateCodePaneThreadRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct CreateCodePaneThreadResult {
+pub struct CreateCodePaneMarkdownResult {
     pub layout: CodePaneLayout,
-    pub conversation: ChatConversationDetail,
+    pub document: CodeDocument,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1085,6 +1190,7 @@ pub struct CodeGitFileStatus {
     pub relative_path: String,
     pub status: String,
     pub staged: bool,
+    pub unstaged: bool,
     pub conflict: bool,
 }
 
@@ -1103,6 +1209,7 @@ pub struct CodeGitStatus {
 pub struct CodeGitDiffRequest {
     pub workspace_id: String,
     pub relative_path: Option<String>,
+    pub staged: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1173,7 +1280,96 @@ pub struct CodeGitRepositorySummary {
     pub branches: Vec<CodeGitBranch>,
     pub worktrees: Vec<CodeGitWorktree>,
     pub commits: Vec<CodeGitCommit>,
+    pub stashes: Vec<CodeGitStash>,
     pub has_conflicts: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStash {
+    pub index: u32,
+    pub oid: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStageRequest {
+    pub workspace_id: String,
+    pub relative_paths: Vec<String>,
+    pub stage: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitDiscardRequest {
+    pub workspace_id: String,
+    pub relative_paths: Vec<String>,
+    pub include_untracked: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitCommitRequest {
+    pub workspace_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitBranchCreateRequest {
+    pub workspace_id: String,
+    pub name: String,
+    pub start_point: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitBranchCheckoutRequest {
+    pub workspace_id: String,
+    pub name: String,
+    pub create: bool,
+    pub start_point: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitBranchDeleteRequest {
+    pub workspace_id: String,
+    pub name: String,
+    pub force: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitRemoteRequest {
+    pub workspace_id: String,
+    pub remote: Option<String>,
+    pub branch: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStashSaveRequest {
+    pub workspace_id: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitStashIndexRequest {
+    pub workspace_id: String,
+    pub index: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeGitOperationResult {
+    pub workspace_id: String,
+    pub operation: String,
+    pub message: String,
+    pub oid: Option<String>,
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1243,6 +1439,85 @@ pub struct CodeHostedTracking {
     pub pull_requests: Vec<CodeHostedPullRequest>,
     pub refreshed_at_unix_ms: i64,
     pub stale: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedIssueCreateRequest {
+    pub workspace_id: String,
+    pub title: String,
+    pub body: String,
+    pub labels: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeHostedIssueState {
+    Open,
+    Closed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedIssueUpdateRequest {
+    pub workspace_id: String,
+    pub number: u64,
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub state: Option<CodeHostedIssueState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeHostedIssueAction {
+    Close,
+    Reopen,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedIssueActionRequest {
+    pub workspace_id: String,
+    pub number: u64,
+    pub action: CodeHostedIssueAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedPullRequestCreateRequest {
+    pub workspace_id: String,
+    pub title: String,
+    pub body: String,
+    pub base_branch: Option<String>,
+    pub draft: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeHostedPullRequestAction {
+    Close,
+    Reopen,
+    Merge,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedPullRequestActionRequest {
+    pub workspace_id: String,
+    pub number: u64,
+    pub action: CodeHostedPullRequestAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeHostedOperationResult {
+    pub workspace_id: String,
+    pub operation: String,
+    pub message: String,
+    pub url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2857,6 +3132,10 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     NotificationSummary::export_all(&config)?;
     DiagnosticSnapshot::export_all(&config)?;
     ChatReasoningEffort::export_all(&config)?;
+    ChatEngineAvailability::export_all(&config)?;
+    ChatModelSummary::export_all(&config)?;
+    ChatEngineSummary::export_all(&config)?;
+    ChatEngineCatalog::export_all(&config)?;
     ChatTurnState::export_all(&config)?;
     ChatAttachmentSummary::export_all(&config)?;
     ChatMessagePart::export_all(&config)?;
@@ -2866,6 +3145,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     ChatTurnSummary::export_all(&config)?;
     ChatConversationSummary::export_all(&config)?;
     ChatConversationDetail::export_all(&config)?;
+    ChatFolderSummary::export_all(&config)?;
     ChatSidebarPage::export_all(&config)?;
     ChatEventEnvelope::export_all(&config)?;
     ChatProviderPart::export_all(&config)?;
@@ -2875,14 +3155,20 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     ChatProviderStreamEvent::export_all(&config)?;
     ChatCreateRequest::export_all(&config)?;
     ChatMetadataRequest::export_all(&config)?;
+    ChatFolderCreateRequest::export_all(&config)?;
+    ChatFolderUpdateRequest::export_all(&config)?;
+    ChatFolderDeleteRequest::export_all(&config)?;
+    ChatConversationFolderRequest::export_all(&config)?;
     ChatDeleteRequest::export_all(&config)?;
     ChatDraftRequest::export_all(&config)?;
     ChatAttachmentImportRequest::export_all(&config)?;
+    ChatAttachmentBytesRequest::export_all(&config)?;
     ChatSendRequest::export_all(&config)?;
     ChatTurnRequest::export_all(&config)?;
     ChatEditRequest::export_all(&config)?;
     ChatBranchRequest::export_all(&config)?;
     ChatDeleteAttachmentRequest::export_all(&config)?;
+    ChatDiscardAttachmentRequest::export_all(&config)?;
     ChatExportRequest::export_all(&config)?;
     ChatSidebarQuery::export_all(&config)?;
     ChatEventsQuery::export_all(&config)?;
@@ -2926,8 +3212,8 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     LaunchCodePaneTerminalResult::export_all(&config)?;
     OpenCodePanePreviewRequest::export_all(&config)?;
     OpenCodePanePreviewResult::export_all(&config)?;
-    CreateCodePaneThreadRequest::export_all(&config)?;
-    CreateCodePaneThreadResult::export_all(&config)?;
+    CreateCodePaneMarkdownRequest::export_all(&config)?;
+    CreateCodePaneMarkdownResult::export_all(&config)?;
     CloseCodePaneRequest::export_all(&config)?;
     CodeTerminalSnapshotQuery::export_all(&config)?;
     CodeTerminalSnapshot::export_all(&config)?;
@@ -2954,12 +3240,32 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeGitWorktree::export_all(&config)?;
     CodeGitCommit::export_all(&config)?;
     CodeGitRepositorySummary::export_all(&config)?;
+    CodeGitStash::export_all(&config)?;
+    CodeGitStageRequest::export_all(&config)?;
+    CodeGitDiscardRequest::export_all(&config)?;
+    CodeGitCommitRequest::export_all(&config)?;
+    CodeGitBranchCreateRequest::export_all(&config)?;
+    CodeGitBranchCheckoutRequest::export_all(&config)?;
+    CodeGitBranchDeleteRequest::export_all(&config)?;
+    CodeGitRemoteRequest::export_all(&config)?;
+    CodeGitStashSaveRequest::export_all(&config)?;
+    CodeGitStashIndexRequest::export_all(&config)?;
+    CodeGitOperationResult::export_all(&config)?;
     CodeHostedAuthState::export_all(&config)?;
     CodeHostedTrackingRequest::export_all(&config)?;
     CodeHostedRepository::export_all(&config)?;
     CodeHostedIssue::export_all(&config)?;
     CodeHostedPullRequest::export_all(&config)?;
     CodeHostedTracking::export_all(&config)?;
+    CodeHostedIssueCreateRequest::export_all(&config)?;
+    CodeHostedIssueState::export_all(&config)?;
+    CodeHostedIssueUpdateRequest::export_all(&config)?;
+    CodeHostedIssueAction::export_all(&config)?;
+    CodeHostedIssueActionRequest::export_all(&config)?;
+    CodeHostedPullRequestCreateRequest::export_all(&config)?;
+    CodeHostedPullRequestAction::export_all(&config)?;
+    CodeHostedPullRequestActionRequest::export_all(&config)?;
+    CodeHostedOperationResult::export_all(&config)?;
     CodePreviewState::export_all(&config)?;
     CodePreviewRequest::export_all(&config)?;
     CodePreviewSummary::export_all(&config)?;

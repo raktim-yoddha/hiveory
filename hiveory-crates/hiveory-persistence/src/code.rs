@@ -1,12 +1,13 @@
 //! Durable Code-mode metadata. Terminal bytes are intentionally not stored.
 
 use super::{now_ms, HiveoryPersistence};
-use hiveory_code_domain::migrate_layout_v1;
+use hiveory_code_domain::{migrate_layout_v1, migrate_layout_v2, CODE_LAYOUT_VERSION};
 use hiveory_protocol::{
     CodeDocumentSummary, CodePaneLayout, CodePreviewState, CodePreviewSummary, CodeProjectKind,
     CodeProjectSummary, CodeTerminalKind, CodeTerminalState, CodeTerminalSummary,
     CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
 };
+use serde_json::Value;
 use sqlx::Row;
 
 impl HiveoryPersistence {
@@ -162,11 +163,33 @@ impl HiveoryPersistence {
         let version: i64 = row.get(1);
         let revision: i64 = row.try_get(2).unwrap_or(0);
 
-        let parsed: Result<CodePaneLayout, _> = serde_json::from_str(&layout_json);
+        // The removed pane kind cannot be deserialized by the current
+        // protocol. Normalize it before typed parsing so existing layouts keep
+        // their split tree instead of being treated as corrupt. The old chat
+        // binding is intentionally discarded because it is not a Markdown
+        // document path.
+        let (normalized_json, removed_legacy_pane) =
+            match normalize_legacy_layout_json(&layout_json) {
+                Ok(value) => value,
+                Err(_) => {
+                    let default = hiveory_code_domain::default_layout(workspace_id);
+                    self.save_code_layout(&default).await?;
+                    return Ok(Some(default));
+                }
+            };
+        let parsed: Result<CodePaneLayout, _> = serde_json::from_value(normalized_json);
         match parsed {
             Ok(mut layout) => {
                 if version == 1 || layout.version == 1 {
                     let migrated = migrate_layout_v1(&layout);
+                    self.save_code_layout(&migrated).await?;
+                    Ok(Some(migrated))
+                } else if removed_legacy_pane
+                    || version != i64::from(CODE_LAYOUT_VERSION)
+                    || layout.version != CODE_LAYOUT_VERSION
+                {
+                    let mut migrated = migrate_layout_v2(&layout);
+                    migrated.revision = revision as u64;
                     self.save_code_layout(&migrated).await?;
                     Ok(Some(migrated))
                 } else {
@@ -378,6 +401,29 @@ impl HiveoryPersistence {
         .await?;
         Ok(rows.into_iter().map(preview_from_row).collect())
     }
+}
+
+fn normalize_legacy_layout_json(layout_json: &str) -> Result<(Value, bool), serde_json::Error> {
+    let mut value: Value = serde_json::from_str(layout_json)?;
+    let mut changed = false;
+    if let Some(nodes) = value.get_mut("nodes").and_then(Value::as_array_mut) {
+        for node in nodes {
+            let is_removed_kind = node
+                .get("kind")
+                .and_then(Value::as_str)
+                .is_some_and(|kind| kind == "thread");
+            if !is_removed_kind {
+                continue;
+            }
+            if let Some(object) = node.as_object_mut() {
+                object.insert("kind".to_owned(), Value::String("empty".to_owned()));
+                object.insert("resource_id".to_owned(), Value::Null);
+                object.insert("title".to_owned(), Value::Null);
+                changed = true;
+            }
+        }
+    }
+    Ok((value, changed))
 }
 
 fn project_from_row(row: sqlx::sqlite::SqliteRow) -> CodeProjectSummary {

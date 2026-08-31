@@ -482,6 +482,30 @@ impl HiveoryWorkspaceService {
         document_from_bytes(workspace_id, &normalized, content.as_bytes().to_vec())
     }
 
+    /// Creates a new regular UTF-8 file without replacing an existing entry.
+    /// This is used for application-created documents such as a new Markdown
+    /// pane, where an accidental overwrite would be destructive.
+    pub fn create_file(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+        content: &str,
+    ) -> Result<CodeDocument, HiveoryWorkspaceError> {
+        self.require(workspace_id, CodeWorkspaceCapability::WriteFiles)?;
+        if content.len() as u64 > CODE_MAX_FILE_BYTES {
+            return Err(HiveoryWorkspaceError::FileTooLarge);
+        }
+        let normalized = validate_relative_path(relative_path, false).map_err(domain_path_error)?;
+        let handle = self.handle(workspace_id)?;
+        let (parent, file_name) = open_parent_directory(&handle.root, &normalized)?;
+        let mut created =
+            parent.open_with(&file_name, OpenOptions::new().write(true).create_new(true))?;
+        created.write_all(content.as_bytes())?;
+        created.sync_all()?;
+        drop(created);
+        document_from_bytes(workspace_id, &normalized, content.as_bytes().to_vec())
+    }
+
     fn handle(&self, workspace_id: &str) -> Result<WorkspaceHandle, HiveoryWorkspaceError> {
         self.workspaces
             .read()
@@ -619,6 +643,41 @@ mod tests {
                 CodeWorkspaceCapability::WriteFiles
             ))
         ));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn creates_a_new_file_without_overwriting_an_existing_entry() {
+        let root = std::env::temp_dir().join(format!("hiveory-code-create-{}", Uuid::now_v7()));
+        fs::create_dir_all(&root).unwrap();
+        let service = HiveoryWorkspaceService::new();
+        let summary = service
+            .open_workspace(&root, None, CodeWorkspaceTrust::Trusted)
+            .unwrap();
+
+        let created = service
+            .create_file(&summary.id, "untitled.md", "# New document\n")
+            .unwrap();
+        assert_eq!(created.language.as_deref(), Some("markdown"));
+        assert_eq!(
+            service
+                .read_file(&summary.id, "untitled.md")
+                .unwrap()
+                .content,
+            "# New document\n"
+        );
+        assert!(matches!(
+            service.create_file(&summary.id, "untitled.md", "replacement"),
+            Err(HiveoryWorkspaceError::Io(error))
+                if error.kind() == io::ErrorKind::AlreadyExists
+        ));
+        assert_eq!(
+            service
+                .read_file(&summary.id, "untitled.md")
+                .unwrap()
+                .content,
+            "# New document\n"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }

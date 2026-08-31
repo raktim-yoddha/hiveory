@@ -3,7 +3,7 @@ import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialo
 
 export type ApplicationMode = 'agent' | 'code' | 'chat'
 export type JobState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-export type ChatReasoningEffort = 'auto' | 'low' | 'medium' | 'high'
+export type ChatReasoningEffort = 'auto' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
 export type ChatTurnState = 'queued' | 'streaming' | 'cancel_requested' | 'cancelled' | 'completed' | 'failed' | 'interrupted'
 export type ProviderAccountSummary = { id: string; display_name: string; default_model: string | null; secret_configured: boolean; enabled: boolean }
 export type JobSummary = { id: string; kind: string; state: JobState; created_at_unix_ms: number; updated_at_unix_ms: number; error_code: string | null }
@@ -92,7 +92,7 @@ export type PluginDryRunRequest = { plugin_id: string; connection_id: string; to
 export type PluginInvocationSummary = { id: string; run_id: string | null; plugin_id: string; connection_id: string; tool_name: string; state: string; target: string; request_preview: string; response_preview: string | null; error: string | null; created_at_unix_ms: number; completed_at_unix_ms: number | null }
 
 export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
-export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'open_preview'
+export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'write_git' | 'open_preview'
 export type CodeProjectKind = 'git' | 'folder'
 export type CodeWorkspaceKind = 'primary' | 'managed_worktree' | 'external_worktree'
 export type CodeProjectSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; kind: CodeProjectKind; primary_workspace_id: string; current_branch: string | null; workspace_count: number; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
@@ -110,7 +110,7 @@ export type CodeFileNode = { name: string; relative_path: string; kind: CodeFile
 export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
 export type CodeDocumentSummary = { relative_path: string; language: string | null; last_fingerprint: string | null; last_opened_at_unix_ms: number }
 export type CodeDocument = { workspace_id: string; relative_path: string; content: string; language: string | null; fingerprint: string; bytes: number; read_only: boolean; binary: boolean }
-export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty' | 'thread'
+export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty' | 'markdown'
 export type CodePaneOrientation = 'horizontal' | 'vertical'
 export type CodePanePlacement = 'center' | 'left' | 'right' | 'top' | 'bottom'
 export type CodePanePreset =
@@ -142,8 +142,8 @@ export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: str
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
 export type OpenCodePanePreviewResult = { layout: CodePaneLayout; preview: CodePreviewSummary }
-export type CreateCodePaneThreadRequest = { workspace_id: string; pane_id: string; expected_revision: number }
-export type CreateCodePaneThreadResult = { layout: CodePaneLayout; conversation: ChatConversationDetail }
+export type CreateCodePaneMarkdownRequest = { workspace_id: string; pane_id: string; expected_revision: number }
+export type CreateCodePaneMarkdownResult = { layout: CodePaneLayout; document: CodeDocument }
 export type CloseCodePaneRequest = { workspace_id: string; pane_id: string; expected_revision: number; terminate_running_resource: boolean }
 export type CodeTerminalSnapshot = { summary: CodeTerminalSummary; cols: number; rows: number; output_base64: string; sequence: number }
 
@@ -156,7 +156,11 @@ export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
 export type CodeTerminalEvent = { terminal_id: string; sequence: number; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
 export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
 export type CodeAdapterSummary = { id: string; display_name: string; executable: string; detected: boolean; authenticated: boolean; capabilities: CodeAdapterCapability[] }
-export type CodeGitFileStatus = { relative_path: string; status: string; staged: boolean; conflict: boolean }
+export type ChatEngineAvailability = 'ready' | 'missing' | 'unauthenticated' | 'unavailable'
+export type ChatModelSummary = { id: string; display_name: string; effort_levels: ChatReasoningEffort[]; default_effort: ChatReasoningEffort }
+export type ChatEngineSummary = { id: string; display_name: string; executable: string; availability: ChatEngineAvailability; detected: boolean; authenticated: boolean; models: ChatModelSummary[]; capabilities: CodeAdapterCapability[]; message: string | null; recovery_action: string | null }
+export type ChatEngineCatalog = { engines: ChatEngineSummary[]; generated_at_unix_ms: number }
+export type CodeGitFileStatus = { relative_path: string; status: string; staged: boolean; unstaged: boolean; conflict: boolean }
 export type CodeGitStatus = { workspace_id: string; branch: string | null; ahead: number; behind: number; files: CodeGitFileStatus[] }
 export type CodeGitDiff = { workspace_id: string; relative_path: string | null; content: string; binary: boolean; truncated: boolean }
 export type CodeGitRepositoryRequest = { workspace_id: string }
@@ -164,13 +168,24 @@ export type CodeGitRemote = { name: string; fetch_url: string | null; push_url: 
 export type CodeGitBranch = { name: string; current: boolean; upstream: string | null; ahead: number; behind: number }
 export type CodeGitWorktree = { name: string; path: string; branch: string | null; locked: boolean; dirty_files: string[] }
 export type CodeGitCommit = { oid: string; short_oid: string; message: string; author: string | null; committed_at_unix_ms: number | null }
-export type CodeGitRepositorySummary = { workspace_id: string; root_path: string; repository_name: string | null; head_oid: string | null; branch: string | null; detached: boolean; upstream: string | null; remotes: CodeGitRemote[]; branches: CodeGitBranch[]; worktrees: CodeGitWorktree[]; commits: CodeGitCommit[]; has_conflicts: boolean }
+export type CodeGitStash = { index: number; oid: string; message: string }
+export type CodeGitRepositorySummary = { workspace_id: string; root_path: string; repository_name: string | null; head_oid: string | null; branch: string | null; detached: boolean; upstream: string | null; remotes: CodeGitRemote[]; branches: CodeGitBranch[]; worktrees: CodeGitWorktree[]; commits: CodeGitCommit[]; stashes: CodeGitStash[]; has_conflicts: boolean }
+export type CodeGitOperationResult = { workspace_id: string; operation: string; message: string; oid: string | null; branch: string | null }
 export type CodeHostedAuthState = 'ready' | 'missing_cli' | 'not_authenticated' | 'no_repository' | 'offline' | 'rate_limited' | 'error'
 export type CodeHostedTrackingRequest = { workspace_id: string }
 export type CodeHostedRepository = { host: string; owner: string; name: string; url: string }
 export type CodeHostedIssue = { number: number; title: string; state: string; url: string; author: string | null; labels: string[]; updated_at: string | null }
 export type CodeHostedPullRequest = { number: number; title: string; state: string; draft: boolean; url: string; head_branch: string; base_branch: string; author: string | null; review_decision: string | null; check_state: string; updated_at: string | null }
 export type CodeHostedTracking = { workspace_id: string; repository: CodeHostedRepository | null; auth_state: CodeHostedAuthState; message: string | null; issues: CodeHostedIssue[]; pull_requests: CodeHostedPullRequest[]; refreshed_at_unix_ms: number; stale: boolean }
+export type CodeHostedIssueCreateRequest = { workspace_id: string; title: string; body: string; labels: string[] }
+export type CodeHostedIssueState = 'open' | 'closed'
+export type CodeHostedIssueUpdateRequest = { workspace_id: string; number: number; title: string | null; body: string | null; state: CodeHostedIssueState | null }
+export type CodeHostedIssueAction = 'close' | 'reopen'
+export type CodeHostedIssueActionRequest = { workspace_id: string; number: number; action: CodeHostedIssueAction }
+export type CodeHostedPullRequestCreateRequest = { workspace_id: string; title: string; body: string; base_branch: string | null; draft: boolean }
+export type CodeHostedPullRequestAction = 'close' | 'reopen' | 'merge'
+export type CodeHostedPullRequestActionRequest = { workspace_id: string; number: number; action: CodeHostedPullRequestAction }
+export type CodeHostedOperationResult = { workspace_id: string; operation: string; message: string; url: string | null }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
 export type BrowserProfile = { id: string; name: string; built_in: boolean }
@@ -250,9 +265,10 @@ export type ChatMessagePart =
 export type ChatMessage = { id: string; branch_id: string; role: 'user' | 'assistant' | 'system'; parts: ChatMessagePart[]; created_at_unix_ms: number; turn_id: string | null }
 export type ChatBranchSummary = { id: string; parent_branch_id: string | null; forked_after_message_id: string | null; label: string; created_at_unix_ms: number; active: boolean }
 export type ChatTurnSummary = { id: string; message_id: string; assistant_message_id: string; branch_id: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort; state: ChatTurnState; job_id: string | null; input_tokens: number | null; output_tokens: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
-export type ChatConversationSummary = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; updated_at_unix_ms: number; preview: string | null }
-export type ChatConversationDetail = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; branches: ChatBranchSummary[]; messages: ChatMessage[]; turns: ChatTurnSummary[]; draft: string; event_cursor: number; created_at_unix_ms: number; updated_at_unix_ms: number }
-export type ChatSidebarPage = { conversations: ChatConversationSummary[]; next_cursor: string | null }
+export type ChatConversationSummary = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; folder_id: string | null; folder_position: number; updated_at_unix_ms: number; preview: string | null }
+export type ChatConversationDetail = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; folder_id: string | null; folder_position: number; branches: ChatBranchSummary[]; messages: ChatMessage[]; turns: ChatTurnSummary[]; draft: string; event_cursor: number; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type ChatFolderSummary = { id: string; name: string; position: number; conversation_count: number }
+export type ChatSidebarPage = { conversations: ChatConversationSummary[]; folders: ChatFolderSummary[]; next_cursor: string | null }
 export type ChatEventEnvelope = { global_sequence: number; aggregate_sequence: number; conversation_id: string; branch_id: string | null; turn_id: string | null; message_id: string | null; kind: string; text_delta: string | null; message: string | null; emitted_at_unix_ms: number }
 
 type ProtocolVersion = { major: number; minor?: number; patch?: number }
@@ -260,9 +276,15 @@ type CommandEnvelope<T> = { protocol: ProtocolVersion; request_id: string; paylo
 type ResponseEnvelope<T> = { protocol: ProtocolVersion; request_id: string; payload: T }
 type ChatCreateRequest = { title: string | null }
 type ChatMetadataRequest = { conversation_id: string; title: string | null; pinned: boolean | null; archived: boolean | null }
+export type ChatFolderCreateRequest = { name: string }
+export type ChatFolderUpdateRequest = { folder_id: string; name: string | null; position: number | null }
+export type ChatFolderDeleteRequest = { folder_id: string }
+export type ChatConversationFolderRequest = { conversation_id: string; folder_id: string | null; position: number | null }
 type ChatDeleteRequest = { conversation_id: string }
 type ChatDraftRequest = { conversation_id: string; draft: string }
-type ChatAttachmentImportRequest = { conversation_id: string; message_id: string | null; paths: string[] }
+export type ChatAttachmentImportRequest = { conversation_id: string; message_id: string | null; paths: string[] }
+export type ChatAttachmentBytesRequest = { conversation_id: string; message_id: string | null; display_name: string; mime_type: string; data_base64: string }
+export type ChatDiscardAttachmentRequest = { conversation_id: string; attachment_id: string }
 export type ChatSendRequest = { conversation_id: string; branch_id: string; text: string; attachment_ids: string[]; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort }
 type ChatTurnRequest = { conversation_id: string; turn_id: string; model: string | null; reasoning_effort: ChatReasoningEffort | null }
 type ChatEditRequest = { conversation_id: string; message_id: string; text: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort }
@@ -278,7 +300,16 @@ type CodeReadFileRequest = { workspace_id: string; relative_path: string }
 type CodeSaveFileRequest = { workspace_id: string; relative_path: string; content: string; expected_fingerprint: string | null }
 type CodeSaveLayoutRequest = { workspace_id: string; layout: CodePaneLayout }
 type CodeGitStatusRequest = { workspace_id: string }
-type CodeGitDiffRequest = { workspace_id: string; relative_path: string | null }
+type CodeGitDiffRequest = { workspace_id: string; relative_path: string | null; staged: boolean }
+export type CodeGitStageRequest = { workspace_id: string; relative_paths: string[]; stage: boolean }
+export type CodeGitDiscardRequest = { workspace_id: string; relative_paths: string[]; include_untracked: boolean }
+export type CodeGitCommitRequest = { workspace_id: string; message: string }
+export type CodeGitBranchCreateRequest = { workspace_id: string; name: string; start_point: string | null }
+export type CodeGitBranchCheckoutRequest = { workspace_id: string; name: string; create: boolean; start_point: string | null }
+export type CodeGitBranchDeleteRequest = { workspace_id: string; name: string; force: boolean }
+export type CodeGitRemoteRequest = { workspace_id: string; remote: string | null; branch: string | null }
+export type CodeGitStashSaveRequest = { workspace_id: string; message: string | null }
+export type CodeGitStashIndexRequest = { workspace_id: string; index: number }
 type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; resume_session_id: string | null }
 type CodeTerminalInputRequest = { terminal_id: string; data_base64: string }
 type CodeTerminalInput = { terminal_id: string; data: string }
@@ -336,7 +367,9 @@ function encodeTerminalInput(data: string): string {
   }
   return btoa(binary)
 }
+
 const previewConversations = new Map<string, ChatConversationDetail>()
+const previewFolders = new Map<string, ChatFolderSummary>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeProjects = new Map<string, CodeProjectSummary>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
@@ -355,6 +388,25 @@ const previewRoutines: RoutineDetail[] = [{ summary: { id: 'preview-routine-1', 
 const previewPluginCatalog: PluginCatalogEntry[] = [{ manifest: { id: 'web-json-reader', publisher: 'Hiveory', version: '1.0.0', name: 'Web JSON Reader', description: 'Read bounded JSON from an explicitly allow-listed HTTPS API.', adapter: 'json_http_get', tools: [{ name: 'get_json', description: 'Fetch a JSON document from the configured origin.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"query":{"type":"string"}},"required":["path"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'read_only' }], permissions: [{ capability: 'network.read', explanation: 'Reads JSON only from manifest-approved HTTPS hosts.' }], allowed_hosts: ['api.github.com', 'jsonplaceholder.typicode.com'], connection_kind: 'none', supports_dry_run: false, content_hash: 'preview-hash-reader' }, installed: true, enabled: true, connection_count: 1, assigned_agent_count: 1 }, { manifest: { id: 'webhook-delivery', publisher: 'Hiveory', version: '1.0.0', name: 'Webhook Delivery', description: 'Deliver JSON to a configured HTTPS webhook after approval.', adapter: 'json_http_post', tools: [{ name: 'post_json', description: 'Send a JSON payload to the configured webhook path.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"body":{"type":"object"}},"required":["path","body"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'externally_visible' }], permissions: [{ capability: 'network.write', explanation: 'Sends JSON to a configured HTTPS webhook.' }], allowed_hosts: ['hooks.example.com', 'webhook.site'], connection_kind: 'api_key_header', supports_dry_run: true, content_hash: 'preview-hash-webhook' }, installed: true, enabled: false, connection_count: 0, assigned_agent_count: 0 }]
 const previewPluginConnections: PluginConnectionSummary[] = [{ id: 'preview-connection-reader', plugin_id: 'web-json-reader', name: 'GitHub API', origin: 'https://api.github.com', kind: 'none', api_key_header: null, secret_configured: false, validated_at_unix_ms: Date.now() - 86_400_000, created_at_unix_ms: Date.now() - 172_800_000, updated_at_unix_ms: Date.now() - 86_400_000 }]
 const previewAgentGrants: AgentPluginGrant[] = [{ agent_id: previewAgentSummary.id, plugin_id: 'web-json-reader', connection_id: 'preview-connection-reader', tool_names: ['get_json'], enabled: true }]
+const previewChatEngines: ChatEngineCatalog = {
+  generated_at_unix_ms: Date.now(),
+  engines: [
+    {
+      id: 'hiveory-openai', display_name: 'Hosted provider', executable: 'Hosted provider', availability: 'ready', detected: true, authenticated: true,
+      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: ['auto', 'low', 'medium', 'high'], default_effort: 'auto' }], capabilities: ['model_selection', 'reasoning_effort'], message: null, recovery_action: null,
+    },
+    ...[
+      ['codex-cli', 'Codex CLI'],
+      ['claude-code', 'Claude Code'],
+      ['antigravity', 'Antigravity'],
+      ['opencode', 'OpenCode'],
+    ].map(([id, display_name]) => ({
+      id, display_name, executable: id, availability: 'ready' as const, detected: true, authenticated: true,
+      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: ['auto', 'low', 'medium', 'high'] as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
+      capabilities: ['model_selection', 'reasoning_effort'] as CodeAdapterCapability[], message: null, recovery_action: null,
+    })),
+  ],
+}
 
 function requestId() { return globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(16).slice(2)}` }
 function previewId(prefix: string) { return `${prefix}-${requestId()}` }
@@ -365,11 +417,11 @@ function previewDetail(title = 'New chat'): ChatConversationDetail {
   const id = previewId('conversation')
   const branchId = previewId('branch')
   const now = previewNow()
-  return { id, title, active_branch_id: branchId, pinned: false, archived: false, branches: [{ id: branchId, parent_branch_id: null, forked_after_message_id: null, label: 'Main', created_at_unix_ms: now, active: true }], messages: [], turns: [], draft: '', event_cursor: 0, created_at_unix_ms: now, updated_at_unix_ms: now }
+  return { id, title, active_branch_id: branchId, pinned: false, archived: false, folder_id: null, folder_position: 0, branches: [{ id: branchId, parent_branch_id: null, forked_after_message_id: null, label: 'Main', created_at_unix_ms: now, active: true }], messages: [], turns: [], draft: '', event_cursor: 0, created_at_unix_ms: now, updated_at_unix_ms: now }
 }
 function previewSummary(detail: ChatConversationDetail): ChatConversationSummary {
   const text = detail.messages.flatMap((message) => message.parts).find((part): part is Extract<ChatMessagePart, { kind: 'text' }> => part.kind === 'text')?.text ?? null
-  return { id: detail.id, title: detail.title, active_branch_id: detail.active_branch_id, pinned: detail.pinned, archived: detail.archived, updated_at_unix_ms: detail.updated_at_unix_ms, preview: text?.slice(0, 160) ?? null }
+  return { id: detail.id, title: detail.title, active_branch_id: detail.active_branch_id, pinned: detail.pinned, archived: detail.archived, folder_id: detail.folder_id, folder_position: detail.folder_position, updated_at_unix_ms: detail.updated_at_unix_ms, preview: text?.slice(0, 160) ?? null }
 }
 function previewEvent(detail: ChatConversationDetail, kind: string, messageId: string | null, textDelta: string | null, message: string | null): ChatEventEnvelope {
   detail.event_cursor += 1
@@ -378,10 +430,16 @@ function previewEvent(detail: ChatConversationDetail, kind: string, messageId: s
   return event
 }
 function previewResponse<T>(payload: T): Promise<T> { return Promise.resolve(payload) }
+function previewCodeGitOperation(workspaceId: string, operation: string, message: string, branch: string | null = null, oid: string | null = null): CodeGitOperationResult {
+  const workspace = previewCodeWorkspaces.get(workspaceId)
+  if (!workspace) throw new Error('Workspace was not found.')
+  if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before changing Git state.')
+  return { workspace_id: workspaceId, operation, message, oid, branch: branch ?? workspace.detail.summary.branch }
+}
 function previewCodeLayout(workspaceId: string): CodePaneLayout {
   return {
     workspace_id: workspaceId,
-    version: 2,
+    version: 3,
     root_id: 'root',
     nodes: [
       { pane_id: 'root', parent_id: null, kind: 'empty', orientation: null, ratio_percent: null, children: [], resource_id: null, title: null },
@@ -543,6 +601,26 @@ function previewCodeTree(workspaceId: string, relativeDirectory: string | null):
     else entries.set(name, { name, relative_path: file.relative_path, kind: 'file', size: file.bytes, language: file.language, modified_at_unix_ms: null })
   })
   return { workspace_id: workspaceId, directory, entries: [...entries.values()].sort((a, b) => (a.kind === 'directory' ? -1 : 1) - (b.kind === 'directory' ? -1 : 1) || a.name.localeCompare(b.name)), truncated: false }
+}
+
+function previewCreateMarkdownDocument(workspace: { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }): CodeDocument {
+  for (let index = 1; index <= 100; index += 1) {
+    const relativePath = index === 1 ? 'untitled.md' : `untitled-${index}.md`
+    if (workspace.files.has(relativePath)) continue
+    const document: CodeDocument = {
+      workspace_id: workspace.detail.summary.id,
+      relative_path: relativePath,
+      content: '',
+      language: 'markdown',
+      fingerprint: `preview-${relativePath}-${previewNow()}`,
+      bytes: 0,
+      read_only: false,
+      binary: false,
+    }
+    workspace.files.set(relativePath, document)
+    return structuredClone(document)
+  }
+  throw new Error('No available untitled Markdown filename was found.')
 }
 function previewCodeSummary(): CodeSnapshot {
   return {
@@ -894,7 +972,7 @@ export const hiveoryClient = {
     const workspace = previewCodeWorkspaces.get(workspaceId)
     if (!workspace) throw new Error('Workspace was not found.')
     workspace.detail.summary.trust = grant ? 'trusted' : 'untrusted'
-    workspace.detail.summary.capabilities = grant ? ['read_files', 'write_files', 'execute_processes', 'read_git', 'open_preview'] : ['read_files']
+    workspace.detail.summary.capabilities = grant ? ['read_files', 'write_files', 'execute_processes', 'read_git', 'write_git', 'open_preview'] : ['read_files']
     return previewCodeDetail(workspaceId)
   },
   async codeFileTree(request: CodeFileTreeQuery): Promise<CodeFileTree> {
@@ -1112,15 +1190,23 @@ export const hiveoryClient = {
     const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'preview', preview.id, 'Browser'))
     return { layout, preview }
   },
-  async createCodePaneThread(request: CreateCodePaneThreadRequest): Promise<CreateCodePaneThreadResult> {
-    if (hiveoryIsTauri) return tauriCommand<CreateCodePaneThreadRequest, CreateCodePaneThreadResult>('hiveory_command_create_code_pane_thread', request)
+  async createCodePaneMarkdown(request: CreateCodePaneMarkdownRequest): Promise<CreateCodePaneMarkdownResult> {
+    if (hiveoryIsTauri) return tauriCommand<CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult>('hiveory_command_create_code_pane_markdown', request)
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (!workspace) throw new Error('Workspace was not found.')
-    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before creating a thread.')
-    const conversation = previewDetail('Workspace Thread')
-    previewConversations.set(conversation.id, conversation)
-    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'thread', conversation.id, 'Thread'))
-    return { layout, conversation }
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before creating a Markdown document.')
+    const document = previewCreateMarkdownDocument(workspace)
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'markdown', document.relative_path, document.relative_path))
+    workspace.detail.open_documents = [
+      {
+        relative_path: document.relative_path,
+        language: document.language,
+        last_fingerprint: document.fingerprint,
+        last_opened_at_unix_ms: previewNow(),
+      },
+      ...workspace.detail.open_documents.filter((item) => item.relative_path !== document.relative_path),
+    ]
+    return { layout, document }
   },
   async closeCodePane(request: CloseCodePaneRequest): Promise<CodePaneMutationResult> {
     if (hiveoryIsTauri) return tauriCommand<CloseCodePaneRequest, CodePaneMutationResult>('hiveory_command_close_code_pane', request)
@@ -1188,6 +1274,7 @@ export const hiveoryClient = {
       branches: summary.branch ? [{ name: summary.branch, current: true, upstream: `origin/${summary.branch}`, ahead: 0, behind: 0 }] : [],
       worktrees: [],
       commits: [{ oid: 'preview-head', short_oid: 'preview', message: 'Preview repository state', author: 'Local preview', committed_at_unix_ms: previewNow() }],
+      stashes: [],
       has_conflicts: false,
     }
   },
@@ -1204,6 +1291,77 @@ export const hiveoryClient = {
       refreshed_at_unix_ms: previewNow(),
       stale: false,
     }
+  },
+  async stageCodeGit(request: CodeGitStageRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitStageRequest, CodeGitOperationResult>('hiveory_command_stage_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, request.stage ? 'stage' : 'unstage', request.stage ? 'Staged changes.' : 'Unstaged changes.')
+  },
+  async discardCodeGit(request: CodeGitDiscardRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitDiscardRequest, CodeGitOperationResult>('hiveory_command_discard_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, 'discard', 'Discarded changes.')
+  },
+  async commitCodeGit(request: CodeGitCommitRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitCommitRequest, CodeGitOperationResult>('hiveory_command_commit_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, 'commit', `Created commit “${request.message.trim()}”.`, null, 'preview-commit')
+  },
+  async createCodeGitBranch(request: CodeGitBranchCreateRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitBranchCreateRequest, CodeGitOperationResult>('hiveory_command_create_code_git_branch', request)
+    return previewCodeGitOperation(request.workspace_id, 'branch_create', `Created branch “${request.name}”.`, request.name, 'preview-branch')
+  },
+  async checkoutCodeGitBranch(request: CodeGitBranchCheckoutRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitBranchCheckoutRequest, CodeGitOperationResult>('hiveory_command_checkout_code_git_branch', request)
+    const result = previewCodeGitOperation(request.workspace_id, 'branch_checkout', `Checked out “${request.name}”.`, request.name, 'preview-branch')
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (workspace) workspace.detail.summary.branch = request.name
+    return result
+  },
+  async deleteCodeGitBranch(request: CodeGitBranchDeleteRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitBranchDeleteRequest, CodeGitOperationResult>('hiveory_command_delete_code_git_branch', request)
+    return previewCodeGitOperation(request.workspace_id, 'branch_delete', `Deleted branch “${request.name}”.`)
+  },
+  async fetchCodeGit(request: CodeGitRemoteRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitRemoteRequest, CodeGitOperationResult>('hiveory_command_fetch_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, 'fetch', 'Fetched remote changes.')
+  },
+  async pullCodeGit(request: CodeGitRemoteRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitRemoteRequest, CodeGitOperationResult>('hiveory_command_pull_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, 'pull', 'Pulled remote changes.')
+  },
+  async pushCodeGit(request: CodeGitRemoteRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitRemoteRequest, CodeGitOperationResult>('hiveory_command_push_code_git', request)
+    return previewCodeGitOperation(request.workspace_id, 'push', 'Pushed local changes.')
+  },
+  async saveCodeGitStash(request: CodeGitStashSaveRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitStashSaveRequest, CodeGitOperationResult>('hiveory_command_save_code_git_stash', request)
+    return previewCodeGitOperation(request.workspace_id, 'stash_save', 'Saved a stash.')
+  },
+  async popCodeGitStash(request: CodeGitStashIndexRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitStashIndexRequest, CodeGitOperationResult>('hiveory_command_pop_code_git_stash', request)
+    return previewCodeGitOperation(request.workspace_id, 'stash_pop', `Applied stash ${request.index}.`)
+  },
+  async dropCodeGitStash(request: CodeGitStashIndexRequest): Promise<CodeGitOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeGitStashIndexRequest, CodeGitOperationResult>('hiveory_command_drop_code_git_stash', request)
+    return previewCodeGitOperation(request.workspace_id, 'stash_drop', `Dropped stash ${request.index}.`)
+  },
+  async createCodeHostedIssue(request: CodeHostedIssueCreateRequest): Promise<CodeHostedOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeHostedIssueCreateRequest, CodeHostedOperationResult>('hiveory_command_create_code_hosted_issue', request)
+    return { workspace_id: request.workspace_id, operation: 'issue_create', message: 'Hosted issue creation is available in the desktop app.', url: null }
+  },
+  async updateCodeHostedIssue(request: CodeHostedIssueUpdateRequest): Promise<CodeHostedOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeHostedIssueUpdateRequest, CodeHostedOperationResult>('hiveory_command_update_code_hosted_issue', request)
+    return { workspace_id: request.workspace_id, operation: 'issue_update', message: 'Hosted issue update is available in the desktop app.', url: null }
+  },
+  async actionCodeHostedIssue(request: CodeHostedIssueActionRequest): Promise<CodeHostedOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeHostedIssueActionRequest, CodeHostedOperationResult>('hiveory_command_action_code_hosted_issue', request)
+    return { workspace_id: request.workspace_id, operation: 'issue_action', message: 'Hosted issue actions are available in the desktop app.', url: null }
+  },
+  async createCodeHostedPullRequest(request: CodeHostedPullRequestCreateRequest): Promise<CodeHostedOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeHostedPullRequestCreateRequest, CodeHostedOperationResult>('hiveory_command_create_code_hosted_pull_request', request)
+    return { workspace_id: request.workspace_id, operation: 'pull_request_create', message: 'Hosted pull request creation is available in the desktop app.', url: null }
+  },
+  async actionCodeHostedPullRequest(request: CodeHostedPullRequestActionRequest): Promise<CodeHostedOperationResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeHostedPullRequestActionRequest, CodeHostedOperationResult>('hiveory_command_action_code_hosted_pull_request', request)
+    return { workspace_id: request.workspace_id, operation: 'pull_request_action', message: 'Hosted pull request actions are available in the desktop app.', url: null }
   },
   async startCodeTerminal(request: CodeTerminalStartRequest, onEvent: (event: CodeTerminalEvent) => void): Promise<CodeTerminalSummary> {
     if (hiveoryIsTauri) {
@@ -1461,9 +1619,17 @@ export const hiveoryClient = {
     return typeof selected === 'string' ? selected : null
   },
 
-  async chatSidebar(query: { search?: string; archived: boolean; limit?: number }): Promise<ChatSidebarPage> {
-    if (hiveoryIsTauri) return tauriQuery<ChatSidebarPage>('hiveory_query_chat_sidebar', { query: { search: query.search ?? null, archived: query.archived, limit: query.limit ?? 50 } })
-    return previewResponse({ conversations: [...previewConversations.values()].map(previewSummary).filter((item) => item.archived === query.archived && (!query.search || `${item.title} ${item.preview ?? ''}`.toLowerCase().includes(query.search.toLowerCase()))).sort((a, b) => b.updated_at_unix_ms - a.updated_at_unix_ms), next_cursor: null })
+  async chatEngines(): Promise<ChatEngineCatalog> {
+    if (hiveoryIsTauri) return tauriQuery<ChatEngineCatalog>('hiveory_query_chat_engines')
+    return previewResponse(structuredClone(previewChatEngines))
+  },
+  async chatSidebar(query: { search?: string; archived: boolean; folder_id?: string | null; limit?: number }): Promise<ChatSidebarPage> {
+    if (hiveoryIsTauri) return tauriQuery<ChatSidebarPage>('hiveory_query_chat_sidebar', { query: { search: query.search ?? null, archived: query.archived, folder_id: query.folder_id ?? null, limit: query.limit ?? 50 } })
+    return previewResponse({
+      conversations: [...previewConversations.values()].map(previewSummary).filter((item) => item.archived === query.archived && (!query.folder_id || item.folder_id === query.folder_id) && (!query.search || `${item.title} ${item.preview ?? ''}`.toLowerCase().includes(query.search.toLowerCase()))).sort((a, b) => b.updated_at_unix_ms - a.updated_at_unix_ms),
+      folders: [...previewFolders.values()].map((folder) => ({ ...folder, conversation_count: [...previewConversations.values()].filter((item) => item.folder_id === folder.id && item.archived === query.archived).length })),
+      next_cursor: null,
+    })
   },
   async chatConversation(conversationId: string): Promise<ChatConversationDetail> {
     if (hiveoryIsTauri) return tauriQuery<ChatConversationDetail>('hiveory_query_chat_conversation', { conversationId })
@@ -1488,6 +1654,36 @@ export const hiveoryClient = {
     detail.updated_at_unix_ms = previewNow()
     return previewResponse(structuredClone(detail))
   },
+  async createChatFolder(name: string): Promise<ChatFolderSummary> {
+    const request: ChatFolderCreateRequest = { name: name.trim() }
+    if (hiveoryIsTauri) return tauriCommand<ChatFolderCreateRequest, ChatFolderSummary>('hiveory_command_create_chat_folder', request)
+    const folder: ChatFolderSummary = { id: previewId('folder'), name: request.name || 'New folder', position: previewFolders.size, conversation_count: 0 }
+    previewFolders.set(folder.id, folder)
+    return previewResponse(structuredClone(folder))
+  },
+  async updateChatFolder(request: ChatFolderUpdateRequest): Promise<ChatFolderSummary> {
+    if (hiveoryIsTauri) return tauriCommand<ChatFolderUpdateRequest, ChatFolderSummary>('hiveory_command_update_chat_folder', request)
+    const folder = previewFolders.get(request.folder_id)
+    if (!folder) throw new Error('Folder was not found.')
+    if (request.name !== null) folder.name = request.name.trim() || folder.name
+    if (request.position !== null) folder.position = Math.max(0, request.position)
+    return previewResponse(structuredClone(folder))
+  },
+  async deleteChatFolder(folderId: string): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<ChatFolderDeleteRequest, boolean>('hiveory_command_delete_chat_folder', { folder_id: folderId })
+    const deleted = previewFolders.delete(folderId)
+    previewConversations.forEach((conversation) => { if (conversation.folder_id === folderId) conversation.folder_id = null })
+    return previewResponse(deleted)
+  },
+  async moveChatToFolder(request: ChatConversationFolderRequest): Promise<ChatConversationDetail> {
+    if (hiveoryIsTauri) return tauriCommand<ChatConversationFolderRequest, ChatConversationDetail>('hiveory_command_move_chat_to_folder', request)
+    const detail = previewConversations.get(request.conversation_id)
+    if (!detail) throw new Error('Conversation was not found.')
+    if (request.folder_id && !previewFolders.has(request.folder_id)) throw new Error('Folder was not found.')
+    detail.folder_id = request.folder_id
+    detail.folder_position = Math.max(0, request.position ?? 0)
+    return previewResponse(structuredClone(detail))
+  },
   async deleteChat(conversationId: string): Promise<boolean> {
     if (hiveoryIsTauri) return tauriCommand<ChatDeleteRequest, boolean>('hiveory_command_delete_chat', { conversation_id: conversationId })
     return previewResponse(previewConversations.delete(conversationId))
@@ -1501,7 +1697,12 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriCommand<ChatAttachmentImportRequest, ChatAttachmentSummary[]>('hiveory_command_import_chat_attachments', request)
     return previewResponse(request.paths.map((path) => ({ id: previewId('attachment'), display_name: path.split(/[\\/]/).pop() || 'attachment', mime_type: 'text/plain', bytes: 0, sha256: 'preview' })))
   },
+  async importChatAttachmentBytes(request: ChatAttachmentBytesRequest): Promise<ChatAttachmentSummary> {
+    if (hiveoryIsTauri) return tauriCommand<ChatAttachmentBytesRequest, ChatAttachmentSummary>('hiveory_command_import_chat_attachment_bytes', request)
+    return previewResponse({ id: previewId('attachment'), display_name: request.display_name, mime_type: request.mime_type || 'image/png', bytes: Math.floor(request.data_base64.length * 0.75), sha256: 'preview' })
+  },
   async deleteChatAttachment(request: ChatDeleteAttachmentRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<ChatDeleteAttachmentRequest, boolean>('hiveory_command_delete_chat_attachment', request) : true },
+  async discardChatAttachment(request: ChatDiscardAttachmentRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<ChatDiscardAttachmentRequest, boolean>('hiveory_command_discard_chat_attachment', request) : true },
   async startChatTurn(request: ChatSendRequest): Promise<ChatConversationDetail> {
     if (hiveoryIsTauri) return tauriCommand<ChatSendRequest, ChatConversationDetail>('hiveory_command_start_chat_turn', request)
     const detail = previewConversations.get(request.conversation_id)
@@ -1534,6 +1735,11 @@ export const hiveoryClient = {
     const selected = await openDialog({ multiple: true, directory: false, filters: [{ name: 'Chat attachments', extensions: ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'md', 'markdown'] }] })
     if (!selected) return []
     return Array.isArray(selected) ? selected : [selected]
+  },
+  async chooseAttachmentFolderPath(): Promise<string | null> {
+    if (!hiveoryIsTauri) return null
+    const selected = await openDialog({ multiple: false, directory: true, title: 'Choose a folder to attach' })
+    return typeof selected === 'string' ? selected : null
   },
   async chooseExportDestination(suggestedName = 'chat-export.zip'): Promise<string | null> {
     if (!hiveoryIsTauri) return `${suggestedName}`

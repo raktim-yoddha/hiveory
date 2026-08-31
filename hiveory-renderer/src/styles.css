@@ -1,7 +1,7 @@
 :root { color-scheme: dark; font-family: "IBM Plex Sans", Inter, system-ui, sans-serif; background: #111418; color: #f5f7fa; font-synthesis: none; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; min-height: 100vh; background: #111418; } button, input, textarea { font: inherit; }
 .hiveory-shell { min-height: 100vh; background: radial-gradient(circle at 52% -20%, #1d2736 0, #111418 42%); }.hiveory-titlebar { height: 36px; min-height: 36px; max-height: 36px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px; border-bottom: 1px solid #272d35; background: rgba(17,20,24,.9); }.hiveory-brand, .hiveory-connection, .hiveory-title-actions { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }.hiveory-brand { color: #eef2f7; font-weight: 650; }.hiveory-title-actions { justify-self: end; gap: 4px; }.hiveory-connection { color: #8da891; }.hiveory-icon-button { display: grid; width: 24px; height: 24px; place-items: center; border: 1px solid transparent; border-radius: 4px; color: #9ca3af; background: transparent; cursor: pointer; padding: 0; }.hiveory-icon-button:hover, .hiveory-icon-button.is-active { color: #f4f4f5; border-color: rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.06); }
-.hiveory-mode-switch { display: flex; gap: 3px; padding: 3px; border: 1px solid #2c333d; border-radius: 8px; background: #181c21; }.hiveory-mode-switch button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 5px; padding: 6px 11px; color: #aeb7c2; background: transparent; cursor: pointer; }.hiveory-mode-switch button:hover { color: #eef2f7; background: #232a33; }.hiveory-mode-switch button.is-active { color: #f8fbff; background: #334155; box-shadow: inset 0 0 0 1px #4a5e76; } button:focus-visible, input:focus, textarea:focus { outline: 2px solid #66a9ff; outline-offset: 2px; }
+.hiveory-mode-switch { display: flex; gap: 3px; padding: 3px; border: 1px solid #2c333d; border-radius: 8px; background: #181c21; }.hiveory-mode-switch button { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 5px; padding: 6px 11px; color: #aeb7c2; background: transparent; cursor: pointer; }.hiveory-mode-switch button:hover { color: #eef2f7; background: #232a33; }.hiveory-mode-switch button.is-active { color: #f8fbff; background: #334155; box-shadow: inset 0 0 0 1px #4a5e76; } button:focus-visible, input:focus, textarea:focus { outline: 2px solid #c9ccd1; outline-offset: 2px; }
 .hiveory-workspace { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: calc(100vh - 52px); }.hiveory-rail { display: flex; flex-direction: column; gap: 3px; padding: 18px 10px; border-right: 1px solid #272d35; background: #14181d; }.hiveory-rail-heading { padding: 0 10px 11px; color: #8c97a6; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }.hiveory-rail button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 6px; padding: 8px 10px; text-align: left; color: #bdc6d1; background: transparent; cursor: pointer; }.hiveory-rail button:hover, .hiveory-rail button.is-selected { color: #f5f7fa; background: #20262e; }.hiveory-rail-footer { margin-top: auto; padding: 10px; color: #758192; font-size: 12px; }
 .hiveory-workspace.is-chat-mode { grid-template-columns: minmax(0, 1fr); }.hiveory-workspace.is-chat-mode > .hiveory-rail { display: none; }
 .hiveory-content, .hiveory-diagnostics { max-width: 1180px; width: 100%; padding: 56px clamp(28px, 7vw, 96px); }.hiveory-content { max-width: 980px; }.hiveory-content-header { display: flex; align-items: center; gap: 12px; }.hiveory-content-header > svg { color: #7db5ff; }.hiveory-eyebrow { margin: 0 0 4px; color: #8fa4bd; font-size: 13px; }.hiveory-content h1, .hiveory-diagnostics h1 { margin: 0; font-size: clamp(28px,4vw,42px); letter-spacing: -.035em; }.hiveory-description { max-width: 680px; margin: 20px 0 30px; color: #aeb8c5; font-size: 16px; line-height: 1.6; }.hiveory-empty-state { max-width: 610px; padding: 28px; border: 1px solid #2b333d; border-radius: 12px; background: rgba(24,29,35,.72); }.hiveory-empty-mark { display: grid; width: 46px; height: 46px; place-items: center; border: 1px solid #3b4857; border-radius: 10px; color: #92c4ff; background: #1a222d; }.hiveory-empty-state h2 { margin: 20px 0 8px; font-size: 18px; }.hiveory-empty-state p { margin: 0; color: #aab4c0; line-height: 1.55; }
@@ -15,7 +15,7 @@
 .hiveory-search-field { display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid #343d48; border-radius: 7px; color: #8f9baa; background: #101419; }.hiveory-search-field:focus-within { border-color: #5f95d0; box-shadow: 0 0 0 2px rgba(92, 153, 220, .18); }.hiveory-search-field input { width: 100%; min-width: 0; border: 0; padding: 9px 0; color: #f5f7fa; outline: 0; background: transparent; }.hiveory-search-field input::placeholder { color: #75808d; }
 .hiveory-chat-filters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 3px; border: 1px solid #2d353f; border-radius: 7px; background: #11151a; }.hiveory-chat-filters button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 5px; padding: 7px 5px; color: #919ca9; font-size: 11px; background: transparent; cursor: pointer; }.hiveory-chat-filters button:hover, .hiveory-chat-filters button.is-active { color: #f2f7ff; background: #273544; }
 .hiveory-chat-list { display: grid; align-content: start; gap: 4px; min-height: 0; overflow-y: auto; padding-right: 2px; }.hiveory-chat-list-item { display: grid; gap: 4px; min-width: 0; border: 1px solid transparent; border-radius: 7px; padding: 10px; text-align: left; color: #cad2dc; background: transparent; cursor: pointer; }.hiveory-chat-list-item:hover { border-color: #303d4b; background: #1b232c; }.hiveory-chat-list-item.is-selected { border-color: #3b5d7c; background: #1e2b39; }.hiveory-chat-list-title, .hiveory-chat-list-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hiveory-chat-list-title { color: #f2f6fb; font-size: 13px; font-weight: 650; }.hiveory-chat-list-preview { color: #8f9aa7; font-size: 12px; }.hiveory-chat-list-meta { color: #677381; font-size: 10px; }.hiveory-chat-list-empty { display: grid; justify-items: center; gap: 9px; padding: 38px 12px; color: #75818e; text-align: center; }.hiveory-chat-list-empty p { margin: 0; font-size: 12px; }.hiveory-chat-list-empty button { border: 0; color: #9fcaff; background: transparent; cursor: pointer; }.hiveory-chat-sidebar-footer { display: flex; align-items: center; gap: 7px; margin-top: auto; padding: 10px 4px 0; border-top: 1px solid #2a3038; color: #768392; font-size: 11px; }
-.hiveory-chat-main { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; min-width: 0; min-height: 0; background: radial-gradient(circle at 70% -15%, #1d2a3b 0, #101419 42%); }.hiveory-chat-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; padding: 15px clamp(16px, 3vw, 34px); border-bottom: 1px solid #292f38; background: rgba(16, 20, 25, .72); }.hiveory-chat-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; color: #87b9ec; }.hiveory-chat-title-wrap > div { min-width: 0; }.hiveory-chat-title-wrap input { width: min(420px, 50vw); border: 0; padding: 0; overflow: hidden; color: #f5f7fa; font-size: 16px; font-weight: 680; text-overflow: ellipsis; outline: 0; background: transparent; }.hiveory-chat-title-wrap input:focus { outline: 2px solid #66a9ff; outline-offset: 3px; border-radius: 2px; }.hiveory-chat-title-wrap p { margin: 4px 0 0; color: #788593; font-size: 11px; }.hiveory-chat-header-actions { display: flex; flex-shrink: 0; gap: 4px; }.hiveory-icon-button.is-danger { color: #c78e8e; }.hiveory-icon-button.is-danger:hover { border-color: #78484c; color: #ffc4c4; background: #362127; }
+.hiveory-chat-main { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; min-width: 0; min-height: 0; background: radial-gradient(circle at 70% -15%, #1d2a3b 0, #101419 42%); }.hiveory-chat-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; padding: 15px clamp(16px, 3vw, 34px); border-bottom: 1px solid #292f38; background: rgba(16, 20, 25, .72); }.hiveory-chat-title-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; color: #87b9ec; }.hiveory-chat-title-wrap > div { min-width: 0; }.hiveory-chat-title-wrap input { width: min(420px, 50vw); border: 0; padding: 0; overflow: hidden; color: #f5f7fa; font-size: 16px; font-weight: 680; text-overflow: ellipsis; outline: 0; background: transparent; }.hiveory-chat-title-wrap input:focus { outline: 2px solid #c9ccd1; outline-offset: 3px; border-radius: 2px; }.hiveory-chat-title-wrap p { margin: 4px 0 0; color: #788593; font-size: 11px; }.hiveory-chat-header-actions { display: flex; flex-shrink: 0; gap: 4px; }.hiveory-icon-button.is-danger { color: #c78e8e; }.hiveory-icon-button.is-danger:hover { border-color: #78484c; color: #ffc4c4; background: #362127; }
 .hiveory-chat-context-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; padding: 8px clamp(16px, 3vw, 34px); border-bottom: 1px solid #222a33; color: #8793a1; font-size: 11px; }.hiveory-chat-context-bar span { display: inline-flex; align-items: center; gap: 5px; }.hiveory-chat-context-bar span:first-child { color: #b5d6f6; }.hiveory-branch-badge { color: #c7b7f3 !important; }.hiveory-chat-transcript { min-height: 0; overflow-y: auto; padding: 26px clamp(16px, 9vw, 150px) 42px; scroll-behavior: smooth; }.hiveory-chat-empty { display: grid; justify-items: center; max-width: 500px; margin: 10vh auto 0; color: #aeb8c5; text-align: center; }.hiveory-chat-empty .hiveory-empty-mark { color: #8fbff0; }.hiveory-chat-empty h2 { margin: 19px 0 7px; color: #f2f6fb; font-size: 19px; }.hiveory-chat-empty p { margin: 0; line-height: 1.55; }
 .hiveory-chat-message { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; max-width: 780px; margin: 0 auto 24px; }.hiveory-chat-message-avatar { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid #3b536c; border-radius: 7px; color: #b9dcff; background: #1a2a3a; }.hiveory-chat-message.is-user .hiveory-chat-message-avatar { border-color: #5a4c70; color: #ddcaff; background: #2a2235; font-size: 12px; font-weight: 700; }.hiveory-chat-message-body { min-width: 0; }.hiveory-chat-message-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 27px; color: #e4ebf4; font-size: 12px; font-weight: 650; }.hiveory-chat-message-meta time { color: #677483; font-size: 10px; font-weight: 400; }.hiveory-chat-turn-state { border: 1px solid #3b536c; border-radius: 99px; padding: 2px 6px; color: #8bb8e4; font-size: 9px; font-weight: 500; text-transform: capitalize; }.hiveory-chat-turn-state.failed { border-color: #754548; color: #ed9c9c; }.hiveory-chat-turn-state.completed { border-color: #416849; color: #9dcea5; }.hiveory-chat-message-content { min-width: 0; margin-top: 7px; color: #d6dde7; line-height: 1.62; }.hiveory-chat-message.is-user .hiveory-chat-message-content { display: inline-block; max-width: 100%; border: 1px solid #3a4056; border-radius: 9px 9px 3px 9px; padding: 10px 13px; color: #e9e6f2; background: #28263b; }.hiveory-chat-text { margin: 0 0 10px; overflow-wrap: anywhere; }.hiveory-chat-text:last-child { margin-bottom: 0; }.hiveory-chat-message-actions { display: flex; gap: 3px; margin-top: 7px; opacity: .72; }.hiveory-chat-message-actions button { display: grid; width: 26px; height: 24px; place-items: center; border: 1px solid transparent; border-radius: 5px; color: #8996a4; background: transparent; cursor: pointer; }.hiveory-chat-message-actions button:hover:not(:disabled) { border-color: #3b4e61; color: #c7ddf4; background: #1d2a36; }.hiveory-chat-message-actions button:disabled { display: none; }
 .hiveory-chat-reasoning { margin: 8px 0 11px; border: 1px solid #384457; border-radius: 7px; padding: 8px 10px; color: #b3c2d5; background: #18202b; }.hiveory-chat-reasoning summary { display: flex; align-items: center; gap: 5px; color: #9eb8d4; font-size: 12px; cursor: pointer; }.hiveory-chat-reasoning summary svg { transition: transform .15s ease; }.hiveory-chat-reasoning[open] summary svg { transform: rotate(180deg); }.hiveory-chat-reasoning p { margin: 8px 0 2px; color: #aab5c4; font-size: 12px; line-height: 1.5; }.hiveory-chat-part-status { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: #9eb0c2; font-size: 12px; }.hiveory-chat-part-status span { border: 1px solid #3b5269; border-radius: 99px; padding: 2px 7px; color: #94c2ed; font-size: 10px; text-transform: capitalize; }.hiveory-chat-part-error { display: grid; gap: 4px; margin: 8px 0; border-left: 2px solid #a55757; padding: 7px 10px; color: #f0b8b8; background: rgba(111, 53, 53, .2); font-size: 12px; }.hiveory-chat-part-error strong { text-transform: capitalize; }.hiveory-chat-attachment-card { display: inline-flex; align-items: center; gap: 9px; min-width: 190px; margin: 4px 8px 8px 0; border: 1px solid #3a526b; border-radius: 8px; padding: 9px 10px; color: #9ac8f4; background: #182533; }.hiveory-chat-attachment-card span { display: grid; gap: 3px; min-width: 0; }.hiveory-chat-attachment-card strong { overflow: hidden; max-width: 270px; color: #d6e9fc; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }.hiveory-chat-attachment-card small { color: #8295a8; font-size: 10px; }.hiveory-chat-citation { display: inline-flex; align-items: center; gap: 5px; margin: 5px 10px 7px 0; color: #8fc4f4; font-size: 12px; }.hiveory-chat-citation:hover { color: #c6e4ff; }.hiveory-chat-usage { display: block; margin-top: 6px; color: #6f7d8c; font: 10px "JetBrains Mono", ui-monospace, monospace; }.hiveory-chat-tool-part { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0; border: 1px dashed #4a5360; border-radius: 6px; padding: 6px 8px; color: #8e9aa7; font-size: 11px; }
@@ -187,7 +187,7 @@
 @media (pointer: coarse) { .hiveory-runs button, .hiveory-runs input, .hiveory-runs select { min-height: 44px; } .hiveory-runs button { padding-top: 10px; padding-bottom: 10px; } }
 @media (max-width: 760px) { .hiveory-run-terminal, .hiveory-run-events { margin-left: 12px; margin-right: 12px; }.hiveory-run-event-list > div { grid-template-columns: 48px 35px minmax(0, 1fr); }.hiveory-run-event-list small { grid-column: 3; } }
 
-/* Phase 6 Agent workspace: graphite surfaces, restrained cyan accent, and
+/* Phase 6 Agent workspace: graphite surfaces, restrained neutral accent, and
    explicit state affordances keep side effects visually distinct from chat. */
 .hiveory-agent { min-width: 0; min-height: calc(100vh - 52px); padding: 38px clamp(18px, 4vw, 58px) 44px; background: radial-gradient(circle at 76% -15%, #1b2a3b 0, #111418 45%); }
 .hiveory-agent-header { max-width: 1280px; margin: 0 auto; }.hiveory-agent-heading-mark { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #3a6279; border-radius: 10px; color: #9cddf1; background: #18303a; }.hiveory-agent-header h1 { font-size: clamp(25px, 3vw, 36px); }.hiveory-agent-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }.hiveory-local-badge, .hiveory-state-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #3b6b68; border-radius: 99px; padding: 5px 9px; color: #a9d9c5; background: #172c2a; font: 11px "JetBrains Mono", ui-monospace, monospace; white-space: nowrap; }.hiveory-agent > .hiveory-description { max-width: 720px; margin: 14px auto 26px; }.hiveory-agent-layout { display: grid; max-width: 1280px; min-height: 570px; margin: 0 auto; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; }
@@ -201,7 +201,7 @@
 @media (max-width: 860px) { .hiveory-agent { padding: 28px 14px 32px; }.hiveory-agent-layout { grid-template-columns: 1fr; }.hiveory-agent-list { min-height: auto; }.hiveory-agent-list-footer { display: none; }.hiveory-agent-list-item { display: inline-flex; width: 100%; }.hiveory-agent-main { min-height: 0; } }
 @media (max-width: 560px) { .hiveory-agent-header-actions .hiveory-local-badge { display: none; }.hiveory-agent-context-card { align-items: flex-start; flex-wrap: wrap; }.hiveory-agent-context-card .hiveory-state-chip { width: 100%; margin-left: 51px; }.hiveory-inline-form { align-items: stretch; flex-direction: column; }.hiveory-input-card { align-items: flex-start; flex-direction: column; }.hiveory-agent-workspace, .hiveory-agent-panel { padding: 13px; }.hiveory-run-row { grid-template-columns: 9px minmax(0, 1fr) 15px; }.hiveory-run-row time { display: none; } }
 
-/* Phase 7 automation surfaces: dense operator views with a single blue/cyan
+/* Phase 7 automation surfaces: dense operator views with a single neutral
    action accent, clear risk labels, and layouts that remain usable at narrow
    desktop widths. */
 .hiveory-automation { min-width: 0; min-height: calc(100vh - 52px); padding: 38px clamp(18px, 4vw, 58px) 44px; background: radial-gradient(circle at 78% -15%, #1b2a3b 0, #111418 45%); }
@@ -213,7 +213,7 @@
 /* Phase 8 shared shell: keyboard-first controls, durable activity access, and
    scalable preferences. The PRD layout stays dense while every global action
    has a visible focus target and a non-colour status label. */
-:root { --hiveory-font-scale: 1; --hiveory-surface: #0f1720; --hiveory-surface-raised: #18232d; --hiveory-border: #2e3c48; --hiveory-accent: #22c55e; --hiveory-focus: #8bc5ff; }
+:root { --hiveory-font-scale: 1; --hiveory-surface: #141519; --hiveory-surface-raised: #1d1f24; --hiveory-border: #2d3036; --hiveory-accent: #22c55e; --hiveory-focus: #c9ccd1; }
 body { font-size: calc(14px * var(--hiveory-font-scale)); }
 button, input, select, textarea { min-height: 34px; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--hiveory-focus); outline-offset: 2px; }
@@ -404,7 +404,7 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
 }
 .hiveory-win-btn:focus-visible,
 .hiveory-sidebar-toggle:focus-visible {
-  outline: 2px solid #60a5fa;
+  outline: 2px solid #c9ccd1;
   outline-offset: 1px;
 }
 .hiveory-window-control-error {
@@ -416,7 +416,7 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
   white-space: nowrap;
 }
 
-/* Phase 9 visual system: graphite surfaces, restrained blue action color,
+/* Phase 9 visual system: graphite surfaces, restrained neutral action color,
    and a persistent global rail modeled on the approved product reference. */
 :root {
   --hiveory-canvas: #0d0e11;
@@ -426,16 +426,16 @@ html[data-reduced-motion="true"] * { animation-duration: .01ms !important; anima
   --hiveory-strong-border: #4a4b50;
   --hiveory-text: #ffffff;
   --hiveory-muted: #95979e;
-  --hiveory-blue: #2f7bf6;
-  --hiveory-blue-deep: #1a5fdf;
-  --hiveory-cyan: #29abe2;
+  --hiveory-neutral-accent: #c9ccd1;
+  --hiveory-neutral-accent-strong: #f0f1f3;
+  --hiveory-neutral-accent-soft: rgba(201, 204, 209, .14);
   --hiveory-amber: #ffb800;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--hiveory-canvas);
   color: var(--hiveory-text);
 }
 body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
-.hiveory-shell { background: radial-gradient(circle at 54% -28%, rgba(47, 123, 246, .12), transparent 32%), var(--hiveory-canvas); }
+.hiveory-shell { background: radial-gradient(circle at 54% -28%, rgba(201, 204, 209, .08), transparent 32%), var(--hiveory-canvas); }
 .hiveory-titlebar { height: 36px; min-height: 36px; max-height: 36px; padding: 0 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); background: #0d0e11; }
 .hiveory-brand { color: #f6f7fa; font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
 .hiveory-brand-logo { width: 23px; height: 23px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .16); border-radius: 6px; object-fit: cover; box-shadow: 0 2px 7px rgba(0, 0, 0, .35); }
@@ -453,7 +453,7 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-rail-heading { padding: 0 10px 8px; color: #777a82; font-size: 10px; letter-spacing: .1em; }
 .hiveory-rail button { min-height: 34px; border-radius: 8px; padding: 8px 10px; color: #a9abb2; font-size: 12px; }
 .hiveory-rail button:hover, .hiveory-rail button.is-selected { color: #fff; background: #202125; }
-.hiveory-rail button.is-selected { box-shadow: inset 2px 0 0 var(--hiveory-blue); }
+.hiveory-rail button.is-selected { box-shadow: inset 2px 0 0 var(--hiveory-neutral-accent); }
 .hiveory-rail-divider { height: 1px; margin: 13px 10px 11px; background: var(--hiveory-border); }
 .hiveory-rail-footer { border-top-color: var(--hiveory-border); padding: 13px 10px 3px; color: #6e7078; }
 .hiveory-rail-action { min-height: 28px !important; padding: 5px 0 !important; color: #85878f !important; font-size: 10px !important; }
@@ -463,21 +463,21 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-workspace.is-chat-mode > .hiveory-rail { display: flex; }
 .hiveory-chat { height: calc(100vh - 54px); background: var(--hiveory-canvas); }
 .hiveory-chat-sidebar { border-right-color: var(--hiveory-border); background: #101114; }
-.hiveory-chat-main { background: radial-gradient(circle at 72% -18%, rgba(47, 123, 246, .1), transparent 35%), var(--hiveory-canvas); }
+.hiveory-chat-main { background: radial-gradient(circle at 72% -18%, rgba(201, 204, 209, .07), transparent 35%), var(--hiveory-canvas); }
 .hiveory-chat-header, .hiveory-chat-context-bar { border-bottom-color: var(--hiveory-border); background: rgba(13, 14, 17, .82); }
-.hiveory-chat-context-bar span:first-child { color: #b8d0ff; }
+.hiveory-chat-context-bar span:first-child { color: #c9ccd1; }
 .hiveory-chat-message.is-user .hiveory-chat-message-content { border-color: #34363e; background: #1d1f24; }
 .hiveory-chat-composer { border-color: #34363d; background: #16171a; box-shadow: 0 12px 34px rgba(0, 0, 0, .18); }
 .hiveory-chat-composer-controls select, .hiveory-chat-composer-controls input { border-color: #34363d; color: #dfe1e6; background: #101114; }
 .hiveory-chat-edit, .hiveory-chat-status { border-color: #38404e; background: #161a22; }
-.hiveory-chat-edit button, .hiveory-chat-composer button, .hiveory-code button { border-color: var(--hiveory-blue); background: var(--hiveory-blue-deep); }
-.hiveory-chat-edit button:hover, .hiveory-chat-composer button:hover, .hiveory-code button:hover:not(:disabled) { border-color: #5792ff; background: var(--hiveory-blue); }
+.hiveory-chat-edit button, .hiveory-chat-composer button, .hiveory-code button { border-color: var(--hiveory-neutral-accent); background: #45484f; }
+.hiveory-chat-edit button:hover, .hiveory-chat-composer button:hover, .hiveory-code button:hover:not(:disabled) { border-color: var(--hiveory-neutral-accent-strong); background: #60636a; }
 .hiveory-chat-composer button.is-stop { border-color: #824b52; background: #4a242d; }
 .hiveory-code, .hiveory-runs { background: var(--hiveory-canvas); }
 .hiveory-code-header, .hiveory-runs-header { border-bottom-color: var(--hiveory-border); background: rgba(17, 18, 20, .95); }
 .hiveory-code-grid, .hiveory-runs-layout { grid-template-columns: 244px minmax(0, 1fr); }
 .hiveory-code-sidebar, .hiveory-runs-sidebar { border-right-color: var(--hiveory-border); background: #101114; }
-.hiveory-code-main { background: radial-gradient(circle at 74% -12%, rgba(47, 123, 246, .08), transparent 34%), var(--hiveory-canvas); }
+.hiveory-code-main { background: radial-gradient(circle at 74% -12%, rgba(201, 204, 209, .06), transparent 34%), var(--hiveory-canvas); }
 .hiveory-code-pane-toolbar, .hiveory-code-pane-heading { border-color: var(--hiveory-border); background: #151619; }
 .hiveory-code-workbench { border-color: var(--hiveory-border); background: #0b0c0f; }
 .hiveory-code-editor-pane, .hiveory-code-terminal-pane { border-color: var(--hiveory-border); }
@@ -486,11 +486,11 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-code-engine-select { display: inline-flex; min-width: 0; }
 .hiveory-code-engine-select select, .hiveory-code-model-input { max-width: 150px; min-height: 27px; border: 1px solid #3a3d45; border-radius: 6px; padding: 4px 7px; color: #dfe1e6; background: #101114; font-size: 10px; outline: 0; }
 .hiveory-code-model-input { width: 96px; }
-.hiveory-code-engine-select select:focus, .hiveory-code-model-input:focus { border-color: var(--hiveory-blue); }
+.hiveory-code-engine-select select:focus, .hiveory-code-model-input:focus { border-color: var(--hiveory-neutral-accent); }
 .hiveory-code-trust-banner { border-color: #66502c; background: rgba(53, 40, 21, .55); }
 .hiveory-code-trusted-bar { color: #86c091; }
-.hiveory-feedback { border-color: #35435a; color: #bcd3f9; background: #171c26; }
-.hiveory-skip-link:focus { background: var(--hiveory-blue-deep); }
+.hiveory-feedback { border-color: #45474e; color: #d4d6da; background: #1a1c21; }
+.hiveory-skip-link:focus { background: #45484f; }
 @media (max-width: 720px) { .hiveory-workspace.is-chat-mode { grid-template-columns: 1fr; }.hiveory-workspace.is-chat-mode > .hiveory-rail { display: none; }.hiveory-code-terminal-actions { flex-wrap: wrap; justify-content: flex-end; }.hiveory-code-engine-select select { max-width: 120px; } }
 .hiveory-code-workbench:has(.hiveory-code-preview-pane) { grid-template-columns: minmax(0, 1fr) minmax(280px, .68fr); grid-template-rows: minmax(270px, 1fr) 215px; }
 .hiveory-code-workbench:has(.hiveory-code-preview-pane) .hiveory-code-editor-pane, .hiveory-code-workbench:has(.hiveory-code-preview-pane) .hiveory-code-terminal-pane { grid-column: 1; }
@@ -499,13 +499,13 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-code-preview-pane a { display: inline-grid; width: 27px; height: 27px; place-items: center; color: #9eb5c9; }
 .hiveory-code-preview-pane a:hover { color: #fff; }
 .hiveory-title-action { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; padding: 4px 9px; color: #e2e8f0; background: rgba(255, 255, 255, 0.04); cursor: pointer; font-size: 11.5px; font-weight: 500; transition: all 0.15s ease; }
-.hiveory-title-action:hover { border-color: rgba(96, 165, 250, 0.4); background: rgba(30, 41, 59, 0.6); color: #ffffff; }
+.hiveory-title-action:hover { border-color: rgba(201, 204, 209, 0.4); background: rgba(30, 31, 35, 0.6); color: #ffffff; }
 .hiveory-layout-menu { position: relative; }
 .hiveory-layout-chevron { color: #94a3b8; font-size: 12px; line-height: 1; transition: transform 0.15s ease; }
 .hiveory-layout-dropdown { position: absolute; top: calc(100% + 6px); right: 0; z-index: 300; display: grid; width: 280px; gap: 4px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 6px; background: linear-gradient(180deg, rgba(17, 20, 28, 0.96) 0%, rgba(10, 12, 18, 0.98) 100%); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
 .hiveory-layout-option { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 10px; width: 100%; min-height: 44px; border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; text-align: left; color: #e2e8f0; background: transparent; cursor: pointer; transition: all 0.14s ease; }
-.hiveory-layout-option:hover, .hiveory-layout-option:focus-visible { border-color: rgba(96, 165, 250, 0.35); background: rgba(37, 99, 235, 0.14); color: #ffffff; }
-.hiveory-layout-option-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; color: #60a5fa; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(96, 165, 250, 0.2); }
+.hiveory-layout-option:hover, .hiveory-layout-option:focus-visible { border-color: rgba(201, 204, 209, 0.35); background: rgba(201, 204, 209, 0.12); color: #ffffff; }
+.hiveory-layout-option-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 6px; color: #c9ccd1; background: rgba(201, 204, 209, 0.14); border: 1px solid rgba(201, 204, 209, 0.2); }
 .hiveory-layout-option span:last-child { display: grid; gap: 1px; min-width: 0; }
 .hiveory-layout-option strong { color: #f8fafc; font-size: 11.5px; font-weight: 600; }
 .hiveory-layout-option small { overflow: hidden; color: #94a3b8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -516,3 +516,411 @@ body { overflow: hidden; }
 .hiveory-shell { display: grid; height: 100%; min-height: 0; grid-template-rows: 36px minmax(0, 1fr); overflow: hidden; }
 .hiveory-workspace { min-height: 0; height: auto; overflow: hidden; }
 .hiveory-workspace.is-code-app { display: block; height: 100%; min-height: 0; }
+.hiveory-chat-sidebar-tools { display: flex; align-items: center; justify-content: space-between; padding: 0 4px; color: #8995a3; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }.hiveory-chat-sidebar-tools .hiveory-icon-button { width: 25px; height: 25px; }.hiveory-chat-sidebar-scroll { display: grid; align-content: start; gap: 5px; min-height: 0; overflow-y: auto; padding-right: 2px; }.hiveory-chat-history-label { margin-top: 10px; padding-top: 10px; border-top: 1px solid #252c34; }.hiveory-chat-history-label .hiveory-chat-spin { color: #7baee1; }.hiveory-chat-unfiled { display: flex; align-items: center; gap: 8px; min-height: 32px; border: 1px solid transparent; border-radius: 6px; padding: 7px 9px; color: #aeb9c6; background: transparent; cursor: pointer; font-size: 11px; text-align: left; }.hiveory-chat-unfiled:hover, .hiveory-chat-unfiled.is-selected { border-color: #33475c; color: #edf4fb; background: #1b2836; }.hiveory-chat-folder-section { display: grid; gap: 3px; }.hiveory-chat-folder-row { position: relative; display: flex; align-items: center; min-width: 0; border: 1px solid transparent; border-radius: 6px; }.hiveory-chat-folder-row:hover, .hiveory-chat-folder-row.is-selected { border-color: #33475c; background: #1b2836; }.hiveory-chat-folder-row > button:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; border: 0; padding: 7px 8px; overflow: hidden; color: #aeb9c6; background: transparent; cursor: pointer; font-size: 11px; text-align: left; }.hiveory-chat-folder-row > button:first-child span { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }.hiveory-chat-folder-row > button:first-child small { color: #718091; }.hiveory-chat-folder-row > .hiveory-icon-button { flex-shrink: 0; }.hiveory-chat-folder-menu, .hiveory-chat-row-menu { position: absolute; z-index: 10; display: grid; gap: 2px; min-width: 148px; border: 1px solid #3a4652; border-radius: 7px; padding: 5px; background: #1a2027; box-shadow: 0 14px 28px rgba(0,0,0,.35); }.hiveory-chat-folder-menu { top: 31px; right: 2px; }.hiveory-chat-row-menu { top: 34px; right: 2px; }.hiveory-chat-folder-menu button, .hiveory-chat-row-menu button { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; border-radius: 5px; padding: 7px 8px; color: #c6d0db; background: transparent; cursor: pointer; font-size: 11px; text-align: left; }.hiveory-chat-folder-menu button:hover, .hiveory-chat-row-menu button:hover { color: #f4f8fd; background: #293642; }.hiveory-chat-folder-menu button.is-danger, .hiveory-chat-row-menu button.is-danger { color: #e4a4a8; }.hiveory-chat-menu-label { display: flex; align-items: center; gap: 8px; padding: 7px 8px 3px; color: #758494; font-size: 10px; }.hiveory-chat-list-row { position: relative; min-width: 0; }.hiveory-chat-list-row > .hiveory-chat-list-item { width: 100%; padding-right: 30px; }.hiveory-chat-row-menu-button { position: absolute; z-index: 2; top: 9px; right: 5px; width: 24px; height: 24px; opacity: 0; }.hiveory-chat-list-row:hover .hiveory-chat-row-menu-button, .hiveory-chat-list-row:focus-within .hiveory-chat-row-menu-button { opacity: 1; }.hiveory-chat-list-title { display: flex; align-items: center; gap: 5px; }.hiveory-chat-turn-engine { color: #8fabc6; font-size: 10px; font-weight: 450; }.hiveory-chat-engine-picker { position: relative; min-width: 0; }.hiveory-chat-select-button { display: inline-flex; align-items: center; gap: 6px; max-width: 190px; min-height: 31px; border: 1px solid #3a4856 !important; border-radius: 6px !important; padding: 6px 8px !important; overflow: hidden; color: #c0cfdd !important; background: #202a34 !important; cursor: pointer; font-size: 11px; }.hiveory-chat-select-button:hover:not(:disabled) { border-color: #5b7894 !important; background: #293846 !important; }.hiveory-chat-select-button:disabled { cursor: wait; opacity: .6; }.hiveory-chat-select-button span { overflow: hidden; flex: 1; text-overflow: ellipsis; white-space: nowrap; }.hiveory-chat-engine-menu { position: absolute; z-index: 30; right: 0; bottom: calc(100% + 7px); display: grid; gap: 2px; width: min(300px, 72vw); max-height: 360px; overflow-y: auto; border: 1px solid #3b4957; border-radius: 8px; padding: 6px; background: #171d24; box-shadow: 0 16px 34px rgba(0,0,0,.42); }.hiveory-chat-engine-option { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 43px; border: 1px solid transparent; border-radius: 6px; padding: 7px 8px; color: #c6d2de; background: transparent; cursor: pointer; text-align: left; }.hiveory-chat-engine-option:hover, .hiveory-chat-engine-option:focus-visible { border-color: #3d5870; background: #263441; outline: none; }.hiveory-chat-engine-option > span { display: grid; min-width: 0; flex: 1; gap: 2px; }.hiveory-chat-engine-option strong { overflow: hidden; color: #e7eef6; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.hiveory-chat-engine-option small { color: #8393a3; font-size: 10px; }.hiveory-chat-engine-option.missing, .hiveory-chat-engine-option.unauthenticated, .hiveory-chat-engine-option.unavailable { color: #aab2bb; }.hiveory-chat-engine-option.missing svg:last-child, .hiveory-chat-engine-option.unauthenticated svg:last-child, .hiveory-chat-engine-option.unavailable svg:last-child { color: #e1a05d; }.hiveory-chat-engine-option.ready > svg:last-child { color: #84c99a; }.hiveory-chat-mic-disabled { display: inline-flex !important; width: 31px; min-height: 31px !important; border-color: #343e49 !important; padding: 6px !important; color: #687582 !important; background: #1b2229 !important; cursor: not-allowed !important; }.hiveory-chat-markdown { min-width: 0; }.hiveory-chat-markdown-content { color: inherit; overflow-wrap: anywhere; }.hiveory-chat-markdown-content > *:first-child { margin-top: 0; }.hiveory-chat-markdown-content > *:last-child { margin-bottom: 0; }.hiveory-chat-markdown-content p { margin: 0 0 10px; }.hiveory-chat-markdown-content h1, .hiveory-chat-markdown-content h2, .hiveory-chat-markdown-content h3, .hiveory-chat-markdown-content h4 { margin: 18px 0 8px; color: #edf3fa; line-height: 1.25; }.hiveory-chat-markdown-content h1 { font-size: 1.55em; }.hiveory-chat-markdown-content h2 { font-size: 1.3em; }.hiveory-chat-markdown-content h3 { font-size: 1.12em; }.hiveory-chat-markdown-content ul, .hiveory-chat-markdown-content ol { margin: 8px 0 12px; padding-left: 24px; }.hiveory-chat-markdown-content li + li { margin-top: 4px; }.hiveory-chat-markdown-content a { color: #9dc9f4; text-decoration: underline; text-decoration-color: #4c7398; text-underline-offset: 2px; }.hiveory-chat-markdown-content code { border: 1px solid #303c48; border-radius: 4px; padding: 1px 4px; color: #d4e5f5; background: #18232d; font: .9em "JetBrains Mono", Consolas, monospace; }.hiveory-chat-markdown-content pre { margin: 12px 0; overflow: auto; border: 1px solid #303c48; border-radius: 7px; padding: 12px; color: #d6e4f2; background: #10171e; font: 12px/1.5 "JetBrains Mono", Consolas, monospace; }.hiveory-chat-markdown-content pre code { border: 0; padding: 0; background: transparent; }.hiveory-chat-markdown-content blockquote { margin: 12px 0; border-left: 3px solid #567794; padding-left: 12px; color: #aebdcb; }.hiveory-chat-markdown-content hr { margin: 17px 0; border: 0; border-top: 1px solid #33404d; }.hiveory-chat-markdown-content table { width: 100%; margin: 12px 0; border-collapse: collapse; font-size: .92em; }.hiveory-chat-markdown-content th, .hiveory-chat-markdown-content td { border: 1px solid #33404d; padding: 7px 8px; text-align: left; vertical-align: top; }.hiveory-chat-markdown-content th { color: #e0ebf5; background: #1a2631; }.hiveory-chat-markdown-content img { display: block; max-width: 100%; max-height: 440px; border: 1px solid #33404d; border-radius: 7px; }.hiveory-chat-tool-part pre { max-width: 100%; margin: 7px 0 0; overflow: auto; white-space: pre-wrap; }.hiveory-chat-spin { animation: hiveory-chat-spin .9s linear infinite; }.hiveory-chat-row-menu button:disabled { cursor: wait; opacity: .5; }.hiveory-chat-status { display: flex; align-items: flex-start; gap: 8px; }.hiveory-chat-status > button { flex-shrink: 0; margin: -5px -6px -5px auto; }.hiveory-chat-composer-controls { flex-wrap: wrap; }.hiveory-chat-composer-submit { flex-shrink: 0; }
+@keyframes hiveory-chat-spin { to { transform: rotate(360deg); } }
+
+/* Unified graphite chrome: all shared application surfaces use neutral
+   hierarchy, while green, amber, and red remain reserved for state. */
+:root {
+  --hiveory-graphite-canvas: #0d0e11;
+  --hiveory-graphite-surface: #141519;
+  --hiveory-graphite-raised: #1d1f24;
+  --hiveory-graphite-hover: #282a30;
+  --hiveory-graphite-border: #2d3036;
+  --hiveory-graphite-strong-border: #4b4e55;
+  --hiveory-graphite-text: #f4f4f5;
+  --hiveory-graphite-muted: #a1a1aa;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline-color: #d5d7db;
+}
+
+.hiveory-shell,
+.hiveory-chat-main,
+.hiveory-agent,
+.hiveory-automation,
+.hiveory-code-main {
+  background: radial-gradient(circle at 70% -18%, rgba(201, 204, 209, .08), transparent 35%), var(--hiveory-graphite-canvas);
+}
+
+.hiveory-content-header > svg,
+.hiveory-empty-mark,
+.hiveory-chat-title-wrap,
+.hiveory-chat-empty .hiveory-empty-mark,
+.hiveory-notification-empty svg,
+.hiveory-content-header > svg {
+  color: #c9ccd1;
+}
+
+.hiveory-empty-mark {
+  border-color: var(--hiveory-graphite-strong-border);
+  background: var(--hiveory-graphite-raised);
+}
+
+.hiveory-diagnostic-card,
+.hiveory-agent-list,
+.hiveory-agent-main,
+.hiveory-automation-detail,
+.hiveory-plugin-list,
+.hiveory-plugin-detail,
+.hiveory-settings-card,
+.hiveory-modal {
+  border-color: var(--hiveory-graphite-border);
+  background: var(--hiveory-graphite-surface);
+}
+
+.hiveory-diagnostic-card button:not(.is-secondary):not(.is-danger),
+.hiveory-chat-new-button,
+.hiveory-agent-composer button:not(.is-secondary),
+.hiveory-modal button:not(.is-secondary),
+.hiveory-inline-form button:not(.is-secondary),
+.hiveory-settings-card button:not(.is-secondary):not(.is-danger),
+.hiveory-automation button:not(.is-secondary),
+.hiveory-plugin-detail button:not(.is-secondary),
+.hiveory-code button:not(.is-secondary) {
+  border-color: #5b5e65;
+  color: #f4f4f5;
+  background: #45484f;
+}
+
+.hiveory-diagnostic-card button:not(.is-secondary):not(.is-danger):hover,
+.hiveory-chat-new-button:hover,
+.hiveory-agent-composer button:not(.is-secondary):hover:not(:disabled),
+.hiveory-modal button:not(.is-secondary):hover:not(:disabled),
+.hiveory-inline-form button:not(.is-secondary):hover:not(:disabled),
+.hiveory-settings-card button:not(.is-secondary):not(.is-danger):hover:not(:disabled),
+.hiveory-automation button:not(.is-secondary):hover:not(:disabled),
+.hiveory-plugin-detail button:not(.is-secondary):hover:not(:disabled),
+.hiveory-code button:not(.is-secondary):hover:not(:disabled) {
+  border-color: #787b82;
+  background: #5a5d64;
+}
+
+.hiveory-diagnostic-card input,
+.hiveory-diagnostic-card textarea,
+.hiveory-form-grid input,
+.hiveory-form-grid select,
+.hiveory-form-grid textarea,
+.hiveory-modal input,
+.hiveory-modal select,
+.hiveory-modal textarea,
+.hiveory-settings-card select,
+.hiveory-browser-settings-card > input,
+.hiveory-code-engine-select select,
+.hiveory-code-model-input {
+  border-color: #3b3e45;
+  color: #eef0f2;
+  background: #101114;
+}
+
+.hiveory-diagnostic-card input:focus,
+.hiveory-diagnostic-card textarea:focus,
+.hiveory-form-grid input:focus,
+.hiveory-form-grid select:focus,
+.hiveory-form-grid textarea:focus,
+.hiveory-modal input:focus,
+.hiveory-modal select:focus,
+.hiveory-modal textarea:focus,
+.hiveory-settings-card select:focus,
+.hiveory-browser-settings-card > input:focus,
+.hiveory-code-engine-select select:focus,
+.hiveory-code-model-input:focus {
+  border-color: #8c9097;
+}
+
+.hiveory-chat-sidebar,
+.hiveory-chat-header,
+.hiveory-chat-context-bar,
+.hiveory-chat-composer,
+.hiveory-chat-status,
+.hiveory-chat-edit,
+.hiveory-code-sidebar,
+.hiveory-runs-sidebar {
+  border-color: var(--hiveory-graphite-border);
+  background: var(--hiveory-graphite-surface);
+}
+
+.hiveory-chat-sidebar,
+.hiveory-chat-header,
+.hiveory-chat-context-bar,
+.hiveory-chat-composer,
+.hiveory-chat-status,
+.hiveory-chat-edit {
+  border-color: var(--hiveory-graphite-border);
+}
+
+.hiveory-chat-context-bar span:first-child,
+.hiveory-chat-turn-state,
+.hiveory-chat-streaming-status,
+.hiveory-chat-title-wrap,
+.hiveory-chat-citation,
+.hiveory-chat-list-empty button,
+.hiveory-chat-history-label .hiveory-chat-spin {
+  color: #c9ccd1;
+}
+
+.hiveory-chat-list-item:hover,
+.hiveory-chat-list-item.is-selected,
+.hiveory-chat-unfiled:hover,
+.hiveory-chat-unfiled.is-selected,
+.hiveory-chat-folder-row:hover,
+.hiveory-chat-folder-row.is-selected,
+.hiveory-chat-engine-option:hover,
+.hiveory-chat-engine-option:focus-visible {
+  border-color: #4b4e55;
+  background: var(--hiveory-graphite-hover);
+}
+
+.hiveory-chat-message-avatar {
+  border-color: #4b4e55;
+  color: #d6d8dc;
+  background: #24262b;
+}
+
+.hiveory-chat-message.is-user .hiveory-chat-message-avatar,
+.hiveory-chat-message.is-user .hiveory-chat-message-content {
+  border-color: #45474e;
+  background: #24262b;
+}
+
+.hiveory-chat-message-actions button:hover:not(:disabled),
+.hiveory-chat-attachment-card,
+.hiveory-attachment-chip,
+.hiveory-chat-reasoning,
+.hiveory-chat-tool-part,
+.hiveory-chat-engine-menu,
+.hiveory-chat-select-button {
+  border-color: #45474e;
+}
+
+.hiveory-chat-message-actions button:hover:not(:disabled),
+.hiveory-chat-select-button:hover:not(:disabled),
+.hiveory-attachment-chip button:hover {
+  color: #f0f1f3;
+  background: #303238;
+}
+
+.hiveory-chat-reasoning,
+.hiveory-chat-status,
+.hiveory-chat-edit,
+.hiveory-chat-attachment-card,
+.hiveory-attachment-chip,
+.hiveory-chat-engine-menu {
+  background: #1a1c21;
+}
+
+.hiveory-chat-attachment-card,
+.hiveory-attachment-chip {
+  color: #d4d6da;
+}
+
+.hiveory-chat-edit button,
+.hiveory-chat-composer button {
+  border-color: #5b5e65;
+  background: #45484f;
+}
+
+.hiveory-chat-edit button:hover,
+.hiveory-chat-composer button:hover {
+  border-color: #787b82;
+  background: #5a5d64;
+}
+
+.hiveory-chat-composer:focus-within,
+.hiveory-agent-composer textarea:focus {
+  border-color: #757980;
+  box-shadow: 0 0 0 2px rgba(201, 204, 209, .12);
+}
+
+.hiveory-chat-composer-controls select,
+.hiveory-chat-composer-controls input,
+.hiveory-chat-edit textarea,
+.hiveory-browser-settings-card > input {
+  border-color: #3b3e45;
+  color: #eef0f2;
+  background: #101114;
+}
+
+.hiveory-chat-composer-controls select:focus,
+.hiveory-chat-composer-controls input:focus,
+.hiveory-chat-edit textarea:focus,
+.hiveory-browser-settings-card > input:focus {
+  border-color: #8c9097;
+}
+
+.hiveory-chat-select-button {
+  color: #d4d6da !important;
+  background: #24262b !important;
+}
+
+.hiveory-chat-select-button:hover:not(:disabled) {
+  border-color: #787b82 !important;
+  background: #303238 !important;
+}
+
+.hiveory-chat-markdown-content a,
+.hiveory-chat-citation:hover {
+  color: #d3d5d9;
+}
+
+.hiveory-chat-markdown-content a {
+  text-decoration-color: #6b6e75;
+}
+
+.hiveory-chat-markdown-content blockquote {
+  border-left-color: #73767d;
+}
+
+.hiveory-pulse {
+  background: #c9ccd1;
+  box-shadow: 0 0 0 4px rgba(201, 204, 209, .13);
+}
+
+.hiveory-agent-heading-mark,
+.hiveory-agent-welcome svg,
+.hiveory-add-agent,
+.hiveory-agent-tabs button.is-active,
+.hiveory-agent-tabs button span,
+.hiveory-skill-icon,
+.hiveory-memory-notice svg,
+.hiveory-routine-row-action,
+.hiveory-plugin-mark,
+.hiveory-connection-icon {
+  color: #c9ccd1;
+}
+
+.hiveory-agent-heading-mark,
+.hiveory-skill-icon,
+.hiveory-plugin-mark,
+.hiveory-connection-icon {
+  border-color: #4b4e55;
+  background: #24262b;
+}
+
+.hiveory-agent-list-item:hover,
+.hiveory-agent-list-item.is-selected,
+.hiveory-run-row:hover,
+.hiveory-run-row.is-selected,
+.hiveory-routine-row:hover,
+.hiveory-routine-row.is-selected,
+.hiveory-plugin-row:hover,
+.hiveory-plugin-row.is-selected,
+.hiveory-skill-card.is-enabled {
+  border-color: #4b4e55;
+  background: var(--hiveory-graphite-hover) !important;
+}
+
+.hiveory-add-agent:hover {
+  border-color: #787b82;
+  background: #303238;
+}
+
+.hiveory-agent-tabs button.is-active {
+  border-bottom-color: #c9ccd1;
+}
+
+.hiveory-agent-tabs button span {
+  background: #45484f;
+}
+
+.hiveory-state-dot.running,
+.hiveory-state-dot.preparing {
+  background: #c9ccd1;
+  box-shadow: 0 0 0 3px rgba(201, 204, 209, .13);
+}
+
+.hiveory-automation button:not(.is-secondary),
+.hiveory-agent-composer button:not(.is-secondary),
+.hiveory-inline-form button:not(.is-secondary),
+.hiveory-plugin-detail button:not(.is-secondary) {
+  border-color: #5b5e65;
+  background: #45484f;
+}
+
+.hiveory-automation button:not(.is-secondary):hover:not(:disabled),
+.hiveory-agent-composer button:not(.is-secondary):hover:not(:disabled),
+.hiveory-inline-form button:not(.is-secondary):hover:not(:disabled),
+.hiveory-plugin-detail button:not(.is-secondary):hover:not(:disabled) {
+  border-color: #787b82;
+  background: #5a5d64;
+}
+
+.hiveory-command-palette,
+.hiveory-notification-center,
+.hiveory-update-prompt,
+.hiveory-layout-dropdown {
+  border-color: var(--hiveory-graphite-border);
+  background: #141519;
+}
+
+.hiveory-command-search,
+.hiveory-command-list button:hover,
+.hiveory-command-list button.is-selected,
+.hiveory-notification-list article.is-unread,
+.hiveory-layout-option:hover,
+.hiveory-layout-option:focus-visible {
+  border-color: #4b4e55;
+  background: var(--hiveory-graphite-hover);
+}
+
+.hiveory-command-search {
+  color: #c9ccd1;
+}
+
+.hiveory-notification-empty svg,
+.hiveory-text-button,
+.hiveory-layout-option-icon {
+  color: #c9ccd1;
+}
+
+.hiveory-text-button:hover {
+  color: #f0f1f3;
+}
+
+.hiveory-layout-option-icon {
+  border-color: #4b4e55;
+  background: #24262b;
+}
+
+.hiveory-title-action:hover,
+.hiveory-layout-option:hover,
+.hiveory-layout-option:focus-visible {
+  border-color: #60636a;
+}
+
+.hiveory-title-action:hover {
+  background: rgba(201, 204, 209, .1);
+}
+
+.hiveory-skip-link,
+.hiveory-skip-link:focus {
+  border-color: #6b6e75;
+  background: #45484f;
+}
+
+.hiveory-browser-settings-card:focus-visible {
+  border-color: #8c9097;
+  box-shadow: 0 0 0 2px rgba(201, 204, 209, .16);
+}
+
+.hiveory-settings-card,
+.hiveory-settings-version,
+.hiveory-browser-profile-row {
+  border-color: var(--hiveory-graphite-border);
+  background: #17181c;
+}
+
+.hiveory-feedback {
+  border-color: #45474e;
+  color: #d4d6da;
+  background: #1a1c21;
+}
+
+.hiveory-rail button.is-selected {
+  box-shadow: inset 2px 0 0 #c9ccd1;
+}
