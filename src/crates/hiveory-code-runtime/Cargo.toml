@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 hiveory-protocol = { path = "../hiveory-protocol" }
+hiveory-platform-process = { path = "../hiveory-platform-process" }
 base64.workspace = true
 libc.workspace = true
 portable-pty.workspace = true

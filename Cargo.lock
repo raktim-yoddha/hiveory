@@ -1965,6 +1965,7 @@ dependencies = [
  "hiveory-artifact-store",
  "hiveory-model-gateway",
  "hiveory-persistence",
+ "hiveory-platform-process",
  "hiveory-protocol",
  "hiveory-secret-store",
  "hiveory-tool-runtime",
@@ -1995,6 +1996,7 @@ dependencies = [
  "hiveory-model-gateway",
  "hiveory-notification-service",
  "hiveory-persistence",
+ "hiveory-platform-process",
  "hiveory-plugin-runtime",
  "hiveory-protocol",
  "hiveory-routine-scheduler",
@@ -2053,6 +2055,7 @@ dependencies = [
  "hiveory-code-domain",
  "hiveory-git-service",
  "hiveory-persistence",
+ "hiveory-platform-process",
  "hiveory-protocol",
  "hiveory-workspace-service",
  "hmac 0.12.1",
@@ -2073,6 +2076,7 @@ name = "hiveory-code-runtime"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "hiveory-platform-process",
  "hiveory-protocol",
  "libc",
  "portable-pty",
@@ -2109,6 +2113,7 @@ version = "0.1.0"
 dependencies = [
  "git2",
  "hiveory-code-domain",
+ "hiveory-platform-process",
  "hiveory-protocol",
  "thiserror 2.0.20",
  "uuid",
@@ -2167,6 +2172,10 @@ dependencies = [
  "url",
  "uuid",
 ]
+
+[[package]]
+name = "hiveory-platform-process"
+version = "0.1.0"
 
 [[package]]
 name = "hiveory-plugin-runtime"

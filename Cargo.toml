@@ -3,6 +3,7 @@ members = [
   "src/apps/desktop/src-tauri",
   "src/crates/hiveory-protocol",
   "src/crates/hiveory-domain-common",
+  "src/crates/hiveory-platform-process",
   "src/crates/hiveory-security",
   "src/crates/hiveory-persistence",
   "src/crates/hiveory-secret-store",

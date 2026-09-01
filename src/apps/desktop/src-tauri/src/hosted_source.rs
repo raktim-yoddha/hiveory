@@ -1,4 +1,5 @@
 use hiveory_persistence::HiveoryPersistence;
+use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     CodeHostedAuthState, CodeHostedIssue, CodeHostedIssueAction, CodeHostedIssueState,
     CodeHostedOperationResult, CodeHostedPullRequest, CodeHostedPullRequestAction,
@@ -279,9 +280,11 @@ pub async fn load_tracking(
 }
 
 async fn run_json(root: &Path, args: &[&str]) -> Result<Value, HostedCommandError> {
+    let mut command = Command::new("gh");
+    configure_background_command(command.as_std_mut());
     let result = timeout(
         COMMAND_TIMEOUT,
-        Command::new("gh")
+        command
             .args(args)
             .current_dir(root)
             .stdin(Stdio::null())
@@ -309,9 +312,11 @@ async fn run_json(root: &Path, args: &[&str]) -> Result<Value, HostedCommandErro
 }
 
 async fn run_text(root: &Path, args: &[String]) -> Result<String, HostedCommandError> {
+    let mut command = Command::new("gh");
+    configure_background_command(command.as_std_mut());
     let result = timeout(
         COMMAND_TIMEOUT,
-        Command::new("gh")
+        command
             .args(args)
             .current_dir(root)
             .stdin(Stdio::null())

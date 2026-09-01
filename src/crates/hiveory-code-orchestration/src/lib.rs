@@ -11,6 +11,7 @@ use hiveory_code_domain::{
 };
 use hiveory_git_service::{HiveoryGitError, HiveoryGitService};
 use hiveory_persistence::HiveoryPersistence;
+use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::CodeWorkspaceCapability;
 use hiveory_protocol::{
     CodeCheckpoint, CodeCheckpointDiffRequest, CodeCheckpointKind, CodeCheckpointState,
@@ -124,6 +125,7 @@ impl CodeWorkerAdapter for CliWorkerAdapter {
             _ => "codex",
         };
         let mut command = Command::new(executable);
+        configure_background_command(command.as_std_mut());
         match adapter_id {
             "claude-code" => {
                 command.args([
@@ -1472,6 +1474,7 @@ impl HiveoryCodeOrchestration {
             "Plan this coding objective as a small deterministic DAG. Do not edit files.\n\nObjective:\n{objective}\n\nReturn only the requested structured proposal. Keep task specifications actionable, bounded, and independent where possible."
         );
         let mut command = Command::new("codex");
+        configure_background_command(command.as_std_mut());
         configure_worker_environment(&mut command);
         command
             .arg("exec")
@@ -2810,6 +2813,7 @@ fn dispatch_bridge_program() -> String {
 }
 
 fn configure_worker_process(command: &mut Command) {
+    configure_background_command(command.as_std_mut());
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -2841,7 +2845,9 @@ fn request_worker_stop(pid: Option<u32>) {
     let Some(pid) = pid else { return };
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("taskkill")
+        let mut command = std::process::Command::new("taskkill");
+        configure_background_command(&mut command);
+        let _ = command
             .args(["/PID", &pid.to_string(), "/T"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -2858,7 +2864,9 @@ fn force_terminate_worker_process(pid: Option<u32>) {
     let Some(pid) = pid else { return };
     #[cfg(windows)]
     {
-        let _ = std::process::Command::new("taskkill")
+        let mut command = std::process::Command::new("taskkill");
+        configure_background_command(&mut command);
+        let _ = command
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())

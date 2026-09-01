@@ -13,6 +13,7 @@ use hiveory_artifact_store::HiveoryArtifactStore;
 use hiveory_model_gateway::{HiveoryModelProvider, HiveoryProviderError};
 use hiveory_persistence::agent::{HiveoryAgentStore, HiveoryAgentStoreError};
 use hiveory_persistence::routine::HiveoryRoutineStore;
+use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     AgentApprovalDecision, AgentApprovalDecisionRequest, AgentApprovalPolicy, AgentArtifactKind,
     AgentArtifactSummary, AgentConversationCreateRequest, AgentConversationDetail,
@@ -1755,6 +1756,7 @@ async fn execute_computer_command(args: &Value) -> Result<String, String> {
                 return Err("remote_target must be an SSH alias or user@host value".to_owned());
             }
             let mut process = tokio::process::Command::new("ssh");
+            configure_background_command(process.as_std_mut());
             process
                 .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"])
                 .arg(remote_target)
@@ -1788,6 +1790,7 @@ async fn execute_computer_command(args: &Value) -> Result<String, String> {
 #[cfg(target_os = "windows")]
 fn desktop_command(command: &str) -> tokio::process::Command {
     let mut process = tokio::process::Command::new("cmd");
+    configure_background_command(process.as_std_mut());
     process.args(["/D", "/S", "/C"]).arg(command);
     process
 }

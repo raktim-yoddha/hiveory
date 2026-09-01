@@ -10,6 +10,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 hiveory-protocol = { path = "../../../crates/hiveory-protocol" }
+hiveory-platform-process = { path = "../../../crates/hiveory-platform-process" }
 hiveory-artifact-store = { path = "../../../crates/hiveory-artifact-store" }
 hiveory-agent-runtime = { path = "../../../crates/hiveory-agent-runtime" }
 hiveory-plugin-runtime = { path = "../../../crates/hiveory-plugin-runtime" }

@@ -5,6 +5,7 @@
 //! agent is launched through a structured, fixed adapter definition.
 
 use base64::{engine::general_purpose::STANDARD, Engine};
+use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     ChatEngineAvailability, ChatEngineSummary, ChatModelSummary, ChatProviderStreamEvent,
     ChatProviderStreamEventKind, ChatReasoningEffort, CodeAdapterCapability, CodeAdapterSummary,
@@ -114,7 +115,9 @@ fn adapter_spec(id: &str) -> Option<AdapterSpec> {
 fn resolve_executable(name: &str) -> ResolvedExecutable {
     #[cfg(windows)]
     {
-        let where_output = StdCommand::new("where.exe")
+        let mut where_command = StdCommand::new("where.exe");
+        configure_background_command(&mut where_command);
+        let where_output = where_command
             .arg(name)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -187,6 +190,7 @@ fn executable_priority(path: &Path) -> u8 {
 
 fn command_with_prefix(program: &ResolvedExecutable) -> StdCommand {
     let mut command = StdCommand::new(&program.program);
+    configure_background_command(&mut command);
     command.args(&program.prefix);
     command
 }
@@ -459,6 +463,7 @@ async fn discover_cli_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>,
 async fn discover_codex_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
     let resolved = resolve_executable(spec.executable);
     let mut command = TokioCommand::new(resolved.program);
+    configure_background_command(command.as_std_mut());
     command
         .args(resolved.prefix)
         .args(["app-server", "--stdio"])
@@ -636,6 +641,7 @@ async fn read_json_rpc_response(
 async fn run_cli_capture(spec: AdapterSpec, args: &[&str]) -> Result<String, String> {
     let resolved = resolve_executable(spec.executable);
     let mut command = TokioCommand::new(resolved.program);
+    configure_background_command(command.as_std_mut());
     command
         .args(resolved.prefix)
         .args(args)
@@ -1253,6 +1259,7 @@ fn cli_chat_command(
 ) -> TokioCommand {
     let resolved = resolve_executable(spec.executable);
     let mut command = TokioCommand::new(resolved.program);
+    configure_background_command(command.as_std_mut());
     command
         .args(resolved.prefix)
         .current_dir(chat_root)
@@ -1618,7 +1625,9 @@ fn terminate_process_tree(pid: Option<u32>, _process_group_id: Option<i32>) {
     let Some(pid) = pid else { return };
     #[cfg(windows)]
     {
-        let _ = StdCommand::new("taskkill")
+        let mut command = StdCommand::new("taskkill");
+        configure_background_command(&mut command);
+        let _ = command
             .args(["/PID", &pid.to_string(), "/T", "/F"])
             .stdout(Stdio::null())
             .stderr(Stdio::null())

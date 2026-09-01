@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 hiveory-code-domain = { path = "../hiveory-code-domain" }
+hiveory-platform-process = { path = "../hiveory-platform-process" }
 hiveory-git-service = { path = "../hiveory-git-service" }
 hiveory-persistence = { path = "../hiveory-persistence" }
 hiveory-protocol = { path = "../hiveory-protocol" }

@@ -10,6 +10,7 @@ use git2::{
     StatusOptions, WorktreeAddOptions, WorktreeLockStatus, WorktreePruneOptions,
 };
 use hiveory_code_domain::validate_relative_path;
+use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     CodeGitBranch, CodeGitCommit, CodeGitDiff, CodeGitFileStatus, CodeGitOperationResult,
     CodeGitRemote, CodeGitRepositorySummary, CodeGitStash, CodeGitStatus, CodeGitWorktree,
@@ -656,7 +657,9 @@ impl HiveoryGitService {
         operation: &str,
         args: &[String],
     ) -> Result<String, HiveoryGitError> {
-        let output = Command::new("git")
+        let mut command = Command::new("git");
+        configure_background_command(&mut command);
+        let output = command
             .args(args)
             .current_dir(root)
             .env("GIT_TERMINAL_PROMPT", "0")

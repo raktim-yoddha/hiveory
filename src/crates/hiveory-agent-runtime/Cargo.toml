@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 hiveory-agent-domain = { path = "../hiveory-agent-domain" }
+hiveory-platform-process = { path = "../hiveory-platform-process" }
 hiveory-artifact-store = { path = "../hiveory-artifact-store" }
 hiveory-model-gateway = { path = "../hiveory-model-gateway" }
 hiveory-persistence = { path = "../hiveory-persistence" }
