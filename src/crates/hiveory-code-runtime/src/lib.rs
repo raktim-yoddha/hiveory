@@ -756,10 +756,28 @@ impl HiveoryCodeRuntime {
         workspace_root: &Path,
         sink: TerminalEventSink,
     ) -> Result<CodeTerminalSummary, HiveoryCodeRuntimeError> {
+        self.start_at_root_with_id(request, workspace_root, sink, None, 0)
+    }
+
+    /// Starts a terminal while preserving a durable resource id and event
+    /// sequence.  The background terminal host uses this when a pane is
+    /// resumed after the host process itself was replaced; keeping the id is
+    /// what lets the layout continue to point at the same terminal record.
+    pub fn start_at_root_with_id(
+        &self,
+        request: &CodeTerminalStartRequest,
+        workspace_root: &Path,
+        sink: TerminalEventSink,
+        terminal_id: Option<&str>,
+        initial_sequence: u64,
+    ) -> Result<CodeTerminalSummary, HiveoryCodeRuntimeError> {
         if request.cols == 0 || request.rows == 0 || request.cols > 500 || request.rows > 500 {
             return Err(HiveoryCodeRuntimeError::InvalidDimensions);
         }
-        let id = format!("terminal-{}", uuid::Uuid::now_v7());
+        let id = terminal_id
+            .filter(|value| !value.trim().is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("terminal-{}", uuid::Uuid::now_v7()));
         let started_at_unix_ms = now_ms();
         let process_root = process_path(workspace_root);
         let mut command = command_for(request, &process_root)?;
@@ -824,7 +842,7 @@ impl HiveoryCodeRuntime {
             killer: Mutex::new(killer),
             process_group_id,
             ring_buffer: Mutex::new(std::collections::VecDeque::with_capacity(16 * 1024)),
-            sequence: std::sync::atomic::AtomicU64::new(0),
+            sequence: std::sync::atomic::AtomicU64::new(initial_sequence),
             broadcast_tx: broadcast_tx.clone(),
         });
         self.sessions

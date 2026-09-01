@@ -18,6 +18,7 @@ hiveory-chat-domain = { path = "../../../crates/hiveory-chat-domain" }
 hiveory-code-domain = { path = "../../../crates/hiveory-code-domain" }
 hiveory-code-orchestration = { path = "../../../crates/hiveory-code-orchestration" }
 hiveory-code-runtime = { path = "../../../crates/hiveory-code-runtime" }
+hiveory-terminal-host = { path = "../../../crates/hiveory-terminal-host" }
 hiveory-git-service = { path = "../../../crates/hiveory-git-service" }
 hiveory-job-runtime = { path = "../../../crates/hiveory-job-runtime" }
 hiveory-model-gateway = { path = "../../../crates/hiveory-model-gateway" }

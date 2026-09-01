@@ -1945,7 +1945,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hiveory-agent-domain"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-protocol",
  "serde",
@@ -1956,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-agent-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "cap-std",
@@ -1980,7 +1980,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-app-host"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "arboard",
@@ -2001,6 +2001,7 @@ dependencies = [
  "hiveory-protocol",
  "hiveory-routine-scheduler",
  "hiveory-secret-store",
+ "hiveory-terminal-host",
  "hiveory-tool-runtime",
  "hiveory-workspace-service",
  "serde",
@@ -2023,7 +2024,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-artifact-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-protocol",
  "sha2 0.10.9",
@@ -2034,7 +2035,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-chat-domain"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-protocol",
  "thiserror 2.0.20",
@@ -2042,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-code-domain"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-protocol",
  "thiserror 2.0.20",
@@ -2050,7 +2051,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-code-orchestration"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-code-domain",
  "hiveory-git-service",
@@ -2073,7 +2074,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-code-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "hiveory-platform-process",
@@ -2089,7 +2090,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-dispatch-bridge"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hmac 0.12.1",
  "serde",
@@ -2101,7 +2102,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-domain-common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "uuid",
@@ -2109,7 +2110,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-git-service"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "git2",
  "hiveory-code-domain",
@@ -2121,7 +2122,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-job-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-persistence",
  "hiveory-protocol",
@@ -2133,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-model-gateway"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2148,7 +2149,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-notification-service"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-job-runtime",
  "hiveory-persistence",
@@ -2159,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-persistence"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-agent-domain",
  "hiveory-code-domain",
@@ -2175,11 +2176,11 @@ dependencies = [
 
 [[package]]
 name = "hiveory-platform-process"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "hiveory-plugin-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "futures-util",
@@ -2197,7 +2198,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2207,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-routine-scheduler"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2225,7 +2226,7 @@ dependencies = [
 
 [[package]]
 name = "hiveory-secret-store"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "keyring",
  "thiserror 2.0.20",
@@ -2234,14 +2235,32 @@ dependencies = [
 
 [[package]]
 name = "hiveory-security"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "thiserror 2.0.20",
 ]
 
 [[package]]
+name = "hiveory-terminal-host"
+version = "0.1.1"
+dependencies = [
+ "aes-gcm",
+ "base64 0.22.1",
+ "hiveory-code-runtime",
+ "hiveory-persistence",
+ "hiveory-platform-process",
+ "hiveory-protocol",
+ "hiveory-secret-store",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "hiveory-tool-runtime"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "hiveory-persistence",
@@ -2254,14 +2273,14 @@ dependencies = [
 
 [[package]]
 name = "hiveory-tooling"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hiveory-protocol",
 ]
 
 [[package]]
 name = "hiveory-workspace-service"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cap-std",
  "hiveory-code-domain",

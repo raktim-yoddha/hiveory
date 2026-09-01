@@ -19,9 +19,7 @@ use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, Hiveory
 use hiveory_chat_domain::{estimate_context_tokens, validate_send_request};
 use hiveory_code_domain::{default_layout, validate_layout};
 use hiveory_code_orchestration::{HiveoryCodeOrchestration, HiveoryCodeOrchestrationError};
-use hiveory_code_runtime::{
-    stream_cli_chat_turn, HiveoryCodeRuntime, HiveoryCodeRuntimeError, TerminalEventSink,
-};
+use hiveory_code_runtime::{stream_cli_chat_turn, HiveoryCodeRuntime, HiveoryCodeRuntimeError};
 use hiveory_git_service::{HiveoryGitError, HiveoryGitService};
 use hiveory_job_runtime::HiveoryJobRuntime;
 use hiveory_model_gateway::{
@@ -91,6 +89,7 @@ use hiveory_protocol::{
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
+use hiveory_terminal_host::{HiveoryTerminalHostClient, HiveoryTerminalHostError};
 use hiveory_tool_runtime::HiveoryAuditLog;
 use hiveory_workspace_service::{
     HiveoryWorkspaceError, HiveoryWorkspaceMetadata, HiveoryWorkspaceService,
@@ -147,6 +146,12 @@ struct HiveoryWindowState {
     maximized: bool,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct CodeTerminalHistorySettingRequest {
+    terminal_id: String,
+    enabled: bool,
+}
+
 #[derive(Clone)]
 struct HiveoryFoundation {
     persistence: HiveoryPersistence,
@@ -166,6 +171,7 @@ struct HiveoryFoundation {
     code_workspaces: HiveoryWorkspaceService,
     code_workspaces_root: PathBuf,
     code_runtime: HiveoryCodeRuntime,
+    terminal_host: HiveoryTerminalHostClient,
     code_git: HiveoryGitService,
     code_orchestration: HiveoryCodeOrchestration,
     code_active_workspace_id: Arc<RwLock<Option<String>>>,
@@ -175,6 +181,35 @@ struct HiveoryFoundation {
 struct CodeTerminalLaunchReservation {
     launches: Arc<std::sync::Mutex<HashSet<String>>>,
     key: String,
+}
+
+fn forward_terminal_events(
+    host: HiveoryTerminalHostClient,
+    terminal_id: String,
+    after_sequence: u64,
+    channel: Channel<CodeTerminalEvent>,
+) {
+    tauri::async_runtime::spawn(async move {
+        let Ok(mut receiver) = host
+            .subscribe(&CodeTerminalSubscribeRequest {
+                terminal_id,
+                after_sequence,
+            })
+            .await
+        else {
+            return;
+        };
+        loop {
+            match receiver.recv().await {
+                Ok(event) => {
+                    if channel.send(event).is_err() {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
 }
 
 impl Drop for CodeTerminalLaunchReservation {
@@ -194,6 +229,12 @@ impl HiveoryFoundation {
         let persistence = HiveoryPersistence::open(&database_path)
             .await
             .map_err(|error| error.to_string())?;
+        let secrets: HiveorySecretStoreHandle = Arc::new(HiveoryKeyringSecretStore);
+        let history_key_ref = ensure_terminal_history_key(&persistence, &secrets).await?;
+        let terminal_host =
+            HiveoryTerminalHostClient::connect_or_start(database_path.clone(), history_key_ref)
+                .await
+                .map_err(|error| error.to_string())?;
         let previous_shutdown_was_clean = persistence
             .previous_shutdown_was_clean()
             .await
@@ -251,17 +292,12 @@ impl HiveoryFoundation {
             .interrupt_active_jobs()
             .await
             .map_err(|error| error.to_string())?;
-        persistence
-            .mark_active_code_terminals_dormant()
-            .await
-            .map_err(|error| error.to_string())?;
         let chat = HiveoryChatStore::new(persistence.clone());
         let interrupted_chats = chat
             .interrupt_active_turns()
             .await
             .map_err(|error| error.to_string())?;
         let jobs = HiveoryJobRuntime::new(persistence.clone());
-        let secrets: HiveorySecretStoreHandle = Arc::new(HiveoryKeyringSecretStore);
         let provider: Arc<dyn HiveoryModelProvider> =
             Arc::new(HiveoryOpenAiResponsesProvider::new(secrets.clone()));
         let notifications = HiveoryNotificationService::new(persistence.clone(), jobs.clone());
@@ -329,6 +365,7 @@ impl HiveoryFoundation {
             code_workspaces,
             code_workspaces_root,
             code_runtime: HiveoryCodeRuntime::new(),
+            terminal_host,
             code_git: HiveoryGitService,
             code_orchestration,
             code_active_workspace_id,
@@ -933,29 +970,25 @@ impl HiveoryFoundation {
 
     async fn stop_code_workspace_terminals(&self, workspace_id: &str) -> Result<(), ApiError> {
         let terminals = self
-            .code_runtime
+            .terminal_host
             .list()
-            .map_err(runtime_error)?
+            .await
+            .map_err(terminal_host_error)?
             .into_iter()
             .filter(|terminal| terminal.workspace_id == workspace_id)
             .collect::<Vec<_>>();
         for terminal in terminals {
             if self
-                .code_runtime
+                .terminal_host
                 .stop(&CodeTerminalStopRequest {
                     terminal_id: terminal.id.clone(),
                     force: true,
                 })
-                .map_err(runtime_error)?
+                .await
+                .map_err(terminal_host_error)?
             {
-                self.persistence
-                    .finish_code_terminal(
-                        &terminal.id,
-                        hiveory_protocol::CodeTerminalState::Interrupted,
-                        None,
-                    )
-                    .await
-                    .map_err(database_error)?;
+                // The host writes the terminal state before acknowledging the
+                // stop, so the next workspace load sees the same state.
             }
         }
         Ok(())
@@ -1180,9 +1213,10 @@ impl HiveoryFoundation {
             .await
             .map_err(database_error)?;
         for terminal in self
-            .code_runtime
+            .terminal_host
             .list()
-            .map_err(runtime_error)?
+            .await
+            .map_err(terminal_host_error)?
             .into_iter()
             .filter(|terminal| terminal.workspace_id == workspace_id)
         {
@@ -2289,26 +2323,10 @@ async fn hiveory_command_open_code_dispatch_terminal(
         .dispatch_terminal_context(&command.payload)
         .await
         .map_err(orchestration_error)?;
-    let persistence = foundation.persistence.clone();
     let coding_agent = context.resume_session_id.is_some();
-    let sink: TerminalEventSink = Arc::new(move |event| {
-        let _ = channel.send(event.clone());
-        if matches!(event.kind, hiveory_protocol::CodeTerminalEventKind::Exited) {
-            let persistence = persistence.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = persistence
-                    .finish_code_terminal(
-                        &event.terminal_id,
-                        hiveory_protocol::CodeTerminalState::Exited,
-                        event.exit_code,
-                    )
-                    .await;
-            });
-        }
-    });
     let summary = foundation
-        .code_runtime
-        .start_at_root(
+        .terminal_host
+        .start(
             &CodeTerminalStartRequest {
                 workspace_id: context.workspace_id,
                 kind: if coding_agent {
@@ -2323,9 +2341,11 @@ async fn hiveory_command_open_code_dispatch_terminal(
                 resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
             },
             &context.worktree_path,
-            sink,
+            None,
+            None,
         )
-        .map_err(runtime_error)?;
+        .await
+        .map_err(terminal_host_error)?;
     let attached = foundation
         .persistence
         .attach_orchestration_terminal(
@@ -2336,19 +2356,23 @@ async fn hiveory_command_open_code_dispatch_terminal(
         .await
         .map_err(database_error)?;
     if !attached {
-        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
-            terminal_id: summary.id.clone(),
-            force: true,
-        });
+        let _ = foundation
+            .terminal_host
+            .stop(&CodeTerminalStopRequest {
+                terminal_id: summary.id.clone(),
+                force: true,
+            })
+            .await;
         return Err(validation_error(
             "The dispatch lease changed before the terminal could be attached.",
         ));
     }
-    foundation
-        .persistence
-        .save_code_terminal(&summary)
-        .await
-        .map_err(database_error)?;
+    forward_terminal_events(
+        foundation.terminal_host.clone(),
+        summary.id.clone(),
+        0,
+        channel,
+    );
     Ok(response(&command.request_id, summary))
 }
 
@@ -2437,10 +2461,13 @@ async fn hiveory_command_confirm_code_cleanup(
                 })
             }) {
                 if let Some(terminal_id) = dispatch.terminal_id.as_deref() {
-                    let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
-                        terminal_id: terminal_id.to_owned(),
-                        force: true,
-                    });
+                    let _ = foundation
+                        .terminal_host
+                        .stop(&CodeTerminalStopRequest {
+                            terminal_id: terminal_id.to_owned(),
+                            force: true,
+                        })
+                        .await;
                 }
             }
         }
@@ -3306,31 +3333,17 @@ async fn hiveory_command_start_code_terminal(
         .code_workspaces
         .root_path(&command.payload.workspace_id)
         .map_err(workspace_error)?;
-    let persistence = foundation.persistence.clone();
-    let sink: TerminalEventSink = Arc::new(move |event| {
-        let _ = channel.send(event.clone());
-        if matches!(event.kind, hiveory_protocol::CodeTerminalEventKind::Exited) {
-            let persistence = persistence.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = persistence
-                    .finish_code_terminal(
-                        &event.terminal_id,
-                        hiveory_protocol::CodeTerminalState::Exited,
-                        event.exit_code,
-                    )
-                    .await;
-            });
-        }
-    });
     let summary = foundation
-        .code_runtime
-        .start(&command.payload, &root, sink)
-        .map_err(runtime_error)?;
-    foundation
-        .persistence
-        .save_code_terminal(&summary)
+        .terminal_host
+        .start(&command.payload, &root, None, None)
         .await
-        .map_err(database_error)?;
+        .map_err(terminal_host_error)?;
+    forward_terminal_events(
+        foundation.terminal_host.clone(),
+        summary.id.clone(),
+        0,
+        channel,
+    );
     foundation
         .audit
         .record(
@@ -3358,9 +3371,10 @@ async fn hiveory_command_write_code_terminal(
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
     foundation
-        .code_runtime
+        .terminal_host
         .write(&command.payload)
-        .map_err(runtime_error)?;
+        .await
+        .map_err(terminal_host_error)?;
     Ok(response(&command.request_id, true))
 }
 
@@ -3371,9 +3385,10 @@ async fn hiveory_command_resize_code_terminal(
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
     let resized = foundation
-        .code_runtime
+        .terminal_host
         .resize(&command.payload)
-        .map_err(runtime_error)?;
+        .await
+        .map_err(terminal_host_error)?;
     Ok(response(&command.request_id, resized))
 }
 
@@ -3384,20 +3399,42 @@ async fn hiveory_command_stop_code_terminal(
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
     let stopped = foundation
-        .code_runtime
+        .terminal_host
         .stop(&command.payload)
-        .map_err(runtime_error)?;
-    if stopped {
-        let _ = foundation
-            .persistence
-            .finish_code_terminal(
-                &command.payload.terminal_id,
-                hiveory_protocol::CodeTerminalState::Interrupted,
-                None,
-            )
-            .await;
-    }
+        .await
+        .map_err(terminal_host_error)?;
     Ok(response(&command.request_id, stopped))
+}
+
+#[tauri::command]
+async fn hiveory_query_code_terminal_history(
+    terminal_id: String,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<bool, ApiError> {
+    foundation
+        .persistence
+        .code_terminal_session(&terminal_id)
+        .await
+        .map_err(database_error)?
+        .map(|session| session.history_enabled)
+        .ok_or_else(|| validation_error("Terminal session was not found."))
+}
+
+#[tauri::command]
+async fn hiveory_command_set_code_terminal_history(
+    command: CommandEnvelope<CodeTerminalHistorySettingRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    let changed = foundation
+        .terminal_host
+        .set_history_enabled(&command.payload.terminal_id, command.payload.enabled)
+        .await
+        .map_err(terminal_host_error)?;
+    if !changed {
+        return Err(validation_error("Terminal session was not found."));
+    }
+    Ok(response(&command.request_id, true))
 }
 
 #[tauri::command]
@@ -3876,47 +3913,11 @@ async fn hiveory_command_launch_code_pane_terminal(
         _ => default_layout(&command.payload.workspace_id),
     };
 
-    if current_layout.revision != command.payload.expected_revision {
-        return Err(application_error(
-            "layout_conflict",
-            format!(
-                "Pane layout was modified elsewhere (current revision {}, expected {}).",
-                current_layout.revision, command.payload.expected_revision
-            ),
-            RetryClass::AfterUserAction,
-        ));
-    }
-
     let pane = current_layout
         .nodes
         .iter()
         .find(|node| node.pane_id == command.payload.pane_id)
         .ok_or_else(|| validation_error("Target pane was not found."))?;
-
-    if let Some(terminal_id) = pane.resource_id.as_deref() {
-        if let Some(existing_terminal) = foundation
-            .code_runtime
-            .list()
-            .map_err(runtime_error)?
-            .into_iter()
-            .find(|terminal| terminal.id == terminal_id)
-            .filter(|terminal| {
-                matches!(
-                    terminal.state,
-                    hiveory_protocol::CodeTerminalState::Running
-                        | hiveory_protocol::CodeTerminalState::Starting
-                )
-            })
-        {
-            return Ok(response(
-                &command.request_id,
-                LaunchCodePaneTerminalResult {
-                    layout: current_layout,
-                    terminal: existing_terminal,
-                },
-            ));
-        }
-    }
 
     let launch_key = format!(
         "{}:{}",
@@ -3943,22 +3944,90 @@ async fn hiveory_command_launch_code_pane_terminal(
         }
     };
 
-    let persistence = foundation.persistence.clone();
-    let sink: TerminalEventSink = Arc::new(move |event| {
-        let _ = channel.send(event.clone());
-        if matches!(event.kind, hiveory_protocol::CodeTerminalEventKind::Exited) {
-            let persistence = persistence.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = persistence
-                    .finish_code_terminal(
-                        &event.terminal_id,
-                        hiveory_protocol::CodeTerminalState::Exited,
-                        event.exit_code,
-                    )
-                    .await;
-            });
+    if let Some(terminal_id) = pane.resource_id.as_deref() {
+        if let Some(existing_terminal) = foundation
+            .terminal_host
+            .list()
+            .await
+            .map_err(terminal_host_error)?
+            .into_iter()
+            .find(|terminal| terminal.id == terminal_id)
+            .filter(|terminal| {
+                matches!(
+                    terminal.state,
+                    hiveory_protocol::CodeTerminalState::Running
+                        | hiveory_protocol::CodeTerminalState::Starting
+                )
+            })
+        {
+            forward_terminal_events(
+                foundation.terminal_host.clone(),
+                existing_terminal.id.clone(),
+                0,
+                channel,
+            );
+            return Ok(response(
+                &command.request_id,
+                LaunchCodePaneTerminalResult {
+                    layout: current_layout,
+                    terminal: existing_terminal,
+                },
+            ));
         }
-    });
+        // A relaunch is a reconnect/resume operation.  It intentionally does
+        // not require the renderer's layout revision and never writes a new
+        // resource binding, which removes the stale-revision failure path.
+        let persisted = foundation
+            .persistence
+            .code_terminal_session(terminal_id)
+            .await
+            .map_err(database_error)?;
+        let terminal_start = CodeTerminalStartRequest {
+            workspace_id: command.payload.workspace_id.clone(),
+            kind: command.payload.kind,
+            cols: command.payload.cols,
+            rows: command.payload.rows,
+            adapter_id: command.payload.adapter_id.clone(),
+            model: command.payload.model.clone(),
+            resume_session_id: persisted
+                .as_ref()
+                .and_then(|record| record.summary.session_id.clone()),
+        };
+        let summary = foundation
+            .terminal_host
+            .start(
+                &terminal_start,
+                &root,
+                Some(terminal_id.to_owned()),
+                persisted.as_ref().map(|record| record.history_enabled),
+            )
+            .await
+            .map_err(terminal_host_error)?;
+        forward_terminal_events(
+            foundation.terminal_host.clone(),
+            summary.id.clone(),
+            0,
+            channel,
+        );
+        return Ok(response(
+            &command.request_id,
+            LaunchCodePaneTerminalResult {
+                layout: current_layout,
+                terminal: summary,
+            },
+        ));
+    }
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
 
     let terminal_start = CodeTerminalStartRequest {
         workspace_id: command.payload.workspace_id.clone(),
@@ -3969,17 +4038,11 @@ async fn hiveory_command_launch_code_pane_terminal(
         model: command.payload.model.clone(),
         resume_session_id: None,
     };
-
     let summary = foundation
-        .code_runtime
-        .start(&terminal_start, &root, sink)
-        .map_err(runtime_error)?;
-
-    foundation
-        .persistence
-        .save_code_terminal(&summary)
+        .terminal_host
+        .start(&terminal_start, &root, None, None)
         .await
-        .map_err(database_error)?;
+        .map_err(terminal_host_error)?;
 
     let pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
         summary
@@ -4018,10 +4081,13 @@ async fn hiveory_command_launch_code_pane_terminal(
     {
         Ok(l) => l,
         Err(err) => {
-            let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
-                terminal_id: summary.id,
-                force: true,
-            });
+            let _ = foundation
+                .terminal_host
+                .stop(&CodeTerminalStopRequest {
+                    terminal_id: summary.id.clone(),
+                    force: true,
+                })
+                .await;
             return Err(if err.to_string().contains("layout_conflict") {
                 application_error(
                     "layout_conflict",
@@ -4033,6 +4099,13 @@ async fn hiveory_command_launch_code_pane_terminal(
             });
         }
     };
+
+    forward_terminal_events(
+        foundation.terminal_host.clone(),
+        summary.id.clone(),
+        0,
+        channel,
+    );
 
     foundation
         .audit
@@ -4338,9 +4411,10 @@ async fn hiveory_command_close_code_pane(
         ) {
             if let Some(resource_id) = &pane.resource_id {
                 let is_running = foundation
-                    .code_runtime
+                    .terminal_host
                     .list()
-                    .map_err(runtime_error)?
+                    .await
+                    .map_err(terminal_host_error)?
                     .into_iter()
                     .any(|t| {
                         t.id == *resource_id
@@ -4359,17 +4433,12 @@ async fn hiveory_command_close_code_pane(
                             RetryClass::AfterUserAction,
                         ));
                     } else {
-                        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
-                            terminal_id: resource_id.clone(),
-                            force: true,
-                        });
                         let _ = foundation
-                            .persistence
-                            .finish_code_terminal(
-                                resource_id,
-                                hiveory_protocol::CodeTerminalState::Interrupted,
-                                None,
-                            )
+                            .terminal_host
+                            .stop(&CodeTerminalStopRequest {
+                                terminal_id: resource_id.clone(),
+                                force: true,
+                            })
                             .await;
                     }
                 }
@@ -4415,9 +4484,10 @@ async fn hiveory_query_code_terminal_snapshot(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<CodeTerminalSnapshot, ApiError> {
     foundation
-        .code_runtime
-        .snapshot(&query.terminal_id)
-        .map_err(runtime_error)
+        .terminal_host
+        .snapshot(&query)
+        .await
+        .map_err(terminal_host_error)
 }
 
 #[tauri::command]
@@ -4427,9 +4497,10 @@ async fn hiveory_stream_code_terminal_events(
     channel: Channel<CodeTerminalEvent>,
 ) -> Result<(), ApiError> {
     let mut receiver = foundation
-        .code_runtime
-        .subscribe(&request.terminal_id)
-        .map_err(runtime_error)?;
+        .terminal_host
+        .subscribe(&request)
+        .await
+        .map_err(terminal_host_error)?;
 
     loop {
         match receiver.recv().await {
@@ -4441,12 +4512,7 @@ async fn hiveory_stream_code_terminal_events(
                     break;
                 }
             }
-            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                // The renderer will compare the next sequence with its local
-                // cursor and reload the bounded PTY snapshot if a gap exists.
-                continue;
-            }
-            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+            Err(_) => break,
         }
     }
     Ok(())
@@ -5638,6 +5704,42 @@ fn validate_code_command<T>(command: &CommandEnvelope<T>) -> Result<(), ApiError
     validate_chat_command(command)
 }
 
+async fn ensure_terminal_history_key(
+    persistence: &HiveoryPersistence,
+    secrets: &HiveorySecretStoreHandle,
+) -> Result<String, String> {
+    const HISTORY_KEY_SETTING: &str = "code.terminal_history_key_ref";
+    if let Some(value) = persistence
+        .get_setting(HISTORY_KEY_SETTING)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        let reference = serde_json::from_str::<String>(&value).unwrap_or(value);
+        if secrets.get(&reference).is_ok() {
+            return Ok(reference);
+        }
+    }
+
+    // Uuid v7 includes OS-backed randomness and is available through the
+    // workspace's existing UUID dependency.  Two independent values provide
+    // the 32 bytes required by AES-256-GCM without adding another RNG stack.
+    let first = uuid::Uuid::now_v7();
+    let second = uuid::Uuid::now_v7();
+    let mut key = [0_u8; 32];
+    key[..16].copy_from_slice(first.as_bytes());
+    key[16..].copy_from_slice(second.as_bytes());
+    let encoded = STANDARD.encode(key);
+    let reference = secrets.put(&encoded).map_err(|error| error.to_string())?;
+    persistence
+        .set_setting(
+            HISTORY_KEY_SETTING,
+            &serde_json::to_string(&reference).map_err(|error| error.to_string())?,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(reference)
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -5709,28 +5811,25 @@ fn workspace_error(error: HiveoryWorkspaceError) -> ApiError {
     application_error(code, message, retry)
 }
 
-fn runtime_error(error: HiveoryCodeRuntimeError) -> ApiError {
-    let (code, message) = match error {
-        HiveoryCodeRuntimeError::InvalidDimensions => (
+fn terminal_host_error(error: HiveoryTerminalHostError) -> ApiError {
+    let (code, message): (&str, String) = match error {
+        HiveoryTerminalHostError::InvalidDimensions => (
             "terminal_invalid_dimensions",
-            "The terminal size is outside the supported range.",
+            "The terminal size is outside the supported range.".to_owned(),
         ),
-        HiveoryCodeRuntimeError::UnsupportedAdapter => (
+        HiveoryTerminalHostError::UnsupportedAdapter => (
             "code_adapter_unavailable",
-            "The requested coding-agent adapter is unavailable.",
+            "The requested coding-agent adapter is unavailable.".to_owned(),
         ),
-        HiveoryCodeRuntimeError::Cancelled => (
+        HiveoryTerminalHostError::Cancelled => (
             "terminal_cancelled",
-            "The coding-agent process was cancelled.",
+            "The coding-agent process was cancelled.".to_owned(),
         ),
-        HiveoryCodeRuntimeError::TerminalNotFound => (
+        HiveoryTerminalHostError::TerminalNotFound => (
             "terminal_not_found",
-            "The terminal session is no longer available.",
+            "The terminal session is no longer available.".to_owned(),
         ),
-        HiveoryCodeRuntimeError::Operation(_) => (
-            "terminal_operation_failed",
-            "The terminal operation could not be completed.",
-        ),
+        HiveoryTerminalHostError::Operation(message) => ("terminal_operation_failed", message),
     };
     application_error(code, message, RetryClass::AfterUserAction)
 }
@@ -6681,6 +6780,7 @@ pub fn run() {
             hiveory_command_close_code_pane,
             hiveory_query_code_terminal_snapshot,
             hiveory_stream_code_terminal_events,
+            hiveory_query_code_terminal_history,
             hiveory_query_code_git_status,
             hiveory_query_code_git_diff,
             hiveory_query_code_git_repository,
@@ -6706,6 +6806,7 @@ pub fn run() {
             hiveory_command_write_code_terminal,
             hiveory_command_resize_code_terminal,
             hiveory_command_stop_code_terminal,
+            hiveory_command_set_code_terminal_history,
             hiveory_command_open_code_preview,
             hiveory_query_chat_sidebar,
             hiveory_query_chat_engines,

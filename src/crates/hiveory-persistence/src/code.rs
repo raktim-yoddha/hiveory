@@ -1,4 +1,4 @@
-//! Durable Code-mode metadata. Terminal bytes are intentionally not stored.
+//! Durable Code-mode metadata and encrypted terminal-history records.
 
 use super::{now_ms, HiveoryPersistence};
 use hiveory_code_domain::{migrate_layout_v1, migrate_layout_v2, CODE_LAYOUT_VERSION};
@@ -9,6 +9,31 @@ use hiveory_protocol::{
 };
 use serde_json::Value;
 use sqlx::Row;
+
+/// Encrypted terminal history as stored by the durable terminal host.
+///
+/// The persistence layer deliberately does not own the encryption key.  The
+/// host encrypts before inserting and decrypts only when it needs to rebuild a
+/// terminal snapshot, keeping plaintext terminal contents out of SQLite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeTerminalHistoryRecord {
+    pub id: String,
+    pub terminal_id: String,
+    pub direction: String,
+    pub sequence: u64,
+    pub payload: Vec<u8>,
+    pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeTerminalSessionRecord {
+    pub summary: CodeTerminalSummary,
+    pub root_path: Option<String>,
+    pub cols: u16,
+    pub rows: u16,
+    pub history_enabled: bool,
+    pub host_instance_id: Option<String>,
+}
 
 impl HiveoryPersistence {
     pub async fn code_projects(&self) -> Result<Vec<CodeProjectSummary>, sqlx::Error> {
@@ -328,6 +353,147 @@ impl HiveoryPersistence {
         Ok(())
     }
 
+    /// Saves terminal metadata owned by the background terminal host.  This
+    /// is separate from the legacy summary writer so older callers remain
+    /// source-compatible while the host can persist the information required
+    /// to reconnect a pane after a process restart.
+    pub async fn save_code_terminal_session(
+        &self,
+        terminal: &CodeTerminalSummary,
+        root_path: &str,
+        cols: u16,
+        rows: u16,
+        history_enabled: bool,
+        host_instance_id: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO hiveory_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workspace_id=excluded.workspace_id, kind=excluded.kind, state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, session_id=excluded.session_id, exit_code=excluded.exit_code, started_at_unix_ms=excluded.started_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, root_path=excluded.root_path, cols=excluded.cols, rows=excluded.rows, history_enabled=excluded.history_enabled, host_instance_id=excluded.host_instance_id",
+        )
+        .bind(&terminal.id)
+        .bind(&terminal.workspace_id)
+        .bind(terminal_kind_value(terminal.kind))
+        .bind(terminal_state_value(terminal.state))
+        .bind(terminal.pid.map(|pid| pid as i64))
+        .bind(&terminal.adapter_id)
+        .bind(&terminal.model)
+        .bind(&terminal.session_id)
+        .bind(terminal.exit_code)
+        .bind(terminal.started_at_unix_ms)
+        .bind(terminal.updated_at_unix_ms)
+        .bind(root_path)
+        .bind(i64::from(cols))
+        .bind(i64::from(rows))
+        .bind(if history_enabled { 1_i64 } else { 0_i64 })
+        .bind(host_instance_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn code_terminal(
+        &self,
+        terminal_id: &str,
+    ) -> Result<Option<CodeTerminalSummary>, sqlx::Error> {
+        Ok(sqlx::query(
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms FROM hiveory_code_terminals WHERE id=?",
+        )
+        .bind(terminal_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(terminal_from_row))
+    }
+
+    pub async fn code_terminal_session(
+        &self,
+        terminal_id: &str,
+    ) -> Result<Option<CodeTerminalSessionRecord>, sqlx::Error> {
+        let Some(row) = sqlx::query(
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id FROM hiveory_code_terminals WHERE id=?",
+        )
+        .bind(terminal_id)
+        .fetch_optional(&self.pool)
+        .await?
+        else {
+            return Ok(None);
+        };
+
+        let summary = terminal_from_row_with_offset(&row, 0);
+        Ok(Some(CodeTerminalSessionRecord {
+            summary,
+            root_path: row.try_get(11).unwrap_or(None),
+            cols: row.try_get::<i64, _>(12).unwrap_or(80).clamp(1, 500) as u16,
+            rows: row.try_get::<i64, _>(13).unwrap_or(24).clamp(1, 500) as u16,
+            history_enabled: row.try_get::<i64, _>(14).unwrap_or(1) != 0,
+            host_instance_id: row.try_get(15).unwrap_or(None),
+        }))
+    }
+
+    pub async fn set_code_terminal_history_enabled(
+        &self,
+        terminal_id: &str,
+        enabled: bool,
+    ) -> Result<bool, sqlx::Error> {
+        Ok(sqlx::query(
+            "UPDATE hiveory_code_terminals SET history_enabled=?, updated_at_unix_ms=? WHERE id=?",
+        )
+        .bind(if enabled { 1_i64 } else { 0_i64 })
+        .bind(now_ms())
+        .bind(terminal_id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected()
+            > 0)
+    }
+
+    pub async fn append_code_terminal_history(
+        &self,
+        terminal_id: &str,
+        direction: &str,
+        sequence: u64,
+        payload: &[u8],
+    ) -> Result<(), sqlx::Error> {
+        if !matches!(direction, "input" | "output" | "event") {
+            return Err(sqlx::Error::Protocol(
+                "unsupported terminal history direction".to_owned(),
+            ));
+        }
+        sqlx::query(
+            "INSERT INTO hiveory_code_terminal_history (id, terminal_id, direction, sequence, payload, created_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(uuid::Uuid::now_v7().to_string())
+        .bind(terminal_id)
+        .bind(direction)
+        .bind(sequence as i64)
+        .bind(payload)
+        .bind(now_ms())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn code_terminal_history(
+        &self,
+        terminal_id: &str,
+    ) -> Result<Vec<CodeTerminalHistoryRecord>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, terminal_id, direction, sequence, payload, created_at_unix_ms FROM hiveory_code_terminal_history WHERE terminal_id=? ORDER BY created_at_unix_ms ASC, id ASC",
+        )
+        .bind(terminal_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| CodeTerminalHistoryRecord {
+                id: row.get(0),
+                terminal_id: row.get(1),
+                direction: row.get(2),
+                sequence: row.get::<i64, _>(3).max(0) as u64,
+                payload: row.get(4),
+                created_at_unix_ms: row.get(5),
+            })
+            .collect())
+    }
+
     pub async fn code_terminals(
         &self,
         workspace_id: &str,
@@ -502,14 +668,21 @@ fn workspace_kind_value(kind: CodeWorkspaceKind) -> &'static str {
 }
 
 fn terminal_from_row(row: sqlx::sqlite::SqliteRow) -> CodeTerminalSummary {
+    terminal_from_row_with_offset(&row, 0)
+}
+
+fn terminal_from_row_with_offset(
+    row: &sqlx::sqlite::SqliteRow,
+    offset: usize,
+) -> CodeTerminalSummary {
     CodeTerminalSummary {
-        id: row.get(0),
-        workspace_id: row.get(1),
-        kind: match row.get::<String, _>(2).as_str() {
+        id: row.get(offset),
+        workspace_id: row.get(offset + 1),
+        kind: match row.get::<String, _>(offset + 2).as_str() {
             "coding_agent" => CodeTerminalKind::CodingAgent,
             _ => CodeTerminalKind::Shell,
         },
-        state: match row.get::<String, _>(3).as_str() {
+        state: match row.get::<String, _>(offset + 3).as_str() {
             "starting" => CodeTerminalState::Starting,
             "running" => CodeTerminalState::Running,
             "exited" => CodeTerminalState::Exited,
@@ -517,13 +690,13 @@ fn terminal_from_row(row: sqlx::sqlite::SqliteRow) -> CodeTerminalSummary {
             "dormant" => CodeTerminalState::Dormant,
             _ => CodeTerminalState::Interrupted,
         },
-        pid: row.get::<Option<i64>, _>(4).map(|pid| pid as u32),
-        adapter_id: row.get(5),
-        model: row.get(6),
-        session_id: row.get(7),
-        exit_code: row.get(8),
-        started_at_unix_ms: row.get(9),
-        updated_at_unix_ms: row.get(10),
+        pid: row.get::<Option<i64>, _>(offset + 4).map(|pid| pid as u32),
+        adapter_id: row.get(offset + 5),
+        model: row.get(offset + 6),
+        session_id: row.get(offset + 7),
+        exit_code: row.get(offset + 8),
+        started_at_unix_ms: row.get(offset + 9),
+        updated_at_unix_ms: row.get(offset + 10),
     }
 }
 
@@ -564,5 +737,128 @@ fn preview_state_value(state: CodePreviewState) -> &'static str {
         CodePreviewState::Open => "open",
         CodePreviewState::Closed => "closed",
         CodePreviewState::Blocked => "blocked",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hiveory_code_domain::capabilities_for_trust;
+    use hiveory_protocol::CodeTerminalKind;
+    use uuid::Uuid;
+
+    fn cleanup(path: &std::path::Path) {
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite3-wal"));
+    }
+
+    #[tokio::test]
+    async fn terminal_session_and_history_survive_reopen() {
+        let path = std::env::temp_dir().join(format!(
+            "hiveory-terminal-history-{}.sqlite3",
+            Uuid::now_v7()
+        ));
+        let persistence = HiveoryPersistence::open(&path)
+            .await
+            .expect("open database");
+        let workspace_id = "workspace-terminal-history".to_owned();
+        persistence
+            .save_code_workspace(&CodeWorkspaceSummary {
+                id: workspace_id.clone(),
+                host_id: "local".to_owned(),
+                display_name: "Terminal history fixture".to_owned(),
+                root_path: std::env::temp_dir().to_string_lossy().into_owned(),
+                repository_name: None,
+                branch: None,
+                is_git_repository: false,
+                trust: CodeWorkspaceTrust::Trusted,
+                capabilities: capabilities_for_trust(CodeWorkspaceTrust::Trusted),
+                project_id: "project-terminal-history".to_owned(),
+                workspace_kind: CodeWorkspaceKind::Primary,
+                worktree_name: None,
+                base_ref: None,
+                parent_workspace_id: None,
+                managed_by_app: false,
+                available: true,
+                unavailable_reason: None,
+                updated_at_unix_ms: now_ms(),
+            })
+            .await
+            .expect("save workspace");
+
+        let terminal = CodeTerminalSummary {
+            id: "terminal-history".to_owned(),
+            workspace_id,
+            kind: CodeTerminalKind::Shell,
+            state: CodeTerminalState::Dormant,
+            pid: None,
+            adapter_id: None,
+            model: None,
+            session_id: Some("session-history".to_owned()),
+            exit_code: None,
+            started_at_unix_ms: 10,
+            updated_at_unix_ms: 20,
+        };
+        persistence
+            .save_code_terminal_session(&terminal, "/workspace", 120, 40, true, "host-1")
+            .await
+            .expect("save terminal session");
+        persistence
+            .append_code_terminal_history(&terminal.id, "output", 7, b"encrypted-output")
+            .await
+            .expect("save terminal output");
+        persistence
+            .append_code_terminal_history(&terminal.id, "input", 0, b"encrypted-input")
+            .await
+            .expect("save terminal input");
+
+        let session = persistence
+            .code_terminal_session(&terminal.id)
+            .await
+            .expect("read terminal session")
+            .expect("terminal session exists");
+        assert_eq!(session.summary, terminal);
+        assert_eq!(session.root_path.as_deref(), Some("/workspace"));
+        assert_eq!((session.cols, session.rows), (120, 40));
+        assert!(session.history_enabled);
+        assert_eq!(session.host_instance_id.as_deref(), Some("host-1"));
+        assert_eq!(
+            persistence
+                .code_terminal_history(&terminal.id)
+                .await
+                .expect("read history")
+                .len(),
+            2
+        );
+
+        persistence
+            .set_code_terminal_history_enabled(&terminal.id, false)
+            .await
+            .expect("disable history");
+        drop(persistence);
+
+        let reopened = HiveoryPersistence::open(&path)
+            .await
+            .expect("reopen database");
+        let reopened_session = reopened
+            .code_terminal_session(&terminal.id)
+            .await
+            .expect("read reopened terminal session")
+            .expect("reopened terminal session exists");
+        assert!(!reopened_session.history_enabled);
+        let history = reopened
+            .code_terminal_history(&terminal.id)
+            .await
+            .expect("read reopened history");
+        assert_eq!(history.len(), 2);
+        assert!(history
+            .iter()
+            .any(|record| record.payload == b"encrypted-output"));
+        assert!(history
+            .iter()
+            .any(|record| record.payload == b"encrypted-input"));
+        drop(reopened);
+        cleanup(&path);
     }
 }

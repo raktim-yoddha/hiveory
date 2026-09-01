@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertTriangle, RotateCw } from 'lucide-react'
+import { AlertTriangle, RotateCw, ShieldCheck, ShieldOff } from 'lucide-react'
 import {
   hiveoryClient,
   type CodeTerminalEvent,
@@ -55,6 +55,21 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited' || summary?.state === 'dormant',
   )
   const [transportError, setTransportError] = useState<string | null>(null)
+  const [historyEnabled, setHistoryEnabled] = useState(true)
+  const [historyBusy, setHistoryBusy] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    setHistoryEnabled(true)
+    void hiveoryClient.getCodeTerminalHistoryEnabled(terminalId)
+      .then((enabled) => {
+        if (mounted) setHistoryEnabled(enabled)
+      })
+      .catch(() => undefined)
+    return () => {
+      mounted = false
+    }
+  }, [terminalId])
 
   useEffect(() => {
     setIsInterrupted(
@@ -269,7 +284,22 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       termRef.current = null
       fitAddonRef.current = null
     }
-  }, [terminalId])
+  }, [terminalId, summary?.state])
+
+  const toggleHistory = async () => {
+    if (historyBusy) return
+    const nextValue = !historyEnabled
+    setHistoryEnabled(nextValue)
+    setHistoryBusy(true)
+    try {
+      await hiveoryClient.setCodeTerminalHistoryEnabled({ terminal_id: terminalId, enabled: nextValue })
+    } catch (error: unknown) {
+      setHistoryEnabled(!nextValue)
+      setTransportError(`History setting could not be saved: ${formatTerminalError(error)}`)
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
 
   return (
     <div className="code-terminal-pane">
@@ -298,6 +328,18 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         </div>
       )}
       <div ref={containerRef} className="code-terminal-container" aria-label="Interactive terminal" />
+      <div className="code-terminal-history-control">
+        {historyEnabled ? <ShieldCheck size={12} aria-hidden="true" /> : <ShieldOff size={12} aria-hidden="true" />}
+        <label>
+          <input
+            type="checkbox"
+            checked={historyEnabled}
+            disabled={historyBusy}
+            onChange={() => void toggleHistory()}
+          />
+          <span>{historyEnabled ? 'Save encrypted terminal history' : 'Terminal history is off'}</span>
+        </label>
+      </div>
     </div>
   )
 }

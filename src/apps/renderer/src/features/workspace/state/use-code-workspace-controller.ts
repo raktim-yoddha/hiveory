@@ -5,6 +5,8 @@ import {
   type CodePanePlacement,
   type CodePanePreset,
   type CodeTerminalKind,
+  type CodeTerminalSummary,
+  type CodePreviewSummary,
 } from '../../../shared/api/hiveory-client'
 import {
   codeWorkspaceReducer,
@@ -66,6 +68,39 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   const terminalLaunchesRef = useRef(new Set<string>())
   stateRef.current = state
 
+  const commitLayout = useCallback((layout: CodeWorkspaceState['layout']) => {
+    if (!layout) return
+    const current = stateRef.current
+    stateRef.current = {
+      ...current,
+      layout,
+      revision: layout.revision ?? current.revision + 1,
+      focusedPaneId: layout.focused_pane_id ?? current.focusedPaneId,
+      maximizedPaneId: layout.maximized_pane_id ?? null,
+    }
+    dispatch({ type: 'SET_LAYOUT', layout })
+  }, [])
+
+  const commitTerminal = useCallback((terminal: CodeTerminalSummary) => {
+    const terminals = new Map(stateRef.current.terminals)
+    terminals.set(terminal.id, terminal)
+    stateRef.current = { ...stateRef.current, terminals }
+    dispatch({ type: 'SET_TERMINAL', terminal })
+  }, [])
+
+  const commitPreview = useCallback((preview: CodePreviewSummary) => {
+    const previews = new Map(stateRef.current.previews)
+    previews.set(preview.id, preview)
+    stateRef.current = { ...stateRef.current, previews }
+    dispatch({ type: 'SET_PREVIEW', preview })
+  }, [])
+
+  const enqueueOperation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const run = mutationQueueRef.current.then(operation)
+    mutationQueueRef.current = run.then(() => undefined, () => undefined)
+    return run
+  }, [])
+
   const loadWorkspace = useCallback(async (workspaceId: string) => {
     const requestId = ++loadRequestRef.current
     dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
@@ -87,6 +122,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         revision: snapshot.layout.revision ?? 0,
         focusedPaneId: snapshot.layout.focused_pane_id ?? null,
         maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
+        terminals: new Map(snapshot.terminals.map((terminal) => [terminal.id, terminal])),
+        previews: new Map(snapshot.previews.map((preview) => [preview.id, preview])),
       }
     } catch (err: unknown) {
       if (requestId !== loadRequestRef.current) return
@@ -121,23 +158,24 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await hiveoryClient.applyCodePaneMutation({
+        const save = (expectedRevision: number) => hiveoryClient.applyCodePaneMutation({
           workspace_id: workspaceId,
-          expected_revision: revision,
+          expected_revision: expectedRevision,
           mutation,
         })
-        stateRef.current = {
-          ...stateRef.current,
-          layout: res.layout,
-          revision: res.layout.revision ?? revision + 1,
-          focusedPaneId: res.layout.focused_pane_id ?? stateRef.current.focusedPaneId,
-          maximizedPaneId: res.layout.maximized_pane_id ?? null,
+        let res
+        try {
+          res = await save(revision)
+        } catch (err: unknown) {
+          if (!formatError(err).includes('layout_conflict')) throw err
+          await loadWorkspace(workspaceId)
+          res = await save(stateRef.current.revision)
         }
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+        commitLayout(res.layout)
       } catch (err: unknown) {
         const msg = formatError(err)
         if (msg.includes('layout_conflict')) {
-          await loadWorkspace(workspaceId)
+          dispatch({ type: 'SET_ERROR', error: 'The layout changed while saving. Please try again.' })
         } else {
           dispatch({ type: 'SET_ERROR', error: msg })
         }
@@ -147,7 +185,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     })
     mutationQueueRef.current = run.catch(() => undefined)
     return run
-  }, [loadWorkspace])
+  }, [commitLayout, loadWorkspace])
 
   const splitPane = useCallback(
     async (paneId: string, placement: CodePanePlacement = 'right') => {
@@ -165,99 +203,131 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       model?: string | null,
       url?: string
     ) => {
+      await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await hiveoryClient.applyCodePaneMutation({
+        const split = (expectedRevision: number) => hiveoryClient.applyCodePaneMutation({
           workspace_id: workspaceId,
-          expected_revision: revision,
+          expected_revision: expectedRevision,
           mutation: { type: 'split', pane_id: paneId, placement },
         })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+        let res
+        try {
+          res = await split(revision)
+        } catch (err: unknown) {
+          if (!formatError(err).includes('layout_conflict')) throw err
+          await loadWorkspace(workspaceId)
+          res = await split(stateRef.current.revision)
+        }
+        commitLayout(res.layout)
 
         const newPaneId = res.layout.focused_pane_id
         if (!newPaneId) return
 
-        let curRev = res.layout.revision ?? 0
+        const curRev = res.layout.revision ?? 0
 
         if (kind === 'shell' || kind === 'coding_agent') {
-          try {
-            const termRes = await hiveoryClient.launchCodePaneTerminal({
-              workspace_id: workspaceId,
-              pane_id: newPaneId,
-              expected_revision: curRev,
-              kind,
-              adapter_id: adapterId ?? null,
-              model: model ?? null,
-              cols: 80,
-              rows: 24,
-            })
-            dispatch({ type: 'SET_TERMINAL', terminal: termRes.terminal })
-            dispatch({ type: 'SET_LAYOUT', layout: termRes.layout })
-          } catch (termErr: unknown) {
-            const innerMsg = formatError(termErr)
-            if (innerMsg.toLowerCase().includes('trust')) {
-              await hiveoryClient.trustCodeWorkspace(workspaceId, true)
-              const detail = await hiveoryClient.codeWorkspace(workspaceId)
-              curRev = detail.layout.revision ?? 0
-              const termRes = await hiveoryClient.launchCodePaneTerminal({
-                workspace_id: workspaceId,
-                pane_id: newPaneId,
-                expected_revision: curRev,
-                kind,
-                adapter_id: adapterId ?? null,
-                model: model ?? null,
-                cols: 80,
-                rows: 24,
-              })
-              dispatch({ type: 'SET_TERMINAL', terminal: termRes.terminal })
-              dispatch({ type: 'SET_LAYOUT', layout: termRes.layout })
-            } else {
-              throw termErr
+          const launchDockedTerminal = async () => {
+            let expectedRevision = curRev
+            let conflictRetried = false
+            let trustRetried = false
+            while (true) {
+              try {
+                return await hiveoryClient.launchCodePaneTerminal({
+                  workspace_id: workspaceId,
+                  pane_id: newPaneId,
+                  expected_revision: expectedRevision,
+                  kind,
+                  adapter_id: adapterId ?? null,
+                  model: model ?? null,
+                  cols: 80,
+                  rows: 24,
+                })
+              } catch (termErr: unknown) {
+                const innerMsg = formatError(termErr)
+                if (innerMsg.toLowerCase().includes('trust') && !trustRetried) {
+                  await hiveoryClient.trustCodeWorkspace(workspaceId, true)
+                  await loadWorkspace(workspaceId)
+                  expectedRevision = stateRef.current.revision
+                  trustRetried = true
+                  continue
+                }
+                if (innerMsg.includes('layout_conflict') && !conflictRetried) {
+                  await loadWorkspace(workspaceId)
+                  expectedRevision = stateRef.current.revision
+                  conflictRetried = true
+                  continue
+                }
+                throw termErr
+              }
             }
           }
+          const termRes = await launchDockedTerminal()
+          commitTerminal(termRes.terminal)
+          commitLayout(termRes.layout)
         } else if (kind === 'preview') {
-          const prevRes = await hiveoryClient.openCodePanePreview({
-            workspace_id: workspaceId,
-            pane_id: newPaneId,
-            expected_revision: curRev,
-            url: url || 'http://localhost:3000',
-          })
-          dispatch({ type: 'SET_PREVIEW', preview: prevRes.preview })
-          dispatch({ type: 'SET_LAYOUT', layout: prevRes.layout })
-        } else if (kind === 'markdown') {
+          let prevRes
           try {
-            const markdownRes = await hiveoryClient.createCodePaneMarkdown({
+            prevRes = await hiveoryClient.openCodePanePreview({
               workspace_id: workspaceId,
               pane_id: newPaneId,
               expected_revision: curRev,
+              url: url || 'http://localhost:3000',
             })
-            dispatch({ type: 'SET_LAYOUT', layout: markdownRes.layout })
-          } catch (markdownErr: unknown) {
-            const innerMsg = formatError(markdownErr)
-            if (innerMsg.toLowerCase().includes('trust')) {
-              await hiveoryClient.trustCodeWorkspace(workspaceId, true)
-              const detail = await hiveoryClient.codeWorkspace(workspaceId)
-              curRev = detail.layout.revision ?? 0
-              const markdownRes = await hiveoryClient.createCodePaneMarkdown({
+          } catch (previewErr: unknown) {
+            if (!formatError(previewErr).includes('layout_conflict')) throw previewErr
+            await loadWorkspace(workspaceId)
+            prevRes = await hiveoryClient.openCodePanePreview({
+              workspace_id: workspaceId,
+              pane_id: newPaneId,
+              expected_revision: stateRef.current.revision,
+              url: url || 'http://localhost:3000',
+            })
+          }
+          commitPreview(prevRes.preview)
+          commitLayout(prevRes.layout)
+        } else if (kind === 'markdown') {
+          let markdownRes
+          let expectedRevision = curRev
+          let conflictRetried = false
+          let trustRetried = false
+          while (!markdownRes) {
+            try {
+              markdownRes = await hiveoryClient.createCodePaneMarkdown({
                 workspace_id: workspaceId,
                 pane_id: newPaneId,
-                expected_revision: curRev,
+                expected_revision: expectedRevision,
               })
-              dispatch({ type: 'SET_LAYOUT', layout: markdownRes.layout })
-            } else {
+            } catch (markdownErr: unknown) {
+              const innerMsg = formatError(markdownErr)
+              if (innerMsg.toLowerCase().includes('trust') && !trustRetried) {
+                await hiveoryClient.trustCodeWorkspace(workspaceId, true)
+                await loadWorkspace(workspaceId)
+                expectedRevision = stateRef.current.revision
+                trustRetried = true
+                continue
+              }
+              if (innerMsg.includes('layout_conflict') && !conflictRetried) {
+                await loadWorkspace(workspaceId)
+                expectedRevision = stateRef.current.revision
+                conflictRetried = true
+                continue
+              }
               throw markdownErr
             }
           }
+          commitLayout(markdownRes.layout)
         }
       } catch (err: unknown) {
         dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
+      })
     },
-    []
+    [commitLayout, commitPreview, commitTerminal, enqueueOperation, loadWorkspace]
   )
 
   const renamePane = useCallback(
@@ -316,6 +386,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
 
   const launchTerminal = useCallback(
     async (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => {
+      await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       const pane = stateRef.current.layout?.nodes.find((node) => node.pane_id === paneId)
@@ -339,8 +410,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             cols: 80,
             rows: 24,
           })
-          dispatch({ type: 'SET_TERMINAL', terminal: res.terminal })
-          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          commitTerminal(res.terminal)
+          commitLayout(res.layout)
           return
         } catch (innerErr: unknown) {
           const innerMsg = formatError(innerErr)
@@ -358,8 +429,24 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               cols: 80,
               rows: 24,
             })
-            dispatch({ type: 'SET_TERMINAL', terminal: res.terminal })
-            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            commitTerminal(res.terminal)
+            commitLayout(res.layout)
+            return
+          }
+          if (innerMsg.includes('layout_conflict')) {
+            await loadWorkspace(workspaceId)
+            const res = await hiveoryClient.launchCodePaneTerminal({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: stateRef.current.revision,
+              kind,
+              adapter_id: adapterId ?? null,
+              model: model ?? null,
+              cols: 80,
+              rows: 24,
+            })
+            commitTerminal(res.terminal)
+            commitLayout(res.layout)
             return
           }
           throw innerErr
@@ -370,12 +457,14 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         terminalLaunchesRef.current.delete(launchKey)
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
+      })
     },
-    []
+    [commitLayout, commitTerminal, enqueueOperation, loadWorkspace]
   )
 
   const openPreview = useCallback(
     async (paneId: string, url: string) => {
+      await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       try {
@@ -388,8 +477,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             expected_revision: curRev,
             url,
           })
-          dispatch({ type: 'SET_PREVIEW', preview: res.preview })
-          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          commitPreview(res.preview)
+          commitLayout(res.layout)
           return
         } catch (innerErr: unknown) {
           const innerMsg = formatError(innerErr)
@@ -403,8 +492,20 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               expected_revision: curRev,
               url,
             })
-            dispatch({ type: 'SET_PREVIEW', preview: res.preview })
-            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            commitPreview(res.preview)
+            commitLayout(res.layout)
+            return
+          }
+          if (innerMsg.includes('layout_conflict')) {
+            await loadWorkspace(workspaceId)
+            const res = await hiveoryClient.openCodePanePreview({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: stateRef.current.revision,
+              url,
+            })
+            commitPreview(res.preview)
+            commitLayout(res.layout)
             return
           }
           throw innerErr
@@ -414,12 +515,14 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
+      })
     },
-    []
+    [commitLayout, commitPreview, enqueueOperation, loadWorkspace]
   )
 
   const createMarkdown = useCallback(
     async (paneId: string) => {
+      await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       try {
@@ -431,7 +534,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             pane_id: paneId,
             expected_revision: curRev,
           })
-          dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+          commitLayout(res.layout)
           return
         } catch (innerErr: unknown) {
           const innerMsg = formatError(innerErr)
@@ -444,7 +547,17 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               pane_id: paneId,
               expected_revision: curRev,
             })
-            dispatch({ type: 'SET_LAYOUT', layout: res.layout })
+            commitLayout(res.layout)
+            return
+          }
+          if (innerMsg.includes('layout_conflict')) {
+            await loadWorkspace(workspaceId)
+            const res = await hiveoryClient.createCodePaneMarkdown({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: stateRef.current.revision,
+            })
+            commitLayout(res.layout)
             return
           }
           throw innerErr
@@ -454,8 +567,9 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
+      })
     },
-    []
+    [commitLayout, enqueueOperation, loadWorkspace]
   )
 
   const sleepWorkspace = useCallback(
@@ -510,45 +624,66 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         return
       }
 
-      try {
-        dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await hiveoryClient.closeCodePane({
-          workspace_id: workspaceId,
-          pane_id: paneId,
-          expected_revision: revision,
-          terminate_running_resource: false,
-        })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
-      } catch (err: unknown) {
-        dispatch({ type: 'SET_ERROR', error: formatError(err) })
-      } finally {
-        dispatch({ type: 'SET_MUTATING', isMutating: false })
-      }
+      await enqueueOperation(async () => {
+        try {
+          dispatch({ type: 'SET_MUTATING', isMutating: true })
+          const close = (expectedRevision: number) => hiveoryClient.closeCodePane({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: expectedRevision,
+            terminate_running_resource: false,
+          })
+          let res
+          try {
+            res = await close(revision)
+          } catch (err: unknown) {
+            if (!formatError(err).includes('layout_conflict')) throw err
+            await loadWorkspace(workspaceId)
+            res = await close(stateRef.current.revision)
+          }
+          commitLayout(res.layout)
+        } catch (err: unknown) {
+          dispatch({ type: 'SET_ERROR', error: formatError(err) })
+        } finally {
+          dispatch({ type: 'SET_MUTATING', isMutating: false })
+        }
+      })
     },
-    []
+    [commitLayout, enqueueOperation, loadWorkspace]
   )
 
   const confirmClose = useCallback(
     async (terminateRunning: boolean) => {
       const { confirmClosePane, workspaceId, revision } = stateRef.current
       if (!confirmClosePane || !workspaceId) return
+      const paneId = confirmClosePane.paneId
       dispatch({ type: 'SET_CONFIRM_CLOSE', confirm: null })
-      try {
-        dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const res = await hiveoryClient.closeCodePane({
-          workspace_id: workspaceId,
-          pane_id: confirmClosePane.paneId,
-          expected_revision: revision,
-          terminate_running_resource: terminateRunning,
-        })
-        dispatch({ type: 'SET_LAYOUT', layout: res.layout })
-      } catch (err: unknown) {
-        dispatch({ type: 'SET_ERROR', error: formatError(err) })
-      } finally {
-        dispatch({ type: 'SET_MUTATING', isMutating: false })
-      }
+      await enqueueOperation(async () => {
+        try {
+          dispatch({ type: 'SET_MUTATING', isMutating: true })
+          const close = (expectedRevision: number) => hiveoryClient.closeCodePane({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: expectedRevision,
+            terminate_running_resource: terminateRunning,
+          })
+          let res
+          try {
+            res = await close(revision)
+          } catch (err: unknown) {
+            if (!formatError(err).includes('layout_conflict')) throw err
+            await loadWorkspace(workspaceId)
+            res = await close(stateRef.current.revision)
+          }
+          commitLayout(res.layout)
+        } catch (err: unknown) {
+          dispatch({ type: 'SET_ERROR', error: formatError(err) })
+        } finally {
+          dispatch({ type: 'SET_MUTATING', isMutating: false })
+        }
+      })
     },
-    []
+    [commitLayout, enqueueOperation, loadWorkspace]
   )
 
   const dismissConfirmClose = useCallback(() => {

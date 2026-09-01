@@ -15,6 +15,7 @@ members = [
   "src/crates/hiveory-chat-domain",
   "src/crates/hiveory-code-domain",
   "src/crates/hiveory-code-runtime",
+  "src/crates/hiveory-terminal-host",
   "src/crates/hiveory-code-orchestration",
   "src/crates/hiveory-agent-domain",
   "src/crates/hiveory-agent-runtime",
@@ -28,7 +29,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/hiveory/hiveory"
@@ -52,7 +53,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 sha2 = "0.10"
 hmac = "0.12"
 sqlx = { version = "0.9", default-features = false, features = ["macros", "migrate", "runtime-tokio", "sqlite"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "process", "io-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "process", "io-util", "net"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 url = "2"
 portable-pty = "0.9"

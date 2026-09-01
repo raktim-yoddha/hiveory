@@ -149,6 +149,7 @@ export type CreateCodePaneMarkdownRequest = { workspace_id: string; pane_id: str
 export type CreateCodePaneMarkdownResult = { layout: CodePaneLayout; document: CodeDocument }
 export type CloseCodePaneRequest = { workspace_id: string; pane_id: string; expected_revision: number; terminate_running_resource: boolean }
 export type CodeTerminalSnapshot = { summary: CodeTerminalSummary; cols: number; rows: number; output_base64: string; sequence: number }
+export type CodeTerminalHistorySettingRequest = { terminal_id: string; enabled: boolean }
 
 export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: CodePaneKind; orientation: CodePaneOrientation | null; ratio_percent: number | null; children: string[]; resource_id: string | null; title?: string | null }
 export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[]; revision?: number; focused_pane_id?: string | null; maximized_pane_id?: string | null }
@@ -1295,6 +1296,14 @@ export const hiveoryClient = {
       output_base64: btoa('Preview terminal snapshot\r\n'),
       sequence: 1,
     }
+  },
+  async getCodeTerminalHistoryEnabled(terminalId: string): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriQuery<boolean>('hiveory_query_code_terminal_history', { terminalId })
+    return true
+  },
+  async setCodeTerminalHistoryEnabled(request: CodeTerminalHistorySettingRequest): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<CodeTerminalHistorySettingRequest, boolean>('hiveory_command_set_code_terminal_history', request)
+    return true
   },
   subscribeCodeTerminalEvents(terminalId: string, afterSequence: number, onEvent: (event: CodeTerminalEvent) => void): () => void {
     if (hiveoryIsTauri) {
