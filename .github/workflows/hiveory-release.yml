@@ -43,7 +43,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           tauriScript: pnpm exec tauri
-          args: --config src/apps/desktop/src-tauri/tauri.conf.json
+          projectPath: src/apps/desktop/src-tauri
+          args: --config tauri.conf.json
           tagName: ${{ github.ref_name }}
           releaseName: Hiveory v__VERSION__
           releaseBody: |
