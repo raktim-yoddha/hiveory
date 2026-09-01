@@ -7,8 +7,9 @@ import { spawnSync } from 'node:child_process'
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const releaseDir = resolve(projectRoot, 'releases')
 const tauriConfig = resolve(projectRoot, 'src', 'apps', 'desktop', 'src-tauri', 'tauri.conf.json')
-const tauriCommand = resolve(projectRoot, 'node_modules', '.bin', process.platform === 'win32' ? 'tauri.cmd' : 'tauri')
+const tauriCli = resolve(projectRoot, 'node_modules', '@tauri-apps', 'cli', 'tauri.js')
 const buildDir = mkdtempSync(join(tmpdir(), 'hiveory-build-'))
+const appVersion = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8')).version
 const signingKey = process.env.TAURI_SIGNING_PRIVATE_KEY?.trim()
 const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true'
 let temporaryConfigPath = null
@@ -38,14 +39,32 @@ function findArtifact(directory, suffix, description) {
   return resolve(directory, artifact)
 }
 
+function errorCode(error) {
+  return error && typeof error === 'object' && 'code' in error ? error.code : undefined
+}
+
+function isLockedFileError(error) {
+  return errorCode(error) === 'EPERM' || errorCode(error) === 'EBUSY'
+}
+
+function portableFallbackName() {
+  return `Hiveory-portable-v${appVersion}-${Date.now()}.exe`
+}
+
+function replaceArtifact(name, source) {
+  const destination = resolve(releaseDir, name)
+  if (existsSync(destination)) rmSync(destination, { force: true })
+  copyFileSync(source, destination)
+  return name
+}
+
 try {
   console.log('Building the desktop application in a temporary directory outside the project …')
   const configPath = resolveBuildConfig()
   const configArgument = configPath === tauriConfig ? 'tauri.conf.json' : basename(configPath)
-  const result = spawnSync(tauriCommand, ['build', '--config', configArgument], {
+  const result = spawnSync(process.execPath, [tauriCli, 'build', '--config', configArgument], {
     cwd: dirname(tauriConfig),
     env: { ...process.env, CARGO_TARGET_DIR: buildDir },
-    shell: process.platform === 'win32',
     stdio: 'inherit',
   })
 
@@ -62,42 +81,35 @@ try {
   const published = [
     ['Hiveory.msi', msi],
     ['Hiveory-setup.exe', setup],
-    ['Hiveory-portable.exe', sourceExe],
   ]
   const publishedNames = new Set(published.map(([name]) => name))
 
   for (const entry of readdirSync(releaseDir, { withFileTypes: true })) {
+    if (entry.name === 'Hiveory-portable.exe' || entry.name.startsWith('Hiveory-portable-v')) {
+      continue
+    }
     if (!publishedNames.has(entry.name)) {
       rmSync(resolve(releaseDir, entry.name), { force: true, recursive: entry.isDirectory() })
     }
   }
 
-  const failures = []
   const completed = []
   for (const [name, source] of published) {
-    const destination = resolve(releaseDir, name)
-    try {
-      if (existsSync(destination)) rmSync(destination, { force: true })
-      copyFileSync(source, destination)
-      completed.push(name)
-    } catch (error) {
-      const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
-      if (code === 'EPERM' || code === 'EBUSY') {
-        failures.push(`${name} is in use; close the running application and rerun pnpm app:build`)
-        continue
-      }
-      throw error
-    }
+    completed.push(replaceArtifact(name, source))
+  }
+
+  try {
+    completed.push(replaceArtifact('Hiveory-portable.exe', sourceExe))
+  } catch (error) {
+    if (!isLockedFileError(error)) throw error
+    const fallback = portableFallbackName()
+    completed.push(replaceArtifact(fallback, sourceExe))
+    console.warn(`Hiveory-portable.exe is in use; published the latest portable build as releases/${fallback}.`)
   }
 
   if (completed.length) {
     console.log('The single releases/ folder was updated:')
     for (const name of completed) console.log(`  releases/${name}`)
-  }
-  if (failures.length) {
-    console.error('Some release artifacts could not be replaced:')
-    for (const failure of failures) console.error(`  ${failure}`)
-    process.exitCode = 1
   }
 } finally {
   if (temporaryConfigPath) {
