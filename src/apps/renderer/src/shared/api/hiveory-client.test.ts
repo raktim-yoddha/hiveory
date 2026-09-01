@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { hiveoryClient, normalizeBrowserInput } from './hiveory-client'
+import { formatHiveoryClientError, hiveoryClient, normalizeBrowserInput } from './hiveory-client'
 
 test('normalizes browser addresses and uses Google for search text', () => {
   expect(normalizeBrowserInput('localhost:5173/dashboard')).toBe('http://localhost:5173/dashboard')
@@ -9,6 +9,13 @@ test('normalizes browser addresses and uses Google for search text', () => {
   expect(normalizeBrowserInput('tauri webview')).toBe('https://www.google.com/search?q=tauri%20webview')
   expect(() => normalizeBrowserInput('file:///tmp/index.html')).toThrow('HTTP and HTTPS')
   expect(() => normalizeBrowserInput('mailto:user@example.com')).toThrow('HTTP and HTTPS')
+})
+
+test('renders structured desktop failures as actionable messages', () => {
+  expect(formatHiveoryClientError({ message: 'A workspace cannot be removed while it has children.' }))
+    .toBe('A workspace cannot be removed while it has children.')
+  expect(formatHiveoryClientError({ error: { detail: 'The Browser could not be opened.' } }))
+    .toBe('The Browser could not be opened.')
 })
 
 test('uses an in-browser preview snapshot when no desktop host is present', async () => {

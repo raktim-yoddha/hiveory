@@ -1,5 +1,5 @@
-import React, { Component, type ReactNode } from 'react'
-import type { CodePaneNode } from '../../../shared/api/hiveory-client'
+import React, { Component, useEffect, useState, type ReactNode } from 'react'
+import { hiveoryClient, type CodePaneNode } from '../../../shared/api/hiveory-client'
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodePaneHeader } from './CodePaneHeader'
 import { CodePaneDropTargets } from './CodePaneDropTargets'
@@ -72,9 +72,47 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
   } = controller
   const isFocused = state.focusedPaneId === node.pane_id
   const isMaximized = state.maximizedPaneId === node.pane_id
+  const [historyEnabled, setHistoryEnabled] = useState(true)
+  const [historyBusy, setHistoryBusy] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
   const terminalSummary = node.resource_id ? state.terminals.get(node.resource_id) : undefined
   const previewSummary = node.resource_id ? state.previews.get(node.resource_id) : undefined
+
+  useEffect(() => {
+    const terminalId = node.kind === 'terminal' || node.kind === 'coding_agent' ? node.resource_id : null
+    if (!terminalId) return
+
+    let mounted = true
+    setHistoryEnabled(true)
+    setHistoryError(null)
+    void hiveoryClient.getCodeTerminalHistoryEnabled(terminalId)
+      .then((enabled) => {
+        if (mounted) setHistoryEnabled(enabled)
+      })
+      .catch(() => undefined)
+    return () => {
+      mounted = false
+    }
+  }, [node.kind, node.resource_id])
+
+  const toggleTerminalHistory = async () => {
+    const terminalId = node.resource_id
+    if (!terminalId || historyBusy) return
+
+    const nextValue = !historyEnabled
+    setHistoryEnabled(nextValue)
+    setHistoryBusy(true)
+    try {
+      await hiveoryClient.setCodeTerminalHistoryEnabled({ terminal_id: terminalId, enabled: nextValue })
+    } catch (error: unknown) {
+      setHistoryEnabled(!nextValue)
+      const message = error instanceof Error ? error.message : String(error)
+      setHistoryError(`History setting could not be saved: ${message}`)
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
 
   const renderContent = () => {
     switch (node.kind) {
@@ -105,6 +143,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           <CodeTerminalPane
             terminalId={node.resource_id}
             summary={terminalSummary}
+            historyError={historyError}
+            onDismissHistoryError={() => setHistoryError(null)}
             onRelaunch={() => {
               void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model)
             }}
@@ -135,6 +175,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           isFocused={isFocused}
           isMaximized={isMaximized}
           terminalState={terminalSummary?.state}
+          terminalHistoryEnabled={historyEnabled}
+          terminalHistoryBusy={historyBusy}
           onFocus={() => void focusPane(node.pane_id)}
           onRename={(title) => void renamePane(node.pane_id, title)}
           onSplitAndLaunch={(placement, kind, adapterId, model, url) => {
@@ -154,6 +196,11 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
               ? () => {
                   void launchTerminal(node.pane_id, 'shell')
                 }
+              : undefined
+          }
+          onToggleTerminalHistory={
+            node.kind === 'terminal' || node.kind === 'coding_agent'
+              ? () => void toggleTerminalHistory()
               : undefined
           }
         />

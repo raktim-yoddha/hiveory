@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useCallback, type ReactNode } from 'react'
+import React, { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import {
+  formatHiveoryClientError,
   hiveoryClient,
   type CodePanePreset,
   type CodeProjectSummary,
   type CodeSnapshot,
   type CodeWorkspaceCreateRequest,
+  type CodeWorkspaceSection,
   type CodeWorkspaceParentRequest,
   type CodeWorkspaceSummary,
   type CodeWorkspaceUpdateRequest,
@@ -45,7 +47,8 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [projects, setProjects] = useState<CodeProjectSummary[]>([])
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(initialWorkspaceId ?? null)
-  const [activeSection, setActiveSection] = useState<'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'>(initialSection)
+  const [activeSection, setActiveSection] = useState<CodeWorkspaceSection>(initialSection)
+  const [contextHydrated, setContextHydrated] = useState(false)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [createWorkspaceProjectId, setCreateWorkspaceProjectId] = useState<string | null>(null)
   const [createWorkspaceBusy, setCreateWorkspaceBusy] = useState(false)
@@ -60,6 +63,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
   const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
+  const contextHydratedRef = useRef(false)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
@@ -70,9 +74,17 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
 
   const refreshWorkspaces = useCallback(async (): Promise<CodeSnapshot | null> => {
     try {
-      const snapshot = await hiveoryClient.codeSnapshot()
+      const [snapshot, context] = await Promise.all([
+        hiveoryClient.codeSnapshot(),
+        hiveoryClient.codeWorkspaceContext(),
+      ])
       setProjects(snapshot.projects)
       setWorkspaces(snapshot.workspaces)
+      if (!contextHydratedRef.current) {
+        contextHydratedRef.current = true
+        setActiveSection(context.section)
+        setContextHydrated(true)
+      }
       const activeWorkspaceStillAvailable = Boolean(activeWorkspaceId && snapshot.workspaces.some((workspace) => workspace.id === activeWorkspaceId && workspace.available))
       if (!activeWorkspaceStillAvailable) {
         const availableWorkspace = snapshot.workspaces.find((workspace) => workspace.available)
@@ -94,6 +106,13 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }, [refreshWorkspaces])
 
   useEffect(() => {
+    if (!contextHydrated) return
+    void hiveoryClient
+      .setCodeWorkspaceContext({ workspace_id: activeWorkspaceId, section: activeSection })
+      .catch((error: unknown) => setError(formatHiveoryClientError(error)))
+  }, [activeSection, activeWorkspaceId, contextHydrated, setError])
+
+  useEffect(() => {
     const handleSidebarToggle = (event: Event) => {
       const requested = (event as CustomEvent<{ collapsed?: unknown }>).detail?.collapsed
       setSidebarCollapsed(typeof requested === 'boolean' ? requested : (current) => !current)
@@ -108,6 +127,10 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
     setActiveSection('workspace')
   }
 
+  const handleSelectGlobalSection = (section: CodeWorkspaceSection) => {
+    setActiveSection(section)
+  }
+
   const handleAddProject = async () => {
     const path = await hiveoryClient.chooseWorkspacePath()
     if (!path) return
@@ -118,7 +141,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await refreshWorkspaces()
       void loadWorkspace(detail.summary.id)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = formatHiveoryClientError(err)
       setError(msg)
     }
   }
@@ -141,7 +164,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await refreshWorkspaces()
       await loadWorkspace(detail.summary.id)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = formatHiveoryClientError(err)
       setCreateWorkspaceError(message)
       setError(message)
     } finally {
@@ -163,7 +186,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await refreshWorkspaces()
       if (activeWorkspaceId === request.workspace_id) await loadWorkspace(request.workspace_id)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = formatHiveoryClientError(err)
       setRenameWorkspaceError(message)
       setError(message)
     } finally {
@@ -185,7 +208,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await refreshWorkspaces()
       if (activeWorkspaceId === request.workspace_id) await loadWorkspace(request.workspace_id)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = formatHiveoryClientError(err)
       setParentWorkspaceError(message)
       setError(message)
     } finally {
@@ -204,7 +227,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await hiveoryClient.removeCodeWorkspace({ workspace_id: workspace.id, force: true })
       await refreshWorkspaces()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(formatHiveoryClientError(err))
     }
   }
 
@@ -217,7 +240,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       await hiveoryClient.removeCodeProject({ project_id: project.id, force: true })
       await refreshWorkspaces()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(formatHiveoryClientError(err))
     }
   }
 
@@ -336,7 +359,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         onOpenParentWorkspaceDialog={handleOpenParentWorkspace}
         onRemoveProject={(projectId) => void handleRemoveProject(projectId)}
         onRemoveWorkspace={(workspaceId) => void handleRemoveWorkspace(workspaceId)}
-        onSelectGlobalSection={(section) => setActiveSection(section)}
+        onSelectGlobalSection={handleSelectGlobalSection}
         sourcePanelOpen={sourcePanelOpen}
         coordinationPanelOpen={coordinationPanelOpen}
         onToggleSourcePanel={handleToggleSourcePanel}

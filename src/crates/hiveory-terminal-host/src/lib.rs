@@ -1085,7 +1085,10 @@ pub async fn run_server(config: HostConfig) -> Result<(), String> {
     let persistence = HiveoryPersistence::open(&config.database_path)
         .await
         .map_err(|error| error.to_string())?;
-    let _ = persistence.mark_active_code_terminals_dormant().await;
+    // The desktop application can close while this hidden host remains alive.
+    // Starting or reconnecting the host therefore must never turn persisted live
+    // sessions into dormant ones: host/runtime liveness is reconciled by the
+    // caller before a pane renders an end-of-session state.
     let cipher = Arc::new(HistoryCipher::from_key_reference(&config.history_key_ref)?);
     let history_enabled = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
     let (history_tx, history_rx) = mpsc::unbounded_channel();

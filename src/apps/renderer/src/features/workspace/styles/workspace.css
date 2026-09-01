@@ -1703,30 +1703,6 @@
   font-size: 11px;
 }
 
-.code-terminal-history-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 25px;
-  border-top: 1px solid #202c38;
-  padding: 4px 10px;
-  color: #718396;
-  background: #111923;
-  font-size: 10px;
-}
-
-.code-terminal-history-control label {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-
-.code-terminal-history-control input {
-  margin: 0;
-  accent-color: #6ea8ff;
-}
-
 /* ===========================================================================
    BROWSER PANE
    ========================================================================== */

@@ -96,6 +96,7 @@ export type CodeWorkspaceTrust = 'untrusted' | 'trusted'
 export type CodeWorkspaceCapability = 'read_files' | 'write_files' | 'execute_processes' | 'read_git' | 'write_git' | 'open_preview'
 export type CodeProjectKind = 'git' | 'folder'
 export type CodeWorkspaceKind = 'primary' | 'managed_worktree' | 'external_worktree'
+export type CodeWorkspaceSection = 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
 export type CodeProjectSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; kind: CodeProjectKind; primary_workspace_id: string; current_branch: string | null; workspace_count: number; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
 export type CodeWorkspaceSummary = { id: string; host_id: string; display_name: string; root_path: string; repository_name: string | null; branch: string | null; is_git_repository: boolean; trust: CodeWorkspaceTrust; capabilities: CodeWorkspaceCapability[]; project_id: string; workspace_kind: CodeWorkspaceKind; worktree_name: string | null; base_ref: string | null; parent_workspace_id: string | null; managed_by_app: boolean; available: boolean; unavailable_reason: string | null; updated_at_unix_ms: number }
 export type CodeProjectRemoveRequest = { project_id: string; force: boolean }
@@ -106,6 +107,7 @@ export type CodeWorkspaceOpenTarget = 'file_manager' | 'terminal'
 export type CodeWorkspaceOpenInRequest = { workspace_id: string; target: CodeWorkspaceOpenTarget }
 export type CodeWorkspaceDetail = { summary: CodeWorkspaceSummary; layout: CodePaneLayout; open_documents: CodeDocumentSummary[]; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
 export type CodeSnapshot = { projects: CodeProjectSummary[]; workspaces: CodeWorkspaceSummary[]; active_workspace_id: string | null; adapters: CodeAdapterSummary[] }
+export type CodeWorkspaceContext = { workspace_id: string | null; section: CodeWorkspaceSection }
 export type CodeFileKind = 'file' | 'directory' | 'symlink' | 'binary'
 export type CodeFileNode = { name: string; relative_path: string; kind: CodeFileKind; size: number | null; language: string | null; modified_at_unix_ms: number | null }
 export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
@@ -744,9 +746,45 @@ function previewAgentRun(request: AgentRunStartRequest): AgentRunSummary {
   return structuredClone(summary)
 }
 
+export function formatHiveoryClientError(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    for (const key of ['message', 'error', 'detail', 'reason']) {
+      const candidate = value[key]
+      if (typeof candidate === 'string' && candidate.trim()) return candidate
+      if (candidate && typeof candidate === 'object') {
+        const message = formatHiveoryClientError(candidate)
+        if (message && message !== 'An unexpected desktop-host error occurred.') return message
+      }
+    }
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return 'An unexpected desktop-host error occurred.'
+    }
+  }
+  return error == null ? 'An unexpected desktop-host error occurred.' : String(error)
+}
+
+function normalizeHiveoryClientError(error: unknown): Error {
+  if (error instanceof Error && error.message) return error
+  const normalized = new Error(formatHiveoryClientError(error))
+  if (error && typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    if (typeof value.code === 'string') normalized.name = value.code
+  }
+  return normalized
+}
+
 async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload): Promise<TResponse> {
-  const result = await invoke<ResponseEnvelope<TResponse>>(name, { command: envelope(payload) })
-  return unwrap(result)
+  try {
+    const result = await invoke<ResponseEnvelope<TResponse>>(name, { command: envelope(payload) })
+    return unwrap(result)
+  } catch (error: unknown) {
+    throw normalizeHiveoryClientError(error)
+  }
 }
 async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Promise<T> { return invoke<T>(name, args) }
 
@@ -927,6 +965,16 @@ export const hiveoryClient = {
 
   async codeSnapshot(): Promise<CodeSnapshot> {
     return hiveoryIsTauri ? tauriQuery<CodeSnapshot>('hiveory_query_code_snapshot') : previewCodeSummary()
+  },
+  async codeWorkspaceContext(): Promise<CodeWorkspaceContext> {
+    return hiveoryIsTauri
+      ? tauriQuery<CodeWorkspaceContext>('hiveory_query_code_workspace_context')
+      : { workspace_id: previewCodeSummary().active_workspace_id, section: 'workspace' }
+  },
+  async setCodeWorkspaceContext(context: CodeWorkspaceContext): Promise<CodeWorkspaceContext> {
+    return hiveoryIsTauri
+      ? tauriCommand<CodeWorkspaceContext, CodeWorkspaceContext>('hiveory_command_set_code_workspace_context', context)
+      : context
   },
   async codeWorkspace(workspaceId: string): Promise<CodeWorkspaceDetail> {
     if (hiveoryIsTauri) return tauriQuery<CodeWorkspaceDetail>('hiveory_query_code_workspace', { query: { workspace_id: workspaceId } })

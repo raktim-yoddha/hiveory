@@ -111,7 +111,7 @@ use tauri::{
 };
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
 struct HiveoryShellState {
@@ -152,6 +152,36 @@ struct CodeTerminalHistorySettingRequest {
     enabled: bool,
 }
 
+const CODE_WORKSPACE_CONTEXT_SETTING: &str = "code_workspace_context.v1";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CodeWorkspaceContext {
+    workspace_id: Option<String>,
+    section: String,
+}
+
+impl Default for CodeWorkspaceContext {
+    fn default() -> Self {
+        Self {
+            workspace_id: None,
+            section: "workspace".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct CodeWorkspaceContextUpdate {
+    workspace_id: Option<String>,
+    section: String,
+}
+
+fn is_code_workspace_section(value: &str) -> bool {
+    matches!(
+        value,
+        "dashboard" | "routines" | "plugins" | "skills" | "workspace"
+    )
+}
+
 #[derive(Clone)]
 struct HiveoryFoundation {
     persistence: HiveoryPersistence,
@@ -175,6 +205,7 @@ struct HiveoryFoundation {
     code_git: HiveoryGitService,
     code_orchestration: HiveoryCodeOrchestration,
     code_active_workspace_id: Arc<RwLock<Option<String>>>,
+    code_active_section: Arc<RwLock<String>>,
     code_terminal_launches: Arc<std::sync::Mutex<HashSet<String>>>,
 }
 
@@ -249,6 +280,12 @@ impl HiveoryFoundation {
             .code_workspaces()
             .await
             .map_err(|error| error.to_string())?;
+        let persisted_context = persistence
+            .get_setting(CODE_WORKSPACE_CONTEXT_SETTING)
+            .await
+            .map_err(|error| error.to_string())?
+            .and_then(|value| serde_json::from_str::<CodeWorkspaceContext>(&value).ok())
+            .unwrap_or_default();
         for summary in &persisted_workspaces {
             if code_workspaces
                 .open_workspace(
@@ -274,10 +311,26 @@ impl HiveoryFoundation {
                 );
             }
         }
-        let code_active_workspace_id = Arc::new(RwLock::new(
-            persisted_workspaces
-                .first()
-                .map(|summary| summary.id.clone()),
+        let restored_workspace_id = persisted_context
+            .workspace_id
+            .clone()
+            .filter(|workspace_id| {
+                persisted_workspaces
+                    .iter()
+                    .any(|summary| &summary.id == workspace_id)
+            })
+            .or_else(|| {
+                persisted_workspaces
+                    .first()
+                    .map(|summary| summary.id.clone())
+            });
+        let code_active_workspace_id = Arc::new(RwLock::new(restored_workspace_id));
+        let code_active_section = Arc::new(RwLock::new(
+            if is_code_workspace_section(&persisted_context.section) {
+                persisted_context.section
+            } else {
+                "workspace".to_owned()
+            },
         ));
         let code_orchestration = HiveoryCodeOrchestration::new(
             persistence.clone(),
@@ -369,6 +422,7 @@ impl HiveoryFoundation {
             code_git: HiveoryGitService,
             code_orchestration,
             code_active_workspace_id,
+            code_active_section,
             code_terminal_launches: Arc::new(std::sync::Mutex::new(HashSet::new())),
         })
     }
@@ -513,16 +567,103 @@ impl HiveoryFoundation {
                 );
             }
         }
+        let active_workspace_id = {
+            let current = self
+                .code_active_workspace_id
+                .read()
+                .map_err(|_| unavailable_error())?
+                .clone();
+            current.filter(|workspace_id| {
+                workspaces
+                    .iter()
+                    .any(|workspace| workspace.id == *workspace_id && workspace.available)
+            })
+        };
+        let active_workspace_id = active_workspace_id.or_else(|| {
+            workspaces
+                .iter()
+                .find(|workspace| workspace.available)
+                .map(|workspace| workspace.id.clone())
+        });
+        let context_changed = {
+            let mut active = self
+                .code_active_workspace_id
+                .write()
+                .map_err(|_| unavailable_error())?;
+            if *active == active_workspace_id {
+                false
+            } else {
+                *active = active_workspace_id.clone();
+                true
+            }
+        };
+        if context_changed {
+            self.persist_code_workspace_context().await?;
+        }
         Ok(CodeSnapshot {
             projects,
             workspaces,
-            active_workspace_id: self
+            active_workspace_id,
+            adapters: self.code_runtime.adapters(),
+        })
+    }
+
+    async fn code_workspace_context(&self) -> Result<CodeWorkspaceContext, ApiError> {
+        Ok(CodeWorkspaceContext {
+            workspace_id: self
                 .code_active_workspace_id
                 .read()
                 .map_err(|_| unavailable_error())?
                 .clone(),
-            adapters: self.code_runtime.adapters(),
+            section: self
+                .code_active_section
+                .read()
+                .map_err(|_| unavailable_error())?
+                .clone(),
         })
+    }
+
+    async fn persist_code_workspace_context(&self) -> Result<(), ApiError> {
+        let context = self.code_workspace_context().await?;
+        let value = serde_json::to_string(&context).map_err(|error| {
+            application_error(
+                "code_workspace_context_serialize",
+                error.to_string(),
+                RetryClass::AfterUserAction,
+            )
+        })?;
+        self.persistence
+            .set_setting(CODE_WORKSPACE_CONTEXT_SETTING, &value)
+            .await
+            .map_err(database_error)
+    }
+
+    async fn set_code_workspace_context(
+        &self,
+        update: CodeWorkspaceContextUpdate,
+    ) -> Result<CodeWorkspaceContext, ApiError> {
+        if !is_code_workspace_section(&update.section) {
+            return Err(validation_error("The selected Code section is invalid."));
+        }
+        if let Some(workspace_id) = update.workspace_id.as_deref() {
+            let workspace = self
+                .code_workspaces
+                .summary(workspace_id)
+                .map_err(workspace_error)?;
+            if !workspace.available {
+                return Err(validation_error("The selected workspace is not available."));
+            }
+        }
+        *self
+            .code_active_workspace_id
+            .write()
+            .map_err(|_| unavailable_error())? = update.workspace_id;
+        *self
+            .code_active_section
+            .write()
+            .map_err(|_| unavailable_error())? = update.section;
+        self.persist_code_workspace_context().await?;
+        self.code_workspace_context().await
     }
 
     async fn add_code_project(&self, path: &str) -> Result<CodeWorkspaceDetail, ApiError> {
@@ -1194,6 +1335,11 @@ impl HiveoryFoundation {
                 self.reopen_persisted_code_workspace(&persisted).await?
             }
         };
+        *self
+            .code_active_workspace_id
+            .write()
+            .map_err(|_| unavailable_error())? = Some(summary.id.clone());
+        self.persist_code_workspace_context().await?;
         let layout = match self
             .persistence
             .code_layout(workspace_id)
@@ -1965,6 +2111,27 @@ async fn hiveory_query_code_snapshot(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<CodeSnapshot, ApiError> {
     foundation.code_snapshot().await
+}
+
+#[tauri::command]
+async fn hiveory_query_code_workspace_context(
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<CodeWorkspaceContext, ApiError> {
+    foundation.code_workspace_context().await
+}
+
+#[tauri::command]
+async fn hiveory_command_set_code_workspace_context(
+    command: CommandEnvelope<CodeWorkspaceContextUpdate>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeWorkspaceContext>, ApiError> {
+    validate_code_command(&command)?;
+    Ok(response(
+        &command.request_id,
+        foundation
+            .set_code_workspace_context(command.payload)
+            .await?,
+    ))
 }
 
 #[tauri::command]
@@ -3455,8 +3622,20 @@ async fn hiveory_command_browser_open(
     if command.payload.browser_id.trim().is_empty() {
         return Err(validation_error("A browser resource is required."));
     }
-    browser
-        .open(&app, &command.payload)
+    // Native child-webview construction must run on Tauri's UI thread.  The
+    // command itself is async and may execute on a worker, which previously
+    // caused the browser pane to fail during startup with an opaque IPC error.
+    let browser_manager = (*browser).clone();
+    let browser_request = command.payload.clone();
+    let browser_app = app.clone();
+    let (sender, receiver) = oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = sender.send(browser_manager.open(&browser_app, &browser_request));
+    })
+    .map_err(|error| browser_error(error.to_string()))?;
+    receiver
+        .await
+        .map_err(|_| browser_error("The Browser startup task was cancelled.".to_owned()))?
         .map(|state| response(&command.request_id, state))
         .map_err(browser_error)
 }
@@ -6729,6 +6908,7 @@ pub fn run() {
             hiveory_command_dry_run_plugin,
             hiveory_query_plugin_invocations,
             hiveory_query_code_snapshot,
+            hiveory_query_code_workspace_context,
             hiveory_query_code_workspace,
             hiveory_query_code_runs,
             hiveory_query_code_run,
@@ -6746,6 +6926,7 @@ pub fn run() {
             hiveory_command_update_code_workspace,
             hiveory_command_set_code_workspace_parent,
             hiveory_command_open_code_workspace_in,
+            hiveory_command_set_code_workspace_context,
             hiveory_command_remove_code_workspace,
             hiveory_command_remove_code_project,
             hiveory_command_trust_code_workspace,

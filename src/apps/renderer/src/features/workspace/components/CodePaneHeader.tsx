@@ -28,6 +28,8 @@ interface CodePaneHeaderProps {
   isFocused: boolean
   isMaximized: boolean
   terminalState?: CodeTerminalState
+  terminalHistoryEnabled?: boolean
+  terminalHistoryBusy?: boolean
   onFocus: () => void
   onRename: (newTitle: string) => void
   onSplitAndLaunch: (
@@ -41,6 +43,7 @@ interface CodePaneHeaderProps {
   onClose: () => void
   onRelaunch?: () => void
   onOpenShellInstead?: () => void
+  onToggleTerminalHistory?: () => void
 }
 
 export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
@@ -54,6 +57,9 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   onClose,
   onRelaunch,
   onOpenShellInstead,
+  terminalHistoryEnabled,
+  terminalHistoryBusy,
+  onToggleTerminalHistory,
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(node.title || '')
@@ -215,6 +221,9 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 onToggleMaximize={onToggleMaximize}
                 onRelaunch={onRelaunch}
                 onOpenShellInstead={onOpenShellInstead}
+                terminalHistoryEnabled={terminalHistoryEnabled}
+                terminalHistoryBusy={terminalHistoryBusy}
+                onToggleTerminalHistory={onToggleTerminalHistory}
                 onClosePane={onClose}
               />
             )}

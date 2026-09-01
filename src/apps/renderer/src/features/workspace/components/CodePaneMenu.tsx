@@ -6,6 +6,8 @@ import {
   Trash2,
   Terminal,
   RotateCw,
+  ShieldCheck,
+  ShieldOff,
 } from 'lucide-react'
 import type { CodePaneNode } from '../../../shared/api/hiveory-client'
 
@@ -17,6 +19,9 @@ interface CodePaneMenuProps {
   onToggleMaximize: () => void
   onRelaunch?: () => void
   onOpenShellInstead?: () => void
+  terminalHistoryEnabled?: boolean
+  terminalHistoryBusy?: boolean
+  onToggleTerminalHistory?: () => void
   onClosePane: () => void
 }
 
@@ -28,6 +33,9 @@ export const CodePaneMenu: React.FC<CodePaneMenuProps> = ({
   onToggleMaximize,
   onRelaunch,
   onOpenShellInstead,
+  terminalHistoryEnabled = true,
+  terminalHistoryBusy = false,
+  onToggleTerminalHistory,
   onClosePane,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null)
@@ -71,6 +79,22 @@ export const CodePaneMenu: React.FC<CodePaneMenuProps> = ({
         >
           <Terminal size={13} />
           <span>Open shell instead</span>
+        </button>
+      )}
+
+      {isTerminalOrAgent && onToggleTerminalHistory && (
+        <button
+          className="code-dropdown-item"
+          disabled={terminalHistoryBusy}
+          role="menuitemcheckbox"
+          aria-checked={terminalHistoryEnabled}
+          onClick={() => {
+            onToggleTerminalHistory()
+            onClose()
+          }}
+        >
+          {terminalHistoryEnabled ? <ShieldCheck size={13} /> : <ShieldOff size={13} />}
+          <span>{terminalHistoryEnabled ? 'Save encrypted terminal history' : 'Terminal history is off'}</span>
         </button>
       )}
 

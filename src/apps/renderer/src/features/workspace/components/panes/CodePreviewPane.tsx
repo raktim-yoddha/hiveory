@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  formatHiveoryClientError,
   hiveoryClient,
   normalizeBrowserInput,
   type BrowserCaptureEvent,
@@ -434,7 +435,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         syncAnnotations(annotationsRef.current)
         requestAnimationFrame(() => syncBoundsRef.current())
       } catch (error: unknown) {
-        if (!disposed) setNotice(error instanceof Error ? error.message : 'The Browser could not be opened.')
+        if (!disposed) setNotice(formatHiveoryClientError(error))
       }
     })()
     return () => {
