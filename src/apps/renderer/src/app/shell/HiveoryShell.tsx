@@ -468,6 +468,7 @@ export function HiveoryShell() {
           <div className="hiveory-brand">
             <img className="hiveory-brand-logo" src="/hiveory-logo.png" alt="" draggable={false} />
             <span className="hiveory-brand-name">Hiveory</span>
+            {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
             <button
               type="button"
               className="hiveory-icon-button hiveory-sidebar-toggle"
@@ -498,7 +499,6 @@ export function HiveoryShell() {
           </nav>
 
           <div className="hiveory-title-actions" onDoubleClick={(event) => event.stopPropagation()}>
-            {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
             {screen === 'workspace' && activeMode === 'code' && (
               <div className="hiveory-layout-menu">
                 <button

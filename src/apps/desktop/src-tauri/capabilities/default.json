@@ -13,6 +13,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-unmaximize",
     "dialog:default",
+    "dialog:allow-open",
     "notification:allow-is-permission-granted",
     "notification:allow-request-permission"
   ]

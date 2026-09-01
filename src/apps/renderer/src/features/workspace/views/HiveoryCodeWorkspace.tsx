@@ -132,9 +132,9 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }
 
   const handleAddProject = async () => {
-    const path = await hiveoryClient.chooseWorkspacePath()
-    if (!path) return
     try {
+      const path = await hiveoryClient.chooseWorkspacePath()
+      if (!path) return
       const detail = await hiveoryClient.addCodeProject(path)
       setActiveWorkspaceId(detail.summary.id)
       setActiveSection('workspace')

@@ -6726,6 +6726,8 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|error| error.to_string())?;
+            std::fs::create_dir_all(&app_data_dir)
+                .map_err(|error| Box::<dyn std::error::Error>::from(error))?;
             let database_path = app_data_dir.join("hiveory.sqlite3");
             let artifact_root = app_data_dir.join("artifacts");
             let orchestration_root = app_data_dir.join("orchestration");
