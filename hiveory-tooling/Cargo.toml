@@ -1,8 +1,0 @@
-[package]
-name = "hiveory-tooling"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-
-[dependencies]
-hiveory-protocol = { path = "../hiveory-crates/hiveory-protocol" }

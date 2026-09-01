@@ -23,7 +23,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo run -p hiveory-tooling
-      - run: git diff --exit-code -- hiveory-renderer/src/generated
+      - run: git diff --exit-code -- src/apps/renderer/src/generated
       - run: pnpm check
       - run: pnpm test
       - run: pnpm audit:identity

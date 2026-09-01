@@ -4,16 +4,16 @@
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "app:dev": "pnpm exec tauri dev --config hiveory-desktop/src-tauri/tauri.conf.json",
-    "app:build": "node hiveory-tooling/scripts/build-release.mjs",
+    "app:dev": "pnpm exec tauri dev --config src/apps/desktop/src-tauri/tauri.conf.json",
+    "app:build": "node tools/scripts/build-release.mjs",
     "app:doctor": "pnpm exec tauri info",
-    "build": "pnpm --dir hiveory-renderer build",
-    "check": "pnpm --dir hiveory-renderer check",
-    "test": "pnpm --dir hiveory-renderer test",
+    "build": "pnpm --dir src/apps/renderer build",
+    "check": "pnpm --dir src/apps/renderer check",
+    "test": "pnpm --dir src/apps/renderer test",
     "verify": "pnpm check && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "release:check": "pnpm verify && pnpm audit:identity && pnpm audit:references",
-    "audit:identity": "node hiveory-tooling/scripts/hiveory-prohibited-name-scan.mjs",
-    "audit:references": "node hiveory-tooling/scripts/hiveory-reference-guard.mjs"
+    "audit:identity": "node tools/scripts/hiveory-prohibited-name-scan.mjs",
+    "audit:references": "node tools/scripts/hiveory-reference-guard.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0"

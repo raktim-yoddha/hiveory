@@ -7,11 +7,23 @@ area without navigating unrelated application code.
 
 | Path | Responsibility |
 | --- | --- |
-| `hiveory-renderer/` | React user interface and client-side interaction state. |
-| `hiveory-desktop/` | Tauri desktop host, native window lifecycle, and native commands. |
-| `hiveory-crates/` | Rust domain, runtime, persistence, and integration crates. |
-| `hiveory-tooling/` | Build, release, and development tooling. |
+| `src/apps/renderer/` | React user interface and client-side interaction state. |
+| `src/apps/desktop/` | Tauri desktop host, native window lifecycle, and native commands. |
+| `src/crates/` | Rust domain, runtime, persistence, and integration crates. |
+| `tools/` | Build, release, and protocol-generation tooling. |
 | `docs/` | Architecture decisions, verification evidence, and contributor guidance. |
+
+## Root layout
+
+```text
+src/
+  apps/
+    desktop/             desktop application host
+    renderer/            frontend application
+  crates/                Rust capability crates
+tools/                   repository automation and generators
+docs/                    architecture and verification records
+```
 
 ## Renderer layout
 
