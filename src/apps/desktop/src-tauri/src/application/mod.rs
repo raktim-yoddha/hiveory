@@ -856,6 +856,14 @@ impl HiveoryFoundation {
         &self,
         request: &CodeWorkspaceOpenInRequest,
     ) -> Result<bool, ApiError> {
+        if request.target == CodeWorkspaceOpenTarget::Terminal {
+            return Err(application_error(
+                "external_terminal_disabled",
+                "External terminals are disabled. Start a terminal from the embedded workspace pane.",
+                RetryClass::AfterUserAction,
+            ));
+        }
+
         let workspace_id = request.workspace_id.trim();
         if workspace_id.is_empty() {
             return Err(validation_error("A workspace is required."));
@@ -876,29 +884,23 @@ impl HiveoryFoundation {
         #[cfg(target_os = "windows")]
         let spawn_result = match request.target {
             CodeWorkspaceOpenTarget::FileManager => Command::new("explorer.exe").arg(&path).spawn(),
-            CodeWorkspaceOpenTarget::Terminal => Command::new("wt.exe")
-                .arg("-d")
-                .arg(&path)
-                .current_dir(&path)
-                .spawn()
-                .or_else(|_| Command::new("cmd.exe").arg("/K").current_dir(&path).spawn()),
+            CodeWorkspaceOpenTarget::Terminal => {
+                unreachable!("external terminals are rejected above")
+            }
         };
         #[cfg(target_os = "macos")]
         let spawn_result = match request.target {
             CodeWorkspaceOpenTarget::FileManager => Command::new("open").arg(&path).spawn(),
-            CodeWorkspaceOpenTarget::Terminal => Command::new("open")
-                .arg("-a")
-                .arg("Terminal")
-                .arg(&path)
-                .spawn(),
+            CodeWorkspaceOpenTarget::Terminal => {
+                unreachable!("external terminals are rejected above")
+            }
         };
         #[cfg(all(unix, not(target_os = "macos")))]
         let spawn_result = match request.target {
             CodeWorkspaceOpenTarget::FileManager => Command::new("xdg-open").arg(&path).spawn(),
-            CodeWorkspaceOpenTarget::Terminal => Command::new("x-terminal-emulator")
-                .current_dir(&path)
-                .spawn()
-                .or_else(|_| Command::new("xterm").current_dir(&path).spawn()),
+            CodeWorkspaceOpenTarget::Terminal => {
+                unreachable!("external terminals are rejected above")
+            }
         };
         #[cfg(not(any(target_os = "windows", target_os = "macos", unix)))]
         let spawn_result: Result<std::process::Child, std::io::Error> = Err(std::io::Error::new(

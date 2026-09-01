@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "app:dev": "pnpm exec tauri dev --config src/apps/desktop/src-tauri/tauri.conf.json",
+    "app:dev": "node tools/scripts/dev.mjs",
     "app:build": "node tools/scripts/build-release.mjs",
     "app:doctor": "pnpm exec tauri info",
     "build": "pnpm --dir src/apps/renderer build",

@@ -85,11 +85,7 @@ pub(crate) async fn update_issue(
             CodeHostedIssueState::Open => "reopen",
             CodeHostedIssueState::Closed => "close",
         };
-        output = run_text(
-            root,
-            &["issue".to_owned(), verb.to_owned(), number.clone()],
-        )
-        .await?;
+        output = run_text(root, &["issue".to_owned(), verb.to_owned(), number.clone()]).await?;
     }
     Ok(hosted_result(
         workspace_id,

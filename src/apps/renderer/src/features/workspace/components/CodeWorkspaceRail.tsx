@@ -573,10 +573,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                 <FolderOpen size={13} aria-hidden="true" />
                 <span>File Explorer</span>
               </button>
-              <button type="button" role="menuitem" onClick={() => void openWorkspaceIn(workspace, 'terminal')}>
-                <SquareTerminal size={13} aria-hidden="true" />
-                <span>Terminal</span>
-              </button>
             </div>
           )}
           <button type="button" role="menuitem" onClick={() => void copyWorkspacePath(workspace)}>
