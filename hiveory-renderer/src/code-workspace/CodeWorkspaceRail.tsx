@@ -877,8 +877,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
             <div className="code-rail-user-info"><span className="code-rail-username">Developer</span><span className="code-rail-user-badge">PRO</span></div>
           </div>
           <div className="code-rail-user-actions">
-            <button type="button" className="code-rail-user-icon-btn" title="Theme"><Moon size={14} aria-hidden="true" /></button>
-            <button type="button" className="code-rail-user-icon-btn" title="Settings"><Settings size={14} aria-hidden="true" /></button>
+            <button type="button" className="code-rail-user-icon-btn" title="Theme preferences are not configured" disabled><Moon size={14} aria-hidden="true" /></button>
+            <button type="button" className="code-rail-user-icon-btn" title="Open settings" onClick={() => window.dispatchEvent(new Event('hiveory-open-global-settings'))}><Settings size={14} aria-hidden="true" /></button>
           </div>
         </div>
       </footer>

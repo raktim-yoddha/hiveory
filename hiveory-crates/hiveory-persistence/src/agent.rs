@@ -1411,7 +1411,9 @@ fn artifact_kind_from_value(value: &str) -> Option<AgentArtifactKind> {
 mod tests {
     use super::*;
     use hiveory_agent_domain::default_runtime_limits;
-    use hiveory_protocol::{AgentMemoryMutationRequest, AgentRunStartRequest};
+    use hiveory_protocol::{
+        AgentExecutionTarget, AgentMemoryMutationRequest, AgentRunStartRequest,
+    };
 
     #[tokio::test]
     async fn agent_state_survives_database_reopen() {
@@ -1440,6 +1442,8 @@ mod tests {
                 prompt: "Summarize the release state".to_owned(),
                 background: false,
                 routine_execution_id: None,
+                execution_target: AgentExecutionTarget::Desktop,
+                remote_target: None,
             })
             .await
             .expect("create run");

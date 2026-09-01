@@ -2575,6 +2575,20 @@ pub struct AgentMemoryDeleteRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentExecutionTarget {
+    Desktop,
+    RemoteVm,
+}
+
+impl Default for AgentExecutionTarget {
+    fn default() -> Self {
+        Self::Desktop
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct AgentRunStartRequest {
     pub agent_id: String,
     pub conversation_id: Option<String>,
@@ -2582,6 +2596,10 @@ pub struct AgentRunStartRequest {
     pub background: bool,
     #[serde(default)]
     pub routine_execution_id: Option<String>,
+    #[serde(default)]
+    pub execution_target: AgentExecutionTarget,
+    #[serde(default)]
+    pub remote_target: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3357,6 +3375,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     AgentMemoryQuery::export_all(&config)?;
     AgentMemoryMutationRequest::export_all(&config)?;
     AgentMemoryDeleteRequest::export_all(&config)?;
+    AgentExecutionTarget::export_all(&config)?;
     AgentRunStartRequest::export_all(&config)?;
     AgentRunControlRequest::export_all(&config)?;
     AgentApprovalDecisionRequest::export_all(&config)?;

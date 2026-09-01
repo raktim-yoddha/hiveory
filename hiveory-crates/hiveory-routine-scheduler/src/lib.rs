@@ -7,9 +7,10 @@ use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_notification_service::HiveoryNotificationService;
 use hiveory_persistence::routine::{HiveoryRoutineStore, HiveoryRoutineStoreError};
 use hiveory_protocol::{
-    AgentRunStartRequest, AgentRunState, AgentRunSummary, RoutineCatchUpPolicy,
-    RoutineCreateRequest, RoutineDeliveryDestination, RoutineDetail, RoutineExecution,
-    RoutineExecutionState, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
+    AgentExecutionTarget, AgentRunStartRequest, AgentRunState, AgentRunSummary,
+    RoutineCatchUpPolicy, RoutineCreateRequest, RoutineDeliveryDestination, RoutineDetail,
+    RoutineExecution, RoutineExecutionState, RoutineIdRequest, RoutineQuery, RoutineSummary,
+    RoutineUpdateRequest,
 };
 use std::{collections::BTreeSet, str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
@@ -448,6 +449,8 @@ impl HiveoryRoutineScheduler {
             prompt: detail.prompt_template,
             background: true,
             routine_execution_id: Some(execution.id.clone()),
+            execution_target: AgentExecutionTarget::Desktop,
+            remote_target: None,
         };
         match self.launcher.launch(request).await {
             Ok(run) => {

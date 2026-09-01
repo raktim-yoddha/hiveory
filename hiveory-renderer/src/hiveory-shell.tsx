@@ -167,14 +167,21 @@ export function HiveoryShell() {
   }, [])
 
   useEffect(() => {
-    const openBrowserSettings = () => {
+    const openGlobalSettings = () => {
       setScreen('settings')
       setCommandOpen(false)
       setNotificationsOpen(false)
+    }
+    const openBrowserSettings = () => {
+      openGlobalSettings()
       window.setTimeout(() => document.getElementById('hiveory-browser-settings')?.focus(), 0)
     }
+    window.addEventListener('hiveory-open-global-settings', openGlobalSettings)
     window.addEventListener('hiveory-open-browser-settings', openBrowserSettings)
-    return () => window.removeEventListener('hiveory-open-browser-settings', openBrowserSettings)
+    return () => {
+      window.removeEventListener('hiveory-open-global-settings', openGlobalSettings)
+      window.removeEventListener('hiveory-open-browser-settings', openBrowserSettings)
+    }
   }, [])
 
   useEffect(() => {
@@ -940,7 +947,7 @@ function HiveorySettings({
   updateInstalling: boolean
   onOpenDiagnostics: () => void
 }) {
-  const [version, setVersion] = useState('1.1.0')
+  const [version, setVersion] = useState('0.1.0')
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const [browserConfiguration, setBrowserConfiguration] = useState<BrowserConfiguration | null>(null)

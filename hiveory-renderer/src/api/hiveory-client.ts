@@ -21,6 +21,7 @@ export type AgentRunState = 'queued' | 'preparing' | 'running' | 'awaiting_appro
 export type AgentToolRisk = 'read_only' | 'internal_mutation' | 'filesystem_mutation' | 'externally_visible'
 export type AgentToolCallState = 'proposed' | 'awaiting_approval' | 'approved' | 'executing' | 'completed' | 'denied' | 'failed' | 'cancelled'
 export type AgentApprovalDecision = 'approve' | 'deny'
+export type AgentExecutionTarget = 'desktop' | 'remote_vm'
 export type AgentMemoryClass = 'agent_knowledge' | 'user_preference' | 'run_summary' | 'skill_observation'
 export type AgentSkillOrigin = 'builtin' | 'application_data' | 'configured_directory'
 export type AgentArtifactKind = 'text' | 'json' | 'markdown'
@@ -49,7 +50,7 @@ export type AgentSkillConflictResolutionRequest = { agent_id: string; trigger: s
 export type AgentMemoryQuery = { agent_id: string; search: string | null; class: AgentMemoryClass | null; limit: number | null }
 export type AgentMemoryMutationRequest = { agent_id: string; memory_id: string | null; class: AgentMemoryClass; content: string; source_type: string; source_id: string | null; enabled: boolean }
 export type AgentMemoryDeleteRequest = { agent_id: string; memory_id: string }
-export type AgentRunStartRequest = { agent_id: string; conversation_id: string | null; prompt: string; background: boolean; routine_execution_id?: string | null }
+export type AgentRunStartRequest = { agent_id: string; conversation_id: string | null; prompt: string; background: boolean; routine_execution_id?: string | null; execution_target?: AgentExecutionTarget; remote_target?: string | null }
 export type AgentRunControlRequest = { run_id: string }
 export type AgentApprovalDecisionRequest = { run_id: string; approval_id: string; fingerprint: string; decision: AgentApprovalDecision; comment: string | null }
 export type AgentInputRequest = { run_id: string; answer: string }
@@ -381,6 +382,7 @@ const previewCodeSubscribers = new Set<(event: CodeOrchestrationEventEnvelope) =
 const previewAgentSubscribers = new Set<(event: AgentEventEnvelope) => void>()
 const previewAgentSummary: AgentSummary = { id: 'local-operator', name: 'Local operator', description: 'A focused assistant for your explicitly granted folders.', avatar_color: '#22d3ee', provider_account_id: previewProvider.id, model: previewProvider.default_model ?? 'gpt-5.6-mini', version: 1, archived: false, active_run_state: null, enabled_skill_count: 1, enabled_tool_count: 8, folder_grant_count: 0, created_at_unix_ms: Date.now(), updated_at_unix_ms: Date.now() }
 const previewAgentRuns = new Map<string, AgentRunDetail>()
+const previewAgentConversations = new Map<string, AgentConversationDetail>()
 const previewAgentSkills: AgentSkillSummary[] = [{ id: 'folder-brief', name: 'Folder brief', version: '1.0.0', description: 'Summarize an explicitly granted folder without changing it.', origin: 'builtin', source_path: 'builtin/folder-brief/SKILL.md', triggers: ['brief', 'summarize folder'], permissions: ['folder.list', 'folder.read_text'], enabled: true, valid: true, validation_message: null }, { id: 'decision-log', name: 'Decision log', version: '1.0.0', description: 'Capture an explicit decision in durable Agent memory.', origin: 'builtin', source_path: 'builtin/decision-log/SKILL.md', triggers: ['decision'], permissions: ['memory.remember'], enabled: false, valid: true, validation_message: null }]
 const previewAgentTools: AgentToolDefinition[] = [{ name: 'folder.list', description: 'List entries in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.read_text', description: 'Read a UTF-8 file in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.write_text', description: 'Write a UTF-8 file in an explicitly writable folder.', input_schema_json: '{}', risk: 'filesystem_mutation' }, { name: 'memory.search', description: 'Search inspectable durable memory.', input_schema_json: '{}', risk: 'read_only' }, { name: 'memory.remember', description: 'Store an explicit non-sensitive memory.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'artifact.create_text', description: 'Create a private text artifact.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'user.request_input', description: 'Pause and ask the user for missing information.', input_schema_json: '{}', risk: 'read_only' }, { name: 'delegate_task', description: 'Start a bounded child run with inherited permissions.', input_schema_json: '{}', risk: 'externally_visible' }]
 const previewRoutineExecution: RoutineExecution = { id: 'preview-execution-1', routine_id: 'preview-routine-1', run_id: null, occurrence_key: 'preview@UTC', scheduled_for_unix_ms: Date.now() - 86_400_000, state: 'completed', folder_grant_ids: [], plugin_tool_names: [], error: null, report: 'Completed with a local preview result.', created_at_unix_ms: Date.now() - 86_400_000, updated_at_unix_ms: Date.now() - 86_400_000, started_at_unix_ms: Date.now() - 86_400_000, completed_at_unix_ms: Date.now() - 86_400_000 }
@@ -704,14 +706,33 @@ function previewAgentRun(request: AgentRunStartRequest): AgentRunSummary {
   const id = previewId('agent-run')
   const now = previewNow()
   const conversationId = request.conversation_id ?? previewId('agent-conversation')
+  const conversation = previewAgentConversations.get(conversationId) ?? {
+    id: conversationId,
+    agent_id: request.agent_id,
+    title: 'New conversation',
+    messages: [],
+    runs: [],
+    draft: '',
+    updated_at_unix_ms: now,
+  }
   const summary: AgentRunSummary = { id, agent_id: request.agent_id, agent_version: 1, conversation_id: conversationId, state: 'running', prompt_preview: request.prompt.slice(0, 160), background: request.background, step_count: 1, tool_call_count: 0, pending_approval_id: null, lease_generation: 1, input_tokens: null, output_tokens: null, error: null, created_at_unix_ms: now, updated_at_unix_ms: now, completed_at_unix_ms: null }
   const detail: AgentRunDetail = { summary, messages: [{ id: previewId('message'), run_id: id, role: 'user', kind: 'prompt', content: request.prompt, tool_call_id: null, created_at_unix_ms: now }], tool_calls: [], approvals: [], skills: structuredClone(previewAgentSkills.filter((skill) => skill.enabled)), memories: [], artifacts: [], child_runs: [], event_cursor: 0 }
   previewAgentRuns.set(id, detail)
+  conversation.messages.push(...detail.messages)
+  conversation.runs.unshift(summary)
+  conversation.updated_at_unix_ms = now
+  previewAgentConversations.set(conversationId, conversation)
   setTimeout(() => {
     const current = previewAgentRuns.get(id)
     if (!current || current.summary.state !== 'running') return
     const text = 'Preview run complete. In the desktop host, this turn is backed by the durable Agent runtime and explicit tool approvals.'
     current.summary.state = 'completed'; current.summary.completed_at_unix_ms = previewNow(); current.summary.updated_at_unix_ms = previewNow(); current.messages.push({ id: previewId('message'), run_id: id, role: 'assistant', kind: 'text', content: text, tool_call_id: null, created_at_unix_ms: previewNow() }); current.event_cursor += 1
+    const storedConversation = previewAgentConversations.get(conversationId)
+    if (storedConversation) {
+      storedConversation.messages = [...current.messages.filter((message) => !storedConversation.messages.some((existing) => existing.id === message.id))]
+      storedConversation.runs = storedConversation.runs.map((run) => run.id === id ? current.summary : run)
+      storedConversation.updated_at_unix_ms = previewNow()
+    }
     const event: AgentEventEnvelope = { run_id: id, sequence: current.event_cursor, event_id: previewId('event'), kind: 'assistant_text_delta', step: 1, tool_call_id: null, payload: JSON.stringify({ text }), emitted_at_unix_ms: previewNow() }
     previewAgentSubscribers.forEach((subscriber) => subscriber(event))
     previewAgentSummary.active_run_state = null; previewAgentSummary.updated_at_unix_ms = previewNow()
@@ -754,9 +775,9 @@ const previewBrowserConfiguration: BrowserConfiguration = {
 export const hiveoryClient = {
   async bootstrap(): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? tauriQuery<BootstrapSnapshot>('hiveory_query_bootstrap') : { protocol, active_mode: 'agent', product_name: 'Hiveory' } },
   async setActiveMode(mode: ApplicationMode): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? invoke<BootstrapSnapshot>('hiveory_command_set_active_mode', { command: { mode } }) : { protocol, active_mode: mode, product_name: 'Hiveory' } },
-  async buildInformation(): Promise<BuildInformation> { return hiveoryIsTauri ? tauriQuery<BuildInformation>('hiveory_query_build_information') : { product_name: 'Hiveory', version: '1.1.0', protocol: { major: 2 } } },
+  async buildInformation(): Promise<BuildInformation> { return hiveoryIsTauri ? tauriQuery<BuildInformation>('hiveory_query_build_information') : { product_name: 'Hiveory', version: '0.1.0', protocol: { major: 2 } } },
   async diagnostics(): Promise<DiagnosticSnapshot> { return hiveoryIsTauri ? tauriQuery<DiagnosticSnapshot>('hiveory_query_diagnostic_snapshot') : { providers: [previewProvider], recent_jobs: [], notifications: [], recovery_message: null } },
-  async checkForUpdate(): Promise<UpdateSnapshot> { return hiveoryIsTauri ? tauriQuery<UpdateSnapshot>('hiveory_query_update') : { configured: false, current_version: '1.1.0', available_version: null, notes: null, published_at: null, status: 'not_configured' } },
+  async checkForUpdate(): Promise<UpdateSnapshot> { return hiveoryIsTauri ? tauriQuery<UpdateSnapshot>('hiveory_query_update') : { configured: false, current_version: '0.1.0', available_version: null, notes: null, published_at: null, status: 'not_configured' } },
   async installUpdate(): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_install_update') },
   async createBackup(destination: string): Promise<BackupSummary> { return hiveoryIsTauri ? invoke<BackupSummary>('hiveory_command_create_backup', { destination }) : { path: destination, bytes: 0, created_at_unix_ms: Date.now(), includes_database: true, artifact_count: 0 } },
   async prepareRestore(source: string): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_prepare_restore', { source }) },
@@ -792,9 +813,35 @@ export const hiveoryClient = {
   async agentMemory(query: AgentMemoryQuery): Promise<AgentMemorySummary[]> { return hiveoryIsTauri ? tauriQuery<AgentMemorySummary[]>('hiveory_query_agent_memory', { query }) : [] },
   async rememberAgentMemory(request: AgentMemoryMutationRequest): Promise<AgentMemorySummary> { return tauriQuery<AgentMemorySummary>('hiveory_command_remember_agent_memory', { request }) },
   async deleteAgentMemory(request: AgentMemoryDeleteRequest): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_delete_agent_memory', { request }) },
-  async agentConversations(query: AgentConversationQuery): Promise<AgentConversationSummary[]> { return hiveoryIsTauri ? tauriQuery<AgentConversationSummary[]>('hiveory_query_agent_conversations', { query }) : [] },
-  async createAgentConversation(request: AgentConversationCreateRequest): Promise<AgentConversationDetail> { return tauriQuery<AgentConversationDetail>('hiveory_command_create_agent_conversation', { request }) },
-  async agentConversation(conversationId: string): Promise<AgentConversationDetail> { return tauriQuery<AgentConversationDetail>('hiveory_query_agent_conversation', { conversationId }) },
+  async agentConversations(query: AgentConversationQuery): Promise<AgentConversationSummary[]> {
+    if (hiveoryIsTauri) return tauriQuery<AgentConversationSummary[]>('hiveory_query_agent_conversations', { query })
+    return [...previewAgentConversations.values()]
+      .filter((conversation) => conversation.agent_id === query.agent_id)
+      .sort((left, right) => right.updated_at_unix_ms - left.updated_at_unix_ms)
+      .slice(0, query.limit ?? 100)
+      .map((conversation) => ({ id: conversation.id, agent_id: conversation.agent_id, title: conversation.title, message_count: conversation.messages.length, updated_at_unix_ms: conversation.updated_at_unix_ms }))
+  },
+  async createAgentConversation(request: AgentConversationCreateRequest): Promise<AgentConversationDetail> {
+    if (hiveoryIsTauri) return tauriQuery<AgentConversationDetail>('hiveory_command_create_agent_conversation', { request })
+    const now = previewNow()
+    const conversation: AgentConversationDetail = {
+      id: previewId('agent-conversation'),
+      agent_id: request.agent_id,
+      title: request.title?.trim() || 'New conversation',
+      messages: [],
+      runs: [],
+      draft: '',
+      updated_at_unix_ms: now,
+    }
+    previewAgentConversations.set(conversation.id, conversation)
+    return structuredClone(conversation)
+  },
+  async agentConversation(conversationId: string): Promise<AgentConversationDetail> {
+    if (hiveoryIsTauri) return tauriQuery<AgentConversationDetail>('hiveory_query_agent_conversation', { conversationId })
+    const conversation = previewAgentConversations.get(conversationId)
+    if (!conversation) throw new Error('Agent conversation was not found.')
+    return structuredClone(conversation)
+  },
   async agentRuns(query: AgentRunsQuery): Promise<AgentRunSummary[]> { return hiveoryIsTauri ? tauriQuery<AgentRunSummary[]>('hiveory_query_agent_runs', { query }) : [...previewAgentRuns.values()].map((run) => run.summary) },
   async agentRun(runId: string): Promise<AgentRunDetail> { return hiveoryIsTauri ? tauriQuery<AgentRunDetail>('hiveory_query_agent_run', { runId }) : structuredClone(previewAgentRuns.get(runId) ?? (() => { throw new Error('Run was not found.') })()) },
   async startAgentRun(request: AgentRunStartRequest): Promise<AgentRunSummary> { return hiveoryIsTauri ? tauriQuery<AgentRunSummary>('hiveory_command_start_agent_run', { request }) : previewAgentRun(request) },

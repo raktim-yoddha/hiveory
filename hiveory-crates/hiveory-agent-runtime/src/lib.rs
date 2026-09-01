@@ -17,7 +17,7 @@ use hiveory_protocol::{
     AgentApprovalDecision, AgentApprovalDecisionRequest, AgentApprovalPolicy, AgentArtifactKind,
     AgentArtifactSummary, AgentConversationCreateRequest, AgentConversationDetail,
     AgentConversationQuery, AgentCreateRequest, AgentDashboard, AgentDetail, AgentEventEnvelope,
-    AgentEventKind, AgentEventsQuery, AgentExportRequest, AgentFolderGrant,
+    AgentEventKind, AgentEventsQuery, AgentExecutionTarget, AgentExportRequest, AgentFolderGrant,
     AgentFolderGrantDeleteRequest, AgentFolderGrantRequest, AgentInputRequest,
     AgentMemoryDeleteRequest, AgentMemoryMutationRequest, AgentMemoryQuery, AgentMemorySummary,
     AgentModelTurnRequest, AgentProviderStreamEvent, AgentProviderStreamEventKind,
@@ -372,10 +372,20 @@ impl HiveoryAgentRuntime {
         request: &AgentRunStartRequest,
     ) -> Result<AgentRunSummary, HiveoryAgentRuntimeError> {
         let run = self.store.create_run(request).await?;
+        let execution_context = match request.execution_target {
+            AgentExecutionTarget::Desktop => "Execution face: desktop. Use computer.run with target \"desktop\" for approved commands on this Windows machine.".to_owned(),
+            AgentExecutionTarget::RemoteVm => match request.remote_target.as_deref().map(str::trim).filter(|target| !target.is_empty()) {
+                Some(target) => format!("Execution face: remote VM. Use computer.run with target \"remote_vm\" and remote_target \"{target}\". The target must be an SSH host alias or user@host already configured on this desktop."),
+                None => "Execution face: remote VM. Do not attempt remote tools until the user configures a non-secret SSH host alias in Agent settings.".to_owned(),
+            },
+        };
         self.store
             .save_continuation(
                 &run.id,
-                &[json!({ "role": "user", "content": request.prompt.trim() })],
+                &[
+                    json!({ "role": "user", "content": request.prompt.trim() }),
+                    json!({ "role": "developer", "content": execution_context }),
+                ],
                 None,
             )
             .await?;
@@ -1398,6 +1408,9 @@ impl HiveoryAgentRuntime {
                     serde_json::to_string(&summary).map_err(|error| error.to_string())?,
                 ))
             }
+            "computer.run" => execute_computer_command(&args)
+                .await
+                .map(ToolExecution::Result),
             "user.request_input" => {
                 let prompt = args
                     .get("prompt")
@@ -1447,6 +1460,8 @@ impl HiveoryAgentRuntime {
                         prompt: prompt.to_owned(),
                         background: true,
                         routine_execution_id: None,
+                        execution_target: AgentExecutionTarget::Desktop,
+                        remote_target: None,
                     })
                     .await
                     .map_err(|error| error.to_string())?;
@@ -1708,6 +1723,82 @@ impl HiveoryAgentRuntime {
     }
 }
 
+async fn execute_computer_command(args: &Value) -> Result<String, String> {
+    const MAX_COMMAND_CHARS: usize = 8_000;
+    const MAX_OUTPUT_CHARS: usize = 64 * 1024;
+    let command = args
+        .get("command")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|command| !command.is_empty())
+        .ok_or_else(|| "command is required".to_owned())?;
+    if command.len() > MAX_COMMAND_CHARS {
+        return Err("command is too long".to_owned());
+    }
+    let target = args
+        .get("target")
+        .and_then(Value::as_str)
+        .unwrap_or("desktop");
+    let mut process = match target {
+        "desktop" => desktop_command(command),
+        "remote_vm" => {
+            let remote_target = args
+                .get("remote_target")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|target| !target.is_empty())
+                .ok_or_else(|| "remote_target is required for a remote VM command".to_owned())?;
+            if !remote_target.chars().all(|character| {
+                character.is_ascii_alphanumeric()
+                    || matches!(character, '@' | '.' | '-' | '_' | ':')
+            }) {
+                return Err("remote_target must be an SSH alias or user@host value".to_owned());
+            }
+            let mut process = tokio::process::Command::new("ssh");
+            process
+                .args(["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"])
+                .arg(remote_target)
+                .arg("--")
+                .arg(command);
+            process
+        }
+        _ => return Err("target must be desktop or remote_vm".to_owned()),
+    };
+    let output = tokio::time::timeout(Duration::from_secs(60), process.output())
+        .await
+        .map_err(|_| "command timed out after 60 seconds".to_owned())?
+        .map_err(|error| error.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut combined = format!("stdout:\n{stdout}\nstderr:\n{stderr}");
+    let truncated = combined.chars().count() > MAX_OUTPUT_CHARS;
+    if truncated {
+        combined = combined.chars().take(MAX_OUTPUT_CHARS).collect();
+    }
+    Ok(json!({
+        "target": target,
+        "exit_code": output.status.code(),
+        "success": output.status.success(),
+        "output": combined,
+        "truncated": truncated,
+    })
+    .to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn desktop_command(command: &str) -> tokio::process::Command {
+    let mut process = tokio::process::Command::new("cmd");
+    process.args(["/D", "/S", "/C"]).arg(command);
+    process
+}
+
+#[cfg(not(target_os = "windows"))]
+fn desktop_command(command: &str) -> tokio::process::Command {
+    let mut process = tokio::process::Command::new("sh");
+    process.args(["-lc", command]);
+    process
+}
+
 pub fn builtin_tool_definitions() -> Vec<AgentToolDefinition> {
     vec![
         tool(
@@ -1745,6 +1836,12 @@ pub fn builtin_tool_definitions() -> Vec<AgentToolDefinition> {
             "Create a text, Markdown, or JSON artifact in private Agent storage.",
             r#"{"type":"object","properties":{"name":{"type":["string","null"]},"kind":{"type":["string","null"],"enum":["text","markdown","json",null]},"content":{"type":"string"}},"required":["name","kind","content"],"additionalProperties":false}"#,
             AgentToolRisk::InternalMutation,
+        ),
+        tool(
+            "computer.run",
+            "Run one approved command on the desktop or an explicitly configured SSH remote VM. Remote targets must be SSH aliases or user@host values already configured by the user.",
+            r#"{"type":"object","properties":{"command":{"type":"string"},"target":{"type":"string","enum":["desktop","remote_vm"]},"remote_target":{"type":["string","null"]}},"required":["command","target","remote_target"],"additionalProperties":false}"#,
+            AgentToolRisk::ExternallyVisible,
         ),
         tool(
             "user.request_input",
@@ -1842,7 +1939,9 @@ fn tool_target(name: &str, arguments_json: &str) -> String {
         .ok()
         .and_then(|value| {
             value
-                .get("path")
+                .get("remote_target")
+                .or_else(|| value.get("command"))
+                .or_else(|| value.get("path"))
                 .or_else(|| value.get("name"))
                 .and_then(Value::as_str)
                 .map(str::to_owned)
@@ -1951,5 +2050,17 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn remote_command_target_rejects_shell_metacharacters() {
+        let error = execute_computer_command(&json!({
+            "command": "hostname",
+            "target": "remote_vm",
+            "remote_target": "dev-vm;unexpected",
+        }))
+        .await
+        .expect_err("unsafe SSH target must be rejected");
+        assert!(error.contains("SSH alias"));
     }
 }
