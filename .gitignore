@@ -2,7 +2,10 @@
 /target/
 node_modules/
 dist/
-/releases/
+/releases/production/
+/releases/dev/
+/releases/*.msi
+/releases/*.exe
 /src/crates/hiveory-protocol/bindings/
 *.log
 .env

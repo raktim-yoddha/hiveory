@@ -37,6 +37,7 @@ import { HiveoryCodeWorkspace } from '../../features/workspace/views/HiveoryCode
 import { HiveoryAgent } from '../../features/agent/views/HiveoryAgent'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
+import { isHiveoryDev } from '../edition'
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -497,6 +498,7 @@ export function HiveoryShell() {
           </nav>
 
           <div className="hiveory-title-actions" onDoubleClick={(event) => event.stopPropagation()}>
+            {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
             {screen === 'workspace' && activeMode === 'code' && (
               <div className="hiveory-layout-menu">
                 <button

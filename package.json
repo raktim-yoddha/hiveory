@@ -6,6 +6,7 @@
   "scripts": {
     "app:dev": "node tools/scripts/dev.mjs",
     "app:build": "node tools/scripts/build-release.mjs",
+    "app:build:dev": "node tools/scripts/build-dev-portable.mjs",
     "app:doctor": "pnpm exec tauri info",
     "build": "pnpm --dir src/apps/renderer build",
     "check": "pnpm --dir src/apps/renderer check",

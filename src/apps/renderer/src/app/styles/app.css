@@ -445,6 +445,7 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-mode-switch button:hover { color: #f4f5f7; background: rgba(255, 255, 255, 0.06); }
 .hiveory-mode-switch button.is-active { color: #fff; background: #27272a; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
 .hiveory-title-actions { gap: 4px; }
+.hiveory-dev-tag { display: inline-flex; align-items: center; min-height: 22px; border: 1px solid #7c5c1c; border-radius: 4px; padding: 0 7px; color: #f2c777; background: #241c0f; font-size: 10px; font-weight: 800; letter-spacing: .12em; line-height: 1; }
 .hiveory-title-action { display: inline-flex; align-items: center; gap: 5px; padding: 2.5px 9px; min-height: 24px; border-radius: 5px; font-size: 11px; font-weight: 500; color: #d1d5db; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer; }
 .hiveory-title-action:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
 .hiveory-connection { border: 1px solid #263b2d; border-radius: 99px; padding: 5px 9px; color: #83bf91; background: #111a14; font-size: 10px; }
