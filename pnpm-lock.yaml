@@ -12,7 +12,7 @@ importers:
         specifier: ^2.8.0
         version: 2.11.4
 
-  hiveory-renderer:
+  src/apps/renderer:
     dependencies:
       '@dnd-kit/core':
         specifier: ^6.3.1
