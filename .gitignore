@@ -1,15 +1,14 @@
+# Build and dependency artifacts
 /target/
-/node_modules/
-/hiveory-renderer/node_modules/
-/hiveory-renderer/dist/
-/hiveory-desktop/src-tauri/target/
+node_modules/
+dist/
 /releases/
-/hiveory-crates/hiveory-protocol/bindings/
+/src/crates/hiveory-protocol/bindings/
 *.log
 .env
 .env.*
 !.env.example
 /techn 
-/graphify-out/
+graphify-out/
 tauri-agent-super-app-prd.md
 THIRD_PARTY_NOTICES.md
