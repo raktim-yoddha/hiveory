@@ -63,6 +63,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   const stateRef = useRef(state)
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const loadRequestRef = useRef(0)
+  const terminalLaunchesRef = useRef(new Set<string>())
   stateRef.current = state
 
   const loadWorkspace = useCallback(async (workspaceId: string) => {
@@ -317,6 +318,13 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     async (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
+      const pane = stateRef.current.layout?.nodes.find((node) => node.pane_id === paneId)
+      const existingTerminal = pane?.resource_id ? stateRef.current.terminals.get(pane.resource_id) : null
+      if (existingTerminal?.state === 'running' || existingTerminal?.state === 'starting') return
+
+      const launchKey = `${workspaceId}:${paneId}`
+      if (terminalLaunchesRef.current.has(launchKey)) return
+      terminalLaunchesRef.current.add(launchKey)
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
         let curRev = revision
@@ -359,6 +367,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       } catch (err: unknown) {
         dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
+        terminalLaunchesRef.current.delete(launchKey)
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
     },

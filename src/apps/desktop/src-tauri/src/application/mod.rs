@@ -97,7 +97,7 @@ use hiveory_workspace_service::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io,
     path::{Path, PathBuf},
     process::Command,
@@ -169,6 +169,20 @@ struct HiveoryFoundation {
     code_git: HiveoryGitService,
     code_orchestration: HiveoryCodeOrchestration,
     code_active_workspace_id: Arc<RwLock<Option<String>>>,
+    code_terminal_launches: Arc<std::sync::Mutex<HashSet<String>>>,
+}
+
+struct CodeTerminalLaunchReservation {
+    launches: Arc<std::sync::Mutex<HashSet<String>>>,
+    key: String,
+}
+
+impl Drop for CodeTerminalLaunchReservation {
+    fn drop(&mut self) {
+        if let Ok(mut launches) = self.launches.lock() {
+            launches.remove(&self.key);
+        }
+    }
 }
 
 impl HiveoryFoundation {
@@ -318,6 +332,7 @@ impl HiveoryFoundation {
             code_git: HiveoryGitService,
             code_orchestration,
             code_active_workspace_id,
+            code_terminal_launches: Arc::new(std::sync::Mutex::new(HashSet::new())),
         })
     }
     async fn diagnostic_snapshot(&self) -> Result<DiagnosticSnapshot, ApiError> {
@@ -3870,6 +3885,62 @@ async fn hiveory_command_launch_code_pane_terminal(
         ));
     }
 
+    let pane = current_layout
+        .nodes
+        .iter()
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .ok_or_else(|| validation_error("Target pane was not found."))?;
+
+    if let Some(terminal_id) = pane.resource_id.as_deref() {
+        if let Some(existing_terminal) = foundation
+            .code_runtime
+            .list()
+            .map_err(runtime_error)?
+            .into_iter()
+            .find(|terminal| terminal.id == terminal_id)
+            .filter(|terminal| {
+                matches!(
+                    terminal.state,
+                    hiveory_protocol::CodeTerminalState::Running
+                        | hiveory_protocol::CodeTerminalState::Starting
+                )
+            })
+        {
+            return Ok(response(
+                &command.request_id,
+                LaunchCodePaneTerminalResult {
+                    layout: current_layout,
+                    terminal: existing_terminal,
+                },
+            ));
+        }
+    }
+
+    let launch_key = format!(
+        "{}:{}",
+        command.payload.workspace_id, command.payload.pane_id
+    );
+    let _launch_reservation = {
+        let mut launches = foundation.code_terminal_launches.lock().map_err(|_| {
+            application_error(
+                "terminal_launch_lock",
+                "Terminal launch lock is unavailable.",
+                RetryClass::AfterUserAction,
+            )
+        })?;
+        if !launches.insert(launch_key.clone()) {
+            return Err(application_error(
+                "terminal_launch_in_progress",
+                "A terminal is already launching for this pane.",
+                RetryClass::AfterUserAction,
+            ));
+        }
+        CodeTerminalLaunchReservation {
+            launches: foundation.code_terminal_launches.clone(),
+            key: launch_key,
+        }
+    };
+
     let persistence = foundation.persistence.clone();
     let sink: TerminalEventSink = Arc::new(move |event| {
         let _ = channel.send(event.clone());
@@ -3924,21 +3995,14 @@ async fn hiveory_command_launch_code_pane_terminal(
     };
 
     let mut new_layout = current_layout.clone();
-    if let Some(node) = new_layout
+    let node = new_layout
         .nodes
         .iter_mut()
-        .find(|n| n.pane_id == command.payload.pane_id)
-    {
-        node.kind = pane_kind;
-        node.resource_id = Some(summary.id.clone());
-        node.title = Some(pane_title);
-    } else {
-        let _ = foundation.code_runtime.stop(&CodeTerminalStopRequest {
-            terminal_id: summary.id,
-            force: true,
-        });
-        return Err(validation_error("Target pane was not found."));
-    }
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .expect("pane was validated before starting the terminal");
+    node.kind = pane_kind;
+    node.resource_id = Some(summary.id.clone());
+    node.title = Some(pane_title);
     new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
 
     let saved_layout = match foundation
