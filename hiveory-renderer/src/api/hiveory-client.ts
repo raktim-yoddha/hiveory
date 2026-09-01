@@ -111,6 +111,8 @@ export type CodeFileNode = { name: string; relative_path: string; kind: CodeFile
 export type CodeFileTree = { workspace_id: string; directory: string; entries: CodeFileNode[]; truncated: boolean }
 export type CodeDocumentSummary = { relative_path: string; language: string | null; last_fingerprint: string | null; last_opened_at_unix_ms: number }
 export type CodeDocument = { workspace_id: string; relative_path: string; content: string; language: string | null; fingerprint: string; bytes: number; read_only: boolean; binary: boolean }
+export type CodeRenameFileRequest = { workspace_id: string; pane_id: string; expected_revision: number; relative_path: string; new_relative_path: string; expected_fingerprint: string | null }
+export type CodeRenameFileResult = { layout: CodePaneLayout; document: CodeDocument }
 export type CodePaneKind = 'terminal' | 'coding_agent' | 'editor' | 'diff' | 'preview' | 'problems' | 'empty' | 'markdown'
 export type CodePaneOrientation = 'horizontal' | 'vertical'
 export type CodePanePlacement = 'center' | 'left' | 'right' | 'top' | 'bottom'
@@ -1043,6 +1045,18 @@ export const hiveoryClient = {
     file.bytes = request.content.length
     file.fingerprint = `preview-${previewNow()}-${Math.random().toString(16).slice(2)}`
     return structuredClone(file)
+  },
+  async renameCodeFile(request: CodeRenameFileRequest): Promise<CodeRenameFileResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeRenameFileRequest, CodeRenameFileResult>('hiveory_command_rename_code_file', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    const file = workspace?.files.get(request.relative_path)
+    if (!workspace || !file) throw new Error('File was not found.')
+    if (workspace.files.has(request.new_relative_path)) throw new Error('A file already exists at the new path.')
+    workspace.files.delete(request.relative_path); file.relative_path = request.new_relative_path; workspace.files.set(file.relative_path, file)
+    const pane = workspace.detail.layout.nodes.find((node) => node.pane_id === request.pane_id)
+    if (!pane) throw new Error('Pane was not found.'); pane.resource_id = file.relative_path; pane.title = file.relative_path.split('/').pop() ?? 'untitled.md'
+    workspace.detail.layout.revision = (workspace.detail.layout.revision ?? 0) + 1
+    return { layout: structuredClone(workspace.detail.layout), document: structuredClone(file) }
   },
   async saveCodeLayout(request: CodeSaveLayoutRequest): Promise<CodePaneLayout> {
     if (hiveoryIsTauri) return tauriCommand<CodeSaveLayoutRequest, CodePaneLayout>('hiveory_command_save_code_layout', request)

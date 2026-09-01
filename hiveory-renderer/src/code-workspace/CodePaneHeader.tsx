@@ -117,6 +117,11 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
 
   const showPaneActions = node.kind !== 'empty'
 
+  const setSplitLauncherOpen = (open: boolean) => {
+    setSplitModalOpen(open)
+    window.dispatchEvent(new CustomEvent('hiveory-browser-suspend-surface', { detail: { suspended: open } }))
+  }
+
   const getPaneIcon = () => {
     switch (node.kind) {
       case 'coding_agent':
@@ -230,7 +235,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             className="code-pane-action-btn"
             title="Add Split Pane"
             aria-label="Add Split Pane"
-            onClick={() => setSplitModalOpen(true)}
+            onClick={() => setSplitLauncherOpen(true)}
           >
             <Plus size={13} />
           </button>
@@ -252,7 +257,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
         <div
           className="code-launch-dialog-backdrop"
           role="presentation"
-          onMouseDown={() => setSplitModalOpen(false)}
+          onMouseDown={() => setSplitLauncherOpen(false)}
         >
           <div
             className="code-split-modal"
@@ -269,7 +274,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               <button
                 type="button"
                 className="code-pane-action-btn"
-                onClick={() => setSplitModalOpen(false)}
+                onClick={() => setSplitLauncherOpen(false)}
                 aria-label="Close"
               >
                 <X size={15} aria-hidden="true" />
@@ -301,7 +306,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 className="code-split-modal-item"
                 onClick={() => {
                   onSplitAndLaunch(splitSide, 'shell')
-                  setSplitModalOpen(false)
+                  setSplitLauncherOpen(false)
                 }}
               >
                 <span className="code-split-item-icon">
@@ -320,7 +325,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                   className="code-split-modal-item"
                   onClick={() => {
                     onSplitAndLaunch(splitSide, 'coding_agent', adapter.id)
-                    setSplitModalOpen(false)
+                    setSplitLauncherOpen(false)
                   }}
                 >
                   <span className="code-split-item-icon">
@@ -338,7 +343,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 className="code-split-modal-item"
                 onClick={() => {
                   onSplitAndLaunch(splitSide, 'markdown')
-                  setSplitModalOpen(false)
+                  setSplitLauncherOpen(false)
                 }}
               >
                 <span className="code-split-item-icon">
@@ -355,7 +360,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 className="code-split-modal-item"
                 onClick={() => {
                   onSplitAndLaunch(splitSide, 'preview', null, null, 'http://localhost:3000')
-                  setSplitModalOpen(false)
+                  setSplitLauncherOpen(false)
                 }}
               >
                 <span className="code-split-item-icon">

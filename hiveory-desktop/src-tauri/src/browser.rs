@@ -1970,12 +1970,7 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
   const label = document.createElement('div');
   label.className = 'tag';
   label.hidden = true;
-  const hint = document.createElement('div');
-  hint.className = 'hint';
-  hint.innerHTML = action === 'annotate'
-    ? '<b>Annotate page element</b><span>Click an element</span><kbd>Esc</kbd>'
-    : '<b>Grab page element</b><span>Click or hover</span><kbd>C</kbd><kbd>S</kbd><kbd>Esc</kbd>';
-  shadow.append(highlight, label, hint);
+  shadow.append(highlight, label);
   let editor = null;
   let menu = null;
   let currentNode = null;

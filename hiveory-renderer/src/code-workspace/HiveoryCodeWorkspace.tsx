@@ -103,9 +103,9 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }, [])
 
   const handleSelectWorkspace = (wsId: string) => {
+    if (wsId === activeWorkspaceId) return
     setActiveWorkspaceId(wsId)
     setActiveSection('workspace')
-    void loadWorkspace(wsId)
   }
 
   const handleAddProject = async () => {

@@ -5,13 +5,13 @@ import {
   CheckCircle2,
   Code2,
   Command,
+  Copy,
   Download,
   FolderArchive,
   Globe2,
   KeyRound,
   Keyboard,
   MessageSquare,
-  Minimize2,
   Minus,
   PanelLeft,
   Plus,
@@ -610,7 +610,7 @@ export function HiveoryShell() {
                 title={windowMaximized ? 'Restore' : 'Maximize'}
                 aria-label={windowMaximized ? 'Restore' : 'Maximize'}
               >
-                {windowMaximized ? <Minimize2 size={11} /> : <SquareIcon size={10} />}
+                {windowMaximized ? <Copy size={11} /> : <SquareIcon size={10} />}
               </button>
               <button
                 type="button"

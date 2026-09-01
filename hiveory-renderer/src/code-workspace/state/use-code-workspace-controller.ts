@@ -103,6 +103,17 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     }
   }, [initialWorkspaceId, loadWorkspace, state.workspaceId])
 
+  useEffect(() => {
+    const handleLayoutUpdated = (event: Event) => {
+      const layout = (event as CustomEvent<CodeWorkspaceState['layout']>).detail
+      if (!layout || layout.workspace_id !== stateRef.current.workspaceId) return
+      stateRef.current = { ...stateRef.current, layout, revision: layout.revision ?? stateRef.current.revision }
+      dispatch({ type: 'SET_LAYOUT', layout })
+    }
+    window.addEventListener('hiveory-code-layout-updated', handleLayoutUpdated)
+    return () => window.removeEventListener('hiveory-code-layout-updated', handleLayoutUpdated)
+  }, [])
+
   const applyMutation = useCallback((mutation: CodePaneMutation) => {
     const run = mutationQueueRef.current.then(async () => {
       const { workspaceId, revision } = stateRef.current
@@ -275,7 +286,10 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     async (paneId: string) => {
       const { layout } = stateRef.current
       if (!layout || layout.focused_pane_id === paneId) return
-      await applyMutation({ type: 'focus', pane_id: paneId })
+      const optimisticLayout = { ...layout, focused_pane_id: paneId }
+      stateRef.current = { ...stateRef.current, layout: optimisticLayout, focusedPaneId: paneId }
+      dispatch({ type: 'SET_LAYOUT', layout: optimisticLayout })
+      void applyMutation({ type: 'focus', pane_id: paneId })
     },
     [applyMutation]
   )

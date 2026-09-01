@@ -2581,6 +2581,24 @@ pub enum AgentExecutionTarget {
     RemoteVm,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRenameFileRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+    pub relative_path: String,
+    pub new_relative_path: String,
+    pub expected_fingerprint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeRenameFileResult {
+    pub layout: CodePaneLayout,
+    pub document: CodeDocument,
+}
+
 impl Default for AgentExecutionTarget {
     fn default() -> Self {
         Self::Desktop
@@ -3214,6 +3232,8 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeFileTree::export_all(&config)?;
     CodeReadFileRequest::export_all(&config)?;
     CodeSaveFileRequest::export_all(&config)?;
+    CodeRenameFileRequest::export_all(&config)?;
+    CodeRenameFileResult::export_all(&config)?;
     CodeDocumentSummary::export_all(&config)?;
     CodeDocument::export_all(&config)?;
     CodePaneKind::export_all(&config)?;

@@ -233,6 +233,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const [profileName, setProfileName] = useState('')
   const [pendingProfile, setPendingProfile] = useState<BrowserProfile | null>(null)
   const [pickerAction, setPickerAction] = useState<BrowserPickerAction | null>(null)
+  const [surfaceSuspended, setSurfaceSuspended] = useState(false)
   const pickerActionRef = useRef<BrowserPickerAction | null>(null)
   const [annotations, setAnnotations] = useState<BrowserPageAnnotation[]>(() => readBrowserAnnotations(browserId))
   const annotationsRef = useRef(annotations)
@@ -255,8 +256,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const syncBounds = useCallback(() => {
     if (!hiveoryClient.isTauri || !surfaceRef.current) return
     const rect = surfaceRef.current.getBoundingClientRect()
-    void hiveoryClient.browserSetBounds({ browser_id: browserId, x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(0, rect.width), height: Math.max(0, rect.height), visible: overlayMode === null && rect.width >= 1 && rect.height >= 1 }).catch(() => undefined)
-  }, [browserId, overlayMode])
+    void hiveoryClient.browserSetBounds({ browser_id: browserId, x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(0, rect.width), height: Math.max(0, rect.height), visible: overlayMode === null && !surfaceSuspended && rect.width >= 1 && rect.height >= 1 }).catch(() => undefined)
+  }, [browserId, overlayMode, surfaceSuspended])
   syncBoundsRef.current = syncBounds
 
   const setNativeVisibility = useCallback(async (visible: boolean) => {
@@ -463,6 +464,16 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       window.removeEventListener('scroll', sync, true)
     }
   }, [syncBounds])
+
+  useEffect(() => {
+    const handleSurfaceSuspension = (event: Event) => {
+      const suspended = (event as CustomEvent<{ suspended?: unknown }>).detail?.suspended === true
+      setSurfaceSuspended(suspended)
+      void setNativeVisibility(!suspended && overlayMode === null).catch(() => undefined)
+    }
+    window.addEventListener('hiveory-browser-suspend-surface', handleSurfaceSuspension)
+    return () => window.removeEventListener('hiveory-browser-suspend-surface', handleSurfaceSuspension)
+  }, [overlayMode, setNativeVisibility])
 
   const applyFallbackHistoryState = (index: number) => {
     const history = fallbackHistoryRef.current
@@ -730,6 +741,9 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     }
   }
 
+  const viewportPreset = BROWSER_VIEWPORT_PRESETS.find((item) => item.id === browserState.viewport_id) ?? BROWSER_VIEWPORT_PRESETS[0]
+  const isEmulatedViewport = viewportPreset.width > 0
+
   return (
     <div className="code-preview-container">
       <div className="code-preview-toolbar">
@@ -763,10 +777,18 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
       {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{pickerAction === 'annotate' ? annotations.length ? `${annotations.length} annotations ready. Select another element or send the feedback.` : 'Click an element to add feedback for an agent.' : 'Click or hover an element, then press C to copy or S to screenshot.'}</span><button type="button" onClick={cancelPicker}>Cancel</button></div>}
       {notice && <div className="code-preview-notice" role="status">{notice}</div>}
-      <div className="code-preview-stage">
-        <div className="code-preview-native-surface" ref={surfaceRef} aria-busy={browserState.loading} onMouseDown={() => { if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined) }}>
+      <div className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
+        <div className="code-preview-device-canvas">
+        <div
+          className="code-preview-native-surface"
+          ref={surfaceRef}
+          aria-busy={browserState.loading}
+          style={isEmulatedViewport ? { width: viewportPreset.width, height: viewportPreset.height } : undefined}
+          onMouseDown={() => { if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined) }}
+        >
           {!hiveoryClient.isTauri && <iframe key={`${browserState.url}:${iframeReloadKey}`} src={browserState.url} className="code-preview-iframe" title="Browser" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerPolicy="no-referrer" onLoad={() => setBrowserState((state) => ({ ...state, loading: false }))} />}
           {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true">{!browserState.title && !browserState.loading && <span>Browser ready</span>}</div>}
+        </div>
         </div>
 
         {overlayMode === 'menu' && (

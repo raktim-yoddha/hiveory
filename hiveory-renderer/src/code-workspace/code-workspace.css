@@ -1758,6 +1758,16 @@
   font: 11px "JetBrains Mono", Consolas, monospace;
 }
 
+.code-preview-url-bar:focus-within {
+  border-color: #66707d;
+  box-shadow: 0 0 0 2px rgba(174, 183, 194, 0.14);
+}
+
+.code-preview-url-bar input:focus,
+.code-preview-url-bar input:focus-visible {
+  outline: none !important;
+}
+
 .code-preview-loading {
   flex-shrink: 0;
   color: #8ca2b4;
@@ -5491,8 +5501,35 @@
   background: #fff;
 }
 
+.code-preview-stage.is-emulated {
+  overflow: auto;
+  background: #15181d;
+}
+
+.code-preview-device-canvas {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.code-preview-stage.is-emulated .code-preview-device-canvas {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 12px;
+}
+
 .code-preview-native-surface {
   flex: 1;
+}
+
+.code-preview-stage.is-emulated .code-preview-native-surface {
+  flex: 0 0 auto;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px #353b44, 0 16px 34px rgba(0, 0, 0, 0.35);
 }
 
 .code-preview-overlay {

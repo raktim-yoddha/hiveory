@@ -115,7 +115,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         return <CodePreviewPane key={previewSummary.id} workspaceId={state.workspaceId ?? previewSummary.workspace_id} preview={previewSummary} />
       case 'markdown':
         if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
-        return <CodeMarkdownPane workspaceId={state.workspaceId} relativePath={node.resource_id} />
+        return <CodeMarkdownPane workspaceId={state.workspaceId} relativePath={node.resource_id} paneId={node.pane_id} expectedRevision={state.revision} />
       default:
         return <div>Unsupported pane type</div>
     }

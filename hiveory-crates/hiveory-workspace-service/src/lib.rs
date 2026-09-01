@@ -506,6 +506,40 @@ impl HiveoryWorkspaceService {
         document_from_bytes(workspace_id, &normalized, content.as_bytes().to_vec())
     }
 
+    pub fn rename_file(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+        new_relative_path: &str,
+        expected_fingerprint: Option<&str>,
+    ) -> Result<CodeDocument, HiveoryWorkspaceError> {
+        self.require(workspace_id, CodeWorkspaceCapability::WriteFiles)?;
+        let source = validate_relative_path(relative_path, false).map_err(domain_path_error)?;
+        let target = validate_relative_path(new_relative_path, false).map_err(domain_path_error)?;
+        if source == target {
+            return self.read_file(workspace_id, &source);
+        }
+        let handle = self.handle(workspace_id)?;
+        let (source_parent, source_name) = open_parent_directory(&handle.root, &source)?;
+        let metadata = source_parent.symlink_metadata(&source_name)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(HiveoryWorkspaceError::SymlinkNotAllowed);
+        }
+        let bytes = source_parent.read(&source_name)?;
+        if expected_fingerprint.is_some_and(|expected| expected != fingerprint(&bytes)) {
+            return Err(HiveoryWorkspaceError::FileConflict);
+        }
+        let (target_parent, target_name) = open_parent_directory(&handle.root, &target)?;
+        if target_parent.symlink_metadata(&target_name).is_ok() {
+            return Err(HiveoryWorkspaceError::Io(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "a file already exists at the new path",
+            )));
+        }
+        source_parent.rename(&source_name, &target_parent, &target_name)?;
+        document_from_bytes(workspace_id, &target, bytes)
+    }
+
     fn handle(&self, workspace_id: &str) -> Result<WorkspaceHandle, HiveoryWorkspaceError> {
         self.workspaces
             .read()
@@ -677,6 +711,39 @@ mod tests {
                 .unwrap()
                 .content,
             "# New document\n"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn renames_a_file_without_overwriting_or_losing_its_contents() {
+        let root = std::env::temp_dir().join(format!("hiveory-code-rename-{}", Uuid::now_v7()));
+        fs::create_dir_all(&root).unwrap();
+        let service = HiveoryWorkspaceService::new();
+        let summary = service
+            .open_workspace(&root, None, CodeWorkspaceTrust::Trusted)
+            .unwrap();
+        let created = service
+            .create_file(&summary.id, "untitled.md", "# Draft\n")
+            .unwrap();
+        let renamed = service
+            .rename_file(
+                &summary.id,
+                "untitled.md",
+                "project-notes.md",
+                Some(&created.fingerprint),
+            )
+            .unwrap();
+        assert_eq!(renamed.relative_path, "project-notes.md");
+        assert_eq!(renamed.content, "# Draft\n");
+        assert!(
+            matches!(service.read_file(&summary.id, "untitled.md"), Err(HiveoryWorkspaceError::Io(error)) if error.kind() == io::ErrorKind::NotFound)
+        );
+        service
+            .create_file(&summary.id, "existing.md", "keep")
+            .unwrap();
+        assert!(
+            matches!(service.rename_file(&summary.id, "project-notes.md", "existing.md", Some(&renamed.fingerprint)), Err(HiveoryWorkspaceError::Io(error)) if error.kind() == io::ErrorKind::AlreadyExists)
         );
         let _ = fs::remove_dir_all(root);
     }

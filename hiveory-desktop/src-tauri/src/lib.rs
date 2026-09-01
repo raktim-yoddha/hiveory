@@ -58,35 +58,35 @@ use hiveory_protocol::{
     CodeGateCreateRequest, CodeGateResolveRequest, CodeGatesQuery, CodeGitBranchCheckoutRequest,
     CodeGitBranchCreateRequest, CodeGitBranchDeleteRequest, CodeGitCommitRequest, CodeGitDiff,
     CodeGitDiffRequest, CodeGitDiscardRequest, CodeGitOperationResult, CodeGitRemoteRequest,
-    CodeGitRepositoryRequest, CodeGitRepositorySummary, CodeGitStageRequest, CodeGitStashIndexRequest,
-    CodeGitStashSaveRequest, CodeGitStatus, CodeGitStatusRequest, CodeHostedIssueActionRequest,
-    CodeHostedIssueCreateRequest, CodeHostedIssueUpdateRequest, CodeHostedOperationResult,
-    CodeHostedPullRequestActionRequest,
+    CodeGitRepositoryRequest, CodeGitRepositorySummary, CodeGitStageRequest,
+    CodeGitStashIndexRequest, CodeGitStashSaveRequest, CodeGitStatus, CodeGitStatusRequest,
+    CodeHostedIssueActionRequest, CodeHostedIssueCreateRequest, CodeHostedIssueUpdateRequest,
+    CodeHostedOperationResult, CodeHostedPullRequestActionRequest,
     CodeHostedPullRequestCreateRequest, CodeHostedTracking, CodeHostedTrackingRequest,
-    CodeMailboxAckRequest, CodeMailboxDelivery,
-    CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
-    CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
-    CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
-    CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary,
-    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeReviewRequest, CodeRunCreateRequest,
-    CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest,
-    CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest, CodeTaskDeleteRequest,
-    CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent, CodeTerminalInputRequest,
-    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot, CodeTerminalSnapshotQuery,
-    CodeTerminalStartRequest, CodeTerminalStopRequest, CodeTerminalSubscribeRequest,
-    CodeTerminalSummary, CodeWorkspaceCreateRequest, CodeWorkspaceDetail,
-    CodeWorkspaceOpenInRequest, CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget,
-    CodeWorkspaceParentRequest, CodeWorkspaceQuery, CodeWorkspaceRemoveRequest,
-    CodeWorkspaceSummary, CodeWorkspaceTrust, CodeWorkspaceTrustRequest,
-    CodeWorkspaceUpdateRequest, CommandEnvelope, CreateCodePaneMarkdownRequest,
-    CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState, LaunchCodePaneTerminalRequest,
-    LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
-    PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
-    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
-    PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest, ResponseEnvelope,
-    RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
-    RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
-    SharedEventEnvelope, SharedEventKind, UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
+    CodeMailboxAckRequest, CodeMailboxDelivery, CodeMailboxQuery, CodeMailboxSendRequest,
+    CodeOrchestrationEventEnvelope, CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation,
+    CodePaneMutationRequest, CodePaneMutationResult, CodePreviewRequest, CodePreviewState,
+    CodePreviewSummary, CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest,
+    CodeProjectSummary, CodeQuestionAnswerRequest, CodeReadFileRequest, CodeRenameFileRequest,
+    CodeRenameFileResult, CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest,
+    CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
+    CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
+    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
+    CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
+    CodeTerminalStopRequest, CodeTerminalSubscribeRequest, CodeTerminalSummary,
+    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenInRequest,
+    CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest,
+    CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeWorkspaceTrustRequest, CodeWorkspaceUpdateRequest, CommandEnvelope,
+    CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState,
+    LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest,
+    OpenCodePanePreviewResult, PluginCatalogEntry, PluginConnectionCreateRequest,
+    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
+    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
+    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
+    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
+    HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
@@ -2662,6 +2662,77 @@ async fn hiveory_command_save_code_file(
         .await
         .map_err(database_error)?;
     Ok(response(&command.request_id, document))
+}
+
+#[tauri::command]
+async fn hiveory_command_rename_code_file(
+    command: CommandEnvelope<CodeRenameFileRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeRenameFileResult>, ApiError> {
+    validate_code_command(&command)?;
+    let current = foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+        .unwrap_or_else(|| default_layout(&command.payload.workspace_id));
+    if current.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            "Pane layout was modified elsewhere.",
+            RetryClass::AfterUserAction,
+        ));
+    }
+    let node = current
+        .nodes
+        .iter()
+        .find(|node| {
+            node.pane_id == command.payload.pane_id
+                && node.resource_id.as_deref() == Some(&command.payload.relative_path)
+        })
+        .ok_or_else(|| validation_error("Markdown pane no longer owns this file."))?;
+    if !matches!(node.kind, hiveory_protocol::CodePaneKind::Markdown) {
+        return Err(validation_error(
+            "Only Markdown documents can be renamed here.",
+        ));
+    }
+    let document = foundation
+        .code_workspaces
+        .rename_file(
+            &command.payload.workspace_id,
+            &command.payload.relative_path,
+            &command.payload.new_relative_path,
+            command.payload.expected_fingerprint.as_deref(),
+        )
+        .map_err(workspace_error)?;
+    let mut layout = current;
+    let pane = layout
+        .nodes
+        .iter_mut()
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .expect("validated pane");
+    pane.resource_id = Some(document.relative_path.clone());
+    pane.title = Some(
+        document
+            .relative_path
+            .rsplit('/')
+            .next()
+            .unwrap_or("untitled.md")
+            .to_owned(),
+    );
+    let layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &layout,
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(
+        &command.request_id,
+        CodeRenameFileResult { layout, document },
+    ))
 }
 
 #[tauri::command]
@@ -5649,11 +5720,9 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "Dependency checkpoints conflict and were not integrated.",
             RetryClass::AfterUserAction,
         ),
-        HiveoryGitError::InvalidInput(message) => application_error(
-            "git_request_invalid",
-            message,
-            RetryClass::AfterUserAction,
-        ),
+        HiveoryGitError::InvalidInput(message) => {
+            application_error("git_request_invalid", message, RetryClass::AfterUserAction)
+        }
         HiveoryGitError::Command { operation, .. } => application_error(
             "git_command_failed",
             format!("The Git {operation} operation failed. Check the repository and try again."),
@@ -5684,11 +5753,9 @@ fn hosted_error(error: hosted_source::HostedCommandError) -> ApiError {
             error.message(),
             RetryClass::AfterUserAction,
         ),
-        hiveory_protocol::CodeHostedAuthState::Offline => (
-            "hosted_offline",
-            error.message(),
-            RetryClass::Safe,
-        ),
+        hiveory_protocol::CodeHostedAuthState::Offline => {
+            ("hosted_offline", error.message(), RetryClass::Safe)
+        }
         hiveory_protocol::CodeHostedAuthState::RateLimited => (
             "hosted_rate_limited",
             error.message(),
@@ -6538,6 +6605,7 @@ pub fn run() {
             hiveory_query_code_file_tree,
             hiveory_query_code_file,
             hiveory_command_save_code_file,
+            hiveory_command_rename_code_file,
             hiveory_command_save_code_layout,
             hiveory_command_apply_code_pane_mutation,
             hiveory_command_launch_code_pane_terminal,

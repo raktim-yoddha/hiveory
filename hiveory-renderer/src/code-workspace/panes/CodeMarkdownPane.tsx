@@ -67,6 +67,8 @@ import { hiveoryClient, type CodeDocument } from '../../api/hiveory-client'
 interface CodeMarkdownPaneProps {
   workspaceId: string
   relativePath: string
+  paneId: string
+  expectedRevision: number
 }
 
 type MarkdownViewMode = 'rich' | 'source' | 'preview'
@@ -209,7 +211,7 @@ function normalizeLink(value: string): string {
   return `https://${value}`
 }
 
-export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath }) => {
+export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, paneId, expectedRevision }) => {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const linkPanelRef = useRef<HTMLFormElement>(null)
   const imagePanelRef = useRef<HTMLFormElement>(null)
@@ -401,6 +403,26 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       setError(reason instanceof Error ? reason.message : 'The Markdown document could not be reloaded.')
     }
   }, [relativePath, syncSourceIntoEditor, workspaceId])
+
+  const renameDocument = useCallback(async () => {
+    const current = documentRef.current
+    if (!current) return
+    const suggested = fileNameFromPath(relativePath)
+    const name = window.prompt('Rename Markdown document', suggested)?.trim()
+    if (!name || name === suggested) return
+    if (name.includes('/') || name.includes('\\') || !name.endsWith('.md')) {
+      setError('Use a Markdown filename ending in .md without folder separators.')
+      return
+    }
+    try {
+      const parent = relativePath.replaceAll('\\', '/').split('/').slice(0, -1).join('/')
+      const result = await hiveoryClient.renameCodeFile({ workspace_id: workspaceId, pane_id: paneId, expected_revision: expectedRevision, relative_path: relativePath, new_relative_path: parent ? `${parent}/${name}` : name, expected_fingerprint: current.fingerprint })
+      window.dispatchEvent(new CustomEvent('hiveory-code-layout-updated', { detail: result.layout }))
+      setStatusMessage(`Renamed to ${name}`)
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'The Markdown document could not be renamed.')
+    }
+  }, [expectedRevision, paneId, relativePath, workspaceId])
 
   const copyMarkdown = useCallback(async () => {
     const content = viewModeRef.current === 'rich' ? editorRef.current?.getMarkdown() ?? sourceRef.current : sourceRef.current
@@ -603,6 +625,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
             <div className="hiveory-markdown-header-menu" role="menu">
               <div className="hiveory-markdown-header-menu-title">{documentName}</div>
               <button type="button" role="menuitem" disabled={saving} onClick={() => { setHeaderMenuOpen(false); void saveDocument() }}><Save size={14} />{saving ? 'Saving…' : 'Save document'}</button>
+              <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void renameDocument() }}><PenLine size={14} />Rename document…</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void reloadDocument() }}><RotateCcw size={14} />Reload from disk</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); changeViewMode('preview') }}><Eye size={14} />Preview</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void shareMarkdown() }}><Share2 size={14} />Share Markdown</button>
