@@ -27,6 +27,7 @@ import {
   PRIMARY_PRESETS,
   type CodePanePresetMeta,
 } from '../model/code-layout-presets-meta'
+import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneCanvasProps {
   controller: CodeWorkspaceController
@@ -181,6 +182,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
   const { state, confirmClose, dismissConfirmClose, dismissError, applyPreset } = controller
   const { layout, maximizedPaneId, error, confirmClosePane } = state
   const [activePaneId, setActivePaneId] = useState<string | null>(null)
+  useBrowserSurfaceBlocker(Boolean(confirmClosePane || activePaneId), 'pane-canvas-overlay')
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor),

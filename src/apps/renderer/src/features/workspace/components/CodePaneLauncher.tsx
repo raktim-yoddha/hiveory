@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { CheckCircle2, ChevronRight, FileText, Globe, Terminal, X } from 'lucide-react'
 import { hiveoryClient, type CodeAdapterSummary } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
+import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneLauncherProps {
   paneId: string
@@ -23,6 +24,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   const [model, setModel] = useState('default')
   const [previewUrl, setPreviewUrl] = useState('http://localhost:3000')
   const [showUrlInput, setShowUrlInput] = useState(false)
+  useBrowserSurfaceBlocker(showCliModal, 'pane-launcher-dialog')
 
   useEffect(() => {
     let mounted = true

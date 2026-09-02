@@ -22,6 +22,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { CodePaneMenu } from './CodePaneMenu'
 import { CliBrandIcon } from './CliIcons'
+import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneHeaderProps {
   node: CodePaneNode
@@ -64,10 +65,11 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   const [isEditing, setIsEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(node.title || '')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [splitModalOpen, setSplitModalOpen] = useState(false)
+  const [splitMenuOpen, setSplitMenuOpen] = useState(false)
   const [splitSide, setSplitSide] = useState<CodePanePlacement>('right')
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+  const splitMenuRef = useRef<HTMLDivElement>(null)
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `pane:${node.pane_id}`,
     data: { paneId: node.pane_id },
@@ -102,6 +104,24 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
     return () => window.removeEventListener('hiveory-rename-focused-pane', handleRenameFocusedPane)
   }, [isFocused])
 
+  useEffect(() => {
+    if (!splitMenuOpen) return
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSplitMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [splitMenuOpen])
+
+  useBrowserSurfaceBlocker(menuOpen || splitMenuOpen, 'pane-header-menu')
+
   const handleCommitRename = () => {
     setIsEditing(false)
     const trimmed = titleValue.trim()
@@ -122,11 +142,6 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   }
 
   const showPaneActions = node.kind !== 'empty'
-
-  const setSplitLauncherOpen = (open: boolean) => {
-    setSplitModalOpen(open)
-    window.dispatchEvent(new CustomEvent('hiveory-browser-suspend-surface', { detail: { suspended: open } }))
-  }
 
   const getPaneIcon = () => {
     switch (node.kind) {
@@ -208,7 +223,10 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               className="code-pane-action-btn"
               title="More Options"
               aria-label="More Options"
-              onClick={() => setMenuOpen(!menuOpen)}
+              onClick={() => {
+                setSplitMenuOpen(false)
+                setMenuOpen(!menuOpen)
+              }}
             >
               <MoreHorizontal size={13} />
             </button>
@@ -239,15 +257,73 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>
 
-          {/* Plus Button — Triggers Centered Screen Pop-up Menu */}
-          <button
-            className="code-pane-action-btn"
-            title="Add Split Pane"
-            aria-label="Add Split Pane"
-            onClick={() => setSplitLauncherOpen(true)}
-          >
-            <Plus size={13} />
-          </button>
+          <div className="code-pane-menu-wrap" ref={splitMenuRef}>
+            <button
+              className="code-pane-action-btn"
+              title="Add Split Pane"
+              aria-label="Add Split Pane"
+              aria-haspopup="menu"
+              aria-expanded={splitMenuOpen}
+              onClick={() => {
+                setMenuOpen(false)
+                setSplitMenuOpen((open) => !open)
+              }}
+            >
+              <Plus size={13} />
+            </button>
+
+            {splitMenuOpen && (
+              <div className="code-split-dropdown" role="menu" aria-label="Add split pane">
+                <div className="code-split-dropdown-header">
+                  <span className="code-dialog-eyebrow">Add split pane</span>
+                  <span>Choose direction and pane type</span>
+                </div>
+
+                <div className="code-split-direction-tabs">
+                  <button
+                    type="button"
+                    className={`code-split-tab ${splitSide === 'right' ? 'is-active' : ''}`}
+                    onClick={() => setSplitSide('right')}
+                  >
+                    <Columns size={14} />
+                    <span>Split Right</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`code-split-tab ${splitSide === 'bottom' ? 'is-active' : ''}`}
+                    onClick={() => setSplitSide('bottom')}
+                  >
+                    <Rows size={14} />
+                    <span>Split Down</span>
+                  </button>
+                </div>
+
+                <div className="code-split-dropdown-list">
+                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'shell'); setSplitMenuOpen(false) }}>
+                    <span className="code-split-item-icon"><Terminal size={16} /></span>
+                    <span className="code-split-item-text"><span className="code-split-item-title">Terminal</span><span className="code-split-item-desc">Interactive local shell</span></span>
+                  </button>
+
+                  {adapters.map((adapter) => (
+                    <button type="button" role="menuitem" key={adapter.id} className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'coding_agent', adapter.id); setSplitMenuOpen(false) }}>
+                      <span className="code-split-item-icon"><CliBrandIcon identifier={adapter.id} size={16} /></span>
+                      <span className="code-split-item-text"><span className="code-split-item-title">{adapter.display_name}</span><span className="code-split-item-desc">Installed command-line agent</span></span>
+                    </button>
+                  ))}
+
+                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'markdown'); setSplitMenuOpen(false) }}>
+                    <span className="code-split-item-icon"><FileText size={16} /></span>
+                    <span className="code-split-item-text"><span className="code-split-item-title">Markdown</span><span className="code-split-item-desc">Create a Markdown document</span></span>
+                  </button>
+
+                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'preview', null, null, 'http://localhost:3000'); setSplitMenuOpen(false) }}>
+                    <span className="code-split-item-icon"><Globe size={16} /></span>
+                    <span className="code-split-item-text"><span className="code-split-item-title">Browser</span><span className="code-split-item-desc">Open a local app or the web</span></span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Close Button */}
           <button
@@ -261,129 +337,6 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
         </div>}
       </div>
 
-      {/* Centered Pop-up Modal for Split Pane Creation */}
-      {splitModalOpen && (
-        <div
-          className="code-launch-dialog-backdrop"
-          role="presentation"
-          onMouseDown={() => setSplitLauncherOpen(false)}
-        >
-          <div
-            className="code-split-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="code-split-modal-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="code-split-modal-header">
-              <div>
-                <span className="code-dialog-eyebrow">Workspace Split</span>
-                <h3 id="code-split-modal-title">Add Split Pane</h3>
-              </div>
-              <button
-                type="button"
-                className="code-pane-action-btn"
-                onClick={() => setSplitLauncherOpen(false)}
-                aria-label="Close"
-              >
-                <X size={15} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="code-split-direction-tabs large">
-              <button
-                type="button"
-                className={`code-split-tab ${splitSide === 'right' ? 'is-active' : ''}`}
-                onClick={() => setSplitSide('right')}
-              >
-                <Columns size={14} />
-                <span>Split Right</span>
-              </button>
-              <button
-                type="button"
-                className={`code-split-tab ${splitSide === 'bottom' ? 'is-active' : ''}`}
-                onClick={() => setSplitSide('bottom')}
-              >
-                <Rows size={14} />
-                <span>Split Down</span>
-              </button>
-            </div>
-
-            <div className="code-split-modal-list">
-              <button
-                type="button"
-                className="code-split-modal-item"
-                onClick={() => {
-                  onSplitAndLaunch(splitSide, 'shell')
-                  setSplitLauncherOpen(false)
-                }}
-              >
-                <span className="code-split-item-icon">
-                  <Terminal size={16} />
-                </span>
-                <div className="code-split-item-text">
-                  <span className="code-split-item-title">Terminal</span>
-                  <span className="code-split-item-desc">Interactive local shell</span>
-                </div>
-              </button>
-
-              {adapters.map((adapter) => (
-                <button
-                  type="button"
-                  key={adapter.id}
-                  className="code-split-modal-item"
-                  onClick={() => {
-                    onSplitAndLaunch(splitSide, 'coding_agent', adapter.id)
-                    setSplitLauncherOpen(false)
-                  }}
-                >
-                  <span className="code-split-item-icon">
-                    <CliBrandIcon identifier={adapter.id} size={16} />
-                  </span>
-                  <div className="code-split-item-text">
-                    <span className="code-split-item-title">{adapter.display_name}</span>
-                    <span className="code-split-item-desc">Installed command-line agent</span>
-                  </div>
-                </button>
-              ))}
-
-              <button
-                type="button"
-                className="code-split-modal-item"
-                onClick={() => {
-                  onSplitAndLaunch(splitSide, 'markdown')
-                  setSplitLauncherOpen(false)
-                }}
-              >
-                <span className="code-split-item-icon">
-                  <FileText size={16} />
-                </span>
-                <div className="code-split-item-text">
-                  <span className="code-split-item-title">Markdown</span>
-                  <span className="code-split-item-desc">Create a Markdown document</span>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                className="code-split-modal-item"
-                onClick={() => {
-                  onSplitAndLaunch(splitSide, 'preview', null, null, 'http://localhost:3000')
-                  setSplitLauncherOpen(false)
-                }}
-              >
-                <span className="code-split-item-icon">
-                  <Globe size={16} />
-                </span>
-                <div className="code-split-item-text">
-                  <span className="code-split-item-title">Browser</span>
-                  <span className="code-split-item-desc">Open a local app or the web</span>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

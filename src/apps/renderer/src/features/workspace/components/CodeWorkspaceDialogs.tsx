@@ -7,6 +7,7 @@ import type {
   CodeWorkspaceSummary,
   CodeWorkspaceUpdateRequest,
 } from '../../../shared/api/hiveory-client'
+import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodeWorkspaceCreateDialogProps {
   open: boolean
@@ -27,6 +28,7 @@ export const CodeWorkspaceCreateDialog: React.FC<CodeWorkspaceCreateDialogProps>
   onClose,
   onSubmit,
 }) => {
+  useBrowserSurfaceBlocker(open, 'workspace-create-dialog')
   const availableProjects = useMemo(() => projects.filter((project) => project.available), [projects])
   const [projectId, setProjectId] = useState(activeProjectId ?? availableProjects[0]?.id ?? '')
   const [name, setName] = useState('')
@@ -81,6 +83,7 @@ interface CodeProjectSettingsDialogProps {
 }
 
 export const CodeProjectSettingsDialog: React.FC<CodeProjectSettingsDialogProps> = ({ open, project, onClose }) => {
+  useBrowserSurfaceBlocker(open, 'project-settings-dialog')
   if (!open || !project) return null
 
   return (
@@ -114,6 +117,7 @@ interface CodeWorkspaceRenameDialogProps {
 }
 
 export const CodeWorkspaceRenameDialog: React.FC<CodeWorkspaceRenameDialogProps> = ({ open, workspace, busy, error, onClose, onSubmit }) => {
+  useBrowserSurfaceBlocker(open, 'workspace-rename-dialog')
   const [name, setName] = useState('')
 
   useEffect(() => {
@@ -154,6 +158,7 @@ interface CodeProjectGroupDialogProps {
 }
 
 export const CodeProjectGroupDialog: React.FC<CodeProjectGroupDialogProps> = ({ open, project, currentGroup, onClose, onSubmit }) => {
+  useBrowserSurfaceBlocker(open, 'project-group-dialog')
   const [name, setName] = useState(currentGroup ?? '')
 
   useEffect(() => {
@@ -195,6 +200,7 @@ interface CodeParentWorkspaceDialogProps {
 }
 
 export const CodeParentWorkspaceDialog: React.FC<CodeParentWorkspaceDialogProps> = ({ open, workspace, candidates, busy, error, onClose, onSubmit }) => {
+  useBrowserSurfaceBlocker(open, 'parent-workspace-dialog')
   const [parentId, setParentId] = useState('')
 
   useEffect(() => {

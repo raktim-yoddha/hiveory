@@ -26,6 +26,7 @@ import {
   hiveoryClient,
   normalizeBrowserInput,
   type BrowserCaptureEvent,
+  type BrowserBoundsRequest,
   type BrowserConfiguration,
   type BrowserEvent,
   type BrowserFrame,
@@ -39,13 +40,17 @@ import {
   BROWSER_ANNOTATION_LIMIT,
   BROWSER_VIEWPORT_PRESETS,
   browserFrameUrl,
-  browserViewportLabel,
   copyBrowserRegion,
   formatBrowserAnnotations,
   formatBrowserGrab,
   parseBrowserElementPayload,
   type BrowserPageAnnotation,
 } from '../../../browser/model/browser-models'
+import {
+  areBrowserSurfacesSuspended,
+  subscribeBrowserSurfaceSuspension,
+} from '../../../browser/model/browser-surface-coordinator'
+import { createLatestAsyncQueue, type LatestAsyncQueue } from '../../../browser/model/latest-async-queue'
 
 const BROWSER_EVENT = 'hiveory-browser-event'
 const BROWSER_CAPTURE_EVENT = 'hiveory-browser-capture-event'
@@ -234,17 +239,46 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const [profileName, setProfileName] = useState('')
   const [pendingProfile, setPendingProfile] = useState<BrowserProfile | null>(null)
   const [pickerAction, setPickerAction] = useState<BrowserPickerAction | null>(null)
-  const [surfaceSuspended, setSurfaceSuspended] = useState(false)
+  const [surfaceSuspended, setSurfaceSuspended] = useState(areBrowserSurfacesSuspended)
+  const [suspensionFrame, setSuspensionFrame] = useState<BrowserFrame | null>(null)
   const pickerActionRef = useRef<BrowserPickerAction | null>(null)
   const [annotations, setAnnotations] = useState<BrowserPageAnnotation[]>(() => readBrowserAnnotations(browserId))
   const annotationsRef = useRef(annotations)
   const [showImportHint, setShowImportHint] = useState(readImportHint)
   const onStateChangeRef = useRef(onStateChange)
   const syncBoundsRef = useRef<() => void>(() => undefined)
+  const overlayModeRef = useRef(overlayMode)
+  const surfaceSuspendedRef = useRef(surfaceSuspended)
+  const nativeVisibilityRequestedRef = useRef(true)
+  const cachedFrameRef = useRef<BrowserFrame | null>(null)
+  const boundsAnimationFrameRef = useRef<number | null>(null)
+  const boundsQueueRef = useRef<LatestAsyncQueue<BrowserBoundsRequest, boolean> | null>(null)
+  if (!boundsQueueRef.current) {
+    boundsQueueRef.current = createLatestAsyncQueue((request) => hiveoryClient.browserSetBounds(request))
+  }
   onStateChangeRef.current = onStateChange
   browserStateRef.current = browserState
   pickerActionRef.current = pickerAction
   annotationsRef.current = annotations
+  overlayModeRef.current = overlayMode
+  surfaceSuspendedRef.current = surfaceSuspended
+
+  const queueBounds = useCallback((request: BrowserBoundsRequest): Promise<boolean> => {
+    return boundsQueueRef.current!.enqueue(request)
+  }, [])
+
+  const currentBounds = useCallback((visible: boolean): BrowserBoundsRequest | null => {
+    if (!hiveoryClient.isTauri || !surfaceRef.current) return null
+    const rect = surfaceRef.current.getBoundingClientRect()
+    return {
+      browser_id: browserId,
+      x: Math.max(0, rect.left),
+      y: Math.max(0, rect.top),
+      width: Math.max(0, rect.width),
+      height: Math.max(0, rect.height),
+      visible: visible && rect.width >= 1 && rect.height >= 1,
+    }
+  }, [browserId])
 
   const applyState = useCallback((state: BrowserRuntimeState | null) => {
     if (!state) return
@@ -255,16 +289,25 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   }, [])
 
   const syncBounds = useCallback(() => {
-    if (!hiveoryClient.isTauri || !surfaceRef.current) return
-    const rect = surfaceRef.current.getBoundingClientRect()
-    void hiveoryClient.browserSetBounds({ browser_id: browserId, x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(0, rect.width), height: Math.max(0, rect.height), visible: overlayMode === null && !surfaceSuspended && rect.width >= 1 && rect.height >= 1 }).catch(() => undefined)
-  }, [browserId, overlayMode, surfaceSuspended])
+    const bounds = currentBounds(
+      nativeVisibilityRequestedRef.current && !surfaceSuspendedRef.current && overlayModeRef.current === null,
+    )
+    if (bounds) void queueBounds(bounds).catch(() => undefined)
+  }, [currentBounds, queueBounds])
   syncBoundsRef.current = syncBounds
 
   const setNativeVisibility = useCallback(async (visible: boolean) => {
-    if (!hiveoryClient.isTauri || !surfaceRef.current) return
-    const rect = surfaceRef.current.getBoundingClientRect()
-    await hiveoryClient.browserSetBounds({ browser_id: browserId, x: Math.max(0, rect.left), y: Math.max(0, rect.top), width: Math.max(0, rect.width), height: Math.max(0, rect.height), visible: visible && rect.width >= 1 && rect.height >= 1 })
+    nativeVisibilityRequestedRef.current = visible
+    const bounds = currentBounds(visible && !surfaceSuspendedRef.current)
+    if (bounds) await queueBounds(bounds)
+  }, [currentBounds, queueBounds])
+
+  const cacheBrowserFrame = useCallback(() => {
+    if (!hiveoryClient.isTauri || !browserOpenedRef.current) return
+    void hiveoryClient.browserCaptureFrame({ browser_id: browserId }).then((frame) => {
+      cachedFrameRef.current = frame
+      if (surfaceSuspendedRef.current) setSuspensionFrame(frame)
+    }).catch(() => undefined)
   }, [browserId])
 
   const syncAnnotations = useCallback((items: BrowserPageAnnotation[]) => {
@@ -302,6 +345,12 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   }, [cancelPickerSession, pickerAction])
 
   useEffect(() => {
+    if (!notice || pickerAction) return
+    const timer = window.setTimeout(() => setNotice(null), 5_000)
+    return () => window.clearTimeout(timer)
+  }, [notice, pickerAction])
+
+  useEffect(() => {
     if (!hiveoryClient.isTauri) return
     const pendingClose = closeTimersRef.current.get(browserId)
     if (pendingClose !== undefined) {
@@ -317,7 +366,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       if (event.payload.state.loading && pickerActionRef.current) {
         cancelPickerSession('Page element tool cancelled because the page changed.')
       }
-      if (!event.payload.state.loading) window.setTimeout(() => syncAnnotations(annotationsRef.current), 80)
+      if (!event.payload.state.loading) {
+        window.setTimeout(() => syncAnnotations(annotationsRef.current), 80)
+        window.setTimeout(cacheBrowserFrame, 120)
+      }
     }).then((remove) => {
       if (disposed) remove()
       else unlisten = remove
@@ -326,7 +378,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       disposed = true
       unlisten?.()
     }
-  }, [applyState, browserId, cancelPickerSession, syncAnnotations])
+  }, [applyState, browserId, cacheBrowserFrame, cancelPickerSession, syncAnnotations])
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
@@ -453,28 +505,44 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
   useLayoutEffect(() => {
     if (!hiveoryClient.isTauri || !surfaceRef.current) return
-    const sync = () => syncBounds()
-    sync()
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync)
+    const scheduleSync = () => {
+      if (boundsAnimationFrameRef.current !== null) return
+      boundsAnimationFrameRef.current = window.requestAnimationFrame(() => {
+        boundsAnimationFrameRef.current = null
+        syncBoundsRef.current()
+      })
+    }
+    scheduleSync()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleSync)
     observer?.observe(surfaceRef.current)
-    window.addEventListener('resize', sync)
-    window.addEventListener('scroll', sync, true)
+    window.addEventListener('resize', scheduleSync)
+    window.addEventListener('scroll', scheduleSync, true)
     return () => {
       observer?.disconnect()
-      window.removeEventListener('resize', sync)
-      window.removeEventListener('scroll', sync, true)
+      window.removeEventListener('resize', scheduleSync)
+      window.removeEventListener('scroll', scheduleSync, true)
+      if (boundsAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(boundsAnimationFrameRef.current)
+        boundsAnimationFrameRef.current = null
+      }
     }
-  }, [syncBounds])
+  }, [])
 
   useEffect(() => {
-    const handleSurfaceSuspension = (event: Event) => {
-      const suspended = (event as CustomEvent<{ suspended?: unknown }>).detail?.suspended === true
+    const handleSurfaceSuspension = (suspended: boolean) => {
+      surfaceSuspendedRef.current = suspended
       setSurfaceSuspended(suspended)
-      void setNativeVisibility(!suspended && overlayMode === null).catch(() => undefined)
+      if (suspended) {
+        setSuspensionFrame(cachedFrameRef.current)
+        const bounds = currentBounds(false)
+        if (bounds) void queueBounds(bounds).catch(() => undefined)
+        return
+      }
+      setSuspensionFrame(null)
+      window.requestAnimationFrame(() => syncBoundsRef.current())
     }
-    window.addEventListener('hiveory-browser-suspend-surface', handleSurfaceSuspension)
-    return () => window.removeEventListener('hiveory-browser-suspend-surface', handleSurfaceSuspension)
-  }, [overlayMode, setNativeVisibility])
+    return subscribeBrowserSurfaceSuspension(handleSurfaceSuspension)
+  }, [currentBounds, queueBounds])
 
   const applyFallbackHistoryState = (index: number) => {
     const history = fallbackHistoryRef.current
@@ -567,6 +635,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     if (hiveoryClient.isTauri) {
       try {
         frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
+        cachedFrameRef.current = frame
       } catch (error) {
         setNotice(error instanceof Error ? error.message : 'The page preview could not be captured.')
       }
@@ -598,7 +667,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     }
     pickerActionRef.current = action
     setPickerAction(action)
-    setNotice(action === 'grab' ? 'Move over the page and click an element. Press Escape to cancel.' : 'Move over the page and click an element to annotate it.')
+    setNotice(null)
     try {
       const started = await hiveoryClient.browserStartCapture({ browser_id: browserId, action })
       if (!started) {
@@ -683,6 +752,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     try {
       const next = await hiveoryClient.browserSwitchProfile({ browser_id: browserId, profile_id: profile.id })
       applyState(next)
+      window.requestAnimationFrame(() => syncBoundsRef.current())
       setNotice(`Switched to ${profile.name}.`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The profile could not be selected.')
@@ -722,7 +792,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     try {
       const next = await hiveoryClient.browserSetViewport({ browser_id: browserId, viewport_id: viewportId })
       applyState(next)
-      setNotice(`Viewport set to ${browserViewportLabel(viewportId)}.`)
+      setNotice(null)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The viewport could not be changed.')
     }
@@ -781,7 +851,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       <div className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
         <div className="code-preview-device-canvas">
         <div
-          className="code-preview-native-surface"
+          className={`code-preview-native-surface${surfaceSuspended ? ' is-suspended' : ''}`}
           ref={surfaceRef}
           aria-busy={browserState.loading}
           style={isEmulatedViewport ? { width: viewportPreset.width, height: viewportPreset.height } : undefined}
@@ -789,6 +859,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         >
           {!hiveoryClient.isTauri && <iframe key={`${browserState.url}:${iframeReloadKey}`} src={browserState.url} className="code-preview-iframe" title="Browser" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerPolicy="no-referrer" onLoad={() => setBrowserState((state) => ({ ...state, loading: false }))} />}
           {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true">{!browserState.title && !browserState.loading && <span>Browser ready</span>}</div>}
+          {hiveoryClient.isTauri && surfaceSuspended && suspensionFrame && <img className="code-preview-suspended-frame" src={browserFrameUrl(suspensionFrame)} alt="" aria-hidden="true" />}
         </div>
         </div>
 

@@ -289,6 +289,7 @@ struct BrowserEntry {
     pending_history_action: Option<HistoryAction>,
     active_interaction: Option<String>,
     annotation_channel: Option<String>,
+    visible: bool,
 }
 
 struct BrowserManagerInner {
@@ -392,6 +393,7 @@ impl BrowserManager {
             pending_history_action: None,
             active_interaction: None,
             annotation_channel: None,
+            visible: false,
         };
         let webview_for_messages = entry.webview.clone();
         self.inner
@@ -653,6 +655,7 @@ impl BrowserManager {
             pending_history_action: None,
             active_interaction: None,
             annotation_channel: None,
+            visible: false,
         };
         let message_webview = replacement.webview.clone();
         let previous = self
@@ -1417,20 +1420,26 @@ impl BrowserManagerInner {
     }
 
     fn set_bounds(&self, request: &BrowserBoundsRequest) -> Result<(), String> {
-        let webview = {
-            let entries = self
+        let should_be_visible = request.visible && request.width >= 1.0 && request.height >= 1.0;
+        let (webview, was_visible) = {
+            let mut entries = self
                 .entries
                 .lock()
                 .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
-            entries
-                .get(&request.browser_id)
-                .map(|entry| entry.webview.clone())
-                .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?
+            let entry = entries
+                .get_mut(&request.browser_id)
+                .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?;
+            let was_visible = entry.visible;
+            entry.visible = should_be_visible;
+            (entry.webview.clone(), was_visible)
         };
-        if !request.visible || request.width < 1.0 || request.height < 1.0 {
-            return webview
-                .hide()
-                .map_err(|error| format!("The Browser could not be hidden: {error}"));
+        if !should_be_visible {
+            if was_visible {
+                webview
+                    .hide()
+                    .map_err(|error| format!("The Browser could not be hidden: {error}"))?;
+            }
+            return Ok(());
         }
         webview
             .set_bounds(tauri::Rect {
@@ -1438,9 +1447,12 @@ impl BrowserManagerInner {
                 size: tauri::Size::Logical(LogicalSize::new(request.width, request.height)),
             })
             .map_err(|error| format!("The Browser could not be resized: {error}"))?;
-        webview
-            .show()
-            .map_err(|error| format!("The Browser could not be shown: {error}"))
+        if !was_visible {
+            webview
+                .show()
+                .map_err(|error| format!("The Browser could not be shown: {error}"))?;
+        }
+        Ok(())
     }
 
     fn focus(&self, browser_id: &str) -> Result<(), String> {
@@ -1472,14 +1484,22 @@ impl BrowserManagerInner {
     }
 
     fn show(&self, browser_id: &str) -> Result<(), String> {
-        let entries = self
-            .entries
-            .lock()
-            .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
-        entries
-            .get(browser_id)
-            .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?
-            .webview
+        let (webview, was_visible) = {
+            let mut entries = self
+                .entries
+                .lock()
+                .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
+            let entry = entries
+                .get_mut(browser_id)
+                .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?;
+            let was_visible = entry.visible;
+            entry.visible = true;
+            (entry.webview.clone(), was_visible)
+        };
+        if was_visible {
+            return Ok(());
+        }
+        webview
             .show()
             .map_err(|error| format!("The Browser could not be shown: {error}"))
     }

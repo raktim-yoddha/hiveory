@@ -37,6 +37,7 @@ import type { CodeWorkspaceController } from '../state/use-code-workspace-contro
 import { CliBrandIcon } from './CliIcons'
 import { CodeProjectGroupDialog } from './CodeWorkspaceDialogs'
 import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows } from '../model/code-workspace-rail-utils'
+import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodeWorkspaceRailProps {
   controller: CodeWorkspaceController
@@ -203,6 +204,10 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const [projectGroups, setProjectGroups] = useState<Record<string, string>>(() => readRailPreferences().projectGroups)
   const [workspaceFlags, setWorkspaceFlags] = useState<Record<string, WorkspaceRailFlags>>(() => readRailPreferences().workspaceFlags)
   const [actionNotice, setActionNotice] = useState<string | null>(null)
+  useBrowserSurfaceBlocker(
+    Boolean(isAddMenuOpen || openContextMenu || projectGroupDialogId),
+    'workspace-rail-overlay',
+  )
   const actionNoticeTimerRef = useRef<number | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const addMenuRef = useRef<HTMLDivElement | null>(null)

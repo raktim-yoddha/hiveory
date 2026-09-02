@@ -38,6 +38,7 @@ import { HiveoryAgent } from '../../features/agent/views/HiveoryAgent'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
 import { isHiveoryDev } from '../edition'
+import { useBrowserSurfaceBlocker } from '../../features/browser/hooks/use-browser-surface-blocker'
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -145,6 +146,10 @@ export function HiveoryShell() {
   const [updatePromptOpen, setUpdatePromptOpen] = useState(false)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updatePromptError, setUpdatePromptError] = useState<string | null>(null)
+  useBrowserSurfaceBlocker(
+    commandOpen || notificationsOpen || codeLayoutMenuOpen || updatePromptOpen,
+    'application-shell-overlay',
+  )
 
   const refresh = async () => {
     try {
