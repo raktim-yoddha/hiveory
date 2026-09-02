@@ -51,6 +51,7 @@ import {
   subscribeBrowserSurfaceSuspension,
 } from '../../../browser/model/browser-surface-coordinator'
 import { createLatestAsyncQueue, type LatestAsyncQueue } from '../../../browser/model/latest-async-queue'
+import { cancelScheduledBrowserClose, scheduleBrowserClose } from '../../../browser/model/browser-lifecycle'
 
 const BROWSER_EVENT = 'hiveory-browser-event'
 const BROWSER_CAPTURE_EVENT = 'hiveory-browser-capture-event'
@@ -222,7 +223,6 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const browserStateRef = useRef<BrowserRuntimeState>(initialBrowserState(browserId, workspaceId, initialUrlRef.current))
   const browserOpenedRef = useRef(false)
   const captureUnlistenRef = useRef<(() => void) | null>(null)
-  const closeTimersRef = useRef(new Map<string, number>())
   const [address, setAddress] = useState(initialUrlRef.current)
   const [browserState, setBrowserState] = useState(() => browserStateRef.current)
   const [notice, setNotice] = useState<string | null>(null)
@@ -352,11 +352,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
-    const pendingClose = closeTimersRef.current.get(browserId)
-    if (pendingClose !== undefined) {
-      window.clearTimeout(pendingClose)
-      closeTimersRef.current.delete(browserId)
-    }
+    cancelScheduledBrowserClose(browserId)
     let disposed = false
     let unlisten: (() => void) | null = null
     void listen<BrowserEvent>(BROWSER_EVENT, (event) => {
@@ -469,7 +465,6 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
-    const closeTimers = closeTimersRef.current
     let disposed = false
     void (async () => {
       try {
@@ -492,14 +487,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     })()
     return () => {
       disposed = true
-      const closeTimer = window.setTimeout(() => {
-        closeTimers.delete(browserId)
-        if (disposed) {
-          browserOpenedRef.current = false
-          void hiveoryClient.browserClose({ browser_id: browserId }).catch(() => undefined)
-        }
-      }, 0)
-      closeTimers.set(browserId, closeTimer)
+      scheduleBrowserClose(browserId, () => {
+        browserOpenedRef.current = false
+        void hiveoryClient.browserClose({ browser_id: browserId }).catch(() => undefined)
+      })
     }
   }, [applyState, browserId, syncAnnotations, workspaceId])
 
@@ -858,7 +849,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
           onMouseDown={() => { if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined) }}
         >
           {!hiveoryClient.isTauri && <iframe key={`${browserState.url}:${iframeReloadKey}`} src={browserState.url} className="code-preview-iframe" title="Browser" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerPolicy="no-referrer" onLoad={() => setBrowserState((state) => ({ ...state, loading: false }))} />}
-          {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true">{!browserState.title && !browserState.loading && <span>Browser ready</span>}</div>}
+          {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true" />}
           {hiveoryClient.isTauri && surfaceSuspended && suspensionFrame && <img className="code-preview-suspended-frame" src={browserFrameUrl(suspensionFrame)} alt="" aria-hidden="true" />}
         </div>
         </div>

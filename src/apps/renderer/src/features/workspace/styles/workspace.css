@@ -5529,7 +5529,7 @@
 
 .code-preview-native-surface.is-suspended,
 .code-preview-native-surface.is-suspended .code-preview-native-placeholder {
-  background: #15181d;
+  background: #f3f4f6;
 }
 
 .code-preview-suspended-frame {
@@ -5538,7 +5538,7 @@
   width: 100%;
   height: 100%;
   object-fit: fill;
-  background: #15181d;
+  background: #f3f4f6;
   user-select: none;
   pointer-events: none;
 }
@@ -5554,7 +5554,7 @@
   z-index: 20;
   inset: 0;
   overflow: hidden;
-  background: #15181d;
+  background: #f3f4f6;
 }
 
 .code-preview-overlay-image {
@@ -5564,7 +5564,7 @@
   height: 100%;
   object-fit: contain;
   object-position: center;
-  background: #15181d;
+  background: #f3f4f6;
   user-select: none;
   pointer-events: none;
 }
