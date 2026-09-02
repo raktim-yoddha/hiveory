@@ -3647,10 +3647,14 @@ async fn hiveory_command_browser_navigate(
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .navigate(&app, &command.payload)
-        .map(|state| response(&command.request_id, state))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let browser_app = app.clone();
+    let state = run_browser_on_main_thread(app, move || {
+        browser_manager.navigate(&browser_app, &request)
+    })
+    .await?;
+    Ok(response(&command.request_id, state))
 }
 
 #[tauri::command]
@@ -3660,10 +3664,13 @@ async fn hiveory_command_browser_back(
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .back(&app, &command.payload.browser_id)
-        .map(|state| response(&command.request_id, state))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let browser_id = command.payload.browser_id.clone();
+    let browser_app = app.clone();
+    let state =
+        run_browser_on_main_thread(app, move || browser_manager.back(&browser_app, &browser_id))
+            .await?;
+    Ok(response(&command.request_id, state))
 }
 
 #[tauri::command]
@@ -3673,10 +3680,14 @@ async fn hiveory_command_browser_forward(
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .forward(&app, &command.payload.browser_id)
-        .map(|state| response(&command.request_id, state))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let browser_id = command.payload.browser_id.clone();
+    let browser_app = app.clone();
+    let state = run_browser_on_main_thread(app, move || {
+        browser_manager.forward(&browser_app, &browser_id)
+    })
+    .await?;
+    Ok(response(&command.request_id, state))
 }
 
 #[tauri::command]
@@ -3686,15 +3697,20 @@ async fn hiveory_command_browser_reload(
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .reload(&app, &command.payload.browser_id)
-        .map(|state| response(&command.request_id, state))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let browser_id = command.payload.browser_id.clone();
+    let browser_app = app.clone();
+    let state = run_browser_on_main_thread(app, move || {
+        browser_manager.reload(&browser_app, &browser_id)
+    })
+    .await?;
+    Ok(response(&command.request_id, state))
 }
 
 #[tauri::command]
 async fn hiveory_command_browser_set_bounds(
     command: CommandEnvelope<BrowserBoundsRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
@@ -3712,34 +3728,36 @@ async fn hiveory_command_browser_set_bounds(
             "Browser bounds must be finite and non-negative.",
         ));
     }
-    browser
-        .set_bounds(bounds)
-        .map(|_| response(&command.request_id, true))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = bounds.clone();
+    run_browser_on_main_thread(app, move || browser_manager.set_bounds(&request)).await?;
+    Ok(response(&command.request_id, true))
 }
 
 #[tauri::command]
 async fn hiveory_command_browser_focus(
     command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .focus(&command.payload.browser_id)
-        .map(|_| response(&command.request_id, true))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let browser_id = command.payload.browser_id.clone();
+    run_browser_on_main_thread(app, move || browser_manager.focus(&browser_id)).await?;
+    Ok(response(&command.request_id, true))
 }
 
 #[tauri::command]
 async fn hiveory_command_browser_close(
     command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .close(&command.payload.browser_id)
-        .map(|_| response(&command.request_id, true))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let browser_id = command.payload.browser_id.clone();
+    run_browser_on_main_thread(app, move || browser_manager.close(&browser_id)).await?;
+    Ok(response(&command.request_id, true))
 }
 
 #[tauri::command]
@@ -3792,22 +3810,28 @@ async fn hiveory_command_browser_switch_profile(
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .switch_profile(&app, &command.payload)
-        .map(|state| response(&command.request_id, state))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let browser_app = app.clone();
+    let state = run_browser_on_main_thread(app, move || {
+        browser_manager.switch_profile(&browser_app, &request)
+    })
+    .await?;
+    Ok(response(&command.request_id, state))
 }
 
 #[tauri::command]
 async fn hiveory_command_browser_start_capture(
     command: CommandEnvelope<BrowserCaptureRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .start_capture(&command.payload)
-        .map(|started| response(&command.request_id, started))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let started =
+        run_browser_on_main_thread(app, move || browser_manager.start_capture(&request)).await?;
+    Ok(response(&command.request_id, started))
 }
 
 #[tauri::command]
@@ -3834,25 +3858,29 @@ fn hiveory_command_browser_copy_text(
 #[tauri::command]
 async fn hiveory_command_browser_cancel_capture(
     command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .cancel_capture(&command.payload)
-        .map(|cancelled| response(&command.request_id, cancelled))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let cancelled =
+        run_browser_on_main_thread(app, move || browser_manager.cancel_capture(&request)).await?;
+    Ok(response(&command.request_id, cancelled))
 }
 
 #[tauri::command]
 async fn hiveory_command_browser_sync_annotations(
     command: CommandEnvelope<BrowserAnnotationSyncRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .sync_annotations(&command.payload)
-        .map(|synced| response(&command.request_id, synced))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let synced =
+        run_browser_on_main_thread(app, move || browser_manager.sync_annotations(&request)).await?;
+    Ok(response(&command.request_id, synced))
 }
 
 #[tauri::command]
@@ -3882,13 +3910,15 @@ async fn hiveory_command_browser_set_viewport(
 #[tauri::command]
 async fn hiveory_command_browser_open_devtools(
     command: CommandEnvelope<BrowserIdRequest>,
+    app: tauri::AppHandle,
     browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<bool>, ApiError> {
     validate_code_command(&command)?;
-    browser
-        .open_devtools(&command.payload)
-        .map(|opened| response(&command.request_id, opened))
-        .map_err(browser_error)
+    let browser_manager = (*browser).clone();
+    let request = command.payload.clone();
+    let opened =
+        run_browser_on_main_thread(app, move || browser_manager.open_devtools(&request)).await?;
+    Ok(response(&command.request_id, opened))
 }
 
 #[tauri::command]
@@ -5932,6 +5962,26 @@ fn validate_preview_url(value: &str) -> Result<url::Url, ApiError> {
 
 fn browser_error(message: String) -> ApiError {
     application_error("browser_error", message, RetryClass::AfterUserAction)
+}
+
+async fn run_browser_on_main_thread<T, F>(
+    app: tauri::AppHandle,
+    operation: F,
+) -> Result<T, ApiError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    let (sender, receiver) = oneshot::channel();
+    app.run_on_main_thread(move || {
+        let _ = sender.send(operation());
+    })
+    .map_err(|error| browser_error(format!("The Browser UI task could not start: {error}")))?;
+
+    receiver
+        .await
+        .map_err(|_| browser_error("The Browser UI task was cancelled.".to_owned()))?
+        .map_err(browser_error)
 }
 
 fn workspace_error(error: HiveoryWorkspaceError) -> ApiError {

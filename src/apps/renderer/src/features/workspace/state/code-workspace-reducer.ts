@@ -24,6 +24,7 @@ export interface CodeWorkspaceState {
 
 export type CodeWorkspaceAction =
   | { type: 'SET_WORKSPACE_LOADING'; workspaceId: string }
+  | { type: 'CLEAR_WORKSPACE' }
   | { type: 'SET_WORKSPACE'; workspaceId: string; layout: CodePaneLayout; terminals: CodeTerminalSummary[]; previews: CodePreviewSummary[] }
   | { type: 'SET_LAYOUT'; layout: CodePaneLayout }
   | { type: 'SET_FOCUSED_PANE'; paneId: string }
@@ -64,6 +65,20 @@ export function codeWorkspaceReducer(
         terminals: new Map(),
         previews: new Map(),
         error: null,
+      }
+    case 'CLEAR_WORKSPACE':
+      return {
+        ...state,
+        workspaceId: null,
+        layout: null,
+        revision: 0,
+        focusedPaneId: null,
+        maximizedPaneId: null,
+        terminals: new Map(),
+        previews: new Map(),
+        isMutating: false,
+        error: null,
+        confirmClosePane: null,
       }
     case 'SET_WORKSPACE': {
       const termMap = new Map<string, CodeTerminalSummary>()

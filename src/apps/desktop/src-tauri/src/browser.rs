@@ -2226,7 +2226,6 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
 #[cfg(windows)]
 fn apply_viewport_windows(webview: &Webview, preset: &BrowserViewportPreset) -> Result<(), String> {
     let (sender, receiver) = mpsc::channel::<Result<(), String>>();
-    let sender_for_call = sender.clone();
     let method = if preset.id == DEFAULT_VIEWPORT_ID {
         "Emulation.clearDeviceMetricsOverride"
     } else {
@@ -2244,31 +2243,21 @@ fn apply_viewport_windows(webview: &Webview, preset: &BrowserViewportPreset) -> 
         .to_string()
     };
     webview
-        .with_webview(move |platform| {
+        .with_webview(move |platform| unsafe {
             let outcome = (|| -> Result<(), String> {
-                unsafe {
-                    let core = platform.controller().CoreWebView2().map_err(|error| {
-                        format!("The viewport controller is unavailable: {error}")
-                    })?;
-                    let sender_for_callback = sender.clone();
-                    let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
-                        move |status, _| {
-                            let result = status.map_err(|error| {
-                                format!("The viewport could not be applied: {error}")
-                            });
-                            let _ = sender_for_callback.send(result);
-                            Ok(())
-                        },
-                    ));
-                    let method = HSTRING::from(method);
-                    let parameters = HSTRING::from(parameters);
-                    core.CallDevToolsProtocolMethod(&method, &parameters, &handler)
-                        .map_err(|error| format!("The viewport could not be applied: {error}"))
-                }
+                let core = platform
+                    .controller()
+                    .CoreWebView2()
+                    .map_err(|error| format!("The viewport controller is unavailable: {error}"))?;
+                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
+                    move |_, _| Ok(()),
+                ));
+                let method = HSTRING::from(method);
+                let parameters = HSTRING::from(parameters);
+                core.CallDevToolsProtocolMethod(&method, &parameters, &handler)
+                    .map_err(|error| format!("The viewport could not be applied: {error}"))
             })();
-            if let Err(error) = outcome {
-                let _ = sender_for_call.send(Err(error));
-            }
+            let _ = sender.send(outcome);
         })
         .map_err(|error| format!("The viewport controller could not start: {error}"))?;
     receiver

@@ -16,6 +16,7 @@ import {
 
 export interface CodeWorkspaceController {
   state: CodeWorkspaceState
+  clearWorkspace: () => void
   loadWorkspace: (workspaceId: string) => Promise<void>
   splitPane: (paneId: string, placement?: CodePanePlacement) => Promise<void>
   splitAndLaunch: (
@@ -150,6 +151,16 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     }
     window.addEventListener('hiveory-code-layout-updated', handleLayoutUpdated)
     return () => window.removeEventListener('hiveory-code-layout-updated', handleLayoutUpdated)
+  }, [])
+
+  const clearWorkspace = useCallback(() => {
+    loadRequestRef.current += 1
+    stateRef.current = {
+      ...initialCodeWorkspaceState,
+      terminals: new Map(),
+      previews: new Map(),
+    }
+    dispatch({ type: 'CLEAR_WORKSPACE' })
   }, [])
 
   const applyMutation = useCallback((mutation: CodePaneMutation) => {
@@ -700,6 +711,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
 
   return {
     state,
+    clearWorkspace,
     loadWorkspace,
     splitPane,
     splitAndLaunch,

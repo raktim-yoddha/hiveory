@@ -18,6 +18,14 @@ test('renders structured desktop failures as actionable messages', () => {
     .toBe('The Browser could not be opened.')
 })
 
+test('does not leak generic object errors to the UI', () => {
+  const wrapped = new Error('[object Object]') as Error & { cause?: unknown }
+  wrapped.cause = { error: { message: 'The Browser could not be opened.' } }
+  expect(formatHiveoryClientError(wrapped)).toBe('The Browser could not be opened.')
+  expect(formatHiveoryClientError(new Error('[object Object]')))
+    .toBe('An unexpected desktop-host error occurred.')
+})
+
 test('uses an in-browser preview snapshot when no desktop host is present', async () => {
   await expect(hiveoryClient.setActiveMode('code')).resolves.toMatchObject({ active_mode: 'code', protocol: { major: 2 } })
 })

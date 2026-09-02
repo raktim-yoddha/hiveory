@@ -18,7 +18,7 @@ import { HiveoryCodeDashboard } from './HiveoryCodeDashboard'
 import { HiveoryCodeRoutines } from './HiveoryCodeRoutines'
 import { HiveoryCodePlugins } from './HiveoryCodePlugins'
 import { HiveoryCodeSkills } from './HiveoryCodeSkills'
-import { CodeParentWorkspaceDialog, CodeProjectSettingsDialog, CodeWorkspaceCreateDialog, CodeWorkspaceRenameDialog } from '../components/CodeWorkspaceDialogs'
+import { CodeDestructiveActionDialog, CodeParentWorkspaceDialog, CodeProjectSettingsDialog, CodeWorkspaceCreateDialog, CodeWorkspaceRenameDialog } from '../components/CodeWorkspaceDialogs'
 import { eligibleParentWorkspaces } from '../model/code-workspace-rail-utils'
 import { CodeSourcePanel } from '../components/CodeSourcePanel'
 import { CodeCoordinationPanel } from '../components/CodeCoordinationPanel'
@@ -38,6 +38,14 @@ interface HiveoryCodeWorkspaceProps {
   initialWorkspaceId?: string | null
   initialSection?: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
   children?: ReactNode
+}
+
+type PendingDestructiveAction = {
+  kind: 'workspace' | 'project'
+  id: string
+  title: string
+  description: string
+  confirmLabel: string
 }
 
 export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
@@ -60,13 +68,16 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [parentWorkspaceId, setParentWorkspaceId] = useState<string | null>(null)
   const [parentWorkspaceBusy, setParentWorkspaceBusy] = useState(false)
   const [parentWorkspaceError, setParentWorkspaceError] = useState<string | null>(null)
+  const [pendingDestructiveAction, setPendingDestructiveAction] = useState<PendingDestructiveAction | null>(null)
+  const [destructiveActionBusy, setDestructiveActionBusy] = useState(false)
+  const [destructiveActionError, setDestructiveActionError] = useState<string | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
   const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
   const contextHydratedRef = useRef(false)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
-  const { loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
+  const { clearWorkspace, loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
   const renameWorkspace = workspaces.find((workspace) => workspace.id === renameWorkspaceId) ?? null
   const parentWorkspace = workspaces.find((workspace) => workspace.id === parentWorkspaceId) ?? null
@@ -93,13 +104,14 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
           : availableWorkspace?.id ?? null
         setActiveWorkspaceId(nextId)
         if (nextId) void loadWorkspace(nextId)
+        else clearWorkspace()
       }
       return snapshot
     } catch {
       // ignore snapshot error
       return null
     }
-  }, [activeWorkspaceId, loadWorkspace])
+  }, [activeWorkspaceId, clearWorkspace, loadWorkspace])
 
   useEffect(() => {
     void refreshWorkspaces()
@@ -216,31 +228,55 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
     }
   }
 
-  const handleRemoveWorkspace = async (workspaceId: string) => {
+  const handleRemoveWorkspace = (workspaceId: string) => {
     const workspace = workspaces.find((item) => item.id === workspaceId)
     if (!workspace) return
     const message = workspace.managed_by_app
       ? `Delete "${workspace.display_name}"? Running panes will be stopped and this app-managed worktree will be permanently removed. Uncommitted changes in it will be lost.`
       : `Remove "${workspace.display_name}" from this app? Its folder and files will be kept.`
-    if (!window.confirm(message)) return
-    try {
-      await hiveoryClient.removeCodeWorkspace({ workspace_id: workspace.id, force: true })
-      await refreshWorkspaces()
-    } catch (err: unknown) {
-      setError(formatHiveoryClientError(err))
-    }
+    setDestructiveActionError(null)
+    setPendingDestructiveAction({
+      kind: 'workspace',
+      id: workspace.id,
+      title: workspace.managed_by_app ? 'Delete workspace?' : 'Remove workspace?',
+      description: message,
+      confirmLabel: workspace.managed_by_app ? 'Delete workspace' : 'Remove workspace',
+    })
   }
 
-  const handleRemoveProject = async (projectId: string) => {
+  const handleRemoveProject = (projectId: string) => {
     const project = projects.find((item) => item.id === projectId)
     if (!project) return
     const message = `Remove "${project.display_name}" from this app? Running panes will be stopped, app-managed secondary worktrees will be deleted, and the primary project folder will be preserved.`
-    if (!window.confirm(message)) return
+    setDestructiveActionError(null)
+    setPendingDestructiveAction({
+      kind: 'project',
+      id: project.id,
+      title: 'Remove project?',
+      description: message,
+      confirmLabel: 'Remove project',
+    })
+  }
+
+  const handleConfirmDestructiveAction = async () => {
+    const action = pendingDestructiveAction
+    if (!action || destructiveActionBusy) return
+    setDestructiveActionBusy(true)
+    setDestructiveActionError(null)
     try {
-      await hiveoryClient.removeCodeProject({ project_id: project.id, force: true })
+      if (action.kind === 'workspace') {
+        await hiveoryClient.removeCodeWorkspace({ workspace_id: action.id, force: true })
+      } else {
+        await hiveoryClient.removeCodeProject({ project_id: action.id, force: true })
+      }
       await refreshWorkspaces()
+      setPendingDestructiveAction(null)
     } catch (err: unknown) {
-      setError(formatHiveoryClientError(err))
+      const message = formatHiveoryClientError(err)
+      setDestructiveActionError(message)
+      setError(message)
+    } finally {
+      setDestructiveActionBusy(false)
     }
   }
 
@@ -415,6 +451,17 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         error={parentWorkspaceError}
         onClose={() => { if (!parentWorkspaceBusy) setParentWorkspaceId(null) }}
         onSubmit={(request) => void handleSetParentWorkspace(request)}
+      />
+
+      <CodeDestructiveActionDialog
+        open={pendingDestructiveAction !== null}
+        title={pendingDestructiveAction?.title ?? ''}
+        description={pendingDestructiveAction?.description ?? ''}
+        confirmLabel={pendingDestructiveAction?.confirmLabel ?? 'Confirm'}
+        busy={destructiveActionBusy}
+        error={destructiveActionError}
+        onClose={() => { if (!destructiveActionBusy) { setPendingDestructiveAction(null); setDestructiveActionError(null) } }}
+        onConfirm={() => void handleConfirmDestructiveAction()}
       />
 
     </div>

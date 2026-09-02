@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BriefcaseBusiness, FolderOpen, FolderTree, GitBranch, Layers3, Pencil, X } from 'lucide-react'
+import { AlertTriangle, BriefcaseBusiness, FolderOpen, FolderTree, GitBranch, Layers3, Pencil, X } from 'lucide-react'
 import type {
   CodeProjectSummary,
   CodeWorkspaceCreateRequest,
@@ -229,6 +229,45 @@ export const CodeParentWorkspaceDialog: React.FC<CodeParentWorkspaceDialogProps>
           <button type="button" className="code-secondary-button" onClick={onClose} disabled={busy}>Cancel</button>
           <button type="button" className="code-primary-button" onClick={() => onSubmit({ workspace_id: workspace.id, parent_workspace_id: parentId || null })} disabled={busy}>{busy ? 'Saving…' : 'Save relationship'}</button>
         </footer>
+      </section>
+    </div>
+  )
+}
+
+interface CodeDestructiveActionDialogProps {
+  open: boolean
+  title: string
+  description: string
+  confirmLabel: string
+  busy: boolean
+  error: string | null
+  onClose: () => void
+  onConfirm: () => void
+}
+
+export const CodeDestructiveActionDialog: React.FC<CodeDestructiveActionDialogProps> = ({
+  open,
+  title,
+  description,
+  confirmLabel,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}) => {
+  useBrowserSurfaceBlocker(open, 'destructive-code-action-dialog')
+  if (!open) return null
+
+  return (
+    <div className="code-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose() }}>
+      <section className="code-confirm-modal code-destructive-action-modal" role="alertdialog" aria-modal="true" aria-labelledby="code-destructive-action-title" aria-describedby="code-destructive-action-description">
+        <div className="code-confirm-heading"><AlertTriangle size={18} aria-hidden="true" /><h2 id="code-destructive-action-title">{title}</h2></div>
+        <p id="code-destructive-action-description" className="code-dialog-description">{description}</p>
+        {error && <p className="code-dialog-error" role="alert">{error}</p>}
+        <div className="code-confirm-actions">
+          <button type="button" className="code-secondary-button" onClick={onClose} disabled={busy}>Cancel</button>
+          <button type="button" className="code-danger-button" onClick={onConfirm} disabled={busy}>{busy ? 'Removing…' : confirmLabel}</button>
+        </div>
       </section>
     </div>
   )

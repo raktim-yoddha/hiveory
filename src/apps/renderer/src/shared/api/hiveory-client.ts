@@ -746,31 +746,65 @@ function previewAgentRun(request: AgentRunStartRequest): AgentRunSummary {
   return structuredClone(summary)
 }
 
-export function formatHiveoryClientError(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  if (typeof error === 'string') return error
-  if (error && typeof error === 'object') {
-    const value = error as Record<string, unknown>
-    for (const key of ['message', 'error', 'detail', 'reason']) {
-      const candidate = value[key]
-      if (typeof candidate === 'string' && candidate.trim()) return candidate
-      if (candidate && typeof candidate === 'object') {
-        const message = formatHiveoryClientError(candidate)
-        if (message && message !== 'An unexpected desktop-host error occurred.') return message
+const UNHELPFUL_ERROR_MESSAGES = new Set([
+  '',
+  '[object Object]',
+  'Error',
+  'Unknown error',
+  'An unknown error occurred.',
+])
+
+function extractHiveoryErrorMessage(error: unknown, seen = new Set<unknown>()): string | null {
+  if (error == null || seen.has(error)) return null
+  if (typeof error === 'object' || typeof error === 'function') seen.add(error)
+
+  if (error instanceof Error) {
+    const cause = extractHiveoryErrorMessage((error as Error & { cause?: unknown }).cause, seen)
+    if (cause) return cause
+    return extractHiveoryErrorMessage(error.message, seen)
+  }
+
+  if (typeof error === 'string') {
+    const message = error.trim()
+    if (UNHELPFUL_ERROR_MESSAGES.has(message)) return null
+    if ((message.startsWith('{') && message.endsWith('}')) || (message.startsWith('[') && message.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(message) as unknown
+        const nested = extractHiveoryErrorMessage(parsed, seen)
+        if (nested) return nested
+      } catch {
+        // Keep the original string when it is not valid JSON.
       }
     }
+    return message || null
+  }
+
+  if (typeof error === 'object') {
+    const value = error as Record<string, unknown>
+    for (const key of ['message', 'error', 'detail', 'reason', 'cause', 'redacted_context']) {
+      const message = extractHiveoryErrorMessage(value[key], seen)
+      if (message) return message
+    }
     try {
-      return JSON.stringify(error)
+      const serialized = JSON.stringify(error)
+      return serialized && serialized !== '{}' ? serialized : null
     } catch {
-      return 'An unexpected desktop-host error occurred.'
+      return null
     }
   }
-  return error == null ? 'An unexpected desktop-host error occurred.' : String(error)
+
+  const primitive = String(error).trim()
+  return UNHELPFUL_ERROR_MESSAGES.has(primitive) ? null : primitive || null
+}
+
+export function formatHiveoryClientError(error: unknown): string {
+  return extractHiveoryErrorMessage(error) ?? 'An unexpected desktop-host error occurred.'
 }
 
 function normalizeHiveoryClientError(error: unknown): Error {
-  if (error instanceof Error && error.message) return error
-  const normalized = new Error(formatHiveoryClientError(error))
+  const message = formatHiveoryClientError(error)
+  if (error instanceof Error && error.message === message) return error
+  const normalized = new Error(message)
   if (error && typeof error === 'object') {
     const value = error as Record<string, unknown>
     if (typeof value.code === 'string') normalized.name = value.code

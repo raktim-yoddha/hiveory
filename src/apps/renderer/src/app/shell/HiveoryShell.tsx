@@ -25,6 +25,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
+  formatHiveoryClientError,
   hiveoryClient,
   type ApplicationMode,
   type BrowserConfiguration,
@@ -981,7 +982,7 @@ function HiveorySettings({
     try {
       setMessage((await work()) ?? 'Completed.')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'The action could not be completed.')
+      setMessage(formatHiveoryClientError(error))
     } finally {
       setBusy(null)
     }

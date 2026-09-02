@@ -289,6 +289,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   }, [])
 
   const syncBounds = useCallback(() => {
+    if (!browserOpenedRef.current) return
     const bounds = currentBounds(
       nativeVisibilityRequestedRef.current && !surfaceSuspendedRef.current && overlayModeRef.current === null,
     )
@@ -298,6 +299,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
   const setNativeVisibility = useCallback(async (visible: boolean) => {
     nativeVisibilityRequestedRef.current = visible
+    if (!browserOpenedRef.current) return
     const bounds = currentBounds(visible && !surfaceSuspendedRef.current)
     if (bounds) await queueBounds(bounds)
   }, [currentBounds, queueBounds])
@@ -315,7 +317,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     void hiveoryClient.browserSyncAnnotations({
       browser_id: browserId,
       annotations: items as unknown as Record<string, unknown>[],
-    }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Browser annotations could not be displayed.'))
+    }).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
   }, [browserId])
 
   useEffect(() => {
@@ -439,7 +441,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
             setNotice('Page element context copied.')
           }
         } catch (error) {
-          setNotice(error instanceof Error ? error.message : 'The page context could not be copied.')
+          setNotice(formatHiveoryClientError(error))
         } finally {
           const activeAction = pickerActionRef.current
           if (activeAction && event.payload.action !== 'annotation-send') {
@@ -447,7 +449,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
               await hiveoryClient.browserStartCapture({ browser_id: browserId, action: activeAction })
             } catch (error) {
               setPickerAction(null)
-              setNotice(error instanceof Error ? error.message : 'The page element tool could not continue.')
+              setNotice(formatHiveoryClientError(error))
             }
           }
         }
@@ -480,7 +482,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         browserOpenedRef.current = true
         applyState(state)
         syncAnnotations(annotationsRef.current)
-        requestAnimationFrame(() => syncBoundsRef.current())
+        await setNativeVisibility(true)
       } catch (error: unknown) {
         if (!disposed) setNotice(formatHiveoryClientError(error))
       }
@@ -492,7 +494,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         void hiveoryClient.browserClose({ browser_id: browserId }).catch(() => undefined)
       })
     }
-  }, [applyState, browserId, syncAnnotations, workspaceId])
+  }, [applyState, browserId, setNativeVisibility, syncAnnotations, workspaceId])
 
   useLayoutEffect(() => {
     if (!hiveoryClient.isTauri || !surfaceRef.current) return
@@ -550,7 +552,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       const target = normalizeBrowserInput(address)
       setNotice(null)
       if (hiveoryClient.isTauri) {
-        void hiveoryClient.browserNavigate({ browser_id: browserId, url: target }).then(applyState).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'The Browser could not navigate.'))
+      void hiveoryClient.browserNavigate({ browser_id: browserId, url: target }).then(applyState).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
       } else {
         const history = fallbackHistoryRef.current
         history.entries = history.entries.slice(0, history.index + 1)
@@ -561,7 +563,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         applyFallbackHistoryState(history.index)
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The Browser address is invalid.')
+      setNotice(formatHiveoryClientError(error))
     }
   }
 
@@ -571,7 +573,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       if (history.index > 0) applyFallbackHistoryState(history.index - 1)
       return
     }
-    void hiveoryClient.browserBack({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Back navigation failed.'))
+    void hiveoryClient.browserBack({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
   }
 
   const handleForward = () => {
@@ -580,7 +582,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       if (history.index + 1 < history.entries.length) applyFallbackHistoryState(history.index + 1)
       return
     }
-    void hiveoryClient.browserForward({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Forward navigation failed.'))
+    void hiveoryClient.browserForward({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
   }
 
   const handleReload = () => {
@@ -589,7 +591,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       setIframeReloadKey((key) => key + 1)
       return
     }
-    void hiveoryClient.browserReload({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'The Browser could not reload.'))
+    void hiveoryClient.browserReload({ browser_id: browserId }).then(applyState).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
   }
 
   const closeOverlay = useCallback(() => {
@@ -628,7 +630,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
         cachedFrameRef.current = frame
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'The page preview could not be captured.')
+        setNotice(formatHiveoryClientError(error))
       }
     }
     try {
@@ -670,7 +672,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     } catch (error) {
       pickerActionRef.current = null
       setPickerAction(null)
-      setNotice(error instanceof Error ? error.message : 'The page element tool could not start.')
+      setNotice(formatHiveoryClientError(error))
     }
   }
 
@@ -700,7 +702,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       setOverlayFrame(frame)
       setOverlayMode('draw')
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The screenshot could not be captured.')
+      setNotice(formatHiveoryClientError(error))
     } finally {
       setMenuBusy(false)
     }
@@ -723,7 +725,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       closeOverlay()
       setNotice(`Created and switched to ${name}.`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The profile could not be created.')
+      setNotice(formatHiveoryClientError(error))
     } finally {
       setMenuBusy(false)
     }
@@ -746,7 +748,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       window.requestAnimationFrame(() => syncBoundsRef.current())
       setNotice(`Switched to ${profile.name}.`)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The profile could not be selected.')
+      setNotice(formatHiveoryClientError(error))
     } finally {
       setPendingProfile(null)
       setProfileDialog(null)
@@ -762,7 +764,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         setNotice(report.message)
         dismissImportHint()
       } catch (error) {
-        setNotice(error instanceof Error ? error.message : 'Cookies could not be imported.')
+        setNotice(formatHiveoryClientError(error))
       }
       return
     }
@@ -774,7 +776,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       setNotice(report.message)
       dismissImportHint()
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'Cookies could not be imported.')
+      setNotice(formatHiveoryClientError(error))
     }
   }
 
@@ -785,7 +787,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       applyState(next)
       setNotice(null)
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : 'The viewport could not be changed.')
+      setNotice(formatHiveoryClientError(error))
     }
   }
 
@@ -830,8 +832,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
           <button type="button" className={pickerAction === 'grab' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => void startPicker('grab')} title="Grab page element" aria-label="Grab page element" disabled={menuBusy}><Crosshair size={14} /></button>
           <button type="button" className={pickerAction === 'annotate' ? 'code-preview-tool-btn is-active has-badge' : 'code-preview-tool-btn has-badge'} onClick={() => void startPicker('annotate')} title="Annotate page element" aria-label="Annotate page element" disabled={menuBusy}>{annotations.length > 0 && <span className="code-preview-tool-badge">{annotations.length}</span>}<MessageSquarePlus size={14} /></button>
           <button type="button" className={overlayMode === 'draw' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => overlayMode === 'draw' ? closeOverlay() : void drawScreenshot()} title="Draw on screenshot" aria-label="Draw on screenshot" disabled={menuBusy || pickerAction !== null}><PenLine size={14} /></button>
-          <button type="button" className="code-preview-tool-btn" onClick={() => { closeOverlay(); void hiveoryClient.browserOpenDevtools({ browser_id: browserId }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'Developer tools could not open.')) }} title="Open developer tools" aria-label="Open developer tools" disabled={menuBusy}><Code2 size={14} /></button>
-          <button type="button" className="code-preview-tool-btn" onClick={() => void hiveoryClient.browserOpenExternal({ browser_id: browserId }).catch((error: unknown) => setNotice(error instanceof Error ? error.message : 'The page could not open externally.'))} title="Open in default browser" aria-label="Open in default browser" disabled={menuBusy}><ExternalLink size={14} /></button>
+          <button type="button" className="code-preview-tool-btn" onClick={() => { closeOverlay(); void hiveoryClient.browserOpenDevtools({ browser_id: browserId }).catch((error: unknown) => setNotice(formatHiveoryClientError(error))) }} title="Open developer tools" aria-label="Open developer tools" disabled={menuBusy}><Code2 size={14} /></button>
+          <button type="button" className="code-preview-tool-btn" onClick={() => void hiveoryClient.browserOpenExternal({ browser_id: browserId }).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))} title="Open in default browser" aria-label="Open in default browser" disabled={menuBusy}><ExternalLink size={14} /></button>
           <button type="button" className={overlayMode === 'menu' ? 'code-preview-tool-btn is-active' : 'code-preview-tool-btn'} onClick={() => overlayMode === 'menu' ? closeOverlay() : void openMenu()} title="Browser options" aria-label="Browser options" aria-haspopup="menu" aria-expanded={overlayMode === 'menu'} disabled={menuBusy}><Ellipsis size={16} /></button>
         </div>
         {browserState.loading && <span className="code-preview-loading" aria-label="Loading">Loading…</span>}

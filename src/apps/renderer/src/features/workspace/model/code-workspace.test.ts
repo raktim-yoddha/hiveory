@@ -91,6 +91,24 @@ describe('codeWorkspaceReducer', () => {
     expect(next.error).toBeNull()
   })
 
+  it('clears the canvas when the last workspace is removed', () => {
+    const loaded = codeWorkspaceReducer(initialCodeWorkspaceState, {
+      type: 'SET_WORKSPACE',
+      workspaceId: 'ws_1',
+      layout: sampleLayout,
+      terminals: [sampleTerminal],
+      previews: [samplePreview],
+    })
+
+    const next = codeWorkspaceReducer(loaded, { type: 'CLEAR_WORKSPACE' })
+
+    expect(next.workspaceId).toBeNull()
+    expect(next.layout).toBeNull()
+    expect(next.terminals.size).toBe(0)
+    expect(next.previews.size).toBe(0)
+    expect(next.confirmClosePane).toBeNull()
+  })
+
   it('updates layout and tracks revision with SET_LAYOUT', () => {
     const updatedLayout: CodePaneLayout = {
       ...sampleLayout,
