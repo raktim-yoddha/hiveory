@@ -865,10 +865,16 @@
 }
 
 .code-pane-drag-grip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   min-height: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  user-select: none;
+}
+
+.code-pane-drag-grip.is-editing {
   flex: 0 0 auto;
 }
 
@@ -888,6 +894,10 @@
 }
 
 .code-pane-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 600;
   color: #f3f4f6;
   font-size: 12px;
@@ -919,6 +929,8 @@
 }
 
 .code-pane-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
   background: #090a0c;
   border: 1px solid #60636a;
   border-radius: 4px;
@@ -926,6 +938,9 @@
   font-size: 12px;
   padding: 1px 6px;
   outline: none;
+  cursor: text;
+  touch-action: auto;
+  user-select: text;
 }
 
 .code-pane-body {

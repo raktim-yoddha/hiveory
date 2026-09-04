@@ -117,8 +117,12 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault()
+      e.stopPropagation()
       handleCommitRename()
     } else if (e.key === 'Escape') {
+      e.preventDefault()
+      e.stopPropagation()
       setIsEditing(false)
       setTitleValue(node.title || '')
     }
@@ -170,13 +174,26 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             ref={setActivatorNodeRef}
             {...attributes}
             {...listeners}
-            className={`code-pane-drag-grip code-pane-drag-handle ${isDragging ? 'is-dragging' : ''}`}
+            className={`code-pane-drag-grip code-pane-drag-handle ${isDragging ? 'is-dragging' : ''} ${isEditing ? 'is-editing' : ''}`}
             data-dragging={isDragging ? 'true' : 'false'}
-            title="Drag to move pane"
+            title={isEditing ? 'Drag to move pane' : 'Hold and drag to move pane'}
             aria-label="Drag pane"
           >
             <span className="code-live-dot" />
             <span className="code-pane-header-icon">{getPaneIcon()}</span>
+
+            {!isEditing && (
+              <span
+                className="code-pane-title"
+                onDoubleClick={(e) => {
+                  e.stopPropagation()
+                  setIsEditing(true)
+                }}
+                title="Double-click or press F2 to rename"
+              >
+                {node.title || defaultTitle()}
+              </span>
+            )}
           </span>
 
           {isEditing ? (
@@ -191,18 +208,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             />
-          ) : (
-            <span
-              className="code-pane-title"
-              onDoubleClick={(e) => {
-                e.stopPropagation()
-                setIsEditing(true)
-              }}
-              title="Double-click or press F2 to rename"
-            >
-              {node.title || defaultTitle()}
-            </span>
-          )}
+          ) : null}
         </div>
 
         {showPaneActions && <div className="code-pane-header-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
