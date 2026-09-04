@@ -1015,6 +1015,22 @@ pub struct OpenCodePanePreviewResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct OpenCodePaneMarkdownRequest {
+    pub workspace_id: String,
+    pub pane_id: String,
+    pub expected_revision: u64,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OpenCodePaneMarkdownResult {
+    pub layout: CodePaneLayout,
+    pub document: CodeDocument,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CreateCodePaneMarkdownRequest {
     pub workspace_id: String,
     pub pane_id: String,
@@ -3245,6 +3261,8 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     LaunchCodePaneTerminalResult::export_all(&config)?;
     OpenCodePanePreviewRequest::export_all(&config)?;
     OpenCodePanePreviewResult::export_all(&config)?;
+    OpenCodePaneMarkdownRequest::export_all(&config)?;
+    OpenCodePaneMarkdownResult::export_all(&config)?;
     CreateCodePaneMarkdownRequest::export_all(&config)?;
     CreateCodePaneMarkdownResult::export_all(&config)?;
     CloseCodePaneRequest::export_all(&config)?;

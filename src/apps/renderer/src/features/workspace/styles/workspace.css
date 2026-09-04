@@ -850,11 +850,7 @@
   padding: 0 10px;
   user-select: none;
   z-index: 5;
-  cursor: grab;
-}
-
-.code-pane-header:active {
-  cursor: grabbing;
+  cursor: default;
 }
 
 .code-pane-header-left {
@@ -868,8 +864,15 @@
   color: #e5e7eb;
 }
 
-.code-pane-drag-handle {
+.code-pane-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 100%;
+  flex: 0 0 auto;
+}
+
+.code-pane-drag-handle {
   cursor: grab;
   touch-action: none;
 }
@@ -2056,16 +2059,13 @@
 
 /* Anchored split-pane dropdown */
 .code-split-dropdown {
-  position: absolute;
-  z-index: 250;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  z-index: 1000;
   background: #141518;
   border: 1px solid #23252b;
   border-radius: 10px;
   padding: 9px;
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 54px));
+  box-sizing: border-box;
   overflow: hidden;
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.68), 0 0 0 1px rgba(255, 255, 255, 0.05);
   display: flex;
@@ -2097,8 +2097,68 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 390px;
+  min-height: 0;
+  flex: 1 1 auto;
   overflow-y: auto;
+}
+
+.code-split-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 9px;
+  color: #858b96;
+  background: #0d0e11;
+  border: 1px solid #252832;
+  border-radius: 7px;
+}
+
+.code-split-search:focus-within {
+  color: #d6d9df;
+  border-color: #60636a;
+  box-shadow: 0 0 0 2px rgba(189, 189, 189, .12);
+}
+
+.code-split-search input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  color: #f1f2f4;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 12px/1.2 Inter, system-ui, sans-serif;
+}
+
+.code-split-search input::placeholder {
+  color: #6d727c;
+}
+
+.code-split-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: #8b909a;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.code-split-search button:hover {
+  color: #ffffff;
+  background: #252832;
+}
+
+.code-split-search-empty {
+  padding: 18px 12px;
+  color: #858b96;
+  text-align: center;
+  font-size: 12px;
 }
 
 .code-split-modal-item {
@@ -2119,7 +2179,6 @@
 .code-split-modal-item:hover {
   background: #1d1e24;
   border-color: #60636a;
-  transform: translateY(-1px);
 }
 
 .code-split-item-icon {
@@ -6366,12 +6425,218 @@
 }
 
 .hiveory-markdown-document-path {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 8px;
+  overflow: visible;
+  color: #a9a9a9;
+  font: 13px/1.2 "JetBrains Mono", Consolas, monospace;
+}
+
+.hiveory-markdown-document-name-group {
   display: flex;
   align-items: center;
   min-width: 0;
+  gap: 6px;
+}
+
+.hiveory-markdown-document-name {
+  max-width: min(260px, 34vw);
+  padding: 3px 5px;
+  overflow: hidden;
+  color: #d8d8d8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: text;
+  font: inherit;
+}
+
+.hiveory-markdown-document-name:hover,
+.hiveory-markdown-document-name:focus-visible {
+  color: #ffffff;
+  background: #252525;
+  border-color: #4b4b4b;
+  outline: none;
+}
+
+.hiveory-markdown-document-directory {
+  min-width: 0;
+  overflow: hidden;
+  color: #707070;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.hiveory-markdown-name-input {
+  width: min(240px, 34vw);
+  min-width: 90px;
+  padding: 3px 6px;
+  color: #f2f2f2;
+  background: #101010;
+  border: 1px solid #6d6d6d;
+  border-radius: 5px;
+  outline: none;
+  font: inherit;
+}
+
+.hiveory-markdown-name-input:focus {
+  border-color: #bdbdbd;
+  box-shadow: 0 0 0 2px rgba(189, 189, 189, .14);
+}
+
+.hiveory-markdown-file-picker-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: #888888;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.hiveory-markdown-file-picker-button:hover,
+.hiveory-markdown-file-picker-button.is-active {
+  color: #f2f2f2;
+  background: #343434;
+  border-color: #4b4b4b;
+}
+
+.hiveory-markdown-file-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(440px, calc(100vh - 80px));
+  gap: 6px;
+  padding: 8px;
+  overflow: hidden;
+  background: #151515;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .48), 0 2px 8px rgba(0, 0, 0, .34);
+}
+
+.hiveory-markdown-file-menu-title {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  color: #a9a9a9;
-  font: 13px/1.2 "JetBrains Mono", Consolas, monospace;
+  padding: 3px 5px;
+  color: #d7d7d7;
+  font: 600 12px/1.2 Inter, system-ui, sans-serif;
+}
+
+.hiveory-markdown-file-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 8px;
+  color: #858585;
+  background: #0e0e0e;
+  border: 1px solid #343434;
+  border-radius: 6px;
+}
+
+.hiveory-markdown-file-search:focus-within {
+  color: #dddddd;
+  border-color: #6b6b6b;
+}
+
+.hiveory-markdown-file-search input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  color: #eeeeee;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: 12px/1.2 Inter, system-ui, sans-serif;
+}
+
+.hiveory-markdown-file-search input::placeholder {
+  color: #707070;
+}
+
+.hiveory-markdown-file-create,
+.hiveory-markdown-file-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 31px;
+  gap: 8px;
+  padding: 0 8px;
+  color: #dcdcdc;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font: 12px/1.2 Inter, system-ui, sans-serif;
+}
+
+.hiveory-markdown-file-create {
+  color: #f0f0f0;
+  background: #292929;
+}
+
+.hiveory-markdown-file-create:hover,
+.hiveory-markdown-file-item:hover,
+.hiveory-markdown-file-item.is-current {
+  color: #ffffff;
+  background: #373737;
+}
+
+.hiveory-markdown-file-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hiveory-markdown-file-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.hiveory-markdown-file-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 16px 8px;
+  color: #858585;
+  text-align: center;
+  font: 11px/1.3 Inter, system-ui, sans-serif;
+}
+
+.hiveory-markdown-file-state.is-error {
+  color: #f1a4a4;
+}
+
+.hiveory-markdown-spin {
+  animation: hiveory-markdown-spin 1s linear infinite;
+}
+
+@keyframes hiveory-markdown-spin {
+  to { transform: rotate(360deg); }
 }
 
 .hiveory-markdown-document-path span:not(.hiveory-markdown-dirty-dot) {

@@ -7,8 +7,6 @@ import {
   Minimize2,
   MoreHorizontal,
   X,
-  Columns,
-  Rows,
   Terminal,
   FileText,
   LayoutTemplate,
@@ -21,6 +19,7 @@ import {
   type CodeTerminalState,
 } from '../../../shared/api/hiveory-client'
 import { CodePaneMenu } from './CodePaneMenu'
+import { CodeSplitPanePicker } from './CodeSplitPanePicker'
 import { CliBrandIcon } from './CliIcons'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
@@ -66,11 +65,11 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   const [titleValue, setTitleValue] = useState(node.title || '')
   const [menuOpen, setMenuOpen] = useState(false)
   const [splitMenuOpen, setSplitMenuOpen] = useState(false)
-  const [splitSide, setSplitSide] = useState<CodePanePlacement>('right')
+  const [splitSide, setSplitSide] = useState<Extract<CodePanePlacement, 'right' | 'bottom'>>('right')
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
-  const splitMenuRef = useRef<HTMLDivElement>(null)
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const splitTriggerRef = useRef<HTMLButtonElement>(null)
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: `pane:${node.pane_id}`,
     data: { paneId: node.pane_id },
   })
@@ -103,22 +102,6 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
     window.addEventListener('hiveory-rename-focused-pane', handleRenameFocusedPane)
     return () => window.removeEventListener('hiveory-rename-focused-pane', handleRenameFocusedPane)
   }, [isFocused])
-
-  useEffect(() => {
-    if (!splitMenuOpen) return
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!splitMenuRef.current?.contains(event.target as Node)) setSplitMenuOpen(false)
-    }
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSplitMenuOpen(false)
-    }
-    document.addEventListener('pointerdown', closeOnOutsidePointer)
-    document.addEventListener('keydown', closeOnEscape)
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointer)
-      document.removeEventListener('keydown', closeOnEscape)
-    }
-  }, [splitMenuOpen])
 
   useBrowserSurfaceBlocker(menuOpen || splitMenuOpen, 'pane-header-menu')
 
@@ -181,14 +164,20 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       >
         <div
           ref={setNodeRef}
-          {...attributes}
-          {...listeners}
-          className={`code-pane-header-left code-pane-drag-handle ${isDragging ? 'is-dragging' : ''}`}
-          data-dragging={isDragging ? 'true' : 'false'}
-          title="Drag to move pane"
+          className="code-pane-header-left"
         >
-          <span className="code-live-dot" />
-          <span className="code-pane-header-icon">{getPaneIcon()}</span>
+          <span
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            className={`code-pane-drag-grip code-pane-drag-handle ${isDragging ? 'is-dragging' : ''}`}
+            data-dragging={isDragging ? 'true' : 'false'}
+            title="Drag to move pane"
+            aria-label="Drag pane"
+          >
+            <span className="code-live-dot" />
+            <span className="code-pane-header-icon">{getPaneIcon()}</span>
+          </span>
 
           {isEditing ? (
             <input
@@ -257,8 +246,9 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             {isMaximized ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
           </button>
 
-          <div className="code-pane-menu-wrap" ref={splitMenuRef}>
+          <div className="code-pane-menu-wrap">
             <button
+              ref={splitTriggerRef}
               className="code-pane-action-btn"
               title="Add Split Pane"
               aria-label="Add Split Pane"
@@ -271,59 +261,17 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             >
               <Plus size={13} />
             </button>
-
-            {splitMenuOpen && (
-              <div className="code-split-dropdown" role="menu" aria-label="Add split pane">
-                <div className="code-split-dropdown-header">
-                  <span className="code-dialog-eyebrow">Add split pane</span>
-                  <span>Choose direction and pane type</span>
-                </div>
-
-                <div className="code-split-direction-tabs">
-                  <button
-                    type="button"
-                    className={`code-split-tab ${splitSide === 'right' ? 'is-active' : ''}`}
-                    onClick={() => setSplitSide('right')}
-                  >
-                    <Columns size={14} />
-                    <span>Split Right</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`code-split-tab ${splitSide === 'bottom' ? 'is-active' : ''}`}
-                    onClick={() => setSplitSide('bottom')}
-                  >
-                    <Rows size={14} />
-                    <span>Split Down</span>
-                  </button>
-                </div>
-
-                <div className="code-split-dropdown-list">
-                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'shell'); setSplitMenuOpen(false) }}>
-                    <span className="code-split-item-icon"><Terminal size={16} /></span>
-                    <span className="code-split-item-text"><span className="code-split-item-title">Terminal</span><span className="code-split-item-desc">Interactive local shell</span></span>
-                  </button>
-
-                  {adapters.map((adapter) => (
-                    <button type="button" role="menuitem" key={adapter.id} className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'coding_agent', adapter.id); setSplitMenuOpen(false) }}>
-                      <span className="code-split-item-icon"><CliBrandIcon identifier={adapter.id} size={16} /></span>
-                      <span className="code-split-item-text"><span className="code-split-item-title">{adapter.display_name}</span><span className="code-split-item-desc">Installed command-line agent</span></span>
-                    </button>
-                  ))}
-
-                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'markdown'); setSplitMenuOpen(false) }}>
-                    <span className="code-split-item-icon"><FileText size={16} /></span>
-                    <span className="code-split-item-text"><span className="code-split-item-title">Markdown</span><span className="code-split-item-desc">Create a Markdown document</span></span>
-                  </button>
-
-                  <button type="button" role="menuitem" className="code-split-modal-item" onClick={() => { onSplitAndLaunch(splitSide, 'preview', null, null, 'http://localhost:3000'); setSplitMenuOpen(false) }}>
-                    <span className="code-split-item-icon"><Globe size={16} /></span>
-                    <span className="code-split-item-text"><span className="code-split-item-title">Browser</span><span className="code-split-item-desc">Open a local app or the web</span></span>
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
+
+          <CodeSplitPanePicker
+            open={splitMenuOpen}
+            anchorRef={splitTriggerRef}
+            splitSide={splitSide}
+            adapters={adapters}
+            onSplitSideChange={(side) => setSplitSide(side)}
+            onSelect={(kind, adapterId, url) => onSplitAndLaunch(splitSide, kind, adapterId, null, url)}
+            onClose={() => setSplitMenuOpen(false)}
+          />
 
           {/* Close Button */}
           <button

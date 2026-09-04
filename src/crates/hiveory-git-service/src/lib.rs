@@ -20,10 +20,12 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{Arc, Condvar, Mutex, OnceLock},
+    time::Duration,
 };
 use thiserror::Error;
 
 const MAX_DIFF_BYTES: usize = 2 * 1024 * 1024;
+const WORKTREE_CLEANUP_ATTEMPTS: usize = 8;
 
 static GIT_OPERATION_LANES: OnceLock<Mutex<HashMap<PathBuf, Arc<GitOperationLane>>>> =
     OnceLock::new();
@@ -65,6 +67,8 @@ pub enum HiveoryGitError {
     WorktreeDirty(String),
     #[error("the managed worktree is locked")]
     WorktreeLocked,
+    #[error("the managed worktree is still in use: {path}: {detail}")]
+    WorktreeBusy { path: PathBuf, detail: String },
     #[error("the repository has no commit to use as a base")]
     MissingHead,
     #[error("the checkpoint merge has conflicts in: {0}")]
@@ -1109,8 +1113,83 @@ impl HiveoryGitService {
         }
         args.push("--".to_owned());
         args.push(inspection.path.to_string_lossy().into_owned());
-        self.run_git(repository_root, "worktree remove", &args)?;
-        Ok(())
+        match self.run_worktree_remove_with_retry(repository_root, &args, &inspection.path) {
+            Ok(()) => {
+                // Git can remove its administrative registration while a
+                // Windows process still has a file in the managed directory
+                // open. Force cleanup owns this directory, so finish the
+                // removal with the same bounded retry policy used for stale
+                // registrations.
+                if inspection.path.exists() {
+                    if force {
+                        remove_managed_directory(&inspection.path)?;
+                    } else {
+                        return Err(HiveoryGitError::WorktreeBusy {
+                            path: inspection.path,
+                            detail: "Git removed the worktree registration but the directory is still present.".to_owned(),
+                        });
+                    }
+                }
+                Ok(())
+            }
+            Err(error @ HiveoryGitError::WorktreeBusy { .. }) if force => {
+                // A partially completed `git worktree remove` may already
+                // have deleted the registration. Verify that state before
+                // touching the directory so a user-owned path can never be
+                // mistaken for an app-managed worktree.
+                if !self.has_worktree_registration(repository_root, name)? {
+                    remove_managed_directory(&inspection.path)?;
+                    let _ = self.run_git(
+                        repository_root,
+                        "worktree prune",
+                        &["worktree".to_owned(), "prune".to_owned()],
+                    );
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn run_worktree_remove_with_retry(
+        &self,
+        repository_root: &Path,
+        args: &[String],
+        worktree_path: &Path,
+    ) -> Result<(), HiveoryGitError> {
+        for attempt in 0..WORKTREE_CLEANUP_ATTEMPTS {
+            match self.run_git(repository_root, "worktree remove", args) {
+                Ok(_) => return Ok(()),
+                Err(HiveoryGitError::Command { operation, detail })
+                    if is_transient_git_detail(&detail) =>
+                {
+                    if attempt + 1 == WORKTREE_CLEANUP_ATTEMPTS {
+                        return Err(HiveoryGitError::WorktreeBusy {
+                            path: worktree_path.to_path_buf(),
+                            detail: format!("Git {operation} failed: {detail}"),
+                        });
+                    }
+                    std::thread::sleep(worktree_cleanup_retry_delay(attempt));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        unreachable!("worktree cleanup retry loop always returns")
+    }
+
+    fn has_worktree_registration(
+        &self,
+        repository_root: &Path,
+        name: &str,
+    ) -> Result<bool, HiveoryGitError> {
+        let repository = self.open_repository(repository_root)?;
+        match repository.find_worktree(name) {
+            Ok(_) => Ok(true),
+            Err(error) if error.code() == git2::ErrorCode::NotFound => Ok(false),
+            Err(error) => Err(HiveoryGitError::Git(error)),
+        }
     }
 
     pub fn unlock_worktree(
@@ -1507,6 +1586,9 @@ fn remove_managed_directory(path: &Path) -> Result<(), HiveoryGitError> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if is_transient_filesystem_error(&error) => {
+            return Err(worktree_busy(path, error));
+        }
         Err(error) => return Err(HiveoryGitError::Io(error)),
     };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -1514,8 +1596,61 @@ fn remove_managed_directory(path: &Path) -> Result<(), HiveoryGitError> {
             "The stale managed worktree path is not a directory and was not removed.".to_owned(),
         ));
     }
-    fs::remove_dir_all(path)?;
-    Ok(())
+    for attempt in 0..WORKTREE_CLEANUP_ATTEMPTS {
+        match fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(error) if is_transient_filesystem_error(&error) => {
+                if attempt + 1 == WORKTREE_CLEANUP_ATTEMPTS {
+                    return Err(worktree_busy(path, error));
+                }
+                std::thread::sleep(worktree_cleanup_retry_delay(attempt));
+            }
+            Err(error) => return Err(HiveoryGitError::Io(error)),
+        }
+    }
+    unreachable!("managed directory cleanup retry loop always returns")
+}
+
+fn worktree_busy(path: &Path, error: io::Error) -> HiveoryGitError {
+    HiveoryGitError::WorktreeBusy {
+        path: path.to_path_buf(),
+        detail: error.to_string(),
+    }
+}
+
+fn is_transient_filesystem_error(error: &io::Error) -> bool {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        return true;
+    }
+    matches!(error.raw_os_error(), Some(1 | 5 | 16 | 32 | 39 | 145))
+}
+
+fn is_transient_git_detail(detail: &str) -> bool {
+    let detail = detail.to_ascii_lowercase();
+    [
+        "being used by another process",
+        "access is denied",
+        "permission denied",
+        "directory not empty",
+        "could not remove",
+        "operation not permitted",
+        "resource busy",
+        "cannot lock",
+    ]
+    .iter()
+    .any(|marker| detail.contains(marker))
+}
+
+fn worktree_cleanup_retry_delay(attempt: usize) -> Duration {
+    Duration::from_millis(match attempt {
+        0 => 150,
+        1 => 250,
+        2 => 500,
+        3 => 1_000,
+        4 => 2_000,
+        _ => 500,
+    })
 }
 
 fn command_message(output: String, fallback: &str) -> String {

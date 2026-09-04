@@ -78,14 +78,14 @@ use hiveory_protocol::{
     CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
     CodeWorkspaceTrustRequest, CodeWorkspaceUpdateRequest, CommandEnvelope,
     CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState,
-    LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePanePreviewRequest,
-    OpenCodePanePreviewResult, PluginCatalogEntry, PluginConnectionCreateRequest,
-    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
-    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest,
-    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
-    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
-    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
-    HIVEORY_PROTOCOL_VERSION,
+    LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePaneMarkdownRequest,
+    OpenCodePaneMarkdownResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
+    PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
+    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
+    PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest, ResponseEnvelope,
+    RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
+    RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
+    SharedEventEnvelope, SharedEventKind, UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
@@ -1117,18 +1117,45 @@ impl HiveoryFoundation {
         for terminal in terminals {
             if self
                 .terminal_host
-                .stop(&CodeTerminalStopRequest {
-                    terminal_id: terminal.id.clone(),
-                    force: true,
-                })
+                .stop_and_wait(
+                    &CodeTerminalStopRequest {
+                        terminal_id: terminal.id.clone(),
+                        force: true,
+                    },
+                    terminal.pid,
+                )
                 .await
                 .map_err(terminal_host_error)?
             {
-                // The host writes the terminal state before acknowledging the
-                // stop, so the next workspace load sees the same state.
+                // Destructive stops wait for both the host reader and the
+                // native process so Git never races a live PTY.
             }
         }
         Ok(())
+    }
+
+    async fn release_code_workspace_handles(
+        &self,
+        workspaces: &[CodeWorkspaceSummary],
+    ) -> Result<(), ApiError> {
+        for workspace in workspaces {
+            match self.code_workspaces.close_workspace(&workspace.id) {
+                Ok(_) | Err(HiveoryWorkspaceError::NotFound) => {}
+                Err(error) => return Err(workspace_error(error)),
+            }
+        }
+        Ok(())
+    }
+
+    async fn restore_code_workspace_handles(&self, workspaces: &[CodeWorkspaceSummary]) {
+        for workspace in workspaces {
+            if !Path::new(&workspace.root_path).is_dir()
+                || self.code_workspaces.summary(&workspace.id).is_ok()
+            {
+                continue;
+            }
+            let _ = self.reopen_persisted_code_workspace(workspace).await;
+        }
     }
 
     async fn remove_code_workspace(
@@ -1167,12 +1194,41 @@ impl HiveoryFoundation {
             ));
         }
 
-        self.stop_code_workspace_terminals(&summary.id).await?;
-        if summary.managed_by_app {
-            let worktree_name = summary.worktree_name.as_deref().ok_or_else(|| {
+        let worktree_name = if summary.managed_by_app {
+            Some(summary.worktree_name.as_deref().ok_or_else(|| {
                 validation_error("The managed workspace has no Git worktree identity.")
-            })?;
-            self.code_git
+            })?)
+        } else {
+            None
+        };
+        self.stop_code_workspace_terminals(&summary.id).await?;
+        let mut project_workspaces = self
+            .persistence
+            .code_workspaces()
+            .await
+            .map_err(database_error)?
+            .into_iter()
+            .filter(|workspace| {
+                workspace.project_id == project.id || workspace.id == project.primary_workspace_id
+            })
+            .collect::<Vec<_>>();
+        if !project_workspaces
+            .iter()
+            .any(|workspace| workspace.id == summary.id)
+        {
+            project_workspaces.push(summary.clone());
+        }
+        if let Err(error) = self
+            .release_code_workspace_handles(&project_workspaces)
+            .await
+        {
+            self.restore_code_workspace_handles(&project_workspaces)
+                .await;
+            return Err(error);
+        }
+        if let Some(worktree_name) = worktree_name {
+            let removal = self
+                .code_git
                 .remove_worktree(
                     Path::new(&project.root_path),
                     worktree_name,
@@ -1180,8 +1236,21 @@ impl HiveoryFoundation {
                     &self.code_workspaces_root,
                     request.force,
                 )
-                .map_err(git_error)?;
+                .map_err(git_error);
+            if let Err(error) = removal {
+                self.restore_code_workspace_handles(&project_workspaces)
+                    .await;
+                return Err(error);
+            }
         }
+
+        let surviving_workspaces = project_workspaces
+            .iter()
+            .filter(|workspace| workspace.id != summary.id)
+            .cloned()
+            .collect::<Vec<_>>();
+        self.restore_code_workspace_handles(&surviving_workspaces)
+            .await;
 
         // Removing a parent must not leave dangling hierarchy metadata in the
         // in-memory service. SQLite also clears the foreign key on delete, but
@@ -1205,7 +1274,6 @@ impl HiveoryFoundation {
             }
         }
 
-        let _ = self.code_workspaces.close_workspace(&summary.id);
         self.persistence
             .delete_code_workspace(&summary.id)
             .await
@@ -1221,6 +1289,7 @@ impl HiveoryFoundation {
                 .code_active_workspace_id
                 .write()
                 .map_err(|_| unavailable_error())? = Some(project.primary_workspace_id.clone());
+            self.persist_code_workspace_context().await?;
         }
         self.audit
             .record(
@@ -1265,16 +1334,34 @@ impl HiveoryFoundation {
             .collect::<Vec<_>>();
 
         for workspace in &workspaces {
-            self.stop_code_workspace_terminals(&workspace.id).await?;
+            if workspace.managed_by_app
+                && workspace.id != project.primary_workspace_id
+                && workspace.worktree_name.is_none()
+            {
+                return Err(validation_error(
+                    "A managed workspace has no Git worktree identity.",
+                ));
+            }
         }
         for workspace in &workspaces {
-            if !workspace.managed_by_app {
+            self.stop_code_workspace_terminals(&workspace.id).await?;
+        }
+        if let Err(error) = self.release_code_workspace_handles(&workspaces).await {
+            self.restore_code_workspace_handles(&workspaces).await;
+            return Err(error);
+        }
+        for workspace in &workspaces {
+            if !workspace.managed_by_app || workspace.id == project.primary_workspace_id {
                 continue;
             }
-            let worktree_name = workspace.worktree_name.as_deref().ok_or_else(|| {
-                validation_error("A managed workspace has no Git worktree identity.")
-            })?;
-            self.code_git
+            let Some(worktree_name) = workspace.worktree_name.as_deref() else {
+                self.restore_code_workspace_handles(&workspaces).await;
+                return Err(validation_error(
+                    "A managed workspace has no Git worktree identity.",
+                ));
+            };
+            let removal = self
+                .code_git
                 .remove_worktree(
                     Path::new(&project.root_path),
                     worktree_name,
@@ -1282,11 +1369,23 @@ impl HiveoryFoundation {
                     &self.code_workspaces_root,
                     request.force,
                 )
-                .map_err(git_error)?;
+                .map_err(git_error);
+            if let Err(error) = removal {
+                self.restore_code_workspace_handles(&workspaces).await;
+                return Err(error);
+            }
+            // Commit each completed worktree stage so a later failure leaves
+            // the project and only the remaining workspace records intact.
+            self.persistence
+                .delete_code_workspace(&workspace.id)
+                .await
+                .map_err(database_error)?;
         }
 
         for workspace in &workspaces {
-            let _ = self.code_workspaces.close_workspace(&workspace.id);
+            if workspace.managed_by_app && workspace.id != project.primary_workspace_id {
+                continue;
+            }
             self.persistence
                 .delete_code_workspace(&workspace.id)
                 .await
@@ -4431,6 +4530,144 @@ async fn hiveory_command_open_code_pane_preview(
 }
 
 #[tauri::command]
+async fn hiveory_command_open_code_pane_markdown(
+    command: CommandEnvelope<OpenCodePaneMarkdownRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<OpenCodePaneMarkdownResult>, ApiError> {
+    validate_code_command(&command)?;
+    foundation
+        .code_workspaces
+        .require(
+            &command.payload.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::ReadFiles,
+        )
+        .map_err(workspace_error)?;
+
+    if !is_markdown_path(&command.payload.relative_path) {
+        return Err(validation_error(
+            "Only Markdown files can be opened in a Markdown pane.",
+        ));
+    }
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            format!(
+                "Pane layout was modified elsewhere (current revision {}, expected {}).",
+                current_layout.revision, command.payload.expected_revision
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
+
+    let target = current_layout
+        .nodes
+        .iter()
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .ok_or_else(|| validation_error("Target pane was not found."))?;
+    if !target.children.is_empty() {
+        return Err(validation_error(
+            "Only leaf panes can hold a Markdown document.",
+        ));
+    }
+
+    let document = foundation
+        .code_workspaces
+        .read_file(
+            &command.payload.workspace_id,
+            &command.payload.relative_path,
+        )
+        .map_err(workspace_error)?;
+    if document.binary || !is_markdown_path(&document.relative_path) {
+        return Err(validation_error(
+            "The selected file is not a readable Markdown document.",
+        ));
+    }
+
+    let mut new_layout = current_layout;
+    if let Some(node) = new_layout
+        .nodes
+        .iter_mut()
+        .find(|node| node.pane_id == command.payload.pane_id)
+    {
+        node.kind = hiveory_protocol::CodePaneKind::Markdown;
+        node.resource_id = Some(document.relative_path.clone());
+        node.title = Some(
+            document
+                .relative_path
+                .rsplit('/')
+                .next()
+                .unwrap_or("untitled.md")
+                .to_owned(),
+        );
+    }
+    new_layout.focused_pane_id = Some(command.payload.pane_id.clone());
+
+    let saved_layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &new_layout,
+        )
+        .await
+        .map_err(|err| {
+            if err.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Layout conflict on save",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(err)
+            }
+        })?;
+
+    foundation
+        .persistence
+        .save_code_document(
+            &command.payload.workspace_id,
+            &hiveory_protocol::CodeDocumentSummary {
+                relative_path: document.relative_path.clone(),
+                language: document.language.clone(),
+                last_fingerprint: Some(document.fingerprint.clone()),
+                last_opened_at_unix_ms: now_ms(),
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    foundation
+        .audit
+        .record(
+            "code.markdown.open",
+            "success",
+            "info",
+            Some(&command.payload.relative_path),
+            Some("opened an existing Markdown document pane"),
+        )
+        .await
+        .map_err(database_error)?;
+
+    Ok(response(
+        &command.request_id,
+        OpenCodePaneMarkdownResult {
+            layout: saved_layout,
+            document,
+        },
+    ))
+}
+
+#[tauri::command]
 async fn hiveory_command_create_code_pane_markdown(
     command: CommandEnvelope<CreateCodePaneMarkdownRequest>,
     foundation: State<'_, HiveoryFoundation>,
@@ -4577,6 +4814,13 @@ fn create_new_markdown_document(
         io::ErrorKind::AlreadyExists,
         "no available untitled Markdown filename was found",
     )))
+}
+
+fn is_markdown_path(path: &str) -> bool {
+    matches!(
+        Path::new(path).extension().and_then(|extension| extension.to_str()),
+        Some(extension) if extension.eq_ignore_ascii_case("md") || extension.eq_ignore_ascii_case("markdown")
+    )
 }
 
 #[tauri::command]
@@ -6098,6 +6342,24 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "The worktree is still locked by its worker lease.",
             RetryClass::AfterUserAction,
         ),
+        HiveoryGitError::WorktreeBusy { path, detail } => {
+            let display_path = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("the managed workspace");
+            let mut error = application_error(
+                "git_worktree_busy",
+                format!(
+                    "The managed workspace '{display_path}' is still in use by another process. {detail}"
+                ),
+                RetryClass::AfterUserAction,
+            );
+            error.recovery_action = Some(
+                "Close applications using this workspace, wait a moment, and select Retry."
+                    .to_owned(),
+            );
+            error
+        }
         HiveoryGitError::MissingHead => application_error(
             "git_missing_head",
             "The repository has no commit to use as an orchestration base.",
@@ -7001,6 +7263,7 @@ pub fn run() {
             hiveory_command_apply_code_pane_mutation,
             hiveory_command_launch_code_pane_terminal,
             hiveory_command_open_code_pane_preview,
+            hiveory_command_open_code_pane_markdown,
             hiveory_command_create_code_pane_markdown,
             hiveory_command_close_code_pane,
             hiveory_query_code_terminal_snapshot,

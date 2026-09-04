@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import {
   hiveoryClient,
+  type CodeDocument,
   type CodePaneMutation,
   type CodePanePlacement,
   type CodePanePreset,
@@ -36,6 +37,8 @@ export interface CodeWorkspaceController {
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   createMarkdown: (paneId: string) => Promise<void>
+  openMarkdown: (paneId: string, relativePath: string) => Promise<void>
+  renameMarkdown: (paneId: string, relativePath: string, newRelativePath: string, expectedFingerprint: string | null) => Promise<CodeDocument | null>
   sleepWorkspace: (workspaceId?: string) => Promise<boolean>
   requestClosePane: (paneId: string) => Promise<void>
   confirmClose: (terminateRunning: boolean) => Promise<void>
@@ -583,6 +586,90 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     [commitLayout, enqueueOperation, loadWorkspace]
   )
 
+  const openMarkdown = useCallback(
+    async (paneId: string, relativePath: string) => {
+      await enqueueOperation(async () => {
+        const { workspaceId, revision } = stateRef.current
+        if (!workspaceId) return
+        try {
+          dispatch({ type: 'SET_MUTATING', isMutating: true })
+          let result
+          try {
+            result = await hiveoryClient.openCodePaneMarkdown({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: revision,
+              relative_path: relativePath,
+            })
+          } catch (innerErr: unknown) {
+            if (!formatError(innerErr).includes('layout_conflict')) throw innerErr
+            await loadWorkspace(workspaceId)
+            result = await hiveoryClient.openCodePaneMarkdown({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: stateRef.current.revision,
+              relative_path: relativePath,
+            })
+          }
+          commitLayout(result.layout)
+        } catch (err: unknown) {
+          dispatch({ type: 'SET_ERROR', error: formatError(err) })
+        } finally {
+          dispatch({ type: 'SET_MUTATING', isMutating: false })
+        }
+      })
+    },
+    [commitLayout, enqueueOperation, loadWorkspace]
+  )
+
+  const renameMarkdown = useCallback(
+    async (
+      paneId: string,
+      relativePath: string,
+      newRelativePath: string,
+      expectedFingerprint: string | null,
+    ): Promise<CodeDocument | null> => {
+      let renamed: CodeDocument | null = null
+      await enqueueOperation(async () => {
+        const { workspaceId, revision } = stateRef.current
+        if (!workspaceId) return
+        try {
+          dispatch({ type: 'SET_MUTATING', isMutating: true })
+          let result
+          try {
+            result = await hiveoryClient.renameCodeFile({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: revision,
+              relative_path: relativePath,
+              new_relative_path: newRelativePath,
+              expected_fingerprint: expectedFingerprint,
+            })
+          } catch (innerErr: unknown) {
+            if (!formatError(innerErr).includes('layout_conflict')) throw innerErr
+            await loadWorkspace(workspaceId)
+            result = await hiveoryClient.renameCodeFile({
+              workspace_id: workspaceId,
+              pane_id: paneId,
+              expected_revision: stateRef.current.revision,
+              relative_path: relativePath,
+              new_relative_path: newRelativePath,
+              expected_fingerprint: expectedFingerprint,
+            })
+          }
+          renamed = result.document
+          commitLayout(result.layout)
+        } catch (err: unknown) {
+          dispatch({ type: 'SET_ERROR', error: formatError(err) })
+        } finally {
+          dispatch({ type: 'SET_MUTATING', isMutating: false })
+        }
+      })
+      return renamed
+    },
+    [commitLayout, enqueueOperation, loadWorkspace]
+  )
+
   const sleepWorkspace = useCallback(
     async (requestedWorkspaceId?: string) => {
       const workspaceId = requestedWorkspaceId ?? stateRef.current.workspaceId
@@ -724,6 +811,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     launchTerminal,
     openPreview,
     createMarkdown,
+    openMarkdown,
+    renameMarkdown,
     sleepWorkspace,
     requestClosePane,
     confirmClose,

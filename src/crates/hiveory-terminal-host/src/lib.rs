@@ -34,11 +34,12 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     sync::mpsc,
-    time::{sleep, timeout},
+    time::{sleep, timeout, Instant},
 };
 
 const READY_FILE_VERSION: u16 = 1;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(8);
+const TERMINAL_STOP_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Error, Clone)]
 pub enum HiveoryTerminalHostError {
@@ -290,6 +291,22 @@ impl HiveoryTerminalHostClient {
         }
     }
 
+    /// Stops a terminal and waits for the native process to disappear. The
+    /// PID check keeps cleanup safe when this client reconnects to a host
+    /// started by an older Hiveory build whose Stop response did not wait for
+    /// physical process exit.
+    pub async fn stop_and_wait(
+        &self,
+        request: &CodeTerminalStopRequest,
+        pid: Option<u32>,
+    ) -> Result<bool, HiveoryTerminalHostError> {
+        let stopped = self.stop(request).await?;
+        if request.force {
+            wait_for_process_exit(pid, TERMINAL_STOP_TIMEOUT).await?;
+        }
+        Ok(stopped)
+    }
+
     pub async fn set_history_enabled(
         &self,
         terminal_id: &str,
@@ -474,6 +491,9 @@ fn process_is_alive(pid: u32, executable: &Path) -> bool {
     if pid == 0 {
         return false;
     }
+    if !process_id_is_alive(pid).unwrap_or(false) {
+        return false;
+    }
     #[cfg(windows)]
     {
         let mut command = Command::new("tasklist.exe");
@@ -496,13 +516,66 @@ fn process_is_alive(pid: u32, executable: &Path) -> bool {
     #[cfg(not(windows))]
     {
         let _ = executable;
+        process_id_is_alive(pid).unwrap_or(false)
+    }
+}
+
+fn process_id_is_alive(pid: u32) -> Result<bool, String> {
+    if pid == 0 {
+        return Ok(false);
+    }
+    #[cfg(windows)]
+    {
+        let mut command = Command::new("tasklist.exe");
+        configure_background_command(&mut command);
+        let filter = format!("PID eq {pid}");
+        let output = command
+            .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+            .output()
+            .map_err(|error| format!("tasklist could not verify PID {pid}: {error}"))?;
+        if !output.status.success() {
+            return Err(format!("tasklist failed while verifying PID {pid}"));
+        }
+        let text = String::from_utf8_lossy(&output.stdout);
+        Ok(text
+            .lines()
+            .any(|line| line.contains(&format!(",\"{pid}\""))))
+    }
+    #[cfg(not(windows))]
+    {
         Command::new("kill")
             .arg("-0")
             .arg(pid.to_string())
             .status()
             .map(|status| status.success())
-            .unwrap_or(false)
+            .map_err(|error| format!("could not verify PID {pid}: {error}"))
     }
+}
+
+async fn wait_for_process_exit(
+    pid: Option<u32>,
+    wait_timeout: Duration,
+) -> Result<(), HiveoryTerminalHostError> {
+    let Some(pid) = pid else {
+        return Ok(());
+    };
+    let deadline = Instant::now() + wait_timeout;
+    loop {
+        if !process_id_is_alive(pid).map_err(|error| {
+            HiveoryTerminalHostError::Operation(format!(
+                "could not verify terminal process exit: {error}"
+            ))
+        })? {
+            break;
+        }
+        if Instant::now() >= deadline {
+            return Err(HiveoryTerminalHostError::Operation(
+                "terminal process did not exit before cleanup timed out".to_owned(),
+            ));
+        }
+        sleep(Duration::from_millis(50)).await;
+    }
+    Ok(())
 }
 
 fn read_ready(path: &Path) -> Option<Endpoint> {
@@ -813,10 +886,13 @@ impl HostService {
             )
             .await
         {
-            let _ = self.runtime.stop(&CodeTerminalStopRequest {
-                terminal_id: summary.id.clone(),
-                force: true,
-            });
+            let _ = self.runtime.stop_and_wait(
+                &CodeTerminalStopRequest {
+                    terminal_id: summary.id.clone(),
+                    force: true,
+                },
+                TERMINAL_STOP_TIMEOUT,
+            );
             return Err(HiveoryTerminalHostError::Operation(error.to_string()));
         }
         self.history_enabled
@@ -928,7 +1004,7 @@ impl HostService {
     ) -> Result<bool, HiveoryTerminalHostError> {
         let stopped = self
             .runtime
-            .stop(&request)
+            .stop_and_wait(&request, TERMINAL_STOP_TIMEOUT)
             .map_err(HiveoryTerminalHostError::from)?;
         if stopped {
             self.persistence

@@ -147,6 +147,8 @@ export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: str
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
 export type OpenCodePanePreviewResult = { layout: CodePaneLayout; preview: CodePreviewSummary }
+export type OpenCodePaneMarkdownRequest = { workspace_id: string; pane_id: string; expected_revision: number; relative_path: string }
+export type OpenCodePaneMarkdownResult = { layout: CodePaneLayout; document: CodeDocument }
 export type CreateCodePaneMarkdownRequest = { workspace_id: string; pane_id: string; expected_revision: number }
 export type CreateCodePaneMarkdownResult = { layout: CodePaneLayout; document: CodeDocument }
 export type CloseCodePaneRequest = { workspace_id: string; pane_id: string; expected_revision: number; terminate_running_resource: boolean }
@@ -629,6 +631,36 @@ function previewCreateMarkdownDocument(workspace: { detail: CodeWorkspaceDetail;
   }
   throw new Error('No available untitled Markdown filename was found.')
 }
+
+function isMarkdownPath(path: string): boolean {
+  return /\.(md|markdown)$/i.test(path.replaceAll('\\', '/'))
+}
+
+async function collectMarkdownFiles(
+  readTree: (relativePath: string | null) => Promise<CodeFileTree>,
+): Promise<string[]> {
+  const directories: Array<string | null> = [null]
+  const visited = new Set<string>()
+  const markdownFiles = new Set<string>()
+
+  while (directories.length && visited.size < 512) {
+    const directory = directories.shift() ?? null
+    const key = directory ?? ''
+    if (visited.has(key)) continue
+    visited.add(key)
+    const tree = await readTree(directory)
+    for (const entry of tree.entries) {
+      if (entry.kind === 'directory') {
+        directories.push(entry.relative_path)
+      } else if (entry.kind === 'file' && isMarkdownPath(entry.relative_path)) {
+        markdownFiles.add(entry.relative_path.replaceAll('\\', '/'))
+      }
+    }
+  }
+
+  return [...markdownFiles].sort((left, right) => left.localeCompare(right))
+}
+
 function previewCodeSummary(): CodeSnapshot {
   return {
     projects: [...previewCodeProjects.values()],
@@ -1117,6 +1149,11 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriQuery<CodeFileTree>('hiveory_query_code_file_tree', { query: request })
     return previewCodeTree(request.workspace_id, request.relative_path)
   },
+  async listCodeMarkdownFiles(workspaceId: string): Promise<string[]> {
+    return collectMarkdownFiles((relativePath) => hiveoryIsTauri
+      ? tauriQuery<CodeFileTree>('hiveory_query_code_file_tree', { query: { workspace_id: workspaceId, relative_path: relativePath } })
+      : Promise.resolve(previewCodeTree(workspaceId, relativePath)))
+  },
   async readCodeFile(request: CodeReadFileRequest): Promise<CodeDocument> {
     if (hiveoryIsTauri) return tauriQuery<CodeDocument>('hiveory_query_code_file', { request })
     const file = previewCodeWorkspaces.get(request.workspace_id)?.files.get(request.relative_path)
@@ -1140,11 +1177,27 @@ export const hiveoryClient = {
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     const file = workspace?.files.get(request.relative_path)
     if (!workspace || !file) throw new Error('File was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before renaming files.')
+    if ((workspace.detail.layout.revision ?? 0) !== request.expected_revision) throw new Error('layout_conflict')
+    if (request.expected_fingerprint && request.expected_fingerprint !== file.fingerprint) throw new Error('The file changed on disk. Reload it before renaming.')
     if (workspace.files.has(request.new_relative_path)) throw new Error('A file already exists at the new path.')
-    workspace.files.delete(request.relative_path); file.relative_path = request.new_relative_path; workspace.files.set(file.relative_path, file)
-    const pane = workspace.detail.layout.nodes.find((node) => node.pane_id === request.pane_id)
-    if (!pane) throw new Error('Pane was not found.'); pane.resource_id = file.relative_path; pane.title = file.relative_path.split('/').pop() ?? 'untitled.md'
+    const pane = workspace.detail.layout.nodes.find((node) => node.pane_id === request.pane_id && node.kind === 'markdown' && node.resource_id === request.relative_path)
+    if (!pane) throw new Error('Markdown pane no longer owns this file.')
+    workspace.files.delete(request.relative_path)
+    file.relative_path = request.new_relative_path
+    workspace.files.set(file.relative_path, file)
+    pane.resource_id = file.relative_path
+    pane.title = file.relative_path.split('/').pop() ?? 'untitled.md'
     workspace.detail.layout.revision = (workspace.detail.layout.revision ?? 0) + 1
+    workspace.detail.open_documents = [
+      {
+        relative_path: file.relative_path,
+        language: file.language,
+        last_fingerprint: file.fingerprint,
+        last_opened_at_unix_ms: previewNow(),
+      },
+      ...workspace.detail.open_documents.filter((item) => item.relative_path !== request.relative_path && item.relative_path !== file.relative_path),
+    ]
     return { layout: structuredClone(workspace.detail.layout), document: structuredClone(file) }
   },
   async saveCodeLayout(request: CodeSaveLayoutRequest): Promise<CodePaneLayout> {
@@ -1339,6 +1392,28 @@ export const hiveoryClient = {
     workspace.detail.previews = [preview, ...workspace.detail.previews]
     const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'preview', preview.id, 'Browser'))
     return { layout, preview }
+  },
+  async openCodePaneMarkdown(request: OpenCodePaneMarkdownRequest): Promise<OpenCodePaneMarkdownResult> {
+    if (hiveoryIsTauri) return tauriCommand<OpenCodePaneMarkdownRequest, OpenCodePaneMarkdownResult>('hiveory_command_open_code_pane_markdown', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    const file = workspace.files.get(request.relative_path)
+    if (!file) throw new Error('File was not found.')
+    if (file.binary || !isMarkdownPath(file.relative_path)) throw new Error('Only Markdown files can be opened in a Markdown pane.')
+    if ((workspace.detail.layout.revision ?? 0) !== request.expected_revision) throw new Error('layout_conflict')
+    const pane = previewFindPane(workspace.detail.layout, request.pane_id)
+    if (pane.children.length) throw new Error('Only leaf panes can hold a resource.')
+    const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, 'markdown', file.relative_path, file.relative_path.split('/').pop() ?? 'untitled.md'))
+    workspace.detail.open_documents = [
+      {
+        relative_path: file.relative_path,
+        language: file.language,
+        last_fingerprint: file.fingerprint,
+        last_opened_at_unix_ms: previewNow(),
+      },
+      ...workspace.detail.open_documents.filter((item) => item.relative_path !== file.relative_path),
+    ]
+    return { layout, document: structuredClone(file) }
   },
   async createCodePaneMarkdown(request: CreateCodePaneMarkdownRequest): Promise<CreateCodePaneMarkdownResult> {
     if (hiveoryIsTauri) return tauriCommand<CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult>('hiveory_command_create_code_pane_markdown', request)

@@ -69,6 +69,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
     launchTerminal,
     openPreview,
     createMarkdown,
+    openMarkdown,
+    renameMarkdown,
   } = controller
   const isFocused = state.focusedPaneId === node.pane_id
   const isMaximized = state.maximizedPaneId === node.pane_id
@@ -155,7 +157,15 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         return <CodePreviewPane key={previewSummary.id} workspaceId={state.workspaceId ?? previewSummary.workspace_id} preview={previewSummary} />
       case 'markdown':
         if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
-        return <CodeMarkdownPane workspaceId={state.workspaceId} relativePath={node.resource_id} paneId={node.pane_id} expectedRevision={state.revision} />
+        return (
+          <CodeMarkdownPane
+            workspaceId={state.workspaceId}
+            relativePath={node.resource_id}
+            onOpenMarkdown={(path) => void openMarkdown(node.pane_id, path)}
+            onCreateMarkdown={() => void createMarkdown(node.pane_id)}
+            onRenameMarkdown={(path, fingerprint) => renameMarkdown(node.pane_id, node.resource_id!, path, fingerprint)}
+          />
+        )
       default:
         return <div>Unsupported pane type</div>
     }

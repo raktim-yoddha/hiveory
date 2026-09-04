@@ -110,6 +110,42 @@ test('preview creates root Markdown documents with unique names and keeps them w
   expect(saved.content).toBe('# Markdown from preview\n')
 })
 
+test('preview lists, opens, and renames Markdown documents through the pane contract', async () => {
+  const detail = await hiveoryClient.openCodeWorkspace('~/markdown-switcher-demo')
+  const trusted = await hiveoryClient.trustCodeWorkspace(detail.summary.id, true)
+  const markdownFiles = await hiveoryClient.listCodeMarkdownFiles(trusted.summary.id)
+
+  expect(markdownFiles).toContain('README.md')
+
+  const opened = await hiveoryClient.openCodePaneMarkdown({
+    workspace_id: trusted.summary.id,
+    pane_id: trusted.layout.root_id,
+    expected_revision: trusted.layout.revision ?? 0,
+    relative_path: 'README.md',
+  })
+  expect(opened.layout.nodes.find((node) => node.pane_id === opened.layout.root_id)).toMatchObject({
+    kind: 'markdown',
+    resource_id: 'README.md',
+    title: 'README.md',
+  })
+
+  const renamed = await hiveoryClient.renameCodeFile({
+    workspace_id: trusted.summary.id,
+    pane_id: opened.layout.root_id,
+    expected_revision: opened.layout.revision ?? 0,
+    relative_path: opened.document.relative_path,
+    new_relative_path: 'notes.md',
+    expected_fingerprint: opened.document.fingerprint,
+  })
+  expect(renamed.document.relative_path).toBe('notes.md')
+  expect(renamed.layout.nodes.find((node) => node.pane_id === renamed.layout.root_id)).toMatchObject({
+    kind: 'markdown',
+    resource_id: 'notes.md',
+    title: 'notes.md',
+  })
+  await expect(hiveoryClient.listCodeMarkdownFiles(trusted.summary.id)).resolves.toContain('notes.md')
+})
+
 test('preview keeps projects as parents of primary and isolated workspaces', async () => {
   const primary = await hiveoryClient.addCodeProject('~/hierarchy-demo')
   const before = await hiveoryClient.codeSnapshot()

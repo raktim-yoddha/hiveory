@@ -29,12 +29,16 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { createLowlight, common } from 'lowlight'
 import {
+  ChevronDown,
   ChevronRight,
   Code2,
   Copy,
   Ellipsis,
   Eye,
   FileImage,
+  FilePlus2,
+  FileText,
+  FolderOpen,
   Heading1,
   Heading2,
   Heading3,
@@ -45,6 +49,7 @@ import {
   List,
   ListTodo,
   ListOrdered,
+  LoaderCircle,
   Minus,
   MoreHorizontal,
   PanelRight,
@@ -67,8 +72,9 @@ import { hiveoryClient, type CodeDocument } from '../../../../shared/api/hiveory
 interface CodeMarkdownPaneProps {
   workspaceId: string
   relativePath: string
-  paneId: string
-  expectedRevision: number
+  onOpenMarkdown?: (relativePath: string) => void
+  onCreateMarkdown?: () => void
+  onRenameMarkdown?: (newRelativePath: string, expectedFingerprint: string | null) => Promise<CodeDocument | null>
 }
 
 type MarkdownViewMode = 'rich' | 'source' | 'preview'
@@ -211,11 +217,15 @@ function normalizeLink(value: string): string {
   return `https://${value}`
 }
 
-export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, paneId, expectedRevision }) => {
+export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, onOpenMarkdown, onCreateMarkdown, onRenameMarkdown }) => {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const linkPanelRef = useRef<HTMLFormElement>(null)
   const imagePanelRef = useRef<HTMLFormElement>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
+  const markdownFileMenuRef = useRef<HTMLDivElement>(null)
+  const markdownNameInputRef = useRef<HTMLInputElement>(null)
+  const nameCommitInProgressRef = useRef(false)
+  const skipNameCommitRef = useRef(false)
   const syncingRef = useRef(false)
   const documentRef = useRef<CodeDocument | null>(null)
   const sourceRef = useRef('')
@@ -240,6 +250,28 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
   const [outlineOpen, setOutlineOpen] = useState(false)
   const [selectionTick, setSelectionTick] = useState(0)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [markdownFileMenuOpen, setMarkdownFileMenuOpen] = useState(false)
+  const [markdownFiles, setMarkdownFiles] = useState<string[]>([])
+  const [markdownFilesLoading, setMarkdownFilesLoading] = useState(false)
+  const [markdownFilesError, setMarkdownFilesError] = useState<string | null>(null)
+  const [markdownFileQuery, setMarkdownFileQuery] = useState('')
+  const [nameEditing, setNameEditing] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+
+  const documentName = fileNameFromPath(relativePath)
+  const documentDirectory = relativePath.replaceAll('\\', '/').split('/').slice(0, -1).join('/')
+
+  useEffect(() => {
+    setNameDraft(documentName)
+    setNameEditing(false)
+  }, [documentName])
+
+  useEffect(() => {
+    if (nameEditing) {
+      markdownNameInputRef.current?.focus()
+      markdownNameInputRef.current?.select()
+    }
+  }, [nameEditing])
 
   const updateSlashMenu = useCallback((instance: Editor) => {
     setSlashMenu(editorSlashState(instance, surfaceRef.current))
@@ -333,6 +365,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       if (linkPanelRef.current && !linkPanelRef.current.contains(target)) setLinkPanelOpen(false)
       if (imagePanelRef.current && !imagePanelRef.current.contains(target)) setImagePanelOpen(false)
       if (headerMenuRef.current && !headerMenuRef.current.contains(target)) setHeaderMenuOpen(false)
+      if (markdownFileMenuRef.current && !markdownFileMenuRef.current.contains(target)) setMarkdownFileMenuOpen(false)
     }
     document.addEventListener('mousedown', closeTransientMenus)
     return () => document.removeEventListener('mousedown', closeTransientMenus)
@@ -358,12 +391,12 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     setViewMode(next)
   }, [syncSourceIntoEditor])
 
-  const saveDocument = useCallback(async () => {
+  const saveDocument = useCallback(async (): Promise<boolean> => {
     const current = documentRef.current
-    if (!current) return
+    if (!current) return false
     if (current.read_only || current.binary) {
       setError('This Markdown document is read-only.')
-      return
+      return false
     }
     const content = viewModeRef.current === 'rich' ? editorRef.current?.getMarkdown() ?? sourceRef.current : sourceRef.current
     setSaving(true)
@@ -381,8 +414,10 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       setMarkdownDocument(saved)
       setMarkdownSource(saved.content)
       setDirty(false)
+      return true
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'The Markdown document could not be saved.')
+      return false
     } finally {
       setSaving(false)
     }
@@ -404,25 +439,74 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     }
   }, [relativePath, syncSourceIntoEditor, workspaceId])
 
-  const renameDocument = useCallback(async () => {
-    const current = documentRef.current
-    if (!current) return
-    const suggested = fileNameFromPath(relativePath)
-    const name = window.prompt('Rename Markdown document', suggested)?.trim()
-    if (!name || name === suggested) return
-    if (name.includes('/') || name.includes('\\') || !name.endsWith('.md')) {
-      setError('Use a Markdown filename ending in .md without folder separators.')
+  const renameDocument = useCallback(async (requestedName = nameDraft) => {
+    if (!onRenameMarkdown) {
+      setError('Markdown rename is unavailable in this workspace.')
       return
     }
+
+    let current = documentRef.current
+    if (!current) return
+    if (dirty && !(await saveDocument())) return
+    current = documentRef.current
+    if (!current) return
+
+    const name = requestedName.trim()
+    if (!name || name === documentName) {
+      setNameDraft(documentName)
+      setNameEditing(false)
+      return
+    }
+    if (name.includes('/') || name.includes('\\') || !/\.(md|markdown)$/i.test(name)) {
+      setError('Use a Markdown filename ending in .md or .markdown without folder separators.')
+      return
+    }
+
     try {
-      const parent = relativePath.replaceAll('\\', '/').split('/').slice(0, -1).join('/')
-      const result = await hiveoryClient.renameCodeFile({ workspace_id: workspaceId, pane_id: paneId, expected_revision: expectedRevision, relative_path: relativePath, new_relative_path: parent ? `${parent}/${name}` : name, expected_fingerprint: current.fingerprint })
-      window.dispatchEvent(new CustomEvent('hiveory-code-layout-updated', { detail: result.layout }))
-      setStatusMessage(`Renamed to ${name}`)
+      const newRelativePath = documentDirectory ? `${documentDirectory}/${name}` : name
+      const result = await onRenameMarkdown(newRelativePath, current.fingerprint)
+      if (!result) return
+      documentRef.current = result
+      sourceRef.current = result.content
+      baselineRef.current = result.content
+      setMarkdownDocument(result)
+      setMarkdownSource(result.content)
+      setDirty(false)
+      setNameDraft(fileNameFromPath(result.relative_path))
+      setNameEditing(false)
+      setStatusMessage(`Renamed to ${fileNameFromPath(result.relative_path)}`)
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'The Markdown document could not be renamed.')
     }
-  }, [expectedRevision, paneId, relativePath, workspaceId])
+  }, [dirty, documentDirectory, documentName, nameDraft, onRenameMarkdown, saveDocument])
+
+  const commitNameEdit = useCallback(() => {
+    if (nameCommitInProgressRef.current) return
+    nameCommitInProgressRef.current = true
+    void renameDocument(nameDraft).finally(() => {
+      nameCommitInProgressRef.current = false
+    })
+  }, [nameDraft, renameDocument])
+
+  const refreshMarkdownFiles = useCallback(async () => {
+    setMarkdownFilesLoading(true)
+    setMarkdownFilesError(null)
+    try {
+      const files = await hiveoryClient.listCodeMarkdownFiles(workspaceId)
+      setMarkdownFiles([...new Set([relativePath, ...files])].sort((left, right) => left.localeCompare(right)))
+    } catch (reason: unknown) {
+      setMarkdownFilesError(reason instanceof Error ? reason.message : 'Markdown files could not be listed.')
+    } finally {
+      setMarkdownFilesLoading(false)
+    }
+  }, [relativePath, workspaceId])
+
+  const toggleMarkdownFileMenu = useCallback(() => {
+    setMarkdownFileMenuOpen((open) => {
+      if (!open) void refreshMarkdownFiles()
+      return !open
+    })
+  }, [refreshMarkdownFiles])
 
   const copyMarkdown = useCallback(async () => {
     const content = viewModeRef.current === 'rich' ? editorRef.current?.getMarkdown() ?? sourceRef.current : sourceRef.current
@@ -603,15 +687,128 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     setMoreOpen(false)
   }
 
-  const documentName = relativePath.replaceAll('\\', '/').split('/').pop() || 'untitled.md'
+  const filteredMarkdownFiles = useMemo(() => {
+    const query = markdownFileQuery.trim().toLowerCase()
+    if (!query) return markdownFiles
+    return markdownFiles.filter((path) => path.toLowerCase().includes(query))
+  }, [markdownFileQuery, markdownFiles])
 
   return (
     <div className="hiveory-markdown-pane">
       <div className="hiveory-markdown-document-header">
-        <div className="hiveory-markdown-document-path" title={relativePath}>
-          <span>{relativePath}</span>
+        <div className="hiveory-markdown-document-path" ref={markdownFileMenuRef} title={relativePath}>
+          <div className="hiveory-markdown-document-name-group">
+            {nameEditing ? (
+              <input
+                ref={markdownNameInputRef}
+                type="text"
+                className="hiveory-markdown-name-input"
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onBlur={() => {
+                  if (skipNameCommitRef.current) {
+                    skipNameCommitRef.current = false
+                    return
+                  }
+                  commitNameEdit()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    skipNameCommitRef.current = true
+                    setNameDraft(documentName)
+                    setNameEditing(false)
+                    event.currentTarget.blur()
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+                aria-label="Markdown filename"
+              />
+            ) : (
+              <button
+                type="button"
+                className="hiveory-markdown-document-name"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setNameDraft(documentName)
+                  setNameEditing(true)
+                }}
+                title="Click to rename this Markdown file"
+              >
+                {documentName}
+              </button>
+            )}
+            {documentDirectory && <span className="hiveory-markdown-document-directory">/{documentDirectory}</span>}
+          </div>
+          <button
+            type="button"
+            className={`hiveory-markdown-file-picker-button${markdownFileMenuOpen ? ' is-active' : ''}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              toggleMarkdownFileMenu()
+            }}
+            title="Open Markdown document"
+            aria-label="Open Markdown document"
+            aria-haspopup="menu"
+            aria-expanded={markdownFileMenuOpen}
+          >
+            <ChevronDown size={14} />
+          </button>
           {dirty && <span className="hiveory-markdown-dirty-dot" title="Unsaved changes" aria-label="Unsaved changes" />}
           {statusMessage && <span className="hiveory-markdown-status-message" role="status">{statusMessage}</span>}
+          {markdownFileMenuOpen && (
+            <div className="hiveory-markdown-file-menu" role="menu" onMouseDown={(event) => event.stopPropagation()}>
+              <div className="hiveory-markdown-file-menu-title"><FolderOpen size={14} />Markdown files</div>
+              <label className="hiveory-markdown-file-search">
+                <Search size={14} aria-hidden="true" />
+                <input
+                  type="search"
+                  value={markdownFileQuery}
+                  onChange={(event) => setMarkdownFileQuery(event.target.value)}
+                  placeholder="Search Markdown files…"
+                  aria-label="Search Markdown files"
+                />
+              </label>
+              <button
+                type="button"
+                role="menuitem"
+                className="hiveory-markdown-file-create"
+                onClick={() => {
+                  setMarkdownFileMenuOpen(false)
+                  setMarkdownFileQuery('')
+                  onCreateMarkdown?.()
+                }}
+              >
+                <FilePlus2 size={14} />Create new Markdown
+              </button>
+              <div className="hiveory-markdown-file-list">
+                {markdownFilesLoading && <div className="hiveory-markdown-file-state"><LoaderCircle size={14} className="hiveory-markdown-spin" />Loading files…</div>}
+                {!markdownFilesLoading && markdownFilesError && <div className="hiveory-markdown-file-state is-error">{markdownFilesError}</div>}
+                {!markdownFilesLoading && !markdownFilesError && filteredMarkdownFiles.map((path) => (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    key={path}
+                    className={`hiveory-markdown-file-item${path === relativePath ? ' is-current' : ''}`}
+                    onClick={() => {
+                      setMarkdownFileMenuOpen(false)
+                      setMarkdownFileQuery('')
+                      if (path !== relativePath) onOpenMarkdown?.(path)
+                    }}
+                    title={path}
+                  >
+                    <FileText size={14} />
+                    <span>{path}</span>
+                  </button>
+                ))}
+                {!markdownFilesLoading && !markdownFilesError && !filteredMarkdownFiles.length && <div className="hiveory-markdown-file-state">No Markdown files found.</div>}
+              </div>
+            </div>
+          )}
         </div>
         <div className="hiveory-markdown-header-actions" ref={headerMenuRef}>
           <div className="hiveory-markdown-view-toggle" role="group" aria-label="Markdown editing mode">
@@ -625,7 +822,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
             <div className="hiveory-markdown-header-menu" role="menu">
               <div className="hiveory-markdown-header-menu-title">{documentName}</div>
               <button type="button" role="menuitem" disabled={saving} onClick={() => { setHeaderMenuOpen(false); void saveDocument() }}><Save size={14} />{saving ? 'Saving…' : 'Save document'}</button>
-              <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void renameDocument() }}><PenLine size={14} />Rename document…</button>
+              <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); setNameDraft(documentName); setNameEditing(true) }}><PenLine size={14} />Rename document…</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void reloadDocument() }}><RotateCcw size={14} />Reload from disk</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); changeViewMode('preview') }}><Eye size={14} />Preview</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void shareMarkdown() }}><Share2 size={14} />Share Markdown</button>

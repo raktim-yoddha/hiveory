@@ -275,6 +275,10 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       const message = formatHiveoryClientError(err)
       setDestructiveActionError(message)
       setError(message)
+      // Removal is staged on the host. Refresh even after an error so a
+      // completed worktree stage, or a recovered unavailable workspace, is
+      // reflected immediately and the next retry targets current state.
+      await refreshWorkspaces().catch(() => null)
     } finally {
       setDestructiveActionBusy(false)
     }

@@ -23,7 +23,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command as StdCommand, Stdio},
-    sync::{Arc, Mutex},
+    sync::{Arc, Condvar, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
@@ -674,13 +674,51 @@ const MAX_RING_BUFFER_BYTES: usize = 1024 * 1024; // 1 MiB
 struct TerminalSession {
     summary: Mutex<CodeTerminalSummary>,
     dimensions: Mutex<(u16, u16)>,
-    writer: Mutex<Box<dyn Write + Send>>,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+    writer: Mutex<Option<Box<dyn Write + Send>>>,
+    master: Mutex<Option<Box<dyn MasterPty + Send>>>,
+    killer: Mutex<Option<Box<dyn ChildKiller + Send + Sync>>>,
     process_group_id: Option<i32>,
     ring_buffer: Mutex<std::collections::VecDeque<u8>>,
     sequence: std::sync::atomic::AtomicU64,
     broadcast_tx: tokio::sync::broadcast::Sender<CodeTerminalEvent>,
+    completion: (Mutex<bool>, Condvar),
+}
+
+impl TerminalSession {
+    fn dispose_resources(&self) {
+        if let Ok(mut writer) = self.writer.lock() {
+            let _ = writer.take();
+        }
+        if let Ok(mut master) = self.master.lock() {
+            let _ = master.take();
+        }
+        if let Ok(mut killer) = self.killer.lock() {
+            let _ = killer.take();
+        }
+    }
+
+    fn signal_completion(&self) {
+        let (completed, wake) = &self.completion;
+        if let Ok(mut completed) = completed.lock() {
+            *completed = true;
+            wake.notify_all();
+        }
+    }
+
+    fn wait_for_completion(&self, wait_timeout: std::time::Duration) -> bool {
+        let (completed, wake) = &self.completion;
+        let Ok(completed) = completed.lock() else {
+            return false;
+        };
+        if *completed {
+            return true;
+        }
+        let Ok((completed, _)) = wake.wait_timeout_while(completed, wait_timeout, |done| !*done)
+        else {
+            return false;
+        };
+        *completed
+    }
 }
 
 #[derive(Clone, Default)]
@@ -837,13 +875,14 @@ impl HiveoryCodeRuntime {
         let session = Arc::new(TerminalSession {
             summary: Mutex::new(summary.clone()),
             dimensions: Mutex::new((request.cols, request.rows)),
-            writer: Mutex::new(writer),
-            master: Mutex::new(pair.master),
-            killer: Mutex::new(killer),
+            writer: Mutex::new(Some(writer)),
+            master: Mutex::new(Some(pair.master)),
+            killer: Mutex::new(Some(killer)),
             process_group_id,
             ring_buffer: Mutex::new(std::collections::VecDeque::with_capacity(16 * 1024)),
             sequence: std::sync::atomic::AtomicU64::new(initial_sequence),
             broadcast_tx: broadcast_tx.clone(),
+            completion: (Mutex::new(false), Condvar::new()),
         });
         self.sessions
             .lock()
@@ -918,6 +957,7 @@ impl HiveoryCodeRuntime {
                         }
                     }
                 }
+                drop(reader);
                 let exit_status = child.wait().ok();
                 let exit_code = exit_status.as_ref().map(|status| status.exit_code() as i32);
                 if let Ok(mut summary) = bg_session.summary.lock() {
@@ -943,6 +983,9 @@ impl HiveoryCodeRuntime {
                 };
                 let _ = bg_session.broadcast_tx.send(exit_ev.clone());
                 emit(&sink, exit_ev);
+                drop(child);
+                bg_session.dispose_resources();
+                bg_session.signal_completion();
             })
             .map_err(|error| HiveoryCodeRuntimeError::Operation(error.to_string()))?;
         Ok(summary)
@@ -996,6 +1039,9 @@ impl HiveoryCodeRuntime {
         let mut writer = session.writer.lock().map_err(|_| {
             HiveoryCodeRuntimeError::Operation("terminal writer lock poisoned".to_owned())
         })?;
+        let writer = writer.as_mut().ok_or_else(|| {
+            HiveoryCodeRuntimeError::Operation("terminal writer is no longer available".to_owned())
+        })?;
         writer
             .write_all(&bytes)
             .and_then(|_| writer.flush())
@@ -1027,12 +1073,13 @@ impl HiveoryCodeRuntime {
         if let Ok(mut dims) = session.dimensions.lock() {
             *dims = (request.cols, request.rows);
         }
-        let result = session
-            .master
-            .lock()
-            .map_err(|_| {
-                HiveoryCodeRuntimeError::Operation("terminal master lock poisoned".to_owned())
-            })?
+        let mut master = session.master.lock().map_err(|_| {
+            HiveoryCodeRuntimeError::Operation("terminal master lock poisoned".to_owned())
+        })?;
+        let Some(master) = master.as_mut() else {
+            return Ok(false);
+        };
+        let result = master
             .resize(PtySize {
                 rows: request.rows,
                 cols: request.cols,
@@ -1058,11 +1105,9 @@ impl HiveoryCodeRuntime {
             .state;
         if matches!(
             state,
-            CodeTerminalState::Exited
-                | CodeTerminalState::Failed
-                | CodeTerminalState::Interrupted
-                | CodeTerminalState::Dormant
-        ) {
+            CodeTerminalState::Exited | CodeTerminalState::Failed | CodeTerminalState::Dormant
+        ) || (matches!(state, CodeTerminalState::Interrupted) && !request.force)
+        {
             return Ok(false);
         }
         if request.force {
@@ -1070,21 +1115,24 @@ impl HiveoryCodeRuntime {
                 session.summary.lock().ok().and_then(|summary| summary.pid),
                 session.process_group_id,
             );
-            session
-                .killer
-                .lock()
-                .map_err(|_| {
-                    HiveoryCodeRuntimeError::Operation("terminal killer lock poisoned".to_owned())
-                })?
-                .kill()
-                .map_err(|error| HiveoryCodeRuntimeError::Operation(error.to_string()))?;
+            let mut killer = session.killer.lock().map_err(|_| {
+                HiveoryCodeRuntimeError::Operation("terminal killer lock poisoned".to_owned())
+            })?;
+            if let Some(killer) = killer.as_mut() {
+                // The process-tree kill is authoritative on Windows and can
+                // race portable-pty's process handle. The reader thread's
+                // child.wait() remains the source of truth, so an already
+                // closed PTY handle is safe to treat as an idempotent stop.
+                let _ = killer.kill();
+            }
         } else {
-            session
-                .writer
-                .lock()
-                .map_err(|_| {
-                    HiveoryCodeRuntimeError::Operation("terminal writer lock poisoned".to_owned())
-                })?
+            let mut writer = session.writer.lock().map_err(|_| {
+                HiveoryCodeRuntimeError::Operation("terminal writer lock poisoned".to_owned())
+            })?;
+            let Some(writer) = writer.as_mut() else {
+                return Ok(false);
+            };
+            writer
                 .write_all(b"\x03")
                 .map_err(|error| HiveoryCodeRuntimeError::Operation(error.to_string()))?;
         }
@@ -1093,6 +1141,24 @@ impl HiveoryCodeRuntime {
             summary.updated_at_unix_ms = now_ms();
         }
         Ok(true)
+    }
+
+    /// Stops a terminal and waits until the reader thread has observed child
+    /// exit and released every PTY resource. Destructive workspace operations
+    /// use this boundary so Git never races a still-open ConPTY handle.
+    pub fn stop_and_wait(
+        &self,
+        request: &CodeTerminalStopRequest,
+        wait_timeout: std::time::Duration,
+    ) -> Result<bool, HiveoryCodeRuntimeError> {
+        let session = self.session(&request.terminal_id)?;
+        let stopped = self.stop(request)?;
+        if !session.wait_for_completion(wait_timeout) {
+            return Err(HiveoryCodeRuntimeError::Operation(
+                "terminal process did not exit before cleanup timed out".to_owned(),
+            ));
+        }
+        Ok(stopped)
     }
 
     fn session(&self, terminal_id: &str) -> Result<Arc<TerminalSession>, HiveoryCodeRuntimeError> {
