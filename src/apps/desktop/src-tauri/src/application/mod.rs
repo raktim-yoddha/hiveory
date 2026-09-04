@@ -12,7 +12,7 @@ use browser::{
     BrowserCookieSourceRequest, BrowserFrame, BrowserIdRequest, BrowserManager,
     BrowserNavigationRequest, BrowserOpenRequest, BrowserProfileIdRequest, BrowserProfileRequest,
     BrowserRuntimeState, BrowserSettingsRequest, BrowserSwitchProfileRequest,
-    BrowserViewportRequest,
+    BrowserTouchEmulationRequest, BrowserViewportRequest,
 };
 use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, HiveoryStoredAttachment};
@@ -4221,6 +4221,18 @@ async fn hiveory_command_browser_set_viewport(
 }
 
 #[tauri::command]
+async fn hiveory_command_browser_set_touch_emulation(
+    command: CommandEnvelope<BrowserTouchEmulationRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<BrowserRuntimeState>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .set_touch_emulation(&command.payload)
+        .map(|state| response(&command.request_id, state))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
 async fn hiveory_command_browser_open_devtools(
     command: CommandEnvelope<BrowserIdRequest>,
     app: tauri::AppHandle,
@@ -7383,6 +7395,7 @@ pub fn run() {
             hiveory_command_browser_sync_annotations,
             hiveory_command_browser_capture_frame,
             hiveory_command_browser_set_viewport,
+            hiveory_command_browser_set_touch_emulation,
             hiveory_command_browser_open_devtools,
             hiveory_command_browser_open_external,
             hiveory_command_open_external_url,

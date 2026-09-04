@@ -160,6 +160,12 @@ pub(crate) struct BrowserViewportRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct BrowserTouchEmulationRequest {
+    pub browser_id: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BrowserCaptureRequest {
     pub browser_id: String,
     pub action: String,
@@ -242,6 +248,7 @@ pub(crate) struct BrowserRuntimeState {
     pub error: Option<String>,
     pub profile_id: String,
     pub viewport_id: String,
+    pub touch_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -280,6 +287,7 @@ struct BrowserEntry {
     webview: Webview,
     profile_id: String,
     viewport_id: String,
+    touch_enabled: bool,
     current_url: String,
     title: String,
     loading: bool,
@@ -380,6 +388,7 @@ impl BrowserManager {
             webview,
             profile_id: profile_id.clone(),
             viewport_id,
+            touch_enabled: false,
             current_url: url.to_string(),
             title: String::new(),
             loading: true,
@@ -611,7 +620,7 @@ impl BrowserManager {
         request: &BrowserSwitchProfileRequest,
     ) -> Result<BrowserRuntimeState, String> {
         self.inner.require_profile(&request.profile_id)?;
-        let (workspace_id, url, viewport_id) = {
+        let (workspace_id, url, viewport_id, touch_enabled) = {
             let entries = self
                 .inner
                 .entries
@@ -624,6 +633,7 @@ impl BrowserManager {
                 entry.workspace_id.clone(),
                 entry.current_url.clone(),
                 entry.viewport_id.clone(),
+                entry.touch_enabled,
             )
         };
         let url = normalize_browser_input(&url)?;
@@ -634,6 +644,7 @@ impl BrowserManager {
             .map_err(|error| format!("The browser profile could not be created: {error}"))?;
         let webview = self.build_webview(app, &request.browser_id, &url, profile_dir)?;
         self.inner.apply_viewport(&webview, &viewport)?;
+        self.inner.apply_touch_emulation(&webview, touch_enabled)?;
         webview
             .hide()
             .map_err(|error| format!("The embedded Browser could not be hidden: {error}"))?;
@@ -643,6 +654,7 @@ impl BrowserManager {
             webview,
             profile_id: request.profile_id.clone(),
             viewport_id,
+            touch_enabled,
             current_url: url.to_string(),
             title: String::new(),
             loading: true,
@@ -753,6 +765,20 @@ impl BrowserManager {
         self.inner.apply_viewport(&webview, &preset)?;
         self.inner
             .set_viewport_state(&request.browser_id, &request.viewport_id)?;
+        self.inner
+            .snapshot(&request.browser_id)?
+            .ok_or_else(|| "The Browser pane is no longer open.".to_owned())
+    }
+
+    pub(crate) fn set_touch_emulation(
+        &self,
+        request: &BrowserTouchEmulationRequest,
+    ) -> Result<BrowserRuntimeState, String> {
+        let webview = self.inner.webview(&request.browser_id)?;
+        self.inner
+            .apply_touch_emulation(&webview, request.enabled)?;
+        self.inner
+            .set_touch_emulation_state(&request.browser_id, request.enabled)?;
         self.inner
             .snapshot(&request.browser_id)?
             .ok_or_else(|| "The Browser pane is no longer open.".to_owned())
@@ -1241,6 +1267,22 @@ impl BrowserManagerInner {
         Ok(entry.webview.clone())
     }
 
+    fn set_touch_emulation_state(
+        &self,
+        browser_id: &str,
+        enabled: bool,
+    ) -> Result<Webview, String> {
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
+        let entry = entries
+            .get_mut(browser_id)
+            .ok_or_else(|| "The Browser pane is no longer open.".to_owned())?;
+        entry.touch_enabled = enabled;
+        Ok(entry.webview.clone())
+    }
+
     fn webview(&self, browser_id: &str) -> Result<Webview, String> {
         let entries = self
             .entries
@@ -1322,6 +1364,18 @@ impl BrowserManagerInner {
         #[cfg(not(windows))]
         {
             let _ = (webview, preset);
+            Ok(())
+        }
+    }
+
+    fn apply_touch_emulation(&self, webview: &Webview, enabled: bool) -> Result<(), String> {
+        #[cfg(windows)]
+        {
+            apply_touch_emulation_windows(webview, enabled)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (webview, enabled);
             Ok(())
         }
     }
@@ -1666,6 +1720,7 @@ fn snapshot_from_entry(entry: &BrowserEntry) -> BrowserRuntimeState {
         error: entry.error.clone(),
         profile_id: entry.profile_id.clone(),
         viewport_id: entry.viewport_id.clone(),
+        touch_enabled: entry.touch_enabled,
     }
 }
 
@@ -2405,8 +2460,38 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
 }
 
 #[cfg(windows)]
-fn apply_viewport_windows(webview: &Webview, preset: &BrowserViewportPreset) -> Result<(), String> {
+fn call_devtools_protocol_method_windows(
+    webview: &Webview,
+    method: &'static str,
+    parameters: String,
+    context: &'static str,
+) -> Result<(), String> {
     let (sender, receiver) = mpsc::channel::<Result<(), String>>();
+    webview
+        .with_webview(move |platform| unsafe {
+            let outcome = (|| -> Result<(), String> {
+                let core = platform
+                    .controller()
+                    .CoreWebView2()
+                    .map_err(|error| format!("The {context} controller is unavailable: {error}"))?;
+                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
+                    move |_, _| Ok(()),
+                ));
+                let method = HSTRING::from(method);
+                let parameters = HSTRING::from(parameters);
+                core.CallDevToolsProtocolMethod(&method, &parameters, &handler)
+                    .map_err(|error| format!("The {context} setting could not be applied: {error}"))
+            })();
+            let _ = sender.send(outcome);
+        })
+        .map_err(|error| format!("The {context} controller could not start: {error}"))?;
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|_| format!("The {context} controller did not respond."))?
+}
+
+#[cfg(windows)]
+fn apply_viewport_windows(webview: &Webview, preset: &BrowserViewportPreset) -> Result<(), String> {
     let method = if preset.id == DEFAULT_VIEWPORT_ID {
         "Emulation.clearDeviceMetricsOverride"
     } else {
@@ -2423,27 +2508,31 @@ fn apply_viewport_windows(webview: &Webview, preset: &BrowserViewportPreset) -> 
         })
         .to_string()
     };
-    webview
-        .with_webview(move |platform| unsafe {
-            let outcome = (|| -> Result<(), String> {
-                let core = platform
-                    .controller()
-                    .CoreWebView2()
-                    .map_err(|error| format!("The viewport controller is unavailable: {error}"))?;
-                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
-                    move |_, _| Ok(()),
-                ));
-                let method = HSTRING::from(method);
-                let parameters = HSTRING::from(parameters);
-                core.CallDevToolsProtocolMethod(&method, &parameters, &handler)
-                    .map_err(|error| format!("The viewport could not be applied: {error}"))
-            })();
-            let _ = sender.send(outcome);
+    call_devtools_protocol_method_windows(webview, method, parameters, "viewport")
+}
+
+#[cfg(windows)]
+fn apply_touch_emulation_windows(webview: &Webview, enabled: bool) -> Result<(), String> {
+    call_devtools_protocol_method_windows(
+        webview,
+        "Emulation.setTouchEmulationEnabled",
+        serde_json::json!({
+            "enabled": enabled,
+            "maxTouchPoints": if enabled { 1 } else { 0 },
         })
-        .map_err(|error| format!("The viewport controller could not start: {error}"))?;
-    receiver
-        .recv_timeout(std::time::Duration::from_secs(5))
-        .map_err(|_| "The viewport controller did not respond.".to_owned())?
+        .to_string(),
+        "touch emulation",
+    )?;
+    call_devtools_protocol_method_windows(
+        webview,
+        "Emulation.setEmitTouchEventsForMouse",
+        serde_json::json!({
+            "enabled": enabled,
+            "configuration": "mobile",
+        })
+        .to_string(),
+        "touch input",
+    )
 }
 
 #[cfg(windows)]

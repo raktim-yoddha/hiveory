@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { listen } from '@tauri-apps/api/event'
 import {
   ArrowLeft,
   ArrowRight,
   Check,
+  ChevronDown,
   ChevronRight,
   Code2,
   Cookie,
@@ -11,6 +13,7 @@ import {
   Ellipsis,
   ExternalLink,
   Globe2,
+  Hand,
   Import,
   Lock,
   MessageSquarePlus,
@@ -77,6 +80,14 @@ interface BrowserSurfaceGeometry {
   height: number
 }
 
+interface DeviceMenuPosition {
+  left: number
+  top?: number
+  bottom?: number
+  width: number
+  maxHeight: number
+}
+
 function initialBrowserState(browserId: string, workspaceId: string, url: string): BrowserRuntimeState {
   return {
     browser_id: browserId,
@@ -89,6 +100,7 @@ function initialBrowserState(browserId: string, workspaceId: string, url: string
     error: null,
     profile_id: 'default',
     viewport_id: 'default',
+    touch_enabled: false,
   }
 }
 
@@ -231,6 +243,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const [overlayFrame, setOverlayFrame] = useState<BrowserFrame | null>(null)
   const [overlayFrameGeometry, setOverlayFrameGeometry] = useState<BrowserSurfaceGeometry | null>(null)
   const [deviceToolbarOpen, setDeviceToolbarOpen] = useState(false)
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false)
+  const [deviceMenuPosition, setDeviceMenuPosition] = useState<DeviceMenuPosition | null>(null)
   const [menuSection, setMenuSection] = useState<BrowserMenuSection>('root')
   const [menuBusy, setMenuBusy] = useState(false)
   const [profileDialog, setProfileDialog] = useState<'create' | 'switch' | null>(null)
@@ -248,6 +262,9 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const overlayModeRef = useRef(overlayMode)
   const surfaceSuspendedRef = useRef(surfaceSuspended)
   const nativeVisibilityRequestedRef = useRef(true)
+  const deviceMenuOpenRef = useRef(false)
+  const deviceMenuButtonRef = useRef<HTMLButtonElement>(null)
+  const deviceMenuRef = useRef<HTMLDivElement>(null)
   const cachedFrameRef = useRef<BrowserFrame | null>(null)
   const boundsAnimationFrameRef = useRef<number | null>(null)
   const boundsQueueRef = useRef<LatestAsyncQueue<BrowserBoundsRequest, boolean> | null>(null)
@@ -260,6 +277,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   annotationsRef.current = annotations
   overlayModeRef.current = overlayMode
   surfaceSuspendedRef.current = surfaceSuspended
+  deviceMenuOpenRef.current = deviceMenuOpen
 
   const queueBounds = useCallback((request: BrowserBoundsRequest): Promise<boolean> => {
     return boundsQueueRef.current!.enqueue(request)
@@ -305,7 +323,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const syncBounds = useCallback(() => {
     if (!browserOpenedRef.current) return
     const bounds = currentBounds(
-      nativeVisibilityRequestedRef.current && !surfaceSuspendedRef.current && overlayModeRef.current === null,
+      nativeVisibilityRequestedRef.current && !surfaceSuspendedRef.current && overlayModeRef.current === null && !deviceMenuOpenRef.current,
     )
     if (bounds) void queueBounds(bounds).catch(() => undefined)
   }, [currentBounds, queueBounds])
@@ -314,9 +332,84 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const setNativeVisibility = useCallback(async (visible: boolean) => {
     nativeVisibilityRequestedRef.current = visible
     if (!browserOpenedRef.current) return
-    const bounds = currentBounds(visible && !surfaceSuspendedRef.current)
+    const bounds = currentBounds(visible && !surfaceSuspendedRef.current && !deviceMenuOpenRef.current)
     if (bounds) await queueBounds(bounds)
   }, [currentBounds, queueBounds])
+
+  const updateDeviceMenuPosition = useCallback(() => {
+    const trigger = deviceMenuButtonRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const gutter = 8
+    const gap = 6
+    const width = Math.min(300, Math.max(220, window.innerWidth - gutter * 2))
+    const left = Math.min(Math.max(gutter, rect.left), Math.max(gutter, window.innerWidth - width - gutter))
+    const below = Math.max(0, window.innerHeight - rect.bottom - gutter - gap)
+    const above = Math.max(0, rect.top - gutter - gap)
+    if (below >= 220 || below >= above) {
+      setDeviceMenuPosition({ left, top: rect.bottom + gap, width, maxHeight: Math.max(120, below) })
+    } else {
+      setDeviceMenuPosition({ left, bottom: window.innerHeight - rect.top + gap, width, maxHeight: Math.max(120, above) })
+    }
+  }, [])
+
+  const closeDeviceMenu = useCallback((restoreNative = true) => {
+    deviceMenuOpenRef.current = false
+    setDeviceMenuOpen(false)
+    setDeviceMenuPosition(null)
+    if (!restoreNative || surfaceSuspendedRef.current || overlayModeRef.current !== null) return
+    window.requestAnimationFrame(() => {
+      setSuspensionFrame(null)
+      void setNativeVisibility(true).catch(() => undefined)
+      syncBoundsRef.current()
+    })
+  }, [setNativeVisibility])
+
+  const openDeviceMenu = useCallback(async () => {
+    updateDeviceMenuPosition()
+    setMenuBusy(true)
+    let frame = cachedFrameRef.current
+    if (hiveoryClient.isTauri && browserOpenedRef.current) {
+      try {
+        frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
+        cachedFrameRef.current = frame
+      } catch (error) {
+        setNotice(formatHiveoryClientError(error))
+      }
+      setSuspensionFrame(frame)
+      try {
+        await setNativeVisibility(false)
+      } catch {
+        // The themed selector remains usable if the native surface has already closed.
+      }
+    }
+    deviceMenuOpenRef.current = true
+    setDeviceMenuOpen(true)
+    setMenuBusy(false)
+  }, [browserId, setNativeVisibility, updateDeviceMenuPosition])
+
+  useEffect(() => {
+    if (!deviceMenuOpen) return
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (deviceMenuRef.current?.contains(target) || deviceMenuButtonRef.current?.contains(target)) return
+      closeDeviceMenu()
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeDeviceMenu()
+    }
+    const reposition = () => updateDeviceMenuPosition()
+    document.addEventListener('pointerdown', dismiss, true)
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('resize', reposition)
+    window.addEventListener('scroll', reposition, true)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss, true)
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('resize', reposition)
+      window.removeEventListener('scroll', reposition, true)
+    }
+  }, [closeDeviceMenu, deviceMenuOpen, updateDeviceMenuPosition])
 
   const cacheBrowserFrame = useCallback(() => {
     if (!hiveoryClient.isTauri || !browserOpenedRef.current) return
@@ -634,7 +727,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     setOverlayFrameGeometry(null)
     setMenuSection('root')
     window.requestAnimationFrame(() => {
-      void setNativeVisibility(true).catch(() => undefined)
+      if (!deviceMenuOpenRef.current) void setNativeVisibility(true).catch(() => undefined)
       syncBoundsRef.current()
       window.setTimeout(() => syncAnnotations(annotationsRef.current), 50)
     })
@@ -659,6 +752,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       await hiveoryClient.browserCancelCapture({ browser_id: browserId }).catch(() => false)
     }
     setMenuBusy(true)
+    if (deviceMenuOpenRef.current) closeDeviceMenu(false)
     let frame: BrowserFrame | null = null
     const geometry = currentOverlayGeometry()
     if (hiveoryClient.isTauri) {
@@ -828,12 +922,37 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     }
   }
 
+  const selectDeviceViewport = async (viewportId: string) => {
+    await selectViewport(viewportId)
+    closeDeviceMenu()
+  }
+
+  const toggleTouchEmulation = async () => {
+    setMenuBusy(true)
+    try {
+      const next = await hiveoryClient.browserSetTouchEmulation({
+        browser_id: browserId,
+        enabled: !browserStateRef.current.touch_enabled,
+      })
+      applyState(next)
+      setNotice(next.touch_enabled ? 'Touch simulation enabled.' : 'Touch simulation disabled.')
+    } catch (error) {
+      setNotice(formatHiveoryClientError(error))
+    } finally {
+      setMenuBusy(false)
+    }
+  }
+
   const toggleDeviceToolbar = () => {
     const nextOpen = !deviceToolbarOpen
     closeOverlay()
     setDeviceToolbarOpen(nextOpen)
+    closeDeviceMenu(false)
     if (!nextOpen && browserStateRef.current.viewport_id !== 'default') {
       void selectViewport('default')
+    }
+    if (!nextOpen && browserStateRef.current.touch_enabled) {
+      void hiveoryClient.browserSetTouchEmulation({ browser_id: browserId, enabled: false }).then(applyState).catch((error: unknown) => setNotice(formatHiveoryClientError(error)))
     }
   }
 
@@ -852,6 +971,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   }
 
   const viewportPreset = BROWSER_VIEWPORT_PRESETS.find((item) => item.id === browserState.viewport_id) ?? BROWSER_VIEWPORT_PRESETS[0]
+  const viewportLabel = viewportPreset.id === 'default' ? 'Responsive' : viewportPreset.label
   const isEmulatedViewport = viewportPreset.width > 0
 
   return (
@@ -888,26 +1008,49 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       {deviceToolbarOpen && (
         <div className="code-preview-device-toolbar" role="toolbar" aria-label="Browser device toolbar">
           <span className="code-preview-device-toolbar-label"><Monitor size={13} />Dimensions</span>
-          <label className="code-preview-device-select-label">
-            <span className="sr-only">Device preset</span>
-            <select
-              value={browserState.viewport_id}
-              onChange={(event) => void selectViewport(event.target.value)}
-              disabled={menuBusy}
-              aria-label="Device preset"
-            >
-              {BROWSER_VIEWPORT_PRESETS.map((viewport) => (
-                <option key={viewport.id} value={viewport.id}>
-                  {viewport.id === 'default' ? 'Responsive' : `${viewport.label} — ${viewport.dimensions}`}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button
+            ref={deviceMenuButtonRef}
+            type="button"
+            className={`code-preview-device-select${deviceMenuOpen ? ' is-open' : ''}`}
+            onClick={() => deviceMenuOpen ? closeDeviceMenu() : void openDeviceMenu()}
+            disabled={menuBusy}
+            aria-label="Device preset"
+            aria-haspopup="listbox"
+            aria-expanded={deviceMenuOpen}
+          >
+            <span>{viewportLabel}</span>
+            {viewportPreset.id !== 'default' && <small>{viewportPreset.dimensions}</small>}
+            <ChevronDown size={13} aria-hidden="true" />
+          </button>
           <span className="code-preview-device-dimension" aria-label="Viewport width">{viewportPreset.width || 'Auto'}</span>
           <span className="code-preview-device-separator" aria-hidden="true">×</span>
           <span className="code-preview-device-dimension" aria-label="Viewport height">{viewportPreset.height || 'Auto'}</span>
+          <button type="button" className={`code-preview-device-touch${browserState.touch_enabled ? ' is-active' : ''}`} onClick={() => void toggleTouchEmulation()} disabled={menuBusy} aria-pressed={browserState.touch_enabled} title={browserState.touch_enabled ? 'Disable touch simulation' : 'Enable touch simulation'} aria-label={browserState.touch_enabled ? 'Disable touch simulation' : 'Enable touch simulation'}><Hand size={13} /><span>Touch</span></button>
           <button type="button" className="code-preview-device-close" onClick={toggleDeviceToolbar} title="Hide device toolbar" aria-label="Hide device toolbar"><X size={14} /></button>
         </div>
+      )}
+
+      {deviceMenuOpen && deviceMenuPosition && createPortal(
+        <div
+          ref={deviceMenuRef}
+          className="code-preview-device-menu"
+          role="listbox"
+          aria-label="Device presets"
+          style={{ left: deviceMenuPosition.left, top: deviceMenuPosition.top, bottom: deviceMenuPosition.bottom, width: deviceMenuPosition.width, maxHeight: deviceMenuPosition.maxHeight }}
+        >
+          <div className="code-preview-device-menu-heading"><Monitor size={14} /><span>Device presets</span></div>
+          {BROWSER_VIEWPORT_PRESETS.map((viewport) => {
+            const selected = viewport.id === browserState.viewport_id
+            return (
+              <button key={viewport.id} type="button" className={selected ? 'is-selected' : undefined} role="option" aria-selected={selected} onClick={() => void selectDeviceViewport(viewport.id)}>
+                <span>{viewport.id === 'default' ? 'Responsive' : viewport.label}</span>
+                <small>{viewport.id === 'default' ? 'Fit to pane' : viewport.dimensions}</small>
+                {selected && <Check size={14} aria-hidden="true" />}
+              </button>
+            )
+          })}
+        </div>,
+        document.body,
       )}
 
       {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{pickerAction === 'annotate' ? annotations.length ? `${annotations.length} annotations ready. Select another element or send the feedback.` : 'Click an element to add feedback for an agent.' : 'Click or hover an element, then press C to copy or S to screenshot.'}</span><button type="button" onClick={cancelPicker}>Cancel</button></div>}
@@ -915,7 +1058,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       <div ref={stageRef} className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
         <div className="code-preview-device-canvas">
         <div
-          className={`code-preview-native-surface${surfaceSuspended ? ' is-suspended' : ''}`}
+          className={`code-preview-native-surface${surfaceSuspended || deviceMenuOpen ? ' is-suspended' : ''}`}
           ref={surfaceRef}
           aria-busy={browserState.loading}
           style={isEmulatedViewport ? { width: viewportPreset.width, height: viewportPreset.height } : undefined}
@@ -923,7 +1066,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         >
           {!hiveoryClient.isTauri && <iframe key={`${browserState.url}:${iframeReloadKey}`} src={browserState.url} className="code-preview-iframe" title="Browser" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerPolicy="no-referrer" onLoad={() => setBrowserState((state) => ({ ...state, loading: false }))} />}
           {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true" />}
-          {hiveoryClient.isTauri && surfaceSuspended && suspensionFrame && <img className="code-preview-suspended-frame" src={browserFrameUrl(suspensionFrame)} alt="" aria-hidden="true" />}
+          {hiveoryClient.isTauri && (surfaceSuspended || deviceMenuOpen) && suspensionFrame && <img className="code-preview-suspended-frame" src={browserFrameUrl(suspensionFrame)} alt="" aria-hidden="true" />}
         </div>
         </div>
 

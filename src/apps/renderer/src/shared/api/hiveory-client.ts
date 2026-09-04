@@ -199,7 +199,7 @@ export type CodePreviewSummary = { id: string; workspace_id: string; url: string
 export type BrowserProfile = { id: string; name: string; built_in: boolean }
 export type BrowserSettings = { home_url: string; search_engine: string; default_profile_id: string; default_viewport_id: string }
 export type BrowserConfiguration = { profiles: BrowserProfile[]; settings: BrowserSettings }
-export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null; profile_id: string; viewport_id: string }
+export type BrowserRuntimeState = { browser_id: string; workspace_id: string; url: string; title: string; loading: boolean; can_go_back: boolean; can_go_forward: boolean; error: string | null; profile_id: string; viewport_id: string; touch_enabled: boolean }
 export type BrowserEvent = { event: 'state' | 'popup_routed' | 'download_started' | 'download_finished' | 'error'; state: BrowserRuntimeState; notice: string | null }
 export type BrowserCaptureEvent = { browser_id: string; action: 'grab' | 'annotate' | 'cancel' | 'annotation-copy' | 'annotation-send' | 'annotation-delete' | 'annotation-clear'; payload: Record<string, unknown> }
 export type BrowserFrame = { png_base64: string; width: number; height: number }
@@ -214,6 +214,7 @@ export type BrowserProfileIdRequest = { profile_id: string }
 export type BrowserSwitchProfileRequest = { browser_id: string; profile_id: string }
 export type BrowserSettingsRequest = { settings: BrowserSettings }
 export type BrowserViewportRequest = { browser_id: string; viewport_id: string }
+export type BrowserTouchEmulationRequest = { browser_id: string; enabled: boolean }
 export type BrowserCaptureRequest = { browser_id: string; action: 'grab' | 'annotate' }
 export type BrowserAnnotationSyncRequest = { browser_id: string; annotations: Record<string, unknown>[] }
 export type BrowserCookieFileRequest = { browser_id: string; path: string }
@@ -878,6 +879,7 @@ function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowser
     error: null,
     profile_id: 'default',
     viewport_id: 'default',
+    touch_enabled: false,
   }
 }
 
@@ -1397,6 +1399,12 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriCommand<BrowserViewportRequest, BrowserRuntimeState>('hiveory_command_browser_set_viewport', request)
     const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
     state.viewport_id = request.viewport_id
+    return state
+  },
+  async browserSetTouchEmulation(request: BrowserTouchEmulationRequest): Promise<BrowserRuntimeState> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserTouchEmulationRequest, BrowserRuntimeState>('hiveory_command_browser_set_touch_emulation', request)
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    state.touch_enabled = request.enabled
     return state
   },
   async browserOpenDevtools(request: BrowserIdRequest): Promise<boolean> {

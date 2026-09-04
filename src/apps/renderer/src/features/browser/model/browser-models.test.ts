@@ -19,6 +19,7 @@ const fallback: BrowserRuntimeState = {
   error: null,
   profile_id: 'default',
   viewport_id: 'default',
+  touch_enabled: false,
 }
 
 function payload() {
