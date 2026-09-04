@@ -2,6 +2,23 @@ import type { BrowserFrame, BrowserRuntimeState } from '../../../shared/api/hive
 
 export const BROWSER_VIEWPORT_PRESETS = [
   { id: 'default', label: 'Default', dimensions: 'Use the Browser pane size', width: 0, height: 0 },
+  { id: 'iphone-se', label: 'iPhone SE', dimensions: '375 × 667', width: 375, height: 667 },
+  { id: 'iphone-xr', label: 'iPhone XR', dimensions: '414 × 896', width: 414, height: 896 },
+  { id: 'iphone-12-pro', label: 'iPhone 12 Pro', dimensions: '390 × 844', width: 390, height: 844 },
+  { id: 'iphone-14-pro-max', label: 'iPhone 14 Pro Max', dimensions: '430 × 932', width: 430, height: 932 },
+  { id: 'pixel-7', label: 'Pixel 7', dimensions: '412 × 915', width: 412, height: 915 },
+  { id: 'samsung-galaxy-s8-plus', label: 'Samsung Galaxy S8+', dimensions: '360 × 740', width: 360, height: 740 },
+  { id: 'samsung-galaxy-s20-ultra', label: 'Samsung Galaxy S20 Ultra', dimensions: '412 × 915', width: 412, height: 915 },
+  { id: 'ipad-mini', label: 'iPad Mini', dimensions: '768 × 1024', width: 768, height: 1024 },
+  { id: 'ipad-air', label: 'iPad Air', dimensions: '820 × 1180', width: 820, height: 1180 },
+  { id: 'ipad-pro', label: 'iPad Pro', dimensions: '1024 × 1366', width: 1024, height: 1366 },
+  { id: 'surface-pro-7', label: 'Surface Pro 7', dimensions: '912 × 1368', width: 912, height: 1368 },
+  { id: 'surface-duo', label: 'Surface Duo', dimensions: '540 × 720', width: 540, height: 720 },
+  { id: 'galaxy-z-fold-5', label: 'Galaxy Z Fold 5', dimensions: '344 × 882', width: 344, height: 882 },
+  { id: 'asus-zenbook-fold', label: 'Asus Zenbook Fold', dimensions: '853 × 1280', width: 853, height: 1280 },
+  { id: 'samsung-galaxy-a51-71', label: 'Samsung Galaxy A51/71', dimensions: '412 × 914', width: 412, height: 914 },
+  { id: 'nest-hub', label: 'Nest Hub', dimensions: '1024 × 600', width: 1024, height: 600 },
+  { id: 'nest-hub-max', label: 'Nest Hub Max', dimensions: '1280 × 800', width: 1280, height: 800 },
   { id: 'mobile-s', label: 'Mobile S', dimensions: '320 × 568', width: 320, height: 568 },
   { id: 'mobile-m', label: 'Mobile M', dimensions: '375 × 667', width: 375, height: 667 },
   { id: 'mobile-l', label: 'Mobile L', dimensions: '425 × 812', width: 425, height: 812 },
@@ -14,6 +31,24 @@ export const BROWSER_VIEWPORT_PRESETS = [
 export type BrowserViewportId = (typeof BROWSER_VIEWPORT_PRESETS)[number]['id']
 export type BrowserAnnotationIntent = 'change' | 'question'
 export type BrowserRect = { x: number; y: number; width: number; height: number }
+export type BrowserClientRect = { left: number; top: number; right: number; bottom: number }
+
+export function intersectBrowserSurface(
+  surface: BrowserClientRect,
+  stage: BrowserClientRect,
+  viewport: { width: number; height: number },
+): BrowserRect {
+  const left = Math.max(0, surface.left, stage.left)
+  const top = Math.max(0, surface.top, stage.top)
+  const right = Math.min(viewport.width, surface.right, stage.right)
+  const bottom = Math.min(viewport.height, surface.bottom, stage.bottom)
+  return {
+    x: left,
+    y: top,
+    width: Math.max(0, right - left),
+    height: Math.max(0, bottom - top),
+  }
+}
 
 export type BrowserElementPayload = {
   page: {

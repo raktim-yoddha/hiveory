@@ -114,6 +114,43 @@ use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
+#[derive(Debug, Clone, Deserialize)]
+struct CodeCreateFileRequest {
+    workspace_id: String,
+    relative_path: String,
+    content: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CodeImportAssetRequest {
+    workspace_id: String,
+    source_path: String,
+    target_directory: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CodeImportedAsset {
+    relative_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct CodeReadAssetRequest {
+    workspace_id: String,
+    document_path: String,
+    source: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CodeAssetData {
+    data_base64: String,
+    mime_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ExternalUrlRequest {
+    url: String,
+}
+
 struct HiveoryShellState {
     active_mode: RwLock<ApplicationMode>,
 }
@@ -2974,6 +3011,185 @@ async fn hiveory_command_save_code_file(
 }
 
 #[tauri::command]
+async fn hiveory_command_create_code_file(
+    command: CommandEnvelope<CodeCreateFileRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeDocument>, ApiError> {
+    validate_code_command(&command)?;
+    if !is_markdown_path(&command.payload.relative_path) {
+        return Err(validation_error(
+            "New documents must use a .md or .markdown filename.",
+        ));
+    }
+    let document = foundation
+        .code_workspaces
+        .create_file(
+            &command.payload.workspace_id,
+            &command.payload.relative_path,
+            &command.payload.content,
+        )
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .save_code_document(
+            &command.payload.workspace_id,
+            &hiveory_protocol::CodeDocumentSummary {
+                relative_path: document.relative_path.clone(),
+                language: document.language.clone(),
+                last_fingerprint: Some(document.fingerprint.clone()),
+                last_opened_at_unix_ms: now_ms(),
+            },
+        )
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, document))
+}
+
+#[tauri::command]
+async fn hiveory_command_import_code_asset(
+    command: CommandEnvelope<CodeImportAssetRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeImportedAsset>, ApiError> {
+    validate_code_command(&command)?;
+    let source = PathBuf::from(command.payload.source_path.trim());
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !matches!(
+        extension.as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"
+    ) {
+        return Err(validation_error(
+            "Choose a PNG, JPEG, GIF, WebP, or SVG image.",
+        ));
+    }
+    let bytes = std::fs::read(&source)
+        .map_err(|error| workspace_error(HiveoryWorkspaceError::Io(error)))?;
+    let original_stem = source
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("image");
+    let mut stem = original_stem
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    while stem.contains("--") {
+        stem = stem.replace("--", "-");
+    }
+    let stem = stem.trim_matches('-');
+    let stem = if stem.is_empty() { "image" } else { stem };
+    let directory = command.payload.target_directory.trim().replace('\\', "/");
+
+    let mut created_path = None;
+    for index in 1..=1000 {
+        let filename = if index == 1 {
+            format!("{stem}.{extension}")
+        } else {
+            format!("{stem}-{index}.{extension}")
+        };
+        let relative_path = if directory.is_empty() {
+            filename
+        } else {
+            format!("{directory}/{filename}")
+        };
+        match foundation.code_workspaces.create_file_bytes(
+            &command.payload.workspace_id,
+            &relative_path,
+            &bytes,
+        ) {
+            Ok(_) => {
+                created_path = Some(relative_path);
+                break;
+            }
+            Err(HiveoryWorkspaceError::Io(error))
+                if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(workspace_error(error)),
+        }
+    }
+    let relative_path = created_path
+        .ok_or_else(|| validation_error("No available filename could be found for this image."))?;
+    Ok(response(
+        &command.request_id,
+        CodeImportedAsset { relative_path },
+    ))
+}
+
+#[tauri::command]
+async fn hiveory_query_code_asset(
+    request: CodeReadAssetRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<CodeAssetData, ApiError> {
+    let source = request.source.trim().replace('\\', "/");
+    if source.is_empty()
+        || source.starts_with('/')
+        || source.contains(':')
+        || source.starts_with("//")
+    {
+        return Err(validation_error(
+            "The Markdown image path is not a workspace-relative file.",
+        ));
+    }
+    let directory = Path::new(&request.document_path)
+        .parent()
+        .and_then(Path::to_str)
+        .unwrap_or_default()
+        .replace('\\', "/");
+    let mut path_parts = directory
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    for part in source.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                if path_parts.pop().is_none() {
+                    return Err(validation_error(
+                        "The Markdown image path leaves the workspace.",
+                    ));
+                }
+            }
+            value => path_parts.push(value.to_owned()),
+        }
+    }
+    let relative_path = path_parts.join("/");
+    let bytes = foundation
+        .code_workspaces
+        .read_file_bytes(&request.workspace_id, &relative_path)
+        .map_err(workspace_error)?;
+    let mime_type = match Path::new(&relative_path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        _ => {
+            return Err(validation_error(
+                "The Markdown image type is not supported.",
+            ))
+        }
+    };
+    Ok(CodeAssetData {
+        data_base64: STANDARD.encode(bytes),
+        mime_type: mime_type.to_owned(),
+    })
+}
+
+#[tauri::command]
 async fn hiveory_command_rename_code_file(
     command: CommandEnvelope<CodeRenameFileRequest>,
     foundation: State<'_, HiveoryFoundation>,
@@ -4026,6 +4242,18 @@ async fn hiveory_command_browser_open_external(
     validate_code_command(&command)?;
     browser
         .open_external(&command.payload)
+        .map(|opened| response(&command.request_id, opened))
+        .map_err(browser_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_open_external_url(
+    command: CommandEnvelope<ExternalUrlRequest>,
+    browser: State<'_, BrowserManager>,
+) -> Result<ResponseEnvelope<bool>, ApiError> {
+    validate_code_command(&command)?;
+    browser
+        .open_external_url(&command.payload.url)
         .map(|opened| response(&command.request_id, opened))
         .map_err(browser_error)
 }
@@ -7157,6 +7385,7 @@ pub fn run() {
             hiveory_command_browser_set_viewport,
             hiveory_command_browser_open_devtools,
             hiveory_command_browser_open_external,
+            hiveory_command_open_external_url,
             hiveory_command_browser_import_cookie_file,
             hiveory_command_browser_import_cookie_source,
             hiveory_query_bootstrap,
@@ -7258,6 +7487,9 @@ pub fn run() {
             hiveory_query_code_file_tree,
             hiveory_query_code_file,
             hiveory_command_save_code_file,
+            hiveory_command_create_code_file,
+            hiveory_command_import_code_asset,
+            hiveory_query_code_asset,
             hiveory_command_rename_code_file,
             hiveory_command_save_code_layout,
             hiveory_command_apply_code_pane_mutation,

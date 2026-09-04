@@ -3,6 +3,7 @@ import type { BrowserRuntimeState } from '../../../shared/api/hiveory-client'
 import {
   formatBrowserAnnotations,
   formatBrowserGrab,
+  intersectBrowserSurface,
   parseBrowserElementPayload,
   type BrowserPageAnnotation,
 } from './browser-models'
@@ -51,6 +52,22 @@ function payload() {
 }
 
 describe('browser capture models', () => {
+  it('clips a fixed device viewport to the browser pane instead of adjacent panes', () => {
+    expect(intersectBrowserSurface(
+      { left: 100, top: 80, right: 500, bottom: 780 },
+      { left: 100, top: 80, right: 310, bottom: 620 },
+      { width: 1440, height: 900 },
+    )).toEqual({ x: 100, y: 80, width: 210, height: 540 })
+  })
+
+  it('returns an invisible surface when the device viewport is outside the pane', () => {
+    expect(intersectBrowserSurface(
+      { left: 500, top: 100, right: 800, bottom: 600 },
+      { left: 100, top: 100, right: 400, bottom: 600 },
+      { width: 1440, height: 900 },
+    )).toEqual({ x: 500, y: 100, width: 0, height: 500 })
+  })
+
   it('normalizes and bounds page-controlled capture fields', () => {
     const parsed = parseBrowserElementPayload({
       page: { viewport: { width: Number.NaN, height: 720 } },

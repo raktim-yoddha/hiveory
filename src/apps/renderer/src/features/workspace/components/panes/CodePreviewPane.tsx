@@ -43,6 +43,7 @@ import {
   copyBrowserRegion,
   formatBrowserAnnotations,
   formatBrowserGrab,
+  intersectBrowserSurface,
   parseBrowserElementPayload,
   type BrowserPageAnnotation,
 } from '../../../browser/model/browser-models'
@@ -59,7 +60,7 @@ const GOOGLE_HOME = 'https://www.google.com/'
 const IMPORT_HINT_STORAGE_KEY = 'hiveory.browser.import-hint-dismissed'
 
 type BrowserOverlay = 'menu' | 'draw' | 'agent' | null
-type BrowserMenuSection = 'root' | 'cookies' | 'viewport'
+type BrowserMenuSection = 'root' | 'cookies'
 type BrowserPickerAction = 'grab' | 'annotate'
 
 interface CodePreviewPaneProps {
@@ -67,6 +68,13 @@ interface CodePreviewPaneProps {
   preview?: CodePreviewSummary
   initialUrl?: string
   onStateChange?: (state: BrowserRuntimeState) => void
+}
+
+interface BrowserSurfaceGeometry {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 function initialBrowserState(browserId: string, workspaceId: string, url: string): BrowserRuntimeState {
@@ -147,25 +155,25 @@ function BrowserMenu({
   section,
   configuration,
   activeProfileId,
-  activeViewportId,
+  deviceToolbarOpen,
   onSection,
   onClose,
   onNewProfile,
   onSwitchProfile,
   onImport,
-  onViewport,
+  onToggleDeviceToolbar,
   onSettings,
 }: {
   section: BrowserMenuSection
   configuration: BrowserConfiguration
   activeProfileId: string
-  activeViewportId: string
+  deviceToolbarOpen: boolean
   onSection: (section: BrowserMenuSection) => void
   onClose: () => void
   onNewProfile: () => void
   onSwitchProfile: (profile: BrowserProfile) => void
   onImport: (source: 'chrome' | 'edge' | 'brave' | 'file') => void
-  onViewport: (viewportId: string) => void
+  onToggleDeviceToolbar: () => void
   onSettings: () => void
 }) {
   return (
@@ -180,19 +188,6 @@ function BrowserMenu({
           <div className="code-preview-menu-disclosure"><span aria-hidden="true">ⓘ</span><p><strong>Google logins aren’t imported</strong>Sign in to Google directly in this Browser profile.</p></div>
         </div>
       )}
-      {section === 'viewport' && (
-        <div className="code-preview-menu code-preview-submenu" role="menu" aria-label="Viewport size">
-          {BROWSER_VIEWPORT_PRESETS.map((viewport, index) => (
-            <React.Fragment key={viewport.id}>
-              {index === 1 && <div className="code-preview-menu-separator" />}
-              <button type="button" className={activeViewportId === viewport.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeViewportId === viewport.id} onClick={() => onViewport(viewport.id)}>
-                {activeViewportId === viewport.id ? <Check size={14} /> : <span className="code-preview-menu-placeholder" />}
-                <span>{viewport.label}{viewport.width ? ` — ${viewport.dimensions}` : ''}</span>
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-      )}
       <div className="code-preview-menu" role="menu" aria-label="Browser options">
         {configuration.profiles.map((profile) => (
           <button type="button" key={profile.id} className={activeProfileId === profile.id ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemradio" aria-checked={activeProfileId === profile.id} onClick={() => onSwitchProfile(profile)}>
@@ -205,7 +200,7 @@ function BrowserMenu({
         <div className="code-preview-menu-separator" />
         <button type="button" className={section === 'cookies' ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitem" onMouseEnter={() => onSection('cookies')} onClick={() => onSection('cookies')}><Cookie size={14} /><span>Import Cookies</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
         <div className="code-preview-menu-separator" />
-        <button type="button" className={section === 'viewport' ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitem" onMouseEnter={() => onSection('viewport')} onClick={() => onSection('viewport')}><Monitor size={14} /><span>Viewport Size</span><ChevronRight size={14} className="code-preview-menu-chevron" /></button>
+        <button type="button" className={deviceToolbarOpen ? 'code-preview-menu-item is-selected' : 'code-preview-menu-item'} role="menuitemcheckbox" aria-checked={deviceToolbarOpen} onClick={onToggleDeviceToolbar}>{deviceToolbarOpen ? <Check size={14} /> : <Monitor size={14} />}<span>{deviceToolbarOpen ? 'Hide Device Toolbar' : 'Show Device Toolbar'}</span></button>
         <div className="code-preview-menu-separator" />
         <button type="button" className="code-preview-menu-item" role="menuitem" onClick={onSettings}><Settings2 size={14} /><span>Browser Settings…</span></button>
       </div>
@@ -234,6 +229,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   })
   const [overlayMode, setOverlayMode] = useState<BrowserOverlay>(null)
   const [overlayFrame, setOverlayFrame] = useState<BrowserFrame | null>(null)
+  const [overlayFrameGeometry, setOverlayFrameGeometry] = useState<BrowserSurfaceGeometry | null>(null)
+  const [deviceToolbarOpen, setDeviceToolbarOpen] = useState(false)
   const [menuSection, setMenuSection] = useState<BrowserMenuSection>('root')
   const [menuBusy, setMenuBusy] = useState(false)
   const [profileDialog, setProfileDialog] = useState<'create' | 'switch' | null>(null)
@@ -271,21 +268,37 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const currentBounds = useCallback((visible: boolean): BrowserBoundsRequest | null => {
     if (!hiveoryClient.isTauri || !surfaceRef.current) return null
     const rect = surfaceRef.current.getBoundingClientRect()
+    const stageRect = stageRef.current?.getBoundingClientRect() ?? rect
+    const clipped = intersectBrowserSurface(rect, stageRect, { width: window.innerWidth, height: window.innerHeight })
     return {
       browser_id: browserId,
-      x: Math.max(0, rect.left),
-      y: Math.max(0, rect.top),
-      width: Math.max(0, rect.width),
-      height: Math.max(0, rect.height),
-      visible: visible && rect.width >= 1 && rect.height >= 1,
+      x: clipped.x,
+      y: clipped.y,
+      width: clipped.width,
+      height: clipped.height,
+      visible: visible && clipped.width >= 1 && clipped.height >= 1,
     }
   }, [browserId])
+
+  const currentOverlayGeometry = useCallback((): BrowserSurfaceGeometry | null => {
+    if (!surfaceRef.current || !stageRef.current) return null
+    const rect = surfaceRef.current.getBoundingClientRect()
+    const stageRect = stageRef.current.getBoundingClientRect()
+    const clipped = intersectBrowserSurface(rect, stageRect, { width: window.innerWidth, height: window.innerHeight })
+    return {
+      left: Math.max(0, clipped.x - stageRect.left),
+      top: Math.max(0, clipped.y - stageRect.top),
+      width: clipped.width,
+      height: clipped.height,
+    }
+  }, [])
 
   const applyState = useCallback((state: BrowserRuntimeState | null) => {
     if (!state) return
     browserStateRef.current = state
     setBrowserState(state)
     setAddress(state.url)
+    if (state.viewport_id !== 'default') setDeviceToolbarOpen(true)
     onStateChangeRef.current?.(state)
   }, [])
 
@@ -618,6 +631,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const closeOverlay = useCallback(() => {
     setOverlayMode(null)
     setOverlayFrame(null)
+    setOverlayFrameGeometry(null)
     setMenuSection('root')
     window.requestAnimationFrame(() => {
       void setNativeVisibility(true).catch(() => undefined)
@@ -646,6 +660,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     }
     setMenuBusy(true)
     let frame: BrowserFrame | null = null
+    const geometry = currentOverlayGeometry()
     if (hiveoryClient.isTauri) {
       try {
         frame = await hiveoryClient.browserCaptureFrame({ browser_id: browserId })
@@ -660,6 +675,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       // The menu remains usable even when the native surface has already closed.
     }
     setOverlayFrame(frame)
+    setOverlayFrameGeometry(geometry)
     setMenuSection(section)
     setOverlayMode('menu')
     setMenuBusy(false)
@@ -801,14 +817,23 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     }
   }
 
-  const selectViewport = async (viewportId: string) => {
-    closeOverlay()
+  const selectViewport = async (viewportId: string, dismissMenu = false) => {
+    if (dismissMenu) closeOverlay()
     try {
       const next = await hiveoryClient.browserSetViewport({ browser_id: browserId, viewport_id: viewportId })
       applyState(next)
       setNotice(null)
     } catch (error) {
       setNotice(formatHiveoryClientError(error))
+    }
+  }
+
+  const toggleDeviceToolbar = () => {
+    const nextOpen = !deviceToolbarOpen
+    closeOverlay()
+    setDeviceToolbarOpen(nextOpen)
+    if (!nextOpen && browserStateRef.current.viewport_id !== 'default') {
+      void selectViewport('default')
     }
   }
 
@@ -860,6 +885,31 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
         {browserState.loading && <span className="code-preview-loading" aria-label="Loading">Loading…</span>}
       </div>
 
+      {deviceToolbarOpen && (
+        <div className="code-preview-device-toolbar" role="toolbar" aria-label="Browser device toolbar">
+          <span className="code-preview-device-toolbar-label"><Monitor size={13} />Dimensions</span>
+          <label className="code-preview-device-select-label">
+            <span className="sr-only">Device preset</span>
+            <select
+              value={browserState.viewport_id}
+              onChange={(event) => void selectViewport(event.target.value)}
+              disabled={menuBusy}
+              aria-label="Device preset"
+            >
+              {BROWSER_VIEWPORT_PRESETS.map((viewport) => (
+                <option key={viewport.id} value={viewport.id}>
+                  {viewport.id === 'default' ? 'Responsive' : `${viewport.label} — ${viewport.dimensions}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="code-preview-device-dimension" aria-label="Viewport width">{viewportPreset.width || 'Auto'}</span>
+          <span className="code-preview-device-separator" aria-hidden="true">×</span>
+          <span className="code-preview-device-dimension" aria-label="Viewport height">{viewportPreset.height || 'Auto'}</span>
+          <button type="button" className="code-preview-device-close" onClick={toggleDeviceToolbar} title="Hide device toolbar" aria-label="Hide device toolbar"><X size={14} /></button>
+        </div>
+      )}
+
       {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{pickerAction === 'annotate' ? annotations.length ? `${annotations.length} annotations ready. Select another element or send the feedback.` : 'Click an element to add feedback for an agent.' : 'Click or hover an element, then press C to copy or S to screenshot.'}</span><button type="button" onClick={cancelPicker}>Cancel</button></div>}
       {notice && <div className="code-preview-notice" role="status">{notice}</div>}
       <div ref={stageRef} className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
@@ -879,8 +929,8 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
         {overlayMode === 'menu' && (
           <div className="code-preview-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeOverlay() }}>
-            {overlayFrame && <img className="code-preview-overlay-image" src={browserFrameUrl(overlayFrame)} alt="Current browser page" />}
-            <BrowserMenu section={menuSection} configuration={configuration} activeProfileId={browserState.profile_id} activeViewportId={browserState.viewport_id} onSection={setMenuSection} onClose={closeOverlay} onNewProfile={() => setProfileDialog('create')} onSwitchProfile={switchProfile} onImport={(source) => void importCookies(source)} onViewport={(viewportId) => void selectViewport(viewportId)} onSettings={openSettings} />
+            {overlayFrame && overlayFrameGeometry && <img className="code-preview-overlay-image is-browser-menu-frame" style={{ left: overlayFrameGeometry.left, top: overlayFrameGeometry.top, width: overlayFrameGeometry.width, height: overlayFrameGeometry.height }} src={browserFrameUrl(overlayFrame)} alt="Current browser page" />}
+            <BrowserMenu section={menuSection} configuration={configuration} activeProfileId={browserState.profile_id} deviceToolbarOpen={deviceToolbarOpen} onSection={setMenuSection} onClose={closeOverlay} onNewProfile={() => setProfileDialog('create')} onSwitchProfile={switchProfile} onImport={(source) => void importCookies(source)} onToggleDeviceToolbar={toggleDeviceToolbar} onSettings={openSettings} />
             {profileDialog === 'create' && (
               <form className="hiveory-browser-profile-dialog" onSubmit={(event) => { event.preventDefault(); void newProfile() }}>
                 <div className="hiveory-browser-profile-dialog-head"><div><span>Browser profile</span><strong>Create a separate profile</strong></div><button type="button" onClick={() => { setProfileDialog(null); setProfileName('') }} aria-label="Close profile dialog"><X size={15} /></button></div>

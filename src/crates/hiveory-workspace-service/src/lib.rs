@@ -491,6 +491,18 @@ impl HiveoryWorkspaceService {
         relative_path: &str,
         content: &str,
     ) -> Result<CodeDocument, HiveoryWorkspaceError> {
+        self.create_file_bytes(workspace_id, relative_path, content.as_bytes())
+    }
+
+    /// Creates a new regular file from arbitrary bytes without replacing an
+    /// existing entry. Markdown attachments use this path so images remain
+    /// inside the workspace and travel with their document.
+    pub fn create_file_bytes(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+        content: &[u8],
+    ) -> Result<CodeDocument, HiveoryWorkspaceError> {
         self.require(workspace_id, CodeWorkspaceCapability::WriteFiles)?;
         if content.len() as u64 > CODE_MAX_FILE_BYTES {
             return Err(HiveoryWorkspaceError::FileTooLarge);
@@ -500,10 +512,32 @@ impl HiveoryWorkspaceService {
         let (parent, file_name) = open_parent_directory(&handle.root, &normalized)?;
         let mut created =
             parent.open_with(&file_name, OpenOptions::new().write(true).create_new(true))?;
-        created.write_all(content.as_bytes())?;
+        created.write_all(content)?;
         created.sync_all()?;
         drop(created);
-        document_from_bytes(workspace_id, &normalized, content.as_bytes().to_vec())
+        document_from_bytes(workspace_id, &normalized, content.to_vec())
+    }
+
+    /// Reads raw bytes through the same capability and path-containment checks
+    /// as text documents. The renderer receives these bytes as a data URL and
+    /// never needs broad filesystem access.
+    pub fn read_file_bytes(
+        &self,
+        workspace_id: &str,
+        relative_path: &str,
+    ) -> Result<Vec<u8>, HiveoryWorkspaceError> {
+        self.require(workspace_id, CodeWorkspaceCapability::ReadFiles)?;
+        let normalized = validate_relative_path(relative_path, false).map_err(domain_path_error)?;
+        let handle = self.handle(workspace_id)?;
+        let (parent, file_name) = open_parent_directory(&handle.root, &normalized)?;
+        let metadata = parent.symlink_metadata(&file_name)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(HiveoryWorkspaceError::SymlinkNotAllowed);
+        }
+        if metadata.len() > CODE_MAX_FILE_BYTES {
+            return Err(HiveoryWorkspaceError::FileTooLarge);
+        }
+        Ok(parent.read(&file_name)?)
     }
 
     pub fn rename_file(
@@ -712,6 +746,33 @@ mod tests {
                 .content,
             "# New document\n"
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn imports_and_reads_binary_workspace_assets_without_overwriting() {
+        let root = std::env::temp_dir().join(format!("hiveory-code-assets-{}", Uuid::now_v7()));
+        fs::create_dir_all(root.join("docs")).unwrap();
+        let service = HiveoryWorkspaceService::new();
+        let summary = service
+            .open_workspace(&root, None, CodeWorkspaceTrust::Trusted)
+            .unwrap();
+        let bytes = [0_u8, 1, 2, 3, 255];
+
+        let created = service
+            .create_file_bytes(&summary.id, "docs/image.png", &bytes)
+            .unwrap();
+        assert!(created.binary);
+        assert_eq!(
+            service
+                .read_file_bytes(&summary.id, "docs/image.png")
+                .unwrap(),
+            bytes
+        );
+        assert!(matches!(
+            service.create_file_bytes(&summary.id, "docs/image.png", &[9]),
+            Err(HiveoryWorkspaceError::Io(error)) if error.kind() == io::ErrorKind::AlreadyExists
+        ));
         let _ = fs::remove_dir_all(root);
     }
 

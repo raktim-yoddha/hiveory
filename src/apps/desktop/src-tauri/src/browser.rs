@@ -774,6 +774,14 @@ impl BrowserManager {
         Ok(true)
     }
 
+    pub(crate) fn open_external_url(&self, url: &str) -> Result<bool, String> {
+        let parsed = Url::parse(url.trim())
+            .map_err(|_| "The link is not a valid web address.".to_owned())?;
+        let validated = validate_browser_url(&parsed)?;
+        open_url_external(validated.as_str())?;
+        Ok(true)
+    }
+
     pub(crate) fn import_cookie_file(
         &self,
         request: &BrowserCookieFileRequest,
@@ -1766,6 +1774,125 @@ fn viewport_preset(id: &str) -> Option<BrowserViewportPreset> {
             height: 0,
             device_scale_factor: 1.0,
             mobile: false,
+        },
+        "iphone-se" => BrowserViewportPreset {
+            id: "iphone-se",
+            width: 375,
+            height: 667,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "iphone-xr" => BrowserViewportPreset {
+            id: "iphone-xr",
+            width: 414,
+            height: 896,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "iphone-12-pro" => BrowserViewportPreset {
+            id: "iphone-12-pro",
+            width: 390,
+            height: 844,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "iphone-14-pro-max" => BrowserViewportPreset {
+            id: "iphone-14-pro-max",
+            width: 430,
+            height: 932,
+            device_scale_factor: 3.0,
+            mobile: true,
+        },
+        "pixel-7" => BrowserViewportPreset {
+            id: "pixel-7",
+            width: 412,
+            height: 915,
+            device_scale_factor: 2.625,
+            mobile: true,
+        },
+        "samsung-galaxy-s8-plus" => BrowserViewportPreset {
+            id: "samsung-galaxy-s8-plus",
+            width: 360,
+            height: 740,
+            device_scale_factor: 3.0,
+            mobile: true,
+        },
+        "samsung-galaxy-s20-ultra" => BrowserViewportPreset {
+            id: "samsung-galaxy-s20-ultra",
+            width: 412,
+            height: 915,
+            device_scale_factor: 3.5,
+            mobile: true,
+        },
+        "ipad-mini" => BrowserViewportPreset {
+            id: "ipad-mini",
+            width: 768,
+            height: 1024,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "ipad-air" => BrowserViewportPreset {
+            id: "ipad-air",
+            width: 820,
+            height: 1180,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "ipad-pro" => BrowserViewportPreset {
+            id: "ipad-pro",
+            width: 1024,
+            height: 1366,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "surface-pro-7" => BrowserViewportPreset {
+            id: "surface-pro-7",
+            width: 912,
+            height: 1368,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "surface-duo" => BrowserViewportPreset {
+            id: "surface-duo",
+            width: 540,
+            height: 720,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "galaxy-z-fold-5" => BrowserViewportPreset {
+            id: "galaxy-z-fold-5",
+            width: 344,
+            height: 882,
+            device_scale_factor: 2.625,
+            mobile: true,
+        },
+        "asus-zenbook-fold" => BrowserViewportPreset {
+            id: "asus-zenbook-fold",
+            width: 853,
+            height: 1280,
+            device_scale_factor: 2.0,
+            mobile: true,
+        },
+        "samsung-galaxy-a51-71" => BrowserViewportPreset {
+            id: "samsung-galaxy-a51-71",
+            width: 412,
+            height: 914,
+            device_scale_factor: 2.625,
+            mobile: true,
+        },
+        "nest-hub" => BrowserViewportPreset {
+            id: "nest-hub",
+            width: 1024,
+            height: 600,
+            device_scale_factor: 1.0,
+            mobile: true,
+        },
+        "nest-hub-max" => BrowserViewportPreset {
+            id: "nest-hub-max",
+            width: 1280,
+            height: 800,
+            device_scale_factor: 1.0,
+            mobile: true,
         },
         "mobile-s" => BrowserViewportPreset {
             id: "mobile-s",

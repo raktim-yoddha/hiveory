@@ -159,6 +159,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
         return (
           <CodeMarkdownPane
+            key={node.resource_id}
             workspaceId={state.workspaceId}
             relativePath={node.resource_id}
             onOpenMarkdown={(path) => void openMarkdown(node.pane_id, path)}

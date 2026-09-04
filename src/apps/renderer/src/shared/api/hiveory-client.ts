@@ -306,6 +306,12 @@ type CodeWorkspaceTrustRequest = { workspace_id: string; grant: boolean }
 type CodeFileTreeQuery = { workspace_id: string; relative_path: string | null }
 type CodeReadFileRequest = { workspace_id: string; relative_path: string }
 type CodeSaveFileRequest = { workspace_id: string; relative_path: string; content: string; expected_fingerprint: string | null }
+type CodeCreateFileRequest = { workspace_id: string; relative_path: string; content: string }
+type CodeImportAssetRequest = { workspace_id: string; source_path: string; target_directory: string }
+type CodeReadAssetRequest = { workspace_id: string; document_path: string; source: string }
+export type CodeImportedAsset = { relative_path: string }
+export type CodeAssetData = { data_base64: string; mime_type: string }
+type ExternalUrlRequest = { url: string }
 type CodeSaveLayoutRequest = { workspace_id: string; layout: CodePaneLayout }
 type CodeGitStatusRequest = { workspace_id: string }
 type CodeGitDiffRequest = { workspace_id: string; relative_path: string | null; staged: boolean }
@@ -1172,6 +1178,33 @@ export const hiveoryClient = {
     file.fingerprint = `preview-${previewNow()}-${Math.random().toString(16).slice(2)}`
     return structuredClone(file)
   },
+  async createCodeFile(request: CodeCreateFileRequest): Promise<CodeDocument> {
+    if (hiveoryIsTauri) return tauriCommand<CodeCreateFileRequest, CodeDocument>('hiveory_command_create_code_file', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    if (!workspace) throw new Error('Workspace was not found.')
+    if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before saving files.')
+    if (workspace.files.has(request.relative_path)) throw new Error('A file already exists at that path.')
+    const file: CodeDocument = {
+      workspace_id: request.workspace_id,
+      relative_path: request.relative_path,
+      content: request.content,
+      language: 'markdown',
+      fingerprint: `preview-${previewNow()}-${Math.random().toString(16).slice(2)}`,
+      bytes: request.content.length,
+      read_only: false,
+      binary: false,
+    }
+    workspace.files.set(request.relative_path, file)
+    return structuredClone(file)
+  },
+  async importCodeAsset(request: CodeImportAssetRequest): Promise<CodeImportedAsset> {
+    if (hiveoryIsTauri) return tauriCommand<CodeImportAssetRequest, CodeImportedAsset>('hiveory_command_import_code_asset', request)
+    throw new Error('Local image import is available in the desktop app.')
+  },
+  async readCodeAsset(request: CodeReadAssetRequest): Promise<CodeAssetData> {
+    if (hiveoryIsTauri) return tauriQuery<CodeAssetData>('hiveory_query_code_asset', { request })
+    throw new Error('Local workspace images are available in the desktop app.')
+  },
   async renameCodeFile(request: CodeRenameFileRequest): Promise<CodeRenameFileResult> {
     if (hiveoryIsTauri) return tauriCommand<CodeRenameFileRequest, CodeRenameFileResult>('hiveory_command_rename_code_file', request)
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
@@ -1462,6 +1495,11 @@ export const hiveoryClient = {
   },
   async getCodeTerminalHistoryEnabled(terminalId: string): Promise<boolean> {
     if (hiveoryIsTauri) return tauriQuery<boolean>('hiveory_query_code_terminal_history', { terminalId })
+    return true
+  },
+  async openExternalUrl(request: ExternalUrlRequest): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<ExternalUrlRequest, boolean>('hiveory_command_open_external_url', request)
+    window.open(request.url, '_blank', 'noopener,noreferrer')
     return true
   },
   async setCodeTerminalHistoryEnabled(request: CodeTerminalHistorySettingRequest): Promise<boolean> {

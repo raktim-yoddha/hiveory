@@ -1,12 +1,15 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { Editor } from '@tiptap/core'
@@ -35,6 +38,7 @@ import {
   Copy,
   Ellipsis,
   Eye,
+  ExternalLink,
   FileImage,
   FilePlus2,
   FileText,
@@ -107,14 +111,9 @@ interface ToolbarButtonProps {
 
 const lowlight = createLowlight(common)
 
-function resolveMarkdownImageSource(source: string): string {
-  if (/^(https?:|data:|blob:|asset:|file:)/i.test(source)) return source
-  if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) return convertFileSrc(source)
-  return source
-}
-
-const WorkspaceImage = Image.extend({
-  addNodeView() {
+function workspaceImageExtension(workspaceId: string, documentPath: string) {
+  return Image.extend({
+    addNodeView() {
     return ({ node, HTMLAttributes }) => {
       const frame = document.createElement('figure')
       frame.className = 'hiveory-markdown-image'
@@ -122,9 +121,22 @@ const WorkspaceImage = Image.extend({
       image.draggable = false
       frame.append(image)
 
+      let loadVersion = 0
       const sync = (current: ProseMirrorNode) => {
+        const version = ++loadVersion
         const source = typeof current.attrs.src === 'string' ? current.attrs.src : ''
-        image.src = resolveMarkdownImageSource(source)
+        if (/^(https?:|data:|blob:|asset:|file:)/i.test(source)) image.src = source
+        else if (/^(?:[a-z]:[\\/]|\\\\)/i.test(source)) image.src = convertFileSrc(source)
+        else if (source) {
+          image.removeAttribute('src')
+          void hiveoryClient.readCodeAsset({ workspace_id: workspaceId, document_path: documentPath, source })
+            .then((asset) => {
+              if (version === loadVersion) image.src = `data:${asset.mime_type};base64,${asset.data_base64}`
+            })
+            .catch(() => {
+              if (version === loadVersion) image.removeAttribute('src')
+            })
+        } else image.removeAttribute('src')
         image.alt = typeof current.attrs.alt === 'string' ? current.attrs.alt : ''
         if (typeof current.attrs.title === 'string' && current.attrs.title) image.title = current.attrs.title
         else image.removeAttribute('title')
@@ -146,15 +158,15 @@ const WorkspaceImage = Image.extend({
         },
       }
     }
-  },
-})
+    },
+  })
+}
 
-const markdownExtensions = [
+const baseMarkdownExtensions = [
   StarterKit.configure({ link: false, code: false, codeBlock: false }),
   Code,
   CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
   Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
-  WorkspaceImage.configure({ allowBase64: true }),
   TaskList,
   TaskItem.configure({ nested: true }),
   Details.configure({ persist: true }),
@@ -169,6 +181,64 @@ const markdownExtensions = [
   Placeholder.configure({ includeChildren: true, placeholder: 'Write markdown… Type / for blocks.' }),
   Markdown.configure({ markedOptions: { gfm: true } }),
 ]
+
+function FloatingMarkdownMenu({
+  anchor,
+  className,
+  align = 'end',
+  children,
+}: {
+  anchor: React.RefObject<HTMLElement>
+  className: string
+  align?: 'start' | 'end'
+  children: ReactNode
+}) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ top: 0, left: 0, visible: false })
+
+  useLayoutEffect(() => {
+    const update = () => {
+      const anchorElement = anchor.current
+      const menu = menuRef.current
+      if (!anchorElement || !menu) return
+      const anchorRect = anchorElement.getBoundingClientRect()
+      const menuRect = menu.getBoundingClientRect()
+      const margin = 8
+      const left = align === 'start'
+        ? Math.min(window.innerWidth - menuRect.width - margin, Math.max(margin, anchorRect.left))
+        : Math.min(window.innerWidth - menuRect.width - margin, Math.max(margin, anchorRect.right - menuRect.width))
+      const roomBelow = window.innerHeight - anchorRect.bottom - margin
+      const top = roomBelow >= menuRect.height
+        ? anchorRect.bottom + 6
+        : Math.max(margin, anchorRect.top - menuRect.height - 6)
+      setPosition({ top, left, visible: true })
+    }
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    if (anchor.current) observer?.observe(anchor.current)
+    if (menuRef.current) observer?.observe(menuRef.current)
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
+    }
+  }, [align, anchor])
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className={className}
+      role="menu"
+      style={{ position: 'fixed', top: position.top, left: position.left, visibility: position.visible ? 'visible' : 'hidden' }}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
+      {children}
+    </div>,
+    document.body,
+  )
+}
 
 function MarkdownToolbarButton({ label, icon: Icon, text, active = false, disabled = false, onClick }: ToolbarButtonProps) {
   return (
@@ -217,12 +287,13 @@ function normalizeLink(value: string): string {
   return `https://${value}`
 }
 
-export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, onOpenMarkdown, onCreateMarkdown, onRenameMarkdown }) => {
+export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, onOpenMarkdown, onRenameMarkdown }) => {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const linkPanelRef = useRef<HTMLFormElement>(null)
   const imagePanelRef = useRef<HTMLFormElement>(null)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const markdownFileMenuRef = useRef<HTMLDivElement>(null)
+  const moreMenuAnchorRef = useRef<HTMLDivElement>(null)
   const markdownNameInputRef = useRef<HTMLInputElement>(null)
   const nameCommitInProgressRef = useRef(false)
   const skipNameCommitRef = useRef(false)
@@ -257,14 +328,16 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
   const [markdownFileQuery, setMarkdownFileQuery] = useState('')
   const [nameEditing, setNameEditing] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
+  const [draftMode, setDraftMode] = useState(false)
 
-  const documentName = fileNameFromPath(relativePath)
+  const persistedDocumentName = fileNameFromPath(relativePath)
+  const documentName = draftMode ? (nameDraft || 'Untitled.md') : persistedDocumentName
   const documentDirectory = relativePath.replaceAll('\\', '/').split('/').slice(0, -1).join('/')
 
   useEffect(() => {
-    setNameDraft(documentName)
+    if (!draftMode) setNameDraft(persistedDocumentName)
     setNameEditing(false)
-  }, [documentName])
+  }, [draftMode, persistedDocumentName])
 
   useEffect(() => {
     if (nameEditing) {
@@ -277,6 +350,11 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     setSlashMenu(editorSlashState(instance, surfaceRef.current))
   }, [])
 
+  const markdownExtensions = useMemo(() => [
+    ...baseMarkdownExtensions,
+    workspaceImageExtension(workspaceId, relativePath).configure({ allowBase64: true }),
+  ], [relativePath, workspaceId])
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: markdownExtensions,
@@ -286,6 +364,22 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       attributes: {
         class: 'hiveory-markdown-content',
         spellcheck: 'true',
+      },
+      handleClick: (_view, _position, event) => {
+        const target = event.target instanceof Element ? event.target.closest('a[href]') : null
+        if (!(target instanceof HTMLAnchorElement)) return false
+        const href = target.getAttribute('href') ?? ''
+        if (!href) return false
+        event.preventDefault()
+        setLinkValue(href)
+        setLinkPanelOpen(true)
+        setImagePanelOpen(false)
+        if ((event.ctrlKey || event.metaKey) && /^https?:\/\//i.test(href)) {
+          void hiveoryClient.openExternalUrl({ url: href }).catch((reason: unknown) => {
+            setError(reason instanceof Error ? reason.message : 'The link could not be opened.')
+          })
+        }
+        return true
       },
     },
     onUpdate: ({ editor: instance }) => {
@@ -307,6 +401,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
 
   useEffect(() => {
     let disposed = false
+    setDraftMode(false)
     setLoading(true)
     setError(null)
     setMarkdownDocument(null)
@@ -399,6 +494,11 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       return false
     }
     const content = viewModeRef.current === 'rich' ? editorRef.current?.getMarkdown() ?? sourceRef.current : sourceRef.current
+    if (draftMode) {
+      setStatusMessage('Name this document to save it')
+      setNameEditing(true)
+      return false
+    }
     setSaving(true)
     setError(null)
     try {
@@ -421,9 +521,84 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     } finally {
       setSaving(false)
     }
-  }, [relativePath, workspaceId])
+  }, [draftMode, relativePath, workspaceId])
+
+  const saveDraft = useCallback(async (requestedName: string): Promise<boolean> => {
+    const name = requestedName.trim()
+    if (!name || name.includes('/') || name.includes('\\') || !/\.(md|markdown)$/i.test(name)) {
+      setError('Use a Markdown filename ending in .md or .markdown without folder separators.')
+      setNameEditing(true)
+      return false
+    }
+    const relativeDraftPath = documentDirectory ? `${documentDirectory}/${name}` : name
+    const content = viewModeRef.current === 'rich' ? editorRef.current?.getMarkdown() ?? sourceRef.current : sourceRef.current
+    setSaving(true)
+    setError(null)
+    try {
+      const created = await hiveoryClient.createCodeFile({
+        workspace_id: workspaceId,
+        relative_path: relativeDraftPath,
+        content,
+      })
+      documentRef.current = created
+      sourceRef.current = created.content
+      baselineRef.current = created.content
+      setMarkdownDocument(created)
+      setMarkdownSource(created.content)
+      setDirty(false)
+      setDraftMode(false)
+      setNameEditing(false)
+      setStatusMessage(`Saved ${fileNameFromPath(created.relative_path)}`)
+      onOpenMarkdown?.(created.relative_path)
+      return true
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'The Markdown document could not be created.')
+      setNameEditing(true)
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }, [documentDirectory, onOpenMarkdown, workspaceId])
+
+  const createNewDraft = useCallback(() => {
+    if (dirty && !window.confirm('Discard the unsaved changes and create a new Markdown document?')) return
+    const draft: CodeDocument = {
+      workspace_id: workspaceId,
+      relative_path: 'Untitled.md',
+      content: '',
+      language: 'markdown',
+      fingerprint: '',
+      bytes: 0,
+      read_only: false,
+      binary: false,
+    }
+    documentRef.current = draft
+    sourceRef.current = ''
+    baselineRef.current = ''
+    setMarkdownDocument(draft)
+    setMarkdownSource('')
+    setDirty(false)
+    setDraftMode(true)
+    setNameDraft('Untitled.md')
+    setNameEditing(false)
+    setError(null)
+    setStatusMessage('New unsaved document')
+    syncSourceIntoEditor('')
+  }, [dirty, syncSourceIntoEditor, workspaceId])
+
+  const openMarkdownDocument = useCallback((path: string) => {
+    if (path === relativePath && !draftMode) return
+    if (dirty && !window.confirm('Discard the unsaved changes and open another Markdown document?')) return
+    setMarkdownFileMenuOpen(false)
+    setMarkdownFileQuery('')
+    onOpenMarkdown?.(path)
+  }, [dirty, draftMode, onOpenMarkdown, relativePath])
 
   const reloadDocument = useCallback(async () => {
+    if (draftMode) {
+      createNewDraft()
+      return
+    }
     try {
       const next = await hiveoryClient.readCodeFile({ workspace_id: workspaceId, relative_path: relativePath })
       documentRef.current = next
@@ -437,9 +612,13 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'The Markdown document could not be reloaded.')
     }
-  }, [relativePath, syncSourceIntoEditor, workspaceId])
+  }, [createNewDraft, draftMode, relativePath, syncSourceIntoEditor, workspaceId])
 
   const renameDocument = useCallback(async (requestedName = nameDraft) => {
+    if (draftMode) {
+      await saveDraft(requestedName)
+      return
+    }
     if (!onRenameMarkdown) {
       setError('Markdown rename is unavailable in this workspace.')
       return
@@ -478,7 +657,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'The Markdown document could not be renamed.')
     }
-  }, [dirty, documentDirectory, documentName, nameDraft, onRenameMarkdown, saveDocument])
+  }, [dirty, documentDirectory, documentName, draftMode, nameDraft, onRenameMarkdown, saveDocument, saveDraft])
 
   const commitNameEdit = useCallback(() => {
     if (nameCommitInProgressRef.current) return
@@ -506,6 +685,11 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
       if (!open) void refreshMarkdownFiles()
       return !open
     })
+  }, [refreshMarkdownFiles])
+
+  const showMarkdownFileMenu = useCallback(() => {
+    void refreshMarkdownFiles()
+    setMarkdownFileMenuOpen(true)
   }, [refreshMarkdownFiles])
 
   const copyMarkdown = useCallback(async () => {
@@ -556,6 +740,12 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
   }, [])
 
   const chooseImage = useCallback(async () => {
+    if (draftMode) {
+      setError('Save this new Markdown document before adding a local image.')
+      setStatusMessage('Save the document first')
+      setNameEditing(true)
+      return
+    }
     if (!hiveoryClient.isTauri) {
       setImagePanelOpen(true)
       return
@@ -566,11 +756,19 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
         directory: false,
         filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'] }],
       })
-      if (typeof selected === 'string') insertImage(selected)
+      if (typeof selected === 'string') {
+        const imported = await hiveoryClient.importCodeAsset({
+          workspace_id: workspaceId,
+          source_path: selected,
+          target_directory: documentDirectory,
+        })
+        insertImage(fileNameFromPath(imported.relative_path))
+        setStatusMessage(`Imported ${fileNameFromPath(imported.relative_path)}`)
+      }
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : 'The image could not be selected.')
     }
-  }, [insertImage])
+  }, [documentDirectory, draftMode, insertImage, workspaceId])
 
   const openLinkPanel = () => {
     const activeLink = editor?.getAttributes('link').href
@@ -761,7 +959,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
           {dirty && <span className="hiveory-markdown-dirty-dot" title="Unsaved changes" aria-label="Unsaved changes" />}
           {statusMessage && <span className="hiveory-markdown-status-message" role="status">{statusMessage}</span>}
           {markdownFileMenuOpen && (
-            <div className="hiveory-markdown-file-menu" role="menu" onMouseDown={(event) => event.stopPropagation()}>
+            <FloatingMarkdownMenu anchor={markdownFileMenuRef} className="hiveory-markdown-file-menu" align="start">
               <div className="hiveory-markdown-file-menu-title"><FolderOpen size={14} />Markdown files</div>
               <label className="hiveory-markdown-file-search">
                 <Search size={14} aria-hidden="true" />
@@ -780,7 +978,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
                 onClick={() => {
                   setMarkdownFileMenuOpen(false)
                   setMarkdownFileQuery('')
-                  onCreateMarkdown?.()
+                  createNewDraft()
                 }}
               >
                 <FilePlus2 size={14} />Create new Markdown
@@ -794,11 +992,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
                     role="menuitem"
                     key={path}
                     className={`hiveory-markdown-file-item${path === relativePath ? ' is-current' : ''}`}
-                    onClick={() => {
-                      setMarkdownFileMenuOpen(false)
-                      setMarkdownFileQuery('')
-                      if (path !== relativePath) onOpenMarkdown?.(path)
-                    }}
+                    onClick={() => openMarkdownDocument(path)}
                     title={path}
                   >
                     <FileText size={14} />
@@ -807,7 +1001,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
                 ))}
                 {!markdownFilesLoading && !markdownFilesError && !filteredMarkdownFiles.length && <div className="hiveory-markdown-file-state">No Markdown files found.</div>}
               </div>
-            </div>
+            </FloatingMarkdownMenu>
           )}
         </div>
         <div className="hiveory-markdown-header-actions" ref={headerMenuRef}>
@@ -819,8 +1013,10 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
           <button type="button" className="hiveory-markdown-header-button" onClick={() => void shareMarkdown()} title="Share Markdown" aria-label="Share Markdown"><Share2 size={15} /></button>
           <button type="button" className={`hiveory-markdown-header-button${headerMenuOpen ? ' is-active' : ''}`} onClick={() => setHeaderMenuOpen((value) => !value)} title="Document options" aria-label="Document options" aria-haspopup="menu" aria-expanded={headerMenuOpen}><MoreHorizontal size={16} /></button>
           {headerMenuOpen && (
-            <div className="hiveory-markdown-header-menu" role="menu">
+            <FloatingMarkdownMenu anchor={headerMenuRef} className="hiveory-markdown-header-menu">
               <div className="hiveory-markdown-header-menu-title">{documentName}</div>
+              <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); createNewDraft() }}><FilePlus2 size={14} />New Markdown</button>
+              <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); showMarkdownFileMenu() }}><FolderOpen size={14} />Open Markdown…</button>
               <button type="button" role="menuitem" disabled={saving} onClick={() => { setHeaderMenuOpen(false); void saveDocument() }}><Save size={14} />{saving ? 'Saving…' : 'Save document'}</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); setNameDraft(documentName); setNameEditing(true) }}><PenLine size={14} />Rename document…</button>
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void reloadDocument() }}><RotateCcw size={14} />Reload from disk</button>
@@ -829,7 +1025,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
               <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void copyMarkdown() }}><Copy size={14} />Copy Markdown</button>
               <button type="button" role="menuitem" onClick={() => runMoreCommand(() => editor?.chain().focus().undo().run())}><Undo2 size={14} />Undo</button>
               <button type="button" role="menuitem" onClick={() => runMoreCommand(() => editor?.chain().focus().redo().run())}><Redo2 size={14} />Redo</button>
-            </div>
+            </FloatingMarkdownMenu>
           )}
         </div>
       </div>
@@ -851,10 +1047,10 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
         <MarkdownToolbarButton label="Quote" icon={Quote} disabled={!editor || viewMode !== 'rich'} onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={editor?.isActive('blockquote')} />
         <MarkdownToolbarButton label="Link" icon={Link2} disabled={!editor || viewMode !== 'rich'} onClick={openLinkPanel} active={editor?.isActive('link')} />
         <MarkdownToolbarButton label="Image" icon={ImageIcon} disabled={!editor || viewMode !== 'rich'} onClick={() => void chooseImage()} />
-        <div className="hiveory-markdown-more-wrap">
+        <div className="hiveory-markdown-more-wrap" ref={moreMenuAnchorRef}>
           <MarkdownToolbarButton label="More blocks" icon={Ellipsis} disabled={!editor || viewMode !== 'rich'} onClick={() => setMoreOpen((value) => !value)} active={moreOpen} />
           {moreOpen && (
-            <div className="hiveory-markdown-more-menu" role="menu">
+            <FloatingMarkdownMenu anchor={moreMenuAnchorRef} className="hiveory-markdown-more-menu">
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().toggleHeading({ level: 4 }).run())}><Heading4 size={15} />Heading 4</button>
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().toggleHeading({ level: 5 }).run())}><Heading5 size={15} />Heading 5</button>
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().toggleCodeBlock().run())}><Code2 size={15} />Code block</button>
@@ -864,7 +1060,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().insertInlineMath({ latex: 'x^2' }).run())}><Sigma size={15} />Inline math</button>
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().insertBlockMath({ latex: 'x^2 + y^2 = z^2' }).run())}><Sigma size={15} />Math block</button>
               <button type="button" role="menuitem" onMouseDown={(event) => event.preventDefault()} onClick={() => runMoreCommand(() => editor?.chain().focus().setDetails().run())}><ChevronRight size={15} />Collapsible section</button>
-            </div>
+            </FloatingMarkdownMenu>
           )}
         </div>
       </div>
@@ -885,7 +1081,12 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
         {linkPanelOpen && (
           <form className="hiveory-markdown-popover hiveory-markdown-link-popover" ref={linkPanelRef} onSubmit={applyLink} onMouseDown={(event) => event.stopPropagation()}>
             <label><Link2 size={14} />Link address<input autoFocus value={linkValue} onChange={(event) => setLinkValue(event.target.value)} placeholder="https://example.com" /></label>
-            <div className="hiveory-markdown-popover-actions"><button type="button" onClick={() => { editor?.chain().focus().unsetLink().run(); setLinkPanelOpen(false) }}>Remove</button><button type="submit" className="is-primary">Apply</button></div>
+            <span className="hiveory-markdown-link-hint">Ctrl-click linked text to open it in your default browser.</span>
+            <div className="hiveory-markdown-popover-actions">
+              <button type="button" disabled={!/^https?:\/\//i.test(linkValue.trim())} onClick={() => void hiveoryClient.openExternalUrl({ url: linkValue.trim() }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'The link could not be opened.'))}><ExternalLink size={13} />Open</button>
+              <button type="button" onClick={() => { editor?.chain().focus().unsetLink().run(); setLinkPanelOpen(false) }}>Remove</button>
+              <button type="submit" className="is-primary">Apply</button>
+            </div>
           </form>
         )}
         {imagePanelOpen && (

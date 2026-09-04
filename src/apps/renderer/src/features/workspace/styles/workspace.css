@@ -4171,7 +4171,7 @@
 .code-coordination-proposal span { color: #929aa6; font-size: 9px; }
 
 .code-coordination-block-heading {
-  justify-content: flex-start;
+  justify-content: safe center;
   margin: 12px 0 5px;
   color: #aeb7c5;
 }
@@ -5577,7 +5577,7 @@
 }
 
 .code-preview-stage.is-emulated {
-  overflow: auto;
+  overflow: hidden;
   background: #15181d;
 }
 
@@ -5589,12 +5589,16 @@
 }
 
 .code-preview-stage.is-emulated .code-preview-device-canvas {
+  box-sizing: border-box;
   flex: 0 0 auto;
   align-items: flex-start;
-  justify-content: center;
-  min-width: 100%;
-  min-height: 100%;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
   padding: 12px;
+  overflow: hidden;
 }
 
 .code-preview-native-surface {
@@ -5619,6 +5623,8 @@
 
 .code-preview-stage.is-emulated .code-preview-native-surface {
   flex: 0 0 auto;
+  max-width: none;
+  max-height: none;
   overflow: hidden;
   box-shadow: 0 0 0 1px #353b44, 0 16px 34px rgba(0, 0, 0, 0.35);
 }
@@ -5641,6 +5647,115 @@
   background: #15181d;
   user-select: none;
   pointer-events: none;
+}
+
+.code-preview-overlay-image.is-browser-menu-frame {
+  right: auto;
+  bottom: auto;
+  object-fit: fill;
+  object-position: left top;
+}
+
+.code-preview-device-toolbar {
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex: 0 0 32px;
+  min-width: 0;
+  gap: 5px;
+  padding: 3px 7px;
+  overflow-x: auto;
+  color: #aeb7c0;
+  background: #101216;
+  border-bottom: 1px solid #2a2d33;
+  scrollbar-width: none;
+}
+
+.code-preview-device-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.code-preview-device-toolbar-label {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.code-preview-device-select-label {
+  flex: 0 0 auto;
+}
+
+.code-preview-device-select-label .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.code-preview-device-select-label select {
+  width: clamp(112px, 18vw, 190px);
+  height: 24px;
+  padding: 0 26px 0 8px;
+  color: #e7ebee;
+  color-scheme: dark;
+  background: #202329;
+  border: 1px solid #343840;
+  border-radius: 6px;
+  outline: none;
+  font: 11px/1 Inter, system-ui, sans-serif;
+}
+
+.code-preview-device-select-label select:focus-visible,
+.code-preview-device-close:focus-visible {
+  outline: 2px solid #b8b8b8;
+  outline-offset: 1px;
+}
+
+.code-preview-device-dimension {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 47px;
+  height: 24px;
+  padding: 0 6px;
+  color: #d8dde1;
+  background: #17191e;
+  border: 1px solid #30343a;
+  border-radius: 6px;
+  font: 10px/1 "JetBrains Mono", Consolas, monospace;
+}
+
+.code-preview-device-separator {
+  flex: 0 0 auto;
+  color: #747e87;
+  font-size: 10px;
+}
+
+.code-preview-device-close {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  color: #9aa4ac;
+  background: #101216;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.code-preview-device-close:hover {
+  color: #fff;
+  background: #30343a;
 }
 
 .code-preview-overlay-shade {
@@ -6529,10 +6644,9 @@
 }
 
 .hiveory-markdown-file-menu {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 6px);
-  left: 0;
+  position: fixed;
+  z-index: 10000;
+  right: auto;
   display: flex;
   flex-direction: column;
   width: min(320px, calc(100vw - 24px));
@@ -6831,10 +6945,9 @@
 }
 
 .hiveory-markdown-more-menu {
-  position: absolute;
-  z-index: 24;
-  top: 34px;
-  right: 0;
+  position: fixed;
+  z-index: 10000;
+  right: auto;
   display: grid;
   width: 190px;
   padding: 5px;
@@ -6865,10 +6978,9 @@
 }
 
 .hiveory-markdown-header-menu {
-  position: absolute;
-  z-index: 28;
-  top: 35px;
-  right: 0;
+  position: fixed;
+  z-index: 10000;
+  right: auto;
   display: grid;
   width: 190px;
   padding: 5px;
@@ -6882,6 +6994,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 11px/1.2 "JetBrains Mono", Consolas, monospace;
+}
+
+.hiveory-markdown-link-hint {
+  display: block;
+  padding: 0 2px;
+  color: #8f8f8f;
+  font: 10px/1.4 Inter, system-ui, sans-serif;
 }
 
 .hiveory-markdown-surface {
