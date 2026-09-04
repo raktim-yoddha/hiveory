@@ -1,5 +1,5 @@
 import React, { Component, useEffect, useState, type ReactNode } from 'react'
-import { hiveoryClient, type CodePaneNode } from '../../../shared/api/hiveory-client'
+import { hiveoryClient, type BrowserRuntimeState, type CodePaneNode } from '../../../shared/api/hiveory-client'
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodePaneHeader } from './CodePaneHeader'
 import { CodePaneDropTargets } from './CodePaneDropTargets'
@@ -68,6 +68,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
     requestClosePane,
     launchTerminal,
     openPreview,
+    updatePreviewState,
     createMarkdown,
     openMarkdown,
     renameMarkdown,
@@ -154,7 +155,14 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         )
       case 'preview':
         if (!previewSummary) return <div className="code-preview-native-placeholder">Loading Browser…</div>
-        return <CodePreviewPane key={previewSummary.id} workspaceId={state.workspaceId ?? previewSummary.workspace_id} preview={previewSummary} />
+        return (
+          <CodePreviewPane
+            key={previewSummary.id}
+            workspaceId={state.workspaceId ?? previewSummary.workspace_id}
+            preview={previewSummary}
+            onStateChange={(nextState: BrowserRuntimeState) => updatePreviewState(nextState)}
+          />
+        )
       case 'markdown':
         if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
         return (

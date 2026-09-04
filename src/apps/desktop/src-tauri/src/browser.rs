@@ -287,6 +287,7 @@ struct BrowserEntry {
     history: Vec<String>,
     history_index: usize,
     pending_history_action: Option<HistoryAction>,
+    pending_history_url: Option<String>,
     active_interaction: Option<String>,
     annotation_channel: Option<String>,
     visible: bool,
@@ -337,16 +338,11 @@ impl BrowserManager {
             if existing.workspace_id != request.workspace_id {
                 return Err("This browser resource belongs to another workspace.".to_owned());
             }
-            if existing.url != url.as_str() {
-                let state = self.navigate(
-                    app,
-                    &BrowserNavigationRequest {
-                        browser_id: request.browser_id.clone(),
-                        url: url.to_string(),
-                    },
-                )?;
-                return Ok(state);
-            }
+            // `open` is the lifecycle/reconnect operation for an existing pane.
+            // Its URL is a snapshot supplied by the renderer and can be older
+            // than the URL currently being loaded in the native WebView. An
+            // explicit address-bar navigation goes through `navigate`; opening
+            // an existing resource must never undo that newer navigation.
             self.inner.show(&request.browser_id)?;
             emit_event(
                 app,
@@ -391,6 +387,7 @@ impl BrowserManager {
             history: vec![url.to_string()],
             history_index: 0,
             pending_history_action: None,
+            pending_history_url: None,
             active_interaction: None,
             annotation_channel: None,
             visible: false,
@@ -653,6 +650,7 @@ impl BrowserManager {
             history: vec![url.to_string()],
             history_index: 0,
             pending_history_action: None,
+            pending_history_url: None,
             active_interaction: None,
             annotation_channel: None,
             visible: false,
@@ -845,6 +843,8 @@ impl BrowserManager {
         let app_for_load = app.clone();
         let inner_for_load = Arc::clone(&inner);
         let browser_id_for_load = browser_id.clone();
+        let inner_for_navigation = Arc::clone(&inner);
+        let browser_id_for_navigation = browser_id.clone();
         let app_for_title = app.clone();
         let inner_for_title = Arc::clone(&inner);
         let browser_id_for_title = browser_id.clone();
@@ -861,7 +861,14 @@ impl BrowserManager {
             WebviewUrl::External(url.clone()),
         )
         .data_directory(profile_dir)
-        .on_navigation(is_allowed_browser_url)
+        .on_navigation(move |navigation_url| {
+            if !is_allowed_browser_url(navigation_url) {
+                return false;
+            }
+            let _ = inner_for_navigation
+                .navigation_requested(&browser_id_for_navigation, navigation_url.to_string());
+            true
+        })
         .on_new_window(move |new_url, _features| {
             if !is_allowed_browser_url(&new_url) {
                 if let Some(state) = inner_for_popup
@@ -1361,6 +1368,7 @@ impl BrowserManagerInner {
             entry.loading = true;
             entry.error = None;
             entry.pending_history_action = None;
+            entry.pending_history_url = None;
             entry.current_url = url.to_string();
             entry.webview.clone()
         };
@@ -1394,6 +1402,13 @@ impl BrowserManagerInner {
             entry.loading = true;
             entry.error = None;
             entry.pending_history_action = Some(action);
+            let target_index = match action {
+                HistoryAction::Back => entry.history_index.saturating_sub(1),
+                HistoryAction::Forward => {
+                    (entry.history_index + 1).min(entry.history.len().saturating_sub(1))
+                }
+            };
+            entry.pending_history_url = entry.history.get(target_index).cloned();
             entry.webview.clone()
         };
         let script = match action {
@@ -1524,7 +1539,13 @@ impl BrowserManagerInner {
         let Some(entry) = entries.get_mut(browser_id) else {
             return Ok(None);
         };
-        entry.current_url = url;
+        if !accepts_browser_load_event(
+            &entry.current_url,
+            entry.pending_history_url.as_deref(),
+            &url,
+        ) {
+            return Ok(None);
+        }
         entry.loading = true;
         entry.error = None;
         Ok(Some(snapshot_from_entry(entry)))
@@ -1543,6 +1564,14 @@ impl BrowserManagerInner {
             let Some(entry) = entries.get_mut(browser_id) else {
                 return Ok(None);
             };
+            if !accepts_browser_load_event(
+                &entry.current_url,
+                entry.pending_history_url.as_deref(),
+                &url,
+            ) {
+                return Ok(None);
+            }
+            entry.pending_history_url = None;
             match entry.pending_history_action.take() {
                 Some(HistoryAction::Back) => {
                     entry.history_index = entry.history_index.saturating_sub(1);
@@ -1583,6 +1612,23 @@ impl BrowserManagerInner {
         Ok(Some(state))
     }
 
+    fn navigation_requested(&self, browser_id: &str, url: String) -> Result<(), String> {
+        let mut entries = self
+            .entries
+            .lock()
+            .map_err(|_| "The Browser state lock is unavailable.".to_owned())?;
+        let Some(entry) = entries.get_mut(browser_id) else {
+            return Ok(());
+        };
+        entry.current_url = url.clone();
+        entry.loading = true;
+        entry.error = None;
+        if entry.pending_history_action.is_some() {
+            entry.pending_history_url = Some(url);
+        }
+        Ok(())
+    }
+
     fn title_changed(
         &self,
         browser_id: &str,
@@ -1598,6 +1644,14 @@ impl BrowserManagerInner {
         entry.title = title;
         Ok(Some(snapshot_from_entry(entry)))
     }
+}
+
+fn accepts_browser_load_event(
+    current_url: &str,
+    pending_history_url: Option<&str>,
+    event_url: &str,
+) -> bool {
+    pending_history_url.unwrap_or(current_url) == event_url
 }
 
 fn snapshot_from_entry(entry: &BrowserEntry) -> BrowserRuntimeState {
@@ -3154,8 +3208,8 @@ fn now_ms() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_annotation_overlay_script, build_picker_script, is_allowed_browser_url,
-        normalize_browser_input,
+        accepts_browser_load_event, build_annotation_overlay_script, build_picker_script,
+        is_allowed_browser_url, normalize_browser_input,
     };
 
     #[test]
@@ -3192,6 +3246,30 @@ mod tests {
         let url = url::Url::parse("https://user:pass@example.com").unwrap();
         assert!(!is_allowed_browser_url(&url));
         assert!(normalize_browser_input("mailto:user@example.com").is_err());
+    }
+
+    #[test]
+    fn stale_page_load_events_cannot_replace_a_newer_navigation() {
+        assert!(accepts_browser_load_event(
+            "https://new.example/",
+            None,
+            "https://new.example/"
+        ));
+        assert!(!accepts_browser_load_event(
+            "https://new.example/",
+            None,
+            "https://old.example/"
+        ));
+        assert!(accepts_browser_load_event(
+            "https://old.example/",
+            Some("https://history.example/"),
+            "https://history.example/"
+        ));
+        assert!(!accepts_browser_load_event(
+            "https://old.example/",
+            Some("https://history.example/"),
+            "https://stale.example/"
+        ));
     }
 
     #[test]

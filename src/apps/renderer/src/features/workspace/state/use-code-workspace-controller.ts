@@ -8,6 +8,7 @@ import {
   type CodeTerminalKind,
   type CodeTerminalSummary,
   type CodePreviewSummary,
+  type BrowserRuntimeState,
 } from '../../../shared/api/hiveory-client'
 import {
   codeWorkspaceReducer,
@@ -36,6 +37,7 @@ export interface CodeWorkspaceController {
   applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
+  updatePreviewState: (state: BrowserRuntimeState) => void
   createMarkdown: (paneId: string) => Promise<void>
   openMarkdown: (paneId: string, relativePath: string) => Promise<void>
   renameMarkdown: (paneId: string, relativePath: string, newRelativePath: string, expectedFingerprint: string | null) => Promise<CodeDocument | null>
@@ -98,6 +100,18 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     stateRef.current = { ...stateRef.current, previews }
     dispatch({ type: 'SET_PREVIEW', preview })
   }, [])
+
+  const updatePreviewState = useCallback((browserState: BrowserRuntimeState) => {
+    const currentPreview = stateRef.current.previews.get(browserState.browser_id)
+    if (!currentPreview) return
+    let origin = currentPreview.origin
+    try {
+      origin = new URL(browserState.url).origin
+    } catch {
+      // Keep the last known origin if a transient native navigation state is malformed.
+    }
+    commitPreview({ ...currentPreview, url: browserState.url, origin })
+  }, [commitPreview])
 
   const enqueueOperation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
     const run = mutationQueueRef.current.then(operation)
@@ -810,6 +824,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     applyPreset,
     launchTerminal,
     openPreview,
+    updatePreviewState,
     createMarkdown,
     openMarkdown,
     renameMarkdown,
