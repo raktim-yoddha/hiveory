@@ -820,7 +820,13 @@ async function tauriCommand<TPayload, TResponse>(name: string, payload: TPayload
     throw normalizeHiveoryClientError(error)
   }
 }
-async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Promise<T> { return invoke<T>(name, args) }
+async function tauriQuery<T>(name: string, args?: Record<string, unknown>): Promise<T> {
+  try {
+    return await invoke<T>(name, args)
+  } catch (error: unknown) {
+    throw normalizeHiveoryClientError(error)
+  }
+}
 
 function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowserInput(request.url)): BrowserRuntimeState {
   return {

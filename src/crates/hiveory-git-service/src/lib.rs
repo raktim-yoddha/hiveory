@@ -4,10 +4,9 @@
 //! operations remain explicit and are called only by trusted host commands.
 
 use git2::{
-    build::CheckoutBuilder,
-    BranchType, DiffFormat, DiffOptions, Index, IndexAddOption, IndexEntry,
-    IndexTime, MergeOptions, Reference, Remote, Repository, Signature, StashFlags, Status,
-    StatusOptions, WorktreeAddOptions, WorktreeLockStatus, WorktreePruneOptions,
+    build::CheckoutBuilder, BranchType, DiffFormat, DiffOptions, Index, IndexAddOption, IndexEntry,
+    IndexTime, MergeOptions, Reference, Remote, Repository, Signature, Status, StatusOptions,
+    WorktreeAddOptions, WorktreeLockStatus,
 };
 use hiveory_code_domain::validate_relative_path;
 use hiveory_platform_process::configure_background_command;
@@ -16,14 +15,37 @@ use hiveory_protocol::{
     CodeGitRemote, CodeGitRepositorySummary, CodeGitStash, CodeGitStatus, CodeGitWorktree,
 };
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    sync::{Arc, Condvar, Mutex, OnceLock},
 };
 use thiserror::Error;
 
 const MAX_DIFF_BYTES: usize = 2 * 1024 * 1024;
+
+static GIT_OPERATION_LANES: OnceLock<Mutex<HashMap<PathBuf, Arc<GitOperationLane>>>> =
+    OnceLock::new();
+
+#[derive(Debug, Default)]
+struct GitOperationLane {
+    busy: Mutex<bool>,
+    ready: Condvar,
+}
+
+struct GitOperationGuard {
+    lane: Arc<GitOperationLane>,
+}
+
+impl Drop for GitOperationGuard {
+    fn drop(&mut self) {
+        if let Ok(mut busy) = self.lane.busy.lock() {
+            *busy = false;
+            self.lane.ready.notify_one();
+        }
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum HiveoryGitError {
@@ -170,11 +192,7 @@ impl HiveoryGitService {
                 .head()
                 .ok()
                 .and_then(|head| head.peel_to_tree().ok());
-            repository.diff_tree_to_index(
-                head_tree.as_ref(),
-                Some(&index),
-                Some(&mut options),
-            )?
+            repository.diff_tree_to_index(head_tree.as_ref(), Some(&index), Some(&mut options))?
         } else {
             repository.diff_index_to_workdir(None, Some(&mut options))?
         };
@@ -204,6 +222,7 @@ impl HiveoryGitService {
         relative_paths: &[String],
         stage: bool,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "stage")?;
         let repository = self.open_repository(root)?;
         let paths = normalized_paths(relative_paths)?;
         if stage {
@@ -234,10 +253,8 @@ impl HiveoryGitService {
                     .ok()
                     .and_then(|reference| reference.peel_to_commit().ok());
                 if let Some(head) = head {
-                    repository.reset_default(
-                        Some(head.as_object()),
-                        paths.iter().map(String::as_str),
-                    )?;
+                    repository
+                        .reset_default(Some(head.as_object()), paths.iter().map(String::as_str))?;
                 } else {
                     let mut index = repository.index()?;
                     for path in &paths {
@@ -276,6 +293,7 @@ impl HiveoryGitService {
         relative_paths: &[String],
         include_untracked: bool,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "discard")?;
         let repository = self.open_repository(root)?;
         let paths = if relative_paths.is_empty() {
             self.dirty_paths(root)?
@@ -331,15 +349,18 @@ impl HiveoryGitService {
 
         let mut index = repository.index()?;
         for path in remove_paths {
-            let absolute = worktree.join(Path::new(&path));
-            remove_untracked_path(&absolute)?;
+            remove_untracked_path(&worktree, Path::new(&path))?;
             let _ = index.remove_path(Path::new(&path));
         }
         index.write()?;
         Ok(operation_result(
             workspace_id,
             "discard",
-            format!("Discarded {} path{}.", paths.len(), if paths.len() == 1 { "" } else { "s" }),
+            format!(
+                "Discarded {} path{}.",
+                paths.len(),
+                if paths.len() == 1 { "" } else { "s" }
+            ),
             None,
             self.current_branch(root)?,
         ))
@@ -351,6 +372,7 @@ impl HiveoryGitService {
         root: &Path,
         message: &str,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "commit")?;
         let repository = self.open_repository(root)?;
         let message = message.trim();
         if message.is_empty() {
@@ -365,7 +387,10 @@ impl HiveoryGitService {
             ));
         }
         let tree_oid = index.write_tree()?;
-        let head = repository.head().ok().and_then(|reference| reference.target());
+        let head = repository
+            .head()
+            .ok()
+            .and_then(|reference| reference.target());
         let same_as_head = head
             .and_then(|oid| repository.find_commit(oid).ok())
             .is_some_and(|commit| commit.tree_id() == tree_oid);
@@ -389,19 +414,15 @@ impl HiveoryGitService {
                 &[&parent],
             )?
         } else {
-            repository.commit(
-                Some("HEAD"),
-                &signature,
-                &signature,
-                message,
-                &tree,
-                &[],
-            )?
+            repository.commit(Some("HEAD"), &signature, &signature, message, &tree, &[])?
         };
         Ok(operation_result(
             workspace_id,
             "commit",
-            format!("Created commit {}.", oid.to_string().chars().take(8).collect::<String>()),
+            format!(
+                "Created commit {}.",
+                oid.to_string().chars().take(8).collect::<String>()
+            ),
             Some(oid.to_string()),
             self.current_branch(root)?,
         ))
@@ -414,6 +435,7 @@ impl HiveoryGitService {
         name: &str,
         start_point: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "branch create")?;
         let repository = self.open_repository(root)?;
         let name = validate_branch_name(name)?;
         if repository.find_branch(&name, BranchType::Local).is_ok() {
@@ -442,6 +464,7 @@ impl HiveoryGitService {
         create: bool,
         start_point: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "branch checkout")?;
         let repository = self.open_repository(root)?;
         let name = validate_branch_name(name)?;
         let existing = repository.find_branch(&name, BranchType::Local);
@@ -488,19 +511,27 @@ impl HiveoryGitService {
         name: &str,
         force: bool,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "branch delete")?;
         let repository = self.open_repository(root)?;
         let name = validate_branch_name(name)?;
-        let mut branch = repository.find_branch(&name, BranchType::Local)?;
+        let branch = repository.find_branch(&name, BranchType::Local)?;
         if branch.is_head() {
             return Err(HiveoryGitError::InvalidInput(
                 "The current branch cannot be deleted.".to_owned(),
             ));
         }
-        if force {
-            self.run_git(root, "branch delete", &["branch".to_owned(), "-D".to_owned(), name.clone()])?;
-        } else {
-            branch.delete()?;
-        }
+        drop(branch);
+        drop(repository);
+        self.run_git(
+            root,
+            "branch delete",
+            &[
+                "branch".to_owned(),
+                if force { "-D" } else { "-d" }.to_owned(),
+                "--".to_owned(),
+                name.clone(),
+            ],
+        )?;
         Ok(operation_result(
             workspace_id,
             "branch_delete",
@@ -517,6 +548,7 @@ impl HiveoryGitService {
         remote: Option<&str>,
         branch: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "fetch")?;
         let remote = validate_remote(remote)?;
         let branch = validate_optional_branch(branch)?;
         let mut args = vec!["fetch".to_owned()];
@@ -545,6 +577,7 @@ impl HiveoryGitService {
         remote: Option<&str>,
         branch: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "pull")?;
         let remote = validate_remote(remote)?;
         let branch = validate_optional_branch(branch)?;
         let mut args = vec!["pull".to_owned(), "--ff-only".to_owned()];
@@ -571,6 +604,7 @@ impl HiveoryGitService {
         remote: Option<&str>,
         branch: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
+        let _operation = git_operation_guard(root, "push")?;
         let remote = validate_remote(remote)?;
         let branch = validate_optional_branch(branch)?;
         let mut args = vec!["push".to_owned()];
@@ -596,23 +630,24 @@ impl HiveoryGitService {
         root: &Path,
         message: Option<&str>,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
-        let mut repository = self.open_repository(root)?;
-        let signature = repository.signature().map_err(|error| {
-            HiveoryGitError::InvalidInput(format!(
-                "Configure Git user.name and user.email before stashing ({error})."
-            ))
-        })?;
+        let _operation = git_operation_guard(root, "stash save")?;
+        self.open_repository(root)?;
         let message = message.map(str::trim).filter(|value| !value.is_empty());
-        let oid = repository.stash_save2(
-            &signature,
-            message.or(Some("Hiveory source-control stash")),
-            Some(StashFlags::INCLUDE_UNTRACKED),
-        )?;
+        let mut args = vec![
+            "stash".to_owned(),
+            "push".to_owned(),
+            "--include-untracked".to_owned(),
+        ];
+        if let Some(message) = message {
+            args.push("-m".to_owned());
+            args.push(message.to_owned());
+        }
+        let output = self.run_git(root, "stash save", &args)?;
         Ok(operation_result(
             workspace_id,
             "stash_save",
-            format!("Saved stash {}.", oid.to_string().chars().take(8).collect::<String>()),
-            Some(oid.to_string()),
+            command_message(output, "Saved the working changes to a stash."),
+            None,
             self.current_branch(root)?,
         ))
     }
@@ -623,8 +658,17 @@ impl HiveoryGitService {
         root: &Path,
         index: u32,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
-        let mut repository = self.open_repository(root)?;
-        repository.stash_pop(index as usize, None)?;
+        let _operation = git_operation_guard(root, "stash pop")?;
+        self.open_repository(root)?;
+        self.run_git(
+            root,
+            "stash pop",
+            &[
+                "stash".to_owned(),
+                "pop".to_owned(),
+                format!("stash@{{{index}}}"),
+            ],
+        )?;
         Ok(operation_result(
             workspace_id,
             "stash_pop",
@@ -640,8 +684,17 @@ impl HiveoryGitService {
         root: &Path,
         index: u32,
     ) -> Result<CodeGitOperationResult, HiveoryGitError> {
-        let mut repository = self.open_repository(root)?;
-        repository.stash_drop(index as usize)?;
+        let _operation = git_operation_guard(root, "stash drop")?;
+        self.open_repository(root)?;
+        self.run_git(
+            root,
+            "stash drop",
+            &[
+                "stash".to_owned(),
+                "drop".to_owned(),
+                format!("stash@{{{index}}}"),
+            ],
+        )?;
         Ok(operation_result(
             workspace_id,
             "stash_drop",
@@ -663,6 +716,8 @@ impl HiveoryGitService {
             .args(args)
             .current_dir(root)
             .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GCM_INTERACTIVE", "Never")
+            .env("LANG", "C")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -855,7 +910,8 @@ impl HiveoryGitService {
     }
 
     pub fn ensure_repository(&self, root: &Path) -> Result<String, HiveoryGitError> {
-        let repository = match Repository::discover(root) {
+        let _operation = git_operation_guard(root, "repository initialization")?;
+        let repository = match Repository::open(root) {
             Ok(repo) => repo,
             Err(_) => Repository::init(root)?,
         };
@@ -914,6 +970,7 @@ impl HiveoryGitService {
         branch_name: &str,
         base_oid: &str,
     ) -> Result<HiveoryCreatedWorktree, HiveoryGitError> {
+        let _operation = git_operation_guard(repository_root, "worktree create")?;
         if name.trim().is_empty()
             || name.contains('/')
             || name.contains('\\')
@@ -940,7 +997,12 @@ impl HiveoryGitService {
         let reference = branch.into_reference();
         let mut options = WorktreeAddOptions::new();
         options.reference(Some(&reference)).lock(true);
-        repository.worktree(name, path, Some(&options))?;
+        if let Err(error) = repository.worktree(name, path, Some(&options)) {
+            if let Ok(mut created_branch) = repository.find_branch(branch_name, BranchType::Local) {
+                let _ = created_branch.delete();
+            }
+            return Err(HiveoryGitError::Git(error));
+        }
         Ok(HiveoryCreatedWorktree {
             name: name.to_owned(),
             path: path.to_path_buf(),
@@ -974,11 +1036,48 @@ impl HiveoryGitService {
         &self,
         repository_root: &Path,
         name: &str,
+        expected_path: &Path,
         managed_root: &Path,
         force: bool,
     ) -> Result<(), HiveoryGitError> {
-        let inspection = self.inspect_worktree(repository_root, name)?;
-        if !is_within(managed_root, &inspection.path) {
+        let _operation = git_operation_guard(repository_root, "worktree remove")?;
+        if name.trim().is_empty() || name.contains('/') || name.contains('\\') {
+            return Err(HiveoryGitError::InvalidWorktreeName);
+        }
+        if !is_within(managed_root, expected_path) {
+            return Err(HiveoryGitError::WorktreeOutsideManagedRoot);
+        }
+
+        let inspection = match self.inspect_worktree(repository_root, name) {
+            Ok(inspection) => Some(inspection),
+            Err(HiveoryGitError::Git(error)) if error.code() == git2::ErrorCode::NotFound => None,
+            Err(error) => return Err(error),
+        };
+
+        let Some(inspection) = inspection else {
+            // A previous interrupted cleanup can leave app metadata after Git's
+            // worktree registration is already gone. This path is app-owned and
+            // boundary-checked above, so force removal is safe and idempotent.
+            if expected_path.exists() {
+                if !force {
+                    return Err(HiveoryGitError::InvalidInput(
+                        "The managed worktree registration is stale. Retry with force cleanup."
+                            .to_owned(),
+                    ));
+                }
+                remove_managed_directory(expected_path)?;
+            }
+            let _ = self.run_git(
+                repository_root,
+                "worktree prune",
+                &["worktree".to_owned(), "prune".to_owned()],
+            );
+            return Ok(());
+        };
+
+        if !paths_equal(&inspection.path, expected_path)
+            || !is_within(managed_root, &inspection.path)
+        {
             return Err(HiveoryGitError::WorktreeOutsideManagedRoot);
         }
         if inspection.locked && !force {
@@ -989,14 +1088,28 @@ impl HiveoryGitService {
                 return Err(HiveoryGitError::WorktreeDirty(path.clone()));
             }
         }
-        let repository = self.open_repository(repository_root)?;
-        let worktree = repository.find_worktree(name)?;
         if force && inspection.locked {
+            let repository = self.open_repository(repository_root)?;
+            let worktree = repository.find_worktree(name)?;
             worktree.unlock()?;
         }
-        let mut options = WorktreePruneOptions::new();
-        options.valid(true).working_tree(true).locked(force);
-        worktree.prune(Some(&mut options))?;
+
+        if !inspection.path.exists() {
+            self.run_git(
+                repository_root,
+                "worktree prune",
+                &["worktree".to_owned(), "prune".to_owned()],
+            )?;
+            return Ok(());
+        }
+
+        let mut args = vec!["worktree".to_owned(), "remove".to_owned()];
+        if force {
+            args.push("--force".to_owned());
+        }
+        args.push("--".to_owned());
+        args.push(inspection.path.to_string_lossy().into_owned());
+        self.run_git(repository_root, "worktree remove", &args)?;
         Ok(())
     }
 
@@ -1005,6 +1118,7 @@ impl HiveoryGitService {
         repository_root: &Path,
         name: &str,
     ) -> Result<(), HiveoryGitError> {
+        let _operation = git_operation_guard(repository_root, "worktree unlock")?;
         let repository = self.open_repository(repository_root)?;
         let worktree = repository.find_worktree(name)?;
         if matches!(worktree.is_locked()?, WorktreeLockStatus::Locked(_)) {
@@ -1075,6 +1189,7 @@ impl HiveoryGitService {
         parent_oid: Option<&str>,
         message: &str,
     ) -> Result<HiveoryCheckpoint, HiveoryGitError> {
+        let _operation = git_operation_guard(worktree_root, "checkpoint create")?;
         let repository = self.open_repository(worktree_root)?;
         let parent_oid = match parent_oid {
             Some(value) => git2::Oid::from_str(value)
@@ -1171,6 +1286,7 @@ impl HiveoryGitService {
         ref_name: &str,
         message: &str,
     ) -> Result<HiveoryCheckpoint, HiveoryGitError> {
+        let _operation = git_operation_guard(repository_root, "checkpoint merge")?;
         let repository = self.open_repository(repository_root)?;
         let mut current_oid = git2::Oid::from_str(base_oid)
             .map_err(|error| HiveoryGitError::InvalidPath(error.to_string()))?;
@@ -1235,6 +1351,41 @@ impl HiveoryGitService {
             }
         })
     }
+}
+
+fn git_operation_guard(root: &Path, operation: &str) -> Result<GitOperationGuard, HiveoryGitError> {
+    let key = Repository::discover(root)
+        .ok()
+        .map(|repository| comparison_path(repository.commondir()))
+        .unwrap_or_else(|| comparison_path(root));
+    let lanes = GIT_OPERATION_LANES.get_or_init(|| Mutex::new(HashMap::new()));
+    let lane = {
+        let mut lanes = lanes.lock().map_err(|_| HiveoryGitError::Command {
+            operation: operation.to_owned(),
+            detail: "The Git operation coordinator is unavailable.".to_owned(),
+        })?;
+        Arc::clone(
+            lanes
+                .entry(key)
+                .or_insert_with(|| Arc::new(GitOperationLane::default())),
+        )
+    };
+    let mut busy = lane.busy.lock().map_err(|_| HiveoryGitError::Command {
+        operation: operation.to_owned(),
+        detail: "The Git operation coordinator is unavailable.".to_owned(),
+    })?;
+    while *busy {
+        busy = lane
+            .ready
+            .wait(busy)
+            .map_err(|_| HiveoryGitError::Command {
+                operation: operation.to_owned(),
+                detail: "The Git operation coordinator is unavailable.".to_owned(),
+            })?;
+    }
+    *busy = true;
+    drop(busy);
+    Ok(GitOperationGuard { lane })
 }
 
 fn checkpoint_signature() -> Result<Signature<'static>, HiveoryGitError> {
@@ -1315,20 +1466,56 @@ fn list_stashes(repository: &mut Repository) -> Result<Vec<CodeGitStash>, Hiveor
     Ok(stashes)
 }
 
-fn remove_untracked_path(path: &Path) -> Result<(), HiveoryGitError> {
-    let metadata = match fs::symlink_metadata(path) {
+fn remove_untracked_path(
+    worktree_root: &Path,
+    relative_path: &Path,
+) -> Result<(), HiveoryGitError> {
+    let path = worktree_root.join(relative_path);
+    let metadata = match fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(error) => return Err(HiveoryGitError::Io(error)),
     };
-    if metadata.file_type().is_symlink() || metadata.is_file() {
-        fs::remove_file(path)?;
+    if metadata.file_type().is_symlink() {
+        let parent = path.parent().ok_or_else(|| {
+            HiveoryGitError::InvalidPath(relative_path.to_string_lossy().into_owned())
+        })?;
+        if !is_within_or_equal(worktree_root, parent) {
+            return Err(HiveoryGitError::InvalidPath(
+                relative_path.to_string_lossy().into_owned(),
+            ));
+        }
+        fs::remove_file(&path)?;
+        return Ok(());
+    }
+    if metadata.is_file() {
+        if !is_within(worktree_root, &path) {
+            return Err(HiveoryGitError::InvalidPath(
+                relative_path.to_string_lossy().into_owned(),
+            ));
+        }
+        fs::remove_file(&path)?;
         return Ok(());
     }
     Err(HiveoryGitError::InvalidInput(
         "Discarding directories is disabled; select the files inside the directory instead."
             .to_owned(),
     ))
+}
+
+fn remove_managed_directory(path: &Path) -> Result<(), HiveoryGitError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(HiveoryGitError::Io(error)),
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(HiveoryGitError::InvalidInput(
+            "The stale managed worktree path is not a directory and was not removed.".to_owned(),
+        ));
+    }
+    fs::remove_dir_all(path)?;
+    Ok(())
 }
 
 fn command_message(output: String, fallback: &str) -> String {
@@ -1341,16 +1528,61 @@ fn command_message(output: String, fallback: &str) -> String {
 }
 
 fn sanitize_command_detail(value: &str) -> String {
-    value
+    let redacted = redact_url_credentials(value);
+    let normalized = redacted.to_ascii_lowercase();
+    let guidance = if normalized.contains("authentication failed")
+        || normalized.contains("could not read username")
+    {
+        Some("Authentication failed. Check the remote credentials.")
+    } else if normalized.contains("could not resolve host")
+        || normalized.contains("network is unreachable")
+    {
+        Some("The remote host could not be reached. Check the network connection.")
+    } else if normalized.contains("no tracking information") || normalized.contains("no upstream") {
+        Some("The branch has no upstream. Publish the branch first.")
+    } else if normalized.contains("non-fast-forward") || normalized.contains("fetch first") {
+        Some("The remote has newer commits. Pull or sync before pushing again.")
+    } else if normalized.contains("local changes") && normalized.contains("overwritten") {
+        Some("The operation would overwrite local changes. Commit, stash, or discard them first.")
+    } else if normalized.contains("index.lock") || normalized.contains("cannot lock ref") {
+        Some("Another Git operation is using this repository. Wait for it to finish and retry.")
+    } else if normalized.contains("dubious ownership") {
+        Some("Git blocked this repository because its ownership is not trusted.")
+    } else {
+        None
+    };
+    if let Some(guidance) = guidance {
+        return guidance.to_owned();
+    }
+    redacted
         .lines()
+        .rev()
         .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .take(8)
-        .collect::<Vec<_>>()
-        .join(" ")
+        .find(|line| !line.is_empty())
+        .unwrap_or("Git did not provide an error message.")
         .chars()
-        .take(2000)
+        .take(1200)
         .collect()
+}
+
+fn redact_url_credentials(value: &str) -> String {
+    let mut redacted = value.to_owned();
+    let mut search_from = 0;
+    while let Some(relative_scheme) = redacted[search_from..].find("://") {
+        let credentials_start = search_from + relative_scheme + 3;
+        let remainder = &redacted[credentials_start..];
+        let boundary = remainder
+            .find(char::is_whitespace)
+            .unwrap_or(remainder.len());
+        let Some(at) = remainder[..boundary].find('@') else {
+            search_from = credentials_start;
+            continue;
+        };
+        let credentials_end = credentials_start + at + 1;
+        redacted.replace_range(credentials_start..credentials_end, "<redacted>@");
+        search_from = credentials_start + "<redacted>@".len();
+    }
+    redacted
 }
 
 fn file_mode(path: &Path) -> u32 {
@@ -1369,10 +1601,62 @@ fn file_mode(path: &Path) -> u32 {
     0o100644
 }
 
+fn comparison_path(path: &Path) -> PathBuf {
+    if let Ok(canonical) = fs::canonicalize(path) {
+        return canonical;
+    }
+    if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+        if let Ok(parent) = fs::canonicalize(parent) {
+            return parent.join(name);
+        }
+    }
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|current| current.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
+}
+
+fn components_equal(left: &std::ffi::OsStr, right: &std::ffi::OsStr) -> bool {
+    #[cfg(windows)]
+    {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
 fn is_within(root: &Path, candidate: &Path) -> bool {
+    let root = comparison_path(root);
+    let candidate = comparison_path(candidate);
     let root = root.components().collect::<Vec<_>>();
     let candidate = candidate.components().collect::<Vec<_>>();
-    candidate.len() >= root.len() && candidate[..root.len()] == root[..]
+    candidate.len() > root.len()
+        && root
+            .iter()
+            .zip(&candidate)
+            .all(|(left, right)| components_equal(left.as_os_str(), right.as_os_str()))
+}
+
+fn is_within_or_equal(root: &Path, candidate: &Path) -> bool {
+    paths_equal(root, candidate) || is_within(root, candidate)
+}
+
+fn paths_equal(left: &Path, right: &Path) -> bool {
+    let left = comparison_path(left);
+    let right = comparison_path(right);
+    let left = left.components().collect::<Vec<_>>();
+    let right = right.components().collect::<Vec<_>>();
+    left.len() == right.len()
+        && left
+            .iter()
+            .zip(&right)
+            .all(|(left, right)| components_equal(left.as_os_str(), right.as_os_str()))
 }
 
 fn is_staged(status: Status) -> bool {
@@ -1440,7 +1724,15 @@ fn ahead_behind(repository: &Repository) -> (usize, usize) {
 mod tests {
     use super::*;
     use git2::{Repository, Signature};
-    use std::fs;
+    use std::{
+        fs,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        thread,
+        time::Duration,
+    };
 
     #[test]
     fn reports_worktree_changes_without_mutating_git() {
@@ -1538,12 +1830,7 @@ mod tests {
         let service = HiveoryGitService;
         fs::write(root.join("README.md"), "two\n").unwrap();
         service
-            .stage(
-                "workspace",
-                &root,
-                &["README.md".to_owned()],
-                true,
-            )
+            .stage("workspace", &root, &["README.md".to_owned()], true)
             .unwrap();
         let status = service.status("workspace", &root).unwrap();
         let readme = status
@@ -1565,12 +1852,7 @@ mod tests {
         assert!(readme.unstaged);
 
         service
-            .stage(
-                "workspace",
-                &root,
-                &["README.md".to_owned()],
-                true,
-            )
+            .stage("workspace", &root, &["README.md".to_owned()], true)
             .unwrap();
         let status = service.status("workspace", &root).unwrap();
         let readme = status
@@ -1582,12 +1864,7 @@ mod tests {
         assert!(!readme.unstaged);
 
         service
-            .stage(
-                "workspace",
-                &root,
-                &["README.md".to_owned()],
-                false,
-            )
+            .stage("workspace", &root, &["README.md".to_owned()], false)
             .unwrap();
         let status = service.status("workspace", &root).unwrap();
         let readme = status
@@ -1599,12 +1876,7 @@ mod tests {
         assert!(readme.unstaged);
 
         service
-            .stage(
-                "workspace",
-                &root,
-                &["README.md".to_owned()],
-                true,
-            )
+            .stage("workspace", &root, &["README.md".to_owned()], true)
             .unwrap();
         let result = service.commit("workspace", &root, "update README").unwrap();
         assert!(result.oid.is_some());
@@ -1640,12 +1912,7 @@ mod tests {
         repository
             .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
             .unwrap();
-        let base_branch = repository
-            .head()
-            .unwrap()
-            .shorthand()
-            .unwrap()
-            .to_owned();
+        let base_branch = repository.head().unwrap().shorthand().unwrap().to_owned();
         drop(tree);
         drop(repository);
 
@@ -1653,7 +1920,10 @@ mod tests {
         service
             .checkout_branch("workspace", &root, "feature/test", true, None)
             .unwrap();
-        assert_eq!(service.current_branch(&root).unwrap().as_deref(), Some("feature/test"));
+        assert_eq!(
+            service.current_branch(&root).unwrap().as_deref(),
+            Some("feature/test")
+        );
         service
             .checkout_branch("workspace", &root, &base_branch, false, None)
             .unwrap();
@@ -1704,8 +1974,8 @@ mod tests {
     fn creates_and_cleans_a_managed_checkpoint_worktree() {
         let root =
             std::env::temp_dir().join(format!("hiveory-code-worktree-{}", uuid::Uuid::now_v7()));
-        let managed_root = root.join("managed");
-        let worktree_path = managed_root.join("worker-one");
+        let managed_root = root.join("managed worktrees");
+        let worktree_path = managed_root.join("worker one");
         fs::create_dir_all(&root).unwrap();
         let repository = Repository::init(&root).unwrap();
         fs::write(root.join("README.md"), "hello\n").unwrap();
@@ -1747,9 +2017,229 @@ mod tests {
         assert!(!inspection.locked);
         assert!(inspection.dirty_files.is_empty());
         service
-            .remove_worktree(&root, "worker-one", &managed_root, false)
+            .remove_worktree(&root, "worker-one", &worktree_path, &managed_root, false)
             .unwrap();
         assert!(!worktree_path.exists());
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn force_removes_locked_and_stale_managed_worktrees_idempotently() {
+        let root = std::env::temp_dir().join(format!(
+            "hiveory-code-worktree-recovery-{}",
+            uuid::Uuid::now_v7()
+        ));
+        let managed_root = root.join("managed");
+        let worktree_path = managed_root.join("locked-worker");
+        fs::create_dir_all(&root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        fs::write(root.join("README.md"), "hello\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        let head = repository
+            .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .unwrap()
+            .to_string();
+        drop(tree);
+        drop(repository);
+
+        let service = HiveoryGitService;
+        service
+            .create_worktree(
+                &root,
+                "locked-worker",
+                &worktree_path,
+                "agentic/locked-worker",
+                &head,
+            )
+            .unwrap();
+        service
+            .remove_worktree(&root, "locked-worker", &worktree_path, &managed_root, true)
+            .unwrap();
+        assert!(!worktree_path.exists());
+
+        let orphan_path = managed_root.join("interrupted-worker");
+        fs::create_dir_all(&orphan_path).unwrap();
+        fs::write(orphan_path.join("left-behind.txt"), "stale").unwrap();
+        service
+            .remove_worktree(
+                &root,
+                "interrupted-worker",
+                &orphan_path,
+                &managed_root,
+                true,
+            )
+            .unwrap();
+        service
+            .remove_worktree(
+                &root,
+                "interrupted-worker",
+                &orphan_path,
+                &managed_root,
+                true,
+            )
+            .unwrap();
+        assert!(!orphan_path.exists());
+        assert!(root.join("README.md").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refuses_worktree_cleanup_outside_the_managed_root() {
+        let root = std::env::temp_dir().join(format!(
+            "hiveory-code-worktree-boundary-{}",
+            uuid::Uuid::now_v7()
+        ));
+        let managed_root = root.join("managed");
+        let outside = root.join("user-project");
+        fs::create_dir_all(&managed_root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        Repository::init(&root).unwrap();
+
+        let error = HiveoryGitService
+            .remove_worktree(&root, "user-project", &outside, &managed_root, true)
+            .unwrap_err();
+        assert!(matches!(error, HiveoryGitError::WorktreeOutsideManagedRoot));
+        assert!(outside.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn serializes_mutations_for_the_same_repository() {
+        let root =
+            std::env::temp_dir().join(format!("hiveory-code-git-lock-{}", uuid::Uuid::now_v7()));
+        fs::create_dir_all(&root).unwrap();
+        Repository::init(&root).unwrap();
+        let active = Arc::new(AtomicUsize::new(0));
+        let maximum = Arc::new(AtomicUsize::new(0));
+        let workers = (0..4)
+            .map(|_| {
+                let root = root.clone();
+                let active = Arc::clone(&active);
+                let maximum = Arc::clone(&maximum);
+                thread::spawn(move || {
+                    let _guard = git_operation_guard(&root, "test mutation").unwrap();
+                    let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    maximum.fetch_max(current, Ordering::SeqCst);
+                    thread::sleep(Duration::from_millis(15));
+                    active.fetch_sub(1, Ordering::SeqCst);
+                })
+            })
+            .collect::<Vec<_>>();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(maximum.load(Ordering::SeqCst), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn sanitizes_git_failures_without_hiding_the_action() {
+        assert_eq!(
+            sanitize_command_detail(
+                "fatal: unable to access 'https://person:secret@example.invalid/repo': denied"
+            ),
+            "fatal: unable to access 'https://<redacted>@example.invalid/repo': denied"
+        );
+        assert_eq!(
+            sanitize_command_detail("fatal: the current branch has no upstream branch"),
+            "The branch has no upstream. Publish the branch first."
+        );
+    }
+
+    #[test]
+    fn stashes_without_requiring_commit_identity_configuration() {
+        let root = std::env::temp_dir().join(format!(
+            "hiveory-code-stash-no-identity-{}",
+            uuid::Uuid::now_v7()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        fs::write(root.join("README.md"), "original\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        repository
+            .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .unwrap();
+        drop(tree);
+        drop(repository);
+
+        fs::write(root.join("README.md"), "changed\n").unwrap();
+        let service = HiveoryGitService;
+        service
+            .stash_save("workspace", &root, Some("identity-free stash"))
+            .unwrap();
+        assert!(service.status("workspace", &root).unwrap().files.is_empty());
+        assert_eq!(
+            service
+                .repository_summary("workspace", &root)
+                .unwrap()
+                .stashes
+                .len(),
+            1
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn fetch_pull_and_push_round_trip_against_a_local_remote() {
+        let container =
+            std::env::temp_dir().join(format!("hiveory-code-remote-{}", uuid::Uuid::now_v7()));
+        let root = container.join("working repository");
+        let remote_root = container.join("remote repository.git");
+        fs::create_dir_all(&root).unwrap();
+        Repository::init_bare(&remote_root).unwrap();
+        let repository = Repository::init(&root).unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.name", "Hiveory test")
+            .unwrap();
+        repository
+            .config()
+            .unwrap()
+            .set_str("user.email", "hiveory-test@example.invalid")
+            .unwrap();
+        fs::write(root.join("README.md"), "hello\n").unwrap();
+        let mut index = repository.index().unwrap();
+        index.add_path(Path::new("README.md")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repository.find_tree(tree_id).unwrap();
+        let signature = Signature::now("test", "test@example.invalid").unwrap();
+        repository
+            .commit(Some("HEAD"), &signature, &signature, "initial", &tree, &[])
+            .unwrap();
+        let branch = repository.head().unwrap().shorthand().unwrap().to_owned();
+        repository
+            .remote("origin", &remote_root.to_string_lossy())
+            .unwrap();
+        drop(tree);
+        drop(repository);
+
+        let service = HiveoryGitService;
+        service
+            .push("workspace", &root, Some("origin"), Some(&branch))
+            .unwrap();
+        service
+            .fetch("workspace", &root, Some("origin"), Some(&branch))
+            .unwrap();
+        service
+            .pull("workspace", &root, Some("origin"), Some(&branch))
+            .unwrap();
+        assert!(remote_root
+            .join("refs")
+            .join("heads")
+            .join(&branch)
+            .exists());
+        let _ = fs::remove_dir_all(container);
     }
 }

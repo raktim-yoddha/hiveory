@@ -2573,10 +2573,11 @@ pub struct AgentMemoryDeleteRequest {
     pub memory_id: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentExecutionTarget {
+    #[default]
     Desktop,
     RemoteVm,
 }
@@ -2597,12 +2598,6 @@ pub struct CodeRenameFileRequest {
 pub struct CodeRenameFileResult {
     pub layout: CodePaneLayout,
     pub document: CodeDocument,
-}
-
-impl Default for AgentExecutionTarget {
-    fn default() -> Self {
-        Self::Desktop
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

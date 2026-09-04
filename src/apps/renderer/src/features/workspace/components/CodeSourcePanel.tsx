@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  formatHiveoryClientError,
   hiveoryClient,
   type CodeGitBranch,
   type CodeGitCommit,
@@ -35,6 +36,7 @@ import {
   type CodeHostedTracking,
   type CodeWorkspaceSummary,
 } from '../../../shared/api/hiveory-client'
+import { CodeDestructiveActionDialog } from './CodeWorkspaceDialogs'
 
 type SourceTab = 'changes' | 'branches' | 'commits' | 'issues' | 'pulls' | 'checks'
 
@@ -42,6 +44,14 @@ interface CodeSourcePanelProps {
   workspace: CodeWorkspaceSummary
   onClose: () => void
   onWorkspaceChanged?: () => Promise<unknown>
+}
+
+interface PendingGitConfirmation {
+  title: string
+  description: string
+  confirmLabel: string
+  actionName: string
+  action: () => Promise<{ message: string }>
 }
 
 interface SourceSnapshot {
@@ -98,7 +108,7 @@ function checkTone(state: string): string {
 }
 
 function errorMessage(reason: unknown): string {
-  return reason instanceof Error ? reason.message : String(reason)
+  return formatHiveoryClientError(reason)
 }
 
 export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onClose, onWorkspaceChanged }) => {
@@ -126,6 +136,7 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
   const [pullRequestBody, setPullRequestBody] = useState('')
   const [pullRequestBase, setPullRequestBase] = useState('')
   const [pullRequestDraft, setPullRequestDraft] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState<PendingGitConfirmation | null>(null)
 
   const loadSource = useCallback(async () => {
     if (workspace.trust !== 'trusted') {
@@ -194,6 +205,13 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
 
   const runStage = (relativePaths: string[], stage: boolean, actionName: string) => {
     void runAction(actionName, () => hiveoryClient.stageCodeGit({ workspace_id: workspace.id, relative_paths: relativePaths, stage }))
+  }
+
+  const confirmPendingAction = () => {
+    const pending = pendingConfirmation
+    if (!pending) return
+    setPendingConfirmation(null)
+    void runAction(pending.actionName, pending.action)
   }
 
   const changedFiles = snapshot.status?.files ?? []
@@ -318,8 +336,13 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
             onUnstageAll={() => runStage([], false, 'unstage-all')}
             onDiscard={() => {
               if (selectedPathList.length === 0) return
-              if (!window.confirm(`Discard ${selectedPathList.length} selected path${selectedPathList.length === 1 ? '' : 's'}? This cannot be undone.`)) return
-              void runAction('discard', () => hiveoryClient.discardCodeGit({ workspace_id: workspace.id, relative_paths: selectedPathList, include_untracked: true }))
+              setPendingConfirmation({
+                title: 'Discard changes?',
+                description: `Discard ${selectedPathList.length} selected path${selectedPathList.length === 1 ? '' : 's'}? Tracked changes and selected untracked files will be permanently removed.`,
+                confirmLabel: 'Discard changes',
+                actionName: 'discard',
+                action: () => hiveoryClient.discardCodeGit({ workspace_id: workspace.id, relative_paths: selectedPathList, include_untracked: true }),
+              })
             }}
             onCommit={() => void runAction('commit', () => hiveoryClient.commitCodeGit({ workspace_id: workspace.id, message: commitMessage }))}
             onCommitMessageChange={setCommitMessage}
@@ -346,8 +369,13 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
             })}
             onCheckout={(name) => void runAction(`checkout-${name}`, () => hiveoryClient.checkoutCodeGitBranch({ workspace_id: workspace.id, name, create: false, start_point: null }))}
             onDelete={(name) => {
-              if (!window.confirm(`Delete local branch “${name}”?`)) return
-              void runAction(`delete-${name}`, () => hiveoryClient.deleteCodeGitBranch({ workspace_id: workspace.id, name, force: false }))
+              setPendingConfirmation({
+                title: 'Delete local branch?',
+                description: `Delete local branch “${name}”? Git will refuse if it contains unmerged commits.`,
+                confirmLabel: 'Delete branch',
+                actionName: `delete-${name}`,
+                action: () => hiveoryClient.deleteCodeGitBranch({ workspace_id: workspace.id, name, force: false }),
+              })
             }}
             onSaveStash={() => void runAction('stash-save', async () => {
               const result = await hiveoryClient.saveCodeGitStash({ workspace_id: workspace.id, message: stashMessage.trim() || null })
@@ -356,8 +384,13 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
             })}
             onPopStash={(index) => void runAction(`stash-pop-${index}`, () => hiveoryClient.popCodeGitStash({ workspace_id: workspace.id, index }))}
             onDropStash={(index) => {
-              if (!window.confirm(`Drop stash ${index}?`)) return
-              void runAction(`stash-drop-${index}`, () => hiveoryClient.dropCodeGitStash({ workspace_id: workspace.id, index }))
+              setPendingConfirmation({
+                title: 'Drop stash?',
+                description: `Permanently drop stash ${index}? This cannot be undone from Hiveory.`,
+                confirmLabel: 'Drop stash',
+                actionName: `stash-drop-${index}`,
+                action: () => hiveoryClient.dropCodeGitStash({ workspace_id: workspace.id, index }),
+              })
             }}
           />
         )}
@@ -396,13 +429,32 @@ export const CodeSourcePanel: React.FC<CodeSourcePanelProps> = ({ workspace, onC
             onDraftChange={setPullRequestDraft}
             onCreate={createPullRequest}
             onAction={(number, action) => {
-              if (action === 'merge' && !window.confirm(`Merge pull request #${number}?`)) return
+              if (action === 'merge') {
+                setPendingConfirmation({
+                  title: 'Merge pull request?',
+                  description: `Merge pull request #${number}? This updates the hosted repository.`,
+                  confirmLabel: 'Merge pull request',
+                  actionName: `pull-${number}-${action}`,
+                  action: () => hiveoryClient.actionCodeHostedPullRequest({ workspace_id: workspace.id, number, action }),
+                })
+                return
+              }
               void runAction(`pull-${number}-${action}`, () => hiveoryClient.actionCodeHostedPullRequest({ workspace_id: workspace.id, number, action }))
             }}
           />
         )}
         {!loading && tab === 'checks' && <ChecksView pullRequests={activeChecks} />}
       </div>
+      <CodeDestructiveActionDialog
+        open={pendingConfirmation !== null}
+        title={pendingConfirmation?.title ?? ''}
+        description={pendingConfirmation?.description ?? ''}
+        confirmLabel={pendingConfirmation?.confirmLabel ?? 'Confirm'}
+        busy={false}
+        error={null}
+        onClose={() => setPendingConfirmation(null)}
+        onConfirm={confirmPendingAction}
+      />
     </aside>
   )
 }

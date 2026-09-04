@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent,
 import {
   AlertCircle,
   Archive,
+  ArrowUp,
+  AudioWaveform,
   Check,
   ChevronDown,
   ChevronRight,
+  Clock3,
   Copy,
   Ellipsis,
   File,
@@ -13,17 +16,21 @@ import {
   FolderInput,
   FolderPlus,
   Image as ImageIcon,
+  LayoutDashboard,
   LoaderCircle,
-  Mic,
   MessageCircle,
+  Moon,
   Paperclip,
   Pin,
   PinOff,
   Plus,
+  Puzzle,
   RefreshCw,
   RotateCcw,
-  Send,
+  Search,
+  Settings,
   Settings2,
+  Sparkles,
   Square,
   Trash2,
   X,
@@ -44,6 +51,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from '../../workspace/components/CliIcons'
 import { ChatMarkdown } from '../components/ChatMarkdown'
+import '../styles/chat.css'
 
 type PendingAttachment = {
   key: string
@@ -119,7 +127,37 @@ function statusLabel(value: ChatEngineSummary['availability']): string {
   return 'Ready'
 }
 
+function readSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    const preferences = JSON.parse(window.localStorage.getItem('hiveory.preferences') ?? '{}') as { sidebarCollapsed?: unknown }
+    return preferences.sidebarCollapsed === true
+  } catch {
+    return false
+  }
+}
+
 export function HiveoryChat() {
+  const DEFAULT_RAIL_WIDTH = 228
+  const MIN_RAIL_WIDTH = 180
+  const MAX_RAIL_WIDTH = 480
+
+  const [railWidth, setRailWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return DEFAULT_RAIL_WIDTH
+    const stored = localStorage.getItem('hiveory_chat_rail_width')
+    if (stored) {
+      const parsed = Number(stored)
+      if (!Number.isNaN(parsed) && parsed >= MIN_RAIL_WIDTH && parsed <= MAX_RAIL_WIDTH) {
+        return parsed
+      }
+    }
+    return DEFAULT_RAIL_WIDTH
+  })
+
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
+
   const [sidebar, setSidebar] = useState<ChatSidebarPage>(EMPTY_SIDEBAR)
   const [sidebarLoading, setSidebarLoading] = useState(true)
   const [sidebarSearch, setSidebarSearch] = useState('')
@@ -153,6 +191,59 @@ export function HiveoryChat() {
   const selectedModel = selectedEngine?.models.find((model) => model.id === selectedModelId)
   const activeTurn = conversation?.turns.find((turn) => ['queued', 'streaming', 'cancel_requested'].includes(turn.state))
   const turnById = useMemo(() => new Map((conversation?.turns ?? []).map((turn) => [turn.id, turn])), [conversation?.turns])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('hiveory_chat_rail_width', String(railWidth))
+    } catch {
+      // ignore
+    }
+  }, [railWidth])
+
+  useEffect(() => {
+    const handleToggle = (event: Event) => {
+      const custom = event as CustomEvent<{ collapsed?: boolean }>
+      if (typeof custom.detail?.collapsed === 'boolean') {
+        setSidebarCollapsed(custom.detail.collapsed)
+      } else {
+        setSidebarCollapsed((current) => !current)
+      }
+    }
+    window.addEventListener('hiveory-sidebar-toggle', handleToggle)
+    return () => window.removeEventListener('hiveory-sidebar-toggle', handleToggle)
+  }, [])
+
+  const handleResizeStart = useCallback((e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsResizing(true)
+    resizeStartRef.current = { startX: e.clientX, startWidth: railWidth }
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!resizeStartRef.current) return
+      const deltaX = moveEvent.clientX - resizeStartRef.current.startX
+      const maxAllowed = Math.min(MAX_RAIL_WIDTH, window.innerWidth * 0.5)
+      const newWidth = Math.min(
+        maxAllowed,
+        Math.max(MIN_RAIL_WIDTH, Math.round(resizeStartRef.current.startWidth + deltaX))
+      )
+      setRailWidth(newWidth)
+    }
+
+    const handlePointerUp = () => {
+      setIsResizing(false)
+      resizeStartRef.current = null
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+  }, [railWidth])
+
+  const handleResetWidth = useCallback(() => {
+    setRailWidth(DEFAULT_RAIL_WIDTH)
+  }, [DEFAULT_RAIL_WIDTH])
 
   const reloadSidebar = useCallback(async () => {
     setSidebarLoading(true)
@@ -551,42 +642,169 @@ export function HiveoryChat() {
     }
   }
 
-  const renderConversationRow = (item: ChatConversationSummary) => (
-    <div
-      key={item.id}
-      className="hiveory-chat-list-row"
-      draggable
-      onDragStart={(event) => event.dataTransfer.setData('text/chat-id', item.id)}
-    >
-      <button type="button" className={`hiveory-chat-list-item${item.id === selectedId ? ' is-selected' : ''}`} onClick={() => { setSelectedId(item.id); setRowMenuId(null) }}>
-        <span className="hiveory-chat-list-title">{item.pinned && <Pin size={11} aria-label="Pinned" />} {item.title}</span>
-        <span className="hiveory-chat-list-preview">{item.preview ?? 'No messages yet'}</span>
-        <span className="hiveory-chat-list-meta">{formatDate(item.updated_at_unix_ms)}</span>
-      </button>
-      <button type="button" className="hiveory-icon-button hiveory-chat-row-menu-button" aria-label={`Actions for ${item.title}`} aria-expanded={rowMenuId === item.id} onClick={(event) => { event.stopPropagation(); setRowMenuId(rowMenuId === item.id ? null : item.id); setFolderMenuId(null) }}>
-        <Ellipsis size={15} />
-      </button>
-      {rowMenuId === item.id && (
-        <div className="hiveory-chat-row-menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => void updateConversation(item.id, { pinned: !item.pinned })}>{item.pinned ? <PinOff size={14} /> : <Pin size={14} />}{item.pinned ? 'Unpin' : 'Pin'}</button>
-          <button type="button" role="menuitem" onClick={() => void updateConversation(item.id, { archived: !item.archived })}><Archive size={14} />{item.archived ? 'Restore' : 'Archive'}</button>
-          <div className="hiveory-chat-menu-label"><FolderInput size={14} />Move to</div>
-          {sidebar.folders.map((folder) => <button key={folder.id} type="button" role="menuitem" onClick={() => void moveConversation(item.id, folder.id)}><Folder size={13} />{folder.name}</button>)}
-          {item.folder_id && <button type="button" role="menuitem" onClick={() => void moveConversation(item.id, null)}><X size={14} />Remove from folder</button>}
-          <button type="button" role="menuitem" className="is-danger" disabled={busyAction === 'delete'} onClick={() => void deleteConversation(item)}><Trash2 size={14} />Delete</button>
-        </div>
-      )}
-    </div>
-  )
+  const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => event.preventDefault()
+
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', badge: 1, icon: <LayoutDashboard size={14} aria-hidden="true" /> },
+    { id: 'routines', label: 'Routines', icon: <Clock3 size={14} aria-hidden="true" /> },
+    { id: 'plugins', label: 'Plugins', icon: <Puzzle size={14} aria-hidden="true" /> },
+    { id: 'skills', label: 'Skills', icon: <Sparkles size={14} aria-hidden="true" /> },
+  ]
+
+  const renderConversationRow = (item: ChatConversationSummary) => {
+    const isSelected = item.id === selectedId
+    return (
+      <div
+        key={item.id}
+        className="chat-rail-item-row"
+        draggable
+        onDragStart={(event) => event.dataTransfer.setData('text/chat-id', item.id)}
+      >
+        <button
+          type="button"
+          className={`chat-rail-item ${isSelected ? 'is-selected' : ''}`}
+          onClick={() => {
+            setSelectedId(item.id)
+            setRowMenuId(null)
+          }}
+          title={item.title}
+        >
+          <div className="chat-rail-item-top">
+            <span className="chat-rail-item-title">
+              {item.pinned && <Pin size={10} aria-label="Pinned" />}
+              {item.title}
+            </span>
+          </div>
+          {item.preview && <span className="chat-rail-item-preview">{item.preview}</span>}
+          <div className="chat-rail-item-meta">
+            <span>{formatDate(item.updated_at_unix_ms)}</span>
+          </div>
+        </button>
+        <button
+          type="button"
+          className="chat-rail-row-menu-btn"
+          aria-label={`Actions for ${item.title}`}
+          aria-expanded={rowMenuId === item.id}
+          onClick={(event) => {
+            event.stopPropagation()
+            setRowMenuId(rowMenuId === item.id ? null : item.id)
+            setFolderMenuId(null)
+          }}
+        >
+          <Ellipsis size={13} />
+        </button>
+        {rowMenuId === item.id && (
+          <div className="chat-popover-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void updateConversation(item.id, { pinned: !item.pinned })}
+            >
+              {item.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              {item.pinned ? 'Unpin' : 'Pin'}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void updateConversation(item.id, { archived: !item.archived })}
+            >
+              <Archive size={13} />
+              {item.archived ? 'Restore' : 'Archive'}
+            </button>
+            <div className="chat-popover-label">
+              <FolderInput size={12} />
+              Move to
+            </div>
+            {sidebar.folders.map((folder) => (
+              <button
+                key={folder.id}
+                type="button"
+                role="menuitem"
+                onClick={() => void moveConversation(item.id, folder.id)}
+              >
+                <Folder size={12} />
+                {folder.name}
+              </button>
+            ))}
+            {item.folder_id && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => void moveConversation(item.id, null)}
+              >
+                <X size={13} />
+                Remove from folder
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              className="is-danger"
+              disabled={busyAction === 'delete'}
+              onClick={() => void deleteConversation(item)}
+            >
+              <Trash2 size={13} />
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const renderFolder = (folder: ChatFolderSummary) => {
     const items = sidebar.conversations.filter((item) => item.folder_id === folder.id)
     return (
-      <section key={folder.id} className="hiveory-chat-folder-section" onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const chatId = event.dataTransfer.getData('text/chat-id'); if (chatId) void moveConversation(chatId, folder.id) }}>
-        <div className={`hiveory-chat-folder-row${folderFilter === folder.id ? ' is-selected' : ''}`}>
-          <button type="button" onClick={() => { setFolderFilter(folderFilter === folder.id ? null : folder.id); setSelectedId(null) }}><Folder size={14} /><span>{folder.name}</span><small>{folder.conversation_count}</small></button>
-          <button type="button" className="hiveory-icon-button" aria-label={`Actions for ${folder.name}`} onClick={() => { setFolderMenuId(folderMenuId === folder.id ? null : folder.id); setRowMenuId(null) }}><Ellipsis size={14} /></button>
-          {folderMenuId === folder.id && <div className="hiveory-chat-folder-menu" role="menu"><button type="button" role="menuitem" onClick={() => void renameFolder(folder)}>Rename</button><button type="button" role="menuitem" className="is-danger" onClick={() => void deleteFolder(folder)}>Delete folder</button></div>}
+      <section
+        key={folder.id}
+        className="chat-rail-folder-section"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault()
+          const chatId = event.dataTransfer.getData('text/chat-id')
+          if (chatId) void moveConversation(chatId, folder.id)
+        }}
+      >
+        <div className={`chat-rail-folder-row ${folderFilter === folder.id ? 'is-selected' : ''}`}>
+          <button
+            type="button"
+            className="chat-rail-folder-btn"
+            onClick={() => {
+              setFolderFilter(folderFilter === folder.id ? null : folder.id)
+              setSelectedId(null)
+            }}
+          >
+            <Folder size={13} />
+            <span>{folder.name}</span>
+            <small>{folder.conversation_count}</small>
+          </button>
+          <button
+            type="button"
+            className="chat-rail-icon-btn"
+            aria-label={`Actions for ${folder.name}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              setFolderMenuId(folderMenuId === folder.id ? null : folder.id)
+              setRowMenuId(null)
+            }}
+          >
+            <Ellipsis size={13} />
+          </button>
+          {folderMenuId === folder.id && (
+            <div className="chat-popover-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => void renameFolder(folder)}>
+                Rename
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="is-danger"
+                onClick={() => void deleteFolder(folder)}
+              >
+                Delete folder
+              </button>
+            </div>
+          )}
         </div>
         {items.map(renderConversationRow)}
       </section>
@@ -596,82 +814,725 @@ export function HiveoryChat() {
   const renderMessage = (message: ChatMessage) => {
     const turn = message.turn_id ? turnById.get(message.turn_id) : undefined
     const text = textFromMessage(message)
-    const reasoning = message.parts.filter((part): part is Extract<ChatMessagePart, { kind: 'reasoning_summary' }> => part.kind === 'reasoning_summary').map((part) => part.text).join('\n')
+    const reasoning = message.parts
+      .filter((part): part is Extract<ChatMessagePart, { kind: 'reasoning_summary' }> => part.kind === 'reasoning_summary')
+      .map((part) => part.text)
+      .join('\n')
     const isUser = message.role === 'user'
     const engine = engineCatalog?.engines.find((candidate) => candidate.id === turn?.provider_account_id)
+
+    // Calculate thought duration if available
+    const thoughtDurationSec = turn?.updated_at_unix_ms && turn?.created_at_unix_ms
+      ? Math.max(1, Math.round((turn.updated_at_unix_ms - turn.created_at_unix_ms) / 1000))
+      : 8
+
+    if (isUser) {
+      return (
+        <article key={message.id} className="chat-message-row is-user">
+          <div className="chat-user-bubble">
+            <p className="hiveory-chat-text">{text}</p>
+            {message.parts
+              .filter((part) => part.kind !== 'text' && part.kind !== 'reasoning_summary')
+              .map((part, index) => (
+                <MessagePartView
+                  key={`${message.id}-part-${index}`}
+                  part={part}
+                  onDelete={
+                    conversation
+                      ? async (attachmentId) => {
+                          await hiveoryClient.deleteChatAttachment({
+                            conversation_id: conversation.id,
+                            message_id: message.id,
+                            attachment_id: attachmentId,
+                          })
+                          await reloadConversation(conversation.id)
+                        }
+                      : undefined
+                  }
+                />
+              ))}
+          </div>
+          <div className="chat-message-actions">
+            {text && (
+              <button
+                type="button"
+                className="chat-msg-action-btn"
+                aria-label="Copy message"
+                title="Copy message"
+                onClick={() => void navigator.clipboard?.writeText(text)}
+              >
+                <Copy size={13} />
+              </button>
+            )}
+            <button
+              type="button"
+              className="chat-msg-action-btn"
+              aria-label="Edit message"
+              title="Edit message"
+              onClick={() => {
+                setEditingMessageId(message.id)
+                setEditingText(text)
+              }}
+            >
+              <Settings2 size={13} />
+            </button>
+          </div>
+        </article>
+      )
+    }
+
     return (
-      <article key={message.id} className={`hiveory-chat-message${isUser ? ' is-user' : ''}`}>
-        <div className="hiveory-chat-message-avatar" aria-hidden="true">{isUser ? 'You' : <MessageCircle size={15} />}</div>
-        <div className="hiveory-chat-message-body">
-          <div className="hiveory-chat-message-meta"><span>{isUser ? 'You' : 'Assistant'}</span>{turn && <><span className="hiveory-chat-turn-engine">{engine?.display_name ?? turn.provider_account_id} · {modelLabel(engine, turn.model)}</span><span className={`hiveory-chat-turn-state ${turn.state}`}>{turn.state.replaceAll('_', ' ')}</span></>}<time>{formatDate(message.created_at_unix_ms)}</time></div>
-          {reasoning && <details className="hiveory-chat-reasoning"><summary><ChevronRight size={14} />Reasoning summary</summary><p>{reasoning}</p></details>}
-          <div className="hiveory-chat-message-content">
-            {text && (isUser ? <p className="hiveory-chat-text">{text}</p> : <ChatMarkdown text={text} />)}
-            {!text && turn?.state === 'streaming' && <span className="hiveory-chat-streaming-status"><span className="hiveory-pulse" />Generating response<span className="hiveory-dot-loader">···</span></span>}
-            {message.parts.filter((part) => part.kind !== 'text' && part.kind !== 'reasoning_summary').map((part, index) => <MessagePartView key={`${message.id}-part-${index}`} part={part} onDelete={isUser && conversation ? async (attachmentId) => { await hiveoryClient.deleteChatAttachment({ conversation_id: conversation.id, message_id: message.id, attachment_id: attachmentId }); await reloadConversation(conversation.id) } : undefined} />)}
-          </div>
-          <div className="hiveory-chat-message-actions">
-            {text && <button type="button" aria-label="Copy message" title="Copy message" onClick={() => void navigator.clipboard?.writeText(text)}><Copy size={14} /></button>}
-            {isUser && <button type="button" aria-label="Edit message" title="Edit message" onClick={() => { setEditingMessageId(message.id); setEditingText(text) }}><Settings2 size={14} /></button>}
-            {turn && !isUser && <button type="button" aria-label="Retry response" title="Retry response" disabled={busyAction !== null || turn.state === 'streaming'} onClick={() => void retryTurn(turn.id)}><RotateCcw size={14} /></button>}
-            <button type="button" aria-label="Create branch here" title="Create branch here" disabled={busyAction !== null} onClick={() => void branchFromMessage(message.id)}><Plus size={14} /></button>
-          </div>
+      <article key={message.id} className="chat-message-row is-assistant">
+        {reasoning && (
+          <details className="chat-thought-details">
+            <summary className="chat-thought-summary">
+              <ChevronRight size={13} className="chat-thought-arrow" />
+              <span>Thought for {thoughtDurationSec}s</span>
+            </summary>
+            <div className="chat-thought-content">
+              <p>{reasoning}</p>
+            </div>
+          </details>
+        )}
+
+        <div className="chat-assistant-body">
+          {text && <ChatMarkdown text={text} />}
+          {!text && turn?.state === 'streaming' && (
+            <span className="chat-turn-meta">
+              <span className="chat-streaming-dot" />
+              Generating response…
+            </span>
+          )}
+          {message.parts
+            .filter((part) => part.kind !== 'text' && part.kind !== 'reasoning_summary')
+            .map((part, index) => (
+              <MessagePartView key={`${message.id}-part-${index}`} part={part} />
+            ))}
         </div>
+
+        <div className="chat-message-actions">
+          {text && (
+            <button
+              type="button"
+              className="chat-msg-action-btn"
+              aria-label="Copy message"
+              title="Copy message"
+              onClick={() => void navigator.clipboard?.writeText(text)}
+            >
+              <Copy size={13} />
+            </button>
+          )}
+          {turn && (
+            <button
+              type="button"
+              className="chat-msg-action-btn"
+              aria-label="Retry response"
+              title="Retry response"
+              disabled={busyAction !== null || turn.state === 'streaming'}
+              onClick={() => void retryTurn(turn.id)}
+            >
+              <RotateCcw size={13} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="chat-msg-action-btn"
+            aria-label="Create branch here"
+            title="Create branch here"
+            disabled={busyAction !== null}
+            onClick={() => void branchFromMessage(message.id)}
+          >
+            <Plus size={13} />
+          </button>
+        </div>
+
+        {turn && (
+          <div className="chat-turn-meta">
+            <span>
+              {engine?.display_name ?? turn.provider_account_id} · {modelLabel(engine, turn.model)}
+            </span>
+            <time>{formatDate(message.created_at_unix_ms)}</time>
+          </div>
+        )}
       </article>
     )
   }
 
-  const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => event.preventDefault()
-
   return (
-    <div className="hiveory-chat" onClick={() => { setRowMenuId(null); setFolderMenuId(null) }}>
-      <aside className="hiveory-chat-sidebar" aria-label="Chat history">
-        <div className="hiveory-chat-sidebar-heading"><div><p className="hiveory-eyebrow">Workspace</p><h1>Chat</h1></div><button type="button" className="hiveory-icon-button" aria-label="Refresh chat data" title="Refresh chat data" onClick={() => { void reloadSidebar(); void reloadEngines() }}><RefreshCw size={15} /></button></div>
-        <button type="button" className="hiveory-chat-new-button" onClick={createNewChat}><Plus size={15} />New chat</button>
-        <label className="hiveory-search-field"><span className="hiveory-visually-hidden">Search chats</span><input value={sidebarSearch} onChange={(event) => setSidebarSearch(event.target.value)} placeholder="Search chats" /></label>
-        <div className="hiveory-chat-filters" role="tablist" aria-label="Chat history filter"><button type="button" role="tab" aria-selected={!showArchived} className={!showArchived ? 'is-active' : ''} onClick={() => { setShowArchived(false); setSelectedId(null) }}>Recent</button><button type="button" role="tab" aria-selected={showArchived} className={showArchived ? 'is-active' : ''} onClick={() => { setShowArchived(true); setSelectedId(null) }}><Archive size={12} />Archived</button><button type="button" role="tab" aria-selected={folderFilter === null} className={folderFilter === null ? 'is-active' : ''} onClick={() => { setFolderFilter(null); setSelectedId(null) }}>All</button></div>
-        <div className="hiveory-chat-sidebar-tools"><span>Folders</span><button type="button" className="hiveory-icon-button" aria-label="Create folder" title="Create folder" onClick={createFolder}><FolderPlus size={15} /></button></div>
-        <div className="hiveory-chat-sidebar-scroll">
-          <button type="button" className={`hiveory-chat-unfiled${folderFilter === null ? ' is-selected' : ''}`} onClick={() => { setFolderFilter(null); setSelectedId(null) }}><Folder size={14} />All conversations</button>
-          {sidebar.folders.map(renderFolder)}
-          <div className="hiveory-chat-sidebar-tools hiveory-chat-history-label"><span>{showArchived ? 'Archived chats' : 'Chats'}</span>{sidebarLoading && <LoaderCircle size={13} className="hiveory-chat-spin" />}</div>
-          {sidebar.conversations.filter((item) => !item.folder_id).map(renderConversationRow)}
-          {!sidebarLoading && !sidebar.conversations.length && <div className="hiveory-chat-list-empty"><MessageCircle size={22} /><p>{showArchived ? 'No archived chats.' : 'Your conversations will appear here after the first message.'}</p><button type="button" onClick={createNewChat}>Start a new chat</button></div>}
+    <div
+      className={`hiveory-chat-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}
+      onClick={() => {
+        setRowMenuId(null)
+        setFolderMenuId(null)
+      }}
+    >
+      <aside
+        className={`chat-rail ${isResizing ? 'is-resizing' : ''}`}
+        style={{ width: `${railWidth}px`, minWidth: `${railWidth}px`, maxWidth: `${railWidth}px` }}
+        aria-label="Chat history"
+      >
+        {/* Global Navigation matching Code rail */}
+        <nav className="chat-rail-global-nav" aria-label="Application sections">
+          {navItems.map(({ id, label, badge, icon }) => (
+            <button
+              type="button"
+              key={id}
+              className="chat-rail-nav-item"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent('hiveory-navigate-section', { detail: { mode: 'code', section: id } })
+                )
+              }}
+            >
+              <span className="chat-rail-nav-left">
+                {icon}
+                <span>{label}</span>
+              </span>
+              {badge && <span className="chat-rail-badge-count">{badge}</span>}
+            </button>
+          ))}
+        </nav>
+
+        {/* Chats Section Header */}
+        <div className="chat-rail-section-header">
+          <span>Chats</span>
+          <div className="chat-rail-header-actions">
+            <button
+              type="button"
+              className="chat-rail-icon-btn"
+              aria-label="Create folder"
+              title="Create folder"
+              onClick={createFolder}
+            >
+              <FolderPlus size={13} />
+            </button>
+            <button
+              type="button"
+              className="chat-rail-icon-btn"
+              aria-label="Refresh chat data"
+              title="Refresh chat data"
+              onClick={() => {
+                void reloadSidebar()
+                void reloadEngines()
+              }}
+            >
+              <RefreshCw size={13} />
+            </button>
+            <button
+              type="button"
+              className="chat-rail-icon-btn"
+              aria-label="New chat"
+              title="New chat"
+              onClick={createNewChat}
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
-        <div className="hiveory-chat-sidebar-footer"><Check size={13} />Standalone conversation · no workspace mounted</div>
+
+        {/* Quick New Chat Button */}
+        <button type="button" className="chat-rail-new-chat-btn" onClick={createNewChat}>
+          <Plus size={13} />
+          <span>New chat</span>
+        </button>
+
+        {/* Search Field */}
+        <div className="chat-rail-search">
+          <Search size={13} />
+          <input
+            value={sidebarSearch}
+            onChange={(event) => setSidebarSearch(event.target.value)}
+            placeholder="Search chats"
+            aria-label="Search chats"
+          />
+        </div>
+
+        {/* Filters */}
+        <div className="chat-rail-filters" role="tablist" aria-label="Chat history filter">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!showArchived && folderFilter === null}
+            className={`chat-rail-filter-tab ${!showArchived && folderFilter === null ? 'is-active' : ''}`}
+            onClick={() => {
+              setShowArchived(false)
+              setFolderFilter(null)
+              setSelectedId(null)
+            }}
+          >
+            Recent
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={showArchived}
+            className={`chat-rail-filter-tab ${showArchived ? 'is-active' : ''}`}
+            onClick={() => {
+              setShowArchived(true)
+              setSelectedId(null)
+            }}
+          >
+            <Archive size={11} />
+            Archived
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={folderFilter === null && !showArchived}
+            className={`chat-rail-filter-tab ${folderFilter === null ? 'is-active' : ''}`}
+            onClick={() => {
+              setFolderFilter(null)
+              setSelectedId(null)
+            }}
+          >
+            All
+          </button>
+        </div>
+
+        {/* Scrollable Chat and Folder List */}
+        <div className="chat-rail-scroll">
+          {sidebar.folders.map(renderFolder)}
+          {sidebar.conversations
+            .filter((item) => !item.folder_id)
+            .map(renderConversationRow)}
+          {!sidebarLoading && !sidebar.conversations.length && (
+            <div className="chat-rail-empty">
+              <MessageCircle size={20} />
+              <p>
+                {showArchived
+                  ? 'No archived chats.'
+                  : 'Your conversations will appear here.'}
+              </p>
+              <button type="button" onClick={createNewChat}>
+                Start a new chat
+              </button>
+            </div>
+          )}
+          {sidebarLoading && (
+            <div className="chat-rail-empty">
+              <LoaderCircle size={16} className="hiveory-chat-spin" />
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar Footer matching Code rail */}
+        <footer className="chat-rail-footer">
+          <div className="chat-rail-footer-metric">
+            <span>Notch</span>
+            <span className="chat-rail-toggle-pill">Off</span>
+          </div>
+          <div className="chat-rail-footer-metric">
+            <span>Credits</span>
+            <span className="chat-rail-credits-value">9,684</span>
+          </div>
+          <div className="chat-rail-user-card">
+            <div className="chat-rail-user-left">
+              <div className="chat-rail-avatar">A</div>
+              <div className="chat-rail-user-info">
+                <span className="chat-rail-username">Developer</span>
+                <span className="chat-rail-user-badge">PRO</span>
+              </div>
+            </div>
+            <div className="chat-rail-user-actions">
+              <button
+                type="button"
+                className="chat-rail-user-icon-btn"
+                title="Theme preferences"
+                disabled
+              >
+                <Moon size={14} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="chat-rail-user-icon-btn"
+                title="Open settings"
+                onClick={() => window.dispatchEvent(new Event('hiveory-open-global-settings'))}
+              >
+                <Settings size={14} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </footer>
+
+        {/* Rail Resizer */}
+        <div
+          className="chat-rail-resizer"
+          onPointerDown={handleResizeStart}
+          onDoubleClick={handleResetWidth}
+          title="Drag to resize sidebar • Double-click to reset"
+          aria-label="Resize chat sidebar"
+          role="separator"
+          aria-orientation="vertical"
+        />
       </aside>
 
-      <main className="hiveory-chat-main">
-        <header className="hiveory-chat-header">
-          <div className="hiveory-chat-title-wrap"><MessageCircle size={17} /><div><input aria-label="Conversation title" value={titleDraft} onChange={(event) => setTitleDraft(event.target.value)} onBlur={() => void saveTitle()} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }} /><p>Private chat · only explicitly attached context is sent</p></div></div>
-          <div className="hiveory-chat-header-actions">{conversation?.pinned && <Pin size={14} aria-label="Pinned" />}<button type="button" className="hiveory-icon-button" aria-label="New chat" title="New chat" onClick={createNewChat}><Plus size={16} /></button>{conversation && <button type="button" className="hiveory-icon-button is-danger" aria-label="Delete conversation" title="Delete conversation" onClick={() => void deleteConversation({ id: conversation.id, title: conversation.title, active_branch_id: conversation.active_branch_id, pinned: conversation.pinned, archived: conversation.archived, folder_id: conversation.folder_id, folder_position: conversation.folder_position, updated_at_unix_ms: conversation.updated_at_unix_ms, preview: null })}><Trash2 size={15} /></button>}</div>
-        </header>
-        <div className="hiveory-chat-context-bar"><span><Check size={13} />No project or repository is mounted</span><span>Files, folders, and screenshots are opt-in</span>{conversation && conversation.branches.length > 1 && <span className="hiveory-branch-badge">{conversation.branches.length} branches</span>}</div>
-        <div className="hiveory-chat-transcript" ref={transcriptRef} aria-live="polite">
-          {conversationLoading && <div className="hiveory-chat-streaming-status"><LoaderCircle size={14} className="hiveory-chat-spin" />Opening conversation…</div>}
-          {!conversation && !conversationLoading && <div className="hiveory-chat-empty"><span className="hiveory-empty-mark"><MessageCircle size={22} /></span><h2>Start a focused conversation</h2><p>Ask a question, compare answers across your installed CLIs, or attach only the files you want the active model to see.</p></div>}
-          {conversation?.messages.map(renderMessage)}
-          {activeTurn && <div className="hiveory-chat-streaming-status"><span className="hiveory-pulse" />{selectedEngine?.display_name ?? 'Engine'} is responding…</div>}
-        </div>
-        {error && <div className="hiveory-chat-status" role="alert"><AlertCircle size={14} />{error}<button type="button" className="hiveory-icon-button" aria-label="Dismiss error" onClick={() => setError(null)}><X size={14} /></button></div>}
-        {statusMessage && <div className="hiveory-chat-status" role="status">{statusMessage}</div>}
-        {editingMessageId && <div className="hiveory-chat-edit"><div className="hiveory-chat-edit-heading"><span>Edit message</span><button type="button" className="hiveory-icon-button" aria-label="Cancel edit" onClick={() => setEditingMessageId(null)}><X size={14} /></button></div><textarea value={editingText} onChange={(event) => setEditingText(event.target.value)} rows={4} /><div><button type="button" className="is-secondary" onClick={() => setEditingMessageId(null)}>Cancel</button><button type="button" disabled={!editingText.trim() || busyAction !== null} onClick={() => void submitEdit()}>Send edit</button></div></div>}
-        <div className="hiveory-chat-composer" onDragOver={handleComposerDragOver} onDrop={handleDrop}>
-          {pendingAttachments.length > 0 && <div className="hiveory-chat-attachments" aria-label="Pending attachments">{pendingAttachments.map((item) => <span className="hiveory-attachment-chip" key={item.key}><Paperclip size={12} /><span title={item.name}>{item.name}</span><button type="button" aria-label={`Remove ${item.name}`} onClick={() => setPendingAttachments((current) => current.filter((candidate) => candidate.key !== item.key))}><X size={12} /></button></span>)}</div>}
-          <textarea aria-label="Message" placeholder="Ask anything…" value={draft} onChange={(event) => { setDraft(event.target.value); setDraftDirty(true) }} onKeyDown={onComposerKeyDown} onPaste={handlePaste} rows={3} />
-          <div className="hiveory-chat-composer-toolbar">
-            <div className="hiveory-chat-composer-controls">
-              <button type="button" className="hiveory-icon-button" aria-label="Attach files" title="Attach files" onClick={() => void chooseFiles()}><FilePlus2 size={15} /></button>
-              <button type="button" className="hiveory-icon-button" aria-label="Attach folder" title="Attach folder" onClick={() => void chooseFolder()}><FolderPlus size={15} /></button>
-              <div className="hiveory-chat-engine-picker" ref={enginePickerRef}>
-                <button type="button" className="hiveory-chat-select-button" aria-haspopup="listbox" aria-expanded={engineMenuOpen} onClick={(event) => { event.stopPropagation(); setEngineMenuOpen(!engineMenuOpen) }} disabled={engineLoading}><CliBrandIcon identifier={selectedEngine?.id} size={14} /><span>{selectedEngine?.display_name ?? (engineLoading ? 'Discovering engines…' : 'No engine')}</span><ChevronDown size={13} /></button>
-                {engineMenuOpen && <div className="hiveory-chat-engine-menu" role="listbox" aria-label="Chat engines">{(engineCatalog?.engines ?? []).map((engine) => { const ready = engine.availability === 'ready'; return <button type="button" role="option" aria-selected={engine.id === selectedEngineId} aria-disabled={!ready} className={`hiveory-chat-engine-option ${engine.availability}`} title={ready ? `${engine.display_name} · ${engine.models.length} model${engine.models.length === 1 ? '' : 's'}` : `${statusLabel(engine.availability)}: ${engine.message ?? engine.recovery_action ?? 'Check this CLI configuration.'}`} onClick={(event) => { event.stopPropagation(); setSelectedEngine(engine) }}><CliBrandIcon identifier={engine.id} size={15} /><span><strong>{engine.display_name}</strong><small>{ready ? `${engine.models.length} models` : statusLabel(engine.availability)}</small></span>{ready ? engine.id === selectedEngineId && <Check size={14} /> : <AlertCircle size={14} aria-label={statusLabel(engine.availability)} />}</button> })}</div>}
-              </div>
-              <select aria-label="Chat model" value={selectedModelId} onChange={(event) => setSelectedModelId(event.target.value)} disabled={!selectedEngine?.models.length}>{(selectedEngine?.models ?? []).map((model) => <option key={model.id} value={model.id}>{model.display_name}</option>)}</select>
-              {selectedEngine?.capabilities.includes('reasoning_effort') && <select aria-label="Reasoning effort" value={selectedEffort} onChange={(event) => setSelectedEffort(event.target.value as ChatReasoningEffort)}>{(selectedModel?.effort_levels ?? ['auto']).map((effort) => <option key={effort} value={effort}>{effortLabel(effort)}</option>)}</select>}
-              <span className="hiveory-composer-hint">Drop files or folders here · Shift+Enter for a new line</span>
+      {/* Main Chat Floating Card */}
+      <main className="chat-main-card">
+        {/* Header */}
+        <header className="chat-header">
+          <div className="chat-header-title-wrap">
+            <MessageCircle size={16} />
+            <div>
+              <input
+                className="chat-header-input"
+                aria-label="Conversation title"
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onBlur={() => void saveTitle()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.currentTarget.blur()
+                  }
+                }}
+              />
+              <p className="chat-header-subtitle">
+                Private chat · only explicitly attached context is sent
+              </p>
             </div>
-            <div className="hiveory-chat-composer-submit"><button type="button" className="hiveory-chat-mic-disabled" aria-disabled="true" title="Voice input is temporarily unavailable"><span className="hiveory-visually-hidden">Voice input temporarily unavailable</span><Mic size={15} /></button>{activeTurn ? <button type="button" className="is-stop" onClick={() => void stopTurn()}><Square size={13} />Stop</button> : <button type="button" disabled={busyAction !== null || (!draft.trim() && !pendingAttachments.length) || !selectedEngine || selectedEngine.availability !== 'ready'} onClick={() => void handleSend()}><Send size={14} />{busyAction === 'send' ? 'Sending…' : 'Send'}</button>}</div>
+          </div>
+          <div className="chat-header-actions">
+            {conversation && conversation.branches.length > 1 && (
+              <span className="chat-header-branch-badge">
+                {conversation.branches.length} branches
+              </span>
+            )}
+            {conversation?.pinned && <Pin size={13} aria-label="Pinned" />}
+            <button
+              type="button"
+              className="chat-rail-icon-btn"
+              aria-label="New chat"
+              title="New chat"
+              onClick={createNewChat}
+            >
+              <Plus size={15} />
+            </button>
+            {conversation && (
+              <button
+                type="button"
+                className="chat-rail-icon-btn"
+                aria-label="Delete conversation"
+                title="Delete conversation"
+                onClick={() =>
+                  void deleteConversation({
+                    id: conversation.id,
+                    title: conversation.title,
+                    active_branch_id: conversation.active_branch_id,
+                    pinned: conversation.pinned,
+                    archived: conversation.archived,
+                    folder_id: conversation.folder_id,
+                    folder_position: conversation.folder_position,
+                    updated_at_unix_ms: conversation.updated_at_unix_ms,
+                    preview: null,
+                  })
+                }
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Context Bar */}
+        <div className="chat-context-bar">
+          <div className="chat-context-bar-left">
+            <Check size={13} />
+            <span>No project or repository is mounted</span>
+          </div>
+          <span>Files, folders, and screenshots are opt-in</span>
+        </div>
+
+        {/* Transcript */}
+        <div className="chat-transcript-viewport" ref={transcriptRef} aria-live="polite">
+          <div className="chat-transcript-column">
+            {conversationLoading && (
+              <div className="chat-turn-meta">
+                <LoaderCircle size={13} className="hiveory-chat-spin" />
+                <span>Opening conversation…</span>
+              </div>
+            )}
+            {!conversation && !conversationLoading && (
+              <div className="chat-empty-canvas">
+                <span className="chat-empty-icon">
+                  <MessageCircle size={22} />
+                </span>
+                <h2>Start a focused conversation</h2>
+                <p>
+                  Ask a question, compare answers across your installed CLIs, or attach only the
+                  files you want the active model to see.
+                </p>
+              </div>
+            )}
+            {conversation?.messages.map(renderMessage)}
+            {activeTurn && (
+              <div className="chat-turn-meta">
+                <span className="chat-streaming-dot" />
+                <span>{selectedEngine?.display_name ?? 'Engine'} is responding…</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status / Errors */}
+        {error && (
+          <div className="chat-banner-status is-error" role="alert">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+            <button type="button" aria-label="Dismiss error" onClick={() => setError(null)}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {statusMessage && (
+          <div className="chat-banner-status" role="status">
+            <span>{statusMessage}</span>
+          </div>
+        )}
+
+        {/* Inline Message Edit */}
+        {editingMessageId && (
+          <div className="chat-edit-panel">
+            <div className="chat-edit-header">
+              <span>Edit message</span>
+              <button
+                type="button"
+                className="chat-rail-icon-btn"
+                aria-label="Cancel edit"
+                onClick={() => setEditingMessageId(null)}
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <textarea
+              value={editingText}
+              onChange={(event) => setEditingText(event.target.value)}
+              rows={3}
+            />
+            <div className="chat-edit-actions">
+              <button
+                type="button"
+                className="is-secondary"
+                onClick={() => setEditingMessageId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!editingText.trim() || busyAction !== null}
+                onClick={() => void submitEdit()}
+              >
+                Send edit
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Floating Composer (Image 2 design) */}
+        <div
+          className="chat-composer-container"
+          onDragOver={handleComposerDragOver}
+          onDrop={handleDrop}
+        >
+          {pendingAttachments.length > 0 && (
+            <div className="chat-attachments-list" aria-label="Pending attachments">
+              {pendingAttachments.map((item) => (
+                <span className="chat-attachment-chip" key={item.key}>
+                  <Paperclip size={12} />
+                  <span title={item.name}>{item.name}</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${item.name}`}
+                    onClick={() =>
+                      setPendingAttachments((current) =>
+                        current.filter((candidate) => candidate.key !== item.key)
+                      )
+                    }
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            className="chat-composer-textarea"
+            aria-label="Message"
+            placeholder="Ask anything…"
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setDraftDirty(true)
+            }}
+            onKeyDown={onComposerKeyDown}
+            onPaste={handlePaste}
+            rows={2}
+          />
+
+          <div className="chat-composer-toolbar">
+            <div className="chat-composer-pills">
+              {/* Engine Picker Pill */}
+              <div className="chat-engine-picker-wrapper" ref={enginePickerRef}>
+                <button
+                  type="button"
+                  className="chat-pill-btn"
+                  aria-haspopup="listbox"
+                  aria-expanded={engineMenuOpen}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setEngineMenuOpen(!engineMenuOpen)
+                  }}
+                  disabled={engineLoading}
+                >
+                  <CliBrandIcon identifier={selectedEngine?.id} size={14} />
+                  <span>
+                    {selectedEngine?.display_name ??
+                      (engineLoading ? 'Discovering engines…' : 'No engine')}
+                  </span>
+                  <ChevronDown size={12} />
+                </button>
+                {engineMenuOpen && (
+                  <div className="chat-engine-dropdown" role="listbox" aria-label="Chat engines">
+                    {(engineCatalog?.engines ?? []).map((engine) => {
+                      const ready = engine.availability === 'ready'
+                      return (
+                        <button
+                          type="button"
+                          key={engine.id}
+                          role="option"
+                          aria-selected={engine.id === selectedEngineId}
+                          aria-disabled={!ready}
+                          className={`chat-engine-option-btn ${engine.id === selectedEngineId ? 'is-selected' : ''}`}
+                          title={
+                            ready
+                              ? `${engine.display_name} · ${engine.models.length} model${engine.models.length === 1 ? '' : 's'}`
+                              : `${statusLabel(engine.availability)}: ${engine.message ?? engine.recovery_action ?? 'Check this CLI configuration.'}`
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setSelectedEngine(engine)
+                          }}
+                        >
+                          <CliBrandIcon identifier={engine.id} size={15} />
+                          <div className="chat-engine-option-copy">
+                            <strong>{engine.display_name}</strong>
+                            <small>
+                              {ready
+                                ? `${engine.models.length} models`
+                                : statusLabel(engine.availability)}
+                            </small>
+                          </div>
+                          {ready ? (
+                            engine.id === selectedEngineId && <Check size={14} />
+                          ) : (
+                            <AlertCircle size={14} aria-label={statusLabel(engine.availability)} />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Model Picker Pill */}
+              <select
+                className="chat-pill-select"
+                aria-label="Chat model"
+                value={selectedModelId}
+                onChange={(event) => setSelectedModelId(event.target.value)}
+                disabled={!selectedEngine?.models.length}
+              >
+                {(selectedEngine?.models ?? []).map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.display_name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Reasoning Effort Pill */}
+              {selectedEngine?.capabilities.includes('reasoning_effort') && (
+                <select
+                  className="chat-pill-select"
+                  aria-label="Reasoning effort"
+                  value={selectedEffort}
+                  onChange={(event) =>
+                    setSelectedEffort(event.target.value as ChatReasoningEffort)
+                  }
+                >
+                  {(selectedModel?.effort_levels ?? ['auto']).map((effort) => (
+                    <option key={effort} value={effort}>
+                      {effortLabel(effort)}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <div className="chat-toolbar-divider" />
+
+              {/* Attach Files & Folders */}
+              <button
+                type="button"
+                className="chat-toolbar-icon-btn"
+                aria-label="Attach files"
+                title="Attach files"
+                onClick={() => void chooseFiles()}
+              >
+                <FilePlus2 size={15} />
+              </button>
+              <button
+                type="button"
+                className="chat-toolbar-icon-btn"
+                aria-label="Attach folder"
+                title="Attach folder"
+                onClick={() => void chooseFolder()}
+              >
+                <FolderPlus size={15} />
+              </button>
+
+              <span className="chat-composer-hint">Shift+Enter for newline</span>
+            </div>
+
+            <div className="chat-composer-actions">
+              {/* Mic / Waveform Button (White circular button from Image 2) */}
+              <button
+                type="button"
+                className="chat-mic-btn"
+                aria-disabled="true"
+                title="Voice input is temporarily unavailable"
+                disabled
+              >
+                <AudioWaveform size={16} />
+              </button>
+
+              {/* Send / Stop Button (Image 2 circular button) */}
+              {activeTurn ? (
+                <button
+                  type="button"
+                  className="chat-send-btn is-stop"
+                  onClick={() => void stopTurn()}
+                  aria-label="Stop response"
+                  title="Stop response"
+                >
+                  <Square size={13} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`chat-send-btn ${draft.trim() || pendingAttachments.length ? 'is-ready' : ''}`}
+                  disabled={
+                    busyAction !== null ||
+                    (!draft.trim() && !pendingAttachments.length) ||
+                    !selectedEngine ||
+                    selectedEngine.availability !== 'ready'
+                  }
+                  onClick={() => void handleSend()}
+                  aria-label="Send message"
+                  title="Send message"
+                >
+                  <ArrowUp size={16} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </main>
@@ -684,7 +1545,7 @@ function MessagePartView({ part, onDelete }: { part: ChatMessagePart; onDelete?:
     case 'status': return <div className="hiveory-chat-part-status"><span>{part.code.replaceAll('_', ' ')}</span>{part.text}</div>
     case 'error': return <div className="hiveory-chat-part-error"><strong>{part.code.replaceAll('_', ' ')}</strong><span>{part.message}</span></div>
     case 'attachment':
-    case 'image': return <div className="hiveory-chat-attachment-card">{part.kind === 'image' ? <ImageIcon size={17} /> : <File size={17} />}<span><strong>{part.attachment.display_name}</strong><small>{part.attachment.mime_type} · {formatBytes(part.attachment.bytes)}</small></span>{onDelete && <button type="button" className="hiveory-icon-button" aria-label={`Remove ${part.attachment.display_name}`} onClick={() => void onDelete(part.attachment.id)}><X size={13} /></button>}</div>
+    case 'image': return <div className="hiveory-chat-attachment-card">{part.kind === 'image' ? <ImageIcon size={17} /> : <File size={17} />}<span><strong>{part.attachment.display_name}</strong><small>{part.attachment.mime_type} · {formatBytes(part.attachment.bytes)}</small></span>{onDelete && <button type="button" className="chat-rail-icon-btn" aria-label={`Remove ${part.attachment.display_name}`} onClick={() => void onDelete(part.attachment.id)}><X size={13} /></button>}</div>
     case 'citation': return <a className="hiveory-chat-citation" href={part.url} target="_blank" rel="noreferrer">{part.title ?? part.url}</a>
     case 'usage': return <small className="hiveory-chat-usage">{part.input_tokens ?? 0} input · {part.output_tokens ?? 0} output tokens</small>
     case 'tool_call': return <details className="hiveory-chat-tool-part"><summary>{part.name}</summary><pre>{part.arguments_json}</pre></details>

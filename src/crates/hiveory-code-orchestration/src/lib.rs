@@ -1376,6 +1376,7 @@ impl HiveoryCodeOrchestration {
         self.git.remove_worktree(
             &root,
             &worktree_name(&worktree.path),
+            Path::new(&worktree.path),
             &self.data_root.join("worktrees"),
             request.force,
         )?;

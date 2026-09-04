@@ -744,26 +744,24 @@ impl HostService {
             None
         };
         if let Some(id) = terminal_id.as_deref() {
-            if let Ok(summary) = self
+            if let Ok(Some(summary)) = self
                 .runtime
                 .list()
                 .map(|summaries| summaries.into_iter().find(|summary| summary.id == id))
             {
-                if let Some(summary) = summary {
-                    if matches!(
-                        summary.state,
-                        hiveory_protocol::CodeTerminalState::Running
-                            | hiveory_protocol::CodeTerminalState::Starting
-                    ) {
-                        self.history_enabled.write().await.insert(
-                            id.to_owned(),
-                            existing
-                                .as_ref()
-                                .map(|record| record.history_enabled)
-                                .unwrap_or(true),
-                        );
-                        return Ok(summary);
-                    }
+                if matches!(
+                    summary.state,
+                    hiveory_protocol::CodeTerminalState::Running
+                        | hiveory_protocol::CodeTerminalState::Starting
+                ) {
+                    self.history_enabled.write().await.insert(
+                        id.to_owned(),
+                        existing
+                            .as_ref()
+                            .map(|record| record.history_enabled)
+                            .unwrap_or(true),
+                    );
+                    return Ok(summary);
                 }
             }
         }
@@ -1018,29 +1016,26 @@ async fn history_worker(
                 } else {
                     serde_json::to_vec(&event).unwrap_or_default()
                 };
-                match cipher.encrypt(&terminal_id, &payload) {
-                    Ok(encrypted) => {
-                        if persistence
-                            .append_code_terminal_history(
+                if let Ok(encrypted) = cipher.encrypt(&terminal_id, &payload) {
+                    if persistence
+                        .append_code_terminal_history(
+                            &terminal_id,
+                            direction,
+                            event.sequence,
+                            &encrypted,
+                        )
+                        .await
+                        .is_ok()
+                        && event.kind == CodeTerminalEventKind::Exited
+                    {
+                        let _ = persistence
+                            .finish_code_terminal(
                                 &terminal_id,
-                                direction,
-                                event.sequence,
-                                &encrypted,
+                                hiveory_protocol::CodeTerminalState::Exited,
+                                event.exit_code,
                             )
-                            .await
-                            .is_ok()
-                            && event.kind == CodeTerminalEventKind::Exited
-                        {
-                            let _ = persistence
-                                .finish_code_terminal(
-                                    &terminal_id,
-                                    hiveory_protocol::CodeTerminalState::Exited,
-                                    event.exit_code,
-                                )
-                                .await;
-                        }
+                            .await;
                     }
-                    Err(_) => {}
                 }
                 continue;
             }

@@ -31,20 +31,50 @@ function resolveBuildConfig() {
   return temporaryConfigPath
 }
 
-function portableFallbackName() {
-  return `Hiveory-portable-v${Date.now()}.exe`
-}
-
-function isLockedFileError(error) {
-  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
-  return code === 'EPERM' || code === 'EBUSY'
-}
-
 function replaceArtifact(name, source) {
   const destination = resolve(releaseDir, name)
   if (existsSync(destination)) rmSync(destination, { force: true })
   copyFileSync(source, destination)
   return name
+}
+
+function stopRunningProductionPortable(executablePath) {
+  if (process.platform !== 'win32') return
+
+  const script = `
+    $target = [System.IO.Path]::GetFullPath($env:HIVEORY_PRODUCTION_PORTABLE_PATH)
+    Get-CimInstance Win32_Process -Filter "Name = 'Hiveory-portable.exe'" |
+      Where-Object { $_.ExecutablePath -and [System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; Write-Output $_.ProcessId }
+  `
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+    cwd: projectRoot,
+    env: { ...process.env, HIVEORY_PRODUCTION_PORTABLE_PATH: executablePath },
+    windowsHide: true,
+    encoding: 'utf8',
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(`Unable to close the running Hiveory production portable: ${result.stderr.trim() || `exit code ${result.status}`}`)
+  const processIds = result.stdout.trim().split(/\s+/).filter(Boolean)
+  if (processIds.length > 0) console.log(`Closed running Hiveory production portable process${processIds.length === 1 ? '' : 'es'}: ${processIds.join(', ')}`)
+}
+
+function replacePortableArtifact(source) {
+  const destination = resolve(releaseDir, 'Hiveory-portable.exe')
+  stopRunningProductionPortable(destination)
+  let lastError = null
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      if (existsSync(destination)) rmSync(destination, { force: true })
+      copyFileSync(source, destination)
+      return 'Hiveory-portable.exe'
+    } catch (error) {
+      if (error?.code !== 'EPERM' && error?.code !== 'EBUSY') throw error
+      lastError = error
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 150)
+    }
+  }
+  throw new Error(`Hiveory production portable could not be replaced after closing it: ${lastError?.message ?? 'Windows kept the executable locked.'}`)
 }
 
 function findArtifact(directory, suffix, description) {
@@ -78,14 +108,7 @@ try {
     replaceArtifact('Hiveory.msi', msi),
     replaceArtifact('Hiveory-setup.exe', setup),
   ]
-  try {
-    completed.push(replaceArtifact('Hiveory-portable.exe', sourceExe))
-  } catch (error) {
-    if (!isLockedFileError(error)) throw error
-    const fallback = portableFallbackName()
-    completed.push(replaceArtifact(fallback, sourceExe))
-    console.warn(`Hiveory-portable.exe is in use; published the latest portable build as releases/production/${fallback}.`)
-  }
+  completed.push(replacePortableArtifact(sourceExe))
 
   console.log('Production release artifacts updated:')
   for (const name of completed) console.log(`  releases/production/${name}`)

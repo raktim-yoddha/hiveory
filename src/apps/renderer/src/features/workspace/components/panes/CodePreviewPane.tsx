@@ -219,6 +219,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const initialUrlRef = useRef(preview?.url || initialUrl)
   const hasExplicitInitialUrlRef = useRef(Boolean(preview?.url) || initialUrl !== GOOGLE_HOME)
   const fallbackHistoryRef = useRef({ entries: [initialUrlRef.current], index: 0 })
+  const stageRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<HTMLDivElement>(null)
   const browserStateRef = useRef<BrowserRuntimeState>(initialBrowserState(browserId, workspaceId, initialUrlRef.current))
   const browserOpenedRef = useRef(false)
@@ -508,6 +509,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     scheduleSync()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleSync)
     observer?.observe(surfaceRef.current)
+    // A viewport preset has a fixed surface size.  Its rectangle can still move
+    // when the surrounding pane is resized, so observing only the surface misses
+    // those position-only changes and leaves the native WebView at stale bounds.
+    if (stageRef.current) observer?.observe(stageRef.current)
     window.addEventListener('resize', scheduleSync)
     window.addEventListener('scroll', scheduleSync, true)
     return () => {
@@ -520,6 +525,22 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       }
     }
   }, [])
+
+  useLayoutEffect(() => {
+    if (!hiveoryClient.isTauri) return
+    // Run after React has applied the fixed viewport dimensions, then once more
+    // after the browser layout has settled. This covers viewport switches where
+    // ResizeObserver reports the old box before the new box is painted.
+    let secondFrame: number | null = null
+    const firstFrame = window.requestAnimationFrame(() => {
+      syncBoundsRef.current()
+      secondFrame = window.requestAnimationFrame(() => syncBoundsRef.current())
+    })
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame !== null) window.cancelAnimationFrame(secondFrame)
+    }
+  }, [browserState.viewport_id])
 
   useEffect(() => {
     const handleSurfaceSuspension = (suspended: boolean) => {
@@ -841,7 +862,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
 
       {pickerAction && <div className="code-preview-picker-status" role="status"><Crosshair size={12} /> <span>{pickerAction === 'annotate' ? annotations.length ? `${annotations.length} annotations ready. Select another element or send the feedback.` : 'Click an element to add feedback for an agent.' : 'Click or hover an element, then press C to copy or S to screenshot.'}</span><button type="button" onClick={cancelPicker}>Cancel</button></div>}
       {notice && <div className="code-preview-notice" role="status">{notice}</div>}
-      <div className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
+      <div ref={stageRef} className={`code-preview-stage${isEmulatedViewport ? ' is-emulated' : ''}`}>
         <div className="code-preview-device-canvas">
         <div
           className={`code-preview-native-surface${surfaceSuspended ? ' is-suspended' : ''}`}

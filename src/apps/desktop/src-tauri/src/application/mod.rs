@@ -230,14 +230,9 @@ fn forward_terminal_events(
         else {
             return;
         };
-        loop {
-            match receiver.recv().await {
-                Ok(event) => {
-                    if channel.send(event).is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
+        while let Ok(event) = receiver.recv().await {
+            if channel.send(event).is_err() {
+                break;
             }
         }
     });
@@ -849,6 +844,7 @@ impl HiveoryFoundation {
                 let _ = self.code_git.remove_worktree(
                     &project_root,
                     &created.name,
+                    &created.path,
                     &self.code_workspaces_root,
                     true,
                 );
@@ -1180,6 +1176,7 @@ impl HiveoryFoundation {
                 .remove_worktree(
                     Path::new(&project.root_path),
                     worktree_name,
+                    Path::new(&summary.root_path),
                     &self.code_workspaces_root,
                     request.force,
                 )
@@ -1281,6 +1278,7 @@ impl HiveoryFoundation {
                 .remove_worktree(
                     Path::new(&project.root_path),
                     worktree_name,
+                    Path::new(&workspace.root_path),
                     &self.code_workspaces_root,
                     request.force,
                 )
@@ -4711,17 +4709,12 @@ async fn hiveory_stream_code_terminal_events(
         .await
         .map_err(terminal_host_error)?;
 
-    loop {
-        match receiver.recv().await {
-            Ok(event) => {
-                if event.sequence <= request.after_sequence {
-                    continue;
-                }
-                if channel.send(event).is_err() {
-                    break;
-                }
-            }
-            Err(_) => break,
+    while let Ok(event) = receiver.recv().await {
+        if event.sequence <= request.after_sequence {
+            continue;
+        }
+        if channel.send(event).is_err() {
+            break;
         }
     }
     Ok(())
@@ -6075,14 +6068,14 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "The requested Git path is outside the workspace policy.",
             RetryClass::AfterUserAction,
         ),
-        HiveoryGitError::Git(_) => application_error(
+        HiveoryGitError::Git(error) => application_error(
             "git_read_failed",
-            "The Git operation could not be completed.",
+            format!("Git could not complete the operation: {}", error.message()),
             RetryClass::Safe,
         ),
-        HiveoryGitError::Io(_) => application_error(
+        HiveoryGitError::Io(error) => application_error(
             "git_io_failed",
-            "The Git filesystem operation could not be completed.",
+            format!("Git could not update the repository files: {error}"),
             RetryClass::Safe,
         ),
         HiveoryGitError::InvalidWorktreeName => application_error(
@@ -6095,9 +6088,9 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "The managed worktree path is outside the orchestration directory.",
             RetryClass::AfterUserAction,
         ),
-        HiveoryGitError::WorktreeDirty(_) => application_error(
+        HiveoryGitError::WorktreeDirty(path) => application_error(
             "git_worktree_dirty",
-            "The worktree has uncommitted files. Review it before cleanup.",
+            format!("The worktree has uncommitted changes, including '{path}'. Review it or use force cleanup."),
             RetryClass::AfterUserAction,
         ),
         HiveoryGitError::WorktreeLocked => application_error(
@@ -6110,17 +6103,17 @@ fn git_error(error: HiveoryGitError) -> ApiError {
             "The repository has no commit to use as an orchestration base.",
             RetryClass::AfterUserAction,
         ),
-        HiveoryGitError::MergeConflict(_) => application_error(
+        HiveoryGitError::MergeConflict(paths) => application_error(
             "git_orchestration_conflict",
-            "Dependency checkpoints conflict and were not integrated.",
+            format!("Git found conflicts that must be resolved: {paths}"),
             RetryClass::AfterUserAction,
         ),
         HiveoryGitError::InvalidInput(message) => {
             application_error("git_request_invalid", message, RetryClass::AfterUserAction)
         }
-        HiveoryGitError::Command { operation, .. } => application_error(
+        HiveoryGitError::Command { operation, detail } => application_error(
             "git_command_failed",
-            format!("The Git {operation} operation failed. Check the repository and try again."),
+            format!("Git {operation} failed: {detail}"),
             RetryClass::AfterUserAction,
         ),
         HiveoryGitError::NoStagedChanges => application_error(
@@ -6776,8 +6769,7 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .map_err(|error| error.to_string())?;
-            std::fs::create_dir_all(&app_data_dir)
-                .map_err(|error| Box::<dyn std::error::Error>::from(error))?;
+            std::fs::create_dir_all(&app_data_dir).map_err(Box::<dyn std::error::Error>::from)?;
             let database_path = app_data_dir.join("hiveory.sqlite3");
             let artifact_root = app_data_dir.join("artifacts");
             let orchestration_root = app_data_dir.join("orchestration");
