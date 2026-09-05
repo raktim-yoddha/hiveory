@@ -59,8 +59,9 @@ use sqlx::{
 
 pub(crate) const BROWSER_EVENT: &str = "hiveory-browser-event";
 pub(crate) const BROWSER_CAPTURE_EVENT: &str = "hiveory-browser-capture-event";
-/// New browser surfaces are deliberately inert until the user chooses a URL.
-pub(crate) const BLANK_HOME: &str = "about:blank";
+/// New browser surfaces open at Google. Legacy about:blank state is migrated
+/// to this URL when browser settings or pane snapshots are normalized.
+pub(crate) const DEFAULT_HOME: &str = "https://www.google.com";
 const BROWSER_SETTINGS_KEY: &str = "browser.settings.v1";
 const BROWSER_PROFILES_KEY: &str = "browser.profiles.v1";
 const DEFAULT_PROFILE_ID: &str = "default";
@@ -124,7 +125,7 @@ impl Default for BrowserConfiguration {
                 built_in: true,
             }],
             settings: BrowserSettings {
-                home_url: BLANK_HOME.to_owned(),
+                home_url: DEFAULT_HOME.to_owned(),
                 search_engine: "google".to_owned(),
                 default_profile_id: DEFAULT_PROFILE_ID.to_owned(),
                 default_viewport_id: DEFAULT_VIEWPORT_ID.to_owned(),
@@ -1801,7 +1802,7 @@ fn normalize_browser_configuration(
     }
     configuration.settings.home_url = normalize_browser_input(&configuration.settings.home_url)
         .map(|url| url.to_string())
-        .unwrap_or_else(|_| BLANK_HOME.to_owned());
+        .unwrap_or_else(|_| DEFAULT_HOME.to_owned());
     configuration
 }
 
@@ -3130,8 +3131,8 @@ fn open_url_external(url: &str) -> Result<(), String> {
 
 pub(crate) fn normalize_browser_input(value: &str) -> Result<Url, String> {
     let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Url::parse(BLANK_HOME).map_err(|error| error.to_string());
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("about:blank") {
+        return Url::parse(DEFAULT_HOME).map_err(|error| error.to_string());
     }
 
     if trimmed.contains("://") || trimmed.starts_with("//") {
@@ -3220,9 +3221,6 @@ pub(crate) fn is_allowed_browser_url(url: &Url) -> bool {
 }
 
 fn validate_browser_url(url: &Url) -> Result<Url, String> {
-    if url.as_str() == BLANK_HOME {
-        return Ok(url.clone());
-    }
     if !matches!(url.scheme(), "http" | "https") {
         return Err("Browser supports only HTTP and HTTPS URLs.".to_owned());
     }
@@ -3302,7 +3300,7 @@ fn now_ms() -> i64 {
 mod tests {
     use super::{
         accepts_browser_load_event, build_annotation_overlay_script, build_picker_script,
-        is_allowed_browser_url, normalize_browser_input,
+        is_allowed_browser_url, normalize_browser_input, DEFAULT_HOME,
     };
 
     #[test]
@@ -3311,6 +3309,19 @@ mod tests {
         assert_eq!(url.scheme(), "https");
         assert_eq!(url.host_str(), Some("www.google.com"));
         assert_eq!(url.query(), Some("q=rust+tauri+webview"));
+    }
+
+    #[test]
+    fn new_browser_home_and_legacy_blank_state_open_google() {
+        assert_eq!(DEFAULT_HOME, "https://www.google.com");
+        assert_eq!(
+            normalize_browser_input("").unwrap().as_str(),
+            "https://www.google.com/"
+        );
+        assert_eq!(
+            normalize_browser_input("about:blank").unwrap().as_str(),
+            "https://www.google.com/"
+        );
     }
 
     #[test]

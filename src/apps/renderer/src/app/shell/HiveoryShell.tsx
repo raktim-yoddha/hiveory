@@ -972,7 +972,7 @@ function HiveoryHelp({ onOpenSettings }: { onOpenSettings: () => void }) {
       <div className="hiveory-content-header"><CircleHelp size={22} aria-hidden="true" /><div><p className="hiveory-eyebrow">Local guide</p><h1 id="hiveory-help-title">Help</h1></div></div>
       <p className="hiveory-description">Hiveory keeps projects, terminals, automation schedules, and configuration on this device. Use this guide to find the core controls.</p>
       <div className="hiveory-help-grid">
-        <section><h2>Code workspace</h2><p>Open a project, then add a Browser, Terminal, or CLI pane from the plus button. Browser panes start at <code>about:blank</code>. Terminals remain open until you close their pane.</p></section>
+        <section><h2>Code workspace</h2><p>Open a project, then add a Browser, Terminal, or CLI pane from the plus button. Browser panes start at <code>google.com</code>. Terminals remain open until you close their pane.</p></section>
         <section><h2>Tasks and board</h2><p>The Tasks button shows tasks from local code runs. Use the Workspace board in the Code sidebar footer to drag task cards between lanes; lane placement is stored locally.</p></section>
         <section><h2>Automations</h2><p>Automations run through Hiveory’s local scheduler. Templates are editable before or after use, and their history stays in the app.</p></section>
         <section><h2>Keyboard</h2><p><kbd>Ctrl K</kbd> opens the command palette, <kbd>Ctrl 1</kbd> to <kbd>Ctrl 3</kbd> changes mode, and <kbd>Ctrl ,</kbd> opens settings.</p></section>

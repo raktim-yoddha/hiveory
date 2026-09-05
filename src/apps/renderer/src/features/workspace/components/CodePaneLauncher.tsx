@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { CheckCircle2, ChevronRight, FileText, Globe, Terminal, X } from 'lucide-react'
-import { hiveoryClient, type CodeAdapterSummary } from '../../../shared/api/hiveory-client'
+import { DEFAULT_BROWSER_HOME, hiveoryClient, type CodeAdapterSummary } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
@@ -22,7 +22,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   const [showCliModal, setShowCliModal] = useState(false)
   const [selectedAdapter, setSelectedAdapter] = useState<CodeAdapterSummary | null>(null)
   const [model, setModel] = useState('default')
-  const [previewUrl, setPreviewUrl] = useState('about:blank')
+  const [previewUrl, setPreviewUrl] = useState(DEFAULT_BROWSER_HOME)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [showShellPicker, setShowShellPicker] = useState(false)
   useBrowserSurfaceBlocker(showCliModal, 'pane-launcher-dialog')

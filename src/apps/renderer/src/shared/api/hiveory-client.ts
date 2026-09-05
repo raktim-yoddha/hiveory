@@ -356,10 +356,11 @@ export type CodeCheckpointDiffRequest = { run_id: string; checkpoint_id: string;
 const protocol: ProtocolVersion = { major: 2, minor: 0, patch: 0 }
 const hiveoryIsTauri = '__TAURI_INTERNALS__' in window
 const previewProvider: ProviderAccountSummary = { id: 'hiveory-openai', display_name: 'OpenAI Responses', default_model: 'gpt-5.6-mini', secret_configured: false, enabled: true }
+export const DEFAULT_BROWSER_HOME = 'https://www.google.com'
 
 export function normalizeBrowserInput(value: string): string {
   const trimmed = value.trim()
-  if (!trimmed || trimmed === 'about:blank') return 'about:blank'
+  if (!trimmed || trimmed.toLowerCase() === 'about:blank') return DEFAULT_BROWSER_HOME
   if (/^(https?):\/\//i.test(trimmed)) {
     const url = new URL(trimmed)
     if (url.username || url.password || !url.hostname) throw new Error('Browser URLs must be valid HTTP or HTTPS URLs without credentials.')
@@ -885,7 +886,7 @@ function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowser
 const previewBrowserConfiguration: BrowserConfiguration = {
   profiles: [{ id: 'default', name: 'Default', built_in: true }],
   settings: {
-    home_url: 'about:blank',
+    home_url: DEFAULT_BROWSER_HOME,
     search_engine: 'google',
     default_profile_id: 'default',
     default_viewport_id: 'default',
@@ -1393,7 +1394,7 @@ export const hiveoryClient = {
   },
   async browserSwitchProfile(request: BrowserSwitchProfileRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserSwitchProfileRequest, BrowserRuntimeState>('hiveory_command_browser_switch_profile', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: DEFAULT_BROWSER_HOME })
     state.profile_id = request.profile_id
     return state
   },
@@ -1415,13 +1416,13 @@ export const hiveoryClient = {
   },
   async browserSetViewport(request: BrowserViewportRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserViewportRequest, BrowserRuntimeState>('hiveory_command_browser_set_viewport', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: DEFAULT_BROWSER_HOME })
     state.viewport_id = request.viewport_id
     return state
   },
   async browserSetTouchEmulation(request: BrowserTouchEmulationRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserTouchEmulationRequest, BrowserRuntimeState>('hiveory_command_browser_set_touch_emulation', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: DEFAULT_BROWSER_HOME })
     state.touch_enabled = request.enabled
     return state
   },
@@ -1430,7 +1431,7 @@ export const hiveoryClient = {
   },
   async browserOpenExternal(request: BrowserIdRequest): Promise<boolean> {
     if (hiveoryIsTauri) return tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_open_external', request)
-    window.open('about:blank', '_blank', 'noopener,noreferrer')
+    window.open(DEFAULT_BROWSER_HOME, '_blank', 'noopener,noreferrer')
     return true
   },
   async browserImportCookieFile(request: BrowserCookieFileRequest): Promise<BrowserImportReport> {

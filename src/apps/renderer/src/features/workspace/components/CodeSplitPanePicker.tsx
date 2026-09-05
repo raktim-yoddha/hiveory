@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Columns, FileText, Globe, Rows, Search, Terminal, X } from 'lucide-react'
-import type { CodeAdapterSummary, CodePanePlacement } from '../../../shared/api/hiveory-client'
+import { DEFAULT_BROWSER_HOME, type CodeAdapterSummary, type CodePanePlacement } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
 import { getSplitMenuPosition, type SplitMenuPosition } from './CodeSplitPanePicker.utils'
 
@@ -101,7 +101,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       icon: <CliBrandIcon identifier={adapter.id} size={16} />,
     })),
     { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
-    { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: 'about:blank', icon: <Globe size={16} /> },
+    { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: DEFAULT_BROWSER_HOME, icon: <Globe size={16} /> },
   ], [adapters])
 
   const filteredOptions = useMemo(() => {

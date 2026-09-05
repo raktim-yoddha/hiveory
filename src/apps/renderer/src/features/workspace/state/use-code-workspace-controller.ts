@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import {
+  DEFAULT_BROWSER_HOME,
   hiveoryClient,
   type CodeDocument,
   type CodePaneMutation,
@@ -302,7 +303,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               workspace_id: workspaceId,
               pane_id: newPaneId,
               expected_revision: curRev,
-              url: url || 'http://localhost:3000',
+              url: url || DEFAULT_BROWSER_HOME,
             })
           } catch (previewErr: unknown) {
             if (!formatError(previewErr).includes('layout_conflict')) throw previewErr
@@ -311,7 +312,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               workspace_id: workspaceId,
               pane_id: newPaneId,
               expected_revision: stateRef.current.revision,
-              url: url || 'http://localhost:3000',
+              url: url || DEFAULT_BROWSER_HOME,
             })
           }
           commitPreview(prevRes.preview)
