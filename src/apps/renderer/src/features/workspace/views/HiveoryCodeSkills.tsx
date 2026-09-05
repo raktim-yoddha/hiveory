@@ -89,14 +89,14 @@ export const HiveoryCodeSkills: React.FC = () => {
 
   return <section className="code-page-container hiveory-skills-page" aria-labelledby="hiveory-code-skills-title">
     <header className="code-page-header hiveory-skills-header">
-      <div><h1 id="hiveory-code-skills-title" className="code-page-title">Skills</h1><p className="code-page-subtitle">Skills are stored locally and can be assigned to a Hiveory Agent. They do not modify external CLI installations.</p></div>
+      <div><h1 id="hiveory-code-skills-title" className="code-page-title">Skills</h1><p className="code-page-subtitle">Written once on this machine and shared with every coding CLI launched from Hiveory.</p></div>
       <div className="hiveory-inline-actions"><button type="button" className="is-secondary" onClick={() => setShowCreator(true)} disabled={importing}><FilePlus2 size={15} />Create skill</button><button type="button" className="is-secondary" onClick={() => void importSkill()} disabled={importing}><FileText size={15} />Import SKILL.md</button><button type="button" className="hiveory-icon-button" onClick={() => void refresh()} disabled={loading || importing} aria-label="Refresh skills"><RefreshCw size={15} /></button></div>
     </header>
-    <div className="hiveory-skills-toolbar"><label>Always load for<select value={selectedAgentId} onChange={(event) => void refresh(event.target.value)} disabled={!agents.length}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><span>{activeCount} always loaded · {skills.length} installed</span></div>
+    <div className="hiveory-skills-toolbar"><label>Agent assignment<select value={selectedAgentId} onChange={(event) => void refresh(event.target.value)} disabled={!agents.length}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><span>{skills.length} available to CLI sessions · {activeCount} assigned to this agent</span></div>
     {error && <div className="hiveory-feedback" role="alert">{error}</div>}
     <section className="code-rows-container hiveory-skills-list" aria-busy={loading}>
       {skills.map((skill) => <article key={skill.id} className="code-skill-row">
-        <div className="code-activity-left"><div className="code-activity-icon-box"><FileText size={16} /></div><div className="code-activity-info"><span className="code-skill-name">{skill.name}</span><span className="code-activity-desc">{skill.description}</span><small>{skill.triggers.length ? `Matches in Hiveory: ${skill.triggers.join(', ')}` : 'Available to selected Hiveory Agents'}</small></div></div>
+        <div className="code-activity-left"><div className="code-activity-icon-box"><FileText size={15} /></div><div className="code-activity-info"><span className="code-skill-name">{skill.name}</span><span className="code-activity-desc">{skill.description}</span></div></div>
         <div className="hiveory-skill-row-actions"><span className="code-skill-badge">{skill.origin === 'builtin' ? 'Built in' : 'Custom'}</span><button type="button" className={skill.enabled ? '' : 'is-secondary'} onClick={() => void toggleSkill(skill)} disabled={!selectedAgentId || busySkillId !== null}>{skill.enabled ? <><Check size={14} />Always loaded</> : <><Sparkles size={14} />Always load</>}</button></div>
       </article>)}
       {!loading && !skills.length && <div className="hiveory-empty-panel"><FileText size={24} /><p>No skills are installed. Create one here or import a valid SKILL.md package.</p></div>}

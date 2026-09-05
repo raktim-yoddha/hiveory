@@ -57,10 +57,7 @@ impl HiveoryPluginStore {
         Ok(())
     }
 
-    pub async fn delete_manifest(
-        &self,
-        plugin_id: &str,
-    ) -> Result<(), HiveoryPluginStoreError> {
+    pub async fn delete_manifest(&self, plugin_id: &str) -> Result<(), HiveoryPluginStoreError> {
         sqlx::query("DELETE FROM hiveory_plugin_invocations WHERE plugin_id=?")
             .bind(plugin_id)
             .execute(self.persistence.pool())

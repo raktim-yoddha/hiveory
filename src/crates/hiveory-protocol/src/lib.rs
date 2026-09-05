@@ -1115,6 +1115,15 @@ pub struct CodeTerminalSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct CodeCliSessionIntegration {
+    pub bridge_command: String,
+    pub bridge_args: Vec<String>,
+    pub mcp_config_path: String,
+    pub instructions_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CodeTerminalStartRequest {
     pub workspace_id: String,
     pub kind: CodeTerminalKind,
@@ -1123,6 +1132,8 @@ pub struct CodeTerminalStartRequest {
     pub adapter_id: Option<String>,
     pub model: Option<String>,
     pub resume_session_id: Option<String>,
+    #[serde(default)]
+    pub session_integration: Option<CodeCliSessionIntegration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3278,6 +3289,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeTerminalKind::export_all(&config)?;
     CodeTerminalState::export_all(&config)?;
     CodeTerminalSummary::export_all(&config)?;
+    CodeCliSessionIntegration::export_all(&config)?;
     CodeTerminalStartRequest::export_all(&config)?;
     CodeTerminalInputRequest::export_all(&config)?;
     CodeTerminalResizeRequest::export_all(&config)?;

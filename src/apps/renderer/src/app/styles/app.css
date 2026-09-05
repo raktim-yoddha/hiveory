@@ -1001,6 +1001,120 @@ a:focus-visible {
   .hiveory-plugin-status { display: none; }
 }
 
+/* Desktop plugin catalog: compact, full-width rows with configuration kept in a modal. */
+.hiveory-plugin-page-list {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 20px 18px;
+  color: #ececee;
+  background: #0c0c0d;
+}
+.hiveory-plugin-page-list .hiveory-plugin-page-toolbar { max-width: none; margin: 0 0 12px; }
+.hiveory-plugin-page-list .hiveory-plugin-page-title { align-items: center; }
+.hiveory-plugin-page-list .hiveory-plugin-page-title > div { display: grid; gap: 2px; }
+.hiveory-plugin-page-list .hiveory-plugin-page-title h1 { font-size: 18px; line-height: 1.1; }
+.hiveory-plugin-page-list .hiveory-plugin-page-title p { margin: 0; color: #94969b; font-size: 11px; }
+.hiveory-plugin-page-list > .hiveory-plugin-search {
+  display: flex;
+  width: 100%;
+  height: 34px;
+  margin: 0 0 10px;
+  border: 1px solid #343438;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #8c8f95;
+  background: #1a1a1c;
+}
+.hiveory-plugin-page-list > .hiveory-plugin-search:focus-within { border-color: #686a70; box-shadow: 0 0 0 1px #686a70; }
+.hiveory-plugin-page-list > .hiveory-plugin-search input { color: #ededee; }
+.hiveory-plugin-full-list {
+  min-height: 0;
+  height: calc(100% - 92px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid #303033;
+  border-radius: 8px;
+  background: #171718;
+}
+.hiveory-plugin-full-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto 34px 32px;
+  align-items: center;
+  gap: 9px;
+  min-height: 51px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #303033;
+}
+.hiveory-plugin-full-row:last-child { border-bottom: 0; }
+.hiveory-plugin-full-row:hover { background: #202021; }
+.hiveory-plugin-page-list .hiveory-plugin-mark { border-color: #3a3a3e; color: #d7d7da; background: #29292c; font-size: 9px; font-weight: 750; }
+.hiveory-plugin-row-copy {
+  display: grid !important;
+  justify-content: stretch !important;
+  gap: 2px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  padding: 0 !important;
+  text-align: left;
+  color: inherit !important;
+  background: transparent !important;
+}
+.hiveory-plugin-row-copy strong { overflow: hidden; color: #f1f1f2; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-plugin-row-copy small { overflow: hidden; color: #a2a3a8; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-plugin-page-list .hiveory-plugin-status { display: inline-flex; align-items: center; gap: 4px; border: 0; padding: 0 3px; color: #a5a6ab; background: transparent; font: 10px/1.2 inherit; text-transform: none; }
+.hiveory-plugin-page-list .hiveory-plugin-status.ready { color: #b7d7c2; }
+.hiveory-plugin-page-list .hiveory-plugin-status.test-connection { color: #d4bf95; }
+.hiveory-switch { position: relative; display: inline-flex; width: 30px; height: 17px; cursor: pointer; }
+.hiveory-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.hiveory-switch > span { width: 30px; height: 17px; border: 1px solid #505157; border-radius: 99px; background: #292a2e; transition: background .14s ease, border-color .14s ease; }
+.hiveory-switch > span::after { display: block; width: 11px; height: 11px; margin: 2px; border-radius: 50%; background: #a8a9ae; content: ''; transition: transform .14s ease, background .14s ease; }
+.hiveory-switch input:checked + span { border-color: #657369; background: #3a473f; }
+.hiveory-switch input:checked + span::after { transform: translateX(13px); background: #d9e5dc; }
+.hiveory-switch input:focus-visible + span { outline: 2px solid #aaa; outline-offset: 2px; }
+.hiveory-plugin-menu-wrap { position: relative; }
+.hiveory-plugin-menu {
+  position: absolute;
+  z-index: 20;
+  top: 30px;
+  right: 0;
+  display: grid;
+  width: 150px;
+  border: 1px solid #414146;
+  border-radius: 7px;
+  padding: 4px;
+  background: #232326;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .48);
+}
+.hiveory-plugin-page-list .hiveory-plugin-menu button {
+  justify-content: flex-start;
+  min-height: 29px;
+  border: 0;
+  padding: 5px 8px;
+  color: #dedee1;
+  background: transparent;
+  font-size: 11px;
+}
+.hiveory-plugin-page-list .hiveory-plugin-menu button:hover:not(:disabled) { background: #343438; }
+.hiveory-plugin-config-modal { width: min(760px, calc(100vw - 36px)); max-height: min(780px, calc(100vh - 36px)); overflow-y: auto; }
+.hiveory-plugin-config-title { display: flex; align-items: center; gap: 10px; }
+.hiveory-plugin-config-modal .hiveory-plugin-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hiveory-plugin-full-list::-webkit-scrollbar, .hiveory-plugin-config-modal::-webkit-scrollbar { width: 10px; }
+.hiveory-plugin-full-list::-webkit-scrollbar-track, .hiveory-plugin-config-modal::-webkit-scrollbar-track { background: #171718; }
+.hiveory-plugin-full-list::-webkit-scrollbar-thumb, .hiveory-plugin-config-modal::-webkit-scrollbar-thumb { border: 3px solid #171718; border-radius: 99px; background: #515157; }
+@media (max-width: 720px) {
+  .hiveory-plugin-page-list { height: auto; min-height: 100%; overflow: auto; padding: 13px; }
+  .hiveory-plugin-page-list .hiveory-plugin-page-toolbar { align-items: flex-start; flex-direction: column; }
+  .hiveory-plugin-page-list .hiveory-plugin-page-actions { width: 100%; overflow-x: auto; }
+  .hiveory-plugin-full-list { height: auto; max-height: none; }
+  .hiveory-plugin-full-row { grid-template-columns: 28px minmax(0, 1fr) 30px 30px; }
+  .hiveory-plugin-page-list .hiveory-plugin-status { display: none; }
+  .hiveory-plugin-config-modal .hiveory-plugin-meta { grid-template-columns: 1fr; }
+}
+
 /* Plugins use an application-height split pane so each dense surface scrolls
    independently instead of stretching the shell like a web page. */
 .hiveory-plugin-page {
@@ -1312,3 +1426,41 @@ a:focus-visible {
   .hiveory-plugin-page .hiveory-local-badge { display: none; }
   .hiveory-plugin-page .hiveory-plugin-meta { grid-template-columns: 1fr; }
 }
+
+/* Final catalog refinements are kept last so legacy plugin selectors cannot
+   reintroduce the old split-view colors. */
+.hiveory-plugin-page-list { background: #0c0c0d; }
+.hiveory-plugin-page-list > .hiveory-plugin-search { border-color: #343438; color: #8c8f95; background: #1a1a1c; }
+.hiveory-plugin-page-list .hiveory-plugin-mark { border-color: #3a3a3e; color: #d7d7da; background: #29292c; }
+.hiveory-plugin-page-list .hiveory-plugin-status,
+.hiveory-plugin-page-list .hiveory-plugin-status.connect,
+.hiveory-plugin-page-list .hiveory-plugin-status.disabled {
+  display: inline-flex;
+  border: 0;
+  padding: 0 3px;
+  color: #a5a6ab;
+  background: transparent;
+  font: 10px/1.2 inherit;
+  text-transform: none;
+}
+.hiveory-plugin-page-list .hiveory-plugin-status.ready { color: #b7d7c2; }
+.hiveory-plugin-page-list .hiveory-plugin-status.test-connection { color: #d4bf95; }
+.hiveory-plugin-page-list .hiveory-plugin-menu button { color: #dedee1; background: transparent; }
+.hiveory-plugin-config-modal { border-color: #38383c; background: #18181a; }
+
+.hiveory-automation { background: #0c0c0d; }
+.hiveory-automation-stats > div,
+.hiveory-automation-templates,
+.hiveory-routine-list,
+.hiveory-automation-detail { border-color: #303033; background: #171718; }
+.hiveory-automation-stats span,
+.hiveory-automation-stats small,
+.hiveory-routine-row-copy small { color: #9c9ea4; }
+.hiveory-automation-stats strong,
+.hiveory-routine-row-copy strong { color: #efeff0; }
+.hiveory-routine-row:hover,
+.hiveory-routine-row.is-selected { border-color: #505157; background: #242426 !important; }
+.hiveory-automation-templates button { border-color: #303033; color: #ececee; background: #111112; }
+.hiveory-automation-templates button:hover { border-color: #55565c; background: #1d1d1f; }
+.hiveory-automation-templates button small { color: #aaa; }
+.hiveory-checkbox input { accent-color: #77797f; }

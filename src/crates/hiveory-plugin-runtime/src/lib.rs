@@ -325,9 +325,7 @@ impl HiveoryPluginRuntime {
             .ok_or(HiveoryPluginRuntimeError::NotFound(
                 request.tool_name.clone(),
             ))?;
-        if !matches!(tool.adapter, PluginAdapterKind::JsonHttpPost)
-            || !manifest.supports_dry_run
-        {
+        if !matches!(tool.adapter, PluginAdapterKind::JsonHttpPost) || !manifest.supports_dry_run {
             return Err(HiveoryPluginRuntimeError::InvalidInput(
                 "this plugin tool does not support dry runs".to_owned(),
             ));
@@ -351,6 +349,81 @@ impl HiveoryPluginRuntime {
             "message": "No network request was sent."
         })
         .to_string())
+    }
+
+    /// Returns tools that are safe to advertise to a CLI session. A tool is
+    /// visible only when its plugin is enabled and it has a locally validated
+    /// connection. Credentials remain in the OS keyring and never enter the
+    /// session profile or MCP payload.
+    pub async fn session_definitions(
+        &self,
+    ) -> Result<Vec<AgentToolDefinition>, HiveoryPluginRuntimeError> {
+        let catalog = self.store.catalog().await?;
+        let connections = self.store.connections(None).await?;
+        let mut definitions = Vec::new();
+        for entry in catalog
+            .into_iter()
+            .filter(|entry| entry.installed && entry.enabled)
+        {
+            if !connections.iter().any(|connection| {
+                connection.plugin_id == entry.manifest.id
+                    && connection.validated_at_unix_ms.is_some()
+            }) {
+                continue;
+            }
+            for tool in entry.manifest.tools {
+                definitions.push(AgentToolDefinition {
+                    name: format!("plugin.{}.{}", entry.manifest.id, tool.name),
+                    description: format!("{} ({})", tool.description, entry.manifest.name),
+                    input_schema_json: tool.input_schema_json,
+                    risk: tool.risk,
+                });
+            }
+        }
+        Ok(definitions)
+    }
+
+    /// Executes a tool for an explicitly Hiveory-launched CLI session. The
+    /// bridge only calls this for tools returned by `session_definitions` and
+    /// selects a validated local connection for the matching provider.
+    pub async fn execute_session(
+        &self,
+        session_id: &str,
+        name: &str,
+        arguments_json: &str,
+    ) -> Result<String, HiveoryPluginRuntimeError> {
+        let mut parts = name.splitn(3, '.');
+        if parts.next() != Some("plugin") {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "plugin tool name is invalid".to_owned(),
+            ));
+        }
+        let plugin_id = parts.next().unwrap_or_default();
+        let tool_name = parts.next().unwrap_or_default();
+        if plugin_id.is_empty() || tool_name.is_empty() {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "plugin tool name is invalid".to_owned(),
+            ));
+        }
+        let connection = self
+            .store
+            .connections(Some(plugin_id))
+            .await?
+            .into_iter()
+            .find(|connection| connection.validated_at_unix_ms.is_some())
+            .ok_or_else(|| {
+                HiveoryPluginRuntimeError::InvalidInput(
+                    "plugin has no validated local connection".to_owned(),
+                )
+            })?;
+        self.execute_with_connection(
+            Some(session_id),
+            plugin_id,
+            tool_name,
+            arguments_json,
+            &connection.id,
+        )
+        .await
     }
 
     async fn execute_inner(
@@ -397,9 +470,38 @@ impl HiveoryPluginRuntime {
                 ));
             }
         }
+        self.execute_with_connection(
+            Some(run_id),
+            plugin_id,
+            tool_name,
+            arguments_json,
+            &grant.connection_id,
+        )
+        .await
+    }
+
+    async fn execute_with_connection(
+        &self,
+        run_id: Option<&str>,
+        plugin_id: &str,
+        tool_name: &str,
+        arguments_json: &str,
+        connection_id: &str,
+    ) -> Result<String, HiveoryPluginRuntimeError> {
+        let manifest = self.enabled_manifest(plugin_id).await?;
+        let tool = manifest
+            .tools
+            .iter()
+            .find(|tool| tool.name == tool_name)
+            .ok_or_else(|| {
+                HiveoryPluginRuntimeError::InvalidInput("plugin tool was not found".to_owned())
+            })?;
+        let args = parse_object(arguments_json)?;
+        validate_tool_arguments(tool, &args)?;
+        let qualified = format!("plugin.{plugin_id}.{tool_name}");
         let connection = self
             .store
-            .connection_with_secret(&grant.connection_id)
+            .connection_with_secret(connection_id)
             .await?
             .ok_or(HiveoryPluginRuntimeError::InvalidInput(
                 "plugin connection was not found".to_owned(),
@@ -409,12 +511,17 @@ impl HiveoryPluginRuntime {
                 "plugin connection mismatch".to_owned(),
             ));
         }
+        if connection.0.validated_at_unix_ms.is_none() {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "plugin connection must be tested before CLI use".to_owned(),
+            ));
+        }
         let url = self.safe_url(&manifest, &connection.0.origin, path_arg(&args)?)?;
         let request_preview = preview_json(&Value::Object(args.clone()));
         let invocation = self
             .store
             .insert_invocation(
-                Some(run_id),
+                run_id,
                 plugin_id,
                 &connection.0.id,
                 tool_name,
@@ -844,20 +951,75 @@ fn builtin_manifests() -> Vec<PluginManifest> {
     // with a user-owned token in the operating system keyring; no Hiveory
     // service participates in authentication or request execution.
     vec![
-        provider_manifest("github", "GitHub", "Read repositories, issues, pull requests, and releases from GitHub.", "api.github.com"),
-        provider_manifest("linear", "Linear", "Read and update teams, issues, projects, and comments in Linear.", "api.linear.app"),
-        provider_manifest("gmail", "Gmail", "Read, search, draft, and send mail through the Gmail API.", "gmail.googleapis.com"),
-        provider_manifest("slack", "Slack", "Read channels and messages, search workspaces, and post through Slack.", "slack.com"),
-        provider_manifest("notion", "Notion", "Search, read, create, and update Notion pages and databases.", "api.notion.com"),
-        provider_manifest("cloudflare", "Cloudflare", "Inspect and manage Cloudflare accounts, zones, Workers, DNS, and R2.", "api.cloudflare.com"),
-        provider_manifest("supabase", "Supabase", "Inspect and manage Supabase projects through its management API.", "api.supabase.com"),
-        provider_manifest("vercel", "Vercel", "Read and manage Vercel projects, deployments, domains, and logs.", "api.vercel.com"),
-        provider_manifest("stripe", "Stripe", "Read and manage Stripe customers, products, prices, invoices, and subscriptions.", "api.stripe.com"),
-        provider_manifest("shopify", "Shopify", "Read and manage products, inventory, customers, and orders in a Shopify shop.", "*.myshopify.com"),
+        provider_manifest(
+            "github",
+            "GitHub",
+            "Read repositories, issues, pull requests, and releases from GitHub.",
+            "api.github.com",
+        ),
+        provider_manifest(
+            "linear",
+            "Linear",
+            "Read and update teams, issues, projects, and comments in Linear.",
+            "api.linear.app",
+        ),
+        provider_manifest(
+            "gmail",
+            "Gmail",
+            "Read, search, draft, and send mail through the Gmail API.",
+            "gmail.googleapis.com",
+        ),
+        provider_manifest(
+            "slack",
+            "Slack",
+            "Read channels and messages, search workspaces, and post through Slack.",
+            "slack.com",
+        ),
+        provider_manifest(
+            "notion",
+            "Notion",
+            "Search, read, create, and update Notion pages and databases.",
+            "api.notion.com",
+        ),
+        provider_manifest(
+            "cloudflare",
+            "Cloudflare",
+            "Inspect and manage Cloudflare accounts, zones, Workers, DNS, and R2.",
+            "api.cloudflare.com",
+        ),
+        provider_manifest(
+            "supabase",
+            "Supabase",
+            "Inspect and manage Supabase projects through its management API.",
+            "api.supabase.com",
+        ),
+        provider_manifest(
+            "vercel",
+            "Vercel",
+            "Read and manage Vercel projects, deployments, domains, and logs.",
+            "api.vercel.com",
+        ),
+        provider_manifest(
+            "stripe",
+            "Stripe",
+            "Read and manage Stripe customers, products, prices, invoices, and subscriptions.",
+            "api.stripe.com",
+        ),
+        provider_manifest(
+            "shopify",
+            "Shopify",
+            "Read and manage products, inventory, customers, and orders in a Shopify shop.",
+            "*.myshopify.com",
+        ),
     ]
 }
 
-fn provider_manifest(id: &str, name: &str, description: &str, allowed_host: &str) -> PluginManifest {
+fn provider_manifest(
+    id: &str,
+    name: &str,
+    description: &str,
+    allowed_host: &str,
+) -> PluginManifest {
     let mut manifest = PluginManifest {
         id: id.to_owned(),
         publisher: "Hiveory local integrations".to_owned(),
@@ -916,7 +1078,10 @@ fn allowed_host_matches(allowed: &str, host: &str) -> bool {
 fn connection_test_request(plugin_id: &str) -> (&'static str, Option<Value>) {
     match plugin_id {
         "github" => ("/user", None),
-        "linear" => ("/graphql", Some(json!({ "query": "query { viewer { id } }" }))),
+        "linear" => (
+            "/graphql",
+            Some(json!({ "query": "query { viewer { id } }" })),
+        ),
         "gmail" => ("/gmail/v1/users/me/profile", None),
         "slack" => ("/api/auth.test", None),
         "notion" => ("/v1/users/me", None),
@@ -937,15 +1102,23 @@ mod tests {
     fn builtins_have_stable_strict_schemas_and_hashes() {
         let manifests = builtin_manifests();
         assert_eq!(manifests.len(), 10);
-        assert!(manifests.iter().all(|manifest| !manifest.content_hash.is_empty()));
+        assert!(manifests
+            .iter()
+            .all(|manifest| !manifest.content_hash.is_empty()));
         assert!(manifests.iter().all(|manifest| manifest.tools.len() == 2));
     }
 
     #[test]
     fn provider_host_wildcards_are_bounded_to_the_declared_domain() {
-        assert!(allowed_host_matches("*.myshopify.com", "shop.myshopify.com"));
+        assert!(allowed_host_matches(
+            "*.myshopify.com",
+            "shop.myshopify.com"
+        ));
         assert!(!allowed_host_matches("*.myshopify.com", "myshopify.com"));
-        assert!(!allowed_host_matches("*.myshopify.com", "myshopify.com.attacker.test"));
+        assert!(!allowed_host_matches(
+            "*.myshopify.com",
+            "myshopify.com.attacker.test"
+        ));
     }
 
     #[test]

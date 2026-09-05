@@ -17,6 +17,7 @@ import {
 import { CliBrandIcon } from '../../workspace/components/CliIcons'
 import { HiveoryPlugins } from '../../automation/views/HiveoryPlugins'
 import { HiveoryRoutines } from '../../automation/views/HiveoryRoutines'
+import { HiveoryCodeSkills } from '../../workspace/views/HiveoryCodeSkills'
 import {
   hiveoryClient,
   type AgentApprovalPolicy,
@@ -34,7 +35,7 @@ import {
 export const AGENT_MODE_VERSION = '0.1.0'
 
 type AgentTab = 'chats' | 'skills' | 'settings'
-type AgentSection = 'agents' | 'dashboard' | 'routines' | 'plugins'
+type AgentSection = 'agents' | 'dashboard' | 'routines' | 'plugins' | 'skills'
 
 const DEFAULT_LIMITS = {
   max_steps: 24,
@@ -371,6 +372,8 @@ export function HiveoryAgent() {
       ? <HiveoryRoutines />
       : section === 'plugins'
         ? <HiveoryPlugins />
+        : section === 'skills'
+          ? <HiveoryCodeSkills />
         : <>
           <div className="agent-messages-container"><div className="agent-messages-inner">
             {error && <div className="agent-tool-item" role="alert"><div className="agent-tool-left"><span>{error}</span></div></div>}
@@ -388,13 +391,13 @@ export function HiveoryAgent() {
         <button type="button" className="code-rail-nav-item" onClick={() => setSection('dashboard')}><div className="code-rail-nav-left"><span>Dashboard</span></div><span className="code-rail-badge-count">{agents.filter((item) => item.active_run_state).length}</span></button>
         <button type="button" className="code-rail-nav-item" onClick={() => setSection('routines')}><div className="code-rail-nav-left"><span>Automations</span></div></button>
         <button type="button" className="code-rail-nav-item" onClick={() => setSection('plugins')}><div className="code-rail-nav-left"><span>Plugins</span></div></button>
-        <button type="button" className="code-rail-nav-item" onClick={() => { setSection('agents'); setActiveTab('skills') }}><div className="code-rail-nav-left"><span>Skills</span></div></button>
+        <button type="button" className={`code-rail-nav-item ${section === 'skills' ? 'is-active' : ''}`} onClick={() => setSection('skills')}><div className="code-rail-nav-left"><span>Skills</span></div></button>
       </nav>
       <div className="code-rail-section-header"><span>Agents</span><button type="button" className="code-rail-add-btn" title="Create agent" disabled={sending} onClick={() => void createAgent()}><Plus size={14} /></button></div>
       <div className="code-rail-workspaces-list">{agents.map((item) => <button type="button" key={item.id} className={`code-rail-workspace-row ${item.id === selectedAgentId && section === 'agents' ? 'is-active' : ''}`} onClick={() => { setSection('agents'); setSelectedAgentId(item.id); setActiveTab('chats') }}><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}><span>{item.name}</span>{item.active_run_state && <span className="code-live-dot" />}</div></button>)}{!loading && agents.length === 0 && <span className="agent-thread-preview">Create your first agent.</span>}</div>
       <footer className="code-rail-footer"><div className="code-rail-footer-metric"><span>Runtime</span><span className="code-rail-toggle-pill">v{AGENT_MODE_VERSION}</span></div><div className="code-rail-footer-metric"><span>Mode</span><span className="code-rail-credits-value">Local-first</span></div></footer>
     </aside>
-    <main className="code-workspace-main agent-mode-main">
+    <main className={`code-workspace-main agent-mode-main ${section === 'agents' ? '' : 'is-global-surface'}`}>
       <aside className="agent-sub-sidebar"><div className="agent-sub-header"><span>Chats</span><button type="button" className="agent-sub-icon-btn" title="New chat" onClick={() => void createConversation()} disabled={!selectedAgentId}><Edit size={14} /></button></div><div className="agent-thread-list">{threads.map((thread) => <button type="button" key={thread.id} className={`agent-thread-card ${thread.id === selectedThreadId ? 'is-active' : ''}`} onClick={() => setSelectedThreadId(thread.id)}><div className="agent-thread-top"><span className="agent-thread-title">{thread.title}</span><span className="agent-thread-time">{relativeTime(thread.updated_at_unix_ms)}</span></div><div className="agent-thread-preview">{conversation?.id === thread.id ? messagePreview(conversation.messages) : `${thread.message_count} messages`}</div></button>)}</div></aside>
       <div className="agent-main-content"><div className="agent-content-header"><div className="agent-info-left"><div className="agent-icon-box"><CliBrandIcon identifier={selectedAgent?.provider_account_id ?? 'openai'} size={16} /></div><div className="agent-heading-text"><h2>{selectedAgent?.name ?? 'Agent Mode'}</h2><span className="agent-powered-by">{selectedAgent ? `Powered by ${selectedAgent.provider_account_id}` : 'Create an agent to begin'}</span></div></div><div className="agent-header-controls"><span className="agent-working-pill">• {agents.filter((item) => item.active_run_state).length} working</span><div className="agent-header-tabs"><button type="button" className={`agent-tab-pill ${activeTab === 'chats' ? 'is-active' : ''}`} onClick={() => setActiveTab('chats')}>Chats</button><button type="button" className={`agent-tab-pill ${activeTab === 'skills' ? 'is-active' : ''}`} onClick={() => setActiveTab('skills')}>Skills <span className="agent-tab-count">{agent?.skills.filter((skill) => skill.enabled).length ?? 0}</span></button><button type="button" className={`agent-tab-pill ${activeTab === 'settings' ? 'is-active' : ''}`} onClick={() => setActiveTab('settings')}>Settings</button></div><button type="button" className="agent-new-chat-btn" onClick={() => void createConversation()} disabled={!selectedAgentId}><span>New chat</span><ChevronDown size={13} /></button></div></div>{mainContent}</div>
     </main>

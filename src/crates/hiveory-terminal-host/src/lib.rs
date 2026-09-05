@@ -80,7 +80,7 @@ struct ReadyFile {
 enum HostRequest {
     Health,
     Start {
-        request: CodeTerminalStartRequest,
+        request: Box<CodeTerminalStartRequest>,
         workspace_root: String,
         terminal_id: Option<String>,
         history_enabled: Option<bool>,
@@ -216,7 +216,7 @@ impl HiveoryTerminalHostClient {
     ) -> Result<CodeTerminalSummary, HiveoryTerminalHostError> {
         match self
             .request(HostRequest::Start {
-                request: request.clone(),
+                request: Box::new(request.clone()),
                 workspace_root: workspace_root.to_string_lossy().into_owned(),
                 terminal_id,
                 history_enabled,
@@ -1247,7 +1247,7 @@ async fn handle_connection(
             terminal_id,
             history_enabled,
         } => match service
-            .start(request, workspace_root, terminal_id, history_enabled)
+            .start(*request, workspace_root, terminal_id, history_enabled)
             .await
         {
             Ok(summary) => write_ok(&mut writer, HostResponse::Summary(summary)).await?,

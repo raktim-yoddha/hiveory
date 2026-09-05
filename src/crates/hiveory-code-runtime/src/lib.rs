@@ -1176,9 +1176,7 @@ fn command_for(
     workspace_root: &Path,
 ) -> Result<CommandBuilder, HiveoryCodeRuntimeError> {
     match request.kind {
-        CodeTerminalKind::Shell => {
-            shell_command(request.adapter_id.as_deref())
-        }
+        CodeTerminalKind::Shell => shell_command(request.adapter_id.as_deref()),
         CodeTerminalKind::CodingAgent => {
             let adapter_id = request.adapter_id.as_deref().unwrap_or(CODEX_ADAPTER_ID);
             let spec =
@@ -1201,18 +1199,44 @@ fn command_for(
                     ]);
                     command.arg("--cd");
                     command.arg(process_path(workspace_root).as_os_str());
+                    if let Some(integration) = request.session_integration.as_ref() {
+                        command.args([
+                            "-c",
+                            &format!(
+                                "mcp_servers.hiveory.command={}",
+                                serde_json::to_string(&integration.bridge_command)
+                                    .unwrap_or_else(|_| "\"\"".to_owned())
+                            ),
+                            "-c",
+                            &format!(
+                                "mcp_servers.hiveory.args={}",
+                                serde_json::to_string(&integration.bridge_args)
+                                    .unwrap_or_else(|_| "[]".to_owned())
+                            ),
+                        ]);
+                    }
                     if let Some(session_id) = resume_session_id {
                         command.arg(session_id);
                     }
                 }
                 CLAUDE_CODE_ADAPTER_ID => {
                     command.args(["--permission-mode", "acceptEdits"]);
+                    if let Some(integration) = request.session_integration.as_ref() {
+                        command.args(["--mcp-config", &integration.mcp_config_path]);
+                        command.args([
+                            "--append-system-prompt-file",
+                            &integration.instructions_path,
+                        ]);
+                    }
                     if let Some(session_id) = resume_session_id {
                         command.args(["--resume", session_id]);
                     }
                 }
                 ANTIGRAVITY_ADAPTER_ID => {}
                 OPENCODE_ADAPTER_ID => {
+                    if let Some(integration) = request.session_integration.as_ref() {
+                        command.env("OPENCODE_CONFIG", &integration.mcp_config_path);
+                    }
                     if let Some(session_id) = resume_session_id {
                         command.args(["--session", session_id]);
                     }
@@ -1694,18 +1718,26 @@ fn shell_command(shell_id: Option<&str>) -> Result<CommandBuilder, HiveoryCodeRu
     {
         match shell_id.unwrap_or("cmd") {
             "cmd" => Ok(CommandBuilder::new(
-                std::env::var_os("COMSPEC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("cmd.exe")),
+                std::env::var_os("COMSPEC")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from("cmd.exe")),
             )),
             "powershell" => {
                 let resolved = resolve_executable("pwsh.exe");
-                let program = if resolved.program.is_file() { resolved.program } else { PathBuf::from("powershell.exe") };
+                let program = if resolved.program.is_file() {
+                    resolved.program
+                } else {
+                    PathBuf::from("powershell.exe")
+                };
                 let mut command = CommandBuilder::new(program);
                 command.args(["-NoLogo", "-NoExit"]);
                 Ok(command)
             }
             "git-bash" => {
                 let resolved = resolve_executable("bash.exe");
-                if !resolved.program.is_file() && resolved.program == PathBuf::from("bash.exe") {
+                if !resolved.program.is_file()
+                    && resolved.program.as_path() == Path::new("bash.exe")
+                {
                     return Err(HiveoryCodeRuntimeError::Operation(
                         "Git Bash was not found. Install Git for Windows or select CMD or PowerShell.".to_owned(),
                     ));
@@ -1725,7 +1757,9 @@ fn shell_command(shell_id: Option<&str>) -> Result<CommandBuilder, HiveoryCodeRu
     {
         let _ = shell_id;
         Ok(CommandBuilder::new(
-            std::env::var_os("SHELL").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/bin/sh")),
+            std::env::var_os("SHELL")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/bin/sh")),
         ))
     }
 }
@@ -1841,6 +1875,7 @@ mod tests {
                     adapter_id: None,
                     model: None,
                     resume_session_id: None,
+                    session_integration: None,
                 },
                 &root,
                 sink,
@@ -1879,6 +1914,7 @@ mod tests {
                     adapter_id: None,
                     model: None,
                     resume_session_id: None,
+                    session_integration: None,
                 },
                 &root,
                 sink,

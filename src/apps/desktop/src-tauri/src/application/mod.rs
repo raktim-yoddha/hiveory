@@ -39,19 +39,18 @@ use hiveory_protocol::{
     AgentInputRequest, AgentMemoryDeleteRequest, AgentMemoryMutationRequest, AgentMemoryQuery,
     AgentMemorySummary, AgentPluginGrant, AgentPluginGrantRequest, AgentRunControlRequest,
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
-    AgentSkillSummary,
-    AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest, ApiError,
-    ApplicationMode, BackupSummary, BootstrapSnapshot, BuildInformation,
-    ChatAttachmentBytesRequest, ChatAttachmentImportRequest, ChatAttachmentSummary,
-    ChatBranchRequest, ChatConversationDetail, ChatConversationFolderRequest, ChatCreateRequest,
-    ChatDeleteRequest, ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest,
-    ChatEngineAvailability, ChatEngineCatalog, ChatEngineSummary, ChatEventEnvelope,
-    ChatEventsQuery, ChatExportRequest, ChatFolderCreateRequest, ChatFolderDeleteRequest,
-    ChatFolderSummary, ChatFolderUpdateRequest, ChatMessagePart, ChatMetadataRequest,
-    ChatModelSummary, ChatModelTurnRequest, ChatProviderMessage, ChatProviderPart,
-    ChatProviderStreamEvent, ChatReasoningEffort, ChatSendRequest, ChatSidebarPage,
-    ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest, CloseCodePaneRequest,
-    CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
+    AgentSkillConflictResolutionRequest, AgentSkillSummary, AgentSkillToggleRequest,
+    AgentUpdateRequest, ApiError, ApplicationMode, BackupSummary, BootstrapSnapshot,
+    BuildInformation, ChatAttachmentBytesRequest, ChatAttachmentImportRequest,
+    ChatAttachmentSummary, ChatBranchRequest, ChatConversationDetail,
+    ChatConversationFolderRequest, ChatCreateRequest, ChatDeleteRequest,
+    ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest, ChatEngineAvailability,
+    ChatEngineCatalog, ChatEngineSummary, ChatEventEnvelope, ChatEventsQuery, ChatExportRequest,
+    ChatFolderCreateRequest, ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest,
+    ChatMessagePart, ChatMetadataRequest, ChatModelSummary, ChatModelTurnRequest,
+    ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
+    ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
+    CloseCodePaneRequest, CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDecisionGate, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
     CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery,
@@ -84,10 +83,10 @@ use hiveory_protocol::{
     PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
     PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
     PluginInstallRequest, PluginInvocationSummary, PluginManifest, ProviderDiagnosticRequest,
-    ResponseEnvelope,
-    RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
-    RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
-    SharedEventEnvelope, SharedEventKind, UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
+    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
+    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
+    HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
@@ -224,13 +223,18 @@ struct TaskBoardPreferences {
 fn sanitize_task_board_preferences(mut preferences: TaskBoardPreferences) -> TaskBoardPreferences {
     preferences.statuses.retain(|task_id, status| {
         task_id.len() <= 128
-            && matches!(status.as_str(), "todo" | "in_progress" | "in_review" | "done")
+            && matches!(
+                status.as_str(),
+                "todo" | "in_progress" | "in_review" | "done"
+            )
     });
     if preferences.statuses.len() > 10_000 {
         preferences.statuses = preferences.statuses.into_iter().take(10_000).collect();
     }
     let mut seen = HashSet::new();
-    preferences.pinned.retain(|task_id| task_id.len() <= 128 && seen.insert(task_id.clone()));
+    preferences
+        .pinned
+        .retain(|task_id| task_id.len() <= 128 && seen.insert(task_id.clone()));
     preferences.pinned.truncate(1_000);
     preferences
 }
@@ -259,6 +263,7 @@ fn is_code_workspace_section(value: &str) -> bool {
 
 #[derive(Clone)]
 struct HiveoryFoundation {
+    database_path: PathBuf,
     persistence: HiveoryPersistence,
     secrets: HiveorySecretStoreHandle,
     provider: Arc<dyn HiveoryModelProvider>,
@@ -471,6 +476,7 @@ impl HiveoryFoundation {
         };
         let (chat_events, _) = broadcast::channel(512);
         Ok(Self {
+            database_path,
             persistence,
             secrets,
             provider,
@@ -2200,10 +2206,14 @@ async fn hiveory_command_import_plugin_manifest(
     let metadata = std::fs::metadata(path)
         .map_err(|_| validation_error("The selected plugin manifest could not be read."))?;
     if !metadata.is_file() {
-        return Err(validation_error("The selected plugin manifest is not a file."));
+        return Err(validation_error(
+            "The selected plugin manifest is not a file.",
+        ));
     }
     if metadata.len() > 1024 * 1024 {
-        return Err(validation_error("Plugin manifests must be smaller than 1 MB."));
+        return Err(validation_error(
+            "Plugin manifests must be smaller than 1 MB.",
+        ));
     }
     let contents = std::fs::read_to_string(path)
         .map_err(|_| validation_error("The selected plugin manifest must be UTF-8 JSON."))?;
@@ -2397,7 +2407,8 @@ async fn hiveory_command_update_task_board_preferences(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<TaskBoardPreferences, ApiError> {
     let preferences = sanitize_task_board_preferences(request.preferences);
-    let value = serde_json::to_string(&preferences).map_err(|error| validation_error(error.to_string()))?;
+    let value =
+        serde_json::to_string(&preferences).map_err(|error| validation_error(error.to_string()))?;
     foundation
         .persistence
         .set_setting(TASK_BOARD_PREFERENCES_SETTING, &value)
@@ -2763,26 +2774,28 @@ async fn hiveory_command_open_code_dispatch_terminal(
         .await
         .map_err(orchestration_error)?;
     let coding_agent = context.resume_session_id.is_some();
+    let mut terminal_start = CodeTerminalStartRequest {
+        workspace_id: context.workspace_id,
+        kind: if coding_agent {
+            hiveory_protocol::CodeTerminalKind::CodingAgent
+        } else {
+            hiveory_protocol::CodeTerminalKind::Shell
+        },
+        cols: command.payload.cols,
+        rows: command.payload.rows,
+        adapter_id: coding_agent.then_some(context.adapter_id),
+        model: coding_agent.then_some(context.model).flatten(),
+        resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
+        session_integration: None,
+    };
+    if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        terminal_start.session_integration =
+            prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
+                .await?;
+    }
     let summary = foundation
         .terminal_host
-        .start(
-            &CodeTerminalStartRequest {
-                workspace_id: context.workspace_id,
-                kind: if coding_agent {
-                    hiveory_protocol::CodeTerminalKind::CodingAgent
-                } else {
-                    hiveory_protocol::CodeTerminalKind::Shell
-                },
-                cols: command.payload.cols,
-                rows: command.payload.rows,
-                adapter_id: coding_agent.then_some(context.adapter_id),
-                model: coding_agent.then_some(context.model).flatten(),
-                resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
-            },
-            &context.worktree_path,
-            None,
-            None,
-        )
+        .start(&terminal_start, &context.worktree_path, None, None)
         .await
         .map_err(terminal_host_error)?;
     let attached = foundation
@@ -3933,6 +3946,172 @@ async fn hiveory_command_action_code_hosted_pull_request(
     Ok(response(&command.request_id, result))
 }
 
+async fn prepare_cli_session_integration(
+    foundation: &HiveoryFoundation,
+    adapter_id: Option<&str>,
+) -> Result<Option<hiveory_protocol::CodeCliSessionIntegration>, ApiError> {
+    let Some(adapter_id) = adapter_id else {
+        return Ok(None);
+    };
+    if !matches!(adapter_id, "codex-cli" | "claude-code" | "opencode") {
+        return Ok(None);
+    }
+
+    let session_id = uuid::Uuid::now_v7().to_string();
+    let session_root = foundation
+        .code_workspaces_root
+        .parent()
+        .unwrap_or(&foundation.code_workspaces_root)
+        .join("cli-sessions")
+        .join(&session_id);
+    std::fs::create_dir_all(&session_root).map_err(|error| {
+        application_error(
+            "cli_session_setup_failed",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })?;
+
+    let skill_store =
+        hiveory_persistence::agent::HiveoryAgentStore::new(foundation.persistence.clone());
+    let mut instructions = String::from(
+        "# Hiveory session skills\n\nThese local skills apply only to this CLI session. Follow a skill when the user request matches its purpose. Plugin tools are provided by the `hiveory` MCP server and use locally validated connections.\n",
+    );
+    for skill in skill_store.catalog().await.map_err(|error| {
+        application_error(
+            "skill_catalog_unavailable",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })? {
+        if !skill.valid {
+            continue;
+        }
+        if let Some((summary, body)) =
+            skill_store
+                .skill_package(&skill.id)
+                .await
+                .map_err(|error| {
+                    application_error(
+                        "skill_catalog_unavailable",
+                        error.to_string(),
+                        RetryClass::Safe,
+                    )
+                })?
+        {
+            instructions.push_str(&format!(
+                "\n## {} (`{}`)\n\n{}\n\n{}\n",
+                summary.name, summary.id, summary.description, body
+            ));
+        }
+    }
+    let instructions_path = session_root.join("HIVEORY_SKILLS.md");
+    std::fs::write(&instructions_path, instructions).map_err(|error| {
+        application_error(
+            "cli_session_setup_failed",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })?;
+
+    let bridge_command = std::env::current_exe()
+        .map_err(|error| {
+            application_error(
+                "cli_session_setup_failed",
+                error.to_string(),
+                RetryClass::Safe,
+            )
+        })?
+        .to_string_lossy()
+        .into_owned();
+    let bridge_args = vec![
+        "--plugin-bridge".to_owned(),
+        "--database".to_owned(),
+        foundation.database_path.to_string_lossy().into_owned(),
+        "--session-id".to_owned(),
+        session_id,
+    ];
+    let config = if adapter_id == "opencode" {
+        serde_json::json!({
+            "$schema": "https://opencode.ai/config.json",
+            "instructions": [instructions_path.to_string_lossy()],
+            "mcp": {
+                "hiveory": {
+                    "type": "local",
+                    "command": std::iter::once(bridge_command.clone()).chain(bridge_args.clone()).collect::<Vec<_>>()
+                }
+            }
+        })
+    } else {
+        serde_json::json!({
+            "mcpServers": {
+                "hiveory": {
+                    "type": "stdio",
+                    "command": bridge_command,
+                    "args": bridge_args
+                }
+            }
+        })
+    };
+    let mcp_config_path = session_root.join(if adapter_id == "opencode" {
+        "opencode.json"
+    } else {
+        "mcp.json"
+    });
+    std::fs::write(
+        &mcp_config_path,
+        serde_json::to_vec_pretty(&config).map_err(|error| {
+            application_error(
+                "cli_session_setup_failed",
+                error.to_string(),
+                RetryClass::Safe,
+            )
+        })?,
+    )
+    .map_err(|error| {
+        application_error(
+            "cli_session_setup_failed",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })?;
+
+    Ok(Some(hiveory_protocol::CodeCliSessionIntegration {
+        bridge_command: config["mcpServers"]["hiveory"]["command"]
+            .as_str()
+            .unwrap_or_else(|| {
+                config["mcp"]["hiveory"]["command"][0]
+                    .as_str()
+                    .unwrap_or_default()
+            })
+            .to_owned(),
+        bridge_args: if adapter_id == "opencode" {
+            config["mcp"]["hiveory"]["command"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .skip(1)
+                        .filter_map(|item| item.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            config["mcpServers"]["hiveory"]["args"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default()
+        },
+        mcp_config_path: mcp_config_path.to_string_lossy().into_owned(),
+        instructions_path: instructions_path.to_string_lossy().into_owned(),
+    }))
+}
+
 #[tauri::command]
 async fn hiveory_command_start_code_terminal(
     command: CommandEnvelope<CodeTerminalStartRequest>,
@@ -3951,9 +4130,14 @@ async fn hiveory_command_start_code_terminal(
         .code_workspaces
         .root_path(&command.payload.workspace_id)
         .map_err(workspace_error)?;
+    let mut payload = command.payload.clone();
+    if payload.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        payload.session_integration =
+            prepare_cli_session_integration(&foundation, payload.adapter_id.as_deref()).await?;
+    }
     let summary = foundation
         .terminal_host
-        .start(&command.payload, &root, None, None)
+        .start(&payload, &root, None, None)
         .await
         .map_err(terminal_host_error)?;
     forward_terminal_events(
@@ -4666,7 +4850,7 @@ async fn hiveory_command_launch_code_pane_terminal(
             .code_terminal_session(terminal_id)
             .await
             .map_err(database_error)?;
-        let terminal_start = CodeTerminalStartRequest {
+        let mut terminal_start = CodeTerminalStartRequest {
             workspace_id: command.payload.workspace_id.clone(),
             kind: command.payload.kind,
             cols: command.payload.cols,
@@ -4676,7 +4860,13 @@ async fn hiveory_command_launch_code_pane_terminal(
             resume_session_id: persisted
                 .as_ref()
                 .and_then(|record| record.summary.session_id.clone()),
+            session_integration: None,
         };
+        if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+            terminal_start.session_integration =
+                prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
+                    .await?;
+        }
         let summary = foundation
             .terminal_host
             .start(
@@ -4713,7 +4903,7 @@ async fn hiveory_command_launch_code_pane_terminal(
         ));
     }
 
-    let terminal_start = CodeTerminalStartRequest {
+    let mut terminal_start = CodeTerminalStartRequest {
         workspace_id: command.payload.workspace_id.clone(),
         kind: command.payload.kind,
         cols: command.payload.cols,
@@ -4721,7 +4911,13 @@ async fn hiveory_command_launch_code_pane_terminal(
         adapter_id: command.payload.adapter_id.clone(),
         model: command.payload.model.clone(),
         resume_session_id: None,
+        session_integration: None,
     };
+    if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        terminal_start.session_integration =
+            prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
+                .await?;
+    }
     let summary = foundation
         .terminal_host
         .start(&terminal_start, &root, None, None)
