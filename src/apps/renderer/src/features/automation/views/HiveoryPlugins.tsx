@@ -3,7 +3,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { hiveoryClient, type AgentPluginGrant, type AgentSummary, type PluginCatalogEntry, type PluginConnectionCreateRequest, type PluginConnectionSummary, type PluginManifest } from '../../../shared/api/hiveory-client'
 
 function riskLabel(value: string) { return value.replaceAll('_', ' ') }
-function pluginStatus(entry: PluginCatalogEntry) { return entry.connection_count > 0 ? 'Connected' : entry.enabled ? 'Connect' : 'Disabled' }
+function pluginStatus(entry: PluginCatalogEntry, pluginConnections: PluginConnectionSummary[]) {
+  if (!entry.enabled) return 'Disabled'
+  if (pluginConnections.some((connection) => connection.validated_at_unix_ms)) return 'Ready'
+  return pluginConnections.length ? 'Test connection' : 'Connect'
+}
 const providerTokenDefaults: Record<string, { header: string; origin?: string; hint: string }> = {
   github: { header: 'Authorization', hint: 'Paste `Bearer <GitHub fine-grained token>`.' },
   linear: { header: 'Authorization', hint: 'Paste `Bearer <Linear personal API key>`.' },
@@ -68,7 +72,10 @@ export function HiveoryPlugins() {
       <aside className="hiveory-plugin-catalog" aria-label="Available local plugins">
         <label className="hiveory-plugin-search"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins" aria-label="Search plugins" /></label>
         <div className="hiveory-plugin-list-viewport">
-          {visibleCatalog.map((entry) => <button key={entry.manifest.id} className={`hiveory-plugin-row ${entry.manifest.id === selected?.manifest.id ? 'is-selected' : ''}`} onClick={() => setSelectedId(entry.manifest.id)}>{pluginMark(entry)}<span><strong>{entry.manifest.name}</strong><small>{entry.manifest.description}</small></span><span className={`hiveory-plugin-status ${pluginStatus(entry).toLocaleLowerCase()}`}>{pluginStatus(entry) === 'Connected' ? <CircleCheck size={13} /> : null}{pluginStatus(entry)}</span></button>)}
+          {visibleCatalog.map((entry) => {
+            const status = pluginStatus(entry, connections.filter((connection) => connection.plugin_id === entry.manifest.id))
+            return <button key={entry.manifest.id} className={`hiveory-plugin-row ${entry.manifest.id === selected?.manifest.id ? 'is-selected' : ''}`} onClick={() => setSelectedId(entry.manifest.id)}>{pluginMark(entry)}<span><strong>{entry.manifest.name}</strong><small>{entry.manifest.description}</small></span><span className={`hiveory-plugin-status ${status.toLocaleLowerCase().replaceAll(' ', '-')}`}>{status === 'Ready' ? <CircleCheck size={13} /> : null}{status}</span></button>
+          })}
           {!visibleCatalog.length && <div className="hiveory-empty-panel"><Puzzle size={24} />{catalog.length ? <p>No plugins match your search.</p> : <><p>Plugins are loading from the local runtime.</p><small>Use refresh if this remains empty after a desktop restart.</small></>}</div>}
         </div>
       </aside>
@@ -90,16 +97,17 @@ function PluginGrantEditor({ plugin, connections, agents, busy, onAction }: { pl
   const [connectionId, setConnectionId] = useState('')
   useEffect(() => { if (!agentId) return; void hiveoryClient.agentPluginGrants(agentId).then(setGrants).catch(() => undefined) }, [agentId, plugin.manifest.id])
   useEffect(() => { if (!agentId && agents[0]) setAgentId(agents[0].id) }, [agentId, agents])
-  const grantedConnectionId = grants.find((item) => item.plugin_id === plugin.manifest.id && item.enabled)?.connection_id ?? connections[0]?.id ?? ''
+  const grantedConnectionId = grants.find((item) => item.plugin_id === plugin.manifest.id && item.enabled)?.connection_id ?? connections.find((item) => item.validated_at_unix_ms)?.id ?? connections[0]?.id ?? ''
   useEffect(() => { setConnectionId((current) => connections.some((connection) => connection.id === current) ? current : grantedConnectionId) }, [connections, grantedConnectionId])
   const connection = connections.find((item) => item.id === connectionId) ?? connections[0]
   const grant = grants.find((item) => item.plugin_id === plugin.manifest.id && item.connection_id === connection?.id)
   const enabled = Boolean(grant?.enabled)
+  const canGrant = enabled || Boolean(connection?.validated_at_unix_ms)
   const toggle = async () => {
     if (!connection || !agentId) return
     await onAction(`grant-${plugin.manifest.id}`, async () => { const next = await hiveoryClient.setAgentPluginGrant({ agent_id: agentId, plugin_id: plugin.manifest.id, connection_id: connection.id, tool_names: plugin.manifest.tools.map((tool) => tool.name), enabled: !enabled }); setGrants((current) => [...current.filter((item) => item.plugin_id !== plugin.manifest.id), next]) }, enabled ? 'Plugin grant revoked.' : 'Plugin granted to the Agent.')
   }
-  return <div className="hiveory-plugin-grants"><div className="hiveory-card-heading"><UserRound size={15} /><h3>Agent grants</h3></div><div className="hiveory-grant-controls"><label>Agent<select value={agentId} onChange={(event) => setAgentId(event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><label>Connection<select value={connection?.id ?? ''} onChange={(event) => setConnectionId(event.target.value)} disabled={!connections.length}>{connections.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button onClick={() => void toggle()} disabled={busy !== null || !connection || !plugin.enabled || !agentId}>{enabled ? 'Revoke grant' : 'Grant tools'}</button></div><p className="hiveory-muted-copy">Granting exposes only the selected manifest tools to this Agent. Mutating tools still pause for approval.</p></div>
+  return <div className="hiveory-plugin-grants"><div className="hiveory-card-heading"><UserRound size={15} /><h3>Agent grants</h3></div><div className="hiveory-grant-controls"><label>Agent<select value={agentId} onChange={(event) => setAgentId(event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><label>Connection<select value={connection?.id ?? ''} onChange={(event) => setConnectionId(event.target.value)} disabled={!connections.length}>{connections.map((item) => <option key={item.id} value={item.id}>{item.name}{item.validated_at_unix_ms ? ' · tested' : ' · test required'}</option>)}</select></label><button onClick={() => void toggle()} disabled={busy !== null || !connection || !plugin.enabled || !agentId || !canGrant}>{enabled ? 'Revoke grant' : 'Grant tools'}</button></div><p className="hiveory-muted-copy">{connection && !connection.validated_at_unix_ms && !enabled ? 'Test this connection before granting its tools. ' : ''}Granting exposes only the selected manifest tools to this Hiveory Agent. Mutating tools still pause for approval.</p></div>
 }
 
 function PluginDryRun({ selected, connections }: { selected: PluginCatalogEntry; connections: PluginConnectionSummary[] }) {

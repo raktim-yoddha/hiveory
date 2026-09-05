@@ -482,6 +482,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       {workspaceBoardOpen && (
         <HiveoryWorkspaceBoard
           onOpenWorkspace={(workspaceId) => { handleSelectWorkspace(workspaceId); setWorkspaceBoardOpen(false) }}
+          onStartLocalWork={() => { setWorkspaceBoardOpen(false); if (activeWorkspaceId) setActiveSection('workspace'); else void handleAddProject() }}
           onClose={() => setWorkspaceBoardOpen(false)}
         />
       )}

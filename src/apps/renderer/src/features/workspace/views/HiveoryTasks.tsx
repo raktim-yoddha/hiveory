@@ -13,7 +13,7 @@ function formatTime(value: number) {
   return new Intl.DateTimeFormat([], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
-export function HiveoryTasks({ onOpenWorkspace }: { onOpenWorkspace: (workspaceId: string) => void }) {
+export function HiveoryTasks({ onOpenWorkspace, onStartLocalWork }: { onOpenWorkspace: (workspaceId: string) => void; onStartLocalWork: () => void }) {
   const [tasks, setTasks] = useState<LocalTask[]>([])
   const [query, setQuery] = useState('')
   const [state, setState] = useState<'all' | CodeTask['state']>('all')
@@ -53,7 +53,7 @@ export function HiveoryTasks({ onOpenWorkspace }: { onOpenWorkspace: (workspaceI
       </div>
       <div className="hiveory-tasks-table" role="region" aria-label="Local tasks">
         <div className="hiveory-tasks-columns"><span>ID</span><span>Title / run</span><span>Workspace</span><span>Status</span><span>Updated</span></div>
-        {loading ? <div className="hiveory-tasks-empty"><LoaderCircle className="is-spinning" size={22} /><p>Loading local tasks…</p></div> : error ? <div className="hiveory-tasks-empty"><AlertCircle size={22} /><h2>Tasks could not load</h2><p>{error}</p><button type="button" onClick={() => void refresh()}>Try again</button></div> : visibleTasks.length ? <div className="hiveory-tasks-rows">{visibleTasks.map((task) => <button key={task.id} type="button" className="hiveory-task-row" onClick={() => onOpenWorkspace(task.run.workspace_id)} title={`Open ${task.run.title}`}><span><code>{task.client_id}</code></span><span><strong>{task.title}</strong><small>{task.run.title}</small></span><span>{task.run.workspace_id.slice(0, 8)}</span><span className={`hiveory-task-state ${task.state}`}><CircleCheck size={13} />{taskStateLabel(task.state)}</span><time dateTime={new Date(task.updated_at_unix_ms).toISOString()}>{formatTime(task.updated_at_unix_ms)}</time></button>)}</div> : <div className="hiveory-tasks-empty"><CircleCheck size={22} /><h2>No local tasks match</h2><p>Create a code run or change the filter to see tasks here.</p></div>}
+        {loading ? <div className="hiveory-tasks-empty"><LoaderCircle className="is-spinning" size={22} /><p>Loading local tasks…</p></div> : error ? <div className="hiveory-tasks-empty"><AlertCircle size={22} /><h2>Tasks could not load</h2><p>{error}</p><button type="button" onClick={() => void refresh()}>Try again</button></div> : visibleTasks.length ? <div className="hiveory-tasks-rows">{visibleTasks.map((task) => <button key={task.id} type="button" className="hiveory-task-row" onClick={() => onOpenWorkspace(task.run.workspace_id)} title={`Open ${task.run.title}`}><span><code>{task.client_id}</code></span><span><strong>{task.title}</strong><small>{task.run.title}</small></span><span>{task.run.workspace_id.slice(0, 8)}</span><span className={`hiveory-task-state ${task.state}`}><CircleCheck size={13} />{taskStateLabel(task.state)}</span><time dateTime={new Date(task.updated_at_unix_ms).toISOString()}>{formatTime(task.updated_at_unix_ms)}</time></button>)}</div> : <div className="hiveory-tasks-empty"><CircleCheck size={22} /><h2>No local tasks match</h2><p>Tasks are created by local Hiveory code runs. Start or open a workspace to create one.</p><button type="button" onClick={onStartLocalWork}>Open workspace</button></div>}
       </div>
     </section>
   )

@@ -352,6 +352,8 @@
 .hiveory-workspace-board-header input { width: min(400px, 42vw); border: 1px solid #343840; border-radius: 8px; background: #17191d; color: #f4f5f7; padding: 9px 12px; }
 .hiveory-workspace-board-actions { margin-left: auto; display: flex; gap: 6px; }
 .hiveory-workspace-board-actions button, .hiveory-workspace-board-lane header button, .hiveory-workspace-board-card button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.hiveory-workspace-board-actions .hiveory-workspace-board-start, .hiveory-workspace-board-onboarding button { border: 1px solid #4b4e55; border-radius: 6px; padding: 6px 10px; color: #f1f2f3; background: #2c2f35; cursor: pointer; font-size: 12px; }
+.hiveory-workspace-board-actions .hiveory-workspace-board-start:hover, .hiveory-workspace-board-onboarding button:hover { border-color: #777b83; background: #393c43; }
 .hiveory-workspace-board-pinned { margin: 14px 16px; border: 1px dashed #343840; border-radius: 8px; color: #c6cad2; }
 .hiveory-workspace-board-pinned > button { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; padding: 10px 14px; color: inherit; background: transparent; cursor: pointer; text-align: left; }
 .hiveory-workspace-board-pinned > button span { color: #858b96; margin-right: auto; }
@@ -361,6 +363,8 @@
 .hiveory-workspace-board-pinned-items > button:hover { border-color: #686b71; background: #24262b; }
 .hiveory-workspace-board-pinned-items small { color: #91969e; font-size: 10px; }
 .hiveory-workspace-board-pinned-items > span { color: #858b96; font-size: 12px; }
+.hiveory-workspace-board-onboarding { display: grid; gap: 6px; margin: 0 16px 14px; border: 1px solid #343840; border-radius: 8px; padding: 12px 14px; color: #cbd0d7; background: #15171a; }
+.hiveory-workspace-board-onboarding strong { color: #f1f2f3; font-size: 13px; }.hiveory-workspace-board-onboarding span { color: #9ba1aa; font-size: 12px; }.hiveory-workspace-board-onboarding button { justify-self: start; margin-top: 3px; }
 .hiveory-workspace-board-lanes { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; padding: 0 16px 16px; min-height: 0; flex: 1; overflow: auto; }
 .hiveory-workspace-board-lane { min-height: 360px; border: 1px solid color-mix(in srgb, var(--board-status-color) 65%, #30343a); border-radius: 9px; background: #15171a; overflow: hidden; }
 .hiveory-workspace-board-lane > header { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid #2a2d32; }

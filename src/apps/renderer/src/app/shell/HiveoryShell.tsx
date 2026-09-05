@@ -680,7 +680,7 @@ export function HiveoryShell() {
             <HiveoryHelp onOpenSettings={() => setScreen('settings')} />
           ) : <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading workspace…</div>}>
             {screen === 'tasks' ? (
-              <HiveoryTasks onOpenWorkspace={(workspaceId) => { void hiveoryClient.setCodeWorkspaceContext({ workspace_id: workspaceId, section: 'workspace' }).finally(() => selectMode('code')) }} />
+              <HiveoryTasks onOpenWorkspace={(workspaceId) => { void hiveoryClient.setCodeWorkspaceContext({ workspace_id: workspaceId, section: 'workspace' }).finally(() => selectMode('code')) }} onStartLocalWork={() => selectMode('code')} />
             ) : activeMode === 'agent' ? (
               <HiveoryAgent />
             ) : activeMode === 'chat' ? (
