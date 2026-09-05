@@ -101,7 +101,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       icon: <CliBrandIcon identifier={adapter.id} size={16} />,
     })),
     { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
-    { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: 'http://localhost:3000', icon: <Globe size={16} /> },
+    { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: 'about:blank', icon: <Globe size={16} /> },
   ], [adapters])
 
   const filteredOptions = useMemo(() => {

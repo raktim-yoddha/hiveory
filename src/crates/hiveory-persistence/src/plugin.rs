@@ -57,6 +57,29 @@ impl HiveoryPluginStore {
         Ok(())
     }
 
+    pub async fn delete_manifest(
+        &self,
+        plugin_id: &str,
+    ) -> Result<(), HiveoryPluginStoreError> {
+        sqlx::query("DELETE FROM hiveory_plugin_invocations WHERE plugin_id=?")
+            .bind(plugin_id)
+            .execute(self.persistence.pool())
+            .await?;
+        sqlx::query("DELETE FROM hiveory_agent_plugin_grants WHERE plugin_id=?")
+            .bind(plugin_id)
+            .execute(self.persistence.pool())
+            .await?;
+        sqlx::query("DELETE FROM hiveory_plugin_connections WHERE plugin_id=?")
+            .bind(plugin_id)
+            .execute(self.persistence.pool())
+            .await?;
+        sqlx::query("DELETE FROM hiveory_plugin_manifests WHERE id=?")
+            .bind(plugin_id)
+            .execute(self.persistence.pool())
+            .await?;
+        Ok(())
+    }
+
     pub async fn catalog(&self) -> Result<Vec<PluginCatalogEntry>, HiveoryPluginStoreError> {
         let rows = sqlx::query("SELECT m.manifest_json, m.installed, m.enabled, (SELECT COUNT(*) FROM hiveory_plugin_connections c WHERE c.plugin_id=m.id), (SELECT COUNT(*) FROM hiveory_agent_plugin_grants g WHERE g.plugin_id=m.id AND g.enabled=1) FROM hiveory_plugin_manifests m ORDER BY m.name")
             .fetch_all(self.persistence.pool())

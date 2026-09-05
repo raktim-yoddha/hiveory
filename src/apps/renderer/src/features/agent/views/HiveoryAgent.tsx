@@ -386,7 +386,7 @@ export function HiveoryAgent() {
     <aside className="code-workspace-rail" aria-label="Agent workspace rail">
       <nav className="code-rail-global-nav">
         <button type="button" className="code-rail-nav-item" onClick={() => setSection('dashboard')}><div className="code-rail-nav-left"><span>Dashboard</span></div><span className="code-rail-badge-count">{agents.filter((item) => item.active_run_state).length}</span></button>
-        <button type="button" className="code-rail-nav-item" onClick={() => setSection('routines')}><div className="code-rail-nav-left"><span>Routines</span></div></button>
+        <button type="button" className="code-rail-nav-item" onClick={() => setSection('routines')}><div className="code-rail-nav-left"><span>Automations</span></div></button>
         <button type="button" className="code-rail-nav-item" onClick={() => setSection('plugins')}><div className="code-rail-nav-left"><span>Plugins</span></div></button>
         <button type="button" className="code-rail-nav-item" onClick={() => { setSection('agents'); setActiveTab('skills') }}><div className="code-rail-nav-left"><span>Skills</span></div></button>
       </nav>

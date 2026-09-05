@@ -308,6 +308,83 @@
   gap: 8px;
 }
 
+.code-rail-footer-tools {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 4px 2px;
+}
+
+.code-shell-picker {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.code-shell-picker button {
+  border: 1px solid #30333a;
+  border-radius: 7px;
+  background: #17181c;
+  color: #d8dde5;
+  padding: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.code-shell-picker button:hover { background: #25272d; }
+
+.code-rail-pane-summary { width: 100%; display: flex; align-items: center; gap: 6px; border: 1px solid #30343a; border-radius: 7px; background: #181a1e; color: #cbd0d8; padding: 6px 8px; font-size: 12px; cursor: pointer; }
+.code-rail-pane-summary-icons { display: flex; align-items: center; gap: 3px; }.code-rail-pane-summary-icons > span { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 4px; background: #24272d; }.code-rail-pane-summary > svg { margin-left: auto; }
+
+.hiveory-workspace-board {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 11, 13, 0.98);
+  color: #f4f5f7;
+}
+
+.hiveory-workspace-board-header { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 16px; border-bottom: 1px solid #282b30; }
+.hiveory-workspace-board-header h1 { margin: 0; font-size: 18px; }
+.hiveory-workspace-board-header input { width: min(400px, 42vw); border: 1px solid #343840; border-radius: 8px; background: #17191d; color: #f4f5f7; padding: 9px 12px; }
+.hiveory-workspace-board-actions { margin-left: auto; display: flex; gap: 6px; }
+.hiveory-workspace-board-actions button, .hiveory-workspace-board-lane header button, .hiveory-workspace-board-card button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.hiveory-workspace-board-pinned { margin: 14px 16px; border: 1px dashed #343840; border-radius: 8px; color: #c6cad2; }
+.hiveory-workspace-board-pinned > button { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; padding: 10px 14px; color: inherit; background: transparent; cursor: pointer; text-align: left; }
+.hiveory-workspace-board-pinned > button span { color: #858b96; margin-right: auto; }
+.hiveory-workspace-board-pinned.is-expanded > button svg:last-child { transform: rotate(90deg); }
+.hiveory-workspace-board-pinned-items { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px dashed #343840; padding: 9px 12px; }
+.hiveory-workspace-board-pinned-items > button { display: grid; min-width: 150px; border: 1px solid #3b3e44; border-radius: 6px; padding: 6px 9px; color: #e7e8ea; background: #1a1c20; cursor: pointer; text-align: left; }
+.hiveory-workspace-board-pinned-items > button:hover { border-color: #686b71; background: #24262b; }
+.hiveory-workspace-board-pinned-items small { color: #91969e; font-size: 10px; }
+.hiveory-workspace-board-pinned-items > span { color: #858b96; font-size: 12px; }
+.hiveory-workspace-board-lanes { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; padding: 0 16px 16px; min-height: 0; flex: 1; overflow: auto; }
+.hiveory-workspace-board-lane { min-height: 360px; border: 1px solid color-mix(in srgb, var(--board-status-color) 65%, #30343a); border-radius: 9px; background: #15171a; overflow: hidden; }
+.hiveory-workspace-board-lane > header { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid #2a2d32; }
+.hiveory-board-status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--board-status-color); }
+.hiveory-workspace-board-lane > header > span:not(.hiveory-board-status-dot) { color: #8e949d; font-size: 12px; }
+.hiveory-workspace-board-lane > header button { margin-left: auto; }
+.hiveory-workspace-board-cards { padding: 8px; display: grid; gap: 8px; }
+.hiveory-workspace-board-card { border: 1px solid #30343a; border-radius: 7px; background: #1b1d21; padding: 10px; display: grid; gap: 8px; }
+.hiveory-workspace-board-card > button { display: flex; align-items: center; gap: 8px; font-weight: 650; text-align: left; }
+.hiveory-workspace-board-card > small { color: #949aa3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-workspace-board-card > div { display: flex; align-items: center; gap: 6px; color: #949aa3; font-size: 12px; }
+.hiveory-workspace-board-card > div span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+.hiveory-workspace-board-empty { min-height: 92px; border: 1px dashed #343840; border-radius: 7px; display: grid; place-items: center; color: #858b96; font-size: 13px; }
+
+.hiveory-tasks-page { height: 100%; padding: 20px; overflow: auto; background: #101113; color: #f5f6f8; }
+.hiveory-screen-loading { height: 100%; display: grid; place-items: center; color: #aab0b9; background: #101113; }
+.hiveory-tasks-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.hiveory-tasks-header h1 { margin: 0; font-size: 22px; }.hiveory-tasks-header p { margin: 5px 0 18px; color: #969da8; }
+.hiveory-tasks-provider-tabs { display: flex; gap: 6px; margin-bottom: 12px; }.hiveory-tasks-provider-tabs button, .hiveory-tasks-toolbar button { border: 1px solid #30343a; border-radius: 7px; background: #181a1e; color: #dce0e7; padding: 7px 11px; cursor: pointer; }.hiveory-tasks-provider-tabs button.is-active { background: #e9ebee; color: #17191d; }
+.hiveory-tasks-toolbar { display: flex; gap: 8px; align-items: center; }.hiveory-tasks-toolbar button { display: inline-flex; align-items: center; gap: 6px; }.hiveory-tasks-toolbar input { flex: 1; border: 1px solid #343840; border-radius: 7px; background: #15171a; color: #f4f5f7; padding: 8px 11px; }.hiveory-tasks-filter { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #30343a; border-radius: 7px; background: #181a1e; color: #dce0e7; padding: 6px 9px; font-size: 13px; }.hiveory-tasks-filter select { border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
+.hiveory-tasks-table { margin-top: 14px; border: 1px solid #292c31; border-radius: 9px; overflow: hidden; }.hiveory-tasks-columns { display: grid; grid-template-columns: 90px minmax(260px, 1fr) 130px 120px 140px; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #292c31; color: #9ea5b0; font-size: 11px; font-weight: 700; text-transform: uppercase; }.hiveory-tasks-empty { display: grid; place-items: center; text-align: center; min-height: 310px; padding: 24px; }.hiveory-tasks-empty h2 { margin: 0; font-size: 18px; }.hiveory-tasks-empty p { max-width: 520px; color: #aab0b9; }.hiveory-tasks-empty button { display: inline-flex; gap: 6px; align-items: center; border: 1px solid #4b78e5; background: #3467dc; color: white; border-radius: 7px; padding: 8px 12px; cursor: pointer; }.is-spinning { animation: hiveory-spin 1s linear infinite; }@keyframes hiveory-spin { to { transform: rotate(360deg); } }
+.hiveory-tasks-rows { display: grid; }.hiveory-task-row { display: grid; grid-template-columns: 90px minmax(260px, 1fr) 130px 120px 140px; gap: 12px; align-items: center; width: 100%; border: 0; border-bottom: 1px solid #292c31; background: transparent; color: #e8ebef; padding: 12px 16px; text-align: left; cursor: pointer; }.hiveory-task-row:hover { background: #17191d; }.hiveory-task-row:last-child { border-bottom: 0; }.hiveory-task-row code { color: #aeb5c0; font-size: 12px; }.hiveory-task-row > span:nth-child(2) { min-width: 0; display: grid; gap: 3px; }.hiveory-task-row > span:nth-child(2) strong, .hiveory-task-row > span:nth-child(2) small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hiveory-task-row > span:nth-child(2) small, .hiveory-task-row > span:nth-child(3), .hiveory-task-row time { color: #969da8; font-size: 12px; }.hiveory-task-state { display: inline-flex; align-items: center; gap: 5px; color: #b9c2cd; text-transform: capitalize; font-size: 12px; }.hiveory-task-state.running, .hiveory-task-state.preparing { color: #e0bf49; }.hiveory-task-state.awaiting_review { color: #4bd48d; }.hiveory-task-state.completed { color: #75d8ad; }.hiveory-task-state.failed, .hiveory-task-state.blocked { color: #f18a86; }
+
+
 .code-rail-footer-metric {
   display: flex;
   align-items: center;
@@ -723,6 +800,58 @@
 .code-skill-badge {
   font-size: 12px;
   color: var(--code-text-dim);
+}
+
+.hiveory-skills-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-direction: row;
+}
+
+.hiveory-skills-toolbar,
+.hiveory-skill-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.hiveory-skills-toolbar {
+  justify-content: space-between;
+  min-height: 38px;
+  border: 1px solid var(--code-card-border);
+  border-radius: 8px;
+  padding: 5px 9px;
+  color: var(--code-text-dim);
+  background: var(--code-card-bg);
+  font-size: 11px;
+}
+
+.hiveory-skills-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--code-text-secondary);
+}
+
+.hiveory-skills-toolbar select {
+  min-width: 150px;
+  border: 1px solid var(--code-card-border);
+  border-radius: 5px;
+  padding: 5px 7px;
+  color: var(--code-text-primary);
+  background: var(--code-surface-bg);
+}
+
+.hiveory-skills-list { min-height: 0; overflow: auto; }
+.code-skill-row .code-activity-info { gap: 3px; }
+.code-skill-row .code-activity-info small { color: var(--code-text-dim); font-size: 10px; }
+.hiveory-skill-row-actions { flex-shrink: 0; }
+.hiveory-skill-creator { width: min(720px, 100%); max-height: min(740px, 92vh); overflow: auto; }
+
+@media (max-width: 760px) {
+  .hiveory-skills-header { flex-direction: column; }
+  .hiveory-skills-toolbar, .code-skill-row { align-items: flex-start; flex-direction: column; }
+  .hiveory-skill-row-actions { width: 100%; justify-content: space-between; }
 }
 
 /* ==========================================================================
@@ -5259,7 +5388,8 @@
 }
 
 .code-workspace-root :is(button, input, textarea, select):focus-visible {
-  outline-color: #9aa4b0 !important;
+  outline: 2px solid #778391 !important;
+  outline-offset: 2px;
 }
 
 .code-workspace-root .code-pane-drag-handle:focus-visible,

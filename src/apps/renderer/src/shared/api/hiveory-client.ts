@@ -80,7 +80,7 @@ export type RoutineExecutionsQuery = { routine_id: string; limit: number | null 
 export type PluginAdapterKind = 'json_http_get' | 'json_http_post'
 export type PluginConnectionKind = 'none' | 'api_key_header'
 export type PluginPermission = { capability: string; explanation: string }
-export type PluginToolDefinition = { name: string; description: string; input_schema_json: string; output_schema_json: string; risk: AgentToolRisk }
+export type PluginToolDefinition = { name: string; description: string; adapter: PluginAdapterKind; input_schema_json: string; output_schema_json: string; risk: AgentToolRisk }
 export type PluginManifest = { id: string; publisher: string; version: string; name: string; description: string; adapter: PluginAdapterKind; tools: PluginToolDefinition[]; permissions: PluginPermission[]; allowed_hosts: string[]; connection_kind: PluginConnectionKind; supports_dry_run: boolean; content_hash: string }
 export type PluginCatalogEntry = { manifest: PluginManifest; installed: boolean; enabled: boolean; connection_count: number; assigned_agent_count: number }
 export type PluginConnectionSummary = { id: string; plugin_id: string; name: string; origin: string; kind: PluginConnectionKind; api_key_header: string | null; secret_configured: boolean; validated_at_unix_ms: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
@@ -247,6 +247,8 @@ export const OPENCODE_ADAPTER_ID = 'opencode'
 export const CODE_ADAPTER_IDS = [CODEX_ADAPTER_ID, CLAUDE_CODE_ADAPTER_ID, ANTIGRAVITY_ADAPTER_ID, OPENCODE_ADAPTER_ID] as const
 export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; coordinator_id: string; adapter_id: string; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
 export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type TaskBoardStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
+export type TaskBoardPreferences = { statuses: Record<string, TaskBoardStatus>; pinned: string[] }
 export type CodeTaskDependency = { run_id: string; task_id: string; depends_on_task_id: string }
 export type CodeDispatch = { id: string; run_id: string; task_id: string; attempt: number; state: CodeDispatchState; adapter_id: string; lease_generation: number; session_id: string | null; pid: number | null; worktree_id: string | null; checkpoint_id: string | null; last_heartbeat_at_unix_ms: number | null; terminal_id: string | null; cancel_requested_at_unix_ms: number | null; started_at_unix_ms: number; updated_at_unix_ms: number; error: string | null; result_summary: string | null }
 export type CodeManagedWorktree = { id: string; run_id: string; task_id: string; dispatch_id: string; path: string; branch: string; base_checkpoint_id: string | null; state: CodeManagedWorktreeState; dirty: boolean; locked: boolean; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
@@ -357,7 +359,7 @@ const previewProvider: ProviderAccountSummary = { id: 'hiveory-openai', display_
 
 export function normalizeBrowserInput(value: string): string {
   const trimmed = value.trim()
-  if (!trimmed) return 'https://www.google.com/'
+  if (!trimmed || trimmed === 'about:blank') return 'about:blank'
   if (/^(https?):\/\//i.test(trimmed)) {
     const url = new URL(trimmed)
     if (url.username || url.password || !url.hostname) throw new Error('Browser URLs must be valid HTTP or HTTPS URLs without credentials.')
@@ -401,9 +403,6 @@ const previewAgentSkills: AgentSkillSummary[] = [{ id: 'folder-brief', name: 'Fo
 const previewAgentTools: AgentToolDefinition[] = [{ name: 'folder.list', description: 'List entries in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.read_text', description: 'Read a UTF-8 file in an explicitly granted folder.', input_schema_json: '{}', risk: 'read_only' }, { name: 'folder.write_text', description: 'Write a UTF-8 file in an explicitly writable folder.', input_schema_json: '{}', risk: 'filesystem_mutation' }, { name: 'memory.search', description: 'Search inspectable durable memory.', input_schema_json: '{}', risk: 'read_only' }, { name: 'memory.remember', description: 'Store an explicit non-sensitive memory.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'artifact.create_text', description: 'Create a private text artifact.', input_schema_json: '{}', risk: 'internal_mutation' }, { name: 'user.request_input', description: 'Pause and ask the user for missing information.', input_schema_json: '{}', risk: 'read_only' }, { name: 'delegate_task', description: 'Start a bounded child run with inherited permissions.', input_schema_json: '{}', risk: 'externally_visible' }]
 const previewRoutineExecution: RoutineExecution = { id: 'preview-execution-1', routine_id: 'preview-routine-1', run_id: null, occurrence_key: 'preview@UTC', scheduled_for_unix_ms: Date.now() - 86_400_000, state: 'completed', folder_grant_ids: [], plugin_tool_names: [], error: null, report: 'Completed with a local preview result.', created_at_unix_ms: Date.now() - 86_400_000, updated_at_unix_ms: Date.now() - 86_400_000, started_at_unix_ms: Date.now() - 86_400_000, completed_at_unix_ms: Date.now() - 86_400_000 }
 const previewRoutines: RoutineDetail[] = [{ summary: { id: 'preview-routine-1', name: 'Morning brief', description: 'A bounded weekday briefing for the local operator.', agent_id: previewAgentSummary.id, agent_name: previewAgentSummary.name, schedule: { expression: '0 9 * * 1-5', timezone: 'Asia/Kolkata' }, enabled: true, archived: false, catch_up: 'run_latest', concurrency: 'skip', delivery: 'in_app_and_native', next_run_unix_ms: Date.now() + 3_600_000, last_run_unix_ms: Date.now() - 86_400_000, last_execution_state: 'completed', created_at_unix_ms: Date.now() - 172_800_000, updated_at_unix_ms: Date.now() - 86_400_000 }, prompt_template: 'Summarize the most important updates for me in five bullets.', folder_grant_ids: [], plugin_tool_names: [], max_duration_seconds: 600, max_tool_calls: 12, approval_timeout_seconds: 300, executions: [previewRoutineExecution] }]
-const previewPluginCatalog: PluginCatalogEntry[] = [{ manifest: { id: 'web-json-reader', publisher: 'Hiveory', version: '1.0.0', name: 'Web JSON Reader', description: 'Read bounded JSON from an explicitly allow-listed HTTPS API.', adapter: 'json_http_get', tools: [{ name: 'get_json', description: 'Fetch a JSON document from the configured origin.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"query":{"type":"string"}},"required":["path"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'read_only' }], permissions: [{ capability: 'network.read', explanation: 'Reads JSON only from manifest-approved HTTPS hosts.' }], allowed_hosts: ['api.github.com', 'jsonplaceholder.typicode.com'], connection_kind: 'none', supports_dry_run: false, content_hash: 'preview-hash-reader' }, installed: true, enabled: true, connection_count: 1, assigned_agent_count: 1 }, { manifest: { id: 'webhook-delivery', publisher: 'Hiveory', version: '1.0.0', name: 'Webhook Delivery', description: 'Deliver JSON to a configured HTTPS webhook after approval.', adapter: 'json_http_post', tools: [{ name: 'post_json', description: 'Send a JSON payload to the configured webhook path.', input_schema_json: '{"type":"object","properties":{"path":{"type":"string"},"body":{"type":"object"}},"required":["path","body"],"additionalProperties":false}', output_schema_json: '{"type":"object"}', risk: 'externally_visible' }], permissions: [{ capability: 'network.write', explanation: 'Sends JSON to a configured HTTPS webhook.' }], allowed_hosts: ['hooks.example.com', 'webhook.site'], connection_kind: 'api_key_header', supports_dry_run: true, content_hash: 'preview-hash-webhook' }, installed: true, enabled: false, connection_count: 0, assigned_agent_count: 0 }]
-const previewPluginConnections: PluginConnectionSummary[] = [{ id: 'preview-connection-reader', plugin_id: 'web-json-reader', name: 'GitHub API', origin: 'https://api.github.com', kind: 'none', api_key_header: null, secret_configured: false, validated_at_unix_ms: Date.now() - 86_400_000, created_at_unix_ms: Date.now() - 172_800_000, updated_at_unix_ms: Date.now() - 86_400_000 }]
-const previewAgentGrants: AgentPluginGrant[] = [{ agent_id: previewAgentSummary.id, plugin_id: 'web-json-reader', connection_id: 'preview-connection-reader', tool_names: ['get_json'], enabled: true }]
 const previewChatEngines: ChatEngineCatalog = {
   generated_at_unix_ms: Date.now(),
   engines: [
@@ -886,7 +885,7 @@ function browserPreviewState(request: BrowserOpenRequest, url = normalizeBrowser
 const previewBrowserConfiguration: BrowserConfiguration = {
   profiles: [{ id: 'default', name: 'Default', built_in: true }],
   settings: {
-    home_url: 'https://www.google.com/',
+    home_url: 'about:blank',
     search_engine: 'google',
     default_profile_id: 'default',
     default_viewport_id: 'default',
@@ -927,6 +926,16 @@ export const hiveoryClient = {
   async addAgentFolder(request: AgentFolderGrantRequest): Promise<AgentFolderGrant> { return tauriQuery<AgentFolderGrant>('hiveory_command_add_agent_folder', { request }) },
   async deleteAgentFolder(request: AgentFolderGrantDeleteRequest): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_delete_agent_folder', { request }) },
   async agentSkills(): Promise<AgentSkillCatalog> { return hiveoryIsTauri ? tauriQuery<AgentSkillCatalog>('hiveory_query_agent_skills') : { skills: structuredClone(previewAgentSkills), conflicts: [] } },
+  async importAgentSkill(): Promise<AgentSkillSummary | null> {
+    if (!hiveoryIsTauri) throw new Error('Custom skills can only be imported from the local desktop application.')
+    const selected = await openDialog({ multiple: false, directory: false, title: 'Import a local SKILL.md package', filters: [{ name: 'Skill instructions', extensions: ['md', 'markdown'] }] })
+    if (typeof selected !== 'string' || !selected.trim()) return null
+    return tauriQuery<AgentSkillSummary>('hiveory_command_import_agent_skill', { request: { source_path: selected } })
+  },
+  async createAgentSkill(source: string): Promise<AgentSkillSummary> {
+    if (!hiveoryIsTauri) throw new Error('Custom skills can only be created from the local desktop application.')
+    return tauriQuery<AgentSkillSummary>('hiveory_command_create_agent_skill', { request: { source } })
+  },
   async toggleAgentSkill(request: AgentSkillToggleRequest): Promise<AgentDetail> {
     if (hiveoryIsTauri) return tauriQuery<AgentDetail>('hiveory_command_toggle_agent_skill', { request })
     const skill = previewAgentSkills.find((item) => item.id === request.skill_id); if (skill) skill.enabled = request.enabled; return previewAgentDetail()
@@ -1018,29 +1027,38 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriQuery<RoutineExecution[]>('hiveory_query_routine_executions', { query })
     return structuredClone(previewRoutines.find((item) => item.summary.id === query.routine_id)?.executions.slice(0, query.limit ?? 50) ?? [])
   },
-  async pluginCatalog(): Promise<PluginCatalogEntry[]> { return hiveoryIsTauri ? tauriQuery<PluginCatalogEntry[]>('hiveory_query_plugin_catalog') : structuredClone(previewPluginCatalog) },
-  async pluginConnections(pluginId?: string): Promise<PluginConnectionSummary[]> { return hiveoryIsTauri ? tauriQuery<PluginConnectionSummary[]>('hiveory_query_plugin_connections', { pluginId: pluginId ?? null }) : structuredClone(previewPluginConnections.filter((item) => !pluginId || item.plugin_id === pluginId)) },
+  async pluginCatalog(): Promise<PluginCatalogEntry[]> { return hiveoryIsTauri ? tauriQuery<PluginCatalogEntry[]>('hiveory_query_plugin_catalog') : [] },
+  async importPluginManifest(): Promise<PluginCatalogEntry | null> {
+    if (!hiveoryIsTauri) throw new Error('Plugin manifests can only be imported from the local desktop application.')
+    const selected = await openDialog({ multiple: false, directory: false, title: 'Import a local plugin manifest', filters: [{ name: 'Hiveory plugin manifest', extensions: ['json'] }] })
+    if (typeof selected !== 'string' || !selected.trim()) return null
+    return tauriQuery<PluginCatalogEntry>('hiveory_command_import_plugin_manifest', { path: selected })
+  },
+  async registerPluginManifest(manifest: PluginManifest): Promise<PluginCatalogEntry> {
+    if (!hiveoryIsTauri) throw new Error('Custom plugins can only be created from the local desktop application.')
+    return tauriQuery<PluginCatalogEntry>('hiveory_command_register_plugin_manifest', { manifest })
+  },
+  async pluginConnections(pluginId?: string): Promise<PluginConnectionSummary[]> { return hiveoryIsTauri ? tauriQuery<PluginConnectionSummary[]>('hiveory_query_plugin_connections', { pluginId: pluginId ?? null }) : [] },
   async installPlugin(request: PluginInstallRequest): Promise<void> {
     if (hiveoryIsTauri) { await invoke('hiveory_command_install_plugin', { request }); return }
-    const entry = previewPluginCatalog.find((item) => item.manifest.id === request.plugin_id); if (entry) { entry.installed = request.enabled; entry.enabled = request.enabled }
+    throw new Error('Plugin changes can only be made from the local desktop application.')
   },
   async createPluginConnection(request: PluginConnectionCreateRequest): Promise<PluginConnectionSummary> {
     if (hiveoryIsTauri) return tauriQuery<PluginConnectionSummary>('hiveory_command_create_plugin_connection', { request })
-    const now = previewNow(); const connection: PluginConnectionSummary = { id: previewId('connection'), plugin_id: request.plugin_id, name: request.name, origin: request.origin, kind: request.kind, api_key_header: request.api_key_header, secret_configured: Boolean(request.secret_value), validated_at_unix_ms: null, created_at_unix_ms: now, updated_at_unix_ms: now }; previewPluginConnections.push(connection); return structuredClone(connection)
+    throw new Error('Plugin connections can only be created from the local desktop application.')
   },
   async updatePluginConnection(request: PluginConnectionUpdateRequest): Promise<PluginConnectionSummary> {
     if (hiveoryIsTauri) return tauriQuery<PluginConnectionSummary>('hiveory_command_update_plugin_connection', { request })
-    const connection = previewPluginConnections.find((item) => item.id === request.connection_id); if (!connection) throw new Error('Plugin connection was not found.')
-    Object.assign(connection, { name: request.name, origin: request.origin, api_key_header: request.api_key_header, secret_configured: request.secret_value ? true : connection.secret_configured, validated_at_unix_ms: null, updated_at_unix_ms: previewNow() }); return structuredClone(connection)
+    throw new Error('Plugin connections can only be changed from the local desktop application.')
   },
-  async deletePluginConnection(connectionId: string): Promise<void> { if (hiveoryIsTauri) { await invoke('hiveory_command_delete_plugin_connection', { request: { connection_id: connectionId } }); return } const index = previewPluginConnections.findIndex((item) => item.id === connectionId); if (index >= 0) previewPluginConnections.splice(index, 1) },
-  async testPluginConnection(connectionId: string): Promise<PluginConnectionSummary> { if (hiveoryIsTauri) return tauriQuery<PluginConnectionSummary>('hiveory_command_test_plugin_connection', { request: { connection_id: connectionId } }); const connection = previewPluginConnections.find((item) => item.id === connectionId); if (!connection) throw new Error('Plugin connection was not found.'); connection.validated_at_unix_ms = previewNow(); return structuredClone(connection) },
-  async agentPluginGrants(agentId: string): Promise<AgentPluginGrant[]> { return hiveoryIsTauri ? tauriQuery<AgentPluginGrant[]>('hiveory_query_agent_plugin_grants', { request: { agent_id: agentId } }) : structuredClone(previewAgentGrants.filter((grant) => grant.agent_id === agentId)) },
+  async deletePluginConnection(connectionId: string): Promise<void> { if (hiveoryIsTauri) { await invoke('hiveory_command_delete_plugin_connection', { request: { connection_id: connectionId } }); return } throw new Error('Plugin connections can only be changed from the local desktop application.') },
+  async testPluginConnection(connectionId: string): Promise<PluginConnectionSummary> { if (hiveoryIsTauri) return tauriQuery<PluginConnectionSummary>('hiveory_command_test_plugin_connection', { request: { connection_id: connectionId } }); throw new Error('Plugin connections can only be tested from the local desktop application.') },
+  async agentPluginGrants(agentId: string): Promise<AgentPluginGrant[]> { return hiveoryIsTauri ? tauriQuery<AgentPluginGrant[]>('hiveory_query_agent_plugin_grants', { request: { agent_id: agentId } }) : [] },
   async setAgentPluginGrant(request: AgentPluginGrantRequest): Promise<AgentPluginGrant> {
     if (hiveoryIsTauri) return tauriQuery<AgentPluginGrant>('hiveory_command_set_agent_plugin_grant', { request })
-    const existing = previewAgentGrants.find((grant) => grant.agent_id === request.agent_id && grant.plugin_id === request.plugin_id && grant.connection_id === request.connection_id); if (existing) Object.assign(existing, request); else previewAgentGrants.push(structuredClone(request)); return structuredClone(request)
+    throw new Error('Plugin grants can only be changed from the local desktop application.')
   },
-  async dryRunPlugin(request: PluginDryRunRequest): Promise<string> { return hiveoryIsTauri ? tauriQuery<string>('hiveory_command_dry_run_plugin', { request }) : JSON.stringify({ dry_run: true, target: 'https://hooks.example.com' + JSON.parse(request.arguments_json).path, message: 'No network request was sent.' }) },
+  async dryRunPlugin(request: PluginDryRunRequest): Promise<string> { return hiveoryIsTauri ? tauriQuery<string>('hiveory_command_dry_run_plugin', { request }) : (() => { throw new Error('Plugin dry runs can only be executed from the local desktop application.') })() },
   async pluginInvocations(runId: string): Promise<PluginInvocationSummary[]> { return hiveoryIsTauri ? tauriQuery<PluginInvocationSummary[]>('hiveory_query_plugin_invocations', { runId }) : [] },
 
   async codeSnapshot(): Promise<CodeSnapshot> {
@@ -1375,7 +1393,7 @@ export const hiveoryClient = {
   },
   async browserSwitchProfile(request: BrowserSwitchProfileRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserSwitchProfileRequest, BrowserRuntimeState>('hiveory_command_browser_switch_profile', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
     state.profile_id = request.profile_id
     return state
   },
@@ -1397,13 +1415,13 @@ export const hiveoryClient = {
   },
   async browserSetViewport(request: BrowserViewportRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserViewportRequest, BrowserRuntimeState>('hiveory_command_browser_set_viewport', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
     state.viewport_id = request.viewport_id
     return state
   },
   async browserSetTouchEmulation(request: BrowserTouchEmulationRequest): Promise<BrowserRuntimeState> {
     if (hiveoryIsTauri) return tauriCommand<BrowserTouchEmulationRequest, BrowserRuntimeState>('hiveory_command_browser_set_touch_emulation', request)
-    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'https://www.google.com/' })
+    const state = browserPreviewState({ browser_id: request.browser_id, workspace_id: '', url: 'about:blank' })
     state.touch_enabled = request.enabled
     return state
   },
@@ -1412,7 +1430,7 @@ export const hiveoryClient = {
   },
   async browserOpenExternal(request: BrowserIdRequest): Promise<boolean> {
     if (hiveoryIsTauri) return tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_open_external', request)
-    window.open('https://www.google.com/', '_blank', 'noopener,noreferrer')
+    window.open('about:blank', '_blank', 'noopener,noreferrer')
     return true
   },
   async browserImportCookieFile(request: BrowserCookieFileRequest): Promise<BrowserImportReport> {
@@ -1693,6 +1711,14 @@ export const hiveoryClient = {
   async codeRun(runId: string): Promise<CodeRunDetail> {
     if (hiveoryIsTauri) return tauriQuery<CodeRunDetail>('hiveory_query_code_run', { runId })
     return previewCodeRunDetail(runId)
+  },
+  async taskBoardPreferences(): Promise<TaskBoardPreferences> {
+    if (hiveoryIsTauri) return tauriQuery<TaskBoardPreferences>('hiveory_query_task_board_preferences')
+    throw new Error('The task board is available only in the local desktop application.')
+  },
+  async updateTaskBoardPreferences(preferences: TaskBoardPreferences): Promise<TaskBoardPreferences> {
+    if (hiveoryIsTauri) return tauriQuery<TaskBoardPreferences>('hiveory_command_update_task_board_preferences', { request: { preferences } })
+    throw new Error('The task board is available only in the local desktop application.')
   },
   async codeMailbox(query: CodeMailboxQuery): Promise<CodeMailboxDelivery[]> {
     if (hiveoryIsTauri) return tauriQuery<CodeMailboxDelivery[]>('hiveory_query_code_mailbox', { query })

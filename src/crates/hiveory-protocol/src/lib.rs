@@ -2955,6 +2955,10 @@ pub enum PluginAdapterKind {
     JsonHttpPost,
 }
 
+fn default_plugin_tool_adapter() -> PluginAdapterKind {
+    PluginAdapterKind::JsonHttpGet
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -2975,6 +2979,8 @@ pub struct PluginPermission {
 pub struct PluginToolDefinition {
     pub name: String,
     pub description: String,
+    #[serde(default = "default_plugin_tool_adapter")]
+    pub adapter: PluginAdapterKind,
     pub input_schema_json: String,
     pub output_schema_json: String,
     pub risk: AgentToolRisk,

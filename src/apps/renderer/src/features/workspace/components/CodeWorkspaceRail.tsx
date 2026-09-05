@@ -11,6 +11,7 @@ import {
   FileText,
   Folder,
   FolderOpen,
+  FolderSearch,
   FolderTree,
   GitBranch,
   LayoutDashboard,
@@ -23,6 +24,8 @@ import {
   Puzzle,
   Settings,
   Settings2,
+  CircleHelp,
+  Columns3,
   Sparkles,
   SquareTerminal,
   Trash2,
@@ -58,6 +61,7 @@ interface CodeWorkspaceRailProps {
   coordinationPanelOpen: boolean
   onToggleSourcePanel: (open?: boolean) => void
   onToggleCoordinationPanel: (open?: boolean) => void
+  onOpenWorkspaceBoard: () => void
 }
 
 type ProjectIconId = 'folder' | 'git' | 'briefcase' | 'package'
@@ -131,6 +135,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   coordinationPanelOpen,
   onToggleSourcePanel,
   onToggleCoordinationPanel,
+  onOpenWorkspaceBoard,
 }) => {
   const DEFAULT_RAIL_WIDTH = 228
   const MIN_RAIL_WIDTH = 180
@@ -203,6 +208,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const [projectIcons, setProjectIcons] = useState<Record<string, ProjectIconId>>(() => readRailPreferences().projectIcons)
   const [projectGroups, setProjectGroups] = useState<Record<string, string>>(() => readRailPreferences().projectGroups)
   const [workspaceFlags, setWorkspaceFlags] = useState<Record<string, WorkspaceRailFlags>>(() => readRailPreferences().workspaceFlags)
+  const [expandedPaneTrees, setExpandedPaneTrees] = useState<Set<string>>(new Set())
   const [actionNotice, setActionNotice] = useState<string | null>(null)
   useBrowserSurfaceBlocker(
     Boolean(isAddMenuOpen || openContextMenu || projectGroupDialogId),
@@ -304,7 +310,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
 
   const navItems: { id: 'dashboard' | 'routines' | 'plugins' | 'skills'; label: string; badge?: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', badge: '1', icon: <LayoutDashboard size={15} aria-hidden="true" /> },
-    { id: 'routines', label: 'Routines', icon: <Clock3 size={15} aria-hidden="true" /> },
+    { id: 'routines', label: 'Automations', icon: <Clock3 size={15} aria-hidden="true" /> },
     { id: 'plugins', label: 'Plugins', icon: <Puzzle size={15} aria-hidden="true" /> },
     { id: 'skills', label: 'Skills', icon: <Sparkles size={15} aria-hidden="true" /> },
   ]
@@ -680,9 +686,28 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const renderPaneTree = (workspaceId: string) => {
     if (workspaceId !== activeWorkspaceId || activeGlobalSection !== 'workspace') return null
 
+    const expanded = expandedPaneTrees.has(workspaceId)
+
     return (
       <div className="code-rail-pane-tree">
-        {leaves.map((leaf) => {
+        <button
+          type="button"
+          className="code-rail-pane-summary"
+          onClick={() => setExpandedPaneTrees((current) => {
+            const next = new Set(current)
+            if (next.has(workspaceId)) next.delete(workspaceId)
+            else next.add(workspaceId)
+            return next
+          })}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${leaves.length} panes`}
+        >
+          <span className="code-rail-pane-summary-icons">{leaves.slice(0, 3).map((leaf) => <span key={leaf.pane_id}>{renderPaneRailIcon(leaf)}</span>)}</span>
+          <span>{leaves.length} pane{leaves.length === 1 ? '' : 's'}</span>
+          {leaves.length > 3 && <span>+{leaves.length - 3}</span>}
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+        {expanded && leaves.map((leaf) => {
           const isFocused = leaf.pane_id === state.focusedPaneId
           return (
             <button
@@ -869,19 +894,11 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         })}
       </div>
 
-      <footer className="code-rail-footer">
-        <div className="code-rail-footer-metric"><span>Notch</span><span className="code-rail-toggle-pill">Off</span></div>
-        <div className="code-rail-footer-metric"><span>Credits</span><span className="code-rail-credits-value">9,684</span></div>
-        <div className="code-rail-user-card">
-          <div className="code-rail-user-left">
-            <div className="code-rail-avatar">A</div>
-            <div className="code-rail-user-info"><span className="code-rail-username">Developer</span><span className="code-rail-user-badge">PRO</span></div>
-          </div>
-          <div className="code-rail-user-actions">
-            <button type="button" className="code-rail-user-icon-btn" title="Theme preferences are not configured" disabled><Moon size={14} aria-hidden="true" /></button>
-            <button type="button" className="code-rail-user-icon-btn" title="Open settings" onClick={() => window.dispatchEvent(new Event('hiveory-open-global-settings'))}><Settings size={14} aria-hidden="true" /></button>
-          </div>
-        </div>
+      <footer className="code-rail-footer code-rail-footer-tools" aria-label="Workspace tools">
+        <button type="button" className="code-rail-user-icon-btn" title="Settings" aria-label="Settings" onClick={() => window.dispatchEvent(new Event('hiveory-open-global-settings'))}><Settings size={15} aria-hidden="true" /></button>
+        <button type="button" className="code-rail-user-icon-btn" title="Help" aria-label="Help" onClick={() => window.dispatchEvent(new Event('hiveory-open-help'))}><CircleHelp size={15} aria-hidden="true" /></button>
+        <button type="button" className="code-rail-user-icon-btn" title="Reveal active workspace" aria-label="Reveal active workspace" onClick={() => window.dispatchEvent(new Event('hiveory-reveal-active-workspace'))}><FolderSearch size={15} aria-hidden="true" /></button>
+        <button type="button" className="code-rail-user-icon-btn" title="Workspace board" aria-label="Workspace board" onClick={onOpenWorkspaceBoard}><Columns3 size={15} aria-hidden="true" /></button>
       </footer>
 
       {renderActiveContextMenu()}

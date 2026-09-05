@@ -123,7 +123,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         return (
           <CodePaneLauncher
             paneId={node.pane_id}
-            onLaunchShell={() => void launchTerminal(node.pane_id, 'shell')}
+            onLaunchShell={(shellId) => void launchTerminal(node.pane_id, 'shell', shellId)}
             onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
             onOpenPreview={(url) => void openPreview(node.pane_id, url)}
             onCreateMarkdown={() => void createMarkdown(node.pane_id)}
@@ -135,7 +135,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           return (
             <CodePaneLauncher
               paneId={node.pane_id}
-              onLaunchShell={() => void launchTerminal(node.pane_id, 'shell')}
+              onLaunchShell={(shellId) => void launchTerminal(node.pane_id, 'shell', shellId)}
               onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
               onOpenPreview={(url) => void openPreview(node.pane_id, url)}
               onCreateMarkdown={() => void createMarkdown(node.pane_id)}

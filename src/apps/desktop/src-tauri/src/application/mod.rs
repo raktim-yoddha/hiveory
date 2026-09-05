@@ -39,6 +39,7 @@ use hiveory_protocol::{
     AgentInputRequest, AgentMemoryDeleteRequest, AgentMemoryMutationRequest, AgentMemoryQuery,
     AgentMemorySummary, AgentPluginGrant, AgentPluginGrantRequest, AgentRunControlRequest,
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
+    AgentSkillSummary,
     AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest, ApiError,
     ApplicationMode, BackupSummary, BootstrapSnapshot, BuildInformation,
     ChatAttachmentBytesRequest, ChatAttachmentImportRequest, ChatAttachmentSummary,
@@ -82,7 +83,8 @@ use hiveory_protocol::{
     OpenCodePaneMarkdownResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
     PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
     PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
-    PluginInstallRequest, PluginInvocationSummary, ProviderDiagnosticRequest, ResponseEnvelope,
+    PluginInstallRequest, PluginInvocationSummary, PluginManifest, ProviderDiagnosticRequest,
+    ResponseEnvelope,
     RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution, RoutineExecutionsQuery,
     RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand,
     SharedEventEnvelope, SharedEventKind, UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
@@ -190,6 +192,7 @@ struct CodeTerminalHistorySettingRequest {
 }
 
 const CODE_WORKSPACE_CONTEXT_SETTING: &str = "code_workspace_context.v1";
+const TASK_BOARD_PREFERENCES_SETTING: &str = "task_board_preferences.v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CodeWorkspaceContext {
@@ -210,6 +213,41 @@ impl Default for CodeWorkspaceContext {
 struct CodeWorkspaceContextUpdate {
     workspace_id: Option<String>,
     section: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct TaskBoardPreferences {
+    statuses: HashMap<String, String>,
+    pinned: Vec<String>,
+}
+
+fn sanitize_task_board_preferences(mut preferences: TaskBoardPreferences) -> TaskBoardPreferences {
+    preferences.statuses.retain(|task_id, status| {
+        task_id.len() <= 128
+            && matches!(status.as_str(), "todo" | "in_progress" | "in_review" | "done")
+    });
+    if preferences.statuses.len() > 10_000 {
+        preferences.statuses = preferences.statuses.into_iter().take(10_000).collect();
+    }
+    let mut seen = HashSet::new();
+    preferences.pinned.retain(|task_id| task_id.len() <= 128 && seen.insert(task_id.clone()));
+    preferences.pinned.truncate(1_000);
+    preferences
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct TaskBoardPreferencesUpdate {
+    preferences: TaskBoardPreferences,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AgentSkillImportRequest {
+    source_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AgentSkillCreateRequest {
+    source: String,
 }
 
 fn is_code_workspace_section(value: &str) -> bool {
@@ -1787,6 +1825,36 @@ async fn hiveory_query_agent_skills(
 }
 
 #[tauri::command]
+async fn hiveory_command_import_agent_skill(
+    request: AgentSkillImportRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<AgentSkillSummary, ApiError> {
+    let source_path = Path::new(request.source_path.trim());
+    if !source_path.is_file() {
+        return Err(validation_error("Select a readable SKILL.md file."));
+    }
+    let source = std::fs::read_to_string(source_path)
+        .map_err(|error| validation_error(format!("Could not read skill file: {error}")))?;
+    foundation
+        .agent_runtime
+        .install_skill_markdown(&source)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_create_agent_skill(
+    request: AgentSkillCreateRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<AgentSkillSummary, ApiError> {
+    foundation
+        .agent_runtime
+        .install_skill_markdown(&request.source)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
 async fn hiveory_command_toggle_agent_skill(
     request: AgentSkillToggleRequest,
     foundation: State<'_, HiveoryFoundation>,
@@ -2121,6 +2189,46 @@ async fn hiveory_query_plugin_catalog(
 }
 
 #[tauri::command]
+async fn hiveory_command_import_plugin_manifest(
+    path: String,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<PluginCatalogEntry, ApiError> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err(validation_error("Choose a plugin manifest file."));
+    }
+    let metadata = std::fs::metadata(path)
+        .map_err(|_| validation_error("The selected plugin manifest could not be read."))?;
+    if !metadata.is_file() {
+        return Err(validation_error("The selected plugin manifest is not a file."));
+    }
+    if metadata.len() > 1024 * 1024 {
+        return Err(validation_error("Plugin manifests must be smaller than 1 MB."));
+    }
+    let contents = std::fs::read_to_string(path)
+        .map_err(|_| validation_error("The selected plugin manifest must be UTF-8 JSON."))?;
+    let manifest: PluginManifest = serde_json::from_str(&contents)
+        .map_err(|error| validation_error(format!("Plugin manifest JSON is invalid: {error}")))?;
+    foundation
+        .plugin_runtime
+        .import_manifest(manifest)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_register_plugin_manifest(
+    manifest: PluginManifest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<PluginCatalogEntry, ApiError> {
+    foundation
+        .plugin_runtime
+        .import_manifest(manifest)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
 async fn hiveory_query_plugin_connections(
     plugin_id: Option<String>,
     foundation: State<'_, HiveoryFoundation>,
@@ -2266,6 +2374,36 @@ async fn hiveory_command_set_code_workspace_context(
             .set_code_workspace_context(command.payload)
             .await?,
     ))
+}
+
+#[tauri::command]
+async fn hiveory_query_task_board_preferences(
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<TaskBoardPreferences, ApiError> {
+    let stored = foundation
+        .persistence
+        .get_setting(TASK_BOARD_PREFERENCES_SETTING)
+        .await
+        .map_err(database_error)?;
+    Ok(stored
+        .and_then(|value| serde_json::from_str::<TaskBoardPreferences>(&value).ok())
+        .map(sanitize_task_board_preferences)
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+async fn hiveory_command_update_task_board_preferences(
+    request: TaskBoardPreferencesUpdate,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<TaskBoardPreferences, ApiError> {
+    let preferences = sanitize_task_board_preferences(request.preferences);
+    let value = serde_json::to_string(&preferences).map_err(|error| validation_error(error.to_string()))?;
+    foundation
+        .persistence
+        .set_setting(TASK_BOARD_PREFERENCES_SETTING, &value)
+        .await
+        .map_err(database_error)?;
+    Ok(preferences)
 }
 
 #[tauri::command]
@@ -7345,7 +7483,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                // The scheduler is local to this process. Closing the main
+                // window therefore hides it to the tray; the explicit tray
+                // Quit command remains the user's way to stop automations.
+                api.prevent_close();
                 if let Some(browser) = window.app_handle().try_state::<BrowserManager>() {
                     browser.close_all();
                 }
@@ -7369,10 +7511,8 @@ pub fn run() {
                             );
                         }
                     }
-                    let _ = tauri::async_runtime::block_on(
-                        foundation.persistence.record_clean_shutdown(),
-                    );
                 }
+                let _ = window.hide();
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -7419,6 +7559,8 @@ pub fn run() {
             hiveory_command_add_agent_folder,
             hiveory_command_delete_agent_folder,
             hiveory_query_agent_skills,
+            hiveory_command_import_agent_skill,
+            hiveory_command_create_agent_skill,
             hiveory_command_toggle_agent_skill,
             hiveory_command_resolve_agent_skill_conflict,
             hiveory_query_agent_memory,
@@ -7445,6 +7587,8 @@ pub fn run() {
             hiveory_command_run_routine_now,
             hiveory_query_routine_executions,
             hiveory_query_plugin_catalog,
+            hiveory_command_import_plugin_manifest,
+            hiveory_command_register_plugin_manifest,
             hiveory_query_plugin_connections,
             hiveory_command_install_plugin,
             hiveory_command_create_plugin_connection,
@@ -7457,6 +7601,7 @@ pub fn run() {
             hiveory_query_plugin_invocations,
             hiveory_query_code_snapshot,
             hiveory_query_code_workspace_context,
+            hiveory_query_task_board_preferences,
             hiveory_query_code_workspace,
             hiveory_query_code_runs,
             hiveory_query_code_run,
@@ -7475,6 +7620,7 @@ pub fn run() {
             hiveory_command_set_code_workspace_parent,
             hiveory_command_open_code_workspace_in,
             hiveory_command_set_code_workspace_context,
+            hiveory_command_update_task_board_preferences,
             hiveory_command_remove_code_workspace,
             hiveory_command_remove_code_project,
             hiveory_command_trust_code_workspace,

@@ -293,6 +293,53 @@ impl HiveoryAgentRuntime {
         })
     }
 
+    /// Installs a user-authored skill into the application data directory.
+    /// Existing skill ids are never overwritten; authors must choose a new id
+    /// or remove the old package through a future explicit update flow.
+    pub async fn install_skill_markdown(
+        &self,
+        source: &str,
+    ) -> Result<hiveory_protocol::AgentSkillSummary, HiveoryAgentRuntimeError> {
+        if source.len() > 256 * 1024 {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "skill source exceeds 256 KiB".to_owned(),
+            ));
+        }
+        let preview = parse_skill_markdown(
+            "import/SKILL.md",
+            source,
+            hiveory_protocol::AgentSkillOrigin::ApplicationData,
+        )
+        .map_err(|error| HiveoryAgentRuntimeError::InvalidInput(error.to_string()))?;
+        let skill_dir = self.skill_root.join(&preview.summary.id);
+        if skill_dir.exists() {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(format!(
+                "a custom skill with id '{}' is already installed",
+                preview.summary.id
+            )));
+        }
+        fs::create_dir_all(&self.skill_root)
+            .map_err(|error| HiveoryAgentRuntimeError::InvalidInput(error.to_string()))?;
+        fs::create_dir(&skill_dir)
+            .map_err(|error| HiveoryAgentRuntimeError::InvalidInput(error.to_string()))?;
+        let skill_path = skill_dir.join("SKILL.md");
+        if let Err(error) = fs::write(&skill_path, source) {
+            let _ = fs::remove_dir(&skill_dir);
+            return Err(HiveoryAgentRuntimeError::InvalidInput(error.to_string()));
+        }
+        let package = parse_skill_markdown(
+            &skill_path.to_string_lossy(),
+            source,
+            hiveory_protocol::AgentSkillOrigin::ApplicationData,
+        )
+        .map_err(|error| HiveoryAgentRuntimeError::InvalidInput(error.to_string()))?;
+        if let Err(error) = self.store.upsert_skill(&package).await {
+            let _ = fs::remove_dir_all(&skill_dir);
+            return Err(error.into());
+        }
+        Ok(package.summary)
+    }
+
     pub async fn memory(
         &self,
         query: &AgentMemoryQuery,
@@ -747,11 +794,38 @@ impl HiveoryAgentRuntime {
                 ));
             }
         }
-        for skill in detail
+        // Explicit per-agent skills always load. The global catalog then adds
+        // a small set of trigger-matched skills for the current request so a
+        // CLI does not receive every packaged instruction on every turn.
+        let mut selected_skill_ids = HashSet::new();
+        let mut selected_skills = detail
             .skills
             .iter()
             .filter(|skill| skill.enabled && skill.valid)
-        {
+            .cloned()
+            .collect::<Vec<_>>();
+        selected_skill_ids.extend(selected_skills.iter().map(|skill| skill.id.clone()));
+        let prompt = run.prompt_preview.to_ascii_lowercase();
+        let matched_skills = self
+            .store
+            .catalog()
+            .await?
+            .into_iter()
+            .filter(|skill| {
+                skill.valid
+                    && !selected_skill_ids.contains(&skill.id)
+                    && skill.triggers.iter().any(|trigger| {
+                        let trigger = trigger.trim().to_ascii_lowercase();
+                        trigger.len() >= 3 && prompt.contains(&trigger)
+                    })
+            })
+            .take(4)
+            .collect::<Vec<_>>();
+        for skill in matched_skills {
+            selected_skill_ids.insert(skill.id.clone());
+            selected_skills.push(skill);
+        }
+        for skill in &selected_skills {
             if let Some((_, body)) = self.store.skill_package(&skill.id).await? {
                 instructions.push_str("\n\nLoaded skill: ");
                 instructions.push_str(&skill.name);

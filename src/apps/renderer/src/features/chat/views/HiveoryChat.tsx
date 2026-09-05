@@ -646,7 +646,7 @@ export function HiveoryChat() {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', badge: 1, icon: <LayoutDashboard size={14} aria-hidden="true" /> },
-    { id: 'routines', label: 'Routines', icon: <Clock3 size={14} aria-hidden="true" /> },
+    { id: 'routines', label: 'Automations', icon: <Clock3 size={14} aria-hidden="true" /> },
     { id: 'plugins', label: 'Plugins', icon: <Puzzle size={14} aria-hidden="true" /> },
     { id: 'skills', label: 'Skills', icon: <Sparkles size={14} aria-hidden="true" /> },
   ]

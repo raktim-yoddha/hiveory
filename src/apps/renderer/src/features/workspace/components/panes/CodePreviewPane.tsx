@@ -59,7 +59,7 @@ import { cancelScheduledBrowserClose, scheduleBrowserClose } from '../../../brow
 
 const BROWSER_EVENT = 'hiveory-browser-event'
 const BROWSER_CAPTURE_EVENT = 'hiveory-browser-capture-event'
-const GOOGLE_HOME = 'https://www.google.com/'
+const BLANK_HOME = 'about:blank'
 const IMPORT_HINT_STORAGE_KEY = 'hiveory.browser.import-hint-dismissed'
 
 type BrowserOverlay = 'menu' | 'draw' | 'agent' | null
@@ -221,10 +221,12 @@ function BrowserMenu({
   )
 }
 
-export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, preview, initialUrl = GOOGLE_HOME, onStateChange }) => {
+export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, preview, initialUrl = BLANK_HOME, onStateChange }) => {
   const browserId = preview?.id ?? 'hiveory-browser-' + workspaceId
   const initialUrlRef = useRef(preview?.url || initialUrl)
-  const hasExplicitInitialUrlRef = useRef(Boolean(preview?.url) || initialUrl !== GOOGLE_HOME)
+  // New Browser panes always start inert. A previously saved browser home must
+  // never replace the blank first surface; navigation is an explicit action.
+  const hasExplicitInitialUrlRef = useRef(true)
   const fallbackHistoryRef = useRef({ entries: [initialUrlRef.current], index: 0 })
   const stageRef = useRef<HTMLDivElement>(null)
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -237,7 +239,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
   const [iframeReloadKey, setIframeReloadKey] = useState(0)
   const [configuration, setConfiguration] = useState<BrowserConfiguration>({
     profiles: [{ id: 'default', name: 'Default', built_in: true }],
-    settings: { home_url: GOOGLE_HOME, search_engine: 'google', default_profile_id: 'default', default_viewport_id: 'default' },
+    settings: { home_url: BLANK_HOME, search_engine: 'google', default_profile_id: 'default', default_viewport_id: 'default' },
   })
   const [overlayMode, setOverlayMode] = useState<BrowserOverlay>(null)
   const [overlayFrame, setOverlayFrame] = useState<BrowserFrame | null>(null)

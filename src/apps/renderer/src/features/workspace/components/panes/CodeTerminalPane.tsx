@@ -272,7 +272,9 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       termRef.current = null
       fitAddonRef.current = null
     }
-  }, [terminalId, summary?.state])
+  // A status event is informational. Recreating xterm on it clears the live
+  // buffer during a rapid resize or process transition.
+  }, [terminalId])
 
   return (
     <div className="code-terminal-pane">

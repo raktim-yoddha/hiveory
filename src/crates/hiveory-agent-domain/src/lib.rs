@@ -549,8 +549,8 @@ fn is_safe_identifier(value: &str) -> bool {
         })
 }
 
-pub fn builtin_skill_sources() -> [(&'static str, &'static str); 2] {
-    [
+pub fn builtin_skill_sources() -> Vec<(&'static str, &'static str)> {
+    vec![
         (
             "folder-brief",
             "---\nid: folder-brief\nname: Folder brief\nversion: 1.0.0\ndescription: Summarize a granted folder without changing it.\ntriggers: [brief, summarize folder]\npermissions: [folder.list, folder.read_text]\n---\nRead the granted folder, identify the important files, and return a concise brief with paths. Never write files.",
@@ -558,6 +558,86 @@ pub fn builtin_skill_sources() -> [(&'static str, &'static str); 2] {
         (
             "decision-log",
             "---\nid: decision-log\nname: Decision log\nversion: 1.0.0\ndescription: Capture an explicit decision in durable agent memory.\ntriggers: [decision, record decision]\npermissions: [memory.remember]\n---\nWhen the user explicitly asks to remember a decision, capture the decision and its rationale using the memory tool. Do not store credentials or secrets.",
+        ),
+        (
+            "task-planning",
+            "---\nid: task-planning\nname: Task planning\nversion: 1.0.0\ndescription: Turn an outcome into a small, ordered, verifiable implementation plan.\ntriggers: [plan task, implementation plan, break down work]\npermissions: [folder.list, folder.read_text]\n---\nInspect the relevant workspace before proposing work. State the goal, constraints, dependencies, ordered tasks, and validation for each task. Keep unrelated work out of the plan.",
+        ),
+        (
+            "repository-exploration",
+            "---\nid: repository-exploration\nname: Repository exploration\nversion: 1.0.0\ndescription: Trace code ownership and data flow before changing a project.\ntriggers: [explore repository, find implementation, understand codebase]\npermissions: [folder.list, folder.read_text]\n---\nFind entry points, related types, persistence, and tests. Cite concrete paths and distinguish verified facts from inferences. Do not modify files during exploration.",
+        ),
+        (
+            "code-review",
+            "---\nid: code-review\nname: Code review\nversion: 1.0.0\ndescription: Review changes for correctness, regressions, and missing verification.\ntriggers: [review code, code review, review changes]\npermissions: [folder.list, folder.read_text]\n---\nRead the changed code and its callers. Report actionable findings with severity, evidence, and a focused fix. Verify whether tests cover the failure mode.",
+        ),
+        (
+            "debugging",
+            "---\nid: debugging\nname: Debugging\nversion: 1.0.0\ndescription: Diagnose reproducible failures with evidence before applying a fix.\ntriggers: [debug, investigate failure, fix bug]\npermissions: [folder.list, folder.read_text]\n---\nEstablish reproduction, isolate the failing boundary, form a falsifiable hypothesis, and verify the repair with the smallest relevant check. Preserve logs and avoid speculative changes.",
+        ),
+        (
+            "test-authoring",
+            "---\nid: test-authoring\nname: Test authoring\nversion: 1.0.0\ndescription: Add focused tests that prove a behavior and guard a regression.\ntriggers: [write tests, add test, test coverage]\npermissions: [folder.list, folder.read_text]\n---\nIdentify the public behavior and its failure boundary. Prefer deterministic tests that fail before the fix and pass after it. Avoid tests that only restate implementation details.",
+        ),
+        (
+            "refactoring",
+            "---\nid: refactoring\nname: Refactoring\nversion: 1.0.0\ndescription: Improve structure while preserving observed behavior.\ntriggers: [refactor, simplify code, clean up code]\npermissions: [folder.list, folder.read_text]\n---\nEstablish behavior first, make small reversible changes, and run focused verification after each meaningful boundary. Do not combine structural cleanup with feature changes without calling it out.",
+        ),
+        (
+            "security-audit",
+            "---\nid: security-audit\nname: Security audit\nversion: 1.0.0\ndescription: Review code for secrets exposure, unsafe input handling, and privilege escalation.\ntriggers: [security audit, security review, threat model]\npermissions: [folder.list, folder.read_text]\n---\nMap trust boundaries, identify attacker-controlled inputs, validate authorization, and check logging and secret handling. Report concrete attack paths and practical mitigations.",
+        ),
+        (
+            "dependency-audit",
+            "---\nid: dependency-audit\nname: Dependency audit\nversion: 1.0.0\ndescription: Assess dependency changes for security, compatibility, and maintenance risk.\ntriggers: [dependency audit, update dependencies, package review]\npermissions: [folder.list, folder.read_text]\n---\nInspect lockfiles and manifests, identify direct versus transitive impact, check compatibility constraints, and propose the smallest safe upgrade path with validation.",
+        ),
+        (
+            "performance-review",
+            "---\nid: performance-review\nname: Performance review\nversion: 1.0.0\ndescription: Find measurable latency, memory, and unnecessary work in an implementation.\ntriggers: [performance review, slow, optimize performance]\npermissions: [folder.list, folder.read_text]\n---\nStart from a user-visible bottleneck. Trace expensive work, quantify likely impact, preserve correctness, and recommend a benchmark or profiling check before claiming improvement.",
+        ),
+        (
+            "accessibility-review",
+            "---\nid: accessibility-review\nname: Accessibility review\nversion: 1.0.0\ndescription: Review interactive UI for keyboard, focus, semantics, and contrast.\ntriggers: [accessibility review, a11y, keyboard navigation]\npermissions: [folder.list, folder.read_text]\n---\nVerify semantic controls, labels, visible focus, keyboard paths, error messaging, and color-independent state. Recommend concrete fixes and test them with keyboard-only interaction.",
+        ),
+        (
+            "ui-ux-review",
+            "---\nid: ui-ux-review\nname: UI and UX review\nversion: 1.0.0\ndescription: Improve clarity, hierarchy, and interaction feedback in product UI.\ntriggers: [ui review, ux review, improve interface]\npermissions: [folder.list, folder.read_text]\n---\nEvaluate the user goal, visual hierarchy, empty/loading/error states, responsive behavior, and interaction feedback. Prefer consistent product patterns over decorative changes.",
+        ),
+        (
+            "api-integration",
+            "---\nid: api-integration\nname: API integration\nversion: 1.0.0\ndescription: Design reliable local API integrations with explicit authentication and failure handling.\ntriggers: [api integration, integrate api, oauth]\npermissions: [folder.list, folder.read_text]\n---\nDocument the provider contract, authentication, scopes, retry behavior, pagination, rate limits, and mutation safeguards. Never log tokens or embed confidential client secrets in a desktop application.",
+        ),
+        (
+            "database-migration",
+            "---\nid: database-migration\nname: Database migration\nversion: 1.0.0\ndescription: Change persisted data safely with forward-only, tested migrations.\ntriggers: [database migration, schema change, sqlite migration]\npermissions: [folder.list, folder.read_text]\n---\nPreserve existing data, use additive changes where practical, provide a deterministic backfill, and test upgrade paths from the latest released schema. Do not rewrite user data without an explicit migration.",
+        ),
+        (
+            "documentation",
+            "---\nid: documentation\nname: Documentation\nversion: 1.0.0\ndescription: Write concise documentation grounded in the current implementation.\ntriggers: [document, write docs, readme]\npermissions: [folder.list, folder.read_text]\n---\nDescribe actual behavior, setup, limits, and verification steps. Link to source paths where useful. Avoid aspirational documentation or features that do not exist.",
+        ),
+        (
+            "release-readiness",
+            "---\nid: release-readiness\nname: Release readiness\nversion: 1.0.0\ndescription: Assess whether a change is ready to package and ship.\ntriggers: [release readiness, ship release, preflight]\npermissions: [folder.list, folder.read_text]\n---\nReview changed behavior, migration safety, validation results, packaging, user-facing copy, and known risks. Produce a concise go/no-go checklist backed by evidence.",
+        ),
+        (
+            "git-workflow",
+            "---\nid: git-workflow\nname: Git workflow\nversion: 1.0.0\ndescription: Prepare small reviewable changes while preserving existing work.\ntriggers: [git workflow, prepare commit, inspect diff]\npermissions: [folder.list, folder.read_text]\n---\nInspect status before changing files, isolate unrelated edits, summarize the diff, and identify validation needed. Never discard or overwrite uncommitted work without explicit instruction.",
+        ),
+        (
+            "incident-triage",
+            "---\nid: incident-triage\nname: Incident triage\nversion: 1.0.0\ndescription: Triage production-impacting failures into a safe response plan.\ntriggers: [incident, outage, production failure]\npermissions: [folder.list, folder.read_text]\n---\nAssess impact, establish a timeline, preserve evidence, identify containment steps, and state owner-facing next actions. Prefer reversible mitigation while root cause is uncertain.",
+        ),
+        (
+            "research-verification",
+            "---\nid: research-verification\nname: Research and source verification\nversion: 1.0.0\ndescription: Research time-sensitive technical facts using primary sources.\ntriggers: [research, verify source, look up documentation]\npermissions: [folder.list, folder.read_text]\n---\nUse authoritative source material, separate facts from inference, record direct links, and avoid relying on unsourced summaries for material technical decisions.",
+        ),
+        (
+            "release-notes",
+            "---\nid: release-notes\nname: Changelog and release notes\nversion: 1.0.0\ndescription: Convert verified changes into useful release notes.\ntriggers: [release notes, changelog, summarize changes]\npermissions: [folder.list, folder.read_text]\n---\nDescribe user-visible behavior, migration or setup actions, and fixed issues. Exclude internal churn unless it changes reliability, security, or compatibility.",
+        ),
+        (
+            "workspace-handoff",
+            "---\nid: workspace-handoff\nname: Workspace summary and handoff\nversion: 1.0.0\ndescription: Hand off local work with current state, evidence, and next steps.\ntriggers: [handoff, summarize workspace, status update]\npermissions: [folder.list, folder.read_text]\n---\nSummarize completed work, changed files, validation, open risks, and exact next actions. Do not claim checks that were not run.",
         ),
     ]
 }

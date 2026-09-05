@@ -6,7 +6,7 @@ import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surfac
 
 interface CodePaneLauncherProps {
   paneId: string
-  onLaunchShell: () => void
+  onLaunchShell: (shellId: 'cmd' | 'powershell' | 'git-bash') => void
   onLaunchAgent: (adapterId: string, model: string | null) => void
   onOpenPreview: (url: string) => void
   onCreateMarkdown: () => void
@@ -22,8 +22,9 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
   const [showCliModal, setShowCliModal] = useState(false)
   const [selectedAdapter, setSelectedAdapter] = useState<CodeAdapterSummary | null>(null)
   const [model, setModel] = useState('default')
-  const [previewUrl, setPreviewUrl] = useState('http://localhost:3000')
+  const [previewUrl, setPreviewUrl] = useState('about:blank')
   const [showUrlInput, setShowUrlInput] = useState(false)
+  const [showShellPicker, setShowShellPicker] = useState(false)
   useBrowserSurfaceBlocker(showCliModal, 'pane-launcher-dialog')
 
   useEffect(() => {
@@ -63,13 +64,26 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
 
         <div className="code-launcher-grid">
           {/* 1. Terminal */}
-          <button type="button" className="code-launcher-card" onClick={onLaunchShell}>
+          <button type="button" className="code-launcher-card" onClick={() => setShowShellPicker((open) => !open)}>
             <span className="code-launcher-icon"><Terminal size={17} aria-hidden="true" /></span>
             <span>
               <span className="code-launcher-card-title">Terminal</span>
-              <span className="code-launcher-card-desc">Interactive local shell</span>
+              <span className="code-launcher-card-desc">CMD, PowerShell, or Git Bash</span>
             </span>
           </button>
+          {showShellPicker && (
+            <div className="code-shell-picker" role="group" aria-label="Select terminal shell">
+              {([
+                ['cmd', 'Command Prompt'],
+                ['powershell', 'PowerShell'],
+                ['git-bash', 'Git Bash'],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => { onLaunchShell(id); setShowShellPicker(false) }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 2. Coding Agent / CLI */}
           <button

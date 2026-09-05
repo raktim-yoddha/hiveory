@@ -22,6 +22,7 @@ import { CodeDestructiveActionDialog, CodeParentWorkspaceDialog, CodeProjectSett
 import { eligibleParentWorkspaces } from '../model/code-workspace-rail-utils'
 import { CodeSourcePanel } from '../components/CodeSourcePanel'
 import { CodeCoordinationPanel } from '../components/CodeCoordinationPanel'
+import { HiveoryWorkspaceBoard } from '../components/HiveoryWorkspaceBoard'
 import '../styles/workspace.css'
 
 function readSidebarCollapsed(): boolean {
@@ -74,6 +75,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
   const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
+  const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const contextHydratedRef = useRef(false)
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
@@ -132,6 +134,14 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
     window.addEventListener('hiveory-sidebar-toggle', handleSidebarToggle)
     return () => window.removeEventListener('hiveory-sidebar-toggle', handleSidebarToggle)
   }, [])
+
+  useEffect(() => {
+    const revealActiveWorkspace = () => {
+      if (activeWorkspaceId) setActiveSection('workspace')
+    }
+    window.addEventListener('hiveory-reveal-active-workspace', revealActiveWorkspace)
+    return () => window.removeEventListener('hiveory-reveal-active-workspace', revealActiveWorkspace)
+  }, [activeWorkspaceId])
 
   const handleSelectWorkspace = (wsId: string) => {
     if (wsId === activeWorkspaceId) return
@@ -404,6 +414,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         coordinationPanelOpen={coordinationPanelOpen}
         onToggleSourcePanel={handleToggleSourcePanel}
         onToggleCoordinationPanel={handleToggleCoordinationPanel}
+        onOpenWorkspaceBoard={() => setWorkspaceBoardOpen(true)}
       />
 
       <main className="code-workspace-main">
@@ -467,6 +478,13 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         onClose={() => { if (!destructiveActionBusy) { setPendingDestructiveAction(null); setDestructiveActionError(null) } }}
         onConfirm={() => void handleConfirmDestructiveAction()}
       />
+
+      {workspaceBoardOpen && (
+        <HiveoryWorkspaceBoard
+          onOpenWorkspace={(workspaceId) => { handleSelectWorkspace(workspaceId); setWorkspaceBoardOpen(false) }}
+          onClose={() => setWorkspaceBoardOpen(false)}
+        />
+      )}
 
     </div>
   )

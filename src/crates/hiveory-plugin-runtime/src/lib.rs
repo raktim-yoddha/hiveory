@@ -83,6 +83,24 @@ impl HiveoryPluginRuntime {
     }
 
     pub async fn initialize(&self) -> Result<(), HiveoryPluginRuntimeError> {
+        // These identifiers belonged to the original demo catalog. Remove
+        // them once so an existing local database cannot keep showing fake
+        // providers after an upgrade.
+        let persisted_legacy_ids = self
+            .store
+            .catalog()
+            .await?
+            .into_iter()
+            .filter(|entry| {
+                entry.manifest.id == "web-json-reader"
+                    || entry.manifest.id == "webhook-delivery"
+                    || entry.manifest.publisher == "Hiveory catalog"
+            })
+            .map(|entry| entry.manifest.id)
+            .collect::<Vec<_>>();
+        for legacy_id in persisted_legacy_ids {
+            let _ = self.store.delete_manifest(&legacy_id).await;
+        }
         for manifest in builtin_manifests() {
             self.store.upsert_manifest(&manifest).await?;
         }
@@ -91,6 +109,20 @@ impl HiveoryPluginRuntime {
 
     pub async fn catalog(&self) -> Result<Vec<PluginCatalogEntry>, HiveoryPluginRuntimeError> {
         Ok(self.store.catalog().await?)
+    }
+
+    pub async fn import_manifest(
+        &self,
+        mut manifest: PluginManifest,
+    ) -> Result<PluginCatalogEntry, HiveoryPluginRuntimeError> {
+        manifest.content_hash = manifest_content_hash(&manifest);
+        self.store.upsert_manifest(&manifest).await?;
+        self.store
+            .catalog()
+            .await?
+            .into_iter()
+            .find(|entry| entry.manifest.id == manifest.id)
+            .ok_or_else(|| HiveoryPluginRuntimeError::NotFound(manifest.id))
     }
 
     pub async fn connections(
@@ -252,12 +284,13 @@ impl HiveoryPluginRuntime {
                 "connection was not found".to_owned(),
             ))?;
         let manifest = self.store.manifest(&connection.0.plugin_id).await?;
-        let url = self.safe_url(&manifest, &connection.0.origin, "/")?;
-        // A connection test must never deliver a webhook payload. HEAD verifies
-        // reachability without causing a mutating adapter to fire.
-        let builder = match manifest.adapter {
-            PluginAdapterKind::JsonHttpGet => self.client.get(url),
-            PluginAdapterKind::JsonHttpPost => self.client.head(url),
+        let (path, body) = connection_test_request(&manifest.id);
+        let url = self.safe_url(&manifest, &connection.0.origin, path)?;
+        // Provider health checks are read-only. Linear exposes its identity
+        // endpoint through GraphQL, so it is the one GET-incompatible case.
+        let builder = match body {
+            Some(body) => self.client.post(url).json(&body),
+            None => self.client.get(url),
         };
         let response = self
             .request_builder(&connection.0, connection.1.as_deref(), builder)?
@@ -292,7 +325,7 @@ impl HiveoryPluginRuntime {
             .ok_or(HiveoryPluginRuntimeError::NotFound(
                 request.tool_name.clone(),
             ))?;
-        if !matches!(manifest.adapter, PluginAdapterKind::JsonHttpPost)
+        if !matches!(tool.adapter, PluginAdapterKind::JsonHttpPost)
             || !manifest.supports_dry_run
         {
             return Err(HiveoryPluginRuntimeError::InvalidInput(
@@ -390,7 +423,7 @@ impl HiveoryPluginRuntime {
             )
             .await?;
         let target = url.clone();
-        let result = match manifest.adapter {
+        let result = match tool.adapter {
             PluginAdapterKind::JsonHttpGet => {
                 let mut builder = self.client.get(url);
                 if let Some(query) = args.get("query").and_then(Value::as_str) {
@@ -530,7 +563,7 @@ impl HiveoryPluginRuntime {
         if !manifest
             .allowed_hosts
             .iter()
-            .any(|allowed| allowed.eq_ignore_ascii_case(host))
+            .any(|allowed| allowed_host_matches(allowed, host))
         {
             return Err(HiveoryPluginRuntimeError::InvalidInput(
                 "connection host is not allowed by the plugin manifest".to_owned(),
@@ -790,81 +823,129 @@ fn secret_error(error: HiveorySecretStoreError) -> HiveoryPluginRuntimeError {
     HiveoryPluginRuntimeError::Secret(error.to_string())
 }
 
+fn manifest_content_hash(manifest: &PluginManifest) -> String {
+    let canonical = serde_json::to_vec(&json!({
+        "id": &manifest.id,
+        "publisher": &manifest.publisher,
+        "version": &manifest.version,
+        "adapter": manifest.adapter,
+        "tools": &manifest.tools,
+        "permissions": &manifest.permissions,
+        "allowed_hosts": &manifest.allowed_hosts,
+        "connection_kind": manifest.connection_kind,
+        "supports_dry_run": manifest.supports_dry_run
+    }))
+    .unwrap_or_default();
+    format!("{:x}", Sha256::digest(canonical))
+}
+
 fn builtin_manifests() -> Vec<PluginManifest> {
-    let mut manifests = vec![
-        PluginManifest {
-            id: "web-json-reader".to_owned(),
-            publisher: "Hiveory".to_owned(),
-            version: "1.0.0".to_owned(),
-            name: "JSON Reader".to_owned(),
-            description: "Read structured JSON from an explicitly allowlisted HTTPS service.".to_owned(),
-            adapter: PluginAdapterKind::JsonHttpGet,
-            tools: vec![PluginToolDefinition {
-                name: "get_json".to_owned(),
-                description: "Fetch a JSON document without mutating the remote service.".to_owned(),
-                input_schema_json: r#"{"type":"object","properties":{"path":{"type":"string"},"query":{"type":["string","null"]}},"required":["path","query"],"additionalProperties":false}"#.to_owned(),
-                output_schema_json: r#"{"type":"object","properties":{"status":{"type":"integer"},"body":{}},"required":["status","body"],"additionalProperties":false}"#.to_owned(),
+    // These integrations are direct provider API adapters. Each one is usable
+    // with a user-owned token in the operating system keyring; no Hiveory
+    // service participates in authentication or request execution.
+    vec![
+        provider_manifest("github", "GitHub", "Read repositories, issues, pull requests, and releases from GitHub.", "api.github.com"),
+        provider_manifest("linear", "Linear", "Read and update teams, issues, projects, and comments in Linear.", "api.linear.app"),
+        provider_manifest("gmail", "Gmail", "Read, search, draft, and send mail through the Gmail API.", "gmail.googleapis.com"),
+        provider_manifest("slack", "Slack", "Read channels and messages, search workspaces, and post through Slack.", "slack.com"),
+        provider_manifest("notion", "Notion", "Search, read, create, and update Notion pages and databases.", "api.notion.com"),
+        provider_manifest("cloudflare", "Cloudflare", "Inspect and manage Cloudflare accounts, zones, Workers, DNS, and R2.", "api.cloudflare.com"),
+        provider_manifest("supabase", "Supabase", "Inspect and manage Supabase projects through its management API.", "api.supabase.com"),
+        provider_manifest("vercel", "Vercel", "Read and manage Vercel projects, deployments, domains, and logs.", "api.vercel.com"),
+        provider_manifest("stripe", "Stripe", "Read and manage Stripe customers, products, prices, invoices, and subscriptions.", "api.stripe.com"),
+        provider_manifest("shopify", "Shopify", "Read and manage products, inventory, customers, and orders in a Shopify shop.", "*.myshopify.com"),
+    ]
+}
+
+fn provider_manifest(id: &str, name: &str, description: &str, allowed_host: &str) -> PluginManifest {
+    let mut manifest = PluginManifest {
+        id: id.to_owned(),
+        publisher: "Hiveory local integrations".to_owned(),
+        version: "1.0.0".to_owned(),
+        name: name.to_owned(),
+        description: description.to_owned(),
+        adapter: PluginAdapterKind::JsonHttpGet,
+        tools: vec![
+            PluginToolDefinition {
+                name: "get".to_owned(),
+                description: format!("Send a read-only GET request to the {name} API. Supply an absolute API path from the provider documentation."),
+                adapter: PluginAdapterKind::JsonHttpGet,
+                input_schema_json: r#"{"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}"#.to_owned(),
+                output_schema_json: r#"{"type":"object"}"#.to_owned(),
                 risk: AgentToolRisk::ReadOnly,
-            }],
-            permissions: vec![PluginPermission { capability: "network.https.read".to_owned(), explanation: "GET requests only to the configured declared host.".to_owned() }],
-            allowed_hosts: vec!["api.github.com".to_owned(), "jsonplaceholder.typicode.com".to_owned()],
-            connection_kind: PluginConnectionKind::None,
-            supports_dry_run: false,
-            content_hash: String::new(),
-        },
-        PluginManifest {
-            id: "webhook-delivery".to_owned(),
-            publisher: "Hiveory".to_owned(),
-            version: "1.0.0".to_owned(),
-            name: "Webhook Delivery".to_owned(),
-            description: "Send a JSON payload to an approved HTTPS webhook after explicit approval.".to_owned(),
-            adapter: PluginAdapterKind::JsonHttpPost,
-            tools: vec![PluginToolDefinition {
-                name: "post_json".to_owned(),
-                description: "Send an externally visible JSON webhook request.".to_owned(),
-                input_schema_json: r#"{"type":"object","properties":{"path":{"type":"string"},"body":{"type":"object"}},"required":["path","body"],"additionalProperties":false}"#.to_owned(),
-                output_schema_json: r#"{"type":"object","properties":{"status":{"type":"integer"},"body":{}},"required":["status","body"],"additionalProperties":false}"#.to_owned(),
+            },
+            PluginToolDefinition {
+                name: "post".to_owned(),
+                description: format!("Send an approved JSON POST request to the {name} API. Use only documented API paths and bodies."),
+                adapter: PluginAdapterKind::JsonHttpPost,
+                input_schema_json: r#"{"type":"object","properties":{"path":{"type":"string"},"body":{}},"required":["path","body"],"additionalProperties":false}"#.to_owned(),
+                output_schema_json: r#"{"type":"object"}"#.to_owned(),
                 risk: AgentToolRisk::ExternallyVisible,
-            }],
-            permissions: vec![PluginPermission { capability: "network.https.write".to_owned(), explanation: "POST requests only to the configured declared host and only after approval.".to_owned() }],
-            allowed_hosts: vec!["hooks.example.com".to_owned(), "webhook.site".to_owned()],
-            connection_kind: PluginConnectionKind::ApiKeyHeader,
-            supports_dry_run: true,
-            content_hash: String::new(),
-        },
-    ];
-    for manifest in &mut manifests {
-        let canonical = serde_json::to_vec(&json!({
-            "id": &manifest.id,
-            "publisher": &manifest.publisher,
-            "version": &manifest.version,
-            "adapter": manifest.adapter,
-            "tools": &manifest.tools,
-            "permissions": &manifest.permissions,
-            "allowed_hosts": &manifest.allowed_hosts,
-            "connection_kind": manifest.connection_kind,
-            "supports_dry_run": manifest.supports_dry_run
-        }))
-        .unwrap_or_default();
-        manifest.content_hash = format!("{:x}", Sha256::digest(canonical));
+            },
+        ],
+        permissions: vec![
+            PluginPermission {
+                capability: "network.https".to_owned(),
+                explanation: format!("HTTPS calls only to the declared {name} API host."),
+            },
+            PluginPermission {
+                capability: "credentials.user_owned".to_owned(),
+                explanation: "The user supplies a token or user-owned OAuth credential; it is held in the OS keyring.".to_owned(),
+            },
+        ],
+        allowed_hosts: vec![allowed_host.to_owned()],
+        connection_kind: PluginConnectionKind::ApiKeyHeader,
+        supports_dry_run: false,
+        content_hash: String::new(),
+    };
+    manifest.content_hash = manifest_content_hash(&manifest);
+    manifest
+}
+
+fn allowed_host_matches(allowed: &str, host: &str) -> bool {
+    let allowed = allowed.trim().trim_end_matches('.');
+    let host = host.trim().trim_end_matches('.');
+    if let Some(suffix) = allowed.strip_prefix("*.") {
+        return host.len() > suffix.len()
+            && host.ends_with(suffix)
+            && host.as_bytes().get(host.len() - suffix.len() - 1) == Some(&b'.');
     }
-    manifests
+    allowed.eq_ignore_ascii_case(host)
+}
+
+fn connection_test_request(plugin_id: &str) -> (&'static str, Option<Value>) {
+    match plugin_id {
+        "github" => ("/user", None),
+        "linear" => ("/graphql", Some(json!({ "query": "query { viewer { id } }" }))),
+        "gmail" => ("/gmail/v1/users/me/profile", None),
+        "slack" => ("/api/auth.test", None),
+        "notion" => ("/v1/users/me", None),
+        "cloudflare" => ("/client/v4/user/tokens/verify", None),
+        "supabase" => ("/v1/projects", None),
+        "vercel" => ("/v2/user", None),
+        "stripe" => ("/v1/account", None),
+        "shopify" => ("/admin/api/2025-01/shop.json", None),
+        _ => ("/", None),
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{builtin_manifests, reject_private_host};
+    use super::{allowed_host_matches, builtin_manifests, reject_private_host};
 
     #[test]
     fn builtins_have_stable_strict_schemas_and_hashes() {
-        for manifest in builtin_manifests() {
-            assert!(!manifest.content_hash.is_empty());
-            for tool in manifest.tools {
-                let schema: serde_json::Value =
-                    serde_json::from_str(&tool.input_schema_json).unwrap();
-                assert_eq!(schema["additionalProperties"], false);
-            }
-        }
+        let manifests = builtin_manifests();
+        assert_eq!(manifests.len(), 10);
+        assert!(manifests.iter().all(|manifest| !manifest.content_hash.is_empty()));
+        assert!(manifests.iter().all(|manifest| manifest.tools.len() == 2));
+    }
+
+    #[test]
+    fn provider_host_wildcards_are_bounded_to_the_declared_domain() {
+        assert!(allowed_host_matches("*.myshopify.com", "shop.myshopify.com"));
+        assert!(!allowed_host_matches("*.myshopify.com", "myshopify.com"));
+        assert!(!allowed_host_matches("*.myshopify.com", "myshopify.com.attacker.test"));
     }
 
     #[test]

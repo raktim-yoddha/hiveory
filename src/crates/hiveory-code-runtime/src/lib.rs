@@ -1177,8 +1177,7 @@ fn command_for(
 ) -> Result<CommandBuilder, HiveoryCodeRuntimeError> {
     match request.kind {
         CodeTerminalKind::Shell => {
-            let shell = shell_program();
-            Ok(CommandBuilder::new(shell))
+            shell_command(request.adapter_id.as_deref())
         }
         CodeTerminalKind::CodingAgent => {
             let adapter_id = request.adapter_id.as_deref().unwrap_or(CODEX_ADAPTER_ID);
@@ -1690,18 +1689,44 @@ fn sanitize_cli_error(value: &str) -> String {
         .collect()
 }
 
-fn shell_program() -> PathBuf {
+fn shell_command(shell_id: Option<&str>) -> Result<CommandBuilder, HiveoryCodeRuntimeError> {
     #[cfg(windows)]
     {
-        std::env::var_os("COMSPEC")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("cmd.exe"))
+        match shell_id.unwrap_or("cmd") {
+            "cmd" => Ok(CommandBuilder::new(
+                std::env::var_os("COMSPEC").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("cmd.exe")),
+            )),
+            "powershell" => {
+                let resolved = resolve_executable("pwsh.exe");
+                let program = if resolved.program.is_file() { resolved.program } else { PathBuf::from("powershell.exe") };
+                let mut command = CommandBuilder::new(program);
+                command.args(["-NoLogo", "-NoExit"]);
+                Ok(command)
+            }
+            "git-bash" => {
+                let resolved = resolve_executable("bash.exe");
+                if !resolved.program.is_file() && resolved.program == PathBuf::from("bash.exe") {
+                    return Err(HiveoryCodeRuntimeError::Operation(
+                        "Git Bash was not found. Install Git for Windows or select CMD or PowerShell.".to_owned(),
+                    ));
+                }
+                let mut command = CommandBuilder::new(resolved.program);
+                command.args(resolved.prefix);
+                command.arg("--login");
+                command.arg("-i");
+                Ok(command)
+            }
+            unsupported => Err(HiveoryCodeRuntimeError::Operation(format!(
+                "Unsupported shell profile: {unsupported}"
+            ))),
+        }
     }
     #[cfg(not(windows))]
     {
-        std::env::var_os("SHELL")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("/bin/sh"))
+        let _ = shell_id;
+        Ok(CommandBuilder::new(
+            std::env::var_os("SHELL").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/bin/sh")),
+        ))
     }
 }
 

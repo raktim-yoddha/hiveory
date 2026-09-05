@@ -3,6 +3,7 @@ import {
   Bell,
   Bot,
   CheckCircle2,
+  CircleHelp,
   Code2,
   Command,
   Copy,
@@ -11,6 +12,7 @@ import {
   Globe2,
   KeyRound,
   Keyboard,
+  ListTodo,
   MessageSquare,
   Minus,
   PanelLeft,
@@ -22,7 +24,7 @@ import {
   X,
   Square as SquareIcon,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   formatHiveoryClientError,
@@ -33,13 +35,15 @@ import {
   type DiagnosticSnapshot,
   type UpdateSnapshot,
 } from '../../shared/api/hiveory-client'
-import { HiveoryChat } from '../../features/chat/views/HiveoryChat'
-import { HiveoryCodeWorkspace } from '../../features/workspace/views/HiveoryCodeWorkspace'
-import { HiveoryAgent } from '../../features/agent/views/HiveoryAgent'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/browser/hooks/use-browser-surface-blocker'
+
+const HiveoryChat = lazy(async () => ({ default: (await import('../../features/chat/views/HiveoryChat')).HiveoryChat }))
+const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
+const HiveoryAgent = lazy(async () => ({ default: (await import('../../features/agent/views/HiveoryAgent')).HiveoryAgent }))
+const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryTasks')).HiveoryTasks }))
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -55,7 +59,7 @@ const modes: ModeDefinition[] = [
     label: 'Agent',
     description: 'Named assistants, explicit tools, durable runs, and inspectable memory.',
     icon: Bot,
-    navigation: ['Workspace', 'Runs', 'Routines', 'Plugins', 'Skills'],
+    navigation: ['Workspace', 'Runs', 'Automations', 'Plugins', 'Skills'],
   },
   {
     mode: 'code',
@@ -80,7 +84,7 @@ const previewSnapshot: DiagnosticSnapshot = {
   recovery_message: null,
 }
 
-type ShellScreen = 'workspace' | 'diagnostics' | 'settings'
+type ShellScreen = 'workspace' | 'diagnostics' | 'settings' | 'tasks' | 'help'
 type ShellPreferences = { fontScale: 100 | 110 | 125; compact: boolean; reducedMotion: boolean; sidebarCollapsed: boolean }
 type CommandAction = {
   id: string
@@ -183,11 +187,18 @@ export function HiveoryShell() {
       openGlobalSettings()
       window.setTimeout(() => document.getElementById('hiveory-browser-settings')?.focus(), 0)
     }
+    const openHelp = () => {
+      setScreen('help')
+      setCommandOpen(false)
+      setNotificationsOpen(false)
+    }
     window.addEventListener('hiveory-open-global-settings', openGlobalSettings)
     window.addEventListener('hiveory-open-browser-settings', openBrowserSettings)
+    window.addEventListener('hiveory-open-help', openHelp)
     return () => {
       window.removeEventListener('hiveory-open-global-settings', openGlobalSettings)
       window.removeEventListener('hiveory-open-browser-settings', openBrowserSettings)
+      window.removeEventListener('hiveory-open-help', openHelp)
     }
   }, [])
 
@@ -477,6 +488,16 @@ export function HiveoryShell() {
             {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
             <button
               type="button"
+              className={screen === 'tasks' ? 'hiveory-icon-button is-active' : 'hiveory-icon-button'}
+              onClick={() => { setScreen('tasks'); setCommandOpen(false); setNotificationsOpen(false) }}
+              aria-label="Open tasks"
+              title="Tasks"
+            >
+              <ListTodo size={13} />
+            </button>
+
+            <button
+              type="button"
               className="hiveory-icon-button hiveory-sidebar-toggle"
               onClick={handleToggleSidebar}
               onDoubleClick={(event) => event.stopPropagation()}
@@ -655,13 +676,20 @@ export function HiveoryShell() {
                 void refresh()
               }}
             />
-          ) : activeMode === 'agent' ? (
-            <HiveoryAgent />
-          ) : activeMode === 'chat' ? (
-            <HiveoryChat />
-          ) : (
-            <HiveoryCodeWorkspace />
-          )}
+          ) : screen === 'help' ? (
+            <HiveoryHelp onOpenSettings={() => setScreen('settings')} />
+          ) : <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading workspace…</div>}>
+            {screen === 'tasks' ? (
+              <HiveoryTasks onOpenWorkspace={(workspaceId) => { void hiveoryClient.setCodeWorkspaceContext({ workspace_id: workspaceId, section: 'workspace' }).finally(() => selectMode('code')) }} />
+            ) : activeMode === 'agent' ? (
+              <HiveoryAgent />
+            ) : activeMode === 'chat' ? (
+              <HiveoryChat />
+            ) : (
+              <HiveoryCodeWorkspace />
+            )}
+          </Suspense>
+          }
         </section>
 
         {updatePromptOpen && update?.status === 'available' && update.available_version && (
@@ -935,6 +963,22 @@ function HiveoryUpdatePrompt({
         </button>
       </div>
     </aside>
+  )
+}
+
+function HiveoryHelp({ onOpenSettings }: { onOpenSettings: () => void }) {
+  return (
+    <section className="hiveory-help" aria-labelledby="hiveory-help-title">
+      <div className="hiveory-content-header"><CircleHelp size={22} aria-hidden="true" /><div><p className="hiveory-eyebrow">Local guide</p><h1 id="hiveory-help-title">Help</h1></div></div>
+      <p className="hiveory-description">Hiveory keeps projects, terminals, automation schedules, and configuration on this device. Use this guide to find the core controls.</p>
+      <div className="hiveory-help-grid">
+        <section><h2>Code workspace</h2><p>Open a project, then add a Browser, Terminal, or CLI pane from the plus button. Browser panes start at <code>about:blank</code>. Terminals remain open until you close their pane.</p></section>
+        <section><h2>Tasks and board</h2><p>The Tasks button shows tasks from local code runs. Use the Workspace board in the Code sidebar footer to drag task cards between lanes; lane placement is stored locally.</p></section>
+        <section><h2>Automations</h2><p>Automations run through Hiveory’s local scheduler. Templates are editable before or after use, and their history stays in the app.</p></section>
+        <section><h2>Keyboard</h2><p><kbd>Ctrl K</kbd> opens the command palette, <kbd>Ctrl 1</kbd> to <kbd>Ctrl 3</kbd> changes mode, and <kbd>Ctrl ,</kbd> opens settings.</p></section>
+      </div>
+      <button type="button" onClick={onOpenSettings}><Settings2 size={15} />Open settings</button>
+    </section>
   )
 }
 
