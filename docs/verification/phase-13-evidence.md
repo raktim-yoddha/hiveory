@@ -19,8 +19,8 @@ The implementation gate for this checkout is:
 cargo fmt --all
 cargo check -p hiveory-persistence -p hiveory-code-orchestration -p hiveory-app-host
 cargo test -p hiveory-persistence -p hiveory-git-service -p hiveory-code-orchestration
-pnpm --dir hiveory-renderer check
-pnpm --dir hiveory-renderer test
+pnpm check
+pnpm test
 cargo run -p hiveory-tooling
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace

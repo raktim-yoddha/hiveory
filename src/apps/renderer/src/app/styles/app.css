@@ -1492,31 +1492,31 @@ a:focus-visible {
 /* Compact automation surface: schedules are primary, while configuration and
    execution history open only on demand. This keeps the desktop view aligned
    with the workspace instead of presenting a web dashboard. */
-.hiveory-automation-orca { min-height: calc(100vh - 52px); padding: 14px 16px 22px; background: #0c0c0d; }
-.hiveory-automation-orca-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; margin-bottom: 12px; }
-.hiveory-automation-orca-header h1 { margin: 0; color: #f0f0f1; font-size: 20px; letter-spacing: -.02em; }
-.hiveory-automation-orca-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.hiveory-automation-orca-search { display: flex; align-items: center; gap: 7px; width: min(400px, 34vw); min-height: 34px; border: 1px solid #3a3a3e; border-radius: 7px; padding: 0 10px; color: #93959a; background: #121214; }
-.hiveory-automation-orca-search:focus-within { border-color: #606167; box-shadow: inset 0 0 0 1px rgba(140, 141, 147, .15); }
-.hiveory-automation-orca-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: #eeeeef; background: transparent; font: inherit; font-size: 12px; }
-.hiveory-automation-orca-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 4px; color: #b6b6ba; font-size: 11px; white-space: nowrap; cursor: pointer; }
-.hiveory-automation-orca-filter input { width: 14px; height: 14px; accent-color: #77797f; }
-.hiveory-automation-orca-controls > button:not(.hiveory-icon-button) { min-height: 34px; border-color: #5b5d63; color: #f1f1f2; background: #44464c; }
-.hiveory-automation-orca-surface { min-height: min(720px, calc(100vh - 132px)); border: 1px solid #2a2a2d; border-radius: 9px; padding: 14px; background: #111112; }
-.hiveory-automation-orca-list { display: grid; gap: 2px; margin-bottom: 22px; border: 1px solid #303034; border-radius: 8px; overflow: hidden; background: #19191b; }
-.hiveory-automation-orca-row { display: grid !important; grid-template-columns: 9px minmax(0, 1fr) minmax(180px, auto); align-items: center; gap: 10px; width: 100%; min-height: 58px; border: 0 !important; border-bottom: 1px solid #303034 !important; border-radius: 0 !important; padding: 9px 12px !important; color: #eeeeef !important; background: transparent !important; text-align: left; cursor: pointer; }
-.hiveory-automation-orca-row:last-child { border-bottom: 0 !important; }
-.hiveory-automation-orca-row:hover:not(:disabled) { background: #202023 !important; }
-.hiveory-automation-orca-row > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
-.hiveory-automation-orca-row strong { overflow: hidden; color: #efeff0; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.hiveory-automation-orca-row small { overflow: hidden; color: #a3a4a9; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.hiveory-automation-orca-row-meta { overflow: hidden; color: #b8b9bd; font: 10px/1.35 "JetBrains Mono", ui-monospace, monospace; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
-.hiveory-automation-orca-empty { display: grid; place-content: center; justify-items: center; min-height: 170px; gap: 8px; color: #a6a7ac; text-align: center; }
-.hiveory-automation-orca-empty strong { color: #f0f0f1; font-size: 16px; }.hiveory-automation-orca-empty span { max-width: 540px; font-size: 12px; }
-.hiveory-automation-orca-templates { display: grid; width: min(800px, 100%); margin: 26px auto 0; gap: 10px; }
-.hiveory-automation-orca-templates h2 { margin: 0 0 2px; color: #eeeeef; font-size: 15px; }
-.hiveory-automation-orca-templates button { display: grid !important; gap: 4px; width: 100%; min-height: 74px; border: 1px solid #2d2d31 !important; border-radius: 8px !important; padding: 11px 14px !important; color: #eeeeef !important; background: #0d0d0e !important; text-align: left; }
-.hiveory-automation-orca-templates button:hover:not(:disabled) { border-color: #53545a !important; background: #1c1c1e !important; }
-.hiveory-automation-orca-templates button small { color: #a5a6aa; font: 10px/1.2 "JetBrains Mono", ui-monospace, monospace; }.hiveory-automation-orca-templates button strong { font-size: 14px; }.hiveory-automation-orca-templates button span { color: #aeb0b5; font-size: 12px; }
+.hiveory-automation-desktop { min-height: calc(100vh - 52px); padding: 14px 16px 22px; background: #0c0c0d; }
+.hiveory-automation-desktop-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 42px; margin-bottom: 12px; }
+.hiveory-automation-desktop-header h1 { margin: 0; color: #f0f0f1; font-size: 20px; letter-spacing: -.02em; }
+.hiveory-automation-desktop-controls { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.hiveory-automation-desktop-search { display: flex; align-items: center; gap: 7px; width: min(400px, 34vw); min-height: 34px; border: 1px solid #3a3a3e; border-radius: 7px; padding: 0 10px; color: #93959a; background: #121214; }
+.hiveory-automation-desktop-search:focus-within { border-color: #606167; box-shadow: inset 0 0 0 1px rgba(140, 141, 147, .15); }
+.hiveory-automation-desktop-search input { min-width: 0; width: 100%; border: 0; outline: 0; color: #eeeeef; background: transparent; font: inherit; font-size: 12px; }
+.hiveory-automation-desktop-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 4px; color: #b6b6ba; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.hiveory-automation-desktop-filter input { width: 14px; height: 14px; accent-color: #77797f; }
+.hiveory-automation-desktop-controls > button:not(.hiveory-icon-button) { min-height: 34px; border-color: #5b5d63; color: #f1f1f2; background: #44464c; }
+.hiveory-automation-desktop-surface { min-height: min(720px, calc(100vh - 132px)); border: 1px solid #2a2a2d; border-radius: 9px; padding: 14px; background: #111112; }
+.hiveory-automation-desktop-list { display: grid; gap: 2px; margin-bottom: 22px; border: 1px solid #303034; border-radius: 8px; overflow: hidden; background: #19191b; }
+.hiveory-automation-desktop-row { display: grid !important; grid-template-columns: 9px minmax(0, 1fr) minmax(180px, auto); align-items: center; gap: 10px; width: 100%; min-height: 58px; border: 0 !important; border-bottom: 1px solid #303034 !important; border-radius: 0 !important; padding: 9px 12px !important; color: #eeeeef !important; background: transparent !important; text-align: left; cursor: pointer; }
+.hiveory-automation-desktop-row:last-child { border-bottom: 0 !important; }
+.hiveory-automation-desktop-row:hover:not(:disabled) { background: #202023 !important; }
+.hiveory-automation-desktop-row > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
+.hiveory-automation-desktop-row strong { overflow: hidden; color: #efeff0; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-automation-desktop-row small { overflow: hidden; color: #a3a4a9; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-automation-desktop-row-meta { overflow: hidden; color: #b8b9bd; font: 10px/1.35 "JetBrains Mono", ui-monospace, monospace; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.hiveory-automation-desktop-empty { display: grid; place-content: center; justify-items: center; min-height: 170px; gap: 8px; color: #a6a7ac; text-align: center; }
+.hiveory-automation-desktop-empty strong { color: #f0f0f1; font-size: 16px; }.hiveory-automation-desktop-empty span { max-width: 540px; font-size: 12px; }
+.hiveory-automation-desktop-templates { display: grid; width: min(800px, 100%); margin: 26px auto 0; gap: 10px; }
+.hiveory-automation-desktop-templates h2 { margin: 0 0 2px; color: #eeeeef; font-size: 15px; }
+.hiveory-automation-desktop-templates button { display: grid !important; gap: 4px; width: 100%; min-height: 74px; border: 1px solid #2d2d31 !important; border-radius: 8px !important; padding: 11px 14px !important; color: #eeeeef !important; background: #0d0d0e !important; text-align: left; }
+.hiveory-automation-desktop-templates button:hover:not(:disabled) { border-color: #53545a !important; background: #1c1c1e !important; }
+.hiveory-automation-desktop-templates button small { color: #a5a6aa; font: 10px/1.2 "JetBrains Mono", ui-monospace, monospace; }.hiveory-automation-desktop-templates button strong { font-size: 14px; }.hiveory-automation-desktop-templates button span { color: #aeb0b5; font-size: 12px; }
 .hiveory-routine-detail-modal { width: min(760px, calc(100vw - 36px)); max-height: min(780px, calc(100vh - 36px)); overflow-y: auto; border-color: #3a3a3e; box-shadow: 0 20px 60px rgba(0, 0, 0, .65); }
-@media (max-width: 760px) { .hiveory-automation-orca { padding: 12px; }.hiveory-automation-orca-header { align-items: flex-start; flex-direction: column; }.hiveory-automation-orca-controls { width: 100%; justify-content: flex-start; flex-wrap: wrap; }.hiveory-automation-orca-search { width: min(100%, 400px); flex: 1; }.hiveory-automation-orca-row { grid-template-columns: 9px minmax(0, 1fr) !important; }.hiveory-automation-orca-row-meta { grid-column: 2; text-align: left; } }
+@media (max-width: 760px) { .hiveory-automation-desktop { padding: 12px; }.hiveory-automation-desktop-header { align-items: flex-start; flex-direction: column; }.hiveory-automation-desktop-controls { width: 100%; justify-content: flex-start; flex-wrap: wrap; }.hiveory-automation-desktop-search { width: min(100%, 400px); flex: 1; }.hiveory-automation-desktop-row { grid-template-columns: 9px minmax(0, 1fr) !important; }.hiveory-automation-desktop-row-meta { grid-column: 2; text-align: left; } }

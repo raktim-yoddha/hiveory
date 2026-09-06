@@ -1,57 +1,69 @@
-# Threat Model
+# Threat model
 
-## Assets
+This threat model covers the current Hiveory `0.1.3` desktop application. Security reports follow the private process in the root [security policy](../../SECURITY.md).
 
-User files, process execution authority, source-control credentials, provider credentials, conversation data, and approval history are high-value assets.
+## Assets and trust boundaries
 
-## Current controls
+High-value assets include user files and repositories, process execution authority, source-control credentials, provider credentials, conversation and attachment data, plugin connections, approval history, automation schedules, and durable run state.
 
-The renderer has non-privileged shell, diagnostics, and Chat presentation commands. The host owns mode state, SQLite access, operating-system keychain access, provider networking, job cancellation, audit writes, artifact storage, and native notification dispatch. Renderer preview fallback has no authority. Chat starts with no mounted roots; its provider input is built only from active-branch messages and explicitly imported attachments. Chat requests set provider-side response storage to false and disable tools.
+The main boundaries are:
 
-## Deferred risks and required controls
+1. **Renderer to Rust host.** Renderer input is untrusted. The host validates typed command envelopes and enforces capability policy.
+2. **Host to local filesystem and processes.** Roots, paths, executables, arguments, environment, process ownership, and lifecycle are host-controlled.
+3. **Host to provider networks.** Model, plugin, Jira, and Linear requests use configured HTTPS endpoints and user-owned credentials. GitHub collaboration uses a locally authenticated `gh` process.
+4. **Host to durable storage.** SQLite stores metadata and state; secrets resolve through the operating-system credential store.
+5. **Main renderer to native browser/preview surfaces.** Child webviews receive no privileged renderer commands and are constrained by origin and window policy.
 
-| Threat | Required control before enabling capability |
+## Core controls
+
+| Threat | Current control |
 | --- | --- |
-| Prompt-induced tool misuse | explicit capability grant, per-action approval, redacted audit log |
-| Renderer compromise | host-side authorization and validated typed commands |
-| Provider credential exposure | OS secret store, no renderer secret access, redacted diagnostics |
-| Terminal/process escape | command policy, workspace scoping, approval tiers, process-tree cleanup |
-| Malicious repository content | workspace trust, path normalization, preview isolation |
-| Event replay corruption | transactional migrations, idempotency receipts, monotonic sequence checks |
-| Interrupted diagnostic work | durable job state and checkpoints, with incomplete work marked `Interrupted` on restart |
-| Native notification abuse | renderer permission request only; host persists and dispatches notification content |
+| Renderer compromise | Privileged state and authorization remain in Rust; commands and payloads are validated again at the host boundary |
+| Path traversal or symlink escape | Workspace roots are canonicalized; absolute, prefixed, parent-traversal, and symlinked targets are rejected before capability-scoped access |
+| Unauthorized writes or process launches | Workspaces start untrusted; explicit trust derives separate read, write, process, Git, and preview capabilities |
+| Credential disclosure | Secret values use the OS credential manager; renderer projections contain connection state and opaque references; errors and diagnostics are redacted |
+| Prompt-induced tool misuse | Agent and automation tools require explicit grants; mutating or externally visible calls follow approval policy and create durable audit records |
+| Plugin network escape | Declarative manifests use HTTPS host allow-lists, bounded schemas, timeouts, response limits, and distinct risk for read and write operations |
+| Arbitrary command injection | Shell and worker launches use an executable plus argument vector, fixed adapter selection, scoped working directory, bounded environment, and process ownership |
+| Stale or replayed mutations | Request IDs, unique constraints, optimistic revisions, monotonic event sequences, nonces, and dispatch lease generations fence duplicate and stale effects |
+| Malicious or oversized content | Attachments, archives, terminal chunks, plugin payloads, provider responses, logs, and event backlogs have type and size limits |
+| Browser privilege escalation | Browser and preview panes are auxiliary native webviews with no Tauri capability grant; navigation and child-window behavior are host-controlled |
+| Interrupted work reported as complete | Startup recovery marks ambiguous jobs, chats, terminals, agent runs, and dispatches interrupted or reconciliation-required |
 
-## Phase 4 controls verified in code
+## Workspace, terminal, and Git controls
 
-- Workspace intake canonicalizes the selected directory once and keeps an open `cap-std` directory capability. Relative paths reject absolute/prefix/parent components, and intermediate or target symlinks are not opened or edited.
-- Untrusted workspaces expose read/list only. The host checks the trust-derived capability for every write, process, Git, and preview command; the renderer cannot grant itself authority.
-- Editor writes use an expected SHA-256 fingerprint, a uniquely named sibling temporary file, `sync_all`, and capability-scoped rename. Concurrent disk edits return a conflict instead of silently overwriting them.
-- PTY/ConPTY commands are structured. Shell selection comes from the host environment, the coding-agent adapter is fixed to Codex CLI, output is bounded by the channel contract, and force-stop requests terminate the PTY process group or Windows process tree.
-- Preview URLs reject embedded credentials, allow localhost HTTP or explicitly user-entered HTTPS, and open in an auxiliary webview with no renderer capabilities, same-origin navigation filtering, and denied `window.open` children.
-- Git integration is read-only in this phase and returns redacted stable errors; no remote credentials, commit mutation, or arbitrary Git argument surface is exposed.
+- The workspace service retains a capability-scoped directory handle. Editor saves require the expected SHA-256 fingerprint and use a sibling temporary file, `sync_all`, and atomic rename.
+- PTY/ConPTY sessions are host-owned and have stable IDs, bounded dimensions, a bounded ring buffer, monotonic output sequences, and process-tree termination. Missing live state is surfaced as recoverable or ended rather than rendered as an empty successful terminal.
+- Pane topology is a versioned, host-validated tree. Revision conflicts cause a reload instead of merging stale renderer state.
+- Git roots come from validated workspace state. Repository and hosted-source operations use fixed host functions rather than arbitrary Git or CLI argument surfaces.
+- Managed worktrees stay below the application-managed root. Cleanup validates containment and exact user intent before removing a worktree.
 
-## Phase 3 controls verified in code
+## Agent, Chat, plugin, and automation controls
 
-- Attachment imports reject symlinks/non-regular files, enforce PDF/image/text byte limits, validate magic/content, hash content, and store under an application-controlled root.
-- Export paths are resolved from validated relative paths and archive entry names are reduced to file names, preventing traversal through attachment names.
-- Chat event writes and read-model updates occur in the same SQLite transaction. Provider sequence uniqueness suppresses duplicate deltas/completions, while command request IDs guard replayed mutations.
-- Context overflow is rejected before the provider request; Chat does not silently trim history or summarize it.
-- Provider and secret failures return redacted user-facing diagnostics; credential values are never placed in Chat events or the database.
+- Chat starts with no mounted workspace and sends no tool definitions. Provider input contains only active-branch messages and explicitly imported attachments.
+- Attachment imports reject links and non-regular files, validate supported content, enforce byte limits, and copy data into a content-addressed managed root. Portable export sanitizes archive names.
+- Agent folder, skill, tool, and plugin access is explicit. Approval decisions are bound to the action fingerprint; changed actions require a new decision.
+- Plugin credentials are resolved only for the selected connection. Host allow-lists prevent a manifest from redirecting a request to another service.
+- Automations inherit the selected agent's grants and limits. Catch-up, concurrency, duration, tool-call, and approval-timeout policy bound unattended execution.
+- The local board never turns a drag operation into an external Jira, Linear, or GitHub workflow mutation.
 
-## Phase 5 controls verified in code
+## Orchestration controls
 
-- Orchestration policy is host-owned and durable. The renderer can propose, accept, start, pause, review, and clean up through typed commands but cannot launch a worker or mutate Git directly.
-- Dispatches are claimed transactionally with a lease generation. Worker-originated HMAC envelopes include the dispatch, lease, sequence, and nonce; stale or unauthenticated envelopes are rejected.
-- Codex workers receive only an application-managed worktree. Worker output and event payloads are bounded, process arguments are structured, and parent workspace/remotes/PR operations are explicitly outside this phase.
-- Checkpoints are captured before review. Dependency fan-in is non-interactive and blocks on conflicts; cleanup validates exact confirmation and the managed-root containment invariant.
-- Restart recovery marks active orchestration dispatches interrupted while retaining durable worktree and session identifiers. Resumption is an explicit user action with a fresh lease generation.
+- Task graphs and scheduler policy are durable and host-owned. A proposed graph requires explicit acceptance.
+- Dispatches use generation leases. Worker bridge envelopes include the dispatch, generation, sequence, nonce, and HMAC; stale or unauthenticated events are rejected.
+- Questions, checkpoints, reviews, participant mailboxes, completion reports, path claims, and decision gates remain attached to one run and workspace.
+- Dependency fan-in is non-interactive and stops on conflict. Checkpoints exist before review changes dependency readiness.
+- Restart retains durable worktree and session identifiers while requiring a fresh lease for retry or resume.
 
-## Phase 8 controls verified in code
+## Release, backup, and update controls
 
-- The updater is host-owned and inert without an explicit endpoint and public key. Configured endpoints are parsed and validated by the updater library; the renderer receives only typed release metadata.
-- Backup creation uses SQLite `VACUUM INTO` instead of copying a live database file. The archive contains a versioned manifest, the database, and only application-managed artifacts. Entry count, total size, symlinks, traversal components, and unexpected top-level entries are rejected.
-- Restore is staged in private application data and applied before the database pool opens after an explicit restart. Existing SQLite WAL/SHM sidecars and artifact directories are retained as pre-restore copies so an interrupted restore can be diagnosed.
-- Startup and clean-shutdown markers distinguish an unexpected exit from a clean close. Active work is recovered as interrupted/reconciliation-required and surfaced in Diagnostics; no ambiguous operation is reported as completed.
-- Shell settings persist only visual preferences in renderer local storage. Active mode, window geometry, secrets, jobs, and domain state remain host-owned. The command palette and notification center do not add privileged renderer capabilities.
+- Backup uses SQLite `VACUUM INTO` for a consistent snapshot and includes only a versioned manifest plus application-managed artifacts.
+- Restore rejects traversal, links, unexpected top-level entries, excessive entry counts, and excessive uncompressed size. It is staged before the normal database pool opens and retains pre-restore files.
+- The updater makes no request without an explicitly configured HTTPS endpoint and public key. Tauri verifies the signed package before installation.
+- Startup and clean-shutdown markers distinguish a normal exit from a crash; diagnostics exposes recovery status without revealing secrets or unrestricted host state.
 
-Security-sensitive implementation requires a new ADR and acceptance test before activation.
+## Current limitations
+
+Hiveory is a single-user local desktop trust model. It does not provide multi-tenant isolation, a remote execution host, a shared OAuth broker, arbitrary native plugin sandboxing, or hosted synchronization. Provider accounts remain subject to each provider's token scope and revocation controls. Local malware running as the same operating-system user is outside the protection offered by the application credential store.
+
+Security-sensitive boundary changes require an ADR, tests at the enforcing Rust layer, and an update to this document.

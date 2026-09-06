@@ -93,29 +93,29 @@ export function HiveoryRoutines() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'The routine could not be saved.') } finally { setBusy(null) }
   }
 
-  return <section className="hiveory-automation hiveory-automation-orca" aria-labelledby="hiveory-routines-title">
-    <header className="hiveory-automation-orca-header">
+  return <section className="hiveory-automation hiveory-automation-desktop" aria-labelledby="hiveory-routines-title">
+    <header className="hiveory-automation-desktop-header">
       <h1 id="hiveory-routines-title">Automations</h1>
-      <div className="hiveory-automation-orca-controls">
-        <label className="hiveory-automation-orca-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." aria-label="Search automations" /></label>
-        <label className="hiveory-automation-orca-filter"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Show archived</label>
+      <div className="hiveory-automation-desktop-controls">
+        <label className="hiveory-automation-desktop-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." aria-label="Search automations" /></label>
+        <label className="hiveory-automation-desktop-filter"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Show archived</label>
         <button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></button>
         <button onClick={() => { setEditing(null); setTemplate(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</button>
       </div>
     </header>
-    <section className="hiveory-automation-orca-surface" aria-label="Local automations">
-      {visibleRoutines.length > 0 && <div className="hiveory-automation-orca-list">
-        {visibleRoutines.map((routine) => <button key={routine.id} className="hiveory-automation-orca-row" onClick={() => void selectRoutine(routine)} disabled={busy === `select-${routine.id}`}>
+    <section className="hiveory-automation-desktop-surface" aria-label="Local automations">
+      {visibleRoutines.length > 0 && <div className="hiveory-automation-desktop-list">
+        {visibleRoutines.map((routine) => <button key={routine.id} className="hiveory-automation-desktop-row" onClick={() => void selectRoutine(routine)} disabled={busy === `select-${routine.id}`}>
           <span className={`hiveory-state-dot ${routine.enabled ? 'running' : routine.archived ? 'interrupted' : 'queued'}`} />
           <span><strong>{routine.name}</strong><small>{routine.description || 'No description provided.'}</small></span>
-          <span className="hiveory-automation-orca-row-meta">{routine.enabled ? 'Enabled' : routine.archived ? 'Archived' : 'Paused'} · next {formatTime(routine.next_run_unix_ms)}</span>
+          <span className="hiveory-automation-desktop-row-meta">{routine.enabled ? 'Enabled' : routine.archived ? 'Archived' : 'Paused'} · next {formatTime(routine.next_run_unix_ms)}</span>
         </button>)}
       </div>}
-      {!visibleRoutines.length && <div className="hiveory-automation-orca-empty">
+      {!visibleRoutines.length && <div className="hiveory-automation-desktop-empty">
         <strong>{routines.length ? 'No matching automations' : 'No automations across loaded hosts'}</strong>
         <span>{routines.length ? 'Change the search or filter to see configured schedules.' : 'Create a schedule or start from one of the local templates below.'}</span>
       </div>}
-      {agents.length > 0 && <div className="hiveory-automation-orca-templates" aria-labelledby="hiveory-template-title">
+      {agents.length > 0 && <div className="hiveory-automation-desktop-templates" aria-labelledby="hiveory-template-title">
         <h2 id="hiveory-template-title">Start from a template</h2>
         {automationTemplates.map((item) => <button key={item.name} type="button" disabled={busy !== null} onClick={() => { setEditing(null); setTemplate(item); setShowForm(true) }}>
           <small>{item.schedule.expression}</small><strong>{item.name}</strong><span>{item.description}</span>

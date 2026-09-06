@@ -490,8 +490,8 @@ Phase 13 is complete only when all statements below are true:
 The exact package-level commands may expand as new crates are added, but the final gate must include:
 
 ~~~powershell
-pnpm --dir hiveory-renderer test
-pnpm --dir hiveory-renderer check
+pnpm test
+pnpm check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace

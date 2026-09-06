@@ -32,8 +32,8 @@
 Run these from the repository root:
 
 ```powershell
-pnpm --dir hiveory-renderer check
-pnpm --dir hiveory-renderer test
+pnpm check
+pnpm test
 cargo test -p hiveory-code-runtime
 cargo test -p hiveory-code-domain
 cargo test -p hiveory-protocol

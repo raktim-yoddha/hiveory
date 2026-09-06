@@ -1,25 +1,28 @@
 # Code coordination threat model
 
+This document narrows the general [threat model](../security/threat-model.md) to Code runs.
+
 ## Assets
 
-- user workspace files and uncommitted changes;
-- repository credentials held by the local authentication session;
+- workspace files and uncommitted changes;
+- repository credentials available to the local user;
 - terminal input/output and worker process identity;
-- durable run, task, dispatch, message, checkpoint, and gate history.
+- run, task, dispatch, worktree, checkpoint, mailbox, completion, path-claim, and gate history.
 
-## Controls in the Phase 13 slice
+## Controls
 
-- Workspace roots are resolved by the host and canonicalized before Git or process work.
-- Write-capable orchestration requires explicit workspace trust and the required capabilities.
-- Worker processes run in managed worktrees by default; a PID is never treated as a complete resource identity.
-- Bridge events use an opaque per-dispatch secret, lease generation, monotonic worker sequence, nonce, and HMAC.
-- Duplicate worker events are rejected or replayed by nonce without creating a second effect.
-- Mailbox request IDs make retried sends idempotent, while recipient sequence numbers preserve FIFO delivery.
-- Acknowledgement requires the exact run, delivery, and recipient address.
+- Workspace roots are host-resolved and canonicalized before Git, file, or process work.
+- Write-capable orchestration requires explicit workspace trust and the relevant capability.
+- Workers use application-managed worktrees by default. A PID alone is never treated as a complete resource identity.
+- A dispatch lease generation fences previous attempts. Bridge events carry an ephemeral HMAC secret, monotonic sequence, and nonce.
+- Duplicate worker events are rejected or replayed idempotently without creating a second effect.
+- Mailbox request IDs make sends idempotent; recipient sequences preserve FIFO delivery; acknowledgement requires the exact run, delivery, and recipient.
 - Gate resolution requires an open gate and the configured actor.
-- Hosted command output is parsed into bounded DTOs; raw stderr and credentials are not returned.
-- Terminal output, mailbox payloads, and event payloads are bounded before persistence or broadcast.
+- Worker output, mailbox payloads, terminal history, provider results, and persisted events are bounded and redacted where necessary.
+- Dependency fan-in is non-interactive and blocks on conflicts. Cleanup remains within the application-managed root and requires exact intent.
 
-## Residual risks and boundaries
+## Residual risks
 
-Hosted collaboration mutations remain read-only in this phase. The standalone external control client and complete path-claim enforcement are extension work; current process control stays inside the host orchestration service. No feature should bypass workspace trust, lease checks, explicit gate resolution, or confirmation for destructive actions.
+A coding CLI executes third-party and repository-controlled code with the permissions granted to its workspace and local user. Managed worktrees limit repository overlap but are not an operating-system sandbox. Repository hooks, build tools, package managers, and provider CLIs retain their own risk. Users must review requested capabilities, checkpoints, and externally visible actions.
+
+External task-provider items are read into Hiveory for context. Board movement is local-only; provider workflow mutation requires a separately implemented and approved provider tool.

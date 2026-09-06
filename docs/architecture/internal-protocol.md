@@ -1,11 +1,11 @@
-# Internal Protocol v2
+# Internal protocol v2
 
 All renderer-to-host requests use original `hiveory_*` command names. DTOs are owned by `hiveory-protocol` and exported to TypeScript through `hiveory-tooling`.
 
 | Contract | Rule |
 | --- | --- |
 | Versioning | `ProtocolVersion.major` must match before a command is processed. This release uses major `2`; breaking changes increment it. |
-| IDs | Future durable IDs use UUIDv7 strings; renderer input is untrusted. |
+| IDs | Durable IDs use UUIDv7 strings where the domain requires generated identity; renderer input is untrusted. |
 | Commands | `CommandEnvelope<T>` carries protocol, request ID, and payload. |
 | Replies | `ResponseEnvelope<T>` echoes request ID and protocol. |
 | Errors | `ApiError` has stable code, human message, retry class, and optional recovery action. |
@@ -20,9 +20,14 @@ All renderer-to-host requests use original `hiveory_*` command names. DTOs are o
 | Code worker leases | A dispatch lease generation fences stale worker events. Restarted active dispatches are marked interrupted while identifiers are retained; a retry/resume action obtains a fresh generation. Heartbeats are durable and running leases become stale after the host-defined timeout. |
 | Code worker boundary | Workers use the `codex-cli` adapter through a host-owned adapter boundary and structured `codex exec --json`/resume invocations in managed worktrees. Bounded HMAC-signed envelopes carry origin, worker sequence, nonce, and lease metadata; ephemeral secrets are not persisted. |
 | Code fan-in and cleanup | Accepted dependency checkpoints can be merged non-interactively. Conflicts block the dependent task. Worktree cleanup requires exact confirmation and remains inside the managed local-data root. |
+| Native browser | Browser commands create, navigate, reload, resize, focus, inspect, and close host-owned child webviews. URLs are normalized by the host, and new browser panes start at `https://www.google.com`. Browser resources never receive the main renderer capability set. |
+| Task sources | Workspace task-source commands configure, test, query, refresh, and disconnect GitHub, Jira, and Linear sources. Replies contain bounded provider-neutral task DTOs and connection state, never stored credentials. |
+| Plugins | Plugin commands install or remove validated manifests, enable or disable catalog entries, create and test connections, update grants, and invoke declared tools. The host enforces HTTPS origins, manifest schemas, tool risk, payload limits, and opaque secret handles. |
+| Skills | Skill commands list the validated catalog, create or import local packages, enable assignments, and report conflicts. Skill source and metadata are bounded before persistence. |
+| Automations | Automation commands create, edit, enable, pause, archive, run, query, and filter durable schedules and executions. The local scheduler owns time-zone evaluation, catch-up, concurrency, and run limits. |
 | Agent commands | Agent mutations are host-owned and scoped to named agents, explicit folder grants, bounded tools, skills, memory, artifacts, routines, plugins, and delegated child runs. Approval-required operations are fingerprinted and replay-safe. |
 | Shared shell | Bootstrap, active mode, diagnostics, notifications, preferences, window state, and recovery markers are durable or host-validated. The renderer may request a view change but cannot widen a capability grant. |
 | Release and recovery | Release metadata records protocol/product versions and clean-start markers. Backups are ZIP archives containing a manifest, consistent SQLite snapshot, and managed artifacts. Restore is staged, validated, atomic at the database/artifact-root boundary, and followed by an application restart. |
 | Updates | The host owns update discovery and installation. The updater remains inert unless an HTTPS endpoint and signing public key are configured; installation is delegated to Tauri's signature-verified updater path. |
 
-Run `cargo run -p hiveory-tooling` to refresh generated DTO definitions after protocol changes. CI must fail if generated output drifts.
+Protocol changes must update Rust definitions, renderer bindings and client calls, host command registration, and contract tests together. CI must fail when generated or handwritten bindings drift from the Rust contract.

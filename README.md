@@ -300,6 +300,7 @@ pnpm release:check
 
 ## Useful documentation
 
+- [Documentation index and maintenance policy](docs/README.md)
 - [Foundation architecture](docs/architecture/hiveory-foundation.md)
 - [Terminal pane workspace](docs/architecture/terminal-pane-workspace.md)
 - [Code workspace fidelity](docs/architecture/code-workspace-fidelity.md)

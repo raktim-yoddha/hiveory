@@ -8,7 +8,8 @@ React Code shell
   ├─ bounded pane canvas
   └─ pane projections
        ├─ xterm terminal
-       ├─ sandboxed local preview
+       ├─ native browser or sandboxed local preview
+       ├─ Monaco editor / Markdown
        └─ workspace thread
 
 Tauri host
@@ -35,13 +36,15 @@ The renderer does not invent pane topology. It only dispatches user intent and r
 
 ## Terminal lifecycle
 
-1. A trusted workspace requests a structured shell or adapter launch.
+1. A trusted workspace requests a structured shell or installed coding-adapter launch. Windows profiles include CMD, PowerShell, and Git Bash when available; coding adapters include Codex CLI, Claude Code, Antigravity, and OpenCode when installed.
 2. The runtime starts a PTY in the approved workspace root.
 3. The first event is sequence `1`; output, errors, and exit events increment the same counter.
 4. Output is appended to a 1 MiB ring buffer and broadcast to live subscribers.
 5. A pane subscribes and loads a snapshot. Events received during that race are held until the snapshot is painted.
 6. A sequence gap triggers a full snapshot reload, which repairs a lagged or remounted pane without restarting the process.
 7. Input is encoded as UTF-8 base64 in the renderer and decoded only at the runtime boundary.
+
+Browser panes use host-owned child webviews and start at `https://www.google.com`. Their geometry follows the pane canvas, and their lifecycle is serialized independently from terminal and renderer mounts.
 
 ## Interaction contract
 
@@ -58,4 +61,3 @@ The renderer does not invent pane topology. It only dispatches user intent and r
 ## Failure visibility
 
 Transport errors are rendered in the affected pane or workspace banner. A missing in-memory process is treated as a relaunchable stale resource, not as an empty terminal. This distinction is important for restart recovery and makes failures actionable instead of silently blank.
-

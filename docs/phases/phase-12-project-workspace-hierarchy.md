@@ -28,8 +28,8 @@ Code mode now separates registered projects from the workspaces that run inside 
 ## Verification
 
 ~~~powershell
-pnpm --dir hiveory-renderer test
-pnpm --dir hiveory-renderer check
+pnpm test
+pnpm check
 cargo fmt --all -- --check
 cargo test -p hiveory-persistence
 cargo test -p hiveory-code-runtime -p hiveory-code-domain -p hiveory-protocol

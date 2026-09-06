@@ -7,12 +7,11 @@ Code mode keeps the project list and the active workspace canvas as separate con
 ```text
 Project
 ├── Primary workspace
-├── Managed worktree workspace (Git only)
-└── External worktree workspace (future import path)
-    └── panes, terminals, previews, documents, trust
+└── Managed worktree workspace (Git only)
+    └── panes, terminals, browser resources, documents, trust
 ```
 
-The global rail is independent of this hierarchy. Dashboard, Routines, Plugins, and Skills change the main content view without replacing the Workspaces section. Selecting a project or workspace explicitly returns to the workspace canvas.
+The global rail is independent of this hierarchy. Dashboard, Automations, Plugins, Skills, Tasks, and the workspace board can replace the main content view without changing project ownership. Selecting a project or workspace returns to its workspace canvas.
 
 ## Add flows
 
@@ -38,7 +37,7 @@ Folder projects expose only their primary workspace because there is no Git ref 
 
 ## Persistence and migration
 
-The project table owns registration metadata, while workspace rows retain the existing IDs used by pane layouts, documents, terminals, previews, and trust. The migration converts every legacy flat workspace into a project with that workspace as its primary child. This preserves existing layout and runtime references while making the new hierarchy visible to the renderer.
+The project table owns registration metadata, while workspace rows retain the IDs used by pane layouts, documents, terminals, browser resources, previews, and trust. The migration converts every legacy flat workspace into a project with that workspace as its primary child. This preserves existing layout and runtime references while making the hierarchy visible to the renderer.
 
 The renderer receives both arrays in `CodeSnapshot` and derives the tree by `project_id` and `primary_workspace_id`. The host remains authoritative for filesystem paths, Git worktree creation, trust capabilities, and persistence.
 
@@ -50,3 +49,4 @@ The renderer receives both arrays in `CodeSnapshot` and derives the tree by `pro
 - User-facing names are bounded and reject control characters.
 - Branch names are validated before Git receives them.
 - Pane layouts remain scoped by workspace ID, so switching workspaces never leaks terminal or document state.
+- Removing a project or workspace updates the persisted active selection atomically and never deletes the user's primary repository.

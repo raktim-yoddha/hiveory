@@ -2,7 +2,7 @@
 
 ## Goal
 
-Turn the Tasks and Automations surfaces into real local desktop features modelled on the Orca reference flows. Hiveory must never show simulated accounts, connected providers, tasks, or automation engines.
+Turn the Tasks and Automations surfaces into real local desktop features modelled on the supplied desktop reference flows. Hiveory must never show simulated accounts, connected providers, tasks, or automation engines.
 
 ## Local task sources
 
@@ -16,12 +16,12 @@ Each workspace can select any combination of GitHub, Jira, and Linear sources. S
 
 ## Automations
 
-The existing local scheduler remains the execution authority. The renderer becomes a compact desktop automation list with search, filters, template selection, and a modal editor patterned after Orca:
+The existing local scheduler remains the execution authority. The renderer becomes a compact desktop automation list with search, filters, template selection, and a modal editor patterned after the supplied reference:
 
 - prompt editor on the left;
 - local Agent, workspace, session, schedule, grace period, folder/plugin grants, and bounded-run settings on the right;
 - real template application, validation, save, pause/archive, and run-now actions;
-- no Hermes or remote-host target, because Hiveory is local-only.
+- no remote-agent-host target, because Hiveory is local-only.
 
 ## Pane summary
 

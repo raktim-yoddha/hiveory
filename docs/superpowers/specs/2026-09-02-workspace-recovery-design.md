@@ -60,7 +60,7 @@ The hidden terminal host is the authority for a terminal’s liveness. On host s
 
 The desktop host and renderer use the stable terminal ID to subscribe, fetch a snapshot, and resize only after the terminal is attached. Relaunch is guarded against duplicate launch attempts. It reconnects a recoverable terminal before creating a new process; a new process is created only after the host confirms that no live terminal exists for that ID.
 
-This follows the Orca reference principle of hydrating identities before attachment, delaying reattachment until actual dimensions are available, and deduplicating concurrent recovery work.
+This follows the reference principle of hydrating identities before attachment, delaying reattachment until actual dimensions are available, and deduplicating concurrent recovery work.
 
 ## Failure handling
 

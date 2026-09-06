@@ -1,5 +1,7 @@
 # Release and recovery architecture
 
+This document describes the current startup, shutdown, backup, restore, update, and packaging boundaries for Hiveory `0.1.3`.
+
 The application is local-first: the Tauri host owns the SQLite pool, artifact root, credential handles, active processes, and long-running domain services. The React layer can be discarded and rebuilt from host queries and streams.
 
 ## Startup sequence
@@ -17,7 +19,7 @@ The window close event persists geometry and writes a clean-shutdown timestamp. 
 
 ## Portable backup format
 
-The host creates a temporary consistent database snapshot using SQLite `VACUUM INTO`, then packages it with a versioned manifest and managed artifacts. The archive writer skips symlinks, bounds entry count and total size, and uses only application-generated archive names. Restore validates the manifest and archive names again immediately before extraction. User-selected paths are never used as extraction roots.
+The host implementation in `src/apps/desktop/src-tauri/src/release.rs` creates a temporary consistent database snapshot using SQLite `VACUUM INTO`, then packages it with a versioned manifest and managed artifacts. The archive writer skips symlinks, bounds entry count and total size, and uses only application-generated archive names. Restore validates the manifest and archive names again immediately before extraction. User-selected paths are never used as extraction roots.
 
 ## Update boundary
 
@@ -26,3 +28,7 @@ The updater plugin is host-initialized but runtime-configured. A missing endpoin
 ## Operational diagnostics
 
 Diagnostics exposes provider configuration status, recent durable jobs, retained notifications, recovery messaging, and live shared events. It intentionally does not expose raw secrets, arbitrary filesystem listings, or unrestricted process controls. The release checklist is the cross-platform manual gate for package, credential, PTY, WebView, notification, and restart behavior.
+
+## Windows artifacts
+
+`pnpm app:build` creates and refreshes the portable executable, NSIS installer, and MSI package under `releases/production/`. `pnpm app:build:dev` creates the isolated development portable executable under `releases/dev/`. The application does not require a separately installed Node.js or Python runtime after packaging; WebView2 and normal Windows platform prerequisites still apply.
