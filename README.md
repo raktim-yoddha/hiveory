@@ -112,6 +112,8 @@ Moving an external item on the Hiveory board changes its local board organizatio
 
 ## Plugins
 
+For step-by-step use and local acceptance testing of Plugins, Skills, Automations, Tasks, and the Workspace board, see the [user manual](docs/user-manual.md).
+
 Plugins are declarative HTTPS integrations executed by the Rust host. They are not arbitrary native extensions.
 
 The built-in catalog currently includes:

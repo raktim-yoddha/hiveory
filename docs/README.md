@@ -16,6 +16,7 @@ This directory separates current product documentation from historical engineeri
 | Release lifecycle | [Release and recovery](architecture/release-and-recovery.md) | startup, backup, restore, update, or packaging |
 | Security | [Threat model](security/threat-model.md) and root [security policy](../SECURITY.md) | privileged capabilities, credentials, approvals, or network access |
 | Builds | [Local build guide](builds/local-builds.md) | development, packaging, artifact names, or toolchain requirements |
+| Local feature use and testing | [User manual](user-manual.md) | Plugins, Skills, Automations, Tasks, and Workspace board workflows |
 | Source organization | [Repository conventions](architecture/repository-conventions.md) and [source layout](../src/README.md) | directories, crate ownership, or naming |
 
 ## Historical records
