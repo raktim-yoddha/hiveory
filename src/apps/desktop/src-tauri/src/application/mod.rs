@@ -64,13 +64,15 @@ use hiveory_protocol::{
     CodeHostedIssueActionRequest, CodeHostedIssueCreateRequest, CodeHostedIssueUpdateRequest,
     CodeHostedOperationResult, CodeHostedPullRequestActionRequest,
     CodeHostedPullRequestCreateRequest, CodeHostedTracking, CodeHostedTrackingRequest,
-    CodeMailboxAckRequest, CodeMailboxDelivery, CodeMailboxQuery, CodeMailboxSendRequest,
-    CodeOrchestrationEventEnvelope, CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation,
-    CodePaneMutationRequest, CodePaneMutationResult, CodePreviewRequest, CodePreviewState,
-    CodePreviewSummary, CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest,
-    CodeProjectSummary, CodeQuestionAnswerRequest, CodeReadFileRequest, CodeRenameFileRequest,
-    CodeRenameFileResult, CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest,
-    CodeRunSummary, CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
+    CodeLayoutPresetCreateRequest, CodeLayoutPresetOpenRequest, CodeLayoutPresetQuery,
+    CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodeMailboxAckRequest,
+    CodeMailboxDelivery, CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
+    CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
+    CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
+    CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary,
+    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeRenameFileRequest, CodeRenameFileResult,
+    CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary,
+    CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
     CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
     CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
     CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
@@ -3436,6 +3438,110 @@ async fn hiveory_command_save_code_layout(
         .await
         .map_err(database_error)?;
     Ok(response(&command.request_id, command.payload.layout))
+}
+
+#[tauri::command]
+async fn hiveory_query_code_layout_presets(
+    query: CodeLayoutPresetQuery,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<Vec<CodeLayoutPresetSummary>, ApiError> {
+    foundation
+        .code_workspaces
+        .summary(&query.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .code_layout_presets(&query.workspace_id)
+        .await
+        .map_err(database_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_create_code_layout_preset(
+    command: CommandEnvelope<CodeLayoutPresetCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeLayoutPresetSummary>, ApiError> {
+    validate_code_command(&command)?;
+    validate_code_layout_preset_fields(
+        &command.payload.name,
+        command.payload.description.as_deref(),
+    )?;
+    if command.payload.workspace_id != command.payload.layout.workspace_id {
+        return Err(validation_error("Layout and workspace IDs must match."));
+    }
+    validate_layout(&command.payload.layout)
+        .map_err(|error| validation_error(format!("Invalid pane layout: {error}")))?;
+    foundation
+        .code_workspaces
+        .summary(&command.payload.workspace_id)
+        .map_err(workspace_error)?;
+    let preset = foundation
+        .persistence
+        .create_code_layout_preset(&command.payload)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, preset))
+}
+
+#[tauri::command]
+async fn hiveory_command_update_code_layout_preset(
+    command: CommandEnvelope<CodeLayoutPresetUpdateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeLayoutPresetSummary>, ApiError> {
+    validate_code_command(&command)?;
+    validate_code_layout_preset_fields(
+        &command.payload.name,
+        command.payload.description.as_deref(),
+    )?;
+    if let Some(layout) = &command.payload.layout {
+        if command.payload.workspace_id != layout.workspace_id {
+            return Err(validation_error("Layout and workspace IDs must match."));
+        }
+        validate_layout(layout)
+            .map_err(|error| validation_error(format!("Invalid pane layout: {error}")))?;
+    }
+    let preset = foundation
+        .persistence
+        .update_code_layout_preset(&command.payload)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, preset))
+}
+
+#[tauri::command]
+async fn hiveory_command_open_code_layout_preset(
+    command: CommandEnvelope<CodeLayoutPresetOpenRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodePaneLayout>, ApiError> {
+    validate_code_command(&command)?;
+    let preset = foundation
+        .persistence
+        .code_layout_preset(&command.payload.workspace_id, &command.payload.preset_id)
+        .await
+        .map_err(database_error)?
+        .ok_or_else(|| validation_error("Layout preset was not found."))?;
+    validate_layout(&preset.layout)
+        .map_err(|error| validation_error(format!("Stored layout preset is invalid: {error}")))?;
+    let layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &preset.layout,
+        )
+        .await
+        .map_err(|error| {
+            if error.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Pane layout was modified elsewhere.",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(error)
+            }
+        })?;
+    Ok(response(&command.request_id, layout))
 }
 
 #[tauri::command]
@@ -6806,6 +6912,23 @@ fn validate_code_command<T>(command: &CommandEnvelope<T>) -> Result<(), ApiError
     validate_chat_command(command)
 }
 
+fn validate_code_layout_preset_fields(
+    name: &str,
+    description: Option<&str>,
+) -> Result<(), ApiError> {
+    if name.trim().is_empty() || name.trim().chars().count() > 120 {
+        return Err(validation_error(
+            "Preset name must be between 1 and 120 characters.",
+        ));
+    }
+    if description.is_some_and(|value| value.chars().count() > 500) {
+        return Err(validation_error(
+            "Preset description must be at most 500 characters.",
+        ));
+    }
+    Ok(())
+}
+
 async fn ensure_terminal_history_key(
     persistence: &HiveoryPersistence,
     secrets: &HiveorySecretStoreHandle,
@@ -7933,6 +8056,10 @@ pub fn run() {
             hiveory_query_code_asset,
             hiveory_command_rename_code_file,
             hiveory_command_save_code_layout,
+            hiveory_query_code_layout_presets,
+            hiveory_command_create_code_layout_preset,
+            hiveory_command_update_code_layout_preset,
+            hiveory_command_open_code_layout_preset,
             hiveory_command_apply_code_pane_mutation,
             hiveory_command_launch_code_pane_terminal,
             hiveory_command_open_code_pane_preview,

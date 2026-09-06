@@ -4,25 +4,30 @@ import {
   hiveoryClient,
   type CodeAdapterSummary,
   type CodeAgentLaunchMode,
+  type CodePaneLayout,
 } from '../../../shared/api/hiveory-client'
 import { CodeSplitPanePicker } from './CodeSplitPanePicker'
+import { CodeLayoutPresetLibrary } from './CodeLayoutPresetLibrary'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneLauncherProps {
+  workspaceId: string
+  layout: CodePaneLayout
   onLaunch: (
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     url?: string,
     agentLaunchMode?: CodeAgentLaunchMode,
   ) => void
+  onOpenPreset: (presetId: string) => void
 }
 
-export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) => {
+export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId, layout, onLaunch, onOpenPreset }) => {
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [presetMessage, setPresetMessage] = useState<string | null>(null)
+  const [presetOpen, setPresetOpen] = useState(false)
   const addPaneTriggerRef = useRef<HTMLButtonElement>(null)
-  useBrowserSurfaceBlocker(pickerOpen, 'pane-launcher-dialog')
+  useBrowserSurfaceBlocker(pickerOpen || presetOpen, 'pane-launcher-dialog')
 
   useEffect(() => {
     let mounted = true
@@ -50,7 +55,6 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) 
             aria-haspopup="menu"
             aria-expanded={pickerOpen}
             onClick={() => {
-              setPresetMessage(null)
               setPickerOpen((open) => !open)
             }}
           >
@@ -65,7 +69,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) 
             className="code-launcher-card"
             onClick={() => {
               setPickerOpen(false)
-              setPresetMessage('Pane presets are coming soon.')
+              setPresetOpen(true)
             }}
           >
             <span className="code-launcher-icon"><LayoutTemplate size={18} aria-hidden="true" /></span>
@@ -76,7 +80,6 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) 
           </button>
         </div>
 
-        {presetMessage && <p className="code-launcher-status" role="status">{presetMessage}</p>}
       </div>
 
       <CodeSplitPanePicker
@@ -87,6 +90,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) 
         onSelect={(kind, adapterId, url, agentLaunchMode) => onLaunch(kind, adapterId, url, agentLaunchMode)}
         onClose={() => setPickerOpen(false)}
       />
+      {presetOpen && <CodeLayoutPresetLibrary workspaceId={workspaceId} layout={layout} onOpenPreset={onOpenPreset} onClose={() => setPresetOpen(false)} />}
     </div>
   )
 }

@@ -1563,6 +1563,108 @@
   font-size: 12px;
 }
 
+.code-layout-preset-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.code-layout-preset-modal {
+  display: grid;
+  width: min(720px, 100%);
+  max-height: min(680px, calc(100vh - 48px));
+  overflow: auto;
+  border: 1px solid #3b3c42;
+  border-radius: 10px;
+  background: #141416;
+  box-shadow: 0 22px 64px rgba(0, 0, 0, 0.58);
+}
+
+.code-layout-preset-heading,
+.code-layout-preset-tabs,
+.code-layout-preset-row,
+.code-layout-preset-form {
+  padding: 16px 18px;
+}
+
+.code-layout-preset-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #303034;
+}
+
+.code-layout-preset-heading h2,
+.code-layout-preset-form h3 {
+  margin: 2px 0 0;
+  color: #f4f4f5;
+  font-size: 18px;
+}
+
+.code-layout-preset-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #303034;
+}
+
+.code-layout-preset-tabs button,
+.code-layout-preset-actions button,
+.code-layout-preset-form-actions button,
+.code-layout-preset-empty button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.code-layout-preset-tabs button {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: #aaaab0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.code-layout-preset-tabs button:hover,
+.code-layout-preset-tabs button.is-active {
+  color: #f4f4f5;
+  background: #27272a;
+}
+
+.code-layout-preset-list { display: grid; }
+.code-layout-preset-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; border-bottom: 1px solid #303034; }
+.code-layout-preset-row:last-child { border-bottom: 0; }
+.code-layout-preset-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #3a3a3f; border-radius: 7px; color: #b8b8bf; background: #222225; }
+.code-layout-preset-copy { display: grid; min-width: 0; gap: 3px; }
+.code-layout-preset-copy strong { overflow: hidden; color: #eeeeef; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.code-layout-preset-copy small, .code-layout-preset-copy em { overflow: hidden; color: #a3a3a9; font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.code-layout-preset-copy em { color: #777780; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; }
+.code-layout-preset-actions { display: flex; gap: 7px; }
+.code-layout-preset-empty { display: grid; place-items: center; gap: 9px; padding: 46px 20px; color: #a3a3a9; text-align: center; }
+.code-layout-preset-empty strong { color: #eeeeef; font-size: 14px; }
+.code-layout-preset-empty span { max-width: 380px; font-size: 12px; line-height: 1.45; }
+.code-layout-preset-form { display: grid; gap: 13px; }
+.code-layout-preset-form p { margin: 5px 0 0; color: #a3a3a9; font-size: 12px; line-height: 1.45; }
+.code-layout-preset-form label { display: grid; gap: 6px; color: #c5c5ca; font-size: 12px; font-weight: 650; }
+.code-layout-preset-form label > span { color: #85858d; font-size: 10px; font-weight: 400; }
+.code-layout-preset-form input, .code-layout-preset-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #3b3b40; border-radius: 6px; padding: 8px 9px; color: #f1f1f2; background: #0e0e0f; font: inherit; }
+.code-layout-preset-form textarea { resize: vertical; }
+.code-layout-preset-checkbox { display: flex !important; align-items: center; grid-template-columns: auto 1fr; cursor: pointer; }
+.code-layout-preset-checkbox input { width: 15px; height: 15px; accent-color: #d2d2d7; }
+.code-layout-preset-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.code-layout-preset-feedback { margin: 0; border-top: 1px solid #303034; padding: 10px 18px; color: #c7c7cc; font-size: 12px; }
+
+@media (max-width: 620px) {
+  .code-layout-preset-backdrop { padding: 12px; }
+  .code-layout-preset-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .code-layout-preset-actions { grid-column: 2; justify-content: flex-start; }
+}
+
 .code-launcher-card {
   display: flex;
   align-items: flex-start;

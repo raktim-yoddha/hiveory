@@ -38,6 +38,7 @@ export interface CodeWorkspaceController {
   focusPane: (paneId: string) => Promise<void>
   toggleMaximize: (paneId?: string | null) => Promise<void>
   applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
+  openLayoutPreset: (presetId: string) => Promise<void>
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null, agentLaunchMode?: CodeAgentLaunchMode) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   updatePreviewState: (state: BrowserRuntimeState) => void
@@ -608,6 +609,26 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     [commitLayout, enqueueOperation, loadWorkspace]
   )
 
+  const openLayoutPreset = useCallback(async (presetId: string) => {
+    await enqueueOperation(async () => {
+      const { workspaceId, revision } = stateRef.current
+      if (!workspaceId) return
+      try {
+        dispatch({ type: 'SET_MUTATING', isMutating: true })
+        const layout = await hiveoryClient.openCodeLayoutPreset({
+          preset_id: presetId,
+          workspace_id: workspaceId,
+          expected_revision: revision,
+        })
+        commitLayout(layout)
+      } catch (err: unknown) {
+        dispatch({ type: 'SET_ERROR', error: formatError(err) })
+      } finally {
+        dispatch({ type: 'SET_MUTATING', isMutating: false })
+      }
+    })
+  }, [commitLayout, enqueueOperation])
+
   const openMarkdown = useCallback(
     async (paneId: string, relativePath: string) => {
       await enqueueOperation(async () => {
@@ -830,6 +851,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     focusPane,
     toggleMaximize,
     applyPreset,
+    openLayoutPreset,
     launchTerminal,
     openPreview,
     updatePreviewState,

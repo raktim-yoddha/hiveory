@@ -64,6 +64,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
     focusPane,
     renamePane,
     splitAndLaunch,
+    openLayoutPreset,
     toggleMaximize,
     requestClosePane,
     launchTerminal,
@@ -122,6 +123,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
       case 'empty':
         return (
           <CodePaneLauncher
+            workspaceId={state.workspaceId!}
+            layout={state.layout!}
             onLaunch={(kind, adapterId, url, agentLaunchMode) => {
               if (kind === 'shell' || kind === 'coding_agent') {
                 void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
@@ -131,6 +134,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
                 void createMarkdown(node.pane_id)
               }
             }}
+            onOpenPreset={(presetId) => void openLayoutPreset(presetId)}
           />
         )
       case 'terminal':
@@ -138,6 +142,8 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         if (!node.resource_id || !terminalSummary) {
           return (
             <CodePaneLauncher
+              workspaceId={state.workspaceId!}
+              layout={state.layout!}
               onLaunch={(kind, adapterId, url, agentLaunchMode) => {
                 if (kind === 'shell' || kind === 'coding_agent') {
                   void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
@@ -147,6 +153,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
                   void createMarkdown(node.pane_id)
                 }
               }}
+              onOpenPreset={(presetId) => void openLayoutPreset(presetId)}
             />
           )
         }

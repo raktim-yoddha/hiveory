@@ -143,6 +143,11 @@ export type CodePaneMutation =
 
 export type CodePaneMutationRequest = { workspace_id: string; expected_revision: number; mutation: CodePaneMutation }
 export type CodePaneMutationResult = { layout: CodePaneLayout }
+export type CodeLayoutPresetSummary = { id: string; workspace_id: string; name: string; description: string | null; pane_count: number; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeLayoutPresetQuery = { workspace_id: string }
+export type CodeLayoutPresetCreateRequest = { workspace_id: string; name: string; description: string | null; layout: CodePaneLayout }
+export type CodeLayoutPresetUpdateRequest = { preset_id: string; workspace_id: string; name: string; description: string | null; layout: CodePaneLayout | null }
+export type CodeLayoutPresetOpenRequest = { preset_id: string; workspace_id: string; expected_revision: number }
 export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; cols: number; rows: number }
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
@@ -397,6 +402,7 @@ const previewFolders = new Map<string, ChatFolderSummary>()
 const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeProjects = new Map<string, CodeProjectSummary>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
+const previewCodeLayoutPresets = new Map<string, { summary: CodeLayoutPresetSummary; layout: CodePaneLayout }>()
 const previewCodeRuns = new Map<string, CodeRunDetail>()
 const previewCodeMailboxes = new Map<string, CodeMailboxDelivery[]>()
 const previewCodeMailboxRequests = new Map<string, CodeMailboxDelivery>()
@@ -1266,6 +1272,40 @@ export const hiveoryClient = {
     if (!workspace) throw new Error('Workspace was not found.')
     workspace.detail.layout = structuredClone(request.layout)
     return structuredClone(request.layout)
+  },
+  async codeLayoutPresets(query: CodeLayoutPresetQuery): Promise<CodeLayoutPresetSummary[]> {
+    if (hiveoryIsTauri) return tauriQuery<CodeLayoutPresetSummary[]>('hiveory_query_code_layout_presets', { query })
+    return [...previewCodeLayoutPresets.values()]
+      .filter((preset) => preset.summary.workspace_id === query.workspace_id)
+      .sort((left, right) => right.summary.updated_at_unix_ms - left.summary.updated_at_unix_ms)
+      .map((preset) => structuredClone(preset.summary))
+  },
+  async createCodeLayoutPreset(request: CodeLayoutPresetCreateRequest): Promise<CodeLayoutPresetSummary> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLayoutPresetCreateRequest, CodeLayoutPresetSummary>('hiveory_command_create_code_layout_preset', request)
+    const now = previewNow()
+    const summary: CodeLayoutPresetSummary = { id: previewId('layout-preset'), workspace_id: request.workspace_id, name: request.name.trim(), description: request.description, pane_count: request.layout.nodes.filter((node) => !node.children.length).length, created_at_unix_ms: now, updated_at_unix_ms: now }
+    previewCodeLayoutPresets.set(summary.id, { summary, layout: structuredClone(request.layout) })
+    return structuredClone(summary)
+  },
+  async updateCodeLayoutPreset(request: CodeLayoutPresetUpdateRequest): Promise<CodeLayoutPresetSummary> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLayoutPresetUpdateRequest, CodeLayoutPresetSummary>('hiveory_command_update_code_layout_preset', request)
+    const preset = previewCodeLayoutPresets.get(request.preset_id)
+    if (!preset || preset.summary.workspace_id !== request.workspace_id) throw new Error('Layout preset was not found.')
+    const layout = request.layout ? structuredClone(request.layout) : preset.layout
+    preset.layout = layout
+    preset.summary = { ...preset.summary, name: request.name.trim(), description: request.description, pane_count: layout.nodes.filter((node) => !node.children.length).length, updated_at_unix_ms: previewNow() }
+    return structuredClone(preset.summary)
+  },
+  async openCodeLayoutPreset(request: CodeLayoutPresetOpenRequest): Promise<CodePaneLayout> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLayoutPresetOpenRequest, CodePaneLayout>('hiveory_command_open_code_layout_preset', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    const preset = previewCodeLayoutPresets.get(request.preset_id)
+    if (!workspace || !preset || preset.summary.workspace_id !== request.workspace_id) throw new Error('Layout preset was not found.')
+    if ((workspace.detail.layout.revision ?? 0) !== request.expected_revision) throw new Error('layout_conflict')
+    const layout = structuredClone(preset.layout)
+    layout.revision = request.expected_revision + 1
+    workspace.detail.layout = layout
+    return structuredClone(layout)
   },
   async applyCodePaneMutation(request: CodePaneMutationRequest): Promise<CodePaneMutationResult> {
     if (hiveoryIsTauri) return tauriCommand<CodePaneMutationRequest, CodePaneMutationResult>('hiveory_command_apply_code_pane_mutation', request)

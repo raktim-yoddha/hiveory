@@ -899,6 +899,51 @@ pub struct CodeSaveLayoutRequest {
     pub layout: CodePaneLayout,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLayoutPresetSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub pane_count: u32,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLayoutPresetQuery {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLayoutPresetCreateRequest {
+    pub workspace_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub layout: CodePaneLayout,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLayoutPresetUpdateRequest {
+    pub preset_id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub layout: Option<CodePaneLayout>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLayoutPresetOpenRequest {
+    pub preset_id: String,
+    pub workspace_id: String,
+    pub expected_revision: u64,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -3364,6 +3409,11 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodePaneNode::export_all(&config)?;
     CodePaneLayout::export_all(&config)?;
     CodeSaveLayoutRequest::export_all(&config)?;
+    CodeLayoutPresetSummary::export_all(&config)?;
+    CodeLayoutPresetQuery::export_all(&config)?;
+    CodeLayoutPresetCreateRequest::export_all(&config)?;
+    CodeLayoutPresetUpdateRequest::export_all(&config)?;
+    CodeLayoutPresetOpenRequest::export_all(&config)?;
     CodePanePlacement::export_all(&config)?;
     CodePanePreset::export_all(&config)?;
     CodePaneMutation::export_all(&config)?;

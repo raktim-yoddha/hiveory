@@ -3,12 +3,14 @@
 use super::{now_ms, HiveoryPersistence};
 use hiveory_code_domain::{migrate_layout_v1, migrate_layout_v2, CODE_LAYOUT_VERSION};
 use hiveory_protocol::{
-    CodeAgentLaunchMode, CodeDocumentSummary, CodePaneLayout, CodePreviewState, CodePreviewSummary,
-    CodeProjectKind, CodeProjectSummary, CodeTerminalKind, CodeTerminalState, CodeTerminalSummary,
-    CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeAgentLaunchMode, CodeDocumentSummary, CodeLayoutPresetCreateRequest,
+    CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodePaneLayout, CodePreviewState,
+    CodePreviewSummary, CodeProjectKind, CodeProjectSummary, CodeTerminalKind, CodeTerminalState,
+    CodeTerminalSummary, CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
 };
 use serde_json::Value;
 use sqlx::Row;
+use uuid::Uuid;
 
 /// Encrypted terminal history as stored by the durable terminal host.
 ///
@@ -23,6 +25,12 @@ pub struct CodeTerminalHistoryRecord {
     pub sequence: u64,
     pub payload: Vec<u8>,
     pub created_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeLayoutPresetRecord {
+    pub summary: CodeLayoutPresetSummary,
+    pub layout: CodePaneLayout,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -289,6 +297,101 @@ impl HiveoryPersistence {
         }
 
         Ok(layout)
+    }
+
+    pub async fn code_layout_presets(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<CodeLayoutPresetSummary>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, workspace_id, name, description, layout_json, created_at_unix_ms, updated_at_unix_ms FROM hiveory_code_layout_presets WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC, name COLLATE NOCASE",
+        )
+        .bind(workspace_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(code_layout_preset_summary_from_row)
+            .collect()
+    }
+
+    pub async fn code_layout_preset(
+        &self,
+        workspace_id: &str,
+        preset_id: &str,
+    ) -> Result<Option<CodeLayoutPresetRecord>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, workspace_id, name, description, layout_json, created_at_unix_ms, updated_at_unix_ms FROM hiveory_code_layout_presets WHERE workspace_id=? AND id=?",
+        )
+        .bind(workspace_id)
+        .bind(preset_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(code_layout_preset_record_from_row).transpose()
+    }
+
+    pub async fn create_code_layout_preset(
+        &self,
+        request: &CodeLayoutPresetCreateRequest,
+    ) -> Result<CodeLayoutPresetSummary, sqlx::Error> {
+        let now = now_ms();
+        let id = Uuid::now_v7().to_string();
+        let layout_json = serde_json::to_string(&request.layout)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        sqlx::query(
+            "INSERT INTO hiveory_code_layout_presets (id, workspace_id, name, description, layout_json, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(&request.workspace_id)
+        .bind(&request.name)
+        .bind(&request.description)
+        .bind(layout_json)
+        .bind(now)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+        Ok(CodeLayoutPresetSummary {
+            id,
+            workspace_id: request.workspace_id.clone(),
+            name: request.name.clone(),
+            description: request.description.clone(),
+            pane_count: code_layout_pane_count(&request.layout),
+            created_at_unix_ms: now,
+            updated_at_unix_ms: now,
+        })
+    }
+
+    pub async fn update_code_layout_preset(
+        &self,
+        request: &CodeLayoutPresetUpdateRequest,
+    ) -> Result<CodeLayoutPresetSummary, sqlx::Error> {
+        let existing = self
+            .code_layout_preset(&request.workspace_id, &request.preset_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::Protocol("Layout preset was not found.".to_owned()))?;
+        let layout = request.layout.as_ref().unwrap_or(&existing.layout);
+        let layout_json = serde_json::to_string(layout)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        let now = now_ms();
+        sqlx::query(
+            "UPDATE hiveory_code_layout_presets SET name=?, description=?, layout_json=?, updated_at_unix_ms=? WHERE workspace_id=? AND id=?",
+        )
+        .bind(&request.name)
+        .bind(&request.description)
+        .bind(layout_json)
+        .bind(now)
+        .bind(&request.workspace_id)
+        .bind(&request.preset_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(CodeLayoutPresetSummary {
+            id: request.preset_id.clone(),
+            workspace_id: request.workspace_id.clone(),
+            name: request.name.clone(),
+            description: request.description.clone(),
+            pane_count: code_layout_pane_count(layout),
+            created_at_unix_ms: existing.summary.created_at_unix_ms,
+            updated_at_unix_ms: now,
+        })
     }
 
     pub async fn save_code_document(
@@ -569,6 +672,51 @@ impl HiveoryPersistence {
         .await?;
         Ok(rows.into_iter().map(preview_from_row).collect())
     }
+}
+
+fn code_layout_pane_count(layout: &CodePaneLayout) -> u32 {
+    layout
+        .nodes
+        .iter()
+        .filter(|node| node.children.is_empty())
+        .count() as u32
+}
+
+fn code_layout_preset_summary_from_row(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<CodeLayoutPresetSummary, sqlx::Error> {
+    let layout_json: String = row.get(4);
+    let layout = serde_json::from_str::<CodePaneLayout>(&layout_json)
+        .map_err(|error| sqlx::Error::Protocol(format!("invalid layout preset: {error}")))?;
+    Ok(CodeLayoutPresetSummary {
+        id: row.get(0),
+        workspace_id: row.get(1),
+        name: row.get(2),
+        description: row.get(3),
+        pane_count: code_layout_pane_count(&layout),
+        created_at_unix_ms: row.get(5),
+        updated_at_unix_ms: row.get(6),
+    })
+}
+
+fn code_layout_preset_record_from_row(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<CodeLayoutPresetRecord, sqlx::Error> {
+    let layout_json: String = row.get(4);
+    let layout: CodePaneLayout = serde_json::from_str(&layout_json)
+        .map_err(|error| sqlx::Error::Protocol(format!("invalid layout preset: {error}")))?;
+    Ok(CodeLayoutPresetRecord {
+        summary: CodeLayoutPresetSummary {
+            id: row.get(0),
+            workspace_id: row.get(1),
+            name: row.get(2),
+            description: row.get(3),
+            pane_count: code_layout_pane_count(&layout),
+            created_at_unix_ms: row.get(5),
+            updated_at_unix_ms: row.get(6),
+        },
+        layout,
+    })
 }
 
 fn normalize_legacy_layout_json(layout_json: &str) -> Result<(Value, bool), serde_json::Error> {
@@ -873,6 +1021,76 @@ mod tests {
             .iter()
             .any(|record| record.payload == b"encrypted-input"));
         drop(reopened);
+        cleanup(&path);
+    }
+
+    #[tokio::test]
+    async fn layout_presets_are_scoped_and_updateable() {
+        let path =
+            std::env::temp_dir().join(format!("hiveory-layout-presets-{}.sqlite3", Uuid::now_v7()));
+        let persistence = HiveoryPersistence::open(&path)
+            .await
+            .expect("open database");
+        let workspace_id = "workspace-layout-presets".to_owned();
+        persistence
+            .save_code_workspace(&CodeWorkspaceSummary {
+                id: workspace_id.clone(),
+                host_id: "local".to_owned(),
+                display_name: "Preset fixture".to_owned(),
+                root_path: std::env::temp_dir().to_string_lossy().into_owned(),
+                repository_name: None,
+                branch: None,
+                is_git_repository: false,
+                trust: CodeWorkspaceTrust::Trusted,
+                capabilities: capabilities_for_trust(CodeWorkspaceTrust::Trusted),
+                project_id: "project-layout-presets".to_owned(),
+                workspace_kind: CodeWorkspaceKind::Primary,
+                worktree_name: None,
+                base_ref: None,
+                parent_workspace_id: None,
+                managed_by_app: false,
+                available: true,
+                unavailable_reason: None,
+                updated_at_unix_ms: now_ms(),
+            })
+            .await
+            .expect("save workspace");
+        let layout = hiveory_code_domain::default_layout(&workspace_id);
+        let created = persistence
+            .create_code_layout_preset(&CodeLayoutPresetCreateRequest {
+                workspace_id: workspace_id.clone(),
+                name: "Review".to_owned(),
+                description: Some("Review panes".to_owned()),
+                layout: layout.clone(),
+            })
+            .await
+            .expect("create preset");
+        assert_eq!(
+            persistence
+                .code_layout_presets(&workspace_id)
+                .await
+                .expect("list presets"),
+            vec![created.clone()]
+        );
+        let updated = persistence
+            .update_code_layout_preset(&CodeLayoutPresetUpdateRequest {
+                preset_id: created.id.clone(),
+                workspace_id: workspace_id.clone(),
+                name: "Release review".to_owned(),
+                description: None,
+                layout: None,
+            })
+            .await
+            .expect("update preset");
+        assert_eq!(updated.name, "Release review");
+        let stored = persistence
+            .code_layout_preset(&workspace_id, &created.id)
+            .await
+            .expect("load preset")
+            .expect("preset exists");
+        assert_eq!(stored.summary, updated);
+        assert_eq!(stored.layout, layout);
+        drop(persistence);
         cleanup(&path);
     }
 }
