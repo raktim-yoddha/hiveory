@@ -1550,6 +1550,19 @@
   width: 100%;
 }
 
+.code-launcher-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+.code-launcher-status {
+  margin: -6px 0 0;
+  color: #aeb3bc;
+  font-size: 12px;
+}
+
 .code-launcher-card {
   display: flex;
   align-items: flex-start;
@@ -1576,6 +1589,12 @@
 .code-launcher-card:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+@media (max-width: 620px) {
+  .code-launcher-actions {
+    grid-template-columns: 1fr;
+  }
 }
 
 .code-launcher-icon {

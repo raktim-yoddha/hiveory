@@ -9,9 +9,9 @@ import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch, type Yolo
 interface CodeSplitPanePickerProps {
   open: boolean
   anchorRef: { current: HTMLButtonElement | null }
-  splitSide: Extract<CodePanePlacement, 'right' | 'bottom'>
+  splitSide?: Extract<CodePanePlacement, 'right' | 'bottom'>
   adapters: CodeAdapterSummary[]
-  onSplitSideChange: (side: Extract<CodePanePlacement, 'right' | 'bottom'>) => void
+  onSplitSideChange?: (side: Extract<CodePanePlacement, 'right' | 'bottom'>) => void
   onSelect: (
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
@@ -19,6 +19,7 @@ interface CodeSplitPanePickerProps {
     agentLaunchMode?: CodeAgentLaunchMode,
   ) => void
   onClose: () => void
+  mode?: 'split' | 'pane'
 }
 
 interface SplitPaneOption {
@@ -40,6 +41,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
   onSplitSideChange,
   onSelect,
   onClose,
+  mode = 'split',
 }) => {
   const menuRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -131,7 +133,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       ref={menuRef}
       className="code-split-dropdown"
       role="menu"
-      aria-label="Add split pane"
+      aria-label={mode === 'split' ? 'Add split pane' : 'Add pane'}
       style={{
         top: position.top,
         left: position.left,
@@ -142,15 +144,15 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="code-split-dropdown-header">
-        <span className="code-dialog-eyebrow">Add split pane</span>
-        <span>Choose direction and pane type</span>
+        <span className="code-dialog-eyebrow">{mode === 'split' ? 'Add split pane' : 'Add pane'}</span>
+        <span>{mode === 'split' ? 'Choose direction and pane type' : 'Choose a pane type'}</span>
       </div>
 
-      <div className="code-split-direction-tabs" role="group" aria-label="Split direction">
+      {mode === 'split' && <div className="code-split-direction-tabs" role="group" aria-label="Split direction">
         <button
           type="button"
           className={`code-split-tab ${splitSide === 'right' ? 'is-active' : ''}`}
-          onClick={() => onSplitSideChange('right')}
+          onClick={() => onSplitSideChange?.('right')}
         >
           <Columns size={14} />
           <span>Split Right</span>
@@ -158,12 +160,12 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
         <button
           type="button"
           className={`code-split-tab ${splitSide === 'bottom' ? 'is-active' : ''}`}
-          onClick={() => onSplitSideChange('bottom')}
+          onClick={() => onSplitSideChange?.('bottom')}
         >
           <Rows size={14} />
           <span>Split Down</span>
         </button>
-      </div>
+      </div>}
 
       <label className="code-split-search">
         <Search size={14} aria-hidden="true" />

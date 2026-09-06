@@ -122,11 +122,15 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
       case 'empty':
         return (
           <CodePaneLauncher
-            paneId={node.pane_id}
-            onLaunchShell={(shellId) => void launchTerminal(node.pane_id, 'shell', shellId)}
-            onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
-            onOpenPreview={(url) => void openPreview(node.pane_id, url)}
-            onCreateMarkdown={() => void createMarkdown(node.pane_id)}
+            onLaunch={(kind, adapterId, url, agentLaunchMode) => {
+              if (kind === 'shell' || kind === 'coding_agent') {
+                void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
+              } else if (kind === 'preview') {
+                void openPreview(node.pane_id, url ?? 'https://www.google.com')
+              } else {
+                void createMarkdown(node.pane_id)
+              }
+            }}
           />
         )
       case 'terminal':
@@ -134,11 +138,15 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         if (!node.resource_id || !terminalSummary) {
           return (
             <CodePaneLauncher
-              paneId={node.pane_id}
-              onLaunchShell={(shellId) => void launchTerminal(node.pane_id, 'shell', shellId)}
-              onLaunchAgent={(adapterId, model) => void launchTerminal(node.pane_id, 'coding_agent', adapterId, model)}
-              onOpenPreview={(url) => void openPreview(node.pane_id, url)}
-              onCreateMarkdown={() => void createMarkdown(node.pane_id)}
+              onLaunch={(kind, adapterId, url, agentLaunchMode) => {
+                if (kind === 'shell' || kind === 'coding_agent') {
+                  void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
+                } else if (kind === 'preview') {
+                  void openPreview(node.pane_id, url ?? 'https://www.google.com')
+                } else {
+                  void createMarkdown(node.pane_id)
+                }
+              }}
             />
           )
         }

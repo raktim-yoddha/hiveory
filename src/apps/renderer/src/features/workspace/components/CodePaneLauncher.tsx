@@ -1,247 +1,92 @@
-import React, { useEffect, useState } from 'react'
-import { CheckCircle2, ChevronRight, FileText, Globe, Terminal, X } from 'lucide-react'
-import { DEFAULT_BROWSER_HOME, hiveoryClient, type CodeAdapterSummary } from '../../../shared/api/hiveory-client'
-import { CliBrandIcon } from './CliIcons'
+import React, { useEffect, useRef, useState } from 'react'
+import { LayoutTemplate, Plus } from 'lucide-react'
+import {
+  hiveoryClient,
+  type CodeAdapterSummary,
+  type CodeAgentLaunchMode,
+} from '../../../shared/api/hiveory-client'
+import { CodeSplitPanePicker } from './CodeSplitPanePicker'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneLauncherProps {
-  paneId: string
-  onLaunchShell: (shellId: 'cmd' | 'powershell' | 'git-bash') => void
-  onLaunchAgent: (adapterId: string, model: string | null) => void
-  onOpenPreview: (url: string) => void
-  onCreateMarkdown: () => void
+  onLaunch: (
+    kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
+    adapterId?: string | null,
+    url?: string,
+    agentLaunchMode?: CodeAgentLaunchMode,
+  ) => void
 }
 
-export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({
-  onLaunchShell,
-  onLaunchAgent,
-  onOpenPreview,
-  onCreateMarkdown,
-}) => {
+export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ onLaunch }) => {
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
-  const [showCliModal, setShowCliModal] = useState(false)
-  const [selectedAdapter, setSelectedAdapter] = useState<CodeAdapterSummary | null>(null)
-  const [model, setModel] = useState('default')
-  const [previewUrl, setPreviewUrl] = useState(DEFAULT_BROWSER_HOME)
-  const [showUrlInput, setShowUrlInput] = useState(false)
-  const [showShellPicker, setShowShellPicker] = useState(false)
-  useBrowserSurfaceBlocker(showCliModal, 'pane-launcher-dialog')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [presetMessage, setPresetMessage] = useState<string | null>(null)
+  const addPaneTriggerRef = useRef<HTMLButtonElement>(null)
+  useBrowserSurfaceBlocker(pickerOpen, 'pane-launcher-dialog')
 
   useEffect(() => {
     let mounted = true
     void hiveoryClient.codeSnapshot().then((snapshot) => {
-      if (mounted) {
-        setAdapters(snapshot.adapters)
-        const firstDetected = snapshot.adapters.find((a) => a.detected) || snapshot.adapters[0] || null
-        setSelectedAdapter(firstDetected)
-      }
+      if (mounted) setAdapters(snapshot.adapters.filter((adapter) => adapter.detected))
     })
     return () => {
       mounted = false
     }
   }, [])
 
-  const handleSelectAndLaunch = (adapter: CodeAdapterSummary) => {
-    setSelectedAdapter(adapter)
-  }
-
-  const handleConfirmLaunch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedAdapter) return
-    onLaunchAgent(selectedAdapter.id, model.trim() === 'default' ? null : model.trim() || null)
-    setShowCliModal(false)
-  }
-
-  const detectedCount = adapters.filter((a) => a.detected).length
-
   return (
     <div className="code-empty-pane">
       <div className="code-launcher-container">
         <div className="code-launcher-header">
           <h2>Start a workspace pane</h2>
-          <p>Open a shell, coding agent, Browser, or Markdown document.</p>
+          <p>Add a terminal, coding agent, Browser, or Markdown document.</p>
         </div>
 
-        <div className="code-launcher-grid">
-          {/* 1. Terminal */}
-          <button type="button" className="code-launcher-card" onClick={() => setShowShellPicker((open) => !open)}>
-            <span className="code-launcher-icon"><Terminal size={17} aria-hidden="true" /></span>
+        <div className="code-launcher-actions">
+          <button
+            ref={addPaneTriggerRef}
+            type="button"
+            className="code-launcher-card"
+            aria-haspopup="menu"
+            aria-expanded={pickerOpen}
+            onClick={() => {
+              setPresetMessage(null)
+              setPickerOpen((open) => !open)
+            }}
+          >
+            <span className="code-launcher-icon"><Plus size={18} aria-hidden="true" /></span>
             <span>
-              <span className="code-launcher-card-title">Terminal</span>
-              <span className="code-launcher-card-desc">CMD, PowerShell, or Git Bash</span>
+              <span className="code-launcher-card-title">Add pane</span>
+              <span className="code-launcher-card-desc">Choose a terminal, agent, Browser, or document</span>
             </span>
           </button>
-          {showShellPicker && (
-            <div className="code-shell-picker" role="group" aria-label="Select terminal shell">
-              {([
-                ['cmd', 'Command Prompt'],
-                ['powershell', 'PowerShell'],
-                ['git-bash', 'Git Bash'],
-              ] as const).map(([id, label]) => (
-                <button key={id} type="button" onClick={() => { onLaunchShell(id); setShowShellPicker(false) }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* 2. Coding Agent / CLI */}
           <button
             type="button"
             className="code-launcher-card"
-            onClick={() => setShowCliModal(true)}
+            onClick={() => {
+              setPickerOpen(false)
+              setPresetMessage('Pane presets are coming soon.')
+            }}
           >
-            <span className="code-launcher-icon" style={{ color: '#f59e0b' }}>
-              <span style={{ fontSize: 16, fontWeight: 700 }}>✳</span>
-            </span>
+            <span className="code-launcher-icon"><LayoutTemplate size={18} aria-hidden="true" /></span>
             <span>
-              <span className="code-launcher-card-title">CLI Agent</span>
-              <span className="code-launcher-card-desc">
-                {detectedCount > 0 ? `${detectedCount} agent${detectedCount > 1 ? 's' : ''} available` : 'Launch coding CLI'}
-              </span>
+              <span className="code-launcher-card-title">Load presets</span>
+              <span className="code-launcher-card-desc">Reuse a saved pane layout</span>
             </span>
           </button>
-
-          {/* 3. Markdown */}
-          <button type="button" className="code-launcher-card" onClick={onCreateMarkdown}>
-            <span className="code-launcher-icon"><FileText size={17} aria-hidden="true" /></span>
-            <span>
-              <span className="code-launcher-card-title">Markdown</span>
-              <span className="code-launcher-card-desc">Create a Markdown document</span>
-            </span>
-          </button>
-
-          {/* 4. Browser */}
-          {showUrlInput ? (
-            <form
-              className="code-launcher-card code-launcher-url-card"
-              onSubmit={(event) => {
-                event.preventDefault()
-                onOpenPreview(previewUrl)
-              }}
-            >
-              <span className="code-launcher-icon"><Globe size={17} aria-hidden="true" /></span>
-              <input
-                className="code-preview-url-input"
-                value={previewUrl}
-                onChange={(event) => setPreviewUrl(event.target.value)}
-                placeholder="http://localhost:3000"
-                aria-label="Browser address"
-                autoFocus
-              />
-              <button type="submit" className="code-primary-button">Open</button>
-            </form>
-          ) : (
-            <button type="button" className="code-launcher-card" onClick={() => setShowUrlInput(true)}>
-              <span className="code-launcher-icon"><Globe size={17} aria-hidden="true" /></span>
-              <span>
-                <span className="code-launcher-card-title">Browser</span>
-                <span className="code-launcher-card-desc">Browse a local app or the web</span>
-              </span>
-            </button>
-          )}
         </div>
+
+        {presetMessage && <p className="code-launcher-status" role="status">{presetMessage}</p>}
       </div>
 
-      {/* CLI Agent Selection Modal */}
-      {showCliModal && (
-        <div
-          className="code-launch-dialog-backdrop"
-          role="presentation"
-          onMouseDown={() => setShowCliModal(false)}
-        >
-          <div
-            className="code-cli-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="code-cli-dialog-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="code-cli-dialog-header">
-              <div>
-                <span className="code-dialog-eyebrow">Command-line Agents</span>
-                <h3 id="code-cli-dialog-title">Select Coding Agent</h3>
-              </div>
-              <button
-                type="button"
-                className="code-pane-action-btn"
-                onClick={() => setShowCliModal(false)}
-                aria-label="Close"
-              >
-                <X size={15} aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="code-cli-list">
-              {adapters.map((adapter) => {
-                const isSelected = selectedAdapter?.id === adapter.id
-                return (
-                  <button
-                    type="button"
-                    key={adapter.id}
-                    className={`code-cli-list-item ${isSelected ? 'is-selected' : ''} ${!adapter.detected ? 'is-disabled' : ''}`}
-                    disabled={!adapter.detected}
-                    onClick={() => handleSelectAndLaunch(adapter)}
-                  >
-                    <div className="code-cli-item-left">
-                      <span className="code-cli-icon">
-                        <CliBrandIcon identifier={adapter.id} size={16} />
-                      </span>
-                      <div className="code-cli-info">
-                        <span className="code-cli-name">{adapter.display_name}</span>
-                        <span className="code-cli-desc">
-                          {adapter.detected ? 'Installed on PATH' : 'Not detected'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="code-cli-item-right">
-                      {adapter.detected ? (
-                        <span className="code-cli-status-badge ready">
-                          <CheckCircle2 size={12} /> Ready
-                        </span>
-                      ) : (
-                        <span className="code-cli-status-badge missing">Not installed</span>
-                      )}
-                      <ChevronRight size={14} className="code-cli-arrow" />
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-
-            {selectedAdapter && (
-              <form onSubmit={handleConfirmLaunch} className="code-cli-launch-form">
-                <div className="code-cli-model-row">
-                  <label htmlFor="code-cli-model-input">Model / Arguments:</label>
-                  <input
-                    id="code-cli-model-input"
-                    className="code-cli-model-input"
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="default"
-                  />
-                </div>
-                <div className="code-cli-dialog-footer">
-                  <button
-                    type="button"
-                    className="code-secondary-button"
-                    onClick={() => setShowCliModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="code-primary-button"
-                    disabled={!selectedAdapter.detected}
-                  >
-                    Launch {selectedAdapter.display_name}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
+      <CodeSplitPanePicker
+        open={pickerOpen}
+        anchorRef={addPaneTriggerRef}
+        adapters={adapters}
+        mode="pane"
+        onSelect={(kind, adapterId, url, agentLaunchMode) => onLaunch(kind, adapterId, url, agentLaunchMode)}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   )
 }
