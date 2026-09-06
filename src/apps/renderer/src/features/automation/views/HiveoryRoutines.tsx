@@ -1,4 +1,4 @@
-import { CalendarClock, CheckCircle2, Clock3, Edit3, History, Play, Plus, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react'
+import { CheckCircle2, Edit3, History, Play, Plus, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { hiveoryClient, type AgentFolderGrant, type AgentPluginGrant, type AgentSummary, type PluginCatalogEntry, type PluginConnectionSummary, type RoutineCreateRequest, type RoutineDetail, type RoutineExecution, type RoutineSummary, type RoutineUpdateRequest } from '../../../shared/api/hiveory-client'
 
@@ -19,7 +19,9 @@ const defaultRoutineRequest = (agentId: string): RoutineCreateRequest => ({
   approval_timeout_seconds: 300,
 })
 
-const automationTemplates: Array<Pick<RoutineCreateRequest, 'name' | 'description' | 'prompt_template' | 'schedule'>> = [
+type AutomationTemplate = Pick<RoutineCreateRequest, 'name' | 'description' | 'prompt_template' | 'schedule'>
+
+const automationTemplates: AutomationTemplate[] = [
   { name: 'Weekday repo audit', description: 'Check dependencies, failing tests, and risky open changes each weekday.', prompt_template: 'Review repository health. Check dependencies, failing tests, lint and typecheck status, and risky open changes. Summarize the findings and recommend the next action.', schedule: { expression: '0 9 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
   { name: 'Release readiness', description: 'Prepare a weekly release risk summary from the current project state.', prompt_template: 'Review the current project for release readiness. Report unresolved changes, failing validation, dependency risks, and the highest-priority release blockers.', schedule: { expression: '0 10 * * 5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
   { name: 'Daily change review', description: 'Summarize recent work and flag correctness, UX, and test coverage risks.', prompt_template: 'Review the latest local project changes. Identify correctness risks, UX regressions, missing tests, and specific next actions. Keep the report concise and evidence-based.', schedule: { expression: '0 17 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
@@ -44,6 +46,9 @@ export function HiveoryRoutines() {
   const [editing, setEditing] = useState<RoutineDetail | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [includeArchived, setIncludeArchived] = useState(false)
+  const [query, setQuery] = useState('')
+  const [template, setTemplate] = useState<AutomationTemplate | null>(null)
+  const [showDetail, setShowDetail] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
 
@@ -64,8 +69,11 @@ export function HiveoryRoutines() {
 
   useEffect(() => { void refresh() }, [refresh])
 
-  const activeCount = routines.filter((routine) => routine.enabled && !routine.archived).length
-  const nextScheduled = routines.filter((routine) => routine.enabled && routine.next_run_unix_ms !== null).sort((a, b) => (a.next_run_unix_ms ?? Infinity) - (b.next_run_unix_ms ?? Infinity))[0]
+  const visibleRoutines = routines.filter((routine) => {
+    const needle = query.trim().toLocaleLowerCase()
+    return !needle || [routine.name, routine.description, routine.agent_name, scheduleLabel(routine)]
+      .some((value) => value.toLocaleLowerCase().includes(needle))
+  })
 
   const runAction = async (key: string, action: () => Promise<void>, message: string) => {
     setBusy(key); setFeedback(null)
@@ -74,49 +82,55 @@ export function HiveoryRoutines() {
 
   const selectRoutine = async (routine: RoutineSummary) => {
     setBusy(`select-${routine.id}`)
-    try { setSelected(await hiveoryClient.routine(routine.id)) } catch (error) { setFeedback(error instanceof Error ? error.message : 'Routine details could not be loaded.') } finally { setBusy(null) }
+    try { setSelected(await hiveoryClient.routine(routine.id)); setShowDetail(true) } catch (error) { setFeedback(error instanceof Error ? error.message : 'Routine details could not be loaded.') } finally { setBusy(null) }
   }
 
   const saveRoutine = async (request: RoutineCreateRequest | RoutineUpdateRequest) => {
     setBusy('save'); setFeedback(null)
     try {
       const detail = 'routine_id' in request ? await hiveoryClient.updateRoutine(request) : await hiveoryClient.createRoutine(request)
-      setShowForm(false); setEditing(null); setSelected(detail); setFeedback('Routine saved. Its next occurrence is now durable.'); await refresh(detail.summary.id)
+      setShowForm(false); setEditing(null); setTemplate(null); setSelected(detail); setShowDetail(true); setFeedback('Routine saved. Its next occurrence is now durable.'); await refresh(detail.summary.id)
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'The routine could not be saved.') } finally { setBusy(null) }
   }
 
-  return <section className="hiveory-automation" aria-labelledby="hiveory-routines-title">
-    <div className="hiveory-content-header hiveory-automation-header">
-      <div className="hiveory-agent-heading-mark"><CalendarClock size={22} aria-hidden="true" /></div>
-      <div><p className="hiveory-eyebrow">Durable local automation</p><h1 id="hiveory-routines-title">Automations</h1></div>
-      <div className="hiveory-agent-header-actions"><span className="hiveory-local-badge"><ShieldCheck size={12} />Local scheduler</span><button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></button><button onClick={() => { setEditing(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</button></div>
-    </div>
-    <p className="hiveory-description">Time-zone aware schedules that launch bounded Agent runs. Every occurrence, approval, and failure stays inspectable.</p>
-    <div className="hiveory-automation-stats" aria-label="Routine summary">
-      <div><span>Enabled</span><strong>{activeCount}</strong><small>running schedules</small></div>
-      <div><span>Next occurrence</span><strong>{nextScheduled ? formatTime(nextScheduled.next_run_unix_ms) : '—'}</strong><small>{nextScheduled ? nextScheduled.name : 'nothing queued'}</small></div>
-      <div><span>Policy</span><strong>Bounded</strong><small>10 catch-up slots · 15 min requests</small></div>
-    </div>
-    <div className="hiveory-automation-toolbar"><label className="hiveory-checkbox"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} /><span>Show archived</span></label><span className="hiveory-toolbar-count">{routines.length} configured</span></div>
-    {!routines.length && agents.length > 0 && <section className="hiveory-automation-templates" aria-labelledby="hiveory-template-title"><div><p className="hiveory-eyebrow">Start from a template</p><h2 id="hiveory-template-title">Local automation templates</h2></div><div>{automationTemplates.map((template) => <button key={template.name} type="button" disabled={busy !== null} onClick={() => void saveRoutine({ ...defaultRoutineRequest(agents[0].id), ...template })}><small>{template.schedule.expression}</small><strong>{template.name}</strong><span>{template.description}</span></button>)}</div></section>}
-    <div className="hiveory-automation-layout">
-      <div className="hiveory-routine-list" aria-label="Configured routines">
-        {routines.length ? routines.map((routine) => <button key={routine.id} className={`hiveory-routine-row ${selected?.summary.id === routine.id ? 'is-selected' : ''}`} onClick={() => void selectRoutine(routine)} disabled={busy === `select-${routine.id}`}>
-          <span className={`hiveory-state-dot ${routine.enabled ? 'running' : routine.archived ? 'interrupted' : 'queued'}`} />
-          <span className="hiveory-routine-row-copy"><strong>{routine.name}</strong><small>{routine.agent_name} · {scheduleLabel(routine)}</small><small>{routine.last_execution_state ? executionLabels[routine.last_execution_state] : 'No executions yet'} · next {formatTime(routine.next_run_unix_ms)}</small></span>
-          <span className="hiveory-routine-row-action">{routine.enabled ? 'Enabled' : routine.archived ? 'Archived' : 'Paused'}</span>
-        </button>) : <div className="hiveory-empty-panel"><CalendarClock size={24} /><p>No automations configured. Start with the Weekday repo audit template or create a custom local schedule.</p><button onClick={() => { setEditing(null); setShowForm(true) }} disabled={!agents.length}><Plus size={14} />Use template</button></div>}
+  return <section className="hiveory-automation hiveory-automation-orca" aria-labelledby="hiveory-routines-title">
+    <header className="hiveory-automation-orca-header">
+      <h1 id="hiveory-routines-title">Automations</h1>
+      <div className="hiveory-automation-orca-controls">
+        <label className="hiveory-automation-orca-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." aria-label="Search automations" /></label>
+        <label className="hiveory-automation-orca-filter"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Show archived</label>
+        <button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></button>
+        <button onClick={() => { setEditing(null); setTemplate(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</button>
       </div>
-      {selected ? <RoutineDetailPanel detail={selected} busy={busy} onRun={() => void runAction(`run-${selected.summary.id}`, async () => { await hiveoryClient.runRoutineNow(selected.summary.id) }, 'Routine run queued.')} onEdit={() => { setEditing(selected); setShowForm(true) }} onArchive={() => void runAction(`archive-${selected.summary.id}`, async () => { await hiveoryClient.archiveRoutine(selected.summary.id) }, 'Routine archived.')} /> : <div className="hiveory-automation-detail hiveory-empty-panel"><Clock3 size={24} /><p>Select a routine to inspect its schedule and execution history.</p></div>}
-    </div>
+    </header>
+    <section className="hiveory-automation-orca-surface" aria-label="Local automations">
+      {visibleRoutines.length > 0 && <div className="hiveory-automation-orca-list">
+        {visibleRoutines.map((routine) => <button key={routine.id} className="hiveory-automation-orca-row" onClick={() => void selectRoutine(routine)} disabled={busy === `select-${routine.id}`}>
+          <span className={`hiveory-state-dot ${routine.enabled ? 'running' : routine.archived ? 'interrupted' : 'queued'}`} />
+          <span><strong>{routine.name}</strong><small>{routine.description || 'No description provided.'}</small></span>
+          <span className="hiveory-automation-orca-row-meta">{routine.enabled ? 'Enabled' : routine.archived ? 'Archived' : 'Paused'} · next {formatTime(routine.next_run_unix_ms)}</span>
+        </button>)}
+      </div>}
+      {!visibleRoutines.length && <div className="hiveory-automation-orca-empty">
+        <strong>{routines.length ? 'No matching automations' : 'No automations across loaded hosts'}</strong>
+        <span>{routines.length ? 'Change the search or filter to see configured schedules.' : 'Create a schedule or start from one of the local templates below.'}</span>
+      </div>}
+      {agents.length > 0 && <div className="hiveory-automation-orca-templates" aria-labelledby="hiveory-template-title">
+        <h2 id="hiveory-template-title">Start from a template</h2>
+        {automationTemplates.map((item) => <button key={item.name} type="button" disabled={busy !== null} onClick={() => { setEditing(null); setTemplate(item); setShowForm(true) }}>
+          <small>{item.schedule.expression}</small><strong>{item.name}</strong><span>{item.description}</span>
+        </button>)}
+      </div>}
+    </section>
     {feedback && <div className="hiveory-feedback" role="status">{feedback}</div>}
-    {showForm && <RoutineFormDialog agents={agents} initial={editing} busy={busy === 'save'} onCancel={() => { setShowForm(false); setEditing(null) }} onSave={saveRoutine} />}
+    {showDetail && selected && <div className="hiveory-modal-backdrop" role="presentation"><RoutineDetailPanel detail={selected} busy={busy} onClose={() => setShowDetail(false)} onRun={() => void runAction(`run-${selected.summary.id}`, async () => { await hiveoryClient.runRoutineNow(selected.summary.id) }, 'Routine run queued.')} onEdit={() => { setEditing(selected); setShowDetail(false); setShowForm(true) }} onArchive={() => void runAction(`archive-${selected.summary.id}`, async () => { await hiveoryClient.archiveRoutine(selected.summary.id) }, 'Routine archived.')} /></div>}
+    {showForm && <RoutineFormDialog agents={agents} initial={editing} template={template} busy={busy === 'save'} onCancel={() => { setShowForm(false); setEditing(null); setTemplate(null) }} onSave={saveRoutine} />}
   </section>
 }
 
-function RoutineDetailPanel({ detail, busy, onRun, onEdit, onArchive }: { detail: RoutineDetail; busy: string | null; onRun: () => void; onEdit: () => void; onArchive: () => void }) {
-  return <section className="hiveory-automation-detail" aria-labelledby="hiveory-routine-detail-title">
-    <div className="hiveory-panel-heading"><div><p className="hiveory-eyebrow">Routine detail</p><h2 id="hiveory-routine-detail-title">{detail.summary.name}</h2></div><div className="hiveory-inline-actions"><button className="is-secondary" onClick={onEdit} disabled={busy !== null}><Edit3 size={14} />Edit</button><button onClick={onRun} disabled={busy !== null || detail.summary.archived}><Play size={14} />{busy?.startsWith('run-') ? 'Queueing…' : 'Run now'}</button></div></div>
+function RoutineDetailPanel({ detail, busy, onClose, onRun, onEdit, onArchive }: { detail: RoutineDetail; busy: string | null; onClose: () => void; onRun: () => void; onEdit: () => void; onArchive: () => void }) {
+  return <section className="hiveory-automation-detail hiveory-routine-detail-modal" role="dialog" aria-modal="true" aria-labelledby="hiveory-routine-detail-title">
+    <div className="hiveory-panel-heading"><div><p className="hiveory-eyebrow">Routine detail</p><h2 id="hiveory-routine-detail-title">{detail.summary.name}</h2></div><div className="hiveory-inline-actions"><button className="is-secondary" onClick={onEdit} disabled={busy !== null}><Edit3 size={14} />Edit</button><button onClick={onRun} disabled={busy !== null || detail.summary.archived}><Play size={14} />{busy?.startsWith('run-') ? 'Queueing…' : 'Run now'}</button><button className="hiveory-icon-button" onClick={onClose} aria-label="Close automation detail"><X size={16} /></button></div></div>
     <p className="hiveory-muted-copy">{detail.summary.description || 'No description provided.'}</p>
     <div className="hiveory-routine-detail-grid"><div><span>Schedule</span><strong>{scheduleLabel(detail.summary)}</strong></div><div><span>Next run</span><strong>{formatTime(detail.summary.next_run_unix_ms)}</strong></div><div><span>Catch-up</span><strong>{detail.summary.catch_up.replaceAll('_', ' ')}</strong></div><div><span>Concurrency</span><strong>{detail.summary.concurrency.replaceAll('_', ' ')}</strong></div><div><span>Delivery</span><strong>{detail.summary.delivery.replaceAll('_', ' ')}</strong></div><div><span>Limits</span><strong>{detail.max_tool_calls} tools · {detail.max_duration_seconds}s</strong></div></div>
     <div className="hiveory-routine-prompt"><div className="hiveory-card-heading"><ShieldCheck size={15} /><h3>Prompt snapshot</h3></div><pre>{detail.prompt_template}</pre></div>
@@ -129,8 +143,8 @@ function ExecutionRow({ execution }: { execution: RoutineExecution }) {
   return <div className="hiveory-execution-row"><span className={`hiveory-state-dot ${execution.state}`} /><span><strong>{executionLabels[execution.state]}</strong><small>{formatTime(execution.scheduled_for_unix_ms)} · {execution.occurrence_key.startsWith('manual:') ? 'manual run' : execution.occurrence_key}</small></span><span className="hiveory-execution-result">{execution.error ?? execution.report ?? 'No report'}</span></div>
 }
 
-function RoutineFormDialog({ agents, initial, busy, onCancel, onSave }: { agents: AgentSummary[]; initial: RoutineDetail | null; busy: boolean; onCancel: () => void; onSave: (request: RoutineCreateRequest | RoutineUpdateRequest) => void }) {
-  const seed = initial ? { name: initial.summary.name, description: initial.summary.description, agent_id: initial.summary.agent_id, prompt_template: initial.prompt_template, schedule: initial.summary.schedule, enabled: initial.summary.enabled, catch_up: initial.summary.catch_up, concurrency: initial.summary.concurrency, delivery: initial.summary.delivery, folder_grant_ids: initial.folder_grant_ids, plugin_tool_names: initial.plugin_tool_names, max_duration_seconds: initial.max_duration_seconds, max_tool_calls: initial.max_tool_calls, approval_timeout_seconds: initial.approval_timeout_seconds } : defaultRoutineRequest(agents[0]?.id ?? '')
+function RoutineFormDialog({ agents, initial, template, busy, onCancel, onSave }: { agents: AgentSummary[]; initial: RoutineDetail | null; template: AutomationTemplate | null; busy: boolean; onCancel: () => void; onSave: (request: RoutineCreateRequest | RoutineUpdateRequest) => void }) {
+  const seed = initial ? { name: initial.summary.name, description: initial.summary.description, agent_id: initial.summary.agent_id, prompt_template: initial.prompt_template, schedule: initial.summary.schedule, enabled: initial.summary.enabled, catch_up: initial.summary.catch_up, concurrency: initial.summary.concurrency, delivery: initial.summary.delivery, folder_grant_ids: initial.folder_grant_ids, plugin_tool_names: initial.plugin_tool_names, max_duration_seconds: initial.max_duration_seconds, max_tool_calls: initial.max_tool_calls, approval_timeout_seconds: initial.approval_timeout_seconds } : { ...defaultRoutineRequest(agents[0]?.id ?? ''), ...template }
   const [form, setForm] = useState(seed)
   const [folders, setFolders] = useState<AgentFolderGrant[]>([])
   const [plugins, setPlugins] = useState<PluginCatalogEntry[]>([])
