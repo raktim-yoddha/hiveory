@@ -6,6 +6,7 @@ import {
   type CodePaneMutation,
   type CodePanePlacement,
   type CodePanePreset,
+  type CodeAgentLaunchMode,
   type CodeTerminalKind,
   type CodeTerminalSummary,
   type CodePreviewSummary,
@@ -28,7 +29,8 @@ export interface CodeWorkspaceController {
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     model?: string | null,
-    url?: string
+    url?: string,
+    agentLaunchMode?: CodeAgentLaunchMode,
   ) => Promise<void>
   renamePane: (paneId: string, title: string) => Promise<void>
   movePane: (paneId: string, targetPaneId: string, placement: CodePanePlacement) => Promise<void>
@@ -36,7 +38,7 @@ export interface CodeWorkspaceController {
   focusPane: (paneId: string) => Promise<void>
   toggleMaximize: (paneId?: string | null) => Promise<void>
   applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
-  launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => Promise<void>
+  launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null, agentLaunchMode?: CodeAgentLaunchMode) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   updatePreviewState: (state: BrowserRuntimeState) => void
   createMarkdown: (paneId: string) => Promise<void>
@@ -230,7 +232,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
       adapterId?: string | null,
       model?: string | null,
-      url?: string
+      url?: string,
+      agentLaunchMode: CodeAgentLaunchMode = 'standard',
     ) => {
       await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
@@ -271,6 +274,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
                   kind,
                   adapter_id: adapterId ?? null,
                   model: model ?? null,
+                  agent_launch_mode: agentLaunchMode,
                   cols: 80,
                   rows: 24,
                 })
@@ -414,7 +418,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   )
 
   const launchTerminal = useCallback(
-    async (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null) => {
+    async (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null, agentLaunchMode: CodeAgentLaunchMode = 'standard') => {
       await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
@@ -436,6 +440,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             kind,
             adapter_id: adapterId ?? null,
             model: model ?? null,
+            agent_launch_mode: agentLaunchMode,
             cols: 80,
             rows: 24,
           })
@@ -453,8 +458,9 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               pane_id: paneId,
               expected_revision: curRev,
               kind,
-              adapter_id: adapterId ?? null,
-              model: model ?? null,
+            adapter_id: adapterId ?? null,
+            model: model ?? null,
+            agent_launch_mode: agentLaunchMode,
               cols: 80,
               rows: 24,
             })
@@ -469,8 +475,9 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               pane_id: paneId,
               expected_revision: stateRef.current.revision,
               kind,
-              adapter_id: adapterId ?? null,
-              model: model ?? null,
+            adapter_id: adapterId ?? null,
+            model: model ?? null,
+            agent_launch_mode: agentLaunchMode,
               cols: 80,
               rows: 24,
             })

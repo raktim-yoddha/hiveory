@@ -3,6 +3,17 @@ use hiveory_protocol::{CodeHostedTracking, TaskSourceProvider, TaskSourceSummary
 use sqlx::Row;
 use uuid::Uuid;
 
+pub struct TaskSourceSaveRequest<'a> {
+    pub workspace_id: &'a str,
+    pub provider: TaskSourceProvider,
+    pub label: &'a str,
+    pub endpoint: Option<&'a str>,
+    pub account_label: Option<&'a str>,
+    pub secret_ref: Option<&'a str>,
+    pub validated_at_unix_ms: Option<i64>,
+    pub last_error: Option<&'a str>,
+}
+
 impl HiveoryPersistence {
     pub async fn hosted_tracking_cache(
         &self,
@@ -70,22 +81,15 @@ impl HiveoryPersistence {
 
     pub async fn save_task_source(
         &self,
-        workspace_id: &str,
-        provider: TaskSourceProvider,
-        label: &str,
-        endpoint: Option<&str>,
-        account_label: Option<&str>,
-        secret_ref: Option<&str>,
-        validated_at_unix_ms: Option<i64>,
-        last_error: Option<&str>,
+        request: TaskSourceSaveRequest<'_>,
     ) -> Result<TaskSourceSummary, sqlx::Error> {
-        let provider_value = task_source_provider_value(provider);
+        let provider_value = task_source_provider_value(request.provider);
         let id = Uuid::now_v7().to_string();
         let now = now_ms();
         sqlx::query("INSERT INTO hiveory_task_sources (id, workspace_id, provider, label, endpoint, account_label, secret_ref, enabled, validated_at_unix_ms, last_error, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?) ON CONFLICT(workspace_id, provider) DO UPDATE SET label=excluded.label, endpoint=excluded.endpoint, account_label=excluded.account_label, secret_ref=COALESCE(excluded.secret_ref, hiveory_task_sources.secret_ref), enabled=1, validated_at_unix_ms=excluded.validated_at_unix_ms, last_error=excluded.last_error, updated_at_unix_ms=excluded.updated_at_unix_ms")
-            .bind(id).bind(workspace_id).bind(provider_value).bind(label).bind(endpoint).bind(account_label).bind(secret_ref).bind(validated_at_unix_ms).bind(last_error).bind(now).bind(now).execute(&self.pool).await?;
+            .bind(id).bind(request.workspace_id).bind(provider_value).bind(request.label).bind(request.endpoint).bind(request.account_label).bind(request.secret_ref).bind(request.validated_at_unix_ms).bind(request.last_error).bind(now).bind(now).execute(&self.pool).await?;
         let row = sqlx::query("SELECT id, workspace_id, provider, label, endpoint, account_label, enabled, validated_at_unix_ms, last_error, updated_at_unix_ms FROM hiveory_task_sources WHERE workspace_id=? AND provider=?")
-            .bind(workspace_id).bind(provider_value).fetch_one(&self.pool).await?;
+            .bind(request.workspace_id).bind(provider_value).fetch_one(&self.pool).await?;
         Ok(task_source_from_row(row))
     }
 

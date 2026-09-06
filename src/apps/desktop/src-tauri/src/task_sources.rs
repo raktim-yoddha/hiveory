@@ -1,5 +1,5 @@
 use crate::application::hosted_source;
-use hiveory_persistence::HiveoryPersistence;
+use hiveory_persistence::{HiveoryPersistence, TaskSourceSaveRequest};
 use hiveory_protocol::{
     TaskSourceConnectRequest, TaskSourceItem, TaskSourceProvider, TaskSourceSnapshot,
     TaskSourceSummary,
@@ -51,16 +51,16 @@ pub(crate) async fn connect(
         .map(|value| secrets.put(value).map_err(|error| error.to_string()))
         .transpose()?;
     persistence
-        .save_task_source(
-            &request.workspace_id,
-            request.provider,
-            &label,
-            endpoint.as_deref(),
-            account,
-            secret_ref.as_deref(),
-            Some(now_ms()),
-            None,
-        )
+        .save_task_source(TaskSourceSaveRequest {
+            workspace_id: &request.workspace_id,
+            provider: request.provider,
+            label: &label,
+            endpoint: endpoint.as_deref(),
+            account_label: account,
+            secret_ref: secret_ref.as_deref(),
+            validated_at_unix_ms: Some(now_ms()),
+            last_error: None,
+        })
         .await
         .map_err(|error| error.to_string())
 }

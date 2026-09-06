@@ -1,9 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Columns, FileText, Globe, Rows, Search, Terminal, X } from 'lucide-react'
-import { DEFAULT_BROWSER_HOME, type CodeAdapterSummary, type CodePanePlacement } from '../../../shared/api/hiveory-client'
+import { DEFAULT_BROWSER_HOME, type CodeAdapterSummary, type CodeAgentLaunchMode, type CodePanePlacement } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
 import { getSplitMenuPosition, type SplitMenuPosition } from './CodeSplitPanePicker.utils'
+import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch, type YoloPreferences } from '../model/code-yolo-preferences'
 
 interface CodeSplitPanePickerProps {
   open: boolean
@@ -15,6 +16,7 @@ interface CodeSplitPanePickerProps {
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     url?: string,
+    agentLaunchMode?: CodeAgentLaunchMode,
   ) => void
   onClose: () => void
 }
@@ -26,6 +28,7 @@ interface SplitPaneOption {
   kind: 'shell' | 'coding_agent' | 'markdown' | 'preview'
   adapterId?: string
   url?: string
+  supportsYolo?: boolean
   icon: React.ReactNode
 }
 
@@ -42,6 +45,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
   const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [position, setPosition] = useState<SplitMenuPosition | null>(null)
+  const [yoloPreferences, setYoloPreferences] = useState<YoloPreferences>(loadYoloPreferences)
 
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) {
@@ -98,6 +102,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       description: 'Installed command-line agent',
       kind: 'coding_agent' as const,
       adapterId: adapter.id,
+      supportsYolo: supportsYoloLaunch(adapter.id),
       icon: <CliBrandIcon identifier={adapter.id} size={16} />,
     })),
     { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
@@ -109,6 +114,15 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
     if (!normalizedQuery) return options
     return options.filter((option) => `${option.title} ${option.description}`.toLowerCase().includes(normalizedQuery))
   }, [options, query])
+
+  const toggleYolo = (adapterId: string) => {
+    if (!supportsYoloLaunch(adapterId)) return
+    setYoloPreferences((current) => {
+      const next = { ...current, [adapterId]: !current[adapterId] }
+      saveYoloPreferences(next)
+      return next
+    })
+  }
 
   if (!open || !position || typeof document === 'undefined') return null
 
@@ -165,24 +179,44 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       </label>
 
       <div className="code-split-dropdown-list">
-        {filteredOptions.length ? filteredOptions.map((option) => (
-          <button
-            type="button"
-            role="menuitem"
-            key={option.id}
-            className="code-split-modal-item"
-            onClick={() => {
-              onSelect(option.kind, option.adapterId ?? null, option.url)
-              onClose()
-            }}
-          >
-            <span className="code-split-item-icon">{option.icon}</span>
-            <span className="code-split-item-text">
-              <span className="code-split-item-title">{option.title}</span>
-              <span className="code-split-item-desc">{option.description}</span>
-            </span>
-          </button>
-        )) : (
+        {filteredOptions.length ? filteredOptions.map((option) => {
+          const yoloAdapterId = supportsYoloLaunch(option.adapterId) ? option.adapterId : null
+          const isYoloEnabled = yoloAdapterId ? yoloPreferences[yoloAdapterId] : false
+          return (
+          <div key={option.id} className="code-split-modal-item">
+            <button
+              type="button"
+              role="menuitem"
+              className="code-split-modal-item-main"
+              onClick={() => {
+                const agentLaunchMode: CodeAgentLaunchMode = isYoloEnabled ? 'yolo' : 'standard'
+                onSelect(option.kind, option.adapterId ?? null, option.url, agentLaunchMode)
+                onClose()
+              }}
+            >
+              <span className="code-split-item-icon">{option.icon}</span>
+              <span className="code-split-item-text">
+                <span className="code-split-item-title">{option.title}</span>
+                <span className="code-split-item-desc">{option.description}</span>
+              </span>
+            </button>
+            {yoloAdapterId && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isYoloEnabled}
+                aria-label={`Use YOLO mode for ${option.title}`}
+                title="Persistently launch this agent without interactive permission prompts"
+                className={`code-split-yolo-switch ${isYoloEnabled ? 'is-enabled' : ''}`}
+                onClick={() => toggleYolo(yoloAdapterId)}
+              >
+                <span>YOLO</span>
+                <i aria-hidden="true" />
+              </button>
+            )}
+          </div>
+          )
+        }) : (
           <div className="code-split-search-empty">No matching pane types</div>
         )}
       </div>

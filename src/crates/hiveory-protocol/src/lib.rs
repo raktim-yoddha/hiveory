@@ -986,6 +986,8 @@ pub struct LaunchCodePaneTerminalRequest {
     pub kind: CodeTerminalKind,
     pub adapter_id: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub agent_launch_mode: CodeAgentLaunchMode,
     pub cols: u16,
     pub rows: u16,
 }
@@ -1096,6 +1098,19 @@ pub enum CodeTerminalState {
     Dormant,
 }
 
+/// The permission posture used when a coding-agent terminal starts.
+///
+/// It travels with a terminal so a restored pane repeats the explicit user
+/// choice instead of silently changing its permission behavior.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeAgentLaunchMode {
+    #[default]
+    Standard,
+    Yolo,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeTerminalSummary {
@@ -1107,6 +1122,8 @@ pub struct CodeTerminalSummary {
     pub adapter_id: Option<String>,
     #[serde(default)]
     pub model: Option<String>,
+    #[serde(default)]
+    pub agent_launch_mode: CodeAgentLaunchMode,
     pub session_id: Option<String>,
     pub exit_code: Option<i32>,
     pub started_at_unix_ms: i64,
@@ -1131,6 +1148,8 @@ pub struct CodeTerminalStartRequest {
     pub rows: u16,
     pub adapter_id: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub agent_launch_mode: CodeAgentLaunchMode,
     pub resume_session_id: Option<String>,
     #[serde(default)]
     pub session_integration: Option<CodeCliSessionIntegration>,
@@ -3364,6 +3383,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeTerminalSubscribeRequest::export_all(&config)?;
     CodeTerminalKind::export_all(&config)?;
     CodeTerminalState::export_all(&config)?;
+    CodeAgentLaunchMode::export_all(&config)?;
     CodeTerminalSummary::export_all(&config)?;
     CodeCliSessionIntegration::export_all(&config)?;
     CodeTerminalStartRequest::export_all(&config)?;

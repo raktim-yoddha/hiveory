@@ -2788,6 +2788,7 @@ async fn hiveory_command_open_code_dispatch_terminal(
         rows: command.payload.rows,
         adapter_id: coding_agent.then_some(context.adapter_id),
         model: coding_agent.then_some(context.model).flatten(),
+        agent_launch_mode: hiveory_protocol::CodeAgentLaunchMode::Standard,
         resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
         session_integration: None,
     };
@@ -4928,6 +4929,10 @@ async fn hiveory_command_launch_code_pane_terminal(
             rows: command.payload.rows,
             adapter_id: command.payload.adapter_id.clone(),
             model: command.payload.model.clone(),
+            agent_launch_mode: persisted
+                .as_ref()
+                .map(|record| record.summary.agent_launch_mode)
+                .unwrap_or(command.payload.agent_launch_mode),
             resume_session_id: persisted
                 .as_ref()
                 .and_then(|record| record.summary.session_id.clone()),
@@ -4981,6 +4986,7 @@ async fn hiveory_command_launch_code_pane_terminal(
         rows: command.payload.rows,
         adapter_id: command.payload.adapter_id.clone(),
         model: command.payload.model.clone(),
+        agent_launch_mode: command.payload.agent_launch_mode,
         resume_session_id: None,
         session_integration: None,
     };
@@ -4996,10 +5002,15 @@ async fn hiveory_command_launch_code_pane_terminal(
         .map_err(terminal_host_error)?;
 
     let pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
-        summary
+        let adapter_name = summary
             .adapter_id
             .clone()
-            .unwrap_or_else(|| "Coding Agent".to_owned())
+            .unwrap_or_else(|| "Coding Agent".to_owned());
+        if summary.agent_launch_mode == hiveory_protocol::CodeAgentLaunchMode::Yolo {
+            format!("{adapter_name} · YOLO")
+        } else {
+            adapter_name
+        }
     } else {
         "Terminal".to_owned()
     };
@@ -6931,6 +6942,10 @@ fn terminal_host_error(error: HiveoryTerminalHostError) -> ApiError {
         HiveoryTerminalHostError::UnsupportedAdapter => (
             "code_adapter_unavailable",
             "The requested coding-agent adapter is unavailable.".to_owned(),
+        ),
+        HiveoryTerminalHostError::UnsupportedYoloMode => (
+            "code_yolo_mode_unavailable",
+            "YOLO mode is unavailable for the requested coding-agent adapter.".to_owned(),
         ),
         HiveoryTerminalHostError::Cancelled => (
             "terminal_cancelled",

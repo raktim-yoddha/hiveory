@@ -9,8 +9,8 @@ use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     ChatEngineAvailability, ChatEngineSummary, ChatModelSummary, ChatProviderStreamEvent,
     ChatProviderStreamEventKind, ChatReasoningEffort, CodeAdapterCapability, CodeAdapterSummary,
-    CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest, CodeTerminalKind,
-    CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
+    CodeAgentLaunchMode, CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest,
+    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
     CodeTerminalStopRequest, CodeTerminalSummary,
 };
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
@@ -64,6 +64,8 @@ pub enum HiveoryCodeRuntimeError {
     InvalidDimensions,
     #[error("coding-agent adapter is not supported")]
     UnsupportedAdapter,
+    #[error("YOLO mode is not supported by this coding-agent adapter")]
+    UnsupportedYoloMode,
     #[error("coding-agent process was cancelled")]
     Cancelled,
     #[error("terminal was not found")]
@@ -866,6 +868,7 @@ impl HiveoryCodeRuntime {
             pid,
             adapter_id: request.adapter_id.clone(),
             model: request.model.clone(),
+            agent_launch_mode: request.agent_launch_mode,
             session_id: request.resume_session_id.clone(),
             exit_code: None,
             started_at_unix_ms,
@@ -1186,17 +1189,25 @@ fn command_for(
             command.args(resolved.prefix);
             let resume_session_id = request.resume_session_id.as_deref();
 
+            let yolo_argument = (request.agent_launch_mode == CodeAgentLaunchMode::Yolo)
+                .then(|| yolo_mode_argument(spec.id))
+                .transpose()?;
+
             match spec.id {
                 CODEX_ADAPTER_ID => {
                     if resume_session_id.is_some() {
                         command.arg("resume");
                     }
-                    command.args([
-                        "--sandbox",
-                        "workspace-write",
-                        "--ask-for-approval",
-                        "on-request",
-                    ]);
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    } else {
+                        command.args([
+                            "--sandbox",
+                            "workspace-write",
+                            "--ask-for-approval",
+                            "on-request",
+                        ]);
+                    }
                     command.arg("--cd");
                     command.arg(process_path(workspace_root).as_os_str());
                     if let Some(integration) = request.session_integration.as_ref() {
@@ -1220,7 +1231,11 @@ fn command_for(
                     }
                 }
                 CLAUDE_CODE_ADAPTER_ID => {
-                    command.args(["--permission-mode", "acceptEdits"]);
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    } else {
+                        command.args(["--permission-mode", "acceptEdits"]);
+                    }
                     if let Some(integration) = request.session_integration.as_ref() {
                         command.args(["--mcp-config", &integration.mcp_config_path]);
                         command.args([
@@ -1232,8 +1247,15 @@ fn command_for(
                         command.args(["--resume", session_id]);
                     }
                 }
-                ANTIGRAVITY_ADAPTER_ID => {}
+                ANTIGRAVITY_ADAPTER_ID => {
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    }
+                }
                 OPENCODE_ADAPTER_ID => {
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    }
                     if let Some(integration) = request.session_integration.as_ref() {
                         command.env("OPENCODE_CONFIG", &integration.mcp_config_path);
                     }
@@ -1252,6 +1274,15 @@ fn command_for(
             }
             Ok(command)
         }
+    }
+}
+
+fn yolo_mode_argument(adapter_id: &str) -> Result<&'static str, HiveoryCodeRuntimeError> {
+    match adapter_id {
+        CODEX_ADAPTER_ID => Ok("--dangerously-bypass-approvals-and-sandbox"),
+        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID => Ok("--dangerously-skip-permissions"),
+        OPENCODE_ADAPTER_ID => Ok("--auto"),
+        _ => Err(HiveoryCodeRuntimeError::UnsupportedYoloMode),
     }
 }
 
@@ -1825,6 +1856,27 @@ mod tests {
     }
 
     #[test]
+    fn maps_each_supported_agent_to_its_yolo_flag() {
+        assert_eq!(
+            yolo_mode_argument(CODEX_ADAPTER_ID).unwrap(),
+            "--dangerously-bypass-approvals-and-sandbox"
+        );
+        assert_eq!(
+            yolo_mode_argument(CLAUDE_CODE_ADAPTER_ID).unwrap(),
+            "--dangerously-skip-permissions"
+        );
+        assert_eq!(
+            yolo_mode_argument(ANTIGRAVITY_ADAPTER_ID).unwrap(),
+            "--dangerously-skip-permissions"
+        );
+        assert_eq!(yolo_mode_argument(OPENCODE_ADAPTER_ID).unwrap(), "--auto");
+        assert!(matches!(
+            yolo_mode_argument("unsupported"),
+            Err(HiveoryCodeRuntimeError::UnsupportedYoloMode)
+        ));
+    }
+
+    #[test]
     fn normalizes_cli_delta_and_cumulative_result_without_duplication() {
         let events = Arc::new(Mutex::new(Vec::<ChatProviderStreamEvent>::new()));
         let captured = events.clone();
@@ -1874,6 +1926,7 @@ mod tests {
                     rows: 24,
                     adapter_id: None,
                     model: None,
+                    agent_launch_mode: CodeAgentLaunchMode::Standard,
                     resume_session_id: None,
                     session_integration: None,
                 },
@@ -1913,6 +1966,7 @@ mod tests {
                     rows: 24,
                     adapter_id: None,
                     model: None,
+                    agent_launch_mode: CodeAgentLaunchMode::Standard,
                     resume_session_id: None,
                     session_integration: None,
                 },

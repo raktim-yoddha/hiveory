@@ -2323,22 +2323,69 @@
 .code-split-modal-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
+  min-width: 0;
   background: #17181c;
   border: 1px solid #22242c;
   border-radius: 8px;
-  color: #ffffff;
-  cursor: pointer;
   transition: all 0.12s ease;
-  text-align: left;
   width: 100%;
 }
 
-.code-split-modal-item:hover {
+.code-split-modal-item:hover,
+.code-split-modal-item:focus-within {
   background: #1d1e24;
   border-color: #60636a;
 }
+
+.code-split-modal-item-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  color: #ffffff;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.code-split-modal-item-main:focus-visible,
+.code-split-yolo-switch:focus-visible {
+  outline: 2px solid #b8bcc5;
+  outline-offset: -2px;
+}
+
+.code-split-yolo-switch {
+  display: inline-flex;
+  min-width: 64px;
+  height: 27px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  margin-right: 10px;
+  padding: 0 6px 0 7px;
+  color: #a9afb9;
+  background: #202229;
+  border: 1px solid #454954;
+  border-radius: 999px;
+  cursor: pointer;
+  font: 700 9px/1 Inter, system-ui, sans-serif;
+  letter-spacing: .06em;
+}
+
+.code-split-yolo-switch:hover { border-color: #777d89; color: #eef0f4; }
+.code-split-yolo-switch i {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #727782;
+  transition: transform .14s ease, background .14s ease;
+}
+.code-split-yolo-switch.is-enabled { color: #f1e9cf; border-color: #9a8050; background: #3a3222; }
+.code-split-yolo-switch.is-enabled i { transform: translateX(1px); background: #e3bd67; }
 
 .code-split-item-icon {
   width: 32px;

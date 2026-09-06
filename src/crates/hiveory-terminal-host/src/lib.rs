@@ -47,6 +47,8 @@ pub enum HiveoryTerminalHostError {
     InvalidDimensions,
     #[error("coding-agent adapter is not supported")]
     UnsupportedAdapter,
+    #[error("YOLO mode is not supported by this coding-agent adapter")]
+    UnsupportedYoloMode,
     #[error("coding-agent process was cancelled")]
     Cancelled,
     #[error("terminal was not found")]
@@ -60,6 +62,7 @@ impl From<HiveoryCodeRuntimeError> for HiveoryTerminalHostError {
         match error {
             HiveoryCodeRuntimeError::InvalidDimensions => Self::InvalidDimensions,
             HiveoryCodeRuntimeError::UnsupportedAdapter => Self::UnsupportedAdapter,
+            HiveoryCodeRuntimeError::UnsupportedYoloMode => Self::UnsupportedYoloMode,
             HiveoryCodeRuntimeError::Cancelled => Self::Cancelled,
             HiveoryCodeRuntimeError::TerminalNotFound => Self::TerminalNotFound,
             HiveoryCodeRuntimeError::Operation(message) => Self::Operation(message),
@@ -1333,6 +1336,7 @@ async fn write_error(
     let code = match error {
         HiveoryTerminalHostError::InvalidDimensions => "terminal_invalid_dimensions",
         HiveoryTerminalHostError::UnsupportedAdapter => "code_adapter_unavailable",
+        HiveoryTerminalHostError::UnsupportedYoloMode => "code_yolo_mode_unavailable",
         HiveoryTerminalHostError::Cancelled => "terminal_cancelled",
         HiveoryTerminalHostError::TerminalNotFound => "terminal_not_found",
         HiveoryTerminalHostError::Operation(_) => "terminal_operation_failed",

@@ -14,6 +14,7 @@ import {
 import {
   hiveoryClient,
   type CodeAdapterSummary,
+  type CodeAgentLaunchMode,
   type CodePaneNode,
   type CodePanePlacement,
   type CodeTerminalState,
@@ -37,7 +38,8 @@ interface CodePaneHeaderProps {
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     model?: string | null,
-    url?: string
+    url?: string,
+    agentLaunchMode?: CodeAgentLaunchMode,
   ) => void
   onToggleMaximize: () => void
   onClose: () => void
@@ -275,7 +277,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             splitSide={splitSide}
             adapters={adapters}
             onSplitSideChange={(side) => setSplitSide(side)}
-            onSelect={(kind, adapterId, url) => onSplitAndLaunch(splitSide, kind, adapterId, null, url)}
+            onSelect={(kind, adapterId, url, agentLaunchMode) => onSplitAndLaunch(splitSide, kind, adapterId, null, url, agentLaunchMode)}
             onClose={() => setSplitMenuOpen(false)}
           />
 

@@ -143,7 +143,7 @@ export type CodePaneMutation =
 
 export type CodePaneMutationRequest = { workspace_id: string; expected_revision: number; mutation: CodePaneMutation }
 export type CodePaneMutationResult = { layout: CodePaneLayout }
-export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; cols: number; rows: number }
+export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; cols: number; rows: number }
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
 export type OpenCodePanePreviewResult = { layout: CodePaneLayout; preview: CodePreviewSummary }
@@ -159,7 +159,8 @@ export type CodePaneNode = { pane_id: string; parent_id: string | null; kind: Co
 export type CodePaneLayout = { workspace_id: string; version: number; root_id: string; nodes: CodePaneNode[]; revision?: number; focused_pane_id?: string | null; maximized_pane_id?: string | null }
 export type CodeTerminalKind = 'shell' | 'coding_agent'
 export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted' | 'dormant'
-export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; model: string | null; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeAgentLaunchMode = 'standard' | 'yolo'
+export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
 export type CodeTerminalEvent = { terminal_id: string; sequence: number; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
 export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
@@ -332,7 +333,7 @@ export type CodeGitBranchDeleteRequest = { workspace_id: string; name: string; f
 export type CodeGitRemoteRequest = { workspace_id: string; remote: string | null; branch: string | null }
 export type CodeGitStashSaveRequest = { workspace_id: string; message: string | null }
 export type CodeGitStashIndexRequest = { workspace_id: string; index: number }
-type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; resume_session_id: string | null }
+type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; resume_session_id: string | null }
 type CodeTerminalInputRequest = { terminal_id: string; data_base64: string }
 type CodeTerminalInput = { terminal_id: string; data: string }
 type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
@@ -1345,7 +1346,7 @@ export const hiveoryClient = {
     if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, request.kind === 'coding_agent' ? 'coding_agent' : 'terminal', id, request.kind === 'coding_agent' ? (request.adapter_id ?? 'Coding Agent') : 'Terminal'))
     onEvent?.({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
@@ -1518,7 +1519,7 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriQuery<CodeTerminalSnapshot>('hiveory_query_code_terminal_snapshot', { query: { terminal_id: terminalId } })
     const previewTerminal = [...previewCodeWorkspaces.values()].flatMap((item) => item.detail.terminals).find((terminal) => terminal.id === terminalId)
     return {
-      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, model: null, session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
+      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, model: null, agent_launch_mode: 'standard', session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
       cols: 80,
       rows: 24,
       output_base64: btoa('Preview terminal snapshot\r\n'),
@@ -1675,7 +1676,7 @@ export const hiveoryClient = {
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     onEvent({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
@@ -1892,7 +1893,7 @@ export const hiveoryClient = {
     const detail = previewCodeRunDetail(request.run_id)
     const dispatch = detail.dispatches.find((candidate) => candidate.id === request.dispatch_id)
     if (!dispatch) throw new Error('The dispatch was not found.')
-    return this.startCodeTerminal({ workspace_id: detail.summary.workspace_id, kind: 'coding_agent', cols: request.cols, rows: request.rows, adapter_id: dispatch.adapter_id, model: detail.summary.model, resume_session_id: dispatch.session_id }, onEvent)
+    return this.startCodeTerminal({ workspace_id: detail.summary.workspace_id, kind: 'coding_agent', cols: request.cols, rows: request.rows, adapter_id: dispatch.adapter_id, model: detail.summary.model, agent_launch_mode: 'standard', resume_session_id: dispatch.session_id }, onEvent)
   },
   async answerCodeQuestion(request: CodeQuestionAnswerRequest): Promise<CodeRunDetail> {
     if (hiveoryIsTauri) return tauriCommand<CodeQuestionAnswerRequest, CodeRunDetail>('hiveory_command_answer_code_question', request)

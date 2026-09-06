@@ -22,6 +22,8 @@ pub mod plugin;
 pub mod routine;
 pub mod source;
 
+pub use source::TaskSourceSaveRequest;
+
 pub const HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "hiveory-openai";
 static HIVEORY_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 

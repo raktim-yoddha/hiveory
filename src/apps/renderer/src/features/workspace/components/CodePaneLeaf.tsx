@@ -149,7 +149,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
             historyError={historyError}
             onDismissHistoryError={() => setHistoryError(null)}
             onRelaunch={() => {
-              void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model)
+              void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model, terminalSummary?.agent_launch_mode)
             }}
           />
         )
@@ -198,15 +198,15 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           terminalHistoryBusy={historyBusy}
           onFocus={() => void focusPane(node.pane_id)}
           onRename={(title) => void renamePane(node.pane_id, title)}
-          onSplitAndLaunch={(placement, kind, adapterId, model, url) => {
-            void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url)
+          onSplitAndLaunch={(placement, kind, adapterId, model, url, agentLaunchMode) => {
+            void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url, agentLaunchMode)
           }}
           onToggleMaximize={() => void toggleMaximize(node.pane_id)}
           onClose={() => void requestClosePane(node.pane_id)}
           onRelaunch={
             node.kind === 'terminal' || node.kind === 'coding_agent'
               ? () => {
-                  void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model)
+                  void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model, terminalSummary?.agent_launch_mode)
                 }
               : undefined
           }
