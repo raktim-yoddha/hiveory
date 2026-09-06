@@ -155,6 +155,15 @@
   gap: 9px;
 }
 
+.code-rail-nav-left > svg {
+  color: #aeb0b6;
+  stroke-width: 1.8;
+}
+
+.code-rail-nav-item.is-selected .code-rail-nav-left > svg {
+  color: #f1f1f2;
+}
+
 .code-rail-badge-count {
   font-size: 11px;
   font-weight: 600;
@@ -7769,7 +7778,9 @@
 .hiveory-skills-page .code-page-header { margin-bottom: 12px; }
 .hiveory-skills-page .code-page-title { font-size: 18px; }
 .hiveory-skills-page .code-page-subtitle { margin-top: 3px; color: #a0a1a6; font-size: 11px; }
-.hiveory-skills-page .hiveory-skills-toolbar { min-height: 34px; margin-bottom: 10px; border-color: #343438; border-radius: 6px; background: #18181a; }
+.hiveory-skills-page .hiveory-inline-actions { display: flex; align-items: center; justify-content: flex-end; grid-template-columns: none; gap: 6px; }
+.hiveory-skills-page .hiveory-inline-actions > button { min-height: 30px; white-space: nowrap; }
+.hiveory-skills-page .hiveory-skills-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 34px; margin-bottom: 10px; padding: 4px 10px; border-color: #343438; border-radius: 6px; background: #18181a; }
 .hiveory-skills-page .hiveory-skills-toolbar select { border-color: #404045; color: #e8e8ea; background: #242426; }
 .hiveory-skills-page .hiveory-skills-list {
   display: block;
@@ -7780,7 +7791,7 @@
   background: #171718;
 }
 .hiveory-skills-page .code-skill-row {
-  min-height: 51px;
+  min-height: 56px;
   border: 0;
   border-bottom: 1px solid #303033;
   border-radius: 0;
@@ -7793,11 +7804,16 @@
 .hiveory-skills-page .code-skill-name { font-size: 11px; }
 .hiveory-skills-page .code-activity-desc { color: #a2a3a8; font-size: 10px; }
 .hiveory-skills-page .code-skill-badge { color: #8e9096; font-size: 10px; }
-.hiveory-skills-page .hiveory-skill-row-actions button { min-height: 28px; border-color: #494a50; color: #dedee1; background: #292a2e; font-size: 10px; }
+.hiveory-skills-page .hiveory-skill-row-actions { gap: 8px; }
+.hiveory-skills-page .hiveory-skill-row-actions button { min-width: 82px; min-height: 28px; justify-content: center; border-color: #494a50; color: #dedee1; background: #292a2e; font-size: 10px; }
 .hiveory-skills-page .hiveory-skill-row-actions button:hover:not(:disabled) { border-color: #66686e; background: #38393e; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar { width: 10px; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar-track { background: #171718; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar-thumb { border: 3px solid #171718; border-radius: 99px; background: #515157; }
+@media (max-width: 760px) {
+  .hiveory-skills-page .hiveory-inline-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .hiveory-skills-page .hiveory-skills-toolbar { align-items: flex-start; flex-direction: column; }
+}
 
 /* Tasks and board use the same graphite desktop chrome as Plugins and Skills. */
 .hiveory-tasks-page { background: #0c0c0d; }

@@ -6,7 +6,7 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
-  Clock3,
+  CalendarClock,
   ExternalLink,
   FileText,
   Folder,
@@ -14,19 +14,19 @@ import {
   FolderSearch,
   FolderTree,
   GitBranch,
-  LayoutDashboard,
+  PanelsTopLeft,
   MoreVertical,
   Moon,
   Package,
   Pencil,
   Pin,
   Plus,
-  Puzzle,
+  Blocks,
   Settings,
   Settings2,
   CircleHelp,
   Columns3,
-  Sparkles,
+  BrainCircuit,
   SquareTerminal,
   Trash2,
 } from 'lucide-react'
@@ -112,7 +112,7 @@ function renderPaneRailIcon(node: CodePaneNode) {
     case 'terminal':
       return <SquareTerminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     default:
-      return <Sparkles size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+      return <PanelsTopLeft size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
   }
 }
 
@@ -309,10 +309,10 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   }, [openContextMenu, isAddMenuOpen])
 
   const navItems: { id: 'dashboard' | 'routines' | 'plugins' | 'skills'; label: string; badge?: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', badge: '1', icon: <LayoutDashboard size={15} aria-hidden="true" /> },
-    { id: 'routines', label: 'Automations', icon: <Clock3 size={15} aria-hidden="true" /> },
-    { id: 'plugins', label: 'Plugins', icon: <Puzzle size={15} aria-hidden="true" /> },
-    { id: 'skills', label: 'Skills', icon: <Sparkles size={15} aria-hidden="true" /> },
+    { id: 'dashboard', label: 'Dashboard', badge: '1', icon: <PanelsTopLeft size={16} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'routines', label: 'Automations', icon: <CalendarClock size={16} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'plugins', label: 'Plugins', icon: <Blocks size={16} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'skills', label: 'Skills', icon: <BrainCircuit size={16} strokeWidth={1.8} aria-hidden="true" /> },
   ]
 
   const toggleProject = (projectId: string) => {

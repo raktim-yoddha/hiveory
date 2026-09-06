@@ -1,4 +1,4 @@
-import { Check, FilePlus2, FileText, RefreshCw, Sparkles, X } from 'lucide-react'
+import { Check, CircleCheck, FilePlus2, FileText, Power, RefreshCw, X } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { hiveoryClient, type AgentSkillSummary, type AgentSummary } from '../../../shared/api/hiveory-client'
 
@@ -97,7 +97,7 @@ export const HiveoryCodeSkills: React.FC = () => {
     <section className="code-rows-container hiveory-skills-list" aria-busy={loading}>
       {skills.map((skill) => <article key={skill.id} className="code-skill-row">
         <div className="code-activity-left"><div className="code-activity-icon-box"><FileText size={15} /></div><div className="code-activity-info"><span className="code-skill-name">{skill.name}</span><span className="code-activity-desc">{skill.description}</span></div></div>
-        <div className="hiveory-skill-row-actions"><span className="code-skill-badge">{skill.origin === 'builtin' ? 'Built in' : 'Custom'}</span><button type="button" className={skill.enabled ? '' : 'is-secondary'} onClick={() => void toggleSkill(skill)} disabled={!selectedAgentId || busySkillId !== null}>{skill.enabled ? <><Check size={14} />Always loaded</> : <><Sparkles size={14} />Always load</>}</button></div>
+        <div className="hiveory-skill-row-actions"><span className="code-skill-badge">{skill.origin === 'builtin' ? 'Built in' : 'Custom'}</span><button type="button" className={skill.enabled ? '' : 'is-secondary'} onClick={() => void toggleSkill(skill)} disabled={!selectedAgentId || busySkillId !== null}>{skill.enabled ? <><CircleCheck size={14} />Loaded</> : <><Power size={14} />Load</>}</button></div>
       </article>)}
       {!loading && !skills.length && <div className="hiveory-empty-panel"><FileText size={24} /><p>No skills are installed. Create one here or import a valid SKILL.md package.</p></div>}
     </section>

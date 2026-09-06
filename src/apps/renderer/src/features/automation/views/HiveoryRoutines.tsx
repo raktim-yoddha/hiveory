@@ -19,13 +19,13 @@ const defaultRoutineRequest = (agentId: string): RoutineCreateRequest => ({
   approval_timeout_seconds: 300,
 })
 
-type AutomationTemplate = Pick<RoutineCreateRequest, 'name' | 'description' | 'prompt_template' | 'schedule'>
+type AutomationTemplate = Pick<RoutineCreateRequest, 'name' | 'description' | 'prompt_template' | 'schedule'> & { category: string }
 
 const automationTemplates: AutomationTemplate[] = [
-  { name: 'Weekday repo audit', description: 'Check dependencies, failing tests, and risky open changes each weekday.', prompt_template: 'Review repository health. Check dependencies, failing tests, lint and typecheck status, and risky open changes. Summarize the findings and recommend the next action.', schedule: { expression: '0 9 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
-  { name: 'Release readiness', description: 'Prepare a weekly release risk summary from the current project state.', prompt_template: 'Review the current project for release readiness. Report unresolved changes, failing validation, dependency risks, and the highest-priority release blockers.', schedule: { expression: '0 10 * * 5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
-  { name: 'Daily change review', description: 'Summarize recent work and flag correctness, UX, and test coverage risks.', prompt_template: 'Review the latest local project changes. Identify correctness risks, UX regressions, missing tests, and specific next actions. Keep the report concise and evidence-based.', schedule: { expression: '0 17 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
-  { name: 'Hourly queue check', description: 'Look for stuck local work, stale generated files, and failed validation.', prompt_template: 'Inspect active local work. Report stuck tasks, stale generated files, failed validation, and any action that needs operator attention.', schedule: { expression: '0 * * * *', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
+  { category: 'Repository health', name: 'Weekday repo audit', description: 'Check dependencies, failing tests, and risky open changes each weekday.', prompt_template: 'Review repository health. Check dependencies, failing tests, lint and typecheck status, and risky open changes. Summarize the findings and recommend the next action.', schedule: { expression: '0 9 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
+  { category: 'Release prep', name: 'Release readiness', description: 'Prepare a weekly release risk summary from the current project state.', prompt_template: 'Review the current project for release readiness. Report unresolved changes, failing validation, dependency risks, and the highest-priority release blockers.', schedule: { expression: '0 10 * * 5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
+  { category: 'Recurring review', name: 'Daily change review', description: 'Summarize recent work and flag correctness, UX, and test coverage risks.', prompt_template: 'Review the latest local project changes. Identify correctness risks, UX regressions, missing tests, and specific next actions. Keep the report concise and evidence-based.', schedule: { expression: '0 17 * * 1-5', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
+  { category: 'Maintenance', name: 'Hourly queue check', description: 'Look for stuck local work, stale generated files, and failed validation.', prompt_template: 'Inspect active local work. Report stuck tasks, stale generated files, failed validation, and any action that needs operator attention.', schedule: { expression: '0 * * * *', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } },
 ]
 
 const executionLabels: Record<string, string> = { queued: 'Queued', running: 'Running', awaiting_approval: 'Approval needed', completed: 'Completed', failed: 'Failed', skipped: 'Skipped', interrupted: 'Interrupted', unknown_outcome: 'Unknown outcome' }
@@ -118,7 +118,7 @@ export function HiveoryRoutines() {
       {agents.length > 0 && <div className="hiveory-automation-desktop-templates" aria-labelledby="hiveory-template-title">
         <h2 id="hiveory-template-title">Start from a template</h2>
         {automationTemplates.map((item) => <button key={item.name} type="button" disabled={busy !== null} onClick={() => { setEditing(null); setTemplate(item); setShowForm(true) }}>
-          <small>{item.schedule.expression}</small><strong>{item.name}</strong><span>{item.description}</span>
+          <small>{item.category}</small><strong>{item.name}</strong><span>{item.description}</span>
         </button>)}
       </div>}
     </section>

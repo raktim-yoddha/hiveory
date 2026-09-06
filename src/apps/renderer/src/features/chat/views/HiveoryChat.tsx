@@ -7,7 +7,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Clock3,
+  CalendarClock,
   Copy,
   Ellipsis,
   File,
@@ -16,7 +16,7 @@ import {
   FolderInput,
   FolderPlus,
   Image as ImageIcon,
-  LayoutDashboard,
+  PanelsTopLeft,
   LoaderCircle,
   MessageCircle,
   Moon,
@@ -24,13 +24,13 @@ import {
   Pin,
   PinOff,
   Plus,
-  Puzzle,
+  Blocks,
   RefreshCw,
   RotateCcw,
   Search,
   Settings,
   Settings2,
-  Sparkles,
+  BrainCircuit,
   Square,
   Trash2,
   X,
@@ -645,10 +645,10 @@ export function HiveoryChat() {
   const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => event.preventDefault()
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', badge: 1, icon: <LayoutDashboard size={14} aria-hidden="true" /> },
-    { id: 'routines', label: 'Automations', icon: <Clock3 size={14} aria-hidden="true" /> },
-    { id: 'plugins', label: 'Plugins', icon: <Puzzle size={14} aria-hidden="true" /> },
-    { id: 'skills', label: 'Skills', icon: <Sparkles size={14} aria-hidden="true" /> },
+    { id: 'dashboard', label: 'Dashboard', badge: 1, icon: <PanelsTopLeft size={15} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'routines', label: 'Automations', icon: <CalendarClock size={15} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'plugins', label: 'Plugins', icon: <Blocks size={15} strokeWidth={1.8} aria-hidden="true" /> },
+    { id: 'skills', label: 'Skills', icon: <BrainCircuit size={15} strokeWidth={1.8} aria-hidden="true" /> },
   ]
 
   const renderConversationRow = (item: ChatConversationSummary) => {
