@@ -1464,3 +1464,23 @@ a:focus-visible {
 .hiveory-automation-templates button:hover { border-color: #55565c; background: #1d1d1f; }
 .hiveory-automation-templates button small { color: #aaa; }
 .hiveory-checkbox input { accent-color: #77797f; }
+
+/* The local automation editor follows the desktop split used by the reference:
+   a large prompt surface with a compact scheduling sidebar. The same persisted
+   form fields and scheduler requests are retained. */
+.hiveory-routine-modal { width: min(1080px, calc(100vw - 32px)); max-height: min(880px, 90vh); overflow: auto; background: #171718; }
+.hiveory-routine-modal .hiveory-form-grid { grid-template-columns: minmax(0, 1fr) 320px; align-items: start; column-gap: 28px; row-gap: 12px; }
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(1),
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(3),
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(4) { grid-column: 1; }
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(2),
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(n+5),
+.hiveory-routine-modal .hiveory-form-grid > .hiveory-automation-picker { grid-column: 2; }
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(4) textarea { min-height: 430px; padding: 14px; color: #ededee; background: #1d1d1f; line-height: 1.6; }
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(n+5),
+.hiveory-routine-modal .hiveory-automation-picker { border-top: 1px solid #303033; padding-top: 10px; }
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(n+5) input,
+.hiveory-routine-modal .hiveory-form-grid > label:nth-child(n+5) select,
+.hiveory-routine-modal .hiveory-automation-picker { border-color: #444449; background: #202022; }
+.hiveory-routine-modal > .hiveory-checkbox { margin: 12px 0 0; }.hiveory-routine-modal .hiveory-modal-actions { margin-top: 16px; border-top: 1px solid #303033; padding-top: 14px; }
+@media (max-width: 760px) { .hiveory-routine-modal .hiveory-form-grid { grid-template-columns: 1fr; }.hiveory-routine-modal .hiveory-form-grid > label, .hiveory-routine-modal .hiveory-form-grid > label.is-wide, .hiveory-routine-modal .hiveory-form-grid > .hiveory-automation-picker { grid-column: 1; }.hiveory-routine-modal .hiveory-form-grid > label:nth-child(4) textarea { min-height: 230px; } }

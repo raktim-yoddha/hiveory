@@ -194,6 +194,11 @@ export type CodeHostedPullRequestCreateRequest = { workspace_id: string; title: 
 export type CodeHostedPullRequestAction = 'close' | 'reopen' | 'merge'
 export type CodeHostedPullRequestActionRequest = { workspace_id: string; number: number; action: CodeHostedPullRequestAction }
 export type CodeHostedOperationResult = { workspace_id: string; operation: string; message: string; url: string | null }
+export type TaskSourceProvider = 'github' | 'jira' | 'linear'
+export type TaskSourceSummary = { id: string; workspace_id: string; provider: TaskSourceProvider; label: string; endpoint: string | null; account_label: string | null; enabled: boolean; validated_at_unix_ms: number | null; last_error: string | null; updated_at_unix_ms: number }
+export type TaskSourceConnectRequest = { workspace_id: string; provider: TaskSourceProvider; label: string; endpoint: string | null; account_email: string | null; token: string | null }
+export type TaskSourceItem = { source_id: string; provider: TaskSourceProvider; identifier: string; title: string; status: string; url: string | null; assignee: string | null; project: string | null; updated_at: string | null }
+export type TaskSourceSnapshot = { workspace_id: string; sources: TaskSourceSummary[]; items: TaskSourceItem[]; refreshed_at_unix_ms: number }
 export type CodePreviewState = 'open' | 'closed' | 'blocked'
 export type CodePreviewSummary = { id: string; workspace_id: string; url: string; origin: string; state: CodePreviewState }
 export type BrowserProfile = { id: string; name: string; built_in: boolean }
@@ -1712,6 +1717,18 @@ export const hiveoryClient = {
   async codeRun(runId: string): Promise<CodeRunDetail> {
     if (hiveoryIsTauri) return tauriQuery<CodeRunDetail>('hiveory_query_code_run', { runId })
     return previewCodeRunDetail(runId)
+  },
+  async taskSources(workspaceId: string): Promise<TaskSourceSnapshot> {
+    if (hiveoryIsTauri) return tauriQuery<TaskSourceSnapshot>('hiveory_query_task_sources', { request: { workspace_id: workspaceId, refresh: true } })
+    throw new Error('Task sources are available in the Hiveory desktop application.')
+  },
+  async connectTaskSource(request: TaskSourceConnectRequest): Promise<TaskSourceSummary> {
+    if (hiveoryIsTauri) return invoke<TaskSourceSummary>('hiveory_command_connect_task_source', { request })
+    throw new Error('Task-source connections are available in the Hiveory desktop application.')
+  },
+  async removeTaskSource(workspaceId: string, sourceId: string): Promise<boolean> {
+    if (hiveoryIsTauri) return invoke<boolean>('hiveory_command_remove_task_source', { request: { workspace_id: workspaceId, source_id: sourceId } })
+    throw new Error('Task-source connections are available in the Hiveory desktop application.')
   },
   async taskBoardPreferences(): Promise<TaskBoardPreferences> {
     if (hiveoryIsTauri) return tauriQuery<TaskBoardPreferences>('hiveory_query_task_board_preferences')

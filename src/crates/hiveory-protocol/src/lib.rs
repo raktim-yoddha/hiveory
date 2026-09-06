@@ -2609,6 +2609,82 @@ pub enum AgentExecutionTarget {
     RemoteVm,
 }
 
+/// A locally configured task provider. Credentials are accepted only while a
+/// connection is created and are never included in query responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskSourceProvider {
+    Github,
+    Jira,
+    Linear,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub provider: TaskSourceProvider,
+    pub label: String,
+    pub endpoint: Option<String>,
+    pub account_label: Option<String>,
+    pub enabled: bool,
+    pub validated_at_unix_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceConnectRequest {
+    pub workspace_id: String,
+    pub provider: TaskSourceProvider,
+    pub label: String,
+    pub endpoint: Option<String>,
+    pub account_email: Option<String>,
+    /// A one-time user owned token. The desktop host stores it in the OS
+    /// keyring and intentionally never returns it.
+    pub token: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceIdRequest {
+    pub workspace_id: String,
+    pub source_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceQuery {
+    pub workspace_id: String,
+    pub refresh: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceItem {
+    pub source_id: String,
+    pub provider: TaskSourceProvider,
+    pub identifier: String,
+    pub title: String,
+    pub status: String,
+    pub url: Option<String>,
+    pub assignee: Option<String>,
+    pub project: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct TaskSourceSnapshot {
+    pub workspace_id: String,
+    pub sources: Vec<TaskSourceSummary>,
+    pub items: Vec<TaskSourceItem>,
+    pub refreshed_at_unix_ms: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeRenameFileRequest {
@@ -3334,6 +3410,13 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeHostedPullRequestCreateRequest::export_all(&config)?;
     CodeHostedPullRequestAction::export_all(&config)?;
     CodeHostedPullRequestActionRequest::export_all(&config)?;
+    TaskSourceProvider::export_all(&config)?;
+    TaskSourceSummary::export_all(&config)?;
+    TaskSourceConnectRequest::export_all(&config)?;
+    TaskSourceIdRequest::export_all(&config)?;
+    TaskSourceQuery::export_all(&config)?;
+    TaskSourceItem::export_all(&config)?;
+    TaskSourceSnapshot::export_all(&config)?;
     CodeHostedOperationResult::export_all(&config)?;
     CodePreviewState::export_all(&config)?;
     CodePreviewRequest::export_all(&config)?;

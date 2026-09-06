@@ -1,60 +1,47 @@
-import { AlertCircle, CircleCheck, Filter, LoaderCircle, RefreshCw } from 'lucide-react'
+import { CircleAlert, ExternalLink, Filter, Github, LoaderCircle, Plus, RefreshCw, Settings2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { hiveoryClient, type CodeRunSummary, type CodeTask } from '../../../shared/api/hiveory-client'
+import { hiveoryClient, type CodeWorkspaceSummary, type TaskSourceConnectRequest, type TaskSourceItem, type TaskSourceProvider, type TaskSourceSnapshot } from '../../../shared/api/hiveory-client'
 import '../styles/workspace.css'
 
-type LocalTask = CodeTask & { run: CodeRunSummary }
-
-function taskStateLabel(state: CodeTask['state']) {
-  return state.replaceAll('_', ' ')
-}
-
-function formatTime(value: number) {
-  return new Intl.DateTimeFormat([], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
-}
+const providerName: Record<TaskSourceProvider, string> = { github: 'GitHub', jira: 'Jira', linear: 'Linear' }
+const providerHint: Record<TaskSourceProvider, string> = { github: 'Uses the authenticated gh CLI for this workspace.', jira: 'Connect your Jira Cloud site with your account email and API token. The token stays in the OS keyring.', linear: 'Connect with a Linear personal API key. The key stays in the OS keyring.' }
+const sourceKinds: TaskSourceProvider[] = ['github', 'jira', 'linear']
+function formatTime(value: string | null) { return value ? new Intl.DateTimeFormat([], { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—' }
 
 export function HiveoryTasks({ onOpenWorkspace, onStartLocalWork }: { onOpenWorkspace: (workspaceId: string) => void; onStartLocalWork: () => void }) {
-  const [tasks, setTasks] = useState<LocalTask[]>([])
+  const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
+  const [workspaceId, setWorkspaceId] = useState('')
+  const [snapshot, setSnapshot] = useState<TaskSourceSnapshot | null>(null)
   const [query, setQuery] = useState('')
-  const [state, setState] = useState<'all' | CodeTask['state']>('all')
+  const [provider, setProvider] = useState<'all' | TaskSourceProvider>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  const [connector, setConnector] = useState<TaskSourceProvider | null>(null)
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(async (requestedWorkspaceId?: string) => {
+    setLoading(true); setError(null)
     try {
-      const runs = await hiveoryClient.codeRuns()
-      const details = await Promise.all(runs.map(async (run) => ({ run, detail: await hiveoryClient.codeRun(run.id) })))
-      setTasks(details.flatMap(({ run, detail }) => detail.tasks.map((task) => ({ ...task, run }))).sort((left, right) => right.updated_at_unix_ms - left.updated_at_unix_ms))
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Local tasks could not be loaded.')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { void refresh() }, [refresh])
-
-  const visibleTasks = useMemo(() => {
-    const term = query.trim().toLocaleLowerCase()
-    return tasks.filter((task) => (state === 'all' || task.state === state) && (!term || [task.client_id, task.title, task.specification, task.run.title].some((value) => value.toLocaleLowerCase().includes(term))))
-  }, [query, state, tasks])
-
-  return (
-    <section className="hiveory-tasks-page" aria-labelledby="hiveory-tasks-title">
-      <header className="hiveory-tasks-header">
-        <div><h1 id="hiveory-tasks-title">Tasks</h1><p>Tasks created in local Hiveory code runs. No account or remote service is required.</p></div>
-        <button type="button" className="hiveory-icon-button" onClick={() => void refresh()} disabled={loading} title="Refresh tasks" aria-label="Refresh tasks"><RefreshCw size={15} className={loading ? 'is-spinning' : ''} /></button>
-      </header>
-      <div className="hiveory-tasks-toolbar">
-        <label className="hiveory-tasks-filter"><Filter size={15} /><span>Status</span><select value={state} onChange={(event) => setState(event.target.value as typeof state)}><option value="all">All</option><option value="draft">Draft</option><option value="ready">Ready</option><option value="preparing">Preparing</option><option value="running">Running</option><option value="awaiting_input">Needs input</option><option value="awaiting_review">In review</option><option value="blocked">Blocked</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option></select></label>
-        <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search local tasks" placeholder="Search local tasks" />
-      </div>
-      <div className="hiveory-tasks-table" role="region" aria-label="Local tasks">
-        <div className="hiveory-tasks-columns"><span>ID</span><span>Title / run</span><span>Workspace</span><span>Status</span><span>Updated</span></div>
-        {loading ? <div className="hiveory-tasks-empty"><LoaderCircle className="is-spinning" size={22} /><p>Loading local tasks…</p></div> : error ? <div className="hiveory-tasks-empty"><AlertCircle size={22} /><h2>Tasks could not load</h2><p>{error}</p><button type="button" onClick={() => void refresh()}>Try again</button></div> : visibleTasks.length ? <div className="hiveory-tasks-rows">{visibleTasks.map((task) => <button key={task.id} type="button" className="hiveory-task-row" onClick={() => onOpenWorkspace(task.run.workspace_id)} title={`Open ${task.run.title}`}><span><code>{task.client_id}</code></span><span><strong>{task.title}</strong><small>{task.run.title}</small></span><span>{task.run.workspace_id.slice(0, 8)}</span><span className={`hiveory-task-state ${task.state}`}><CircleCheck size={13} />{taskStateLabel(task.state)}</span><time dateTime={new Date(task.updated_at_unix_ms).toISOString()}>{formatTime(task.updated_at_unix_ms)}</time></button>)}</div> : <div className="hiveory-tasks-empty"><CircleCheck size={22} /><h2>No local tasks match</h2><p>Tasks are created by local Hiveory code runs. Start or open a workspace to create one.</p><button type="button" onClick={onStartLocalWork}>Open workspace</button></div>}
-      </div>
-    </section>
-  )
+      const code = await hiveoryClient.codeSnapshot(); setWorkspaces(code.workspaces)
+      const selected = requestedWorkspaceId || workspaceId || code.active_workspace_id || code.workspaces[0]?.id || ''
+      setWorkspaceId(selected); setSnapshot(selected ? await hiveoryClient.taskSources(selected) : null)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Task sources could not be loaded.') } finally { setLoading(false) }
+  }, [workspaceId])
+  useEffect(() => { void load() }, [load])
+  const visible = useMemo(() => { const term = query.trim().toLocaleLowerCase(); return (snapshot?.items ?? []).filter((item) => (provider === 'all' || item.provider === provider) && (!term || [item.identifier, item.title, item.status, item.assignee ?? '', item.project ?? ''].some((value) => value.toLocaleLowerCase().includes(term)))) }, [snapshot, provider, query])
+  const connect = async (request: TaskSourceConnectRequest) => { setBusy(true); setError(null); try { await hiveoryClient.connectTaskSource(request); setConnector(null); await load(request.workspace_id) } catch (cause) { setError(cause instanceof Error ? cause.message : 'The source could not connect.') } finally { setBusy(false) } }
+  const remove = async (sourceId: string) => { if (!workspaceId || !confirm('Remove this local task source?')) return; setBusy(true); try { await hiveoryClient.removeTaskSource(workspaceId, sourceId); await load(workspaceId) } catch (cause) { setError(cause instanceof Error ? cause.message : 'The source could not be removed.') } finally { setBusy(false) } }
+  const configured = new Set((snapshot?.sources ?? []).filter((source) => source.provider !== 'github').map((source) => source.provider))
+  return <section className="hiveory-tasks-page hiveory-task-sources" aria-labelledby="hiveory-tasks-title">
+    <header className="hiveory-tasks-header"><div><h1 id="hiveory-tasks-title">Tasks</h1><p>Connected task sources for the selected local workspace.</p></div><div className="hiveory-task-header-actions"><select value={workspaceId} onChange={(event) => void load(event.target.value)} aria-label="Select workspace"><option value="">Select workspace</option>{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.display_name}</option>)}</select><button type="button" className="hiveory-icon-button" onClick={() => void load(workspaceId)} disabled={loading} title="Refresh tasks" aria-label="Refresh tasks"><RefreshCw size={15} className={loading ? 'is-spinning' : ''} /></button></div></header>
+    {!workspaceId && !loading ? <div className="hiveory-tasks-empty"><Settings2 size={22} /><h2>Open a workspace first</h2><p>Task sources are scoped to a local workspace so GitHub, Jira, and Linear never bleed into another project.</p><button type="button" onClick={onStartLocalWork}>Open workspace</button></div> : <>
+      <div className="hiveory-task-source-strip">{sourceKinds.map((kind) => { const source = snapshot?.sources.find((item) => item.provider === kind); return <div key={kind} className="hiveory-task-source-chip"><span>{kind === 'github' ? <Github size={15} /> : providerName[kind].slice(0, 1)}</span><div><strong>{providerName[kind]}</strong><small>{source?.validated_at_unix_ms ? 'Connected' : source?.last_error ?? (kind === 'github' ? 'Local CLI' : 'Not connected')}</small></div>{kind !== 'github' && <button type="button" onClick={() => setConnector(kind)}>{configured.has(kind) ? <Settings2 size={14} /> : <Plus size={14} />}</button>}{source && kind !== 'github' && <button type="button" className="hiveory-task-source-remove" onClick={() => void remove(source.id)} disabled={busy} aria-label={`Remove ${providerName[kind]}`}><X size={13} /></button>}</div> })}</div>
+      <div className="hiveory-tasks-provider-tabs" role="tablist"><button className={provider === 'all' ? 'is-active' : ''} onClick={() => setProvider('all')}>All</button>{sourceKinds.map((kind) => <button key={kind} className={provider === kind ? 'is-active' : ''} onClick={() => setProvider(kind)}>{providerName[kind]}</button>)}</div>
+      <div className="hiveory-tasks-toolbar"><label className="hiveory-tasks-filter"><Filter size={15} /><span>Open work</span></label><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search tasks" placeholder="Search issues, pull requests, and projects" /></div>
+      <div className="hiveory-tasks-table" role="region" aria-label="Tasks from connected sources"><div className="hiveory-tasks-columns"><span>ID</span><span>Title / context</span><span>Assignees</span><span>Status</span><span>Updated</span></div>{loading ? <div className="hiveory-tasks-empty"><LoaderCircle className="is-spinning" size={22} /><p>Refreshing selected sources…</p></div> : error ? <div className="hiveory-tasks-empty"><CircleAlert size={22} /><h2>Tasks could not load</h2><p>{error}</p><button type="button" onClick={() => void load(workspaceId)}>Try again</button></div> : visible.length ? <div className="hiveory-tasks-rows">{visible.map((item) => <TaskRow key={`${item.source_id}:${item.identifier}`} item={item} />)}</div> : <div className="hiveory-tasks-empty"><CircleAlert size={22} /><h2>No matching tasks</h2><p>{snapshot?.sources.some((source) => source.validated_at_unix_ms) ? 'Change the search or refresh a connected source.' : 'Connect Jira or Linear, or authenticate the local gh CLI for this workspace.'}</p></div>}</div>
+      <button type="button" className="hiveory-task-open-workspace" onClick={() => onOpenWorkspace(workspaceId)}>Open workspace</button>
+    </>}{connector && <TaskSourceDialog provider={connector} workspaceId={workspaceId} busy={busy} onCancel={() => setConnector(null)} onSave={connect} />}
+  </section>
 }
+
+function TaskRow({ item }: { item: TaskSourceItem }) { const content = <><span><code>{item.identifier}</code></span><span><strong>{item.title}</strong><small>{providerName[item.provider]}{item.project ? ` · ${item.project}` : ''}</small></span><span>{item.assignee ?? '—'}</span><span className="hiveory-task-state">{item.status}</span><time>{formatTime(item.updated_at)}</time></>; return item.url ? <a className="hiveory-task-row" href={item.url} target="_blank" rel="noreferrer">{content}<ExternalLink size={13} /></a> : <div className="hiveory-task-row">{content}</div> }
+function TaskSourceDialog({ provider, workspaceId, busy, onCancel, onSave }: { provider: TaskSourceProvider; workspaceId: string; busy: boolean; onCancel: () => void; onSave: (request: TaskSourceConnectRequest) => void }) { const [label, setLabel] = useState(providerName[provider]); const [endpoint, setEndpoint] = useState(provider === 'linear' ? 'https://api.linear.app' : ''); const [email, setEmail] = useState(''); const [token, setToken] = useState(''); return <div className="hiveory-modal-backdrop" role="presentation"><section className="hiveory-modal hiveory-task-source-modal" role="dialog" aria-modal="true" aria-labelledby="task-source-title"><div className="hiveory-modal-heading"><div><p className="hiveory-eyebrow">Local task source</p><h2 id="task-source-title">Connect {providerName[provider]}</h2></div><button className="hiveory-icon-button" onClick={onCancel} aria-label="Close"><X size={17} /></button></div><p>{providerHint[provider]}</p><label>Name<input value={label} onChange={(event) => setLabel(event.target.value)} autoFocus /></label><label>{provider === 'jira' ? 'Jira site URL' : 'Linear endpoint'}<input value={endpoint} onChange={(event) => setEndpoint(event.target.value)} placeholder={provider === 'jira' ? 'https://your-team.atlassian.net' : 'https://api.linear.app'} /></label>{provider === 'jira' && <label>Account email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>}<label>{provider === 'jira' ? 'API token' : 'Personal API key'}<input type="password" value={token} onChange={(event) => setToken(event.target.value)} autoComplete="off" /></label><div className="hiveory-modal-actions"><button className="is-secondary" onClick={onCancel}>Cancel</button><button disabled={busy || !label.trim() || !endpoint.trim() || !token.trim() || provider === 'jira' && !email.trim()} onClick={() => onSave({ workspace_id: workspaceId, provider, label: label.trim(), endpoint: endpoint.trim(), account_email: provider === 'jira' ? email.trim() : null, token })}>{busy ? 'Testing…' : 'Test and connect'}</button></div></section></div> }

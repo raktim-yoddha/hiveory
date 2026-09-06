@@ -43,6 +43,7 @@ tokio = { workspace = true, features = ["io-std"] }
 tokio-util.workspace = true
 uuid.workspace = true
 url.workspace = true
+reqwest.workspace = true
 zip.workspace = true
 
 [target.'cfg(windows)'.dependencies]

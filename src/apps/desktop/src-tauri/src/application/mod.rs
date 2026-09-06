@@ -4,6 +4,8 @@ mod browser;
 mod hosted_source;
 #[path = "../release.rs"]
 mod release;
+#[path = "../task_sources.rs"]
+mod task_sources;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use browser::{
@@ -85,7 +87,8 @@ use hiveory_protocol::{
     PluginInstallRequest, PluginInvocationSummary, PluginManifest, ProviderDiagnosticRequest,
     ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
     RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
-    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, UpdateSnapshot,
+    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, TaskSourceConnectRequest,
+    TaskSourceIdRequest, TaskSourceQuery, TaskSourceSnapshot, UpdateSnapshot,
     HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
@@ -3522,6 +3525,74 @@ async fn hiveory_query_code_hosted_tracking(
         .root_path(&request.workspace_id)
         .map_err(workspace_error)?;
     Ok(hosted_source::load_tracking(&foundation.persistence, &request.workspace_id, &root).await)
+}
+
+#[tauri::command]
+async fn hiveory_query_task_sources(
+    request: TaskSourceQuery,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<TaskSourceSnapshot, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    let root = foundation
+        .code_workspaces
+        .root_path(&request.workspace_id)
+        .map_err(workspace_error)?;
+    Ok(task_sources::snapshot(
+        &foundation.persistence,
+        foundation.secrets.as_ref(),
+        &request.workspace_id,
+        &root,
+    )
+    .await)
+}
+
+#[tauri::command]
+async fn hiveory_command_connect_task_source(
+    request: TaskSourceConnectRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<hiveory_protocol::TaskSourceSummary, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    task_sources::connect(
+        &foundation.persistence,
+        foundation.secrets.as_ref(),
+        &request,
+    )
+    .await
+    .map_err(validation_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_remove_task_source(
+    request: TaskSourceIdRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<bool, ApiError> {
+    foundation
+        .code_workspaces
+        .require(
+            &request.workspace_id,
+            hiveory_protocol::CodeWorkspaceCapability::ReadGit,
+        )
+        .map_err(workspace_error)?;
+    task_sources::remove(
+        &foundation.persistence,
+        foundation.secrets.as_ref(),
+        &request.source_id,
+    )
+    .await
+    .map_err(validation_error)?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -7860,6 +7931,9 @@ pub fn run() {
             hiveory_query_code_git_diff,
             hiveory_query_code_git_repository,
             hiveory_query_code_hosted_tracking,
+            hiveory_query_task_sources,
+            hiveory_command_connect_task_source,
+            hiveory_command_remove_task_source,
             hiveory_command_stage_code_git,
             hiveory_command_discard_code_git,
             hiveory_command_commit_code_git,

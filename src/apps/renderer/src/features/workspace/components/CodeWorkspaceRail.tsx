@@ -702,9 +702,8 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           aria-expanded={expanded}
           aria-label={`${expanded ? 'Collapse' : 'Expand'} ${leaves.length} panes`}
         >
-          <span className="code-rail-pane-summary-icons">{leaves.slice(0, 3).map((leaf) => <span key={leaf.pane_id}>{renderPaneRailIcon(leaf)}</span>)}</span>
+          <span className="code-rail-pane-summary-icons">{leaves.slice(0, 6).map((leaf) => <span key={leaf.pane_id}>{renderPaneRailIcon(leaf)}</span>)}</span>
           <span>{leaves.length} pane{leaves.length === 1 ? '' : 's'}</span>
-          {leaves.length > 3 && <span>+{leaves.length - 3}</span>}
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
         {expanded && leaves.map((leaf) => {
