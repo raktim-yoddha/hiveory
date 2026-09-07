@@ -148,6 +148,15 @@ export type CodeLayoutPresetQuery = { workspace_id: string }
 export type CodeLayoutPresetCreateRequest = { workspace_id: string; name: string; description: string | null; layout: CodePaneLayout }
 export type CodeLayoutPresetUpdateRequest = { preset_id: string; workspace_id: string; name: string; description: string | null; layout: CodePaneLayout | null }
 export type CodeLayoutPresetOpenRequest = { preset_id: string; workspace_id: string; expected_revision: number }
+export type CodeLaunchPresetPaneKind = 'coding_agent' | 'terminal' | 'browser' | 'markdown'
+export type CodeLaunchPresetEntry = { id: string; kind: CodeLaunchPresetPaneKind; title: string; adapter_id: string | null; url: string | null; agent_launch_mode: CodeAgentLaunchMode }
+export type CodeLaunchPresetSummary = { id: string; workspace_id: string; name: string; entries: CodeLaunchPresetEntry[]; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeLaunchPresetQuery = { workspace_id: string }
+export type CodeLaunchPresetCreateRequest = { workspace_id: string; name: string; entries: CodeLaunchPresetEntry[] }
+export type CodeLaunchPresetUpdateRequest = { preset_id: string; workspace_id: string; name: string; entries: CodeLaunchPresetEntry[] }
+export type CodeLaunchPresetOpenRequest = { preset_id: string; workspace_id: string; expected_revision: number }
+export type CodeLaunchPresetLaunchTarget = { pane_id: string; entry: CodeLaunchPresetEntry }
+export type CodeLaunchPresetOpenResult = { layout: CodePaneLayout; targets: CodeLaunchPresetLaunchTarget[] }
 export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; cols: number; rows: number }
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
@@ -403,6 +412,7 @@ const previewSubscribers = new Set<(event: ChatEventEnvelope) => void>()
 const previewCodeProjects = new Map<string, CodeProjectSummary>()
 const previewCodeWorkspaces = new Map<string, { detail: CodeWorkspaceDetail; files: Map<string, CodeDocument> }>()
 const previewCodeLayoutPresets = new Map<string, { summary: CodeLayoutPresetSummary; layout: CodePaneLayout }>()
+const previewCodeLaunchPresets = new Map<string, CodeLaunchPresetSummary>()
 const previewCodeRuns = new Map<string, CodeRunDetail>()
 const previewCodeMailboxes = new Map<string, CodeMailboxDelivery[]>()
 const previewCodeMailboxRequests = new Map<string, CodeMailboxDelivery>()
@@ -1306,6 +1316,41 @@ export const hiveoryClient = {
     layout.revision = request.expected_revision + 1
     workspace.detail.layout = layout
     return structuredClone(layout)
+  },
+  async codeLaunchPresets(query: CodeLaunchPresetQuery): Promise<CodeLaunchPresetSummary[]> {
+    if (hiveoryIsTauri) return tauriQuery<CodeLaunchPresetSummary[]>('hiveory_query_code_launch_presets', { query })
+    return [...previewCodeLaunchPresets.values()]
+      .filter((preset) => preset.workspace_id === query.workspace_id)
+      .sort((left, right) => right.updated_at_unix_ms - left.updated_at_unix_ms)
+      .map((preset) => structuredClone(preset))
+  },
+  async createCodeLaunchPreset(request: CodeLaunchPresetCreateRequest): Promise<CodeLaunchPresetSummary> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLaunchPresetCreateRequest, CodeLaunchPresetSummary>('hiveory_command_create_code_launch_preset', request)
+    const now = previewNow()
+    const preset: CodeLaunchPresetSummary = { id: previewId('launch-preset'), workspace_id: request.workspace_id, name: request.name.trim(), entries: structuredClone(request.entries), created_at_unix_ms: now, updated_at_unix_ms: now }
+    previewCodeLaunchPresets.set(preset.id, preset)
+    return structuredClone(preset)
+  },
+  async updateCodeLaunchPreset(request: CodeLaunchPresetUpdateRequest): Promise<CodeLaunchPresetSummary> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLaunchPresetUpdateRequest, CodeLaunchPresetSummary>('hiveory_command_update_code_launch_preset', request)
+    const existing = previewCodeLaunchPresets.get(request.preset_id)
+    if (!existing || existing.workspace_id !== request.workspace_id) throw new Error('Launch preset was not found.')
+    const preset = { ...existing, name: request.name.trim(), entries: structuredClone(request.entries), updated_at_unix_ms: previewNow() }
+    previewCodeLaunchPresets.set(preset.id, preset)
+    return structuredClone(preset)
+  },
+  async openCodeLaunchPreset(request: CodeLaunchPresetOpenRequest): Promise<CodeLaunchPresetOpenResult> {
+    if (hiveoryIsTauri) return tauriCommand<CodeLaunchPresetOpenRequest, CodeLaunchPresetOpenResult>('hiveory_command_open_code_launch_preset', request)
+    const workspace = previewCodeWorkspaces.get(request.workspace_id)
+    const preset = previewCodeLaunchPresets.get(request.preset_id)
+    if (!workspace || !preset || preset.workspace_id !== request.workspace_id) throw new Error('Launch preset was not found.')
+    const current = workspace.detail.layout
+    if (current.nodes.length !== 1 || current.nodes[0]?.kind !== 'empty' || current.nodes[0]?.resource_id) throw new Error('Presets can only be opened before the first pane is created.')
+    if ((current.revision ?? 0) !== request.expected_revision) throw new Error('layout_conflict')
+    const leaves: CodePaneNode[] = preset.entries.map((entry, index) => ({ pane_id: `preset-pane-${index + 1}`, parent_id: null, kind: entry.kind === 'coding_agent' ? 'coding_agent' : entry.kind === 'terminal' ? 'terminal' : entry.kind === 'browser' ? 'preview' : 'markdown', orientation: null, ratio_percent: null, children: [], resource_id: null, title: entry.title }))
+    const layout: CodePaneLayout = { workspace_id: request.workspace_id, version: current.version, root_id: leaves[0]?.pane_id ?? 'root', nodes: leaves, revision: request.expected_revision + 1, focused_pane_id: leaves[0]?.pane_id ?? null, maximized_pane_id: null }
+    workspace.detail.layout = layout
+    return { layout: structuredClone(layout), targets: preset.entries.map((entry, index) => ({ pane_id: leaves[index]!.pane_id, entry: structuredClone(entry) })) }
   },
   async applyCodePaneMutation(request: CodePaneMutationRequest): Promise<CodePaneMutationResult> {
     if (hiveoryIsTauri) return tauriCommand<CodePaneMutationRequest, CodePaneMutationResult>('hiveory_command_apply_code_pane_mutation', request)

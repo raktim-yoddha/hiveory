@@ -6,6 +6,7 @@ import {
   type CodePaneMutation,
   type CodePanePlacement,
   type CodePanePreset,
+  type CodeLaunchPresetSummary,
   type CodeAgentLaunchMode,
   type CodeTerminalKind,
   type CodeTerminalSummary,
@@ -38,7 +39,7 @@ export interface CodeWorkspaceController {
   focusPane: (paneId: string) => Promise<void>
   toggleMaximize: (paneId?: string | null) => Promise<void>
   applyPreset: (preset: CodePanePreset, primaryPaneId?: string | null) => Promise<void>
-  openLayoutPreset: (presetId: string) => Promise<void>
+  openLaunchPreset: (preset: CodeLaunchPresetSummary) => Promise<void>
   launchTerminal: (paneId: string, kind: CodeTerminalKind, adapterId?: string | null, model?: string | null, agentLaunchMode?: CodeAgentLaunchMode) => Promise<void>
   openPreview: (paneId: string, url: string) => Promise<void>
   updatePreviewState: (state: BrowserRuntimeState) => void
@@ -609,25 +610,41 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     [commitLayout, enqueueOperation, loadWorkspace]
   )
 
-  const openLayoutPreset = useCallback(async (presetId: string) => {
+  const openLaunchPreset = useCallback(async (preset: CodeLaunchPresetSummary) => {
+    let targets: Awaited<ReturnType<typeof hiveoryClient.openCodeLaunchPreset>>['targets'] = []
+    let launchError: unknown = null
     await enqueueOperation(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       try {
         dispatch({ type: 'SET_MUTATING', isMutating: true })
-        const layout = await hiveoryClient.openCodeLayoutPreset({
-          preset_id: presetId,
+        const result = await hiveoryClient.openCodeLaunchPreset({
+          preset_id: preset.id,
           workspace_id: workspaceId,
           expected_revision: revision,
         })
-        commitLayout(layout)
+        targets = result.targets
+        commitLayout(result.layout)
       } catch (err: unknown) {
+        launchError = err
         dispatch({ type: 'SET_ERROR', error: formatError(err) })
       } finally {
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
     })
-  }, [commitLayout, enqueueOperation])
+    if (launchError) throw launchError
+    for (const target of targets) {
+      if (target.entry.kind === 'coding_agent') {
+        await launchTerminal(target.pane_id, 'coding_agent', target.entry.adapter_id, null, target.entry.agent_launch_mode)
+      } else if (target.entry.kind === 'terminal') {
+        await launchTerminal(target.pane_id, 'shell')
+      } else if (target.entry.kind === 'browser') {
+        await openPreview(target.pane_id, target.entry.url ?? DEFAULT_BROWSER_HOME)
+      } else {
+        await createMarkdown(target.pane_id)
+      }
+    }
+  }, [commitLayout, createMarkdown, enqueueOperation, launchTerminal, openPreview])
 
   const openMarkdown = useCallback(
     async (paneId: string, relativePath: string) => {
@@ -851,7 +868,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     focusPane,
     toggleMaximize,
     applyPreset,
-    openLayoutPreset,
+    openLaunchPreset,
     launchTerminal,
     openPreview,
     updatePreviewState,

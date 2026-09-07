@@ -64,7 +64,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
     focusPane,
     renamePane,
     splitAndLaunch,
-    openLayoutPreset,
+    openLaunchPreset,
     toggleMaximize,
     requestClosePane,
     launchTerminal,
@@ -124,7 +124,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
         return (
           <CodePaneLauncher
             workspaceId={state.workspaceId!}
-            layout={state.layout!}
+            allowPresets={state.layout!.nodes.length === 1 && state.layout!.nodes[0]?.kind === 'empty' && !state.layout!.nodes[0]?.resource_id}
             onLaunch={(kind, adapterId, url, agentLaunchMode) => {
               if (kind === 'shell' || kind === 'coding_agent') {
                 void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
@@ -134,7 +134,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
                 void createMarkdown(node.pane_id)
               }
             }}
-            onOpenPreset={(presetId) => void openLayoutPreset(presetId)}
+            onOpenPreset={openLaunchPreset}
           />
         )
       case 'terminal':
@@ -143,7 +143,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           return (
             <CodePaneLauncher
               workspaceId={state.workspaceId!}
-              layout={state.layout!}
+              allowPresets={state.layout!.nodes.length === 1 && state.layout!.nodes[0]?.kind === 'empty' && !state.layout!.nodes[0]?.resource_id}
               onLaunch={(kind, adapterId, url, agentLaunchMode) => {
                 if (kind === 'shell' || kind === 'coding_agent') {
                   void launchTerminal(node.pane_id, kind, adapterId, null, agentLaunchMode)
@@ -153,7 +153,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
                   void createMarkdown(node.pane_id)
                 }
               }}
-              onOpenPreset={(presetId) => void openLayoutPreset(presetId)}
+              onOpenPreset={openLaunchPreset}
             />
           )
         }

@@ -944,6 +944,86 @@ pub struct CodeLayoutPresetOpenRequest {
     pub expected_revision: u64,
 }
 
+/// A durable startup plan for a workspace. Unlike a layout snapshot, this
+/// describes the panes and sessions that should be created together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeLaunchPresetPaneKind {
+    CodingAgent,
+    Terminal,
+    Browser,
+    Markdown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetEntry {
+    pub id: String,
+    pub kind: CodeLaunchPresetPaneKind,
+    pub title: String,
+    pub adapter_id: Option<String>,
+    pub url: Option<String>,
+    #[serde(default)]
+    pub agent_launch_mode: CodeAgentLaunchMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetSummary {
+    pub id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub entries: Vec<CodeLaunchPresetEntry>,
+    pub created_at_unix_ms: i64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetQuery {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetCreateRequest {
+    pub workspace_id: String,
+    pub name: String,
+    pub entries: Vec<CodeLaunchPresetEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetUpdateRequest {
+    pub preset_id: String,
+    pub workspace_id: String,
+    pub name: String,
+    pub entries: Vec<CodeLaunchPresetEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetOpenRequest {
+    pub preset_id: String,
+    pub workspace_id: String,
+    pub expected_revision: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetLaunchTarget {
+    pub pane_id: String,
+    pub entry: CodeLaunchPresetEntry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeLaunchPresetOpenResult {
+    pub layout: CodePaneLayout,
+    pub targets: Vec<CodeLaunchPresetLaunchTarget>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -3414,6 +3494,15 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeLayoutPresetCreateRequest::export_all(&config)?;
     CodeLayoutPresetUpdateRequest::export_all(&config)?;
     CodeLayoutPresetOpenRequest::export_all(&config)?;
+    CodeLaunchPresetPaneKind::export_all(&config)?;
+    CodeLaunchPresetEntry::export_all(&config)?;
+    CodeLaunchPresetSummary::export_all(&config)?;
+    CodeLaunchPresetQuery::export_all(&config)?;
+    CodeLaunchPresetCreateRequest::export_all(&config)?;
+    CodeLaunchPresetUpdateRequest::export_all(&config)?;
+    CodeLaunchPresetOpenRequest::export_all(&config)?;
+    CodeLaunchPresetLaunchTarget::export_all(&config)?;
+    CodeLaunchPresetOpenResult::export_all(&config)?;
     CodePanePlacement::export_all(&config)?;
     CodePanePreset::export_all(&config)?;
     CodePaneMutation::export_all(&config)?;

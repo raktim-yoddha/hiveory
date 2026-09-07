@@ -19,7 +19,7 @@ use browser::{
 use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, HiveoryStoredAttachment};
 use hiveory_chat_domain::{estimate_context_tokens, validate_send_request};
-use hiveory_code_domain::{default_layout, validate_layout};
+use hiveory_code_domain::{apply_layout_preset, default_layout, split_pane, validate_layout};
 use hiveory_code_orchestration::{HiveoryCodeOrchestration, HiveoryCodeOrchestrationError};
 use hiveory_code_runtime::{stream_cli_chat_turn, HiveoryCodeRuntime, HiveoryCodeRuntimeError};
 use hiveory_git_service::{HiveoryGitError, HiveoryGitService};
@@ -64,22 +64,26 @@ use hiveory_protocol::{
     CodeHostedIssueActionRequest, CodeHostedIssueCreateRequest, CodeHostedIssueUpdateRequest,
     CodeHostedOperationResult, CodeHostedPullRequestActionRequest,
     CodeHostedPullRequestCreateRequest, CodeHostedTracking, CodeHostedTrackingRequest,
+    CodeLaunchPresetCreateRequest, CodeLaunchPresetEntry, CodeLaunchPresetLaunchTarget,
+    CodeLaunchPresetOpenRequest, CodeLaunchPresetOpenResult, CodeLaunchPresetPaneKind,
+    CodeLaunchPresetQuery, CodeLaunchPresetSummary, CodeLaunchPresetUpdateRequest,
     CodeLayoutPresetCreateRequest, CodeLayoutPresetOpenRequest, CodeLayoutPresetQuery,
     CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodeMailboxAckRequest,
     CodeMailboxDelivery, CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
-    CodeOrchestrationEventsQuery, CodePaneLayout, CodePaneMutation, CodePaneMutationRequest,
-    CodePaneMutationResult, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
-    CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary,
-    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeRenameFileRequest, CodeRenameFileResult,
-    CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary,
-    CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
-    CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
-    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
-    CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
-    CodeTerminalStopRequest, CodeTerminalSubscribeRequest, CodeTerminalSummary,
-    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenInRequest,
-    CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest,
-    CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeOrchestrationEventsQuery, CodePaneKind, CodePaneLayout, CodePaneMutation,
+    CodePaneMutationRequest, CodePaneMutationResult, CodePanePlacement, CodePanePreset,
+    CodePreviewRequest, CodePreviewState, CodePreviewSummary, CodeProjectAddRequest,
+    CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary, CodeQuestionAnswerRequest,
+    CodeReadFileRequest, CodeRenameFileRequest, CodeRenameFileResult, CodeReviewRequest,
+    CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest,
+    CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest,
+    CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent,
+    CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot,
+    CodeTerminalSnapshotQuery, CodeTerminalStartRequest, CodeTerminalStopRequest,
+    CodeTerminalSubscribeRequest, CodeTerminalSummary, CodeWorkspaceCreateRequest,
+    CodeWorkspaceDetail, CodeWorkspaceOpenInRequest, CodeWorkspaceOpenRequest,
+    CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest, CodeWorkspaceQuery,
+    CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
     CodeWorkspaceTrustRequest, CodeWorkspaceUpdateRequest, CommandEnvelope,
     CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState,
     LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePaneMarkdownRequest,
@@ -3545,6 +3549,129 @@ async fn hiveory_command_open_code_layout_preset(
 }
 
 #[tauri::command]
+async fn hiveory_query_code_launch_presets(
+    query: CodeLaunchPresetQuery,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<Vec<CodeLaunchPresetSummary>, ApiError> {
+    foundation
+        .code_workspaces
+        .summary(&query.workspace_id)
+        .map_err(workspace_error)?;
+    foundation
+        .persistence
+        .code_launch_presets(&query.workspace_id)
+        .await
+        .map_err(database_error)
+}
+
+#[tauri::command]
+async fn hiveory_command_create_code_launch_preset(
+    command: CommandEnvelope<CodeLaunchPresetCreateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeLaunchPresetSummary>, ApiError> {
+    validate_code_command(&command)?;
+    validate_code_launch_preset(
+        &foundation,
+        &command.payload.name,
+        &command.payload.entries,
+        false,
+    )?;
+    foundation
+        .code_workspaces
+        .summary(&command.payload.workspace_id)
+        .map_err(workspace_error)?;
+    let preset = foundation
+        .persistence
+        .create_code_launch_preset(&command.payload)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, preset))
+}
+
+#[tauri::command]
+async fn hiveory_command_update_code_launch_preset(
+    command: CommandEnvelope<CodeLaunchPresetUpdateRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeLaunchPresetSummary>, ApiError> {
+    validate_code_command(&command)?;
+    validate_code_launch_preset(
+        &foundation,
+        &command.payload.name,
+        &command.payload.entries,
+        false,
+    )?;
+    let preset = foundation
+        .persistence
+        .update_code_launch_preset(&command.payload)
+        .await
+        .map_err(database_error)?;
+    Ok(response(&command.request_id, preset))
+}
+
+#[tauri::command]
+async fn hiveory_command_open_code_launch_preset(
+    command: CommandEnvelope<CodeLaunchPresetOpenRequest>,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<ResponseEnvelope<CodeLaunchPresetOpenResult>, ApiError> {
+    validate_code_command(&command)?;
+    let preset = foundation
+        .persistence
+        .code_launch_preset(&command.payload.workspace_id, &command.payload.preset_id)
+        .await
+        .map_err(database_error)?
+        .ok_or_else(|| validation_error("Launch preset was not found."))?;
+    validate_code_launch_preset(&foundation, &preset.name, &preset.entries, true)?;
+
+    let current_layout = match foundation
+        .persistence
+        .code_layout(&command.payload.workspace_id)
+        .await
+        .map_err(database_error)?
+    {
+        Some(layout) if layout.workspace_id == command.payload.workspace_id => layout,
+        _ => default_layout(&command.payload.workspace_id),
+    };
+    if current_layout.revision != command.payload.expected_revision {
+        return Err(application_error(
+            "layout_conflict",
+            "Pane layout was modified elsewhere.",
+            RetryClass::AfterUserAction,
+        ));
+    }
+    if !is_empty_workspace_layout(&current_layout) {
+        return Err(validation_error(
+            "Presets can only be opened before the first pane is created.",
+        ));
+    }
+
+    let (next_layout, targets) =
+        build_code_launch_preset_layout(&command.payload.workspace_id, &preset.entries)?;
+    let layout = foundation
+        .persistence
+        .mutate_code_layout(
+            &command.payload.workspace_id,
+            command.payload.expected_revision,
+            &next_layout,
+        )
+        .await
+        .map_err(|error| {
+            if error.to_string().contains("layout_conflict") {
+                application_error(
+                    "layout_conflict",
+                    "Pane layout was modified elsewhere.",
+                    RetryClass::AfterUserAction,
+                )
+            } else {
+                database_error(error)
+            }
+        })?;
+    Ok(response(
+        &command.request_id,
+        CodeLaunchPresetOpenResult { layout, targets },
+    ))
+}
+
+#[tauri::command]
 async fn hiveory_query_code_git_status(
     request: CodeGitStatusRequest,
     foundation: State<'_, HiveoryFoundation>,
@@ -5107,7 +5234,7 @@ async fn hiveory_command_launch_code_pane_terminal(
         .await
         .map_err(terminal_host_error)?;
 
-    let pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
+    let default_pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
         let adapter_name = summary
             .adapter_id
             .clone()
@@ -5120,6 +5247,7 @@ async fn hiveory_command_launch_code_pane_terminal(
     } else {
         "Terminal".to_owned()
     };
+    let pane_title = pane.title.clone().unwrap_or(default_pane_title);
 
     let pane_kind = if summary.kind == CodeTerminalKind::CodingAgent {
         hiveory_protocol::CodePaneKind::CodingAgent
@@ -5248,7 +5376,12 @@ async fn hiveory_command_open_code_pane_preview(
     }
 
     let mut new_layout = current_layout.clone();
-    let preview_title = url.host_str().unwrap_or("Preview").to_owned();
+    let preview_title = current_layout
+        .nodes
+        .iter()
+        .find(|node| node.pane_id == command.payload.pane_id)
+        .and_then(|node| node.title.clone())
+        .unwrap_or_else(|| url.host_str().unwrap_or("Preview").to_owned());
     if let Some(node) = new_layout
         .nodes
         .iter_mut()
@@ -6929,6 +7062,142 @@ fn validate_code_layout_preset_fields(
     Ok(())
 }
 
+fn validate_code_launch_preset(
+    foundation: &HiveoryFoundation,
+    name: &str,
+    entries: &[CodeLaunchPresetEntry],
+    require_detected_adapters: bool,
+) -> Result<(), ApiError> {
+    if name.trim().is_empty() || name.trim().chars().count() > 120 {
+        return Err(validation_error(
+            "Preset name must be between 1 and 120 characters.",
+        ));
+    }
+    if entries.is_empty() || entries.len() > 16 {
+        return Err(validation_error(
+            "A preset must contain between 1 and 16 panes.",
+        ));
+    }
+    let adapters = foundation.code_runtime.adapters();
+    let mut ids = HashSet::new();
+    for entry in entries {
+        if entry.id.trim().is_empty() || !ids.insert(entry.id.as_str()) {
+            return Err(validation_error(
+                "Preset pane IDs must be unique and non-empty.",
+            ));
+        }
+        hiveory_code_domain::validate_title(&entry.title)
+            .map_err(|error| validation_error(format!("Invalid preset pane title: {error}")))?;
+        match entry.kind {
+            CodeLaunchPresetPaneKind::CodingAgent => {
+                let adapter_id = entry
+                    .adapter_id
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| {
+                        validation_error("A coding-agent preset pane needs an adapter.")
+                    })?;
+                if entry.url.is_some() {
+                    return Err(validation_error(
+                        "A coding-agent preset pane cannot have a URL.",
+                    ));
+                }
+                if require_detected_adapters
+                    && !adapters
+                        .iter()
+                        .any(|adapter| adapter.id == adapter_id && adapter.detected)
+                {
+                    return Err(validation_error(format!(
+                        "The {adapter_id} coding agent is not installed on this device."
+                    )));
+                }
+            }
+            CodeLaunchPresetPaneKind::Browser => {
+                let url = entry
+                    .url
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| validation_error("A browser preset pane needs a URL."))?;
+                validate_preview_url(url)?;
+                if entry.adapter_id.is_some() {
+                    return Err(validation_error(
+                        "A browser preset pane cannot have an adapter.",
+                    ));
+                }
+            }
+            CodeLaunchPresetPaneKind::Terminal | CodeLaunchPresetPaneKind::Markdown => {
+                if entry.adapter_id.is_some() || entry.url.is_some() {
+                    return Err(validation_error(
+                        "Terminal and Markdown preset panes cannot have an adapter or URL.",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_empty_workspace_layout(layout: &CodePaneLayout) -> bool {
+    layout.nodes.len() == 1
+        && layout.root_id == layout.nodes[0].pane_id
+        && layout.nodes[0].children.is_empty()
+        && layout.nodes[0].kind == CodePaneKind::Empty
+        && layout.nodes[0].resource_id.is_none()
+}
+
+fn build_code_launch_preset_layout(
+    workspace_id: &str,
+    entries: &[CodeLaunchPresetEntry],
+) -> Result<(CodePaneLayout, Vec<CodeLaunchPresetLaunchTarget>), ApiError> {
+    let mut layout = default_layout(workspace_id);
+    for _ in 1..entries.len() {
+        let pane_id = layout
+            .focused_pane_id
+            .clone()
+            .ok_or_else(|| validation_error("Workspace layout has no focused pane."))?;
+        layout = split_pane(&layout, &pane_id, CodePanePlacement::Right).map_err(|error| {
+            validation_error(format!("Could not create preset layout: {error}"))
+        })?;
+    }
+    layout = apply_layout_preset(&layout, CodePanePreset::Tidy)
+        .map_err(|error| validation_error(format!("Could not arrange preset layout: {error}")))?;
+    let pane_ids = layout
+        .nodes
+        .iter()
+        .filter(|node| node.children.is_empty())
+        .map(|node| node.pane_id.clone())
+        .collect::<Vec<_>>();
+    if pane_ids.len() != entries.len() {
+        return Err(validation_error(
+            "Preset layout did not create every requested pane.",
+        ));
+    }
+    let targets = pane_ids
+        .iter()
+        .cloned()
+        .zip(entries.iter().cloned())
+        .map(|(pane_id, entry)| CodeLaunchPresetLaunchTarget { pane_id, entry })
+        .collect::<Vec<_>>();
+    for target in &targets {
+        let node = layout
+            .nodes
+            .iter_mut()
+            .find(|node| node.pane_id == target.pane_id)
+            .ok_or_else(|| validation_error("Preset layout pane was not found."))?;
+        node.kind = match target.entry.kind {
+            CodeLaunchPresetPaneKind::CodingAgent => CodePaneKind::CodingAgent,
+            CodeLaunchPresetPaneKind::Terminal => CodePaneKind::Terminal,
+            CodeLaunchPresetPaneKind::Browser => CodePaneKind::Preview,
+            CodeLaunchPresetPaneKind::Markdown => CodePaneKind::Markdown,
+        };
+        node.title = Some(target.entry.title.clone());
+    }
+    layout.focused_pane_id = targets.first().map(|target| target.pane_id.clone());
+    validate_layout(&layout)
+        .map_err(|error| validation_error(format!("Invalid preset layout: {error}")))?;
+    Ok((layout, targets))
+}
+
 async fn ensure_terminal_history_key(
     persistence: &HiveoryPersistence,
     secrets: &HiveorySecretStoreHandle,
@@ -8060,6 +8329,10 @@ pub fn run() {
             hiveory_command_create_code_layout_preset,
             hiveory_command_update_code_layout_preset,
             hiveory_command_open_code_layout_preset,
+            hiveory_query_code_launch_presets,
+            hiveory_command_create_code_launch_preset,
+            hiveory_command_update_code_launch_preset,
+            hiveory_command_open_code_launch_preset,
             hiveory_command_apply_code_pane_mutation,
             hiveory_command_launch_code_pane_terminal,
             hiveory_command_open_code_pane_preview,

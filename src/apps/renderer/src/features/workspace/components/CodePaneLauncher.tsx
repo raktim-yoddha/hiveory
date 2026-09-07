@@ -4,7 +4,7 @@ import {
   hiveoryClient,
   type CodeAdapterSummary,
   type CodeAgentLaunchMode,
-  type CodePaneLayout,
+  type CodeLaunchPresetSummary,
 } from '../../../shared/api/hiveory-client'
 import { CodeSplitPanePicker } from './CodeSplitPanePicker'
 import { CodeLayoutPresetLibrary } from './CodeLayoutPresetLibrary'
@@ -12,17 +12,17 @@ import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surfac
 
 interface CodePaneLauncherProps {
   workspaceId: string
-  layout: CodePaneLayout
+  allowPresets: boolean
   onLaunch: (
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
     adapterId?: string | null,
     url?: string,
     agentLaunchMode?: CodeAgentLaunchMode,
   ) => void
-  onOpenPreset: (presetId: string) => void
+  onOpenPreset: (preset: CodeLaunchPresetSummary) => Promise<void>
 }
 
-export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId, layout, onLaunch, onOpenPreset }) => {
+export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId, allowPresets, onLaunch, onOpenPreset }) => {
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
   const [presetOpen, setPresetOpen] = useState(false)
@@ -64,7 +64,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId,
               <span className="code-launcher-card-desc">Choose a terminal, agent, Browser, or document</span>
             </span>
           </button>
-          <button
+          {allowPresets && <button
             type="button"
             className="code-launcher-card"
             onClick={() => {
@@ -75,9 +75,9 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId,
             <span className="code-launcher-icon"><LayoutTemplate size={18} aria-hidden="true" /></span>
             <span>
               <span className="code-launcher-card-title">Load presets</span>
-              <span className="code-launcher-card-desc">Reuse a saved pane layout</span>
+              <span className="code-launcher-card-desc">Open a saved workspace setup</span>
             </span>
-          </button>
+          </button>}
         </div>
 
       </div>
@@ -90,7 +90,7 @@ export const CodePaneLauncher: React.FC<CodePaneLauncherProps> = ({ workspaceId,
         onSelect={(kind, adapterId, url, agentLaunchMode) => onLaunch(kind, adapterId, url, agentLaunchMode)}
         onClose={() => setPickerOpen(false)}
       />
-      {presetOpen && <CodeLayoutPresetLibrary workspaceId={workspaceId} layout={layout} onOpenPreset={onOpenPreset} onClose={() => setPresetOpen(false)} />}
+      {presetOpen && <CodeLayoutPresetLibrary workspaceId={workspaceId} adapters={adapters} onOpenPreset={onOpenPreset} onClose={() => setPresetOpen(false)} />}
     </div>
   )
 }

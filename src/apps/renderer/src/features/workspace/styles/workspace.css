@@ -1658,11 +1658,22 @@
 .code-layout-preset-checkbox input { width: 15px; height: 15px; accent-color: #d2d2d7; }
 .code-layout-preset-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .code-layout-preset-feedback { margin: 0; border-top: 1px solid #303034; padding: 10px 18px; color: #c7c7cc; font-size: 12px; }
+.code-launch-preset-entries { display: grid; overflow: auto; max-height: 330px; border: 1px solid #303034; border-radius: 8px; background: #111113; }
+.code-launch-preset-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 10px; border-bottom: 1px solid #303034; }
+.code-launch-preset-entry:last-child { border-bottom: 0; }
+.code-launch-preset-entry-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #3a3a3f; border-radius: 7px; color: #d1d1d6; background: #202024; }
+.code-launch-preset-entry-body { display: grid; min-width: 0; gap: 8px; }
+.code-launch-preset-entry-header { display: flex; align-items: center; justify-content: space-between; color: #e9e9ec; font-size: 12px; }
+.code-launch-preset-entry-fields { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(130px, 1fr) minmax(130px, 1fr); gap: 7px; }
+.code-launch-preset-entry-fields input, .code-launch-preset-entry-fields select { min-width: 0; border: 1px solid #3b3b40; border-radius: 6px; padding: 7px 8px; color: #f1f1f2; background: #0d0d0f; font: inherit; font-size: 12px; }
+.code-launch-preset-add { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.code-launch-preset-add > span { margin-right: 3px; color: #98989f; font-size: 11px; font-weight: 650; }
 
 @media (max-width: 620px) {
   .code-layout-preset-backdrop { padding: 12px; }
   .code-layout-preset-row { grid-template-columns: 34px minmax(0, 1fr); }
   .code-layout-preset-actions { grid-column: 2; justify-content: flex-start; }
+  .code-launch-preset-entry-fields { grid-template-columns: 1fr; }
 }
 
 .code-launcher-card {

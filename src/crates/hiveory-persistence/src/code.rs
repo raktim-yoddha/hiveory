@@ -3,7 +3,8 @@
 use super::{now_ms, HiveoryPersistence};
 use hiveory_code_domain::{migrate_layout_v1, migrate_layout_v2, CODE_LAYOUT_VERSION};
 use hiveory_protocol::{
-    CodeAgentLaunchMode, CodeDocumentSummary, CodeLayoutPresetCreateRequest,
+    CodeAgentLaunchMode, CodeDocumentSummary, CodeLaunchPresetCreateRequest, CodeLaunchPresetEntry,
+    CodeLaunchPresetSummary, CodeLaunchPresetUpdateRequest, CodeLayoutPresetCreateRequest,
     CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodePaneLayout, CodePreviewState,
     CodePreviewSummary, CodeProjectKind, CodeProjectSummary, CodeTerminalKind, CodeTerminalState,
     CodeTerminalSummary, CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
@@ -394,6 +395,94 @@ impl HiveoryPersistence {
         })
     }
 
+    pub async fn code_launch_presets(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<CodeLaunchPresetSummary>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, workspace_id, name, entries_json, created_at_unix_ms, updated_at_unix_ms FROM hiveory_code_launch_presets WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC, name COLLATE NOCASE",
+        )
+        .bind(workspace_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(code_launch_preset_from_row).collect()
+    }
+
+    pub async fn code_launch_preset(
+        &self,
+        workspace_id: &str,
+        preset_id: &str,
+    ) -> Result<Option<CodeLaunchPresetSummary>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT id, workspace_id, name, entries_json, created_at_unix_ms, updated_at_unix_ms FROM hiveory_code_launch_presets WHERE workspace_id=? AND id=?",
+        )
+        .bind(workspace_id)
+        .bind(preset_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(code_launch_preset_from_row).transpose()
+    }
+
+    pub async fn create_code_launch_preset(
+        &self,
+        request: &CodeLaunchPresetCreateRequest,
+    ) -> Result<CodeLaunchPresetSummary, sqlx::Error> {
+        let now = now_ms();
+        let summary = CodeLaunchPresetSummary {
+            id: Uuid::now_v7().to_string(),
+            workspace_id: request.workspace_id.clone(),
+            name: request.name.clone(),
+            entries: request.entries.clone(),
+            created_at_unix_ms: now,
+            updated_at_unix_ms: now,
+        };
+        let entries_json = serde_json::to_string(&summary.entries)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        sqlx::query(
+            "INSERT INTO hiveory_code_launch_presets (id, workspace_id, name, entries_json, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&summary.id)
+        .bind(&summary.workspace_id)
+        .bind(&summary.name)
+        .bind(entries_json)
+        .bind(summary.created_at_unix_ms)
+        .bind(summary.updated_at_unix_ms)
+        .execute(&self.pool)
+        .await?;
+        Ok(summary)
+    }
+
+    pub async fn update_code_launch_preset(
+        &self,
+        request: &CodeLaunchPresetUpdateRequest,
+    ) -> Result<CodeLaunchPresetSummary, sqlx::Error> {
+        let existing = self
+            .code_launch_preset(&request.workspace_id, &request.preset_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::Protocol("Launch preset was not found.".to_owned()))?;
+        let now = now_ms();
+        let entries_json = serde_json::to_string(&request.entries)
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+        sqlx::query(
+            "UPDATE hiveory_code_launch_presets SET name=?, entries_json=?, updated_at_unix_ms=? WHERE workspace_id=? AND id=?",
+        )
+        .bind(&request.name)
+        .bind(entries_json)
+        .bind(now)
+        .bind(&request.workspace_id)
+        .bind(&request.preset_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(CodeLaunchPresetSummary {
+            id: existing.id,
+            workspace_id: request.workspace_id.clone(),
+            name: request.name.clone(),
+            entries: request.entries.clone(),
+            created_at_unix_ms: existing.created_at_unix_ms,
+            updated_at_unix_ms: now,
+        })
+    }
+
     pub async fn save_code_document(
         &self,
         workspace_id: &str,
@@ -716,6 +805,22 @@ fn code_layout_preset_record_from_row(
             updated_at_unix_ms: row.get(6),
         },
         layout,
+    })
+}
+
+fn code_launch_preset_from_row(
+    row: sqlx::sqlite::SqliteRow,
+) -> Result<CodeLaunchPresetSummary, sqlx::Error> {
+    let entries_json: String = row.get(3);
+    let entries = serde_json::from_str::<Vec<CodeLaunchPresetEntry>>(&entries_json)
+        .map_err(|error| sqlx::Error::Protocol(format!("invalid launch preset: {error}")))?;
+    Ok(CodeLaunchPresetSummary {
+        id: row.get(0),
+        workspace_id: row.get(1),
+        name: row.get(2),
+        entries,
+        created_at_unix_ms: row.get(4),
+        updated_at_unix_ms: row.get(5),
     })
 }
 
@@ -1090,6 +1195,86 @@ mod tests {
             .expect("preset exists");
         assert_eq!(stored.summary, updated);
         assert_eq!(stored.layout, layout);
+        drop(persistence);
+        cleanup(&path);
+    }
+
+    #[tokio::test]
+    async fn launch_presets_keep_their_ordered_lineup() {
+        let path =
+            std::env::temp_dir().join(format!("hiveory-launch-presets-{}.sqlite3", Uuid::now_v7()));
+        let persistence = HiveoryPersistence::open(&path)
+            .await
+            .expect("open database");
+        let workspace_id = "workspace-launch-presets".to_owned();
+        persistence
+            .save_code_workspace(&CodeWorkspaceSummary {
+                id: workspace_id.clone(),
+                host_id: "local".to_owned(),
+                display_name: "Launch preset fixture".to_owned(),
+                root_path: std::env::temp_dir().to_string_lossy().into_owned(),
+                repository_name: None,
+                branch: None,
+                is_git_repository: false,
+                trust: CodeWorkspaceTrust::Trusted,
+                capabilities: capabilities_for_trust(CodeWorkspaceTrust::Trusted),
+                project_id: "project-launch-presets".to_owned(),
+                workspace_kind: CodeWorkspaceKind::Primary,
+                worktree_name: None,
+                base_ref: None,
+                parent_workspace_id: None,
+                managed_by_app: false,
+                available: true,
+                unavailable_reason: None,
+                updated_at_unix_ms: now_ms(),
+            })
+            .await
+            .expect("save workspace");
+        let entries = vec![
+            CodeLaunchPresetEntry {
+                id: "implement".to_owned(),
+                kind: hiveory_protocol::CodeLaunchPresetPaneKind::CodingAgent,
+                title: "Implementer".to_owned(),
+                adapter_id: Some("codex".to_owned()),
+                url: None,
+                agent_launch_mode: CodeAgentLaunchMode::Standard,
+            },
+            CodeLaunchPresetEntry {
+                id: "review".to_owned(),
+                kind: hiveory_protocol::CodeLaunchPresetPaneKind::Browser,
+                title: "Review".to_owned(),
+                adapter_id: None,
+                url: Some("https://www.google.com".to_owned()),
+                agent_launch_mode: CodeAgentLaunchMode::Standard,
+            },
+        ];
+        let created = persistence
+            .create_code_launch_preset(&CodeLaunchPresetCreateRequest {
+                workspace_id: workspace_id.clone(),
+                name: "Feature loop".to_owned(),
+                entries: entries.clone(),
+            })
+            .await
+            .expect("create launch preset");
+        assert_eq!(created.entries, entries);
+        assert_eq!(
+            persistence
+                .code_launch_presets(&workspace_id)
+                .await
+                .expect("list launch presets"),
+            vec![created.clone()]
+        );
+        let updated = persistence
+            .update_code_launch_preset(&CodeLaunchPresetUpdateRequest {
+                preset_id: created.id.clone(),
+                workspace_id: workspace_id.clone(),
+                name: "Feature loop revised".to_owned(),
+                entries: entries.clone(),
+            })
+            .await
+            .expect("update launch preset");
+        assert_eq!(updated.name, "Feature loop revised");
+        assert_eq!(updated.entries, entries);
         drop(persistence);
         cleanup(&path);
     }
