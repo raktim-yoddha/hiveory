@@ -7080,6 +7080,7 @@ fn validate_code_launch_preset(
     }
     let adapters = foundation.code_runtime.adapters();
     let mut ids = HashSet::new();
+    let mut titles = HashSet::new();
     for entry in entries {
         if entry.id.trim().is_empty() || !ids.insert(entry.id.as_str()) {
             return Err(validation_error(
@@ -7088,6 +7089,11 @@ fn validate_code_launch_preset(
         }
         hiveory_code_domain::validate_title(&entry.title)
             .map_err(|error| validation_error(format!("Invalid preset pane title: {error}")))?;
+        if !titles.insert(entry.title.trim().to_lowercase()) {
+            return Err(validation_error(
+                "Preset pane names must be unique, including case-insensitive duplicates.",
+            ));
+        }
         match entry.kind {
             CodeLaunchPresetPaneKind::CodingAgent => {
                 let adapter_id = entry

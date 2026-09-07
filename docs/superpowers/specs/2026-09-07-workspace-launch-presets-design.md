@@ -21,19 +21,21 @@ Each preset has a required name and an ordered list of entries. There is no desc
 
 An entry defines one pane to create:
 
-- a local coding-agent session, with an installed adapter, role/title, and persisted YOLO setting when supported;
+- a local coding-agent session, with an installed adapter, a unique pane name, and either standard or YOLO launch mode when supported;
 - a terminal pane, with a role/title;
 - a browser pane, with a validated starting URL and role/title; or
 - a Markdown pane, with a role/title.
 
-The order of entries is preserved. Hiveory derives a compact tiled layout from that order at launch. The builder may add, reorder, edit, or remove entries while creating or editing a preset. The library reports the number and kinds of panes each saved preset will open.
+The order of entries is preserved. Hiveory derives a compact tiled layout from that order at launch. The library reports the number and kinds of panes each saved preset will open.
 
 ## Preset library
 
 The library contains two tabs:
 
 - **Load** lists durable presets for the selected workspace, with the full lineup, **Edit**, and **Open** controls.
-- **Create** contains the name field and lineup builder. It provides an explicit **Add session** control and validates every row before saving.
+- **Create** contains the name field and lineup builder. It has one **Add pane** picker with every installed coding agent, Terminal, Browser, and Markdown. Supported agents present separate **Standard** and **YOLO** choices.
+
+The builder groups matching pane configurations. Every group has minus and plus controls that remove or add actual saved entries, so its quantity is exactly the number of panes that will launch. Standard and YOLO configurations never share a group. The user can expand a group to rename individual panes; newly added panes receive a friendly pet-style title and the host rejects duplicate names case-insensitively.
 
 Edit reopens the same builder for an existing preset. It changes the preset definition only; it cannot change a running workspace.
 

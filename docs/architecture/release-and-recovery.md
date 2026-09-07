@@ -1,6 +1,6 @@
 # Release and recovery architecture
 
-This document describes the current startup, shutdown, backup, restore, update, and packaging boundaries for Hiveory `0.1.3`.
+This document describes the current startup, shutdown, backup, restore, update, and packaging boundaries for Hiveory `0.1.4`.
 
 The application is local-first: the Tauri host owns the SQLite pool, artifact root, credential handles, active processes, and long-running domain services. The React layer can be discarded and rebuilt from host queries and streams.
 

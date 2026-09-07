@@ -1654,26 +1654,57 @@
 .code-layout-preset-form label > span { color: #85858d; font-size: 10px; font-weight: 400; }
 .code-layout-preset-form input, .code-layout-preset-form textarea { width: 100%; box-sizing: border-box; border: 1px solid #3b3b40; border-radius: 6px; padding: 8px 9px; color: #f1f1f2; background: #0e0e0f; font: inherit; }
 .code-layout-preset-form textarea { resize: vertical; }
-.code-layout-preset-checkbox { display: flex !important; align-items: center; grid-template-columns: auto 1fr; cursor: pointer; }
-.code-layout-preset-checkbox input { width: 15px; height: 15px; accent-color: #d2d2d7; }
 .code-layout-preset-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .code-layout-preset-feedback { margin: 0; border-top: 1px solid #303034; padding: 10px 18px; color: #c7c7cc; font-size: 12px; }
-.code-launch-preset-entries { display: grid; overflow: auto; max-height: 330px; border: 1px solid #303034; border-radius: 8px; background: #111113; }
-.code-launch-preset-entry { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 10px; border-bottom: 1px solid #303034; }
-.code-launch-preset-entry:last-child { border-bottom: 0; }
 .code-launch-preset-entry-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid #3a3a3f; border-radius: 7px; color: #d1d1d6; background: #202024; }
-.code-launch-preset-entry-body { display: grid; min-width: 0; gap: 8px; }
-.code-launch-preset-entry-header { display: flex; align-items: center; justify-content: space-between; color: #e9e9ec; font-size: 12px; }
-.code-launch-preset-entry-fields { display: grid; grid-template-columns: minmax(110px, .8fr) minmax(130px, 1fr) minmax(130px, 1fr); gap: 7px; }
-.code-launch-preset-entry-fields input, .code-launch-preset-entry-fields select { min-width: 0; border: 1px solid #3b3b40; border-radius: 6px; padding: 7px 8px; color: #f1f1f2; background: #0d0d0f; font: inherit; font-size: 12px; }
-.code-launch-preset-add { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
-.code-launch-preset-add > span { margin-right: 3px; color: #98989f; font-size: 11px; font-weight: 650; }
+.code-launch-preset-builder { display: grid; gap: 10px; }
+.code-launch-preset-groups { display: grid; max-height: 315px; overflow-y: auto; border: 1px solid #303034; border-radius: 8px; background: #111113; }
+.code-launch-preset-group { border-bottom: 1px solid #303034; background: #151517; }
+.code-launch-preset-group:last-child { border-bottom: 0; }
+.code-launch-preset-group.is-yolo { background: linear-gradient(90deg, rgba(130, 83, 20, .13), #151517 55%); }
+.code-launch-preset-group-summary { display: grid; grid-template-columns: 34px minmax(110px, 1fr) auto auto auto; align-items: center; gap: 10px; min-height: 54px; padding: 9px 10px; }
+.code-launch-preset-group.is-yolo .code-launch-preset-entry-icon { border-color: #795723; color: #f2be64; background: #2b2214; }
+.code-launch-preset-group-copy { display: grid; min-width: 0; gap: 2px; }
+.code-launch-preset-group-copy strong { overflow: hidden; color: #eeeeef; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.code-launch-preset-group-copy small { color: #9999a0; font-size: 10px; }
+.code-launch-preset-yolo-badge { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #815b24; border-radius: 999px; padding: 3px 6px; color: #f2c36e; background: rgba(108, 73, 18, .22); font: 700 10px/1 "JetBrains Mono", ui-monospace, monospace; }
+.code-launch-preset-stepper { display: inline-grid; grid-template-columns: 28px 26px 28px; align-items: center; border: 1px solid #3c3c42; border-radius: 6px; background: #101012; }
+.code-launch-preset-stepper button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; color: #bfc0c6; background: transparent; cursor: pointer; }
+.code-launch-preset-stepper button:hover { color: #f4f4f5; background: #29292d; }
+.code-launch-preset-group.is-yolo .code-launch-preset-stepper button:hover { color: #f6c96f; background: #31230f; }
+.code-launch-preset-stepper output { color: #e8e8eb; text-align: center; font: 650 12px/1 "JetBrains Mono", ui-monospace, monospace; }
+.code-launch-preset-names-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 74px; border: 1px solid transparent; border-radius: 6px; padding: 6px 7px; color: #a9a9b0; background: transparent; cursor: pointer; font-size: 10px; }
+.code-launch-preset-names-toggle:hover { border-color: #39393e; color: #eeeeef; background: #202023; }
+.code-launch-preset-browser-url { display: grid !important; grid-template-columns: 70px minmax(0, 1fr); align-items: center; gap: 8px; padding: 0 10px 9px 54px; color: #a7a7ad !important; font-size: 10px !important; font-weight: 600 !important; }
+.code-launch-preset-browser-url input { min-width: 0; border: 1px solid #39393f; border-radius: 5px; padding: 6px 7px; color: #e9e9eb; background: #0f0f11; font: inherit; font-size: 11px; }
+.code-launch-preset-name-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; padding: 0 10px 10px 54px; }
+.code-launch-preset-name-list label { display: grid !important; gap: 4px; color: #a4a4aa !important; font-size: 10px !important; font-weight: 600 !important; }
+.code-launch-preset-name-list input { min-width: 0; border: 1px solid #3c3c42; border-radius: 5px; padding: 6px 7px; color: #ededee; background: #101012; font: inherit; font-size: 11px; }
+.code-launch-preset-name-list input[aria-invalid="true"] { border-color: #a64b4b; }
+.code-launch-preset-name-list label > span { color: #e48a8a !important; font-size: 9px !important; }
+.code-launch-preset-builder-empty { display: grid; place-items: center; gap: 5px; min-height: 112px; border: 1px dashed #36363b; border-radius: 8px; color: #96969d; text-align: center; font-size: 11px; }
+.code-launch-preset-builder-empty strong { color: #e7e7e9; font-size: 12px; }
+.code-launch-preset-picker-area { position: relative; display: flex; align-items: flex-start; }
+.code-launch-preset-add-pane { min-height: 32px; }
+.code-launch-preset-picker { position: absolute; z-index: 6; top: calc(100% + 7px); left: 0; display: grid; width: min(500px, calc(100vw - 84px)); max-height: 320px; overflow-y: auto; border: 1px solid #4a4a50; border-radius: 8px; padding: 7px; background: #19191b; box-shadow: 0 16px 36px rgba(0, 0, 0, .48); }
+.code-launch-preset-picker > .code-dialog-eyebrow { padding: 4px 5px 6px; }
+.code-launch-preset-picker-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 46px; padding: 6px; border-top: 1px solid #303034; }
+.code-launch-preset-picker-row > span:nth-child(2) { display: grid; min-width: 0; gap: 2px; }
+.code-launch-preset-picker-row strong { color: #ebebed; font-size: 12px; }.code-launch-preset-picker-row small { color: #95959c; font-size: 10px; }
+.code-launch-preset-picker-actions { display: flex; gap: 5px; }
+.code-launch-preset-picker-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 28px; border: 1px solid #44444a; border-radius: 5px; padding: 5px 7px; color: #dddddf; background: #262629; cursor: pointer; font-size: 10px; font-weight: 650; }
+.code-launch-preset-picker-actions button:hover { border-color: #66666c; color: #ffffff; background: #343438; }
+.code-launch-preset-picker-actions button.is-yolo { border-color: #815b24; color: #f2c36e; background: #33250f; }
+.code-launch-preset-picker-actions button.is-yolo:hover { border-color: #bb8534; color: #ffda92; background: #443014; }
 
 @media (max-width: 620px) {
   .code-layout-preset-backdrop { padding: 12px; }
   .code-layout-preset-row { grid-template-columns: 34px minmax(0, 1fr); }
   .code-layout-preset-actions { grid-column: 2; justify-content: flex-start; }
-  .code-launch-preset-entry-fields { grid-template-columns: 1fr; }
+  .code-launch-preset-group-summary { grid-template-columns: 32px minmax(0, 1fr) auto auto; }
+  .code-launch-preset-names-toggle { grid-column: 2 / -1; justify-self: start; }
+  .code-launch-preset-name-list { grid-template-columns: 1fr; padding-left: 10px; }
+  .code-launch-preset-browser-url { grid-template-columns: 1fr; padding-left: 10px; }
 }
 
 .code-launcher-card {
