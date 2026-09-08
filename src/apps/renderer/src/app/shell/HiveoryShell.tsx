@@ -660,7 +660,7 @@ export function HiveoryShell() {
         <section
           id="hiveory-main-content"
           tabIndex={-1}
-          className="hiveory-workspace is-code-app"
+          className={screen === 'settings' ? 'hiveory-workspace is-code-app is-settings-app' : 'hiveory-workspace is-code-app'}
         >
           {screen === 'diagnostics' ? (
             <HiveoryDiagnostics snapshot={snapshot} refresh={refresh} />
