@@ -915,6 +915,44 @@ const previewBrowserConfiguration: BrowserConfiguration = {
   },
 }
 
+type WorkspaceSetupPreference = { setupProjectId?: unknown; setupCommand?: unknown }
+
+function configuredWorkspaceSetup(projectId: string): string | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('hiveory.capability-settings.v1') ?? '{}') as WorkspaceSetupPreference
+    if (stored.setupProjectId !== projectId || typeof stored.setupCommand !== 'string') return null
+    const command = stored.setupCommand.trim()
+    return command || null
+  } catch {
+    return null
+  }
+}
+
+async function launchConfiguredWorkspaceSetup(detail: CodeWorkspaceDetail): Promise<void> {
+  const command = configuredWorkspaceSetup(detail.summary.project_id)
+  if (!command || detail.summary.trust !== 'trusted') return
+  const pane = detail.layout.nodes.find((node) => node.children.length === 0)
+  if (!pane) return
+  try {
+    const result = await hiveoryClient.launchCodePaneTerminal({
+      workspace_id: detail.summary.id,
+      pane_id: pane.pane_id,
+      expected_revision: detail.layout.revision ?? detail.layout.version,
+      kind: 'shell',
+      adapter_id: null,
+      model: null,
+      agent_launch_mode: 'standard',
+      cols: 120,
+      rows: 32,
+    })
+    await hiveoryClient.writeCodeTerminal({ terminal_id: result.terminal.id, data: `${command}\r` })
+  } catch {
+    // A setup command must never prevent a newly created worktree from opening.
+    // The terminal records any command error in the workspace itself.
+  }
+}
+
 export const hiveoryClient = {
   async bootstrap(): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? tauriQuery<BootstrapSnapshot>('hiveory_query_bootstrap') : { protocol, active_mode: 'agent', product_name: 'Hiveory' } },
   async setActiveMode(mode: ApplicationMode): Promise<BootstrapSnapshot> { return hiveoryIsTauri ? invoke<BootstrapSnapshot>('hiveory_command_set_active_mode', { command: { mode } }) : { protocol, active_mode: mode, product_name: 'Hiveory' } },
@@ -1110,7 +1148,11 @@ export const hiveoryClient = {
     return this.addCodeProject(path)
   },
   async createCodeWorkspace(request: CodeWorkspaceCreateRequest): Promise<CodeWorkspaceDetail> {
-    if (hiveoryIsTauri) return tauriCommand<CodeWorkspaceCreateRequest, CodeWorkspaceDetail>('hiveory_command_create_code_workspace', request)
+    if (hiveoryIsTauri) {
+      const detail = await tauriCommand<CodeWorkspaceCreateRequest, CodeWorkspaceDetail>('hiveory_command_create_code_workspace', request)
+      void launchConfiguredWorkspaceSetup(detail)
+      return detail
+    }
     const project = previewCodeProjects.get(request.project_id)
     if (!project) throw new Error('Project was not found.')
     const name = request.name.trim()
@@ -1119,6 +1161,7 @@ export const hiveoryClient = {
     const workspace = previewCodeWorkspace(`${project.root_path}/.hiveory-workspaces/${name}`, project.id, 'managed_worktree', branch)
     workspace.detail.summary.display_name = name
     workspace.detail.summary.worktree_name = name.toLowerCase().replaceAll(' ', '-')
+    void launchConfiguredWorkspaceSetup(workspace.detail)
     return workspace.detail
   },
   async updateCodeWorkspace(request: CodeWorkspaceUpdateRequest): Promise<CodeWorkspaceDetail> {

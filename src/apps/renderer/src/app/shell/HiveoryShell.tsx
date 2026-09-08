@@ -37,6 +37,7 @@ import {
 } from '../../shared/api/hiveory-client'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
+import { HiveoryCapabilitySettings } from '../../features/settings/HiveoryCapabilitySettings'
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/browser/hooks/use-browser-surface-blocker'
 
@@ -675,6 +676,11 @@ export function HiveoryShell() {
                 setScreen('diagnostics')
                 void refresh()
               }}
+              onBackToApp={() => setScreen('workspace')}
+              onOpenWorkbench={() => {
+                setScreen('workspace')
+                selectMode('code')
+              }}
             />
           ) : screen === 'help' ? (
             <HiveoryHelp onOpenSettings={() => setScreen('settings')} />
@@ -990,6 +996,8 @@ function HiveorySettings({
   onInstallUpdate,
   updateInstalling,
   onOpenDiagnostics,
+  onBackToApp,
+  onOpenWorkbench,
 }: {
   preferences: ShellPreferences
   setPreferences: React.Dispatch<React.SetStateAction<ShellPreferences>>
@@ -998,6 +1006,8 @@ function HiveorySettings({
   onInstallUpdate: () => Promise<void>
   updateInstalling: boolean
   onOpenDiagnostics: () => void
+  onBackToApp: () => void
+  onOpenWorkbench: () => void
 }) {
   const [version, setVersion] = useState('0.1.0')
   const [busy, setBusy] = useState<string | null>(null)
@@ -1097,6 +1107,7 @@ function HiveorySettings({
   }
 
   return (
+    <HiveoryCapabilitySettings onBackToApp={onBackToApp} onOpenWorkbench={onOpenWorkbench}>
     <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
       <div className="hiveory-content-header">
         <Settings2 size={22} aria-hidden="true" />
@@ -1232,6 +1243,7 @@ function HiveorySettings({
       </div>
       {message && <div className="hiveory-feedback" role="status">{message}</div>}
     </section>
+    </HiveoryCapabilitySettings>
   )
 }
 
