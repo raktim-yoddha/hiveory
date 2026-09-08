@@ -3644,8 +3644,9 @@ async fn hiveory_command_open_code_launch_preset(
         ));
     }
 
+    let launch_entries = normalize_launch_preset_pane_titles(&preset.entries);
     let (next_layout, targets) =
-        build_code_launch_preset_layout(&command.payload.workspace_id, &preset.entries)?;
+        build_code_launch_preset_layout(&command.payload.workspace_id, &launch_entries)?;
     let layout = foundation
         .persistence
         .mutate_code_layout(
@@ -7149,6 +7150,58 @@ fn is_empty_workspace_layout(layout: &CodePaneLayout) -> bool {
         && layout.nodes[0].children.is_empty()
         && layout.nodes[0].kind == CodePaneKind::Empty
         && layout.nodes[0].resource_id.is_none()
+}
+
+/// Old preset records used two-word descriptive titles. Presets are workspace
+/// setups, so every launch gets a distinct, compact pet name while preserving
+/// one-word names that were already assigned by the current preset builder.
+fn normalize_launch_preset_pane_titles(
+    entries: &[CodeLaunchPresetEntry],
+) -> Vec<CodeLaunchPresetEntry> {
+    const PET_NAMES: &[&str] = &[
+        "Biscuit", "Button", "Clover", "Doodle", "Fable", "Fidget", "Gizmo", "Mochi", "Noodle",
+        "Pebble", "Pickle", "Pippin", "Poppy", "Sprout", "Tango", "Waffles", "Whisker", "Wicket",
+        "Ziggy",
+    ];
+
+    let mut used = HashSet::new();
+    let start = (uuid::Uuid::now_v7().as_u128() as usize) % PET_NAMES.len();
+    entries
+        .iter()
+        .enumerate()
+        .map(|(index, entry)| {
+            let mut entry = entry.clone();
+            let title = entry.title.trim();
+            let title_key = title.to_ascii_lowercase();
+            if !title.is_empty()
+                && !title.chars().any(char::is_whitespace)
+                && used.insert(title_key)
+            {
+                entry.title = title.to_owned();
+                return entry;
+            }
+
+            let mut replacement = None;
+            for offset in 0..PET_NAMES.len() {
+                let candidate = PET_NAMES[(start + index + offset) % PET_NAMES.len()];
+                if used.insert(candidate.to_ascii_lowercase()) {
+                    replacement = Some(candidate.to_owned());
+                    break;
+                }
+            }
+            entry.title = replacement.unwrap_or_else(|| {
+                let base = PET_NAMES[(start + index) % PET_NAMES.len()];
+                let mut suffix = 2;
+                while used.contains(&format!("{}{}", base.to_ascii_lowercase(), suffix)) {
+                    suffix += 1;
+                }
+                let candidate = format!("{base}{suffix}");
+                used.insert(candidate.to_ascii_lowercase());
+                candidate
+            });
+            entry
+        })
+        .collect()
 }
 
 fn build_code_launch_preset_layout(

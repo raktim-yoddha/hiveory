@@ -784,9 +784,32 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     [loadWorkspace]
   )
 
+  const closePaneWithRetry = useCallback(
+    async (paneId: string, terminateRunningResource: boolean) => {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const { workspaceId, revision, layout } = stateRef.current
+        if (!workspaceId || !layout?.nodes.some((node) => node.pane_id === paneId)) return
+        try {
+          const result = await hiveoryClient.closeCodePane({
+            workspace_id: workspaceId,
+            pane_id: paneId,
+            expected_revision: revision,
+            terminate_running_resource: terminateRunningResource,
+          })
+          commitLayout(result.layout)
+          return
+        } catch (error: unknown) {
+          if (!formatError(error).includes('layout_conflict') || attempt === 3) throw error
+          await loadWorkspace(workspaceId)
+        }
+      }
+    },
+    [commitLayout, loadWorkspace],
+  )
+
   const requestClosePane = useCallback(
     async (paneId: string) => {
-      const { layout, terminals, workspaceId, revision } = stateRef.current
+      const { layout, terminals, workspaceId } = stateRef.current
       if (!layout || !workspaceId) return
 
       const node = layout.nodes.find((n) => n.pane_id === paneId)
@@ -816,21 +839,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       await enqueueOperation(async () => {
         try {
           dispatch({ type: 'SET_MUTATING', isMutating: true })
-          const close = (expectedRevision: number) => hiveoryClient.closeCodePane({
-            workspace_id: workspaceId,
-            pane_id: paneId,
-            expected_revision: expectedRevision,
-            terminate_running_resource: false,
-          })
-          let res
-          try {
-            res = await close(revision)
-          } catch (err: unknown) {
-            if (!formatError(err).includes('layout_conflict')) throw err
-            await loadWorkspace(workspaceId)
-            res = await close(stateRef.current.revision)
-          }
-          commitLayout(res.layout)
+          await closePaneWithRetry(paneId, false)
         } catch (err: unknown) {
           dispatch({ type: 'SET_ERROR', error: formatError(err) })
         } finally {
@@ -838,33 +847,19 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         }
       })
     },
-    [commitLayout, enqueueOperation, loadWorkspace]
+    [closePaneWithRetry, enqueueOperation]
   )
 
   const confirmClose = useCallback(
     async (terminateRunning: boolean) => {
-      const { confirmClosePane, workspaceId, revision } = stateRef.current
-      if (!confirmClosePane || !workspaceId) return
+      const { confirmClosePane } = stateRef.current
+      if (!confirmClosePane) return
       const paneId = confirmClosePane.paneId
       dispatch({ type: 'SET_CONFIRM_CLOSE', confirm: null })
       await enqueueOperation(async () => {
         try {
           dispatch({ type: 'SET_MUTATING', isMutating: true })
-          const close = (expectedRevision: number) => hiveoryClient.closeCodePane({
-            workspace_id: workspaceId,
-            pane_id: paneId,
-            expected_revision: expectedRevision,
-            terminate_running_resource: terminateRunning,
-          })
-          let res
-          try {
-            res = await close(revision)
-          } catch (err: unknown) {
-            if (!formatError(err).includes('layout_conflict')) throw err
-            await loadWorkspace(workspaceId)
-            res = await close(stateRef.current.revision)
-          }
-          commitLayout(res.layout)
+          await closePaneWithRetry(paneId, terminateRunning)
         } catch (err: unknown) {
           dispatch({ type: 'SET_ERROR', error: formatError(err) })
         } finally {
@@ -872,7 +867,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         }
       })
     },
-    [commitLayout, enqueueOperation, loadWorkspace]
+    [closePaneWithRetry, enqueueOperation]
   )
 
   const dismissConfirmClose = useCallback(() => {

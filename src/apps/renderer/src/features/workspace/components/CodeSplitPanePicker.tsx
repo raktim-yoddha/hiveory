@@ -203,18 +203,21 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
               </span>
             </button>
             {yoloAdapterId && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={isYoloEnabled}
-                aria-label={`Use YOLO mode for ${option.title}`}
+              <label
+                className="code-split-yolo-toggle"
                 title="Persistently launch this agent without interactive permission prompts"
-                className={`code-split-yolo-switch ${isYoloEnabled ? 'is-enabled' : ''}`}
-                onClick={() => toggleYolo(yoloAdapterId)}
               >
                 <span>YOLO</span>
-                <i aria-hidden="true" />
-              </button>
+                <span className="hiveory-switch">
+                  <input
+                    type="checkbox"
+                    checked={isYoloEnabled}
+                    onChange={() => toggleYolo(yoloAdapterId)}
+                    aria-label={`Use YOLO mode for ${option.title}`}
+                  />
+                  <span aria-hidden="true" />
+                </span>
+              </label>
             )}
           </div>
           )

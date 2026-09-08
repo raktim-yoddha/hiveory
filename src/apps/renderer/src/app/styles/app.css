@@ -1513,9 +1513,9 @@ a:focus-visible {
 .hiveory-automation-desktop-row-meta { overflow: hidden; color: #b8b9bd; font: 10px/1.35 "JetBrains Mono", ui-monospace, monospace; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .hiveory-automation-desktop-empty { display: grid; place-content: center; justify-items: center; min-height: 170px; gap: 8px; color: #a6a7ac; text-align: center; }
 .hiveory-automation-desktop-empty strong { color: #f0f0f1; font-size: 16px; }.hiveory-automation-desktop-empty span { max-width: 540px; font-size: 12px; }
-.hiveory-automation-desktop-templates { display: grid; width: min(900px, 100%); margin: 0 auto; gap: 6px; }
+.hiveory-automation-desktop-templates { display: grid; width: min(800px, 100%); margin: 0 auto; gap: 10px; }
 .hiveory-automation-desktop-templates h2 { margin: 2px 0 6px; border-top: 1px solid #2b2b2e; padding-top: 12px; color: #eeeeef; font-size: 13px; }
-.hiveory-automation-desktop-templates button { display: grid !important; gap: 4px; width: 100%; min-height: 64px; border: 1px solid #2d2d31 !important; border-radius: 7px !important; padding: 10px 12px !important; color: #eeeeef !important; background: #0d0d0e !important; text-align: left; }
+.hiveory-automation-desktop-templates button { display: grid !important; justify-items: start; align-content: center; gap: 4px; width: 100%; min-height: 64px; border: 1px solid #2d2d31 !important; border-radius: 7px !important; padding: 10px 14px !important; color: #eeeeef !important; background: #0d0d0e !important; text-align: left; }
 .hiveory-automation-desktop-templates button:hover:not(:disabled) { border-color: #53545a !important; background: #1c1c1e !important; }
 .hiveory-automation-desktop-templates button small { color: #8e9096; font: 700 10px/1.2 "JetBrains Mono", ui-monospace, monospace; letter-spacing: .06em; text-transform: uppercase; }.hiveory-automation-desktop-templates button strong { font-size: 13px; }.hiveory-automation-desktop-templates button span { color: #aeb0b5; font-size: 12px; }
 .hiveory-routine-detail-modal { width: min(760px, calc(100vw - 36px)); max-height: min(780px, calc(100vh - 36px)); overflow-y: auto; border-color: #3a3a3e; box-shadow: 0 20px 60px rgba(0, 0, 0, .65); }
