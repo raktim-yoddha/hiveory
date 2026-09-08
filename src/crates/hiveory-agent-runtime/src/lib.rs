@@ -1331,13 +1331,13 @@ impl HiveoryAgentRuntime {
         let detail = &scoped_detail;
         let args: Value = serde_json::from_str(arguments_json)
             .map_err(|_| "tool arguments are not valid JSON".to_owned())?;
-        if name.starts_with("plugin.") {
+        if name.starts_with("plugin.") || name.starts_with("browser.") {
             let external_provider = self
                 .external_tools
                 .lock()
                 .expect("agent external tool provider lock")
                 .clone()
-                .ok_or_else(|| "plugin runtime is unavailable".to_owned())?;
+                .ok_or_else(|| "external tool runtime is unavailable".to_owned())?;
             let output = external_provider
                 .execute(run_id, &detail.summary.id, name, &args.to_string())
                 .await?;

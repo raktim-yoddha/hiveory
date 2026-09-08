@@ -515,6 +515,20 @@ impl BrowserManager {
         self.inner.close(browser_id)
     }
 
+    pub(crate) fn snapshot(&self, browser_id: &str) -> Result<Option<BrowserRuntimeState>, String> {
+        self.inner.snapshot(browser_id)
+    }
+
+    pub(crate) fn evaluate(&self, browser_id: &str, script: &str) -> Result<(), String> {
+        if script.trim().is_empty() {
+            return Err("The browser action script cannot be empty.".to_owned());
+        }
+        let webview = self.inner.webview(browser_id)?;
+        webview
+            .eval(script)
+            .map_err(|error| format!("The Browser action could not run: {error}"))
+    }
+
     pub(crate) fn configuration(&self) -> Result<BrowserConfiguration, String> {
         self.inner
             .configuration

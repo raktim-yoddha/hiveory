@@ -7,6 +7,7 @@ mod release;
 #[path = "../task_sources.rs"]
 mod task_sources;
 
+use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use browser::{
     BrowserAnnotationSyncRequest, BrowserBoundsRequest, BrowserCaptureRequest,
@@ -42,9 +43,9 @@ use hiveory_protocol::{
     AgentMemorySummary, AgentPluginGrant, AgentPluginGrantRequest, AgentRunControlRequest,
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentRunsQuery, AgentSkillCatalog,
     AgentSkillConflictResolutionRequest, AgentSkillSummary, AgentSkillToggleRequest,
-    AgentUpdateRequest, ApiError, ApplicationMode, BackupSummary, BootstrapSnapshot,
-    BuildInformation, ChatAttachmentBytesRequest, ChatAttachmentImportRequest,
-    ChatAttachmentSummary, ChatBranchRequest, ChatConversationDetail,
+    AgentToolDefinition, AgentToolRisk, AgentUpdateRequest, ApiError, ApplicationMode,
+    BackupSummary, BootstrapSnapshot, BuildInformation, ChatAttachmentBytesRequest,
+    ChatAttachmentImportRequest, ChatAttachmentSummary, ChatBranchRequest, ChatConversationDetail,
     ChatConversationFolderRequest, ChatCreateRequest, ChatDeleteRequest,
     ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest, ChatEngineAvailability,
     ChatEngineCatalog, ChatEngineSummary, ChatEventEnvelope, ChatEventsQuery, ChatExportRequest,
@@ -100,11 +101,12 @@ use hiveory_protocol::{
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
 use hiveory_terminal_host::{HiveoryTerminalHostClient, HiveoryTerminalHostError};
-use hiveory_tool_runtime::HiveoryAuditLog;
+use hiveory_tool_runtime::{HiveoryAuditLog, HiveoryExternalToolProvider};
 use hiveory_workspace_service::{
     HiveoryWorkspaceError, HiveoryWorkspaceMetadata, HiveoryWorkspaceService,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -159,6 +161,40 @@ struct CodeAssetData {
 #[derive(Debug, Clone, Deserialize)]
 struct ExternalUrlRequest {
     url: String,
+}
+
+const BROWSER_USE_SETTINGS_KEY: &str = "browser.use.settings.v1";
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BrowserUseSettings {
+    enabled: bool,
+    target: String,
+}
+
+impl Default for BrowserUseSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            target: "inner".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BrowserUseSettingsRequest {
+    enabled: bool,
+    target: String,
+}
+
+fn sanitize_browser_use_settings(value: BrowserUseSettings) -> BrowserUseSettings {
+    BrowserUseSettings {
+        enabled: value.enabled,
+        target: match value.target.as_str() {
+            "external" => "external".to_owned(),
+            "desktop" => "desktop".to_owned(),
+            _ => "inner".to_owned(),
+        },
+    }
 }
 
 struct HiveoryShellState {
@@ -261,6 +297,302 @@ struct AgentSkillImportRequest {
 #[derive(Debug, Clone, Deserialize)]
 struct AgentSkillCreateRequest {
     source: String,
+}
+
+#[derive(Clone)]
+struct HiveoryExternalTools {
+    plugin: HiveoryPluginRuntime,
+    browser: HiveoryBrowserToolProvider,
+}
+
+#[derive(Clone)]
+struct HiveoryBrowserToolProvider {
+    app: tauri::AppHandle,
+    manager: BrowserManager,
+    persistence: HiveoryPersistence,
+}
+
+fn agent_tool(
+    name: &str,
+    description: &str,
+    schema: &str,
+    risk: AgentToolRisk,
+) -> AgentToolDefinition {
+    AgentToolDefinition {
+        name: name.to_owned(),
+        description: description.to_owned(),
+        input_schema_json: schema.to_owned(),
+        risk,
+    }
+}
+
+fn browser_argument(args: &Value, key: &str) -> Result<String, String> {
+    args.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| format!("{key} is required"))
+}
+
+fn browser_js_string(value: &str, label: &str, max_chars: usize) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(format!("{label} is required"));
+    }
+    if value.chars().count() > max_chars {
+        return Err(format!("{label} is too long"));
+    }
+    serde_json::to_string(value).map_err(|error| format!("{label} could not be encoded: {error}"))
+}
+
+impl HiveoryBrowserToolProvider {
+    async fn is_enabled(&self) -> bool {
+        self.persistence
+            .get_setting(BROWSER_USE_SETTINGS_KEY)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|value| serde_json::from_str::<BrowserUseSettings>(&value).ok())
+            .map(|value| value.enabled)
+            .unwrap_or(false)
+    }
+
+    async fn definitions(&self) -> Vec<AgentToolDefinition> {
+        if !self.is_enabled().await {
+            return Vec::new();
+        }
+        vec![
+            agent_tool(
+                "browser.state",
+                "Read the current URL, title, loading state, and navigation capabilities of an open embedded Hiveory Browser pane.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+            agent_tool(
+                "browser.open",
+                "Open or reconnect an embedded Hiveory Browser pane for a workspace.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"}},"required":["browser_id","workspace_id","url"],"additionalProperties":false}"#,
+                AgentToolRisk::InternalMutation,
+            ),
+            agent_tool(
+                "browser.navigate",
+                "Navigate an open embedded Hiveory Browser pane to a web address.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"url":{"type":"string"}},"required":["browser_id","url"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
+                "browser.back",
+                "Go back in an embedded Hiveory Browser pane.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::InternalMutation,
+            ),
+            agent_tool(
+                "browser.forward",
+                "Go forward in an embedded Hiveory Browser pane.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::InternalMutation,
+            ),
+            agent_tool(
+                "browser.reload",
+                "Reload the current page in an embedded Hiveory Browser pane.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::InternalMutation,
+            ),
+            agent_tool(
+                "browser.click",
+                "Click one user-authorized element in the embedded Browser using a CSS selector.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"selector":{"type":"string"}},"required":["browser_id","selector"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
+                "browser.fill",
+                "Fill one user-authorized input in the embedded Browser using a CSS selector.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"selector":{"type":"string"},"value":{"type":"string"}},"required":["browser_id","selector","value"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
+                "browser.press",
+                "Dispatch a keyboard key to one user-authorized element in the embedded Browser.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"selector":{"type":"string"},"key":{"type":"string"}},"required":["browser_id","selector","key"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
+                "browser.scroll",
+                "Scroll an embedded Hiveory Browser pane vertically by a bounded number of pixels.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"delta_y":{"type":"number"}},"required":["browser_id","delta_y"],"additionalProperties":false}"#,
+                AgentToolRisk::InternalMutation,
+            ),
+            agent_tool(
+                "browser.open_external",
+                "Open the current embedded Browser page in the user's default external browser.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
+                "browser.capture",
+                "Capture the current embedded Browser page and return its dimensions so the user can inspect it in Hiveory.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+        ]
+    }
+
+    async fn main_thread<T, F>(&self, operation: F) -> Result<T, String>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> Result<T, String> + Send + 'static,
+    {
+        run_browser_on_main_thread(self.app.clone(), operation)
+            .await
+            .map_err(|error| error.message)
+    }
+
+    async fn execute(&self, name: &str, arguments_json: &str) -> Result<String, String> {
+        if !self.is_enabled().await {
+            return Err("Browser Use is disabled in Settings. Enable it before asking an agent to drive a browser.".to_owned());
+        }
+        let args: Value = serde_json::from_str(arguments_json)
+            .map_err(|_| "browser tool arguments are not valid JSON".to_owned())?;
+        let browser_id = browser_argument(&args, "browser_id")?;
+        match name {
+            "browser.state" => {
+                let state = self
+                    .manager
+                    .snapshot(&browser_id)?
+                    .ok_or_else(|| "The Browser pane is not open.".to_owned())?;
+                serde_json::to_string(&state).map_err(|error| error.to_string())
+            }
+            "browser.open" => {
+                let workspace_id = browser_argument(&args, "workspace_id")?;
+                let url = browser_argument(&args, "url")?;
+                let manager = self.manager.clone();
+                let app = self.app.clone();
+                let request = BrowserOpenRequest {
+                    browser_id,
+                    workspace_id,
+                    url,
+                };
+                let state = self
+                    .main_thread(move || manager.open(&app, &request))
+                    .await?;
+                serde_json::to_string(&state).map_err(|error| error.to_string())
+            }
+            "browser.navigate" => {
+                let url = browser_argument(&args, "url")?;
+                let manager = self.manager.clone();
+                let app = self.app.clone();
+                let request = BrowserNavigationRequest { browser_id, url };
+                let state = self
+                    .main_thread(move || manager.navigate(&app, &request))
+                    .await?;
+                serde_json::to_string(&state).map_err(|error| error.to_string())
+            }
+            "browser.back" | "browser.forward" | "browser.reload" => {
+                let manager = self.manager.clone();
+                let app = self.app.clone();
+                let action = name.to_owned();
+                let state = self
+                    .main_thread(move || match action.as_str() {
+                        "browser.back" => manager.back(&app, &browser_id),
+                        "browser.forward" => manager.forward(&app, &browser_id),
+                        _ => manager.reload(&app, &browser_id),
+                    })
+                    .await?;
+                serde_json::to_string(&state).map_err(|error| error.to_string())
+            }
+            "browser.click" | "browser.fill" | "browser.press" | "browser.scroll" => {
+                let script = match name {
+                    "browser.click" => {
+                        let selector = browser_js_string(
+                            &browser_argument(&args, "selector")?,
+                            "selector",
+                            512,
+                        )?;
+                        format!("(() => {{ const element = document.querySelector({selector}); if (!element) throw new Error('Element not found.'); element.click(); }})()")
+                    }
+                    "browser.fill" => {
+                        let selector = browser_js_string(
+                            &browser_argument(&args, "selector")?,
+                            "selector",
+                            512,
+                        )?;
+                        let value =
+                            browser_js_string(&browser_argument(&args, "value")?, "value", 8_000)?;
+                        format!("(() => {{ const element = document.querySelector({selector}); if (!element) throw new Error('Element not found.'); const setter = Object.getOwnPropertyDescriptor(element.constructor.prototype, 'value')?.set; if (setter) setter.call(element, {value}); else element.value = {value}; element.dispatchEvent(new Event('input', {{ bubbles: true }})); element.dispatchEvent(new Event('change', {{ bubbles: true }})); }})()")
+                    }
+                    "browser.press" => {
+                        let selector = browser_js_string(
+                            &browser_argument(&args, "selector")?,
+                            "selector",
+                            512,
+                        )?;
+                        let key = browser_js_string(&browser_argument(&args, "key")?, "key", 80)?;
+                        format!("(() => {{ const element = document.querySelector({selector}); if (!element) throw new Error('Element not found.'); element.dispatchEvent(new KeyboardEvent('keydown', {{ key: {key}, bubbles: true }})); element.dispatchEvent(new KeyboardEvent('keyup', {{ key: {key}, bubbles: true }})); }})()")
+                    }
+                    _ => {
+                        let raw = args
+                            .get("delta_y")
+                            .and_then(Value::as_f64)
+                            .ok_or_else(|| "delta_y is required".to_owned())?;
+                        let delta = raw.clamp(-10_000.0, 10_000.0);
+                        format!("window.scrollBy({{ left: 0, top: {delta}, behavior: 'smooth' }})")
+                    }
+                };
+                let manager = self.manager.clone();
+                self.main_thread(move || manager.evaluate(&browser_id, &script))
+                    .await?;
+                Ok(json!({ "dispatched": true, "action": name }).to_string())
+            }
+            "browser.open_external" => {
+                let manager = self.manager.clone();
+                let request = BrowserIdRequest { browser_id };
+                let opened = self
+                    .main_thread(move || manager.open_external(&request))
+                    .await?;
+                Ok(json!({ "opened": opened }).to_string())
+            }
+            "browser.capture" => {
+                let manager = self.manager.clone();
+                let request = BrowserIdRequest { browser_id };
+                let frame = self
+                    .main_thread(move || manager.capture_frame(&request))
+                    .await?;
+                Ok(
+                    json!({ "captured": true, "width": frame.width, "height": frame.height })
+                        .to_string(),
+                )
+            }
+            _ => Err("browser tool is not available".to_owned()),
+        }
+    }
+}
+
+#[async_trait]
+impl HiveoryExternalToolProvider for HiveoryExternalTools {
+    async fn definitions(&self, agent_id: &str) -> Result<Vec<AgentToolDefinition>, String> {
+        let mut definitions = self.plugin.definitions(agent_id).await?;
+        definitions.extend(self.browser.definitions().await);
+        Ok(definitions)
+    }
+
+    async fn execute(
+        &self,
+        run_id: &str,
+        agent_id: &str,
+        name: &str,
+        arguments_json: &str,
+    ) -> Result<String, String> {
+        if name.starts_with("browser.") {
+            self.browser.execute(name, arguments_json).await
+        } else if name.starts_with("plugin.") {
+            self.plugin
+                .execute(run_id, agent_id, name, arguments_json)
+                .await
+        } else {
+            Err("external tool is not available".to_owned())
+        }
+    }
 }
 
 fn is_code_workspace_section(value: &str) -> bool {
@@ -4899,6 +5231,43 @@ async fn hiveory_command_open_external_url(
 }
 
 #[tauri::command]
+async fn hiveory_query_browser_use_settings(
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<BrowserUseSettings, ApiError> {
+    let settings = foundation
+        .persistence
+        .get_setting(BROWSER_USE_SETTINGS_KEY)
+        .await
+        .map_err(database_error)?
+        .and_then(|value| serde_json::from_str::<BrowserUseSettings>(&value).ok())
+        .map(sanitize_browser_use_settings)
+        .unwrap_or_default();
+    Ok(settings)
+}
+
+#[tauri::command]
+async fn hiveory_command_update_browser_use_settings(
+    request: BrowserUseSettingsRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<BrowserUseSettings, ApiError> {
+    let settings = sanitize_browser_use_settings(BrowserUseSettings {
+        enabled: request.enabled,
+        target: request.target,
+    });
+    let value = serde_json::to_string(&settings).map_err(|error| {
+        validation_error(format!(
+            "Browser Use settings could not be encoded: {error}"
+        ))
+    })?;
+    foundation
+        .persistence
+        .set_setting(BROWSER_USE_SETTINGS_KEY, &value)
+        .await
+        .map_err(database_error)?;
+    Ok(settings)
+}
+
+#[tauri::command]
 async fn hiveory_command_browser_import_cookie_file(
     command: CommandEnvelope<BrowserCookieFileRequest>,
     browser: State<'_, BrowserManager>,
@@ -8167,6 +8536,16 @@ pub fn run() {
                 foundation.persistence.clone(),
                 browser_configuration,
             );
+            foundation
+                .agent_runtime
+                .set_external_tool_provider(Arc::new(HiveoryExternalTools {
+                    plugin: foundation.plugin_runtime.clone(),
+                    browser: HiveoryBrowserToolProvider {
+                        app: app.handle().clone(),
+                        manager: browser_manager.clone(),
+                        persistence: foundation.persistence.clone(),
+                    },
+                }));
             tauri::async_runtime::block_on(
                 foundation
                     .persistence
@@ -8272,6 +8651,8 @@ pub fn run() {
             hiveory_command_browser_open_devtools,
             hiveory_command_browser_open_external,
             hiveory_command_open_external_url,
+            hiveory_query_browser_use_settings,
+            hiveory_command_update_browser_use_settings,
             hiveory_command_browser_import_cookie_file,
             hiveory_command_browser_import_cookie_source,
             hiveory_query_bootstrap,

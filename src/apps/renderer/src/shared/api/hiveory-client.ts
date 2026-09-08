@@ -239,6 +239,8 @@ export type BrowserCaptureRequest = { browser_id: string; action: 'grab' | 'anno
 export type BrowserAnnotationSyncRequest = { browser_id: string; annotations: Record<string, unknown>[] }
 export type BrowserCookieFileRequest = { browser_id: string; path: string }
 export type BrowserCookieSourceRequest = { browser_id: string; source: 'chrome' | 'edge' | 'brave' }
+export type BrowserUseSettings = { enabled: boolean; target: 'inner' | 'external' | 'desktop' }
+export type BrowserUseSettingsRequest = BrowserUseSettings
 export type CodeRunState = 'draft' | 'ready' | 'running' | 'paused' | 'blocked' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
 export type CodeTaskState = 'draft' | 'blocked' | 'ready' | 'preparing' | 'running' | 'awaiting_input' | 'awaiting_review' | 'completed' | 'failed' | 'cancelled'
 export type CodeDispatchState = 'preparing' | 'running' | 'awaiting_input' | 'checkpointing' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted' | 'stale'
@@ -1507,6 +1509,19 @@ export const hiveoryClient = {
   },
   async browserConfiguration(): Promise<BrowserConfiguration> {
     return hiveoryIsTauri ? tauriQuery<BrowserConfiguration>('hiveory_query_browser_configuration') : structuredClone(previewBrowserConfiguration)
+  },
+  async browserUseSettings(): Promise<BrowserUseSettings> {
+    return hiveoryIsTauri
+      ? tauriQuery<BrowserUseSettings>('hiveory_query_browser_use_settings')
+      : { enabled: false, target: 'inner' }
+  },
+  async updateBrowserUseSettings(request: BrowserUseSettingsRequest): Promise<BrowserUseSettings> {
+    if (!hiveoryIsTauri) return request
+    try {
+      return await invoke<BrowserUseSettings>('hiveory_command_update_browser_use_settings', { request })
+    } catch (error: unknown) {
+      throw normalizeHiveoryClientError(error)
+    }
   },
   async browserCreateProfile(request: BrowserProfileRequest): Promise<BrowserConfiguration> {
     if (hiveoryIsTauri) return tauriCommand<BrowserProfileRequest, BrowserConfiguration>('hiveory_command_browser_create_profile', request)

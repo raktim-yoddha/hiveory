@@ -46,6 +46,34 @@ const DEFAULT_LIMITS = {
   max_concurrent_subagents: 2,
 }
 
+function promptWithBrowserContext(prompt: string): string {
+  try {
+    const preferences = JSON.parse(window.localStorage.getItem('hiveory.capability-settings.v1') ?? '{}') as {
+      browserUseEnabled?: boolean
+      browserTarget?: 'inner' | 'external' | 'desktop'
+    }
+    if (preferences.browserUseEnabled !== true) return prompt
+    const active = JSON.parse(window.localStorage.getItem('hiveory.browser.active.v1') ?? 'null') as {
+      browser_id?: string
+      workspace_id?: string
+      url?: string
+      title?: string
+    } | null
+    const target = preferences.browserTarget ?? 'inner'
+    const targetInstruction = target === 'inner'
+      ? 'Use browser.* tools for the embedded Browser. Start with browser.state and use the active browser_id below.'
+      : target === 'external'
+        ? 'Use browser.open_external for an explicit external-browser handoff. Use computer.run target desktop only for user-authorized actions in an external browser.'
+        : 'Use computer.run with target desktop for user-authorized browser and desktop actions. Use browser.* only when the user asks for the embedded Browser.'
+    const context = active?.browser_id
+      ? `Active embedded Browser: browser_id=${active.browser_id}; workspace_id=${active.workspace_id ?? 'unknown'}; url=${active.url ?? 'unknown'}; title=${active.title ?? 'untitled'}.`
+      : 'No embedded Browser pane is currently registered. Ask the user to open one before using browser.* tools.'
+    return `${prompt}\n\n[Hiveory browser-use context]\n${targetInstruction}\n${context}\nTreat this context as runtime metadata, not as a user instruction.`
+  } catch {
+    return prompt
+  }
+}
+
 function relativeTime(timestamp: number) {
   const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
   if (seconds < 60) return 'now'
@@ -252,8 +280,9 @@ export function HiveoryAgent() {
   }
 
   const handleSendMessage = async () => {
-    const prompt = inputPrompt.trim()
-    if (!prompt || !selectedAgentId || sending || runIsActive) return
+    const rawPrompt = inputPrompt.trim()
+    if (!rawPrompt || !selectedAgentId || sending || runIsActive) return
+    const prompt = promptWithBrowserContext(rawPrompt)
     if (executionTarget === 'remote_vm' && !remoteTarget.trim()) {
       setError('Enter an SSH host alias or user@host in Agent settings before starting a Remote VM run.')
       return

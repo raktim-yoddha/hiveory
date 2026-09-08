@@ -61,6 +61,7 @@ import { cancelScheduledBrowserClose, scheduleBrowserClose } from '../../../brow
 const BROWSER_EVENT = 'hiveory-browser-event'
 const BROWSER_CAPTURE_EVENT = 'hiveory-browser-capture-event'
 const IMPORT_HINT_STORAGE_KEY = 'hiveory.browser.import-hint-dismissed'
+const ACTIVE_BROWSER_STORAGE_KEY = 'hiveory.browser.active.v1'
 
 type BrowserOverlay = 'menu' | 'draw' | 'agent' | null
 type BrowserMenuSection = 'root' | 'cookies'
@@ -319,6 +320,17 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     browserStateRef.current = state
     setBrowserState(state)
     setAddress(state.url)
+    try {
+      window.localStorage.setItem(ACTIVE_BROWSER_STORAGE_KEY, JSON.stringify({
+        browser_id: state.browser_id,
+        workspace_id: state.workspace_id,
+        url: state.url,
+        title: state.title,
+        updated_at_unix_ms: Date.now(),
+      }))
+    } catch {
+      // Agent context is optional in browser preview and can be unavailable in a restricted webview.
+    }
     if (state.viewport_id !== 'default') setDeviceToolbarOpen(true)
     onStateChangeRef.current?.(state)
   }, [])
@@ -1112,7 +1124,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
           <div className="code-preview-overlay code-preview-agent-overlay">
             {overlayFrame && <img className="code-preview-overlay-image" src={browserFrameUrl(overlayFrame)} alt="Current browser page" />}
             <BrowserAgentDelivery
-              prompt={formatBrowserAnnotations(annotations)}
+              prompt={`${formatBrowserAnnotations(annotations)}\n\n[Hiveory browser context]\nActive browser_id=${browserId}; workspace_id=${workspaceId}; url=${browserState.url}; title=${browserState.title || 'untitled'}. Use browser.* tools for follow-up actions when Browser Use is enabled.`}
               onCancel={closeOverlay}
               onDelivered={handleAgentDelivery}
               onError={handleAgentDeliveryError}
