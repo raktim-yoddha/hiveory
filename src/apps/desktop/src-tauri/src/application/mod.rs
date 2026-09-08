@@ -5394,7 +5394,7 @@ async fn prepare_cli_session_integration(
         )
     })?;
 
-    Ok(Some(hiveory_protocol::CodeCliSessionIntegration {
+    let integration = hiveory_protocol::CodeCliSessionIntegration {
         bridge_command: config["mcpServers"]["hiveory"]["command"]
             .as_str()
             .unwrap_or_else(|| {
@@ -5427,7 +5427,46 @@ async fn prepare_cli_session_integration(
         },
         mcp_config_path: mcp_config_path.to_string_lossy().into_owned(),
         instructions_path: instructions_path.to_string_lossy().into_owned(),
-    }))
+    };
+    if adapter_id == "antigravity" {
+        configure_antigravity_session_bridge(&integration).await?;
+    }
+    Ok(Some(integration))
+}
+
+/// Antigravity's CLI exposes MCP only through its own server registry rather
+/// than a per-process config flag. Refresh the one Hiveory-owned entry before
+/// launch so it always targets this running desktop session and never needs a
+/// credential in the CLI configuration.
+async fn configure_antigravity_session_bridge(
+    integration: &hiveory_protocol::CodeCliSessionIntegration,
+) -> Result<(), ApiError> {
+    let status = tokio::process::Command::new("agy")
+        .args([
+            "mcp",
+            "add",
+            "hiveory-desktop",
+            &integration.bridge_command,
+            "--",
+        ])
+        .args(&integration.bridge_args)
+        .status()
+        .await
+        .map_err(|error| {
+            application_error(
+                "antigravity_mcp_setup_failed",
+                format!("Could not configure Antigravity for this Hiveory session: {error}"),
+                RetryClass::Safe,
+            )
+        })?;
+    if !status.success() {
+        return Err(application_error(
+            "antigravity_mcp_setup_failed",
+            "Antigravity could not register Hiveory's local session bridge.".to_owned(),
+            RetryClass::Safe,
+        ));
+    }
+    Ok(())
 }
 
 #[tauri::command]
