@@ -13,6 +13,7 @@ import {
   FolderOpen,
   FolderSearch,
   FolderTree,
+  Globe,
   GitBranch,
   PanelsTopLeft,
   MoreVertical,
@@ -101,12 +102,12 @@ function renderProjectIcon(icon: ProjectIconId) {
   return <Folder size={14} aria-hidden="true" />
 }
 
-function renderPaneRailIcon(node: CodePaneNode) {
+function renderPaneRailIcon(node: CodePaneNode, adapterId?: string | null) {
   switch (node.kind) {
     case 'coding_agent':
-      return <CliBrandIcon identifier={node.title} size={13} />
+      return <CliBrandIcon identifier={adapterId} size={13} />
     case 'preview':
-      return <FolderOpen size={13} style={{ color: '#aeb7c2' }} aria-hidden="true" />
+      return <Globe size={13} style={{ color: '#aeb7c2' }} aria-hidden="true" />
     case 'markdown':
       return <FileText size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
     case 'terminal':
@@ -702,7 +703,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
           aria-expanded={expanded}
           aria-label={`${expanded ? 'Collapse' : 'Expand'} ${leaves.length} panes`}
         >
-          <span className="code-rail-pane-summary-icons">{leaves.slice(0, 6).map((leaf) => <span key={leaf.pane_id}>{renderPaneRailIcon(leaf)}</span>)}</span>
+          <span className="code-rail-pane-summary-icons">{leaves.slice(0, 6).map((leaf) => <span key={leaf.pane_id}>{renderPaneRailIcon(leaf, leaf.resource_id ? state.terminals.get(leaf.resource_id)?.adapter_id : null)}</span>)}</span>
           <span>{leaves.length} pane{leaves.length === 1 ? '' : 's'}</span>
           {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
         </button>
@@ -718,7 +719,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
                 void focusPane(leaf.pane_id)
               }}
             >
-              {renderPaneRailIcon(leaf)}
+              {renderPaneRailIcon(leaf, leaf.resource_id ? state.terminals.get(leaf.resource_id)?.adapter_id : null)}
               <span>{leaf.title || (leaf.kind === 'empty' ? 'New pane' : leaf.kind.replace('_', ' '))}</span>
             </button>
           )

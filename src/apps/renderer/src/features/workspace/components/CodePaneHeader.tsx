@@ -26,6 +26,7 @@ import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surfac
 
 interface CodePaneHeaderProps {
   node: CodePaneNode
+  adapterId?: string | null
   isFocused: boolean
   isMaximized: boolean
   terminalState?: CodeTerminalState
@@ -48,8 +49,29 @@ interface CodePaneHeaderProps {
   onToggleTerminalHistory?: () => void
 }
 
+const ADAPTER_CACHE_TTL_MS = 30_000
+let adapterCache: { adapters: CodeAdapterSummary[]; expiresAt: number } | null = null
+let adapterRequest: Promise<CodeAdapterSummary[]> | null = null
+
+const loadDetectedAdapters = async (): Promise<CodeAdapterSummary[]> => {
+  if (adapterCache && adapterCache.expiresAt > Date.now()) return adapterCache.adapters
+  if (!adapterRequest) {
+    adapterRequest = hiveoryClient.codeSnapshot()
+      .then((snapshot) => {
+        const adapters = snapshot.adapters.filter((adapter) => adapter.detected)
+        adapterCache = { adapters, expiresAt: Date.now() + ADAPTER_CACHE_TTL_MS }
+        return adapters
+      })
+      .finally(() => {
+        adapterRequest = null
+      })
+  }
+  return adapterRequest
+}
+
 export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   node,
+  adapterId,
   isFocused,
   isMaximized,
   onFocus,
@@ -79,16 +101,6 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   useEffect(() => {
     setTitleValue(node.title || '')
   }, [node.title])
-
-  useEffect(() => {
-    let mounted = true
-    void hiveoryClient.codeSnapshot().then((snapshot) => {
-      if (mounted) setAdapters(snapshot.adapters.filter((a) => a.detected))
-    })
-    return () => {
-      mounted = false
-    }
-  }, [])
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -135,7 +147,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   const getPaneIcon = () => {
     switch (node.kind) {
       case 'coding_agent':
-        return <CliBrandIcon identifier={node.title} size={13} />
+        return <CliBrandIcon identifier={adapterId} size={13} />
       case 'terminal':
         return <Terminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
       case 'preview':
@@ -264,7 +276,13 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               aria-expanded={splitMenuOpen}
               onClick={() => {
                 setMenuOpen(false)
-                setSplitMenuOpen((open) => !open)
+                setSplitMenuOpen((open) => {
+                  const nextOpen = !open
+                  if (nextOpen && adapters.length === 0) {
+                    void loadDetectedAdapters().then(setAdapters).catch(() => undefined)
+                  }
+                  return nextOpen
+                })
               }}
             >
               <Plus size={13} />

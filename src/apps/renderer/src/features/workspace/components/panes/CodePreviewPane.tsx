@@ -71,6 +71,7 @@ interface CodePreviewPaneProps {
   preview?: CodePreviewSummary
   initialUrl?: string
   onStateChange?: (state: BrowserRuntimeState) => void
+  onFocus?: () => void
 }
 
 interface BrowserSurfaceGeometry {
@@ -221,7 +222,7 @@ function BrowserMenu({
   )
 }
 
-export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, preview, initialUrl = DEFAULT_BROWSER_HOME, onStateChange }) => {
+export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, preview, initialUrl = DEFAULT_BROWSER_HOME, onStateChange, onFocus }) => {
   const browserId = preview?.id ?? 'hiveory-browser-' + workspaceId
   const initialUrlRef = useRef(preview?.url || initialUrl)
   // New Browser panes start at Google. A legacy about:blank snapshot is
@@ -468,6 +469,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
     let unlisten: (() => void) | null = null
     void listen<BrowserEvent>(BROWSER_EVENT, (event) => {
       if (event.payload.state.browser_id !== browserId) return
+      if (event.payload.event === 'focused') {
+        onFocus?.()
+        return
+      }
       applyState(event.payload.state)
       if (event.payload.notice) setNotice(event.payload.notice)
       if (event.payload.state.loading && pickerActionRef.current) {
@@ -485,7 +490,7 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
       disposed = true
       unlisten?.()
     }
-  }, [applyState, browserId, cacheBrowserFrame, cancelPickerSession, syncAnnotations])
+  }, [applyState, browserId, cacheBrowserFrame, cancelPickerSession, onFocus, syncAnnotations])
 
   useEffect(() => {
     if (!hiveoryClient.isTauri) return
@@ -1064,7 +1069,10 @@ export const CodePreviewPane: React.FC<CodePreviewPaneProps> = ({ workspaceId, p
           ref={surfaceRef}
           aria-busy={browserState.loading}
           style={isEmulatedViewport ? { width: viewportPreset.width, height: viewportPreset.height } : undefined}
-          onMouseDown={() => { if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined) }}
+          onMouseDown={() => {
+            onFocus?.()
+            if (hiveoryClient.isTauri) void hiveoryClient.browserFocus({ browser_id: browserId }).catch(() => undefined)
+          }}
         >
           {!hiveoryClient.isTauri && <iframe key={`${browserState.url}:${iframeReloadKey}`} src={browserState.url} className="code-preview-iframe" title="Browser" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerPolicy="no-referrer" onLoad={() => setBrowserState((state) => ({ ...state, loading: false }))} />}
           {hiveoryClient.isTauri && <div className="code-preview-native-placeholder" aria-hidden="true" />}

@@ -66,6 +66,11 @@ const BROWSER_SETTINGS_KEY: &str = "browser.settings.v1";
 const BROWSER_PROFILES_KEY: &str = "browser.profiles.v1";
 const DEFAULT_PROFILE_ID: &str = "default";
 const DEFAULT_VIEWPORT_ID: &str = "default";
+const BROWSER_FOCUS_BRIDGE_SCRIPT: &str = r#"(() => {
+  addEventListener('pointerdown', () => {
+    window.chrome?.webview?.postMessage(JSON.stringify({ kind: 'hiveory-browser-focus' }));
+  }, { capture: true, passive: true });
+})()"#;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BrowserOpenRequest {
@@ -257,6 +262,7 @@ pub(crate) struct BrowserRuntimeState {
 #[serde(rename_all = "snake_case")]
 pub(crate) enum BrowserEventKind {
     State,
+    Focused,
     PopupRouted,
     DownloadStarted,
     DownloadFinished,
@@ -889,6 +895,7 @@ impl BrowserManager {
             WebviewUrl::External(url.clone()),
         )
         .data_directory(profile_dir)
+        .initialization_script_for_all_frames(BROWSER_FOCUS_BRIDGE_SCRIPT)
         .on_navigation(move |navigation_url| {
             if !is_allowed_browser_url(navigation_url) {
                 return false;
@@ -1051,9 +1058,23 @@ impl BrowserManager {
                                         else {
                                             return Ok(());
                                         };
-                                        if value.get("kind").and_then(Value::as_str)
-                                            != Some("hiveory-browser-selection")
-                                        {
+                                        let kind = value.get("kind").and_then(Value::as_str);
+                                        if kind == Some("hiveory-browser-focus") {
+                                            if let Ok(Some(state)) = inner_for_callback
+                                                .snapshot(&browser_id_for_callback)
+                                            {
+                                                emit_event(
+                                                    &app_for_callback,
+                                                    BrowserEvent {
+                                                        event: BrowserEventKind::Focused,
+                                                        state,
+                                                        notice: None,
+                                                    },
+                                                );
+                                            }
+                                            return Ok(());
+                                        }
+                                        if kind != Some("hiveory-browser-selection") {
                                             return Ok(());
                                         }
                                         let action = value

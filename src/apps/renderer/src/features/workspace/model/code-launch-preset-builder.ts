@@ -1,7 +1,6 @@
 import type { CodeLaunchPresetEntry, CodeLaunchPresetPaneKind } from '../../../shared/api/hiveory-client'
 
-const PET_ADJECTIVES = ['Amber', 'Bramble', 'Cedar', 'Clover', 'Dapple', 'Ember', 'Fern', 'Ginger', 'Harbor', 'Juniper', 'Maple', 'Mossy', 'Pebble', 'Poppy', 'Rowan', 'Velvet']
-const PET_ANIMALS = ['Badger', 'Finch', 'Fox', 'Gecko', 'Lark', 'Marten', 'Moth', 'Otter', 'Panda', 'Puffin', 'Raccoon', 'Robin', 'Sparrow', 'Wren', 'Yak', 'Zebra']
+const PET_NAMES = ['Biscuit', 'Button', 'Clover', 'Doodle', 'Fable', 'Fidget', 'Gizmo', 'Mochi', 'Noodle', 'Pebble', 'Pickle', 'Pippin', 'Poppy', 'Sprout', 'Tango', 'Waffles', 'Whisker', 'Wicket', 'Ziggy']
 
 export interface CodeLaunchPresetGroup {
   key: string
@@ -29,18 +28,16 @@ export const groupPresetEntries = (entries: CodeLaunchPresetEntry[]): CodeLaunch
 }
 
 /** Produces a friendly pane title while guaranteeing uniqueness among the supplied titles. */
-export const nextPetPaneTitle = (existingTitles: readonly string[], seed = Math.floor(Math.random() * PET_ADJECTIVES.length * PET_ANIMALS.length)): string => {
+export const nextPetPaneTitle = (existingTitles: readonly string[], seed = Math.floor(Math.random() * PET_NAMES.length)): string => {
   const used = new Set(existingTitles.map(titleKey))
-  const combinations = PET_ADJECTIVES.length * PET_ANIMALS.length
-  for (let offset = 0; offset < combinations; offset += 1) {
-    const index = (seed + offset) % combinations
-    const candidate = `${PET_ADJECTIVES[Math.floor(index / PET_ANIMALS.length)]} ${PET_ANIMALS[index % PET_ANIMALS.length]}`
+  for (let offset = 0; offset < PET_NAMES.length; offset += 1) {
+    const candidate = PET_NAMES[(seed + offset) % PET_NAMES.length]
     if (!used.has(titleKey(candidate))) return candidate
   }
   let suffix = 2
-  const base = 'Clover Otter'
-  while (used.has(titleKey(`${base} ${suffix}`))) suffix += 1
-  return `${base} ${suffix}`
+  const base = PET_NAMES[0]
+  while (used.has(titleKey(`${base}${suffix}`))) suffix += 1
+  return `${base}${suffix}`
 }
 
 export const hasDuplicatePaneTitles = (entries: readonly Pick<CodeLaunchPresetEntry, 'title'>[]): boolean => {

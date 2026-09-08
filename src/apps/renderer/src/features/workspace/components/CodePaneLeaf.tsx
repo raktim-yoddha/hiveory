@@ -1,4 +1,4 @@
-import React, { Component, useEffect, useState, type ReactNode } from 'react'
+import React, { Component, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { hiveoryClient, type BrowserRuntimeState, type CodePaneNode } from '../../../shared/api/hiveory-client'
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodePaneHeader } from './CodePaneHeader'
@@ -82,6 +82,9 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
 
   const terminalSummary = node.resource_id ? state.terminals.get(node.resource_id) : undefined
   const previewSummary = node.resource_id ? state.previews.get(node.resource_id) : undefined
+  const focusCurrentPane = useCallback(() => {
+    if (!isFocused) void focusPane(node.pane_id)
+  }, [focusPane, isFocused, node.pane_id])
 
   useEffect(() => {
     const terminalId = node.kind === 'terminal' || node.kind === 'coding_agent' ? node.resource_id : null
@@ -176,6 +179,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
             workspaceId={state.workspaceId ?? previewSummary.workspace_id}
             preview={previewSummary}
             onStateChange={(nextState: BrowserRuntimeState) => updatePreviewState(nextState)}
+            onFocus={focusCurrentPane}
           />
         )
       case 'markdown':
@@ -206,12 +210,13 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
       {node.kind !== 'empty' && (
         <CodePaneHeader
           node={node}
+          adapterId={terminalSummary?.adapter_id}
           isFocused={isFocused}
           isMaximized={isMaximized}
           terminalState={terminalSummary?.state}
           terminalHistoryEnabled={historyEnabled}
           terminalHistoryBusy={historyBusy}
-          onFocus={() => void focusPane(node.pane_id)}
+          onFocus={focusCurrentPane}
           onRename={(title) => void renamePane(node.pane_id, title)}
           onSplitAndLaunch={(placement, kind, adapterId, model, url, agentLaunchMode) => {
             void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url, agentLaunchMode)

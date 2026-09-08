@@ -77,7 +77,13 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve())
   const loadRequestRef = useRef(0)
   const terminalLaunchesRef = useRef(new Set<string>())
+  const focusPersistTimerRef = useRef<number | null>(null)
+  const pendingFocusedPaneRef = useRef<{ workspaceId: string; paneId: string } | null>(null)
   stateRef.current = state
+
+  useEffect(() => () => {
+    if (focusPersistTimerRef.current !== null) window.clearTimeout(focusPersistTimerRef.current)
+  }, [])
 
   const commitLayout = useCallback((layout: CodeWorkspaceState['layout']) => {
     if (!layout) return
@@ -119,6 +125,11 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   }, [commitPreview])
 
   const enqueueOperation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    if (focusPersistTimerRef.current !== null) {
+      window.clearTimeout(focusPersistTimerRef.current)
+      focusPersistTimerRef.current = null
+      pendingFocusedPaneRef.current = null
+    }
     const run = mutationQueueRef.current.then(operation)
     mutationQueueRef.current = run.then(() => undefined, () => undefined)
     return run
@@ -186,6 +197,11 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   }, [])
 
   const applyMutation = useCallback((mutation: CodePaneMutation) => {
+    if (mutation.type !== 'focus' && focusPersistTimerRef.current !== null) {
+      window.clearTimeout(focusPersistTimerRef.current)
+      focusPersistTimerRef.current = null
+      pendingFocusedPaneRef.current = null
+    }
     const run = mutationQueueRef.current.then(async () => {
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
@@ -395,7 +411,22 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       const optimisticLayout = { ...layout, focused_pane_id: paneId }
       stateRef.current = { ...stateRef.current, layout: optimisticLayout, focusedPaneId: paneId }
       dispatch({ type: 'SET_LAYOUT', layout: optimisticLayout })
-      void applyMutation({ type: 'focus', pane_id: paneId })
+      if (focusPersistTimerRef.current !== null) window.clearTimeout(focusPersistTimerRef.current)
+      const workspaceId = stateRef.current.workspaceId
+      if (!workspaceId) return
+      pendingFocusedPaneRef.current = { workspaceId, paneId }
+      focusPersistTimerRef.current = window.setTimeout(() => {
+        focusPersistTimerRef.current = null
+        const pendingFocus = pendingFocusedPaneRef.current
+        pendingFocusedPaneRef.current = null
+        const currentLayout = stateRef.current.layout
+        if (
+          !pendingFocus ||
+          pendingFocus.workspaceId !== stateRef.current.workspaceId ||
+          !currentLayout?.nodes.some((node) => node.pane_id === pendingFocus.paneId)
+        ) return
+        void applyMutation({ type: 'focus', pane_id: pendingFocus.paneId })
+      }, 120)
     },
     [applyMutation]
   )
