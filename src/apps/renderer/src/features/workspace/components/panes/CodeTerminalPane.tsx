@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertTriangle, Mic, MicOff, RotateCw } from 'lucide-react'
+import { AlertTriangle, RotateCw } from 'lucide-react'
 import {
   hiveoryClient,
   type CodeTerminalEvent,
@@ -11,12 +11,19 @@ import {
 import { readClipboardText, writeClipboardText } from '../../../../shared/clipboard'
 import { useSpeechDictation } from '../../../../shared/speech-dictation'
 
+export type CodeTerminalVoiceState = {
+  supported: boolean
+  listening: boolean
+  toggle: () => void
+}
+
 interface CodeTerminalPaneProps {
   terminalId: string
   summary?: CodeTerminalSummary
   onRelaunch?: () => void
   historyError?: string | null
   onDismissHistoryError?: () => void
+  onVoiceStateChange?: (state: CodeTerminalVoiceState | null) => void
 }
 
 function decodeBase64(value: string): Uint8Array {
@@ -51,6 +58,7 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
   onRelaunch,
   historyError,
   onDismissHistoryError,
+  onVoiceStateChange,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
@@ -76,6 +84,14 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     onError: setVoiceError,
   })
   const stopVoice = voice.stop
+
+  useEffect(() => {
+    onVoiceStateChange?.({
+      supported: voice.supported,
+      listening: voice.listening,
+      toggle: voice.toggle,
+    })
+  }, [onVoiceStateChange, voice.listening, voice.supported, voice.toggle])
 
   useEffect(() => {
     if (isInterrupted) stopVoice()
@@ -135,6 +151,22 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     termRef.current = term
     fitAddonRef.current = fitAddon
 
+    const handlePaste = (event: ClipboardEvent) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
+      if (clipboardText) {
+        term.paste(clipboardText)
+        return
+      }
+      void readClipboardText()
+        .then((text) => {
+          if (!disposed && text) term.paste(text)
+        })
+        .catch((error: unknown) => setTransportError(`Paste failed: ${formatTerminalError(error)}`))
+    }
+    container.addEventListener('paste', handlePaste, true)
+
     term.attachCustomKeyEventHandler((event) => {
       const modifier = event.ctrlKey || event.metaKey
       const key = event.key.toLowerCase()
@@ -144,15 +176,6 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         void writeClipboardText(selectedText)
           .then(() => setTransportError(null))
           .catch((error: unknown) => setTransportError(`Copy failed: ${formatTerminalError(error)}`))
-        return false
-      }
-      if (modifier && key === 'v') {
-        event.preventDefault()
-        void readClipboardText()
-          .then((text) => {
-            if (!disposed && text) term.paste(text)
-          })
-          .catch((error: unknown) => setTransportError(`Paste failed: ${formatTerminalError(error)}`))
         return false
       }
       return true
@@ -313,6 +336,7 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       unsubscribe()
       if (resizeTimer !== null) window.clearTimeout(resizeTimer)
       resizeObserver?.disconnect()
+      container.removeEventListener('paste', handlePaste, true)
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
@@ -353,19 +377,6 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
           <button type="button" onClick={onDismissHistoryError} aria-label="Dismiss terminal history error">×</button>
         </div>
       )}
-      <button
-        type="button"
-        className={`code-terminal-voice-control${voice.listening ? ' is-listening' : ''}`}
-        onClick={() => {
-          setVoiceError(null)
-          voice.toggle()
-        }}
-        disabled={!voice.supported || Boolean(isInterrupted)}
-        aria-label={voice.listening ? 'Stop voice dictation' : 'Start voice dictation'}
-        title={voice.supported ? (voice.listening ? 'Stop voice dictation' : 'Dictate into terminal') : 'Speech recognition is unavailable in this runtime'}
-      >
-        {voice.listening ? <MicOff size={13} /> : <Mic size={13} />}
-      </button>
       {(voice.partialText || voiceError) && (
         <div className={`code-terminal-voice-status${voiceError ? ' is-error' : ''}`} role="status">
           {voiceError ?? voice.partialText}

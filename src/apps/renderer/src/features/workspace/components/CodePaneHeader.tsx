@@ -10,6 +10,8 @@ import {
   Terminal,
   FileText,
   LayoutTemplate,
+  Mic,
+  MicOff,
 } from 'lucide-react'
 import {
   hiveoryClient,
@@ -22,6 +24,7 @@ import {
 import { CodePaneMenu } from './CodePaneMenu'
 import { CodeSplitPanePicker } from './CodeSplitPanePicker'
 import { CliBrandIcon } from './CliIcons'
+import type { CodeTerminalVoiceState } from './panes/CodeTerminalPane'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodePaneHeaderProps {
@@ -32,6 +35,7 @@ interface CodePaneHeaderProps {
   terminalState?: CodeTerminalState
   terminalHistoryEnabled?: boolean
   terminalHistoryBusy?: boolean
+  voiceState?: CodeTerminalVoiceState | null
   onFocus: () => void
   onRename: (newTitle: string) => void
   onSplitAndLaunch: (
@@ -74,6 +78,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   adapterId,
   isFocused,
   isMaximized,
+  terminalState,
   onFocus,
   onRename,
   onSplitAndLaunch,
@@ -84,6 +89,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   terminalHistoryEnabled,
   terminalHistoryBusy,
   onToggleTerminalHistory,
+  voiceState,
 }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [titleValue, setTitleValue] = useState(node.title || '')
@@ -226,6 +232,19 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
         </div>
 
         {showPaneActions && <div className="code-pane-header-actions" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          {voiceState && (
+            <button
+              type="button"
+              className={`code-pane-action-btn code-pane-voice-btn${voiceState.listening ? ' is-listening' : ''}`}
+              title={!voiceState.supported ? 'Speech recognition is unavailable in this runtime' : voiceState.listening ? 'Stop voice dictation' : 'Dictate into terminal'}
+              aria-label={!voiceState.supported ? 'Speech recognition unavailable' : voiceState.listening ? 'Stop voice dictation' : 'Start voice dictation'}
+              aria-pressed={voiceState.listening}
+              disabled={!voiceState.supported || terminalState === 'interrupted' || terminalState === 'failed' || terminalState === 'exited' || terminalState === 'dormant'}
+              onClick={voiceState.toggle}
+            >
+              {voiceState.listening ? <Mic size={13} /> : <MicOff size={13} />}
+            </button>
+          )}
           {/* More Options Menu */}
           <div style={{ position: 'relative' }}>
             <button

@@ -23,6 +23,7 @@ import {
 import { readClipboardText, writeClipboardText } from '../../../shared/clipboard'
 import { useSpeechDictation } from '../../../shared/speech-dictation'
 import { CodePreviewPane } from '../../workspace/components/panes/CodePreviewPane'
+import type { CodeTerminalVoiceState } from '../../workspace/components/panes/CodeTerminalPane'
 import '../../workspace/styles/workspace.css'
 
 type MonacoEnvironment = { getWorker: () => Worker }
@@ -45,6 +46,7 @@ export function HiveoryCode() {
   const [preview, setPreview] = useState<CodePreviewSummary | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [terminalVoiceState, setTerminalVoiceState] = useState<CodeTerminalVoiceState | null>(null)
 
   const loadWorkspace = useCallback(async (workspaceId: string) => {
     setBusy('workspace')
@@ -301,7 +303,7 @@ export function HiveoryCode() {
           <div className="hiveory-code-pane-toolbar"><span><LayoutPanelTop size={14} />Pane tree · {detail?.layout.nodes.length ?? 0} nodes</span><span className="hiveory-code-pane-list">{detail?.layout.nodes.filter((node) => node.children.length === 0).map((node) => <span key={node.pane_id}>{node.kind.replace('_', ' ')}</span>)}</span><button className="hiveory-mini-button" onClick={() => detail && void saveLayout(detail.layout)} disabled={busy !== null} aria-label="Save pane layout"><Save size={13} /></button></div>
           <div className="hiveory-code-workbench">
             <section className="hiveory-code-editor-pane" aria-label="File editor"><div className="hiveory-code-pane-heading"><span><FileCode2 size={14} />{document?.relative_path ?? 'Editor'}</span><div>{document && <span className="hiveory-code-language">{document.language ?? 'plain text'}</span>}<button className="hiveory-mini-button" onClick={() => void saveFile()} disabled={!document || !trusted || document.read_only || busy !== null} aria-label="Save file"><Save size={14} /></button></div></div>{document ? document.binary ? <div className="hiveory-code-binary"><ShieldAlert size={20} /><p>Binary file preview is blocked.</p></div> : <MonacoEditorPane key={`${document.relative_path}:${document.fingerprint}`} path={document.relative_path} content={editorContent} language={document.language} readOnly={!trusted || document.read_only} onChange={setEditorContent} /> : <div className="hiveory-code-editor-empty"><FileCode2 size={24} /><p>Select a file from the workspace tree.</p></div>}</section>
-            <section className="hiveory-code-terminal-pane" aria-label="Workspace terminal"><div className="hiveory-code-pane-heading"><span><Terminal size={14} />Terminal</span><div className="hiveory-code-terminal-actions"><label className="hiveory-code-engine-select"><span className="hiveory-visually-hidden">Coding engine</span><select aria-label="Coding engine" value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)} disabled={Boolean(activeTerminal) || busy !== null}>{adapters.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.detected ? ' · ready' : ' · not detected'}</option>)}</select></label><input className="hiveory-code-model-input" aria-label="Coding engine model" value={adapterModel} onChange={(event) => setAdapterModel(event.target.value)} placeholder="default model" disabled={Boolean(activeTerminal) || busy !== null} /><button className="hiveory-mini-button" onClick={() => void startTerminal('shell')} disabled={!trusted || busy !== null} aria-label="Start shell"><Play size={13} /></button><button className="hiveory-mini-button" onClick={() => void startTerminal('coding_agent')} disabled={!trusted || !adapter?.detected || busy !== null} aria-label={`Start ${adapter?.display_name ?? 'coding agent'}`}><Bot size={13} /></button>{activeTerminal && <><button className="hiveory-mini-button" onClick={() => void stopTerminal(false)} disabled={busy !== null} aria-label="Interrupt terminal"><Square size={12} /></button><button className="hiveory-mini-button is-danger" onClick={() => void stopTerminal(true)} disabled={busy !== null} aria-label="Force stop terminal"><X size={13} /></button></>}</div></div><TerminalPane terminalId={activeTerminal?.id ?? null} output={terminalOutput} onInput={(data) => activeTerminal && void hiveoryClient.writeCodeTerminal({ terminal_id: activeTerminal.id, data })} onResize={(cols, rows) => activeTerminal && void hiveoryClient.resizeCodeTerminal({ terminal_id: activeTerminal.id, cols, rows })} /><div className="hiveory-code-terminal-status">{activeTerminal ? `${activeTerminal.kind === 'coding_agent' ? `${activeTerminal.adapter_id ?? adapter?.display_name ?? 'Coding agent'} · ` : ''}${activeTerminal.state}` : trusted ? `${adapter?.display_name ?? 'Coding engine'} · ${adapter?.detected ? 'ready' : 'not detected'} · start a shell or coding-agent terminal.` : 'Trust the workspace to execute processes.'}</div></section>
+            <section className="hiveory-code-terminal-pane" aria-label="Workspace terminal"><div className="hiveory-code-pane-heading"><span><Terminal size={14} />Terminal</span><div className="hiveory-code-terminal-actions"><label className="hiveory-code-engine-select"><span className="hiveory-visually-hidden">Coding engine</span><select aria-label="Coding engine" value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)} disabled={Boolean(activeTerminal) || busy !== null}>{adapters.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.detected ? ' · ready' : ' · not detected'}</option>)}</select></label><input className="hiveory-code-model-input" aria-label="Coding engine model" value={adapterModel} onChange={(event) => setAdapterModel(event.target.value)} placeholder="default model" disabled={Boolean(activeTerminal) || busy !== null} />{terminalVoiceState && <button type="button" className={`hiveory-mini-button hiveory-code-terminal-voice-control${terminalVoiceState.listening ? ' is-listening' : ''}`} onClick={terminalVoiceState.toggle} disabled={!activeTerminal || !terminalVoiceState.supported} aria-label={!terminalVoiceState.supported ? 'Speech recognition unavailable' : terminalVoiceState.listening ? 'Stop voice dictation' : 'Start voice dictation'} aria-pressed={terminalVoiceState.listening} title={terminalVoiceState.supported ? (terminalVoiceState.listening ? 'Stop voice dictation' : 'Dictate into terminal') : 'Speech recognition is unavailable in this runtime'}>{terminalVoiceState.listening ? <Mic size={13} /> : <MicOff size={13} />}</button>}<button className="hiveory-mini-button" onClick={() => void startTerminal('shell')} disabled={!trusted || busy !== null} aria-label="Start shell"><Play size={13} /></button><button className="hiveory-mini-button" onClick={() => void startTerminal('coding_agent')} disabled={!trusted || !adapter?.detected || busy !== null} aria-label={`Start ${adapter?.display_name ?? 'coding agent'}`}><Bot size={13} /></button>{activeTerminal && <><button className="hiveory-mini-button" onClick={() => void stopTerminal(false)} disabled={busy !== null} aria-label="Interrupt terminal"><Square size={12} /></button><button className="hiveory-mini-button is-danger" onClick={() => void stopTerminal(true)} disabled={busy !== null} aria-label="Force stop terminal"><X size={13} /></button></>}</div></div><TerminalPane terminalId={activeTerminal?.id ?? null} output={terminalOutput} onInput={(data) => activeTerminal && void hiveoryClient.writeCodeTerminal({ terminal_id: activeTerminal.id, data })} onResize={(cols, rows) => activeTerminal && void hiveoryClient.resizeCodeTerminal({ terminal_id: activeTerminal.id, cols, rows })} onVoiceStateChange={setTerminalVoiceState} /><div className="hiveory-code-terminal-status">{activeTerminal ? `${activeTerminal.kind === 'coding_agent' ? `${activeTerminal.adapter_id ?? adapter?.display_name ?? 'Coding agent'} · ` : ''}${activeTerminal.state}` : trusted ? `${adapter?.display_name ?? 'Coding engine'} · ${adapter?.detected ? 'ready' : 'not detected'} · start a shell or coding-agent terminal.` : 'Trust the workspace to execute processes.'}</div></section>
             {preview && <section className="hiveory-code-preview-pane" aria-label="Docked Browser"><div className="hiveory-code-pane-heading"><span><ExternalLink size={14} />Browser</span><button className="hiveory-mini-button" onClick={() => setPreview(null)} aria-label="Close docked Browser"><X size={13} /></button></div><CodePreviewPane key={preview.id} workspaceId={selectedWorkspace.id} preview={preview} onStateChange={(state) => setPreview((current) => current ? { ...current, url: state.url, origin: new URL(state.url).origin } : current)} /></section>}
           </div>
           <div className="hiveory-code-bottom-grid"><section className="hiveory-code-card" aria-labelledby="hiveory-git-title"><div className="hiveory-code-card-heading"><div><GitBranch size={15} /><h3 id="hiveory-git-title">Changes</h3></div><button className="hiveory-mini-button" onClick={() => void refreshGit()} disabled={!trusted || busy !== null} aria-label="Refresh Git status"><RefreshCw size={13} /></button></div>{gitStatus ? <><div className="hiveory-code-git-summary"><span>{gitStatus.branch ?? 'detached HEAD'}</span><span>{gitStatus.ahead} ahead · {gitStatus.behind} behind</span></div><div className="hiveory-code-change-list">{gitStatus.files.length ? gitStatus.files.map((file) => <button key={file.relative_path} onClick={() => void showDiff(file.relative_path)}><span className={`hiveory-code-change-mark ${file.conflict ? 'conflict' : file.status}`}>{file.conflict ? '!' : file.status.slice(0, 1).toUpperCase()}</span><span>{file.relative_path}</span>{file.staged && <small>staged</small>}</button>) : <p className="hiveory-code-muted">Working tree clean.</p>}</div></> : <p className="hiveory-code-muted">{trusted ? 'Git status unavailable or not a repository.' : 'Trust this workspace to read Git status.'}</p>}</section><section className="hiveory-code-card hiveory-code-diff-card" aria-labelledby="hiveory-diff-title"><div className="hiveory-code-card-heading"><div><FileText size={15} /><h3 id="hiveory-diff-title">Diff / review</h3></div>{gitDiff && <button className="hiveory-mini-button" onClick={() => setGitDiff(null)} aria-label="Close diff"><X size={13} /></button>}</div>{gitDiff ? <pre>{gitDiff.content || 'No unstaged diff for this path.'}</pre> : <p className="hiveory-code-muted">Select a changed file to inspect its working-tree diff.</p>}</section><section className="hiveory-code-card" aria-labelledby="hiveory-preview-title"><div className="hiveory-code-card-heading"><div><ExternalLink size={15} /><h3 id="hiveory-preview-title">Browser</h3></div></div><p className="hiveory-code-muted">Open a local development server or browse the web. Plain text searches Google.</p><div className="hiveory-code-preview-form"><input value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} aria-label="Browser address" /><button onClick={() => void openPreview()} disabled={!trusted || busy !== null}><ExternalLink size={14} />Open</button></div></section></div>
@@ -343,7 +345,7 @@ function MonacoEditorPane({ path, content, language, readOnly, onChange }: { pat
   return <div className="hiveory-monaco-wrap"><div className={ready ? 'hiveory-monaco-editor' : 'hiveory-monaco-editor is-hidden'} ref={containerRef} />{!ready && !failed && <div className="hiveory-code-editor-loading">Loading editor…</div>}{failed && <textarea className="hiveory-code-textarea-fallback" value={content} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} spellCheck={false} aria-label="Code editor fallback" />}</div>
 }
 
-function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: string | null; output: string; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void }) {
+function TerminalPane({ terminalId, output, onInput, onResize, onVoiceStateChange }: { terminalId: string | null; output: string; onInput: (data: string) => void; onResize: (cols: number, rows: number) => void; onVoiceStateChange?: (state: CodeTerminalVoiceState | null) => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<XTerm | null>(null)
   const lastOutputLength = useRef(0)
@@ -368,16 +370,40 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
   const stopVoice = voice.stop
 
   useEffect(() => {
+    onVoiceStateChange?.({
+      supported: voice.supported,
+      listening: voice.listening,
+      toggle: voice.toggle,
+    })
+    return () => onVoiceStateChange?.(null)
+  }, [onVoiceStateChange, voice.listening, voice.supported, voice.toggle])
+
+  useEffect(() => {
     if (!terminalId) stopVoice()
   }, [terminalId, stopVoice])
 
   useEffect(() => {
-    if (!containerRef.current) return
+    const container = containerRef.current
+    if (!container) return
+    let disposed = false
     const terminal = new XTerm({ convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, theme: { background: '#0b1120', foreground: '#dbe4f0', cursor: '#22c55e', selectionBackground: '#334155' }, scrollback: 5000 })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
-    terminal.open(containerRef.current)
+    terminal.open(container)
     fit.fit()
+    const handlePaste = (event: ClipboardEvent) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
+      if (clipboardText) {
+        terminal.paste(clipboardText)
+        return
+      }
+      void readClipboardText().then((text) => {
+        if (!disposed && text) terminal.paste(text)
+      }).catch((error: unknown) => setVoiceError(error instanceof Error ? `Paste failed: ${error.message}` : 'Paste failed.'))
+    }
+    container.addEventListener('paste', handlePaste, true)
     terminal.onData((data) => onInputRef.current(encodeBase64(data)))
     terminal.attachCustomKeyEventHandler((event) => {
       const modifier = event.ctrlKey || event.metaKey
@@ -389,20 +415,11 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
         })
         return false
       }
-      if (modifier && key === 'v') {
-        event.preventDefault()
-        void readClipboardText().then((text) => {
-          if (text) terminal.paste(text)
-        }).catch((error: unknown) => {
-          setVoiceError(error instanceof Error ? `Paste failed: ${error.message}` : 'Paste failed.')
-        })
-        return false
-      }
       return true
     })
     terminalRef.current = terminal
     onResizeRef.current(terminal.cols, terminal.rows)
-    return () => { terminal.dispose(); terminalRef.current = null; lastOutputLength.current = 0 }
+    return () => { disposed = true; container.removeEventListener('paste', handlePaste, true); terminal.dispose(); terminalRef.current = null; lastOutputLength.current = 0 }
   }, [terminalId])
   useEffect(() => {
     const terminal = terminalRef.current
@@ -412,19 +429,6 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
     lastOutputLength.current = output.length
   }, [output])
   return <div className="hiveory-xterm">
-    <button
-      type="button"
-      className={`code-terminal-voice-control${voice.listening ? ' is-listening' : ''}`}
-      onClick={() => {
-        setVoiceError(null)
-        voice.toggle()
-      }}
-      disabled={!terminalId || !voice.supported}
-      aria-label={voice.listening ? 'Stop voice dictation' : 'Start voice dictation'}
-      title={!terminalId ? 'Start a terminal before dictating' : voice.supported ? (voice.listening ? 'Stop voice dictation' : 'Dictate into terminal') : 'Speech recognition is unavailable in this runtime'}
-    >
-      {voice.listening ? <MicOff size={13} /> : <Mic size={13} />}
-    </button>
     {(voice.partialText || voiceError) && <div className={`code-terminal-voice-status${voiceError ? ' is-error' : ''}`} role="status">{voiceError ?? voice.partialText}</div>}
     <div ref={containerRef} className="hiveory-xterm-canvas" aria-label={terminalId ? 'Interactive terminal' : 'Terminal idle'} />
   </div>

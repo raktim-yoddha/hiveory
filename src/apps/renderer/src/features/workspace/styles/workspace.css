@@ -1070,6 +1070,17 @@
   background: #1a1b20;
 }
 
+.code-pane-voice-btn.is-listening {
+  color: #9cf2d9;
+  background: #17352f;
+  box-shadow: 0 0 0 1px rgba(69, 183, 160, 0.28);
+}
+
+.code-pane-voice-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .code-pane-rename-input {
   flex: 1 1 auto;
   min-width: 0;
@@ -2021,6 +2032,14 @@
 .code-terminal-voice-control:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.hiveory-code-terminal-voice-control {
+  position: static;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  padding: 3px 5px;
 }
 
 .code-terminal-voice-status {

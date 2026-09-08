@@ -4,7 +4,7 @@ import type { CodeWorkspaceController } from '../state/use-code-workspace-contro
 import { CodePaneHeader } from './CodePaneHeader'
 import { CodePaneDropTargets } from './CodePaneDropTargets'
 import { CodePaneLauncher } from './CodePaneLauncher'
-import { CodeTerminalPane } from './panes/CodeTerminalPane'
+import { CodeTerminalPane, type CodeTerminalVoiceState } from './panes/CodeTerminalPane'
 import { CodePreviewPane } from './panes/CodePreviewPane'
 import { CodeMarkdownPane } from './panes/CodeMarkdownPane'
 
@@ -79,9 +79,20 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
   const [historyEnabled, setHistoryEnabled] = useState(true)
   const [historyBusy, setHistoryBusy] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [voiceState, setVoiceState] = useState<CodeTerminalVoiceState | null>(null)
 
   const terminalSummary = node.resource_id ? state.terminals.get(node.resource_id) : undefined
   const previewSummary = node.resource_id ? state.previews.get(node.resource_id) : undefined
+  const handleVoiceStateChange = useCallback((nextState: CodeTerminalVoiceState | null) => {
+    setVoiceState(nextState)
+  }, [])
+
+  const hasTerminalVoice = (node.kind === 'terminal' || node.kind === 'coding_agent') && Boolean(node.resource_id && terminalSummary)
+
+  useEffect(() => {
+    if (!hasTerminalVoice) setVoiceState(null)
+  }, [hasTerminalVoice])
+
   const focusCurrentPane = useCallback(() => {
     if (!isFocused) void focusPane(node.pane_id)
   }, [focusPane, isFocused, node.pane_id])
@@ -166,6 +177,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
             summary={terminalSummary}
             historyError={historyError}
             onDismissHistoryError={() => setHistoryError(null)}
+            onVoiceStateChange={handleVoiceStateChange}
             onRelaunch={() => {
               void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model, terminalSummary?.agent_launch_mode)
             }}
@@ -216,6 +228,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           terminalState={terminalSummary?.state}
           terminalHistoryEnabled={historyEnabled}
           terminalHistoryBusy={historyBusy}
+          voiceState={hasTerminalVoice ? voiceState : null}
           onFocus={focusCurrentPane}
           onRename={(title) => void renamePane(node.pane_id, title)}
           onSplitAndLaunch={(placement, kind, adapterId, model, url, agentLaunchMode) => {
