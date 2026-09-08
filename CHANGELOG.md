@@ -13,3 +13,10 @@
 ### Release
 
 - Bumped desktop, renderer, Rust workspace, and package metadata to `0.1.4`.
+
+### Orca-style agent capabilities
+
+- Added persisted Browser Use settings with inner Browser, external browser, and User's PC targets.
+- Added `browser.snapshot` for bounded page text, visible controls, and follow-up selectors, plus direct `browser.open_external_url` handoff.
+- Added native Computer Use tools backed by the checked-in Windows accessibility runtime: capabilities, app/window discovery, accessibility snapshots with optional screenshots, and approved click, type, key, scroll, drag, and value actions.
+- Routed browser and desktop actions through the Agent approval timeline and updated the installed Browser Use and Computer Use skills with the real tool contracts.
