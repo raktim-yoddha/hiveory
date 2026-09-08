@@ -60,11 +60,11 @@ function promptWithBrowserContext(prompt: string): string {
       title?: string
     } | null
     const target = preferences.browserTarget ?? 'inner'
-    const targetInstruction = target === 'inner'
-      ? 'Use browser.* tools for the embedded Browser. Start with browser.state and use the active browser_id below.'
-      : target === 'external'
-        ? 'Use browser.open_external for an explicit external-browser handoff. Use computer.run target desktop only for user-authorized actions in an external browser.'
-        : 'Use computer.run with target desktop for user-authorized browser and desktop actions. Use browser.* only when the user asks for the embedded Browser.'
+      const targetInstruction = target === 'inner'
+        ? 'Use browser.* tools for the embedded Browser. Start with browser.state and browser.snapshot, then use the active browser_id below.'
+        : target === 'external'
+          ? 'Use browser.open_external or browser.open_external_url for an explicit external-browser handoff. Use computer.list_apps, computer.snapshot, and computer.action for user-authorized actions in an external browser.'
+          : 'Use computer.capabilities, computer.list_apps, computer.list_windows, computer.snapshot, and computer.action for user-authorized browser and desktop actions. Use computer.run only for an explicit shell command. Use browser.* only when the user asks for the embedded Browser.'
     const context = active?.browser_id
       ? `Active embedded Browser: browser_id=${active.browser_id}; workspace_id=${active.workspace_id ?? 'unknown'}; url=${active.url ?? 'unknown'}; title=${active.title ?? 'untitled'}.`
       : 'No embedded Browser pane is currently registered. Ask the user to open one before using browser.* tools.'

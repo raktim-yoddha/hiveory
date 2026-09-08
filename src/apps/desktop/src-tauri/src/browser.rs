@@ -529,6 +529,26 @@ impl BrowserManager {
             .map_err(|error| format!("The Browser action could not run: {error}"))
     }
 
+    pub(crate) fn evaluate_json(
+        &self,
+        browser_id: &str,
+        expression: &str,
+    ) -> Result<serde_json::Value, String> {
+        if expression.trim().is_empty() {
+            return Err("The browser expression cannot be empty.".to_owned());
+        }
+        let webview = self.inner.webview(browser_id)?;
+        #[cfg(windows)]
+        {
+            evaluate_json_windows(&webview, expression)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = webview;
+            Err("Browser snapshots are currently available on Windows only.".to_owned())
+        }
+    }
+
     pub(crate) fn configuration(&self) -> Result<BrowserConfiguration, String> {
         self.inner
             .configuration
@@ -2494,6 +2514,51 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
 })();"#
         .replace("__ACTION__", &action)
         .replace("__NONCE__", &nonce)
+}
+
+#[cfg(windows)]
+fn evaluate_json_windows(webview: &Webview, expression: &str) -> Result<Value, String> {
+    let (sender, receiver) = mpsc::channel::<Result<Value, String>>();
+    let expression = expression.to_owned();
+    let sender_for_webview = sender.clone();
+    webview
+        .with_webview(move |platform| unsafe {
+            let outcome = (|| -> Result<(), String> {
+                let core = platform
+                    .controller()
+                    .CoreWebView2()
+                    .map_err(|error| format!("The Browser controller is unavailable: {error}"))?;
+                let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(
+                    move |result, payload| {
+                        let value = match result {
+                            Ok(()) => serde_json::from_str::<Value>(&payload)
+                                .map_err(|error| error.to_string()),
+                            Err(error) => Err(error.to_string()),
+                        };
+                        let _ = sender_for_webview.send(value);
+                        Ok(())
+                    },
+                ));
+                let method = HSTRING::from("Runtime.evaluate");
+                let parameters = serde_json::json!({
+                    "expression": expression,
+                    "awaitPromise": true,
+                    "returnByValue": true,
+                    "userGesture": true,
+                })
+                .to_string();
+                let parameters = HSTRING::from(parameters);
+                core.CallDevToolsProtocolMethod(&method, &parameters, &handler)
+                    .map_err(|error| format!("The Browser expression could not run: {error}"))
+            })();
+            if let Err(error) = outcome {
+                let _ = sender.send(Err(error));
+            }
+        })
+        .map_err(|error| format!("The Browser controller could not start: {error}"))?;
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .map_err(|_| "The Browser expression did not respond.".to_owned())?
 }
 
 #[cfg(windows)]

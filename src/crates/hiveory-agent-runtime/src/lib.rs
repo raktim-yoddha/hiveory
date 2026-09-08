@@ -1331,7 +1331,10 @@ impl HiveoryAgentRuntime {
         let detail = &scoped_detail;
         let args: Value = serde_json::from_str(arguments_json)
             .map_err(|_| "tool arguments are not valid JSON".to_owned())?;
-        if name.starts_with("plugin.") || name.starts_with("browser.") {
+        if name.starts_with("plugin.")
+            || name.starts_with("browser.")
+            || name.starts_with("computer.")
+        {
             let external_provider = self
                 .external_tools
                 .lock()

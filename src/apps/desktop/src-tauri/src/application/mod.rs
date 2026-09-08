@@ -303,12 +303,18 @@ struct AgentSkillCreateRequest {
 struct HiveoryExternalTools {
     plugin: HiveoryPluginRuntime,
     browser: HiveoryBrowserToolProvider,
+    computer: HiveoryComputerUseToolProvider,
 }
 
 #[derive(Clone)]
 struct HiveoryBrowserToolProvider {
     app: tauri::AppHandle,
     manager: BrowserManager,
+    persistence: HiveoryPersistence,
+}
+
+#[derive(Clone)]
+struct HiveoryComputerUseToolProvider {
     persistence: HiveoryPersistence,
 }
 
@@ -346,6 +352,240 @@ fn browser_js_string(value: &str, label: &str, max_chars: usize) -> Result<Strin
     serde_json::to_string(value).map_err(|error| format!("{label} could not be encoded: {error}"))
 }
 
+fn browser_snapshot_expression() -> &'static str {
+    r#"(() => {
+      const visible = (node) => {
+        const rect = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      };
+      const selectorFor = (node) => {
+        if (node.id && /^[A-Za-z][\w-]{0,80}$/.test(node.id)) return `#${node.id}`;
+        const parts = [];
+        let current = node;
+        while (current && current.nodeType === 1 && parts.length < 6) {
+          let part = current.tagName.toLowerCase();
+          const parent = current.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children).filter((item) => item.tagName === current.tagName);
+            if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+          }
+          parts.unshift(part);
+          current = parent;
+        }
+        return parts.join(' > ');
+      };
+      const controls = Array.from(document.querySelectorAll('a,button,input,textarea,select,option,[role],[contenteditable="true"],h1,h2,h3,h4'))
+        .filter(visible)
+        .slice(0, 120)
+        .map((node) => ({
+          selector: selectorFor(node),
+          tag: node.tagName.toLowerCase(),
+          role: node.getAttribute('role'),
+          type: node.getAttribute('type'),
+          name: node.getAttribute('name'),
+          label: node.getAttribute('aria-label'),
+          placeholder: node.getAttribute('placeholder'),
+          text: (node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 240),
+        }));
+      return {
+        url: location.href,
+        title: document.title,
+        text: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 8000),
+        controls,
+      };
+    })()"#
+}
+
+const COMPUTER_USE_RUNTIME_PS1: &str =
+    include_str!("../../../../../../techn/orca/native/computer-use-windows/runtime.ps1");
+
+fn computer_operation_tool(operation: &Value) -> Result<&str, String> {
+    let tool = operation
+        .get("tool")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "computer operation tool is required".to_owned())?;
+    const ALLOWED_TOOLS: &[&str] = &[
+        "click",
+        "perform_secondary_action",
+        "scroll",
+        "drag",
+        "type_text",
+        "press_key",
+        "hotkey",
+        "paste_text",
+        "set_value",
+    ];
+    if !ALLOWED_TOOLS.contains(&tool) {
+        return Err(format!("unsupported computer operation: {tool}"));
+    }
+    Ok(tool)
+}
+
+fn computer_operation_app(operation: &Value) -> Result<String, String> {
+    operation
+        .get("app")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "app is required for a computer action".to_owned())
+}
+
+impl HiveoryComputerUseToolProvider {
+    async fn is_enabled(&self) -> bool {
+        self.persistence
+            .get_setting(BROWSER_USE_SETTINGS_KEY)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|value| serde_json::from_str::<BrowserUseSettings>(&value).ok())
+            .map(|value| value.enabled)
+            .unwrap_or(false)
+    }
+
+    async fn definitions(&self) -> Vec<AgentToolDefinition> {
+        if !self.is_enabled().await {
+            return Vec::new();
+        }
+        vec![
+            agent_tool(
+                "computer.capabilities",
+                "Describe the local Windows accessibility, screenshot, and input capabilities available to Computer Use.",
+                r#"{"type":"object","properties":{},"required":[],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+            agent_tool(
+                "computer.list_apps",
+                "List visible desktop applications that Computer Use can inspect. Password-manager windows are excluded.",
+                r#"{"type":"object","properties":{},"required":[],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+            agent_tool(
+                "computer.list_windows",
+                "List windows for a visible desktop application before selecting a window for Computer Use.",
+                r#"{"type":"object","properties":{"app":{"type":"string"}},"required":["app"],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+            agent_tool(
+                "computer.snapshot",
+                "Inspect an application's accessibility tree and optionally capture a bounded screenshot. Use a fresh snapshot before acting.",
+                r#"{"type":"object","properties":{"app":{"type":"string"},"window_id":{"type":["string","null"]},"window_index":{"type":["integer","null"]},"no_screenshot":{"type":"boolean"},"restore_window":{"type":"boolean"}},"required":["app","window_id","window_index","no_screenshot","restore_window"],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
+            agent_tool(
+                "computer.action",
+                "Perform one user-authorized accessibility or input action in a desktop app, then return a fresh state snapshot.",
+                r#"{"type":"object","properties":{"operation":{"type":"object","properties":{"tool":{"type":"string"}},"required":["tool"],"additionalProperties":true}},"required":["operation"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+        ]
+    }
+
+    async fn execute(&self, name: &str, arguments_json: &str) -> Result<String, String> {
+        if !self.is_enabled().await {
+            return Err("Computer Use is disabled in Settings. Enable Browser Use before asking an agent to control the desktop.".to_owned());
+        }
+        let args: Value = serde_json::from_str(arguments_json)
+            .map_err(|_| "computer tool arguments are not valid JSON".to_owned())?;
+        let operation = match name {
+            "computer.capabilities" => json!({ "tool": "handshake" }),
+            "computer.list_apps" => json!({ "tool": "list_apps" }),
+            "computer.list_windows" => json!({
+                "tool": "list_windows",
+                "app": computer_operation_app(&args)?
+            }),
+            "computer.snapshot" => json!({
+                "tool": "get_app_state",
+                "app": computer_operation_app(&args)?,
+                "windowId": args.get("window_id").cloned().unwrap_or(Value::Null),
+                "windowIndex": args.get("window_index").cloned().unwrap_or(Value::Null),
+                "noScreenshot": args.get("no_screenshot").and_then(Value::as_bool).unwrap_or(false),
+                "restoreWindow": args.get("restore_window").and_then(Value::as_bool).unwrap_or(false),
+            }),
+            "computer.action" => {
+                let operation = args
+                    .get("operation")
+                    .cloned()
+                    .ok_or_else(|| "operation is required".to_owned())?;
+                if !operation.is_object() {
+                    return Err("operation must be an object".to_owned());
+                }
+                computer_operation_tool(&operation)?;
+                computer_operation_app(&operation)?;
+                operation
+            }
+            _ => return Err("computer tool is not available".to_owned()),
+        };
+        let operation_json = serde_json::to_string(&operation)
+            .map_err(|error| format!("computer operation could not be encoded: {error}"))?;
+        if operation_json.len() > 32_000 {
+            return Err("computer operation is too large".to_owned());
+        }
+        self.run_operation(&operation_json).await
+    }
+
+    async fn run_operation(&self, operation_json: &str) -> Result<String, String> {
+        let nonce = uuid::Uuid::now_v7().to_string();
+        let directory = std::env::temp_dir().join("hiveory-computer-use");
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| format!("computer runtime directory could not be created: {error}"))?;
+        let script_path = directory.join(format!("{nonce}.ps1"));
+        let operation_path = directory.join(format!("{nonce}.json"));
+        std::fs::write(&script_path, COMPUTER_USE_RUNTIME_PS1)
+            .map_err(|error| format!("computer runtime could not be prepared: {error}"))?;
+        std::fs::write(&operation_path, operation_json)
+            .map_err(|error| format!("computer operation could not be prepared: {error}"))?;
+
+        let mut process = tokio::process::Command::new(if cfg!(target_os = "windows") {
+            "powershell.exe"
+        } else {
+            "pwsh"
+        });
+        process.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ]);
+        process
+            .arg(&script_path)
+            .arg("-OperationPath")
+            .arg(&operation_path);
+        let output = tokio::time::timeout(std::time::Duration::from_secs(60), process.output())
+            .await
+            .map_err(|_| "computer operation timed out after 60 seconds".to_owned())?
+            .map_err(|error| error.to_string());
+        let _ = std::fs::remove_file(&script_path);
+        let _ = std::fs::remove_file(&operation_path);
+        let output = output?;
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        if stdout.is_empty() {
+            return Err(if stderr.is_empty() {
+                format!("computer runtime exited with status {}", output.status)
+            } else {
+                format!("computer runtime failed: {stderr}")
+            });
+        }
+        if stdout.len() > 4 * 1024 * 1024 {
+            return Err("computer runtime returned too much data".to_owned());
+        }
+        let payload: Value = serde_json::from_str(&stdout).map_err(|error| {
+            if stderr.is_empty() {
+                format!("computer runtime returned invalid JSON: {error}")
+            } else {
+                format!("computer runtime returned invalid JSON: {error}; {stderr}")
+            }
+        })?;
+        serde_json::to_string(&payload).map_err(|error| error.to_string())
+    }
+}
+
 impl HiveoryBrowserToolProvider {
     async fn is_enabled(&self) -> bool {
         self.persistence
@@ -363,6 +603,12 @@ impl HiveoryBrowserToolProvider {
             return Vec::new();
         }
         vec![
+            agent_tool(
+                "browser.snapshot",
+                "Inspect the visible text and interactive controls in the embedded Browser, including stable CSS selectors for follow-up actions.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
+                AgentToolRisk::ReadOnly,
+            ),
             agent_tool(
                 "browser.state",
                 "Read the current URL, title, loading state, and navigation capabilities of an open embedded Hiveory Browser pane.",
@@ -430,6 +676,12 @@ impl HiveoryBrowserToolProvider {
                 AgentToolRisk::ExternallyVisible,
             ),
             agent_tool(
+                "browser.open_external_url",
+                "Open a user-authorized web address in the system default external browser.",
+                r#"{"type":"object","properties":{"url":{"type":"string"}},"required":["url"],"additionalProperties":false}"#,
+                AgentToolRisk::ExternallyVisible,
+            ),
+            agent_tool(
                 "browser.capture",
                 "Capture the current embedded Browser page and return its dimensions so the user can inspect it in Hiveory.",
                 r#"{"type":"object","properties":{"browser_id":{"type":"string"}},"required":["browser_id"],"additionalProperties":false}"#,
@@ -454,8 +706,33 @@ impl HiveoryBrowserToolProvider {
         }
         let args: Value = serde_json::from_str(arguments_json)
             .map_err(|_| "browser tool arguments are not valid JSON".to_owned())?;
+        if name == "browser.open_external_url" {
+            let url = browser_argument(&args, "url")?;
+            let manager = self.manager.clone();
+            let url_for_browser = url.clone();
+            let opened = self
+                .main_thread(move || manager.open_external_url(&url_for_browser))
+                .await?;
+            return Ok(json!({ "opened": opened, "url": url }).to_string());
+        }
         let browser_id = browser_argument(&args, "browser_id")?;
         match name {
+            "browser.snapshot" => {
+                let manager = self.manager.clone();
+                let expression = browser_snapshot_expression().to_owned();
+                let snapshot = self
+                    .main_thread(move || manager.evaluate_json(&browser_id, &expression))
+                    .await?;
+                let result = snapshot
+                    .get("result")
+                    .and_then(|value| value.get("result"))
+                    .and_then(|value| value.get("value"))
+                    .cloned()
+                    .ok_or_else(|| {
+                        "The Browser snapshot did not return a page value.".to_owned()
+                    })?;
+                serde_json::to_string(&result).map_err(|error| error.to_string())
+            }
             "browser.state" => {
                 let state = self
                     .manager
@@ -573,6 +850,7 @@ impl HiveoryExternalToolProvider for HiveoryExternalTools {
     async fn definitions(&self, agent_id: &str) -> Result<Vec<AgentToolDefinition>, String> {
         let mut definitions = self.plugin.definitions(agent_id).await?;
         definitions.extend(self.browser.definitions().await);
+        definitions.extend(self.computer.definitions().await);
         Ok(definitions)
     }
 
@@ -585,6 +863,8 @@ impl HiveoryExternalToolProvider for HiveoryExternalTools {
     ) -> Result<String, String> {
         if name.starts_with("browser.") {
             self.browser.execute(name, arguments_json).await
+        } else if name.starts_with("computer.") {
+            self.computer.execute(name, arguments_json).await
         } else if name.starts_with("plugin.") {
             self.plugin
                 .execute(run_id, agent_id, name, arguments_json)
@@ -8543,6 +8823,9 @@ pub fn run() {
                     browser: HiveoryBrowserToolProvider {
                         app: app.handle().clone(),
                         manager: browser_manager.clone(),
+                        persistence: foundation.persistence.clone(),
+                    },
+                    computer: HiveoryComputerUseToolProvider {
                         persistence: foundation.persistence.clone(),
                     },
                 }));
