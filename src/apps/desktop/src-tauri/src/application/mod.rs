@@ -30,6 +30,7 @@ use hiveory_model_gateway::{
 };
 use hiveory_notification_service::HiveoryNotificationService;
 use hiveory_persistence::{
+    agent::HiveoryAgentStore,
     chat::{HiveoryChatStore, HiveoryChatStoreError},
     HiveoryPersistence, HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID,
 };
@@ -123,7 +124,11 @@ use tauri::{
 };
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    net::{TcpListener, TcpStream},
+    sync::{broadcast, mpsc, oneshot},
+};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -304,6 +309,34 @@ struct HiveoryExternalTools {
     plugin: HiveoryPluginRuntime,
     browser: HiveoryBrowserToolProvider,
     computer: HiveoryComputerUseToolProvider,
+}
+
+/// The capabilities a coding CLI may use during one Hiveory-launched pane.
+/// Unlike an Agent run, the CLI process lives outside Tauri, so calls are
+/// forwarded through a loopback bridge back to the owning desktop process.
+#[derive(Clone)]
+struct HiveoryCliSessionTools {
+    plugin: HiveoryPluginRuntime,
+    browser: HiveoryBrowserToolProvider,
+    computer: HiveoryComputerUseToolProvider,
+    skills: HiveoryAgentStore,
+    orchestration: HiveoryCodeOrchestration,
+    session_id: String,
+    workspace_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CliSessionBridgeRequest {
+    token: String,
+    method: String,
+    name: Option<String>,
+    arguments: Option<Value>,
+}
+
+#[derive(Clone)]
+struct CliSessionBridge {
+    endpoint: String,
+    token: String,
 }
 
 #[derive(Clone)]
@@ -843,6 +876,351 @@ impl HiveoryBrowserToolProvider {
             _ => Err("browser tool is not available".to_owned()),
         }
     }
+}
+
+impl HiveoryCliSessionTools {
+    async fn definitions(&self) -> Result<Vec<AgentToolDefinition>, String> {
+        let mut definitions = self
+            .plugin
+            .session_definitions()
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut browser_definitions = self.browser.definitions().await;
+        if let Some(open) = browser_definitions
+            .iter_mut()
+            .find(|definition| definition.name == "browser.open")
+        {
+            open.description = "Open an embedded Hiveory Browser pane in this workspace. Supply only url to let Hiveory create a new browser pane; browser_id and workspace_id are optional when reconnecting an existing pane.".to_owned();
+            open.input_schema_json = r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"}},"required":["url"],"additionalProperties":false}"#.to_owned();
+        }
+        definitions.extend(browser_definitions);
+        definitions.extend(self.computer.definitions().await);
+        definitions.extend(cli_session_management_definitions());
+        Ok(definitions)
+    }
+
+    async fn execute(&self, name: &str, arguments: &Value) -> Result<String, String> {
+        let arguments_json = serde_json::to_string(arguments)
+            .map_err(|error| format!("tool arguments could not be encoded: {error}"))?;
+        if name.starts_with("plugin.") {
+            self.plugin
+                .execute_session(&self.session_id, name, &arguments_json)
+                .await
+                .map_err(|error| error.to_string())
+        } else if name.starts_with("browser.") {
+            let arguments_json = if name == "browser.open" {
+                let mut browser_arguments = arguments.clone();
+                let object = browser_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "browser tool arguments must be an object".to_owned())?;
+                object
+                    .entry("browser_id")
+                    .or_insert_with(|| Value::String(format!("browser-{}", uuid::Uuid::now_v7())));
+                object
+                    .entry("workspace_id")
+                    .or_insert_with(|| Value::String(self.workspace_id.clone()));
+                serde_json::to_string(&browser_arguments)
+                    .map_err(|error| format!("tool arguments could not be encoded: {error}"))?
+            } else {
+                arguments_json
+            };
+            self.browser.execute(name, &arguments_json).await
+        } else if name.starts_with("computer.") {
+            self.computer.execute(name, &arguments_json).await
+        } else if name.starts_with("skills.") {
+            self.execute_skill(name, arguments).await
+        } else if name.starts_with("orchestration.") {
+            self.execute_orchestration(name, arguments).await
+        } else {
+            Err("This Hiveory CLI session does not provide that tool.".to_owned())
+        }
+    }
+
+    async fn execute_skill(&self, name: &str, arguments: &Value) -> Result<String, String> {
+        match name {
+            "skills.list" => {
+                let catalog = self
+                    .skills
+                    .catalog()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                serde_json::to_string(
+                    &catalog
+                        .into_iter()
+                        .filter(|skill| skill.valid)
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(|error| error.to_string())
+            }
+            "skills.read" => {
+                let skill_id = arguments
+                    .get("skill_id")
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.trim().is_empty())
+                    .ok_or_else(|| "skill_id is required".to_owned())?;
+                let package = self
+                    .skills
+                    .skill_package(skill_id)
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "skill was not found".to_owned())?;
+                if !package.0.valid {
+                    return Err("skill is not valid and cannot be used".to_owned());
+                }
+                serde_json::to_string(&json!({ "skill": package.0, "instructions": package.1 }))
+                    .map_err(|error| error.to_string())
+            }
+            _ => Err("skill tool is not available".to_owned()),
+        }
+    }
+
+    async fn execute_orchestration(&self, name: &str, arguments: &Value) -> Result<String, String> {
+        let result = match name {
+            "orchestration.list_runs" => {
+                let workspace_id = arguments.get("workspace_id").and_then(Value::as_str);
+                serde_json::to_value(
+                    self.orchestration
+                        .runs(workspace_id)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.get_run" => {
+                let run_id = required_cli_string(arguments, "run_id")?;
+                serde_json::to_value(
+                    self.orchestration
+                        .detail(run_id)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.create_run" => {
+                let request = serde_json::from_value::<CodeRunCreateRequest>(arguments.clone())
+                    .map_err(|error| format!("invalid create-run request: {error}"))?;
+                serde_json::to_value(
+                    self.orchestration
+                        .create_run(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.create_task" => {
+                let request = serde_json::from_value::<CodeTaskCreateRequest>(arguments.clone())
+                    .map_err(|error| format!("invalid create-task request: {error}"))?;
+                serde_json::to_value(
+                    self.orchestration
+                        .create_task(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.start_run" => {
+                let request = CodeRunRequest {
+                    run_id: required_cli_string(arguments, "run_id")?.to_owned(),
+                };
+                serde_json::to_value(
+                    self.orchestration
+                        .start_run(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.send_message" => {
+                let request = serde_json::from_value::<CodeMailboxSendRequest>(arguments.clone())
+                    .map_err(|error| format!("invalid mailbox request: {error}"))?;
+                serde_json::to_value(
+                    self.orchestration
+                        .send_mailbox_message(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            _ => return Err("orchestration tool is not available".to_owned()),
+        }
+        .map_err(|error| error.to_string())?;
+        serde_json::to_string(&result).map_err(|error| error.to_string())
+    }
+}
+
+fn required_cli_string<'a>(arguments: &'a Value, name: &str) -> Result<&'a str, String> {
+    arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| format!("{name} is required"))
+}
+
+fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
+    const EMPTY: &str = r#"{"type":"object","additionalProperties":false}"#;
+    const RUN_ID: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"}},"required":["run_id"],"additionalProperties":false}"#;
+    const SKILL_ID: &str = r#"{"type":"object","properties":{"skill_id":{"type":"string"}},"required":["skill_id"],"additionalProperties":false}"#;
+    const RUN_LIST: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":false}"#;
+    const CREATE_RUN: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"},"title":{"type":"string"},"objective":{"type":"string"},"review_policy":{"type":"string","enum":["manual","automatic"]},"concurrency_limit":{"type":"integer","minimum":1},"model":{"type":"string"},"coordinator_id":{"type":"string"},"adapter_id":{"type":"string"}},"required":["workspace_id","title","objective","review_policy"],"additionalProperties":false}"#;
+    const CREATE_TASK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"client_id":{"type":"string"},"title":{"type":"string"},"specification":{"type":"string"},"depends_on":{"type":"array","items":{"type":"string"}}},"required":["run_id","title","specification","depends_on"],"additionalProperties":false}"#;
+    const MAILBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"sender_address":{"type":"string"},"recipient_address":{"type":"string"},"kind":{"type":"string","enum":["status","heartbeat","question","answer","escalation","progress","completion"]},"payload":{"type":"string"},"thread_id":{"type":"string"},"client_request_id":{"type":"string"}},"required":["run_id","sender_address","recipient_address","kind","payload"],"additionalProperties":false}"#;
+    [
+        (
+            "skills.list",
+            "List Hiveory skills that are valid for this CLI session.",
+            EMPTY,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "skills.read",
+            "Read the full instructions for one Hiveory skill by its ID.",
+            SKILL_ID,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "orchestration.list_runs",
+            "List Hiveory orchestration runs, optionally for one workspace.",
+            RUN_LIST,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "orchestration.get_run",
+            "Read an orchestration run, including its tasks, dispatches, and messages.",
+            RUN_ID,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "orchestration.create_run",
+            "Create a draft orchestration run in Hiveory. This changes workspace state.",
+            CREATE_RUN,
+            AgentToolRisk::InternalMutation,
+        ),
+        (
+            "orchestration.create_task",
+            "Add a task to a draft Hiveory orchestration run. This changes run state.",
+            CREATE_TASK,
+            AgentToolRisk::InternalMutation,
+        ),
+        (
+            "orchestration.start_run",
+            "Start an orchestration run after its tasks are ready. This launches worker agents.",
+            RUN_ID,
+            AgentToolRisk::FilesystemMutation,
+        ),
+        (
+            "orchestration.send_message",
+            "Send a mailbox message or handoff between agents in a Hiveory orchestration run.",
+            MAILBOX,
+            AgentToolRisk::InternalMutation,
+        ),
+    ]
+    .into_iter()
+    .map(
+        |(name, description, input_schema_json, risk)| AgentToolDefinition {
+            name: name.to_owned(),
+            description: description.to_owned(),
+            input_schema_json: input_schema_json.to_owned(),
+            risk,
+        },
+    )
+    .collect()
+}
+
+async fn start_cli_session_bridge(
+    foundation: &HiveoryFoundation,
+    app: tauri::AppHandle,
+    browser: BrowserManager,
+    session_id: String,
+    workspace_id: String,
+) -> Result<CliSessionBridge, ApiError> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|error| {
+        application_error(
+            "cli_session_bridge_unavailable",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })?;
+    let endpoint = listener.local_addr().map_err(|error| {
+        application_error(
+            "cli_session_bridge_unavailable",
+            error.to_string(),
+            RetryClass::Safe,
+        )
+    })?;
+    let token = uuid::Uuid::now_v7().to_string();
+    let tools = HiveoryCliSessionTools {
+        plugin: foundation.plugin_runtime.clone(),
+        browser: HiveoryBrowserToolProvider {
+            app,
+            manager: browser,
+            persistence: foundation.persistence.clone(),
+        },
+        computer: HiveoryComputerUseToolProvider {
+            persistence: foundation.persistence.clone(),
+        },
+        skills: HiveoryAgentStore::new(foundation.persistence.clone()),
+        orchestration: foundation.code_orchestration.clone(),
+        session_id,
+        workspace_id,
+    };
+    let expected_token = token.clone();
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let Ok((stream, _)) = listener.accept().await else {
+                break;
+            };
+            let tools = tools.clone();
+            let token = expected_token.clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = handle_cli_session_bridge_connection(stream, &token, tools).await;
+            });
+        }
+    });
+    Ok(CliSessionBridge {
+        endpoint: endpoint.to_string(),
+        token,
+    })
+}
+
+async fn handle_cli_session_bridge_connection(
+    stream: TcpStream,
+    expected_token: &str,
+    tools: HiveoryCliSessionTools,
+) -> Result<(), String> {
+    const MAX_BRIDGE_MESSAGE_BYTES: usize = 1024 * 1024;
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    let read = reader
+        .read_line(&mut line)
+        .await
+        .map_err(|error| error.to_string())?;
+    if read == 0 || line.len() > MAX_BRIDGE_MESSAGE_BYTES {
+        return Ok(());
+    }
+    let response = match serde_json::from_str::<CliSessionBridgeRequest>(&line) {
+        Ok(request) if request.token == expected_token => match request.method.as_str() {
+            "tools/list" => match tools.definitions().await {
+                Ok(definitions) => json!({ "ok": true, "tools": definitions }),
+                Err(error) => json!({ "ok": false, "error": error }),
+            },
+            "tools/call" => {
+                let name = request.name.unwrap_or_default();
+                let arguments = request.arguments.unwrap_or_else(|| json!({}));
+                match tools.execute(&name, &arguments).await {
+                    Ok(output) => json!({ "ok": true, "output": output }),
+                    Err(error) => json!({ "ok": false, "error": error }),
+                }
+            }
+            _ => json!({ "ok": false, "error": "unknown bridge method" }),
+        },
+        Ok(_) => json!({ "ok": false, "error": "CLI session bridge authentication failed" }),
+        Err(_) => json!({ "ok": false, "error": "CLI session bridge request is invalid" }),
+    };
+    let encoded = serde_json::to_string(&response).map_err(|error| error.to_string())?;
+    reader
+        .get_mut()
+        .write_all(format!("{encoded}\n").as_bytes())
+        .await
+        .map_err(|error| error.to_string())?;
+    reader
+        .get_mut()
+        .flush()
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[async_trait]
@@ -3386,6 +3764,8 @@ async fn hiveory_command_cancel_code_dispatch(
 async fn hiveory_command_open_code_dispatch_terminal(
     command: CommandEnvelope<CodeDispatchTerminalRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
     channel: Channel<CodeTerminalEvent>,
 ) -> Result<ResponseEnvelope<CodeTerminalSummary>, ApiError> {
     validate_code_command(&command)?;
@@ -3411,9 +3791,14 @@ async fn hiveory_command_open_code_dispatch_terminal(
         session_integration: None,
     };
     if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
-        terminal_start.session_integration =
-            prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
-                .await?;
+        terminal_start.session_integration = prepare_cli_session_integration(
+            &foundation,
+            app,
+            (*browser).clone(),
+            terminal_start.workspace_id.clone(),
+            terminal_start.adapter_id.as_deref(),
+        )
+        .await?;
     }
     let summary = foundation
         .terminal_host
@@ -4866,16 +5251,25 @@ async fn hiveory_command_action_code_hosted_pull_request(
 
 async fn prepare_cli_session_integration(
     foundation: &HiveoryFoundation,
+    app: tauri::AppHandle,
+    browser: BrowserManager,
+    workspace_id: String,
     adapter_id: Option<&str>,
 ) -> Result<Option<hiveory_protocol::CodeCliSessionIntegration>, ApiError> {
     let Some(adapter_id) = adapter_id else {
         return Ok(None);
     };
-    if !matches!(adapter_id, "codex-cli" | "claude-code" | "opencode") {
+    if !matches!(
+        adapter_id,
+        "codex-cli" | "claude-code" | "antigravity" | "opencode"
+    ) {
         return Ok(None);
     }
 
     let session_id = uuid::Uuid::now_v7().to_string();
+    let bridge =
+        start_cli_session_bridge(foundation, app, browser, session_id.clone(), workspace_id)
+            .await?;
     let session_root = foundation
         .code_workspaces_root
         .parent()
@@ -4948,15 +5342,21 @@ async fn prepare_cli_session_integration(
         foundation.database_path.to_string_lossy().into_owned(),
         "--session-id".to_owned(),
         session_id,
+        "--endpoint".to_owned(),
+        bridge.endpoint,
+        "--token".to_owned(),
+        bridge.token,
     ];
     let config = if adapter_id == "opencode" {
         serde_json::json!({
             "$schema": "https://opencode.ai/config.json",
             "instructions": [instructions_path.to_string_lossy()],
             "mcp": {
-                "hiveory": {
-                    "type": "local",
-                    "command": std::iter::once(bridge_command.clone()).chain(bridge_args.clone()).collect::<Vec<_>>()
+                "servers": {
+                    "hiveory": {
+                        "type": "local",
+                        "command": std::iter::once(bridge_command.clone()).chain(bridge_args.clone()).collect::<Vec<_>>()
+                    }
                 }
             }
         })
@@ -4998,13 +5398,13 @@ async fn prepare_cli_session_integration(
         bridge_command: config["mcpServers"]["hiveory"]["command"]
             .as_str()
             .unwrap_or_else(|| {
-                config["mcp"]["hiveory"]["command"][0]
+                config["mcp"]["servers"]["hiveory"]["command"][0]
                     .as_str()
                     .unwrap_or_default()
             })
             .to_owned(),
         bridge_args: if adapter_id == "opencode" {
-            config["mcp"]["hiveory"]["command"]
+            config["mcp"]["servers"]["hiveory"]["command"]
                 .as_array()
                 .map(|items| {
                     items
@@ -5034,6 +5434,8 @@ async fn prepare_cli_session_integration(
 async fn hiveory_command_start_code_terminal(
     command: CommandEnvelope<CodeTerminalStartRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
     channel: Channel<CodeTerminalEvent>,
 ) -> Result<ResponseEnvelope<CodeTerminalSummary>, ApiError> {
     validate_code_command(&command)?;
@@ -5050,8 +5452,14 @@ async fn hiveory_command_start_code_terminal(
         .map_err(workspace_error)?;
     let mut payload = command.payload.clone();
     if payload.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
-        payload.session_integration =
-            prepare_cli_session_integration(&foundation, payload.adapter_id.as_deref()).await?;
+        payload.session_integration = prepare_cli_session_integration(
+            &foundation,
+            app,
+            (*browser).clone(),
+            payload.workspace_id.clone(),
+            payload.adapter_id.as_deref(),
+        )
+        .await?;
     }
     let summary = foundation
         .terminal_host
@@ -5728,6 +6136,8 @@ async fn hiveory_command_apply_code_pane_mutation(
 async fn hiveory_command_launch_code_pane_terminal(
     command: CommandEnvelope<LaunchCodePaneTerminalRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
     channel: Channel<CodeTerminalEvent>,
 ) -> Result<ResponseEnvelope<LaunchCodePaneTerminalResult>, ApiError> {
     validate_code_command(&command)?;
@@ -5839,9 +6249,14 @@ async fn hiveory_command_launch_code_pane_terminal(
             session_integration: None,
         };
         if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
-            terminal_start.session_integration =
-                prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
-                    .await?;
+            terminal_start.session_integration = prepare_cli_session_integration(
+                &foundation,
+                app.clone(),
+                (*browser).clone(),
+                terminal_start.workspace_id.clone(),
+                terminal_start.adapter_id.as_deref(),
+            )
+            .await?;
         }
         let summary = foundation
             .terminal_host
@@ -5891,9 +6306,14 @@ async fn hiveory_command_launch_code_pane_terminal(
         session_integration: None,
     };
     if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
-        terminal_start.session_integration =
-            prepare_cli_session_integration(&foundation, terminal_start.adapter_id.as_deref())
-                .await?;
+        terminal_start.session_integration = prepare_cli_session_integration(
+            &foundation,
+            app,
+            (*browser).clone(),
+            terminal_start.workspace_id.clone(),
+            terminal_start.adapter_id.as_deref(),
+        )
+        .await?;
     }
     let summary = foundation
         .terminal_host
