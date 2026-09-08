@@ -30,7 +30,20 @@ interface SplitPaneOption {
   adapterId?: string
   url?: string
   supportsYolo?: boolean
+  isDefaultAgent?: boolean
   icon: React.ReactNode
+}
+
+const capabilitySettingsStorageKey = 'hiveory.capability-settings.v1'
+
+const loadDefaultAdapterId = (): string | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(capabilitySettingsStorageKey) ?? '{}') as { defaultAdapterId?: unknown }
+    return typeof stored.defaultAdapterId === 'string' && stored.defaultAdapterId.trim() ? stored.defaultAdapterId : null
+  } catch {
+    return null
+  }
 }
 
 export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
@@ -48,6 +61,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
   const [query, setQuery] = useState('')
   const [position, setPosition] = useState<SplitMenuPosition | null>(null)
   const [yoloPreferences, setYoloPreferences] = useState<YoloPreferences>(loadYoloPreferences)
+  const [defaultAdapterId, setDefaultAdapterId] = useState<string | null>(loadDefaultAdapterId)
 
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) {
@@ -76,6 +90,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
       return
     }
 
+    setDefaultAdapterId(loadDefaultAdapterId())
     searchRef.current?.focus()
     const closeOnOutsidePointer = (event: PointerEvent) => {
       const target = event.target as Node | null
@@ -96,20 +111,25 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
     }
   }, [anchorRef, onClose, open])
 
-  const options = useMemo<SplitPaneOption[]>(() => [
-    { id: 'terminal', title: 'Terminal', description: 'Interactive local shell', kind: 'shell' as const, icon: <Terminal size={16} /> },
-    ...adapters.map((adapter) => ({
+  const options = useMemo<SplitPaneOption[]>(() => {
+    const agentOptions = adapters.map((adapter) => ({
       id: `adapter:${adapter.id}`,
       title: adapter.display_name,
       description: 'Installed command-line agent',
       kind: 'coding_agent' as const,
       adapterId: adapter.id,
       supportsYolo: supportsYoloLaunch(adapter.id),
+      isDefaultAgent: adapter.id === defaultAdapterId,
       icon: <CliBrandIcon identifier={adapter.id} size={16} />,
-    })),
-    { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
-    { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: DEFAULT_BROWSER_HOME, icon: <Globe size={16} /> },
-  ], [adapters])
+    }))
+    agentOptions.sort((left, right) => Number(Boolean(right.isDefaultAgent)) - Number(Boolean(left.isDefaultAgent)))
+    return [
+      { id: 'terminal', title: 'Terminal', description: 'Interactive local shell', kind: 'shell' as const, icon: <Terminal size={16} /> },
+      ...agentOptions,
+      { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
+      { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: DEFAULT_BROWSER_HOME, icon: <Globe size={16} /> },
+    ]
+  }, [adapters, defaultAdapterId])
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -198,7 +218,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
             >
               <span className="code-split-item-icon">{option.icon}</span>
               <span className="code-split-item-text">
-                <span className="code-split-item-title">{option.title}</span>
+                <span className="code-split-item-title">{option.title}{option.isDefaultAgent && <b>Default</b>}</span>
                 <span className="code-split-item-desc">{option.description}</span>
               </span>
             </button>

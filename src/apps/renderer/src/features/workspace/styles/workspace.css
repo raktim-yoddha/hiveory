@@ -2556,9 +2556,22 @@
 }
 
 .code-split-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 13px;
   font-weight: 600;
   color: #ffffff;
+}
+
+.code-split-item-title b {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: #2b2e36;
+  color: #bfc6d2;
+  font: 700 8px/1 Inter, system-ui, sans-serif;
+  letter-spacing: .05em;
+  text-transform: uppercase;
 }
 
 .code-split-item-desc {
