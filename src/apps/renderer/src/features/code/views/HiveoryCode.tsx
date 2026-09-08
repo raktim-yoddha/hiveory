@@ -1,7 +1,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal as XTerm } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { ArrowUp, Bot, CheckCircle2, ChevronRight, ExternalLink, FileCode2, FileText, Folder, FolderOpen, GitBranch, LayoutPanelTop, Play, RefreshCw, Save, ShieldAlert, Square, Terminal, X } from 'lucide-react'
+import { ArrowUp, Bot, CheckCircle2, ChevronRight, ExternalLink, FileCode2, FileText, Folder, FolderOpen, GitBranch, LayoutPanelTop, Mic, MicOff, Play, RefreshCw, Save, ShieldAlert, Square, Terminal, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as Monaco from 'monaco-editor'
 import {
@@ -20,6 +20,8 @@ import {
   type CodeWorkspaceDetail,
   type CodeWorkspaceSummary,
 } from '../../../shared/api/hiveory-client'
+import { readClipboardText, writeClipboardText } from '../../../shared/clipboard'
+import { useSpeechDictation } from '../../../shared/speech-dictation'
 import { CodePreviewPane } from '../../workspace/components/panes/CodePreviewPane'
 import '../../workspace/styles/workspace.css'
 
@@ -347,8 +349,28 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
   const lastOutputLength = useRef(0)
   const onInputRef = useRef(onInput)
   const onResizeRef = useRef(onResize)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
   onInputRef.current = onInput
   onResizeRef.current = onResize
+
+  const sendDictatedText = useCallback((text: string) => {
+    const value = text.trim()
+    if (!terminalId || !value) return
+    try {
+      onInputRef.current(encodeBase64(`${value} `))
+      setVoiceError(null)
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : 'Dictation could not be sent.')
+    }
+  }, [terminalId])
+
+  const voice = useSpeechDictation({ onFinalText: sendDictatedText, onError: setVoiceError })
+  const stopVoice = voice.stop
+
+  useEffect(() => {
+    if (!terminalId) stopVoice()
+  }, [terminalId, stopVoice])
+
   useEffect(() => {
     if (!containerRef.current) return
     const terminal = new XTerm({ convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, theme: { background: '#0b1120', foreground: '#dbe4f0', cursor: '#22c55e', selectionBackground: '#334155' }, scrollback: 5000 })
@@ -357,6 +379,27 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
     terminal.open(containerRef.current)
     fit.fit()
     terminal.onData((data) => onInputRef.current(encodeBase64(data)))
+    terminal.attachCustomKeyEventHandler((event) => {
+      const modifier = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      if (modifier && event.shiftKey && key === 'c' && terminal.hasSelection()) {
+        event.preventDefault()
+        void writeClipboardText(terminal.getSelection()).catch((error: unknown) => {
+          setVoiceError(error instanceof Error ? `Copy failed: ${error.message}` : 'Copy failed.')
+        })
+        return false
+      }
+      if (modifier && key === 'v') {
+        event.preventDefault()
+        void readClipboardText().then((text) => {
+          if (text) terminal.paste(text)
+        }).catch((error: unknown) => {
+          setVoiceError(error instanceof Error ? `Paste failed: ${error.message}` : 'Paste failed.')
+        })
+        return false
+      }
+      return true
+    })
     terminalRef.current = terminal
     onResizeRef.current(terminal.cols, terminal.rows)
     return () => { terminal.dispose(); terminalRef.current = null; lastOutputLength.current = 0 }
@@ -368,7 +411,23 @@ function TerminalPane({ terminalId, output, onInput, onResize }: { terminalId: s
     terminal.write(output.slice(output.length < lastOutputLength.current ? 0 : lastOutputLength.current))
     lastOutputLength.current = output.length
   }, [output])
-  return <div className="hiveory-xterm" ref={containerRef} aria-label={terminalId ? 'Interactive terminal' : 'Terminal idle'} />
+  return <div className="hiveory-xterm">
+    <button
+      type="button"
+      className={`code-terminal-voice-control${voice.listening ? ' is-listening' : ''}`}
+      onClick={() => {
+        setVoiceError(null)
+        voice.toggle()
+      }}
+      disabled={!terminalId || !voice.supported}
+      aria-label={voice.listening ? 'Stop voice dictation' : 'Start voice dictation'}
+      title={!terminalId ? 'Start a terminal before dictating' : voice.supported ? (voice.listening ? 'Stop voice dictation' : 'Dictate into terminal') : 'Speech recognition is unavailable in this runtime'}
+    >
+      {voice.listening ? <MicOff size={13} /> : <Mic size={13} />}
+    </button>
+    {(voice.partialText || voiceError) && <div className={`code-terminal-voice-status${voiceError ? ' is-error' : ''}`} role="status">{voiceError ?? voice.partialText}</div>}
+    <div ref={containerRef} className="hiveory-xterm-canvas" aria-label={terminalId ? 'Interactive terminal' : 'Terminal idle'} />
+  </div>
 }
 
 function encodeBase64(value: string) {

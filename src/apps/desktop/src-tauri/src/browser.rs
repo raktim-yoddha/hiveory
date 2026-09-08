@@ -183,6 +183,9 @@ pub(crate) struct BrowserClipboardRequest {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub(crate) struct ClipboardReadRequest {}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct BrowserAnnotationSyncRequest {
     pub browser_id: String,

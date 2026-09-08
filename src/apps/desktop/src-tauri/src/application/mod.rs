@@ -15,7 +15,7 @@ use browser::{
     BrowserCookieSourceRequest, BrowserFrame, BrowserIdRequest, BrowserManager,
     BrowserNavigationRequest, BrowserOpenRequest, BrowserProfileIdRequest, BrowserProfileRequest,
     BrowserRuntimeState, BrowserSettingsRequest, BrowserSwitchProfileRequest,
-    BrowserTouchEmulationRequest, BrowserViewportRequest,
+    BrowserTouchEmulationRequest, BrowserViewportRequest, ClipboardReadRequest,
 };
 use hiveory_agent_runtime::HiveoryAgentRuntime;
 use hiveory_artifact_store::{HiveoryArtifactError, HiveoryArtifactStore, HiveoryStoredAttachment};
@@ -5409,6 +5409,23 @@ fn hiveory_command_browser_copy_text(
 }
 
 #[tauri::command]
+fn hiveory_command_clipboard_read_text(
+    command: CommandEnvelope<ClipboardReadRequest>,
+) -> Result<ResponseEnvelope<String>, ApiError> {
+    validate_code_command(&command)?;
+    let mut clipboard = arboard::Clipboard::new().map_err(|error| {
+        browser_error(format!("The system clipboard could not be opened: {error}"))
+    })?;
+    let text = clipboard.get_text().map_err(|error| {
+        browser_error(format!("The system clipboard could not be read: {error}"))
+    })?;
+    if text.len() > 4 * 1024 * 1024 {
+        return Err(validation_error("The clipboard text is larger than 4 MB."));
+    }
+    Ok(response(&command.request_id, text))
+}
+
+#[tauri::command]
 async fn hiveory_command_browser_cancel_capture(
     command: CommandEnvelope<BrowserIdRequest>,
     app: tauri::AppHandle,
@@ -8926,6 +8943,7 @@ pub fn run() {
             hiveory_command_browser_switch_profile,
             hiveory_command_browser_start_capture,
             hiveory_command_browser_copy_text,
+            hiveory_command_clipboard_read_text,
             hiveory_command_browser_cancel_capture,
             hiveory_command_browser_sync_annotations,
             hiveory_command_browser_capture_frame,

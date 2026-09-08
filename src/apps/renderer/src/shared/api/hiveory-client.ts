@@ -225,6 +225,7 @@ export type BrowserCaptureEvent = { browser_id: string; action: 'grab' | 'annota
 export type BrowserFrame = { png_base64: string; width: number; height: number }
 export type BrowserImportReport = { imported: number; skipped: number; source: string; message: string }
 export type BrowserClipboardRequest = { text: string }
+export type ClipboardReadRequest = Record<string, never>
 export type BrowserOpenRequest = { browser_id: string; workspace_id: string; url: string }
 export type BrowserNavigationRequest = { browser_id: string; url: string }
 export type BrowserIdRequest = { browser_id: string }
@@ -1552,6 +1553,19 @@ export const hiveoryClient = {
   },
   async browserCopyText(request: BrowserClipboardRequest): Promise<boolean> {
     return hiveoryIsTauri ? tauriCommand<BrowserClipboardRequest, boolean>('hiveory_command_browser_copy_text', request) : false
+  },
+  async readClipboardText(): Promise<string> {
+    if (hiveoryIsTauri) return tauriCommand<ClipboardReadRequest, string>('hiveory_command_clipboard_read_text', {})
+    if (navigator.clipboard?.readText) return navigator.clipboard.readText()
+    return ''
+  },
+  async writeClipboardText(text: string): Promise<boolean> {
+    if (hiveoryIsTauri) return tauriCommand<BrowserClipboardRequest, boolean>('hiveory_command_browser_copy_text', { text })
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+    return false
   },
   async browserCancelCapture(request: BrowserIdRequest): Promise<boolean> {
     return hiveoryIsTauri ? tauriCommand<BrowserIdRequest, boolean>('hiveory_command_browser_cancel_capture', request) : false

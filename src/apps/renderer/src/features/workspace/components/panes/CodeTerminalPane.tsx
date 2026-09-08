@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { AlertTriangle, RotateCw } from 'lucide-react'
+import { AlertTriangle, Mic, MicOff, RotateCw } from 'lucide-react'
 import {
   hiveoryClient,
   type CodeTerminalEvent,
   type CodeTerminalSummary,
 } from '../../../../shared/api/hiveory-client'
+import { readClipboardText, writeClipboardText } from '../../../../shared/clipboard'
+import { useSpeechDictation } from '../../../../shared/speech-dictation'
 
 interface CodeTerminalPaneProps {
   terminalId: string
@@ -59,6 +61,26 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited' || summary?.state === 'dormant',
   )
   const [transportError, setTransportError] = useState<string | null>(null)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+
+  const sendDictatedText = useCallback((text: string) => {
+    const value = text.trim()
+    if (!value || summaryRef.current?.state === 'exited' || summaryRef.current?.state === 'failed' || summaryRef.current?.state === 'interrupted' || summaryRef.current?.state === 'dormant') return
+    void hiveoryClient.writeCodeTerminal({ terminal_id: terminalId, data: `${value} ` })
+      .then(() => setVoiceError(null))
+      .catch((error: unknown) => setVoiceError(`Dictation could not be sent: ${formatTerminalError(error)}`))
+  }, [terminalId])
+
+  const voice = useSpeechDictation({
+    onFinalText: sendDictatedText,
+    onError: setVoiceError,
+  })
+  const stopVoice = voice.stop
+
+  useEffect(() => {
+    if (isInterrupted) stopVoice()
+  }, [isInterrupted, stopVoice])
+
   useEffect(() => {
     setIsInterrupted(
       summary?.state === 'interrupted' || summary?.state === 'failed' || summary?.state === 'exited' || summary?.state === 'dormant',
@@ -112,6 +134,29 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     term.open(container)
     termRef.current = term
     fitAddonRef.current = fitAddon
+
+    term.attachCustomKeyEventHandler((event) => {
+      const modifier = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+      if (modifier && event.shiftKey && key === 'c' && term.hasSelection()) {
+        event.preventDefault()
+        const selectedText = term.getSelection()
+        void writeClipboardText(selectedText)
+          .then(() => setTransportError(null))
+          .catch((error: unknown) => setTransportError(`Copy failed: ${formatTerminalError(error)}`))
+        return false
+      }
+      if (modifier && key === 'v') {
+        event.preventDefault()
+        void readClipboardText()
+          .then((text) => {
+            if (!disposed && text) term.paste(text)
+          })
+          .catch((error: unknown) => setTransportError(`Paste failed: ${formatTerminalError(error)}`))
+        return false
+      }
+      return true
+    })
 
     const fit = () => {
       if (disposed || !fitAddonRef.current || !termRef.current) return
@@ -306,6 +351,24 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         <div className="code-terminal-error" role="alert">
           <span>{historyError}</span>
           <button type="button" onClick={onDismissHistoryError} aria-label="Dismiss terminal history error">×</button>
+        </div>
+      )}
+      <button
+        type="button"
+        className={`code-terminal-voice-control${voice.listening ? ' is-listening' : ''}`}
+        onClick={() => {
+          setVoiceError(null)
+          voice.toggle()
+        }}
+        disabled={!voice.supported || Boolean(isInterrupted)}
+        aria-label={voice.listening ? 'Stop voice dictation' : 'Start voice dictation'}
+        title={voice.supported ? (voice.listening ? 'Stop voice dictation' : 'Dictate into terminal') : 'Speech recognition is unavailable in this runtime'}
+      >
+        {voice.listening ? <MicOff size={13} /> : <Mic size={13} />}
+      </button>
+      {(voice.partialText || voiceError) && (
+        <div className={`code-terminal-voice-status${voiceError ? ' is-error' : ''}`} role="status">
+          {voiceError ?? voice.partialText}
         </div>
       )}
       <div ref={containerRef} className="code-terminal-container" aria-label="Interactive terminal" />

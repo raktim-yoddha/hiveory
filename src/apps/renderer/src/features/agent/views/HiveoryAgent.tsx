@@ -8,6 +8,7 @@ import {
   FileText,
   Hammer,
   Mic,
+  MicOff,
   Plus,
   Search,
   Square,
@@ -30,6 +31,8 @@ import {
   type AgentRunDetail,
   type AgentSummary,
 } from '../../../shared/api/hiveory-client'
+import { writeClipboardText } from '../../../shared/clipboard'
+import { useSpeechDictation } from '../../../shared/speech-dictation'
 
 /** The first durable Agent Mode release. Kept separate from the host app version. */
 export const AGENT_MODE_VERSION = '0.1.0'
@@ -128,6 +131,8 @@ export function HiveoryAgent() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [voicePartial, setVoicePartial] = useState('')
+  const [copyNotice, setCopyNotice] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const eventCursorRef = useRef(0)
 
@@ -238,6 +243,52 @@ export function HiveoryAgent() {
   const selectedAgent = useMemo(() => agents.find((item) => item.id === selectedAgentId) ?? null, [agents, selectedAgentId])
   const pendingApprovals = activeRun?.approvals.filter((approval) => approval.state === 'pending') ?? []
   const runIsActive = Boolean(activeRun && !isTerminal(activeRun.summary.state))
+
+  const appendDictatedText = useCallback((text: string) => {
+    const value = text.trim()
+    if (!value) return
+    setInputPrompt((current) => `${current}${current && !/\s$/.test(current) ? ' ' : ''}${value}`)
+    setError(null)
+  }, [])
+
+  const agentVoice = useSpeechDictation({
+    onFinalText: appendDictatedText,
+    onPartialText: setVoicePartial,
+    onError: setError,
+  })
+  const stopAgentVoice = agentVoice.stop
+
+  useEffect(() => {
+    if (runIsActive) stopAgentVoice()
+  }, [runIsActive, stopAgentVoice])
+
+  const copyLatestResponse = useCallback(async () => {
+    const selectedText = window.getSelection()?.toString().trim() ?? ''
+    const responseText = selectedText || [...(conversation?.messages ?? [])].reverse().find((message) => message.role === 'assistant')?.content.trim() || streamingText.trim()
+    if (!responseText) {
+      setCopyNotice('There is no AI response to copy yet.')
+      return
+    }
+    try {
+      await writeClipboardText(responseText)
+      setCopyNotice('AI response copied.')
+      window.setTimeout(() => setCopyNotice(null), 1800)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'The AI response could not be copied.')
+    }
+  }, [conversation?.messages, streamingText])
+
+  useEffect(() => {
+    const handleCopyResponseShortcut = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'c') return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('.code-terminal-container, .hiveory-xterm, .hiveory-xterm-canvas')) return
+      event.preventDefault()
+      void copyLatestResponse()
+    }
+    window.addEventListener('keydown', handleCopyResponseShortcut, true)
+    return () => window.removeEventListener('keydown', handleCopyResponseShortcut, true)
+  }, [copyLatestResponse])
 
   const createAgent = async () => {
     setSending(true)
@@ -406,12 +457,13 @@ export function HiveoryAgent() {
         : <>
           <div className="agent-messages-container"><div className="agent-messages-inner">
             {error && <div className="agent-tool-item" role="alert"><div className="agent-tool-left"><span>{error}</span></div></div>}
+            {copyNotice && <div className="agent-tool-item" role="status"><div className="agent-tool-left"><span>{copyNotice}</span></div></div>}
             {activeTab === 'skills' && agent?.skills.map((skill) => <div className="agent-tool-item" key={skill.id}><div className="agent-tool-left"><FileText size={13} /><span><strong>{skill.name}</strong> · {skill.description}</span></div><button type="button" className="agent-composer-pill" onClick={() => void toggleSkill(skill.id, !skill.enabled)}>{skill.enabled ? 'Enabled' : 'Enable'}</button></div>)}
             {activeTab === 'settings' && agent && <><div className="agent-tool-item"><div className="agent-tool-left"><span>Agent Mode runtime</span></div><span>v{AGENT_MODE_VERSION}</span></div><div className="agent-tool-item"><div className="agent-tool-left"><span>Provider</span></div><span>{agent.summary.provider_account_id}</span></div><label className="agent-tool-item"><div className="agent-tool-left"><span>Model</span></div><input value={modelDraft} onChange={(event) => setModelDraft(event.target.value)} onBlur={() => void saveModel()} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void saveModel() } }} aria-label="Agent model" /></label><label className="agent-tool-item"><div className="agent-tool-left"><span>Approval policy</span></div><select value={agent.approval_policy} onChange={(event) => void setApprovalPolicy(event.target.value as AgentApprovalPolicy)}><option value="always_ask">Always ask</option><option value="ask_for_mutations">Ask for mutations</option><option value="allow_within_scope">Allow in scope</option><option value="deny">Deny tools</option></select></label><div className="agent-tool-item"><div className="agent-tool-left"><span>Execution face</span></div><span>{executionTarget === 'desktop' ? 'Windows desktop' : 'Remote VM'}</span></div>{executionTarget === 'remote_vm' && <label className="agent-tool-item"><div className="agent-tool-left"><TerminalIcon size={13} /><span>SSH target</span></div><input value={remoteTarget} placeholder="dev-vm or user@host" onChange={(event) => saveRemoteTarget(event.target.value)} aria-label="Remote VM SSH target" /></label>}<div className="agent-tool-item"><div className="agent-tool-left"><span>Execution safety</span></div><span>Commands always require approval</span></div></>}
             {activeTab === 'chats' && <>{!conversation && !loading && <div className="agent-assistant-message"><div className="agent-response-text">Start a new chat to give this agent a task.</div></div>}{conversation?.messages.map(renderMessage)}{streamingText && <div className="agent-assistant-message"><div className="agent-thought-toggle"><ChevronRight size={13} /><span>Working</span></div><div className="agent-response-text">{streamingText}</div></div>}{activeRun?.tool_calls.length ? <div className="agent-tools-timeline">{activeRun.tool_calls.map((tool) => <div className="agent-tool-item" key={tool.id}><div className="agent-tool-left">{toolIcon(tool.name)}<span>{tool.name}</span></div>{tool.state === 'completed' ? <CheckCircle2 size={13} className="agent-tool-check" /> : <span>{tool.state.replaceAll('_', ' ')}</span>}</div>)}</div> : null}{pendingApprovals.map((approval) => <div key={approval.id} className="agent-tools-timeline"><div className="agent-tool-item"><div className="agent-tool-left"><Hammer size={13} /><span>{approval.tool_name}: {approval.target}</span></div><div className="agent-composer-pills-left"><button type="button" className="agent-composer-pill" onClick={() => void decideApproval(approval.id, 'deny')}>Deny</button><button type="button" className="agent-send-btn" onClick={() => void decideApproval(approval.id, 'approve')}>Allow</button></div></div></div>)}</>}
             <div ref={messagesEndRef} />
           </div></div>
-          {section === 'agents' && activeTab === 'chats' && <div className="agent-composer-wrap"><div className="agent-floating-composer"><input type="text" className="agent-composer-input" placeholder={runIsActive ? 'Agent is working…' : 'Ask anything…'} value={inputPrompt} disabled={runIsActive} onChange={(event) => setInputPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSendMessage() } }} /><div className="agent-composer-bottom-bar"><div className="agent-composer-pills-left"><button type="button" className="agent-composer-pill" onClick={() => setActiveTab('settings')} title="Edit model in Agent settings"><CliBrandIcon identifier={agent?.summary.provider_account_id ?? 'openai'} size={13} /><span>{agent?.summary.model ?? 'Automatic'}</span><ChevronDown size={11} /></button><button type="button" className="agent-composer-pill" disabled title="Reasoning effort is fixed by the configured model"><Zap size={13} style={{ color: '#a855f7' }} /><span>Model default</span></button><button type="button" className="agent-composer-pill" onClick={() => setActiveTab('settings')} title="Edit approval policy in Agent settings"><Edit size={13} /><span>{agent?.approval_policy === 'always_ask' ? 'Ask first' : 'Scoped approvals'}</span></button><button type="button" className="agent-composer-pill" disabled={runIsActive} onClick={() => selectTarget(executionTarget === 'desktop' ? 'remote_vm' : 'desktop')} title={runIsActive ? 'Execution face is locked while a run is active' : 'Select execution face for the next run'}><Hammer size={13} /><span>{executionTarget === 'desktop' ? 'Desktop' : 'Remote VM'}</span></button></div><div className="agent-composer-actions-right"><span className="agent-token-count">{activeRun?.summary.input_tokens ?? 0} tokens</span><button type="button" className="agent-voice-btn" disabled title="Voice dictation is not configured yet"><Mic size={15} /></button>{runIsActive ? <button type="button" className="agent-send-btn" onClick={() => void cancelRun()} title="Stop agent"><Square size={13} /></button> : <button type="button" className="agent-send-btn" onClick={() => void handleSendMessage()} disabled={!inputPrompt.trim() || sending} title="Send prompt"><ArrowUp size={15} /></button>}</div></div></div></div>}
+          {section === 'agents' && activeTab === 'chats' && <div className="agent-composer-wrap"><div className="agent-floating-composer"><input type="text" className="agent-composer-input" placeholder={runIsActive ? 'Agent is working…' : 'Ask anything…'} value={inputPrompt} disabled={runIsActive} onChange={(event) => setInputPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSendMessage() } }} /><div className="agent-composer-bottom-bar"><div className="agent-composer-pills-left"><button type="button" className="agent-composer-pill" onClick={() => setActiveTab('settings')} title="Edit model in Agent settings"><CliBrandIcon identifier={agent?.summary.provider_account_id ?? 'openai'} size={13} /><span>{agent?.summary.model ?? 'Automatic'}</span><ChevronDown size={11} /></button><button type="button" className="agent-composer-pill" disabled title="Reasoning effort is fixed by the configured model"><Zap size={13} style={{ color: '#a855f7' }} /><span>Model default</span></button><button type="button" className="agent-composer-pill" onClick={() => setActiveTab('settings')} title="Edit approval policy in Agent settings"><Edit size={13} /><span>{agent?.approval_policy === 'always_ask' ? 'Ask first' : 'Scoped approvals'}</span></button><button type="button" className="agent-composer-pill" disabled={runIsActive} onClick={() => selectTarget(executionTarget === 'desktop' ? 'remote_vm' : 'desktop')} title={runIsActive ? 'Execution face is locked while a run is active' : 'Select execution face for the next run'}><Hammer size={13} /><span>{executionTarget === 'desktop' ? 'Desktop' : 'Remote VM'}</span></button></div><div className="agent-composer-actions-right"><span className="agent-token-count">{activeRun?.summary.input_tokens ?? 0} tokens</span>{voicePartial && <span className="agent-voice-preview" title="Live transcription">{voicePartial}</span>}<button type="button" className={`agent-voice-btn${agentVoice.listening ? ' is-listening' : ''}`} disabled={runIsActive || !agentVoice.supported} onClick={() => { setError(null); agentVoice.toggle() }} aria-label={agentVoice.listening ? 'Stop voice dictation' : 'Start voice dictation'} title={agentVoice.supported ? (agentVoice.listening ? 'Stop voice dictation' : 'Dictate prompt') : 'Speech recognition is unavailable in this runtime'}>{agentVoice.listening ? <MicOff size={15} /> : <Mic size={15} />}</button>{runIsActive ? <button type="button" className="agent-send-btn" onClick={() => void cancelRun()} title="Stop agent"><Square size={13} /></button> : <button type="button" className="agent-send-btn" onClick={() => void handleSendMessage()} disabled={!inputPrompt.trim() || sending} title="Send prompt"><ArrowUp size={15} /></button>}</div></div></div></div>}
         </>
 
   return <div className="code-workspace-root agent-mode-root">
