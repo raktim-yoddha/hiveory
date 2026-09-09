@@ -7952,6 +7952,7 @@ async fn hiveory_command_close_code_pane(
         ));
     }
 
+    let mut terminal_to_stop = None;
     if let Some(pane) = current_layout
         .nodes
         .iter()
@@ -7985,13 +7986,11 @@ async fn hiveory_command_close_code_pane(
                             RetryClass::AfterUserAction,
                         ));
                     } else {
-                        let _ = foundation
-                            .terminal_host
-                            .stop(&CodeTerminalStopRequest {
-                                terminal_id: resource_id.clone(),
-                                force: true,
-                            })
-                            .await;
+                        // Persist the visual close first. Waiting for a CLI to
+                        // honour termination made closing a pane feel stalled,
+                        // especially for agents with child processes. The
+                        // terminal host owns the eventual process cleanup.
+                        terminal_to_stop = Some(resource_id.clone());
                     }
                 }
             }
@@ -8021,6 +8020,18 @@ async fn hiveory_command_close_code_pane(
                 database_error(err)
             }
         })?;
+
+    if let Some(terminal_id) = terminal_to_stop {
+        let terminal_host = foundation.terminal_host.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = terminal_host
+                .stop(&CodeTerminalStopRequest {
+                    terminal_id,
+                    force: true,
+                })
+                .await;
+        });
+    }
 
     Ok(response(
         &command.request_id,

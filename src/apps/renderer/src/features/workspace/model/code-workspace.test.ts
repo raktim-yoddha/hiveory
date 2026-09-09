@@ -44,6 +44,26 @@ describe('codeWorkspaceReducer', () => {
     updated_at_unix_ms: 1000,
   }
 
+  it('keeps mounted pane resources while another workspace snapshot is loading', () => {
+    const ready = codeWorkspaceReducer(initialCodeWorkspaceState, {
+      type: 'SET_WORKSPACE',
+      workspaceId: 'ws_1',
+      layout: sampleLayout,
+      terminals: [sampleTerminal],
+      previews: [],
+    })
+
+    const loading = codeWorkspaceReducer(ready, {
+      type: 'SET_WORKSPACE_LOADING',
+      workspaceId: 'ws_2',
+    })
+
+    expect(loading.workspaceId).toBe('ws_1')
+    expect(loading.loadingWorkspaceId).toBe('ws_2')
+    expect(loading.layout).toEqual(sampleLayout)
+    expect(loading.terminals.get(sampleTerminal.id)).toEqual(sampleTerminal)
+  })
+
   const samplePreview: CodePreviewSummary = {
     id: 'prev_1',
     workspace_id: 'ws_1',
@@ -71,7 +91,7 @@ describe('codeWorkspaceReducer', () => {
     expect(next.error).toBeNull()
   })
 
-  it('clears the previous workspace while a new workspace is loading', () => {
+  it('marks the replacement workspace as loading without clearing the canvas', () => {
     const loaded = codeWorkspaceReducer(initialCodeWorkspaceState, {
       type: 'SET_WORKSPACE',
       workspaceId: 'ws_1',
@@ -85,10 +105,11 @@ describe('codeWorkspaceReducer', () => {
       workspaceId: 'ws_2',
     })
 
-    expect(next.workspaceId).toBe('ws_2')
-    expect(next.layout).toBeNull()
-    expect(next.terminals.size).toBe(0)
-    expect(next.previews.size).toBe(0)
+    expect(next.workspaceId).toBe('ws_1')
+    expect(next.loadingWorkspaceId).toBe('ws_2')
+    expect(next.layout).toEqual(sampleLayout)
+    expect(next.terminals.get(sampleTerminal.id)).toEqual(sampleTerminal)
+    expect(next.previews.get(samplePreview.id)).toEqual(samplePreview)
     expect(next.error).toBeNull()
   })
 

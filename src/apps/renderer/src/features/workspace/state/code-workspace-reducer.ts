@@ -6,6 +6,8 @@ import type {
 
 export interface CodeWorkspaceState {
   workspaceId: string | null
+  /** Workspace currently being fetched while the visible canvas stays mounted. */
+  loadingWorkspaceId: string | null
   layout: CodePaneLayout | null
   revision: number
   focusedPaneId: string | null
@@ -38,6 +40,7 @@ export type CodeWorkspaceAction =
 
 export const initialCodeWorkspaceState: CodeWorkspaceState = {
   workspaceId: null,
+  loadingWorkspaceId: null,
   layout: null,
   revision: 0,
   focusedPaneId: null,
@@ -57,19 +60,17 @@ export function codeWorkspaceReducer(
     case 'SET_WORKSPACE_LOADING':
       return {
         ...state,
-        workspaceId: action.workspaceId,
-        layout: null,
-        revision: 0,
-        focusedPaneId: null,
-        maximizedPaneId: null,
-        terminals: new Map(),
-        previews: new Map(),
+        // Keep the existing surface alive until the replacement snapshot is
+        // ready. Clearing this state unmounted every terminal and browser pane
+        // on an agent/workspace switch, forcing a visible full reload.
+        loadingWorkspaceId: action.workspaceId,
         error: null,
       }
     case 'CLEAR_WORKSPACE':
       return {
         ...state,
         workspaceId: null,
+        loadingWorkspaceId: null,
         layout: null,
         revision: 0,
         focusedPaneId: null,
@@ -89,6 +90,7 @@ export function codeWorkspaceReducer(
       return {
         ...state,
         workspaceId: action.workspaceId,
+        loadingWorkspaceId: null,
         layout: action.layout,
         revision: action.layout.revision ?? 0,
         focusedPaneId: action.layout.focused_pane_id ?? action.layout.nodes.find((n) => n.children.length === 0)?.pane_id ?? null,

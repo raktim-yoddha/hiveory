@@ -139,10 +139,16 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
 
   const commitWorkspaceSnapshot = useCallback((snapshot: CodeWorkspaceDetail) => {
     const current = stateRef.current
-    if (snapshot.summary.id !== current.workspaceId) return false
+    if (
+      snapshot.summary.id !== current.workspaceId
+      && snapshot.summary.id !== current.loadingWorkspaceId
+    ) {
+      return false
+    }
     stateRef.current = {
       ...current,
       workspaceId: snapshot.summary.id,
+      loadingWorkspaceId: null,
       layout: snapshot.layout,
       revision: snapshot.layout.revision ?? 0,
       focusedPaneId: snapshot.layout.focused_pane_id ?? null,
@@ -164,7 +170,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     const requestId = ++loadRequestRef.current
     const isWorkspaceSwitch = stateRef.current.workspaceId !== workspaceId
     if (isWorkspaceSwitch) {
-      stateRef.current = { ...stateRef.current, workspaceId }
+      stateRef.current = { ...stateRef.current, loadingWorkspaceId: workspaceId }
       dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
     }
     try {
