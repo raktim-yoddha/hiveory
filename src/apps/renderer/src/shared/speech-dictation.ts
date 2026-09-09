@@ -95,6 +95,7 @@ export function useSpeechDictation({
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const shouldListenRef = useRef(false)
   const restartTimerRef = useRef<number | null>(null)
+  const deliveredFinalIndexesRef = useRef(new Set<number>())
   const [listening, setListening] = useState(false)
   const [partialText, setPartialText] = useState('')
   const supported = getSpeechRecognition() !== null
@@ -129,6 +130,7 @@ export function useSpeechDictation({
     }
 
     const recognition = new SpeechRecognition()
+    deliveredFinalIndexesRef.current.clear()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = language
@@ -138,7 +140,14 @@ export function useSpeechDictation({
         const result = event.results[index]
         const text = result?.[0]?.transcript?.trim() ?? ''
         if (!text) continue
-        if (result.isFinal) onFinalText(text)
+        if (result.isFinal) {
+          // Some WebView speech implementations replay final results during a
+          // continuous session. A final result index is immutable, so deliver
+          // each one once and keep dictated text from being repeated.
+          if (deliveredFinalIndexesRef.current.has(index)) continue
+          deliveredFinalIndexesRef.current.add(index)
+          onFinalText(text)
+        }
         else interim += `${text} `
       }
       const nextPartial = interim.trim()
@@ -162,6 +171,7 @@ export function useSpeechDictation({
       // silence. Restart it while the user still has dictation enabled.
       restartTimerRef.current = window.setTimeout(() => {
         restartTimerRef.current = null
+        deliveredFinalIndexesRef.current.clear()
         try {
           recognition.start()
         } catch {
@@ -195,4 +205,3 @@ export function useSpeechDictation({
 
   return { supported, listening, partialText, start, stop, toggle }
 }
-

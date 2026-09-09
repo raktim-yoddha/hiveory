@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/api/hiveory-client'
 import { readClipboardText, writeClipboardText } from '../../../../shared/clipboard'
 import { useSpeechDictation } from '../../../../shared/speech-dictation'
+import { getTerminalShortcutAction } from '../../../../shared/terminal-shortcuts'
 
 export type CodeTerminalVoiceState = {
   supported: boolean
@@ -151,34 +152,60 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
     termRef.current = term
     fitAddonRef.current = fitAddon
 
+    let ignoreBrowserPaste = false
+    let ignoreBrowserPasteTimer: number | null = null
+    const pasteText = (text: string) => {
+      if (text) term.paste(text)
+    }
+    const pasteFromSystemClipboard = () => {
+      void readClipboardText()
+        .then((text) => {
+          if (!disposed) pasteText(text)
+        })
+        .catch((error: unknown) => setTransportError(`Paste failed: ${formatTerminalError(error)}`))
+    }
     const handlePaste = (event: ClipboardEvent) => {
       event.preventDefault()
       event.stopImmediatePropagation()
+      if (ignoreBrowserPaste) return
       const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
       if (clipboardText) {
-        term.paste(clipboardText)
+        pasteText(clipboardText)
         return
       }
-      void readClipboardText()
-        .then((text) => {
-          if (!disposed && text) term.paste(text)
-        })
-        .catch((error: unknown) => setTransportError(`Paste failed: ${formatTerminalError(error)}`))
+      pasteFromSystemClipboard()
     }
     container.addEventListener('paste', handlePaste, true)
 
     term.attachCustomKeyEventHandler((event) => {
-      const modifier = event.ctrlKey || event.metaKey
-      const key = event.key.toLowerCase()
-      if (modifier && event.shiftKey && key === 'c' && term.hasSelection()) {
-        event.preventDefault()
-        const selectedText = term.getSelection()
-        void writeClipboardText(selectedText)
+      if (event.type !== 'keydown') return true
+      const action = getTerminalShortcutAction(event)
+      if (!action) return true
+
+      if (action.kind === 'copy-selection' && !term.hasSelection()) return true
+      event.preventDefault()
+      event.stopPropagation()
+
+      if (action.kind === 'copy-selection') {
+        void writeClipboardText(term.getSelection())
           .then(() => setTransportError(null))
           .catch((error: unknown) => setTransportError(`Copy failed: ${formatTerminalError(error)}`))
-        return false
+      } else if (action.kind === 'paste') {
+        // Chromium would otherwise dispatch a paste event after this keydown.
+        // Let the terminal shortcut own the operation, then discard that event.
+        ignoreBrowserPaste = true
+        if (ignoreBrowserPasteTimer !== null) window.clearTimeout(ignoreBrowserPasteTimer)
+        ignoreBrowserPasteTimer = window.setTimeout(() => {
+          ignoreBrowserPaste = false
+          ignoreBrowserPasteTimer = null
+        }, 100)
+        pasteFromSystemClipboard()
+      } else if (action.kind === 'select-all') {
+        term.selectAll()
+      } else {
+        term.input(action.data)
       }
-      return true
+      return false
     })
 
     const fit = () => {
@@ -335,6 +362,7 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       dataListener.dispose()
       unsubscribe()
       if (resizeTimer !== null) window.clearTimeout(resizeTimer)
+      if (ignoreBrowserPasteTimer !== null) window.clearTimeout(ignoreBrowserPasteTimer)
       resizeObserver?.disconnect()
       container.removeEventListener('paste', handlePaste, true)
       term.dispose()

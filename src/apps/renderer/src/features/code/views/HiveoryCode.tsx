@@ -22,6 +22,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { readClipboardText, writeClipboardText } from '../../../shared/clipboard'
 import { useSpeechDictation } from '../../../shared/speech-dictation'
+import { getTerminalShortcutAction } from '../../../shared/terminal-shortcuts'
 import { CodePreviewPane } from '../../workspace/components/panes/CodePreviewPane'
 import type { CodeTerminalVoiceState } from '../../workspace/components/panes/CodeTerminalPane'
 import '../../workspace/styles/workspace.css'
@@ -391,35 +392,58 @@ function TerminalPane({ terminalId, output, onInput, onResize, onVoiceStateChang
     terminal.loadAddon(fit)
     terminal.open(container)
     fit.fit()
+    let ignoreBrowserPaste = false
+    let ignoreBrowserPasteTimer: number | null = null
+    const pasteText = (text: string) => {
+      if (text) terminal.paste(text)
+    }
+    const pasteFromSystemClipboard = () => {
+      void readClipboardText().then((text) => {
+        if (!disposed) pasteText(text)
+      }).catch((error: unknown) => setVoiceError(error instanceof Error ? `Paste failed: ${error.message}` : 'Paste failed.'))
+    }
     const handlePaste = (event: ClipboardEvent) => {
       event.preventDefault()
       event.stopImmediatePropagation()
+      if (ignoreBrowserPaste) return
       const clipboardText = event.clipboardData?.getData('text/plain') ?? ''
       if (clipboardText) {
-        terminal.paste(clipboardText)
+        pasteText(clipboardText)
         return
       }
-      void readClipboardText().then((text) => {
-        if (!disposed && text) terminal.paste(text)
-      }).catch((error: unknown) => setVoiceError(error instanceof Error ? `Paste failed: ${error.message}` : 'Paste failed.'))
+      pasteFromSystemClipboard()
     }
     container.addEventListener('paste', handlePaste, true)
     terminal.onData((data) => onInputRef.current(encodeBase64(data)))
     terminal.attachCustomKeyEventHandler((event) => {
-      const modifier = event.ctrlKey || event.metaKey
-      const key = event.key.toLowerCase()
-      if (modifier && event.shiftKey && key === 'c' && terminal.hasSelection()) {
-        event.preventDefault()
+      if (event.type !== 'keydown') return true
+      const action = getTerminalShortcutAction(event)
+      if (!action) return true
+      if (action.kind === 'copy-selection' && !terminal.hasSelection()) return true
+      event.preventDefault()
+      event.stopPropagation()
+      if (action.kind === 'copy-selection') {
         void writeClipboardText(terminal.getSelection()).catch((error: unknown) => {
           setVoiceError(error instanceof Error ? `Copy failed: ${error.message}` : 'Copy failed.')
         })
-        return false
+      } else if (action.kind === 'paste') {
+        ignoreBrowserPaste = true
+        if (ignoreBrowserPasteTimer !== null) window.clearTimeout(ignoreBrowserPasteTimer)
+        ignoreBrowserPasteTimer = window.setTimeout(() => {
+          ignoreBrowserPaste = false
+          ignoreBrowserPasteTimer = null
+        }, 100)
+        pasteFromSystemClipboard()
+      } else if (action.kind === 'select-all') {
+        terminal.selectAll()
+      } else {
+        terminal.input(action.data)
       }
-      return true
+      return false
     })
     terminalRef.current = terminal
     onResizeRef.current(terminal.cols, terminal.rows)
-    return () => { disposed = true; container.removeEventListener('paste', handlePaste, true); terminal.dispose(); terminalRef.current = null; lastOutputLength.current = 0 }
+    return () => { disposed = true; if (ignoreBrowserPasteTimer !== null) window.clearTimeout(ignoreBrowserPasteTimer); container.removeEventListener('paste', handlePaste, true); terminal.dispose(); terminalRef.current = null; lastOutputLength.current = 0 }
   }, [terminalId])
   useEffect(() => {
     const terminal = terminalRef.current
