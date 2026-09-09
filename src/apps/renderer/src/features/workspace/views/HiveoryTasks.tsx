@@ -1,5 +1,5 @@
 import { CircleAlert, ExternalLink, Filter, Github, LoaderCircle, Plus, RefreshCw, Settings2, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { hiveoryClient, type CodeWorkspaceSummary, type TaskSourceConnectRequest, type TaskSourceItem, type TaskSourceProvider, type TaskSourceSnapshot } from '../../../shared/api/hiveory-client'
 import '../styles/workspace.css'
 
@@ -18,14 +18,31 @@ export function HiveoryTasks({ onOpenWorkspace, onStartLocalWork }: { onOpenWork
   const [error, setError] = useState<string | null>(null)
   const [connector, setConnector] = useState<TaskSourceProvider | null>(null)
   const [busy, setBusy] = useState(false)
+  const workspaceIdRef = useRef(workspaceId)
+  const loadRequestRef = useRef(0)
+  useEffect(() => { workspaceIdRef.current = workspaceId }, [workspaceId])
   const load = useCallback(async (requestedWorkspaceId?: string) => {
+    const requestId = ++loadRequestRef.current
+    if (requestedWorkspaceId) {
+      workspaceIdRef.current = requestedWorkspaceId
+      setWorkspaceId(requestedWorkspaceId)
+    }
     setLoading(true); setError(null)
     try {
-      const code = await hiveoryClient.codeSnapshot(); setWorkspaces(code.workspaces)
-      const selected = requestedWorkspaceId || workspaceId || code.active_workspace_id || code.workspaces[0]?.id || ''
-      setWorkspaceId(selected); setSnapshot(selected ? await hiveoryClient.taskSources(selected) : null)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Task sources could not be loaded.') } finally { setLoading(false) }
-  }, [workspaceId])
+      const code = await hiveoryClient.codeSnapshot()
+      const selected = requestedWorkspaceId || workspaceIdRef.current || code.active_workspace_id || code.workspaces[0]?.id || ''
+      const nextSnapshot = selected ? await hiveoryClient.taskSources(selected) : null
+      if (requestId !== loadRequestRef.current) return
+      workspaceIdRef.current = selected
+      setWorkspaces(code.workspaces)
+      setWorkspaceId(selected)
+      setSnapshot(nextSnapshot)
+    } catch (cause) {
+      if (requestId === loadRequestRef.current) setError(cause instanceof Error ? cause.message : 'Task sources could not be loaded.')
+    } finally {
+      if (requestId === loadRequestRef.current) setLoading(false)
+    }
+  }, [])
   useEffect(() => { void load() }, [load])
   const visible = useMemo(() => { const term = query.trim().toLocaleLowerCase(); return (snapshot?.items ?? []).filter((item) => (provider === 'all' || item.provider === provider) && (!term || [item.identifier, item.title, item.status, item.assignee ?? '', item.project ?? ''].some((value) => value.toLocaleLowerCase().includes(term)))) }, [snapshot, provider, query])
   const connect = async (request: TaskSourceConnectRequest) => { setBusy(true); setError(null); try { await hiveoryClient.connectTaskSource(request); setConnector(null); await load(request.workspace_id) } catch (cause) { setError(cause instanceof Error ? cause.message : 'The source could not connect.') } finally { setBusy(false) } }

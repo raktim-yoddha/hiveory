@@ -37,7 +37,6 @@ import {
 } from '../../shared/api/hiveory-client'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
-import { HiveoryCapabilitySettings } from '../../features/settings/HiveoryCapabilitySettings'
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/browser/hooks/use-browser-surface-blocker'
 
@@ -45,6 +44,7 @@ const HiveoryChat = lazy(async () => ({ default: (await import('../../features/c
 const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
 const HiveoryAgent = lazy(async () => ({ default: (await import('../../features/agent/views/HiveoryAgent')).HiveoryAgent }))
 const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryTasks')).HiveoryTasks }))
+const HiveoryCapabilitySettings = lazy(async () => ({ default: (await import('../../features/settings/HiveoryCapabilitySettings')).HiveoryCapabilitySettings }))
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -152,18 +152,40 @@ export function HiveoryShell() {
   const [updatePromptOpen, setUpdatePromptOpen] = useState(false)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updatePromptError, setUpdatePromptError] = useState<string | null>(null)
+  const diagnosticsRefreshTimerRef = useRef<number | null>(null)
+  const diagnosticsRefreshInFlightRef = useRef(false)
+  const diagnosticsRefreshQueuedRef = useRef(false)
   useBrowserSurfaceBlocker(
     commandOpen || notificationsOpen || codeLayoutMenuOpen || updatePromptOpen,
     'application-shell-overlay',
   )
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
+    if (diagnosticsRefreshInFlightRef.current) {
+      diagnosticsRefreshQueuedRef.current = true
+      return
+    }
+    diagnosticsRefreshInFlightRef.current = true
     try {
       setSnapshot(await hiveoryClient.diagnostics())
     } catch {
       // preview fallback
+    } finally {
+      diagnosticsRefreshInFlightRef.current = false
+      if (diagnosticsRefreshQueuedRef.current) {
+        diagnosticsRefreshQueuedRef.current = false
+        void refresh()
+      }
     }
-  }
+  }, [])
+
+  const scheduleDiagnosticsRefresh = useCallback(() => {
+    if (diagnosticsRefreshTimerRef.current !== null) return
+    diagnosticsRefreshTimerRef.current = window.setTimeout(() => {
+      diagnosticsRefreshTimerRef.current = null
+      void refresh()
+    }, 120)
+  }, [refresh])
 
   useEffect(() => {
     void hiveoryClient
@@ -173,10 +195,17 @@ export function HiveoryShell() {
       })
       .catch(() => undefined)
     void refresh()
-    hiveoryClient.subscribe(() => {
-      void refresh()
+    hiveoryClient.subscribe((event) => {
+      // Text chunks can arrive many times per second, while the diagnostics UI
+      // only changes when the run reaches a new state.
+      if (event.kind !== 'provider_text_delta') scheduleDiagnosticsRefresh()
     })
-  }, [])
+    return () => {
+      if (diagnosticsRefreshTimerRef.current !== null) window.clearTimeout(diagnosticsRefreshTimerRef.current)
+      diagnosticsRefreshTimerRef.current = null
+      diagnosticsRefreshQueuedRef.current = false
+    }
+  }, [refresh, scheduleDiagnosticsRefresh])
 
   useEffect(() => {
     const openGlobalSettings = () => {
@@ -1107,6 +1136,7 @@ function HiveorySettings({
   }
 
   return (
+    <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading settings…</div>}>
     <HiveoryCapabilitySettings onBackToApp={onBackToApp} onOpenWorkbench={onOpenWorkbench}>
     <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
       <div className="hiveory-content-header">
@@ -1244,6 +1274,7 @@ function HiveorySettings({
       {message && <div className="hiveory-feedback" role="status">{message}</div>}
     </section>
     </HiveoryCapabilitySettings>
+    </Suspense>
   )
 }
 
