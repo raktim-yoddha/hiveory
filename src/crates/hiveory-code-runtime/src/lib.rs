@@ -7,11 +7,11 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
-    ChatEngineAvailability, ChatEngineSummary, ChatModelSummary, ChatProviderStreamEvent,
-    ChatProviderStreamEventKind, ChatReasoningEffort, CodeAdapterCapability, CodeAdapterSummary,
-    CodeAgentLaunchMode, CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest,
-    CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
-    CodeTerminalStopRequest, CodeTerminalSummary,
+    canonical_code_adapter_id, ChatEngineAvailability, ChatEngineSummary, ChatModelSummary,
+    ChatProviderStreamEvent, ChatProviderStreamEventKind, ChatReasoningEffort,
+    CodeAdapterCapability, CodeAdapterSummary, CodeAgentLaunchMode, CodeTerminalEvent,
+    CodeTerminalEventKind, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
+    CodeTerminalStartRequest, CodeTerminalState, CodeTerminalStopRequest, CodeTerminalSummary,
 };
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde_json::Value;
@@ -111,7 +111,22 @@ struct ResolvedExecutable {
 }
 
 fn adapter_spec(id: &str) -> Option<AdapterSpec> {
-    ADAPTER_SPECS.iter().copied().find(|spec| spec.id == id)
+    let canonical_id = canonical_code_adapter_id(id)?;
+    ADAPTER_SPECS
+        .iter()
+        .copied()
+        .find(|spec| spec.id == canonical_id)
+}
+
+/// Resolve an installed coding-agent executable using the same Windows shim
+/// handling as terminal launches.  The desktop host uses this for adapters
+/// whose integration is registered through a separate CLI command (currently
+/// Antigravity), so the registration process sees the same executable that
+/// the pane itself would launch.
+pub fn resolved_adapter_command(adapter_id: &str) -> Option<(PathBuf, Vec<OsString>)> {
+    let spec = adapter_spec(adapter_id)?;
+    let resolved = resolve_executable(spec.executable);
+    Some((resolved.program, resolved.prefix))
 }
 
 fn resolve_executable(name: &str) -> ResolvedExecutable {
@@ -1874,6 +1889,26 @@ mod tests {
             yolo_mode_argument("unsupported"),
             Err(HiveoryCodeRuntimeError::UnsupportedYoloMode)
         ));
+    }
+
+    #[test]
+    fn resolves_legacy_adapter_aliases_for_cli_launches() {
+        assert_eq!(
+            resolved_adapter_command("codex").map(|(_, _)| CODEX_ADAPTER_ID),
+            Some(CODEX_ADAPTER_ID)
+        );
+        assert_eq!(
+            resolved_adapter_command("claude").map(|(_, _)| CLAUDE_CODE_ADAPTER_ID),
+            Some(CLAUDE_CODE_ADAPTER_ID)
+        );
+        assert_eq!(
+            resolved_adapter_command("agy").map(|(_, _)| ANTIGRAVITY_ADAPTER_ID),
+            Some(ANTIGRAVITY_ADAPTER_ID)
+        );
+        assert_eq!(
+            resolved_adapter_command("open-code").map(|(_, _)| OPENCODE_ADAPTER_ID),
+            Some(OPENCODE_ADAPTER_ID)
+        );
     }
 
     #[test]

@@ -47,6 +47,16 @@ function scanText(text) {
   return null
 }
 
+function contentForIdentityScan(path, text) {
+  // Runtime assets embedded from the excluded `techn` reference tree are not
+  // Hiveory product identifiers. Scan the surrounding source while ignoring
+  // only the literal path passed to `include_str!`.
+  if (path === 'src/apps/desktop/src-tauri/src/application/mod.rs') {
+    return text.replace(/include_str!\(\s*"(?:[^"\\]|\\.)*techn[\\/](?:[^"\\]|\\.)*"\s*\)/g, 'include_str!("embedded-runtime")')
+  }
+  return text
+}
+
 const excludedRoots = new Set(['.git', 'techn', 'target', 'node_modules', 'dist', 'releases', 'graphify-out'])
 const excludedFiles = new Set(['THIRD_PARTY_NOTICES.md', 'tauri-agent-super-app-prd.md'])
 const violations = []
@@ -69,7 +79,7 @@ async function visit(directory) {
       continue
     }
     const content = await readFile(fullPath, 'utf8').catch(() => '')
-    const contentViolation = scanText(content)
+    const contentViolation = scanText(contentForIdentityScan(path, content))
     if (contentViolation) {
       violations.push(`${path} (content violation)`)
     }

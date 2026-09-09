@@ -8,6 +8,25 @@ pub const HIVEORY_PROTOCOL_VERSION: u16 = 2;
 pub const CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID: &str = "local-coordinator";
 pub const CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID: &str = "codex-cli";
 
+/// Return the canonical adapter ID used by the runtime and orchestration
+/// layers.  A few early launch presets stored the short executable name
+/// (`codex`, `claude`, or `agy`), so accepting those aliases keeps existing
+/// workspaces compatible with the current per-session integration bridge.
+pub fn canonical_code_adapter_id(value: &str) -> Option<&'static str> {
+    let value = value.trim();
+    if value.eq_ignore_ascii_case("codex") || value.eq_ignore_ascii_case("codex-cli") {
+        Some("codex-cli")
+    } else if value.eq_ignore_ascii_case("claude") || value.eq_ignore_ascii_case("claude-code") {
+        Some("claude-code")
+    } else if value.eq_ignore_ascii_case("agy") || value.eq_ignore_ascii_case("antigravity") {
+        Some("antigravity")
+    } else if value.eq_ignore_ascii_case("opencode") || value.eq_ignore_ascii_case("open-code") {
+        Some("opencode")
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
@@ -3731,5 +3750,14 @@ mod tests {
     #[test]
     fn protocol_version_is_stable() {
         assert_eq!(current_protocol_version().major, 2);
+    }
+
+    #[test]
+    fn canonicalizes_legacy_code_adapter_names() {
+        assert_eq!(canonical_code_adapter_id("codex"), Some("codex-cli"));
+        assert_eq!(canonical_code_adapter_id("CLAUDE"), Some("claude-code"));
+        assert_eq!(canonical_code_adapter_id("agy"), Some("antigravity"));
+        assert_eq!(canonical_code_adapter_id("open-code"), Some("opencode"));
+        assert_eq!(canonical_code_adapter_id("unknown"), None);
     }
 }

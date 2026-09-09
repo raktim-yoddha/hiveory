@@ -192,6 +192,10 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
     () => layout?.nodes.find((node) => node.pane_id === activePaneId),
     [activePaneId, layout?.nodes],
   )
+  const nodesById = useMemo(
+    () => new Map(layout?.nodes.map((node) => [node.pane_id, node]) ?? []),
+    [layout?.nodes],
+  )
 
   const currentPaneCount = useMemo(() => {
     if (!layout) return 0
@@ -291,6 +295,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
             <CodePaneTree
               nodeId={layout.root_id}
               layout={layout}
+              nodesById={nodesById}
               controller={controller}
               isDragActive={Boolean(activePaneId)}
               draggedPaneId={activePaneId}

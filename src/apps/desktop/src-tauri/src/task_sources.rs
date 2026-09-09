@@ -117,7 +117,7 @@ pub(crate) async fn snapshot(
         .cloned()
         .collect::<Vec<_>>();
     for source in &remote_sources {
-        let result = load_remote(&persistence, secrets, source).await;
+        let result = load_remote(persistence, secrets, source).await;
         match result {
             Ok(mut provider_items) => items.append(&mut provider_items),
             Err(error) => {

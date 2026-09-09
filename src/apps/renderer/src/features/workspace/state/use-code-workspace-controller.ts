@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import {
   DEFAULT_BROWSER_HOME,
   hiveoryClient,
@@ -203,6 +204,39 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     return () => window.removeEventListener('hiveory-code-layout-updated', handleLayoutUpdated)
   }, [])
 
+  // CLI browser tools can create a Preview pane from outside the renderer
+  // mutation queue.  Subscribe to that host event so the new pane is mounted
+  // immediately instead of waiting for the next workspace reload.
+  useEffect(() => {
+    if (!hiveoryClient.isTauri) return
+    let disposed = false
+    let unlistenPreviewOpened: (() => void) | null = null
+    let unlistenAgentPaneOpened: (() => void) | null = null
+    void listen<{ layout: CodeWorkspaceState['layout']; preview: CodePreviewSummary }>('hiveory-code-preview-opened', (event) => {
+      if (disposed || !event.payload.layout || !event.payload.preview) return
+      if (event.payload.layout.workspace_id !== stateRef.current.workspaceId) return
+      commitPreview(event.payload.preview)
+      commitLayout(event.payload.layout)
+    }).then((remove) => {
+      if (disposed) remove()
+      else unlistenPreviewOpened = remove
+    }).catch(() => undefined)
+    void listen<{ layout: CodeWorkspaceState['layout']; terminal: CodeTerminalSummary }>('hiveory-code-agent-pane-opened', (event) => {
+      if (disposed || !event.payload.layout || !event.payload.terminal) return
+      if (event.payload.layout.workspace_id !== stateRef.current.workspaceId) return
+      commitTerminal(event.payload.terminal)
+      commitLayout(event.payload.layout)
+    }).then((remove) => {
+      if (disposed) remove()
+      else unlistenAgentPaneOpened = remove
+    }).catch(() => undefined)
+    return () => {
+      disposed = true
+      unlistenPreviewOpened?.()
+      unlistenAgentPaneOpened?.()
+    }
+  }, [commitLayout, commitPreview, commitTerminal])
+
   const clearWorkspace = useCallback(() => {
     loadRequestRef.current += 1
     stateRef.current = {
@@ -213,7 +247,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     dispatch({ type: 'CLEAR_WORKSPACE' })
   }, [])
 
-  const applyMutation = useCallback((mutation: CodePaneMutation) => {
+  const applyMutation = useCallback((mutation: CodePaneMutation, trackMutation = true) => {
     if (mutation.type !== 'focus' && focusPersistTimerRef.current !== null) {
       window.clearTimeout(focusPersistTimerRef.current)
       focusPersistTimerRef.current = null
@@ -223,7 +257,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       const { workspaceId, revision } = stateRef.current
       if (!workspaceId) return
       try {
-        dispatch({ type: 'SET_MUTATING', isMutating: true })
+        if (trackMutation) dispatch({ type: 'SET_MUTATING', isMutating: true })
         const save = (expectedRevision: number) => hiveoryClient.applyCodePaneMutation({
           workspace_id: workspaceId,
           expected_revision: expectedRevision,
@@ -246,7 +280,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           dispatch({ type: 'SET_ERROR', error: msg })
         }
       } finally {
-        dispatch({ type: 'SET_MUTATING', isMutating: false })
+        if (trackMutation) dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
     })
     mutationQueueRef.current = run.catch(() => undefined)
@@ -442,7 +476,9 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           pendingFocus.workspaceId !== stateRef.current.workspaceId ||
           !currentLayout?.nodes.some((node) => node.pane_id === pendingFocus.paneId)
         ) return
-        void applyMutation({ type: 'focus', pane_id: pendingFocus.paneId })
+        // Focus has already updated locally. Persist it in the background
+        // without toggling the canvas-wide mutation lock or blocking resize.
+        void applyMutation({ type: 'focus', pane_id: pendingFocus.paneId }, false)
       }, 120)
     },
     [applyMutation]

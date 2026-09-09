@@ -14,7 +14,7 @@
 
 - Bumped desktop, renderer, Rust workspace, and package metadata to `0.1.4`.
 
-### Orca-style agent capabilities
+### Agent capabilities
 
 - Added persisted Browser Use settings with inner Browser, external browser, and User's PC targets.
 - Added `browser.snapshot` for bounded page text, visible controls, and follow-up selectors, plus direct `browser.open_external_url` handoff.

@@ -135,6 +135,7 @@ export function HiveoryAgent() {
   const [copyNotice, setCopyNotice] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const eventCursorRef = useRef(0)
+  const activeRunRef = useRef<AgentRunDetail | null>(null)
 
   const loadAgents = useCallback(async () => {
     setLoading(true)
@@ -214,10 +215,17 @@ export function HiveoryAgent() {
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [conversation?.messages.length, streamingText])
 
   useEffect(() => {
-    if (!activeRun || isTerminal(activeRun.summary.state)) return
-    const runId = activeRun.summary.id
-    const conversationId = activeRun.summary.conversation_id
-    const agentId = activeRun.summary.agent_id
+    activeRunRef.current = activeRun
+  }, [activeRun])
+
+  const activeRunId = activeRun?.summary.id
+
+  useEffect(() => {
+    const currentRun = activeRunRef.current
+    if (!currentRun || !activeRunId || isTerminal(currentRun.summary.state)) return
+    const runId = activeRunId
+    const conversationId = currentRun.summary.conversation_id
+    const agentId = currentRun.summary.agent_id
     return hiveoryClient.subscribeAgent(runId, (event) => {
       if (event.sequence <= eventCursorRef.current) return
       eventCursorRef.current = event.sequence
@@ -228,8 +236,8 @@ export function HiveoryAgent() {
       if (event.kind === 'run_state_changed') {
         const state = payload(event).state
         if (typeof state === 'string' && isTerminal(state)) {
-          void loadConversation(conversationId)
-          void loadAgent(agentId)
+          if (conversationId) void loadConversation(conversationId)
+          if (agentId) void loadAgent(agentId)
           void loadAgents()
         } else {
           void hiveoryClient.agentRun(runId).then(setActiveRun).catch(() => undefined)
@@ -238,7 +246,7 @@ export function HiveoryAgent() {
     }, eventCursorRef.current)
   // A live stream has no Tauri-side unsubscribe primitive. Key this effect only by
   // the run id so refreshes of its detail never open duplicate subscriptions.
-  }, [activeRun?.summary.id, loadAgent, loadAgents, loadConversation])
+  }, [activeRunId, loadAgent, loadAgents, loadConversation])
 
   const selectedAgent = useMemo(() => agents.find((item) => item.id === selectedAgentId) ?? null, [agents, selectedAgentId])
   const pendingApprovals = activeRun?.approvals.filter((approval) => approval.state === 'pending') ?? []

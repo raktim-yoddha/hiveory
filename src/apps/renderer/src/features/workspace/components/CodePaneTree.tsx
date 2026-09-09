@@ -7,6 +7,7 @@ import { CodePaneLeaf } from './CodePaneLeaf'
 interface CodePaneTreeProps {
   nodeId: string
   layout: CodePaneLayout
+  nodesById: ReadonlyMap<string, CodePaneLayout['nodes'][number]>
   controller: CodeWorkspaceController
   isDragActive?: boolean
   draggedPaneId?: string | null
@@ -15,11 +16,12 @@ interface CodePaneTreeProps {
 export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
   nodeId,
   layout,
+  nodesById,
   controller,
   isDragActive = false,
   draggedPaneId = null,
 }) => {
-  const node = layout.nodes.find((n) => n.pane_id === nodeId)
+  const node = nodesById.get(nodeId)
   const resizeDebounceRef = useRef<number | null>(null)
 
   useEffect(() => () => {
@@ -49,7 +51,6 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
   const defaultRatio = node.ratio_percent ?? 50
 
   const handleLayoutChanged = (sizes: { [panelId: string]: number }) => {
-    if (controller.state.isMutating) return
     const leftSize = sizes[leftChildId]
     if (typeof leftSize === 'number') {
       const ratio = Math.round(leftSize)
@@ -72,6 +73,7 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
         <CodePaneTree
           nodeId={leftChildId}
           layout={layout}
+          nodesById={nodesById}
           controller={controller}
           isDragActive={isDragActive}
           draggedPaneId={draggedPaneId}
@@ -84,6 +86,7 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
         <CodePaneTree
           nodeId={rightChildId}
           layout={layout}
+          nodesById={nodesById}
           controller={controller}
           isDragActive={isDragActive}
           draggedPaneId={draggedPaneId}

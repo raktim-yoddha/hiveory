@@ -12,20 +12,20 @@ use hiveory_code_domain::{
 use hiveory_git_service::{HiveoryGitError, HiveoryGitService};
 use hiveory_persistence::HiveoryPersistence;
 use hiveory_platform_process::configure_background_command;
-use hiveory_protocol::CodeWorkspaceCapability;
 use hiveory_protocol::{
-    CodeCheckpoint, CodeCheckpointDiffRequest, CodeCheckpointKind, CodeCheckpointState,
-    CodeCleanupConfirmRequest, CodeCleanupPreview, CodeCleanupPreviewRequest, CodeDagProposal,
-    CodeDagProposalAcceptRequest, CodeDagProposalRequest, CodeDagProposalTask, CodeDecisionGate,
-    CodeDispatch, CodeDispatchCancelRequest, CodeDispatchResumeRequest, CodeDispatchState,
-    CodeDispatchTerminalRequest, CodeGateCreateRequest, CodeGateResolveRequest, CodeGateState,
-    CodeGatesQuery, CodeMailboxAckRequest, CodeMailboxDelivery, CodeMailboxQuery,
+    canonical_code_adapter_id, CodeCheckpoint, CodeCheckpointDiffRequest, CodeCheckpointKind,
+    CodeCheckpointState, CodeCleanupConfirmRequest, CodeCleanupPreview, CodeCleanupPreviewRequest,
+    CodeDagProposal, CodeDagProposalAcceptRequest, CodeDagProposalRequest, CodeDagProposalTask,
+    CodeDecisionGate, CodeDispatch, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
+    CodeDispatchState, CodeDispatchTerminalRequest, CodeGateCreateRequest, CodeGateResolveRequest,
+    CodeGateState, CodeGatesQuery, CodeMailboxAckRequest, CodeMailboxDelivery, CodeMailboxQuery,
     CodeMailboxSendRequest, CodeManagedWorktree, CodeManagedWorktreeState,
     CodeOrchestrationEventEnvelope, CodeOrchestrationEventOrigin, CodeOrchestrationMessage,
     CodeOrchestrationMessageKind, CodeQuestionAnswerRequest, CodeReview, CodeReviewDecision,
     CodeReviewPolicy, CodeReviewRequest, CodeRunCreateRequest, CodeRunRequest, CodeRunState,
     CodeRunSummary, CodeTask, CodeTaskCreateRequest, CodeTaskDependency, CodeTaskRetryRequest,
-    CodeTaskState, CodeTaskUpdateRequest, CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID,
+    CodeTaskState, CodeTaskUpdateRequest, CodeWorkspaceCapability,
+    CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID,
 };
 use hiveory_workspace_service::{HiveoryWorkspaceError, HiveoryWorkspaceService};
 use hmac::{Hmac, Mac};
@@ -105,10 +105,7 @@ impl CodeWorkerAdapter for CliWorkerAdapter {
     }
 
     fn supports(&self, adapter_id: &str) -> bool {
-        matches!(
-            adapter_id,
-            "codex-cli" | "claude-code" | "antigravity" | "opencode"
-        )
+        canonical_code_adapter_id(adapter_id).is_some()
     }
 
     fn command(
@@ -118,6 +115,7 @@ impl CodeWorkerAdapter for CliWorkerAdapter {
         model: Option<&str>,
         resume_session_id: Option<&str>,
     ) -> Command {
+        let adapter_id = canonical_code_adapter_id(adapter_id).unwrap_or(adapter_id);
         let executable = match adapter_id {
             "claude-code" => "claude",
             "antigravity" => "agy",
