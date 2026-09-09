@@ -12,6 +12,7 @@ import {
   type CodeTerminalSummary,
   type CodePreviewSummary,
   type BrowserRuntimeState,
+  type CodeWorkspaceDetail,
 } from '../../../shared/api/hiveory-client'
 import {
   codeWorkspaceReducer,
@@ -135,39 +136,55 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     return run
   }, [])
 
+  const commitWorkspaceSnapshot = useCallback((snapshot: CodeWorkspaceDetail) => {
+    const current = stateRef.current
+    if (snapshot.summary.id !== current.workspaceId) return false
+    stateRef.current = {
+      ...current,
+      workspaceId: snapshot.summary.id,
+      layout: snapshot.layout,
+      revision: snapshot.layout.revision ?? 0,
+      focusedPaneId: snapshot.layout.focused_pane_id ?? null,
+      maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
+      terminals: new Map(snapshot.terminals.map((terminal) => [terminal.id, terminal])),
+      previews: new Map(snapshot.previews.map((preview) => [preview.id, preview])),
+    }
+    dispatch({
+      type: 'SET_WORKSPACE',
+      workspaceId: snapshot.summary.id,
+      layout: snapshot.layout,
+      terminals: snapshot.terminals,
+      previews: snapshot.previews,
+    })
+    return true
+  }, [])
+
   const loadWorkspace = useCallback(async (workspaceId: string) => {
     const requestId = ++loadRequestRef.current
-    dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
+    const isWorkspaceSwitch = stateRef.current.workspaceId !== workspaceId
+    if (isWorkspaceSwitch) {
+      stateRef.current = { ...stateRef.current, workspaceId }
+      dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
+    }
     try {
-      dispatch({ type: 'SET_MUTATING', isMutating: true })
       const snapshot = await hiveoryClient.codeWorkspace(workspaceId)
       if (requestId !== loadRequestRef.current) return
-      dispatch({
-        type: 'SET_WORKSPACE',
-        workspaceId,
-        layout: snapshot.layout,
-        terminals: snapshot.terminals,
-        previews: snapshot.previews,
-      })
-      stateRef.current = {
-        ...stateRef.current,
-        workspaceId,
-        layout: snapshot.layout,
-        revision: snapshot.layout.revision ?? 0,
-        focusedPaneId: snapshot.layout.focused_pane_id ?? null,
-        maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
-        terminals: new Map(snapshot.terminals.map((terminal) => [terminal.id, terminal])),
-        previews: new Map(snapshot.previews.map((preview) => [preview.id, preview])),
-      }
+      commitWorkspaceSnapshot(snapshot)
     } catch (err: unknown) {
       if (requestId !== loadRequestRef.current) return
       dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${formatError(err)}` })
-    } finally {
-      if (requestId === loadRequestRef.current) {
-        dispatch({ type: 'SET_MUTATING', isMutating: false })
-      }
     }
-  }, [])
+  }, [commitWorkspaceSnapshot])
+
+  // A stale layout revision is expected when focus or a resize was persisted just
+  // before another action. Refresh it without clearing the canvas, so browser and
+  // terminal surfaces remain mounted while the original action retries.
+  const refreshWorkspace = useCallback(async (workspaceId: string) => {
+    const requestId = ++loadRequestRef.current
+    const snapshot = await hiveoryClient.codeWorkspace(workspaceId)
+    if (requestId !== loadRequestRef.current || stateRef.current.workspaceId !== workspaceId) return false
+    return commitWorkspaceSnapshot(snapshot)
+  }, [commitWorkspaceSnapshot])
 
   useEffect(() => {
     if (initialWorkspaceId && initialWorkspaceId !== state.workspaceId) {
@@ -217,7 +234,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           res = await save(revision)
         } catch (err: unknown) {
           if (!formatError(err).includes('layout_conflict')) throw err
-          await loadWorkspace(workspaceId)
+          await refreshWorkspace(workspaceId)
           res = await save(stateRef.current.revision)
         }
         commitLayout(res.layout)
@@ -234,7 +251,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     })
     mutationQueueRef.current = run.catch(() => undefined)
     return run
-  }, [commitLayout, loadWorkspace])
+  }, [commitLayout, refreshWorkspace])
 
   const splitPane = useCallback(
     async (paneId: string, placement: CodePanePlacement = 'right') => {
@@ -268,7 +285,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           res = await split(revision)
         } catch (err: unknown) {
           if (!formatError(err).includes('layout_conflict')) throw err
-          await loadWorkspace(workspaceId)
+          await refreshWorkspace(workspaceId)
           res = await split(stateRef.current.revision)
         }
         commitLayout(res.layout)
@@ -300,13 +317,13 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
                 const innerMsg = formatError(termErr)
                 if (innerMsg.toLowerCase().includes('trust') && !trustRetried) {
                   await hiveoryClient.trustCodeWorkspace(workspaceId, true)
-                  await loadWorkspace(workspaceId)
+                  await refreshWorkspace(workspaceId)
                   expectedRevision = stateRef.current.revision
                   trustRetried = true
                   continue
                 }
                 if (innerMsg.includes('layout_conflict') && !conflictRetried) {
-                  await loadWorkspace(workspaceId)
+                  await refreshWorkspace(workspaceId)
                   expectedRevision = stateRef.current.revision
                   conflictRetried = true
                   continue
@@ -329,7 +346,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             })
           } catch (previewErr: unknown) {
             if (!formatError(previewErr).includes('layout_conflict')) throw previewErr
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             prevRes = await hiveoryClient.openCodePanePreview({
               workspace_id: workspaceId,
               pane_id: newPaneId,
@@ -355,13 +372,13 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
               const innerMsg = formatError(markdownErr)
               if (innerMsg.toLowerCase().includes('trust') && !trustRetried) {
                 await hiveoryClient.trustCodeWorkspace(workspaceId, true)
-                await loadWorkspace(workspaceId)
+                await refreshWorkspace(workspaceId)
                 expectedRevision = stateRef.current.revision
                 trustRetried = true
                 continue
               }
               if (innerMsg.includes('layout_conflict') && !conflictRetried) {
-                await loadWorkspace(workspaceId)
+                await refreshWorkspace(workspaceId)
                 expectedRevision = stateRef.current.revision
                 conflictRetried = true
                 continue
@@ -378,7 +395,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       }
       })
     },
-    [commitLayout, commitPreview, commitTerminal, enqueueOperation, loadWorkspace]
+    [commitLayout, commitPreview, commitTerminal, enqueueOperation, refreshWorkspace]
   )
 
   const renamePane = useCallback(
@@ -502,7 +519,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             return
           }
           if (innerMsg.includes('layout_conflict')) {
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             const res = await hiveoryClient.launchCodePaneTerminal({
               workspace_id: workspaceId,
               pane_id: paneId,
@@ -528,7 +545,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       }
       })
     },
-    [commitLayout, commitTerminal, enqueueOperation, loadWorkspace]
+    [commitLayout, commitTerminal, enqueueOperation, refreshWorkspace]
   )
 
   const openPreview = useCallback(
@@ -566,7 +583,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             return
           }
           if (innerMsg.includes('layout_conflict')) {
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             const res = await hiveoryClient.openCodePanePreview({
               workspace_id: workspaceId,
               pane_id: paneId,
@@ -586,7 +603,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       }
       })
     },
-    [commitLayout, commitPreview, enqueueOperation, loadWorkspace]
+    [commitLayout, commitPreview, enqueueOperation, refreshWorkspace]
   )
 
   const createMarkdown = useCallback(
@@ -620,7 +637,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             return
           }
           if (innerMsg.includes('layout_conflict')) {
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             const res = await hiveoryClient.createCodePaneMarkdown({
               workspace_id: workspaceId,
               pane_id: paneId,
@@ -638,7 +655,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       }
       })
     },
-    [commitLayout, enqueueOperation, loadWorkspace]
+    [commitLayout, enqueueOperation, refreshWorkspace]
   )
 
   const openLaunchPreset = useCallback(async (preset: CodeLaunchPresetSummary) => {
@@ -694,7 +711,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             })
           } catch (innerErr: unknown) {
             if (!formatError(innerErr).includes('layout_conflict')) throw innerErr
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             result = await hiveoryClient.openCodePaneMarkdown({
               workspace_id: workspaceId,
               pane_id: paneId,
@@ -710,7 +727,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         }
       })
     },
-    [commitLayout, enqueueOperation, loadWorkspace]
+    [commitLayout, enqueueOperation, refreshWorkspace]
   )
 
   const renameMarkdown = useCallback(
@@ -738,7 +755,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
             })
           } catch (innerErr: unknown) {
             if (!formatError(innerErr).includes('layout_conflict')) throw innerErr
-            await loadWorkspace(workspaceId)
+            await refreshWorkspace(workspaceId)
             result = await hiveoryClient.renameCodeFile({
               workspace_id: workspaceId,
               pane_id: paneId,
@@ -758,7 +775,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       })
       return renamed
     },
-    [commitLayout, enqueueOperation, loadWorkspace]
+    [commitLayout, enqueueOperation, refreshWorkspace]
   )
 
   const sleepWorkspace = useCallback(
@@ -771,7 +788,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         const activeTerminals = detail.terminals.filter((terminal) => terminal.state === 'running' || terminal.state === 'starting')
         await Promise.all(activeTerminals.map((terminal) => hiveoryClient.stopCodeTerminal({ terminal_id: terminal.id, force: true })))
         if (stateRef.current.workspaceId === workspaceId) {
-          await loadWorkspace(workspaceId)
+          await refreshWorkspace(workspaceId)
         }
         return true
       } catch (err: unknown) {
@@ -781,7 +798,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
     },
-    [loadWorkspace]
+    [refreshWorkspace]
   )
 
   const closePaneWithRetry = useCallback(
@@ -800,11 +817,11 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           return
         } catch (error: unknown) {
           if (!formatError(error).includes('layout_conflict') || attempt === 3) throw error
-          await loadWorkspace(workspaceId)
+          await refreshWorkspace(workspaceId)
         }
       }
     },
-    [commitLayout, loadWorkspace],
+    [commitLayout, refreshWorkspace],
   )
 
   const requestClosePane = useCallback(

@@ -1,12 +1,15 @@
-import React, { Component, useCallback, useEffect, useState, type ReactNode } from 'react'
+import React, { Component, lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from 'react'
 import { hiveoryClient, type BrowserRuntimeState, type CodePaneNode } from '../../../shared/api/hiveory-client'
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodePaneHeader } from './CodePaneHeader'
 import { CodePaneDropTargets } from './CodePaneDropTargets'
 import { CodePaneLauncher } from './CodePaneLauncher'
-import { CodeTerminalPane, type CodeTerminalVoiceState } from './panes/CodeTerminalPane'
-import { CodePreviewPane } from './panes/CodePreviewPane'
-import { CodeMarkdownPane } from './panes/CodeMarkdownPane'
+import type { CodeTerminalVoiceState } from './panes/CodeTerminalPane'
+
+const CodeTerminalPane = lazy(async () => ({ default: (await import('./panes/CodeTerminalPane')).CodeTerminalPane }))
+const CodePreviewPane = lazy(async () => ({ default: (await import('./panes/CodePreviewPane')).CodePreviewPane }))
+const CodeMarkdownPane = lazy(async () => ({ default: (await import('./panes/CodeMarkdownPane')).CodeMarkdownPane }))
+const paneFallback = <div className="code-pane-empty-message" role="status">Loading pane…</div>
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -172,39 +175,45 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           )
         }
         return (
-          <CodeTerminalPane
-            terminalId={node.resource_id}
-            summary={terminalSummary}
-            historyError={historyError}
-            onDismissHistoryError={() => setHistoryError(null)}
-            onVoiceStateChange={handleVoiceStateChange}
-            onRelaunch={() => {
-              void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model, terminalSummary?.agent_launch_mode)
-            }}
-          />
+          <Suspense fallback={paneFallback}>
+            <CodeTerminalPane
+              terminalId={node.resource_id}
+              summary={terminalSummary}
+              historyError={historyError}
+              onDismissHistoryError={() => setHistoryError(null)}
+              onVoiceStateChange={handleVoiceStateChange}
+              onRelaunch={() => {
+                void launchTerminal(node.pane_id, node.kind === 'coding_agent' ? 'coding_agent' : 'shell', terminalSummary?.adapter_id, terminalSummary?.model, terminalSummary?.agent_launch_mode)
+              }}
+            />
+          </Suspense>
         )
       case 'preview':
         if (!previewSummary) return <div className="code-preview-native-placeholder">Loading Browser…</div>
         return (
-          <CodePreviewPane
-            key={previewSummary.id}
-            workspaceId={state.workspaceId ?? previewSummary.workspace_id}
-            preview={previewSummary}
-            onStateChange={(nextState: BrowserRuntimeState) => updatePreviewState(nextState)}
-            onFocus={focusCurrentPane}
-          />
+          <Suspense fallback={paneFallback}>
+            <CodePreviewPane
+              key={previewSummary.id}
+              workspaceId={state.workspaceId ?? previewSummary.workspace_id}
+              preview={previewSummary}
+              onStateChange={(nextState: BrowserRuntimeState) => updatePreviewState(nextState)}
+              onFocus={focusCurrentPane}
+            />
+          </Suspense>
         )
       case 'markdown':
         if (!node.resource_id || !state.workspaceId) return <div className="code-pane-empty-message">No Markdown document bound</div>
         return (
-          <CodeMarkdownPane
-            key={node.resource_id}
-            workspaceId={state.workspaceId}
-            relativePath={node.resource_id}
-            onOpenMarkdown={(path) => void openMarkdown(node.pane_id, path)}
-            onCreateMarkdown={() => void createMarkdown(node.pane_id)}
-            onRenameMarkdown={(path, fingerprint) => renameMarkdown(node.pane_id, node.resource_id!, path, fingerprint)}
-          />
+          <Suspense fallback={paneFallback}>
+            <CodeMarkdownPane
+              key={node.resource_id}
+              workspaceId={state.workspaceId}
+              relativePath={node.resource_id}
+              onOpenMarkdown={(path) => void openMarkdown(node.pane_id, path)}
+              onCreateMarkdown={() => void createMarkdown(node.pane_id)}
+              onRenameMarkdown={(path, fingerprint) => renameMarkdown(node.pane_id, node.resource_id!, path, fingerprint)}
+            />
+          </Suspense>
         )
       default:
         return <div>Unsupported pane type</div>

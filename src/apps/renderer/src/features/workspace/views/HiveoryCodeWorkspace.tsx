@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import React, { lazy, Suspense, useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import {
   formatHiveoryClientError,
   hiveoryClient,
@@ -14,16 +14,19 @@ import {
 import { useCodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodeWorkspaceRail } from '../components/CodeWorkspaceRail'
 import { CodePaneCanvas } from '../components/CodePaneCanvas'
-import { HiveoryCodeDashboard } from './HiveoryCodeDashboard'
-import { HiveoryCodeRoutines } from './HiveoryCodeRoutines'
-import { HiveoryCodePlugins } from './HiveoryCodePlugins'
-import { HiveoryCodeSkills } from './HiveoryCodeSkills'
 import { CodeDestructiveActionDialog, CodeParentWorkspaceDialog, CodeProjectSettingsDialog, CodeWorkspaceCreateDialog, CodeWorkspaceRenameDialog } from '../components/CodeWorkspaceDialogs'
 import { eligibleParentWorkspaces } from '../model/code-workspace-rail-utils'
-import { CodeSourcePanel } from '../components/CodeSourcePanel'
-import { CodeCoordinationPanel } from '../components/CodeCoordinationPanel'
-import { HiveoryWorkspaceBoard } from '../components/HiveoryWorkspaceBoard'
 import '../styles/workspace.css'
+
+const HiveoryCodeDashboard = lazy(async () => ({ default: (await import('./HiveoryCodeDashboard')).HiveoryCodeDashboard }))
+const HiveoryCodeRoutines = lazy(async () => ({ default: (await import('./HiveoryCodeRoutines')).HiveoryCodeRoutines }))
+const HiveoryCodePlugins = lazy(async () => ({ default: (await import('./HiveoryCodePlugins')).HiveoryCodePlugins }))
+const HiveoryCodeSkills = lazy(async () => ({ default: (await import('./HiveoryCodeSkills')).HiveoryCodeSkills }))
+const CodeSourcePanel = lazy(async () => ({ default: (await import('../components/CodeSourcePanel')).CodeSourcePanel }))
+const CodeCoordinationPanel = lazy(async () => ({ default: (await import('../components/CodeCoordinationPanel')).CodeCoordinationPanel }))
+const HiveoryWorkspaceBoard = lazy(async () => ({ default: (await import('../components/HiveoryWorkspaceBoard')).HiveoryWorkspaceBoard }))
+
+const sectionFallback = <div className="hiveory-screen-loading" role="status">Loading…</div>
 
 function readSidebarCollapsed(): boolean {
   if (typeof window === 'undefined') return false
@@ -418,16 +421,16 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       />
 
       <main className="code-workspace-main">
-        {activeSection === 'dashboard' && <HiveoryCodeDashboard />}
-        {activeSection === 'routines' && <HiveoryCodeRoutines />}
-        {activeSection === 'plugins' && <HiveoryCodePlugins />}
-        {activeSection === 'skills' && <HiveoryCodeSkills />}
+        {activeSection === 'dashboard' && <Suspense fallback={sectionFallback}><HiveoryCodeDashboard /></Suspense>}
+        {activeSection === 'routines' && <Suspense fallback={sectionFallback}><HiveoryCodeRoutines /></Suspense>}
+        {activeSection === 'plugins' && <Suspense fallback={sectionFallback}><HiveoryCodePlugins /></Suspense>}
+        {activeSection === 'skills' && <Suspense fallback={sectionFallback}><HiveoryCodeSkills /></Suspense>}
         {activeSection === 'workspace' && (
           <div className="code-workspace-workspace-view">
             <div className={`code-workspace-canvas-shell ${sourcePanelOpen && activeWorkspace ? 'has-source-panel' : ''} ${coordinationPanelOpen && activeWorkspace ? 'has-coordination-panel' : ''}`}>
               <CodePaneCanvas controller={controller} onOpenFolder={() => void handleAddProject()} />
-              {sourcePanelOpen && activeWorkspace && <CodeSourcePanel workspace={activeWorkspace} onClose={() => setSourcePanelOpen(false)} onWorkspaceChanged={refreshWorkspaces} />}
-              {coordinationPanelOpen && activeWorkspace && <CodeCoordinationPanel workspace={activeWorkspace} onClose={() => setCoordinationPanelOpen(false)} />}
+              {sourcePanelOpen && activeWorkspace && <Suspense fallback={sectionFallback}><CodeSourcePanel workspace={activeWorkspace} onClose={() => setSourcePanelOpen(false)} onWorkspaceChanged={refreshWorkspaces} /></Suspense>}
+              {coordinationPanelOpen && activeWorkspace && <Suspense fallback={sectionFallback}><CodeCoordinationPanel workspace={activeWorkspace} onClose={() => setCoordinationPanelOpen(false)} /></Suspense>}
             </div>
           </div>
         )}
@@ -480,11 +483,13 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       />
 
       {workspaceBoardOpen && (
-        <HiveoryWorkspaceBoard
-          onOpenWorkspace={(workspaceId) => { handleSelectWorkspace(workspaceId); setWorkspaceBoardOpen(false) }}
-          onStartLocalWork={() => { setWorkspaceBoardOpen(false); if (activeWorkspaceId) setActiveSection('workspace'); else void handleAddProject() }}
-          onClose={() => setWorkspaceBoardOpen(false)}
-        />
+        <Suspense fallback={sectionFallback}>
+          <HiveoryWorkspaceBoard
+            onOpenWorkspace={(workspaceId) => { handleSelectWorkspace(workspaceId); setWorkspaceBoardOpen(false) }}
+            onStartLocalWork={() => { setWorkspaceBoardOpen(false); if (activeWorkspaceId) setActiveSection('workspace'); else void handleAddProject() }}
+            onClose={() => setWorkspaceBoardOpen(false)}
+          />
+        </Suspense>
       )}
 
     </div>
