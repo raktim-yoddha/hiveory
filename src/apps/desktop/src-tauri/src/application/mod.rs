@@ -133,6 +133,7 @@ use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     net::{TcpListener, TcpStream},
     sync::{broadcast, mpsc, oneshot},
+    time::{timeout, Duration},
 };
 use tokio_util::sync::CancellationToken;
 
@@ -397,8 +398,12 @@ struct CliAgentPaneOpenedEvent {
 
 const CLI_AGENT_PANE_OPENED_EVENT: &str = "hiveory-code-agent-pane-opened";
 
-fn default_cli_terminal_cols() -> u16 { 100 }
-fn default_cli_terminal_rows() -> u16 { 30 }
+fn default_cli_terminal_cols() -> u16 {
+    100
+}
+fn default_cli_terminal_rows() -> u16 {
+    30
+}
 
 #[derive(Debug, Clone, Serialize)]
 struct CliBrowserPaneOpenedEvent {
@@ -530,13 +535,17 @@ impl HiveoryCliAgentPaneProvider {
                 return Err("Only a Hiveory coding-agent pane can be reused.".to_owned());
             }
             if let Some(terminal_id) = pane.resource_id.as_deref() {
-                if let Some(terminal) = terminals.iter().find(|terminal| terminal.id == terminal_id) {
+                if let Some(terminal) = terminals.iter().find(|terminal| terminal.id == terminal_id)
+                {
                     if matches!(
                         terminal.state,
                         hiveory_protocol::CodeTerminalState::Starting
                             | hiveory_protocol::CodeTerminalState::Running
                     ) {
-                        return Err("The requested coding-agent pane is busy and cannot be reused.".to_owned());
+                        return Err(
+                            "The requested coding-agent pane is busy and cannot be reused."
+                                .to_owned(),
+                        );
                     }
                 }
             }
@@ -547,13 +556,24 @@ impl HiveoryCliAgentPaneProvider {
             let target_id = current
                 .focused_pane_id
                 .as_deref()
-                .filter(|pane_id| current.nodes.iter().any(|node| node.pane_id == *pane_id && node.children.is_empty()))
+                .filter(|pane_id| {
+                    current
+                        .nodes
+                        .iter()
+                        .any(|node| node.pane_id == *pane_id && node.children.is_empty())
+                })
                 .map(ToOwned::to_owned)
                 .or_else(|| visual_leaf_order(&current).into_iter().next())
-                .ok_or_else(|| "The workspace has no available pane for a coding agent.".to_owned())?;
+                .ok_or_else(|| {
+                    "The workspace has no available pane for a coding agent.".to_owned()
+                })?;
             let next = split_pane(&current, &target_id, CodePanePlacement::Right)
                 .map_err(|error| error.to_string())?;
-            let existing = current.nodes.iter().map(|node| node.pane_id.as_str()).collect::<HashSet<_>>();
+            let existing = current
+                .nodes
+                .iter()
+                .map(|node| node.pane_id.as_str())
+                .collect::<HashSet<_>>();
             let pane_id = next
                 .nodes
                 .iter()
@@ -610,7 +630,7 @@ impl HiveoryCliAgentPaneProvider {
         node.title = request
             .title
             .filter(|title| !title.trim().is_empty())
-            .or_else(|| Some(adapter_id.clone()));
+            .or_else(|| Some(generated_pane_title_for_layout(&current)));
         next.focused_pane_id = Some(pane_id.clone());
         validate_layout(&next).map_err(|error| error.to_string())?;
         let layout = match self
@@ -624,7 +644,10 @@ impl HiveoryCliAgentPaneProvider {
                 let _ = self
                     .foundation
                     .terminal_host
-                    .stop(&CodeTerminalStopRequest { terminal_id: terminal.id.clone(), force: true })
+                    .stop(&CodeTerminalStopRequest {
+                        terminal_id: terminal.id.clone(),
+                        force: true,
+                    })
                     .await;
                 return Err(if error.to_string().contains("layout_conflict") {
                     "The workspace changed while the agent pane was opening. Try again.".to_owned()
@@ -636,7 +659,10 @@ impl HiveoryCliAgentPaneProvider {
         let _ = self.app.emit_to(
             "main",
             CLI_AGENT_PANE_OPENED_EVENT,
-            CliAgentPaneOpenedEvent { layout: layout.clone(), terminal: terminal.clone() },
+            CliAgentPaneOpenedEvent {
+                layout: layout.clone(),
+                terminal: terminal.clone(),
+            },
         );
         Ok(json!({
             "workspace_id": self.workspace_id,
@@ -1404,17 +1430,32 @@ fn canonical_cli_tool_alias(name: &str) -> Option<&'static str> {
         "hiveory_computer_action" => "computer.action",
         "hiveory_skills_list" => "skills.list",
         "hiveory_skills_read" => "skills.read",
+        "hiveory_session_status" => "session.status",
+        "hiveory_session_capabilities" => "session.capabilities",
+        "hiveory_session_current_context" => "session.current_context",
         "hiveory_orchestration_list_runs" => "orchestration.list_runs",
         "hiveory_orchestration_get_run" => "orchestration.get_run",
         "hiveory_orchestration_create_run" => "orchestration.create_run",
         "hiveory_orchestration_create_task" => "orchestration.create_task",
         "hiveory_orchestration_start_run" => "orchestration.start_run",
         "hiveory_orchestration_send_message" => "orchestration.send_message",
+        "hiveory_orchestration_wait" => "orchestration.wait",
+        "hiveory_orchestration_list_participants" => "orchestration.list_participants",
+        "hiveory_orchestration_assign_task" => "orchestration.assign_task",
+        "hiveory_orchestration_report_completion" => "orchestration.report_completion",
         _ => return None,
     })
 }
 
 impl HiveoryCliSessionTools {
+    fn participant_address(&self) -> String {
+        if self.session_id.starts_with("cli-worker-") {
+            format!("worker:{}", self.session_id)
+        } else {
+            format!("coordinator:{}", self.session_id)
+        }
+    }
+
     async fn canonical_tool_name(&self, name: &str) -> String {
         if let Some(alias) = canonical_cli_tool_alias(name) {
             return alias.to_owned();
@@ -1486,16 +1527,44 @@ impl HiveoryCliSessionTools {
             match name.as_str() {
                 "agent_panes.list" => serde_json::to_string(&self.agent_panes.list().await?)
                     .map_err(|error| error.to_string()),
-                "agent_panes.open" => serde_json::to_string(&self.agent_panes.open(arguments).await?)
-                    .map_err(|error| error.to_string()),
+                "agent_panes.open" => {
+                    serde_json::to_string(&self.agent_panes.open(arguments).await?)
+                        .map_err(|error| error.to_string())
+                }
                 _ => Err("agent-pane tool is not available".to_owned()),
             }
+        } else if name.starts_with("session.") {
+            self.execute_session(&name, arguments).await
         } else if name.starts_with("skills.") {
             self.execute_skill(&name, arguments).await
         } else if name.starts_with("orchestration.") {
             self.execute_orchestration(&name, arguments).await
         } else {
             Err("This Hiveory CLI session does not provide that tool.".to_owned())
+        }
+    }
+
+    async fn execute_session(&self, name: &str, _arguments: &Value) -> Result<String, String> {
+        match name {
+            "session.status" | "session.capabilities" | "session.current_context" => {
+                serde_json::to_string(&json!({
+                    "status": "ready",
+                    "session_id": self.session_id,
+                    "workspace_id": self.workspace_id,
+                    "participant_address": self.participant_address(),
+                    "orchestration_tools": [
+                        "orchestration.create_run", "orchestration.create_task",
+                        "orchestration.start_run", "orchestration.open_worker_pane",
+                        "orchestration.assign_task", "orchestration.report_completion",
+                        "orchestration.send_message", "orchestration.inbox",
+                        "orchestration.wait", "orchestration.acknowledge_message",
+                        "orchestration.list_participants"
+                    ],
+                    "guidance": "Hiveory orchestration is available in this pane. Call this status tool before reporting that orchestration is unavailable."
+                }))
+                .map_err(|error| error.to_string())
+            }
+            _ => Err("session tool is not available".to_owned()),
         }
     }
 
@@ -1542,7 +1611,10 @@ impl HiveoryCliSessionTools {
             "orchestration.list_runs" => {
                 let workspace_id = arguments.get("workspace_id").and_then(Value::as_str);
                 if workspace_id.is_some_and(|workspace_id| workspace_id != self.workspace_id) {
-                    return Err("CLI sessions can only inspect orchestration runs in their own workspace.".to_owned());
+                    return Err(
+                        "CLI sessions can only inspect orchestration runs in their own workspace."
+                            .to_owned(),
+                    );
                 }
                 serde_json::to_value(
                     self.orchestration
@@ -1553,20 +1625,35 @@ impl HiveoryCliSessionTools {
             }
             "orchestration.get_run" => {
                 let run_id = required_cli_string(arguments, "run_id")?;
-                let detail = self.orchestration.detail(run_id).await.map_err(|error| error.to_string())?;
+                let detail = self
+                    .orchestration
+                    .detail(run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
                 serde_json::to_value(detail)
             }
             "orchestration.create_run" => {
-                let mut request = serde_json::from_value::<CodeRunCreateRequest>(arguments.clone())
+                let mut request_arguments = arguments.clone();
+                request_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "run arguments must be an object".to_owned())?
+                    .entry("workspace_id")
+                    .or_insert_with(|| Value::String(self.workspace_id.clone()));
+                let mut request = serde_json::from_value::<CodeRunCreateRequest>(request_arguments)
                     .map_err(|error| format!("invalid create-run request: {error}"))?;
                 if request.workspace_id.is_empty() {
                     request.workspace_id = self.workspace_id.clone();
                 }
                 if request.workspace_id != self.workspace_id {
-                    return Err("CLI sessions can only create runs in their own workspace.".to_owned());
+                    return Err(
+                        "CLI sessions can only create runs in their own workspace.".to_owned()
+                    );
+                }
+                if request.coordinator_id.is_none() {
+                    request.coordinator_id = Some(self.session_id.clone());
                 }
                 serde_json::to_value(
                     self.orchestration
@@ -1576,9 +1663,19 @@ impl HiveoryCliSessionTools {
                 )
             }
             "orchestration.create_task" => {
-                let request = serde_json::from_value::<CodeTaskCreateRequest>(arguments.clone())
+                let mut request_arguments = arguments.clone();
+                request_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "task arguments must be an object".to_owned())?
+                    .entry("depends_on")
+                    .or_insert_with(|| Value::Array(Vec::new()));
+                let request = serde_json::from_value::<CodeTaskCreateRequest>(request_arguments)
                     .map_err(|error| format!("invalid create-task request: {error}"))?;
-                let detail = self.orchestration.detail(&request.run_id).await.map_err(|error| error.to_string())?;
+                let detail = self
+                    .orchestration
+                    .detail(&request.run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
@@ -1593,7 +1690,11 @@ impl HiveoryCliSessionTools {
                 let request = CodeRunRequest {
                     run_id: required_cli_string(arguments, "run_id")?.to_owned(),
                 };
-                let detail = self.orchestration.detail(&request.run_id).await.map_err(|error| error.to_string())?;
+                let detail = self
+                    .orchestration
+                    .detail(&request.run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
@@ -1605,9 +1706,19 @@ impl HiveoryCliSessionTools {
                 )
             }
             "orchestration.send_message" => {
-                let request = serde_json::from_value::<CodeMailboxSendRequest>(arguments.clone())
+                let mut request_arguments = arguments.clone();
+                request_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "mailbox arguments must be an object".to_owned())?
+                    .entry("sender_address")
+                    .or_insert_with(|| Value::String(self.participant_address()));
+                let request = serde_json::from_value::<CodeMailboxSendRequest>(request_arguments)
                     .map_err(|error| format!("invalid mailbox request: {error}"))?;
-                let detail = self.orchestration.detail(&request.run_id).await.map_err(|error| error.to_string())?;
+                let detail = self
+                    .orchestration
+                    .detail(&request.run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
@@ -1619,26 +1730,268 @@ impl HiveoryCliSessionTools {
                 )
             }
             "orchestration.inbox" => {
-                let request = serde_json::from_value::<CodeMailboxQuery>(arguments.clone())
+                let mut query_arguments = arguments.clone();
+                query_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "inbox arguments must be an object".to_owned())?
+                    .entry("recipient_address")
+                    .or_insert_with(|| Value::String(self.participant_address()));
+                let request = serde_json::from_value::<CodeMailboxQuery>(query_arguments)
                     .map_err(|error| format!("invalid inbox query: {error}"))?;
-                let detail = self.orchestration.detail(&request.run_id).await.map_err(|error| error.to_string())?;
+                let detail = self
+                    .orchestration
+                    .detail(&request.run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
-                serde_json::to_value(self.orchestration.mailbox(&request).await.map_err(|error| error.to_string())?)
+                serde_json::to_value(
+                    self.orchestration
+                        .mailbox(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
             }
             "orchestration.acknowledge_message" => {
-                let request = serde_json::from_value::<CodeMailboxAckRequest>(arguments.clone())
-                    .map_err(|error| format!("invalid mailbox acknowledgement: {error}"))?;
-                let detail = self.orchestration.detail(&request.run_id).await.map_err(|error| error.to_string())?;
+                let mut acknowledgement_arguments = arguments.clone();
+                acknowledgement_arguments
+                    .as_object_mut()
+                    .ok_or_else(|| "acknowledgement arguments must be an object".to_owned())?
+                    .entry("recipient_address")
+                    .or_insert_with(|| Value::String(self.participant_address()));
+                let request =
+                    serde_json::from_value::<CodeMailboxAckRequest>(acknowledgement_arguments)
+                        .map_err(|error| format!("invalid mailbox acknowledgement: {error}"))?;
+                let detail = self
+                    .orchestration
+                    .detail(&request.run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
                 if detail.summary.workspace_id != self.workspace_id {
                     return Err("The requested run belongs to a different workspace.".to_owned());
                 }
-                serde_json::to_value(self.orchestration.acknowledge_mailbox(&request).await.map_err(|error| error.to_string())?)
+                serde_json::to_value(
+                    self.orchestration
+                        .acknowledge_mailbox(&request)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
             }
             "orchestration.list_workers" => serde_json::to_value(self.agent_panes.list().await?),
-            "orchestration.open_worker_pane" => serde_json::to_value(self.agent_panes.open(arguments).await?),
-            "orchestration.adapter_catalog" => serde_json::to_value(self.agent_panes.foundation.code_runtime.chat_engines().await),
+            "orchestration.list_participants" => {
+                let run_id = required_cli_string(arguments, "run_id")?;
+                let detail = self
+                    .orchestration
+                    .detail(run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if detail.summary.workspace_id != self.workspace_id {
+                    return Err("The requested run belongs to a different workspace.".to_owned());
+                }
+                serde_json::to_value(
+                    self.orchestration
+                        .participants(run_id)
+                        .await
+                        .map_err(|error| error.to_string())?,
+                )
+            }
+            "orchestration.wait" => {
+                let run_id = required_cli_string(arguments, "run_id")?.to_owned();
+                let detail = self
+                    .orchestration
+                    .detail(&run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if detail.summary.workspace_id != self.workspace_id {
+                    return Err("The requested run belongs to a different workspace.".to_owned());
+                }
+                let recipient_address = arguments
+                    .get("recipient_address")
+                    .and_then(Value::as_str)
+                    .filter(|address| !address.trim().is_empty())
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| self.participant_address());
+                let timeout_ms = arguments
+                    .get("timeout_ms")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(30_000)
+                    .clamp(1, 60_000);
+                let query = CodeMailboxQuery {
+                    run_id: run_id.clone(),
+                    recipient_address,
+                    include_acknowledged: false,
+                    limit: Some(50),
+                };
+                let mut events = self.orchestration.subscribe();
+                let wait_for_delivery = async {
+                    loop {
+                        let deliveries = self
+                            .orchestration
+                            .mailbox(&query)
+                            .await
+                            .map_err(|error| error.to_string())?;
+                        if !deliveries.is_empty() {
+                            return Ok(json!({ "timed_out": false, "deliveries": deliveries }));
+                        }
+                        match events.recv().await {
+                            Ok(event) if event.run_id == run_id => {}
+                            Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
+                            Err(broadcast::error::RecvError::Closed) => {
+                                return Err("orchestration event stream closed".to_owned())
+                            }
+                        }
+                    }
+                };
+                Ok(
+                    match timeout(Duration::from_millis(timeout_ms), wait_for_delivery).await {
+                        Ok(result) => result?,
+                        Err(_) => json!({ "timed_out": true, "deliveries": [] }),
+                    },
+                )
+            }
+            "orchestration.assign_task" => {
+                let run_id = required_cli_string(arguments, "run_id")?.to_owned();
+                let task_id = required_cli_string(arguments, "task_id")?.to_owned();
+                let detail = self
+                    .orchestration
+                    .detail(&run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if detail.summary.workspace_id != self.workspace_id {
+                    return Err("The requested run belongs to a different workspace.".to_owned());
+                }
+                let task = detail
+                    .tasks
+                    .iter()
+                    .find(|task| task.id == task_id)
+                    .cloned()
+                    .ok_or_else(|| "The requested task was not found.".to_owned())?;
+                let opened = self.agent_panes.open(arguments).await?;
+                let recipient_address = opened
+                    .get("address")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "The worker pane did not return a mailbox address.".to_owned())?
+                    .to_owned();
+                if let Err(error) = self
+                    .orchestration
+                    .start_visible_task(&run_id, &task_id)
+                    .await
+                {
+                    if let Some(terminal_id) = opened
+                        .get("terminal")
+                        .and_then(|terminal| terminal.get("id"))
+                        .and_then(Value::as_str)
+                    {
+                        let _ = self
+                            .agent_panes
+                            .foundation
+                            .terminal_host
+                            .stop(&CodeTerminalStopRequest {
+                                terminal_id: terminal_id.to_owned(),
+                                force: true,
+                            })
+                            .await;
+                    }
+                    return Err(error.to_string());
+                }
+                let assignment = json!({
+                    "type": "assignment",
+                    "run_id": &run_id,
+                    "task_id": &task_id,
+                    "title": &task.title,
+                    "specification": &task.specification,
+                    "sender_address": self.participant_address(),
+                    "completion_instruction": "When complete, call orchestration.report_completion with this run_id, task_id, and a concise summary. Use orchestration.inbox or orchestration.wait for follow-up messages."
+                });
+                let delivery = self
+                    .orchestration
+                    .send_mailbox_message(&CodeMailboxSendRequest {
+                        run_id: run_id.clone(),
+                        sender_address: self.participant_address(),
+                        recipient_address: recipient_address.clone(),
+                        kind: hiveory_protocol::CodeOrchestrationMessageKind::Status,
+                        payload: assignment.to_string(),
+                        thread_id: Some(format!("task-{task_id}")),
+                        client_request_id: Some(format!("assign-{task_id}-{}", uuid::Uuid::now_v7())),
+                    })
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if let Some(terminal_id) = opened
+                    .get("terminal")
+                    .and_then(|terminal| terminal.get("id"))
+                    .and_then(Value::as_str)
+                {
+                    let terminal_host = self.agent_panes.foundation.terminal_host.clone();
+                    let terminal_id = terminal_id.to_owned();
+                    let prompt = format!(
+                        "You are now assigned a Hiveory task. Call session.status, then orchestration.inbox with run_id {run_id:?}. Read and acknowledge the assignment before working."
+                    );
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(750)).await;
+                        let _ = terminal_host
+                            .write(&CodeTerminalInputRequest {
+                                terminal_id,
+                                data_base64: STANDARD.encode(format!("{prompt}\n")),
+                            })
+                            .await;
+                    });
+                }
+                Ok(json!({
+                    "run_id": run_id,
+                    "task_id": task_id,
+                    "worker": opened,
+                    "delivery": delivery,
+                }))
+            }
+            "orchestration.report_completion" => {
+                let run_id = required_cli_string(arguments, "run_id")?.to_owned();
+                let task_id = required_cli_string(arguments, "task_id")?.to_owned();
+                let summary = required_cli_string(arguments, "summary")?.to_owned();
+                let existing = self
+                    .orchestration
+                    .detail(&run_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if existing.summary.workspace_id != self.workspace_id {
+                    return Err("The requested run belongs to a different workspace.".to_owned());
+                }
+                let detail = self
+                    .orchestration
+                    .complete_visible_task(&run_id, &task_id, &summary)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let recipient_address = arguments
+                    .get("recipient_address")
+                    .and_then(Value::as_str)
+                    .filter(|address| !address.trim().is_empty())
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_else(|| format!("coordinator:{}", detail.summary.coordinator_id));
+                let delivery = self
+                    .orchestration
+                    .send_mailbox_message(&CodeMailboxSendRequest {
+                        run_id: run_id.clone(),
+                        sender_address: self.participant_address(),
+                        recipient_address,
+                        kind: hiveory_protocol::CodeOrchestrationMessageKind::Completion,
+                        payload: summary,
+                        thread_id: Some(format!("task-{task_id}")),
+                        client_request_id: Some(format!("complete-{task_id}-{}", uuid::Uuid::now_v7())),
+                    })
+                    .await
+                    .map_err(|error| error.to_string())?;
+                serde_json::to_value(json!({ "run": detail, "delivery": delivery }))
+            }
+            "orchestration.open_worker_pane" => {
+                serde_json::to_value(self.agent_panes.open(arguments).await?)
+            }
+            "orchestration.adapter_catalog" => serde_json::to_value(
+                self.agent_panes
+                    .foundation
+                    .code_runtime
+                    .chat_engines()
+                    .await,
+            ),
             _ => return Err("orchestration tool is not available".to_owned()),
         }
         .map_err(|error| error.to_string())?;
@@ -1659,13 +2012,34 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
     const RUN_ID: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"}},"required":["run_id"],"additionalProperties":false}"#;
     const SKILL_ID: &str = r#"{"type":"object","properties":{"skill_id":{"type":"string"}},"required":["skill_id"],"additionalProperties":false}"#;
     const RUN_LIST: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":false}"#;
-    const CREATE_RUN: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"},"title":{"type":"string"},"objective":{"type":"string"},"review_policy":{"type":"string","enum":["manual","automatic"]},"concurrency_limit":{"type":"integer","minimum":1},"model":{"type":"string"},"coordinator_id":{"type":"string"},"adapter_id":{"type":"string"}},"required":["workspace_id","title","objective","review_policy"],"additionalProperties":false}"#;
-    const CREATE_TASK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"client_id":{"type":"string"},"title":{"type":"string"},"specification":{"type":"string"},"depends_on":{"type":"array","items":{"type":"string"}}},"required":["run_id","title","specification","depends_on"],"additionalProperties":false}"#;
-    const MAILBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"sender_address":{"type":"string"},"recipient_address":{"type":"string"},"kind":{"type":"string","enum":["status","heartbeat","question","answer","escalation","progress","completion"]},"payload":{"type":"string"},"thread_id":{"type":"string"},"client_request_id":{"type":"string"}},"required":["run_id","sender_address","recipient_address","kind","payload"],"additionalProperties":false}"#;
-    const INBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"include_acknowledged":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["run_id","recipient_address"],"additionalProperties":false}"#;
-    const ACK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"delivery_id":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","delivery_id","recipient_address"],"additionalProperties":false}"#;
+    const WAIT: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000}},"required":["run_id"],"additionalProperties":false}"#;
+    const ASSIGN: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"task_id":{"type":"string"},"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","codex","claude","agy","open-code"]},"model":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"required":["run_id","task_id"],"additionalProperties":false}"#;
+    const COMPLETE: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"task_id":{"type":"string"},"summary":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","task_id","summary"],"additionalProperties":false}"#;
+    const CREATE_RUN: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"},"title":{"type":"string"},"objective":{"type":"string"},"review_policy":{"type":"string","enum":["manual","automatic"]},"concurrency_limit":{"type":"integer","minimum":1},"model":{"type":"string"},"coordinator_id":{"type":"string"},"adapter_id":{"type":"string"}},"required":["title","objective","review_policy"],"additionalProperties":false}"#;
+    const CREATE_TASK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"client_id":{"type":"string"},"title":{"type":"string"},"specification":{"type":"string"},"depends_on":{"type":"array","items":{"type":"string"}}},"required":["run_id","title","specification"],"additionalProperties":false}"#;
+    const MAILBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"sender_address":{"type":"string"},"recipient_address":{"type":"string"},"kind":{"type":"string","enum":["status","heartbeat","question","answer","escalation","progress","completion"]},"payload":{"type":"string"},"thread_id":{"type":"string"},"client_request_id":{"type":"string"}},"required":["run_id","recipient_address","kind","payload"],"additionalProperties":false}"#;
+    const INBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"include_acknowledged":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["run_id"],"additionalProperties":false}"#;
+    const ACK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"delivery_id":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","delivery_id"],"additionalProperties":false}"#;
     const OPEN_AGENT: &str = r#"{"type":"object","properties":{"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","codex","claude","agy","open-code"]},"model":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"additionalProperties":false}"#;
     [
+        (
+            "session.status",
+            "Confirm that this pane has a live Hiveory orchestration bridge and return its durable address and tool manifest. Call this before claiming orchestration is unavailable.",
+            EMPTY,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "session.capabilities",
+            "Return the Hiveory capabilities available to this CLI pane.",
+            EMPTY,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
+            "session.current_context",
+            "Return this pane's session, workspace, and durable orchestration address.",
+            EMPTY,
+            AgentToolRisk::ReadOnly,
+        ),
         (
             "skills.list",
             "List Hiveory skills that are valid for this CLI session.",
@@ -1721,6 +2095,12 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
             AgentToolRisk::ReadOnly,
         ),
         (
+            "orchestration.wait",
+            "Wait up to timeout_ms for unread durable messages addressed to this pane. This avoids polling and returns immediately if messages already exist.",
+            WAIT,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
             "orchestration.acknowledge_message",
             "Acknowledge one durable orchestration mailbox delivery after it has been handled.",
             ACK,
@@ -1739,10 +2119,28 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
             AgentToolRisk::ReadOnly,
         ),
         (
+            "orchestration.list_participants",
+            "List the durable coordinator, worker, user, and system addresses in one orchestration run.",
+            RUN_ID,
+            AgentToolRisk::ReadOnly,
+        ),
+        (
             "orchestration.open_worker_pane",
             "Open a visible coding-agent worker pane in this workspace. By default this creates a new pane; reuse_pane_id is accepted only for an idle Hiveory-managed coding-agent pane.",
             OPEN_AGENT,
             AgentToolRisk::FilesystemMutation,
+        ),
+        (
+            "orchestration.assign_task",
+            "Open or reuse a visible worker pane, bind it to an existing ready task, and deliver a structured assignment through its durable mailbox.",
+            ASSIGN,
+            AgentToolRisk::FilesystemMutation,
+        ),
+        (
+            "orchestration.report_completion",
+            "Report completion for this pane's visible task, update task state, and send a durable completion message to the coordinator.",
+            COMPLETE,
+            AgentToolRisk::InternalMutation,
         ),
         (
             "agent_panes.list",
@@ -1775,64 +2173,65 @@ fn start_cli_session_bridge(
     browser: BrowserManager,
     session_id: String,
     workspace_id: String,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<CliSessionBridge, ApiError>> + Send>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<CliSessionBridge, ApiError>> + Send>>
+{
     let foundation = foundation.clone();
     Box::pin(async move {
-    let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|error| {
-        application_error(
-            "cli_session_bridge_unavailable",
-            error.to_string(),
-            RetryClass::Safe,
-        )
-    })?;
-    let endpoint = listener.local_addr().map_err(|error| {
-        application_error(
-            "cli_session_bridge_unavailable",
-            error.to_string(),
-            RetryClass::Safe,
-        )
-    })?;
-    let token = uuid::Uuid::now_v7().to_string();
-    let tools = HiveoryCliSessionTools {
-        plugin: foundation.plugin_runtime.clone(),
-        agent_panes: HiveoryCliAgentPaneProvider {
-            foundation: foundation.clone(),
-            app: app.clone(),
-            browser: browser.clone(),
-            workspace_id: workspace_id.clone(),
-        },
-        browser: HiveoryBrowserToolProvider {
-            app,
-            manager: browser,
-            persistence: foundation.persistence.clone(),
-            code_workspaces: foundation.code_workspaces.clone(),
-            default_workspace_id: Some(workspace_id.clone()),
-        },
-        computer: HiveoryComputerUseToolProvider {
-            persistence: foundation.persistence.clone(),
-        },
-        skills: HiveoryAgentStore::new(foundation.persistence.clone()),
-        orchestration: foundation.code_orchestration.clone(),
-        session_id,
-        workspace_id,
-    };
-    let expected_token = token.clone();
-    tauri::async_runtime::spawn(async move {
-        loop {
-            let Ok((stream, _)) = listener.accept().await else {
-                break;
-            };
-            let tools = tools.clone();
-            let token = expected_token.clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = handle_cli_session_bridge_connection(stream, &token, tools).await;
-            });
-        }
-    });
-    Ok(CliSessionBridge {
-        endpoint: endpoint.to_string(),
-        token,
-    })
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.map_err(|error| {
+            application_error(
+                "cli_session_bridge_unavailable",
+                error.to_string(),
+                RetryClass::Safe,
+            )
+        })?;
+        let endpoint = listener.local_addr().map_err(|error| {
+            application_error(
+                "cli_session_bridge_unavailable",
+                error.to_string(),
+                RetryClass::Safe,
+            )
+        })?;
+        let token = uuid::Uuid::now_v7().to_string();
+        let tools = HiveoryCliSessionTools {
+            plugin: foundation.plugin_runtime.clone(),
+            agent_panes: HiveoryCliAgentPaneProvider {
+                foundation: foundation.clone(),
+                app: app.clone(),
+                browser: browser.clone(),
+                workspace_id: workspace_id.clone(),
+            },
+            browser: HiveoryBrowserToolProvider {
+                app,
+                manager: browser,
+                persistence: foundation.persistence.clone(),
+                code_workspaces: foundation.code_workspaces.clone(),
+                default_workspace_id: Some(workspace_id.clone()),
+            },
+            computer: HiveoryComputerUseToolProvider {
+                persistence: foundation.persistence.clone(),
+            },
+            skills: HiveoryAgentStore::new(foundation.persistence.clone()),
+            orchestration: foundation.code_orchestration.clone(),
+            session_id,
+            workspace_id,
+        };
+        let expected_token = token.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    break;
+                };
+                let tools = tools.clone();
+                let token = expected_token.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = handle_cli_session_bridge_connection(stream, &token, tools).await;
+                });
+            }
+        });
+        Ok(CliSessionBridge {
+            endpoint: endpoint.to_string(),
+            token,
+        })
     })
 }
 
@@ -5925,14 +6324,9 @@ async fn prepare_cli_session_integration(
     let session_id = requested_session_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     // A bridged CLI can summon another pane. The bridge factory returns an
     // erased Send future, preventing the recursive handler/tool type cycle.
-    let bridge = start_cli_session_bridge(
-        foundation,
-        app,
-        browser,
-        session_id.clone(),
-        workspace_id,
-    )
-    .await?;
+    let bridge =
+        start_cli_session_bridge(foundation, app, browser, session_id.clone(), workspace_id)
+            .await?;
     let session_root = foundation
         .code_workspaces_root
         .parent()
@@ -5958,7 +6352,7 @@ async fn prepare_cli_session_integration(
         format!("coordinator:{session_id}")
     };
     instructions.push_str(&format!(
-        "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. When another agent assigns work, use `orchestration.inbox` with the run ID and this address, then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.open_worker_pane` to summon a visible coding-agent collaborator; its returned worker address is the recipient for handoff messages.\n"
+        "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. Hiveory orchestration is available in this pane: call `session.status` before saying it is unavailable. When another agent assigns work, use `orchestration.inbox` with the run ID (the recipient defaults to this address), then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.assign_task` to open a visible worker pane and deliver a tracked task. A visible worker completes by calling `orchestration.report_completion`; use `orchestration.wait` rather than polling for replies.\n"
     ));
     for skill in skill_store.catalog().await.map_err(|error| {
         application_error(
@@ -6022,12 +6416,16 @@ async fn prepare_cli_session_integration(
         serde_json::json!({
             "$schema": "https://opencode.ai/config.json",
             "instructions": [instructions_path.to_string_lossy()],
+            // OpenCode expects named servers directly under `mcp`.  Keeping
+            // this shape canonical matters: a nested `mcp.servers` object can
+            // appear in a resolved config but is not the documented contract
+            // and has led to panes that start without their Hiveory tools.
             "mcp": {
-                "servers": {
-                    "hiveory": {
-                        "type": "local",
-                        "command": std::iter::once(bridge_command.clone()).chain(bridge_args.clone()).collect::<Vec<_>>()
-                    }
+                "hiveory": {
+                    "type": "local",
+                    "command": std::iter::once(bridge_command.clone()).chain(bridge_args.clone()).collect::<Vec<_>>(),
+                    "enabled": true,
+                    "timeout": 10_000
                 }
             }
         })
@@ -6069,13 +6467,13 @@ async fn prepare_cli_session_integration(
         bridge_command: config["mcpServers"]["hiveory"]["command"]
             .as_str()
             .unwrap_or_else(|| {
-                config["mcp"]["servers"]["hiveory"]["command"][0]
+                config["mcp"]["hiveory"]["command"][0]
                     .as_str()
                     .unwrap_or_default()
             })
             .to_owned(),
         bridge_args: if adapter_id == "opencode" {
-            config["mcp"]["servers"]["hiveory"]["command"]
+            config["mcp"]["hiveory"]["command"]
                 .as_array()
                 .map(|items| {
                     items
@@ -6122,7 +6520,10 @@ async fn configure_antigravity_session_bridge(
     })?;
     let mut remove = tokio::process::Command::new(program.clone());
     remove.args(prefix.clone());
-    let _ = remove.args(["mcp", "remove", "hiveory-desktop"]).status().await;
+    let _ = remove
+        .args(["mcp", "remove", "hiveory-desktop"])
+        .status()
+        .await;
     let mut command = tokio::process::Command::new(program);
     command.args(prefix);
     let status = command
@@ -7048,15 +7449,7 @@ async fn hiveory_command_launch_code_pane_terminal(
         .map_err(terminal_host_error)?;
 
     let default_pane_title = if summary.kind == CodeTerminalKind::CodingAgent {
-        let adapter_name = summary
-            .adapter_id
-            .clone()
-            .unwrap_or_else(|| "Coding Agent".to_owned());
-        if summary.agent_launch_mode == hiveory_protocol::CodeAgentLaunchMode::Yolo {
-            format!("{adapter_name} · YOLO")
-        } else {
-            adapter_name
-        }
+        generated_pane_title_for_layout(&current_layout)
     } else {
         "Terminal".to_owned()
     };
@@ -8971,21 +9364,54 @@ fn is_empty_workspace_layout(layout: &CodePaneLayout) -> bool {
 /// Old preset records used two-word descriptive titles. Presets are workspace
 /// setups, so every launch gets a distinct, compact pet name while preserving
 /// one-word names that were already assigned by the current preset builder.
+const PANE_CODENAMES: &[&str] = &[
+    "Biscuit", "Button", "Clover", "Comet", "Doodle", "Fidget", "Gizmo", "Juniper", "Kestrel",
+    "Mochi", "Nimbus", "Noodle", "Pebble", "Pickle", "Pippin", "Poppy", "Quartz", "Rocket",
+    "Saffron", "Sprout", "Tango", "Waffles", "Whisker", "Wicket", "Ziggy",
+];
+
+/// Reserve a creative, compact title for a pane.  This is deliberately host
+/// owned so a manual split, a launch preset, and an orchestration worker all
+/// use exactly the same collision rules.
+fn next_generated_pane_title(used: &mut HashSet<String>) -> String {
+    // UUIDv7 carries random bits as well as time ordering, which is available
+    // with this application's UUID feature set and prevents a fixed sequence.
+    let start = (uuid::Uuid::now_v7().as_u128() as usize) % PANE_CODENAMES.len();
+    for offset in 0..PANE_CODENAMES.len() {
+        let candidate = PANE_CODENAMES[(start + offset) % PANE_CODENAMES.len()];
+        if used.insert(candidate.to_ascii_lowercase()) {
+            return candidate.to_owned();
+        }
+    }
+    let base = PANE_CODENAMES[start];
+    let mut suffix = 2;
+    loop {
+        let candidate = format!("{base}{suffix}");
+        if used.insert(candidate.to_ascii_lowercase()) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
+fn generated_pane_title_for_layout(layout: &CodePaneLayout) -> String {
+    let mut used = layout
+        .nodes
+        .iter()
+        .filter_map(|node| node.title.as_deref())
+        .map(|title| title.trim().to_ascii_lowercase())
+        .filter(|title| !title.is_empty())
+        .collect::<HashSet<_>>();
+    next_generated_pane_title(&mut used)
+}
+
 fn normalize_launch_preset_pane_titles(
     entries: &[CodeLaunchPresetEntry],
 ) -> Vec<CodeLaunchPresetEntry> {
-    const PET_NAMES: &[&str] = &[
-        "Biscuit", "Button", "Clover", "Doodle", "Fable", "Fidget", "Gizmo", "Mochi", "Noodle",
-        "Pebble", "Pickle", "Pippin", "Poppy", "Sprout", "Tango", "Waffles", "Whisker", "Wicket",
-        "Ziggy",
-    ];
-
     let mut used = HashSet::new();
-    let start = (uuid::Uuid::now_v7().as_u128() as usize) % PET_NAMES.len();
     entries
         .iter()
-        .enumerate()
-        .map(|(index, entry)| {
+        .map(|entry| {
             let mut entry = entry.clone();
             let title = entry.title.trim();
             let title_key = title.to_ascii_lowercase();
@@ -8997,24 +9423,7 @@ fn normalize_launch_preset_pane_titles(
                 return entry;
             }
 
-            let mut replacement = None;
-            for offset in 0..PET_NAMES.len() {
-                let candidate = PET_NAMES[(start + index + offset) % PET_NAMES.len()];
-                if used.insert(candidate.to_ascii_lowercase()) {
-                    replacement = Some(candidate.to_owned());
-                    break;
-                }
-            }
-            entry.title = replacement.unwrap_or_else(|| {
-                let base = PET_NAMES[(start + index) % PET_NAMES.len()];
-                let mut suffix = 2;
-                while used.contains(&format!("{}{}", base.to_ascii_lowercase(), suffix)) {
-                    suffix += 1;
-                }
-                let candidate = format!("{base}{suffix}");
-                used.insert(candidate.to_ascii_lowercase());
-                candidate
-            });
+            entry.title = next_generated_pane_title(&mut used);
             entry
         })
         .collect()
@@ -10439,15 +10848,25 @@ mod cli_orchestration_tests {
             .map(|tool| tool.name)
             .collect::<HashSet<_>>();
         for expected in [
+            "session.status",
+            "session.capabilities",
+            "session.current_context",
             "orchestration.adapter_catalog",
             "orchestration.list_workers",
             "orchestration.open_worker_pane",
+            "orchestration.assign_task",
+            "orchestration.report_completion",
+            "orchestration.list_participants",
             "orchestration.inbox",
             "orchestration.acknowledge_message",
+            "orchestration.wait",
             "agent_panes.list",
             "agent_panes.open",
         ] {
-            assert!(names.contains(expected), "missing CLI control tool: {expected}");
+            assert!(
+                names.contains(expected),
+                "missing CLI control tool: {expected}"
+            );
         }
     }
 }

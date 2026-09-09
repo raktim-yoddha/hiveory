@@ -353,6 +353,16 @@ impl HiveoryCodeOrchestration {
         Ok(self.persistence.orchestration_inbox(query).await?)
     }
 
+    /// Durable address directory for a run. CLI agents use this instead of
+    /// guessing a collaborator address from a pane title or process id.
+    pub async fn participants(
+        &self,
+        run_id: &str,
+    ) -> HiveoryCodeOrchestrationResult<Vec<hiveory_protocol::CodeParticipant>> {
+        self.detail(run_id).await?;
+        Ok(self.persistence.orchestration_participants(run_id).await?)
+    }
+
     pub async fn acknowledge_mailbox(
         &self,
         request: &CodeMailboxAckRequest,
@@ -570,6 +580,90 @@ impl HiveoryCodeOrchestration {
         self.emit_status(&request.run_id, Some(&task.id), None, "Task added", true)
             .await?;
         self.detail(&request.run_id).await
+    }
+
+    /// Mark a task as being executed by a visible, Hiveory-owned pane.  The
+    /// existing scheduler continues to own managed-worktree dispatches; this
+    /// path records supervised work in the current workspace without quietly
+    /// launching a second headless worker for the same task.
+    pub async fn start_visible_task(
+        &self,
+        run_id: &str,
+        task_id: &str,
+    ) -> HiveoryCodeOrchestrationResult<hiveory_protocol::CodeRunDetail> {
+        let detail = self.detail(run_id).await?;
+        if !matches!(
+            detail.summary.state,
+            CodeRunState::Draft | CodeRunState::Ready | CodeRunState::Running
+        ) {
+            return Err(HiveoryCodeOrchestrationError::InvalidState(
+                "the run cannot accept a visible worker".to_owned(),
+            ));
+        }
+        let task =
+            find_task(&detail.tasks, task_id).ok_or(HiveoryCodeOrchestrationError::NotFound)?;
+        if !matches!(task.state, CodeTaskState::Draft | CodeTaskState::Ready) {
+            return Err(HiveoryCodeOrchestrationError::InvalidState(
+                "the selected task is already active or terminal".to_owned(),
+            ));
+        }
+        if detail.dependencies.iter().any(|dependency| {
+            dependency.task_id == task_id
+                && detail.tasks.iter().any(|candidate| {
+                    candidate.id == dependency.depends_on_task_id
+                        && candidate.state != CodeTaskState::Completed
+                })
+        }) {
+            return Err(HiveoryCodeOrchestrationError::InvalidState(
+                "complete task dependencies before assigning this visible worker".to_owned(),
+            ));
+        }
+        self.persistence
+            .set_orchestration_run_state(run_id, CodeRunState::Running, None)
+            .await?;
+        self.persistence
+            .set_orchestration_task_state(
+                run_id,
+                task_id,
+                CodeTaskState::Running,
+                None,
+                None,
+                None,
+                Some(task.attempt.saturating_add(1)),
+                None,
+            )
+            .await?;
+        self.emit_status(run_id, Some(task_id), None, "Visible worker assigned", true)
+            .await?;
+        self.detail(run_id).await
+    }
+
+    pub async fn complete_visible_task(
+        &self,
+        run_id: &str,
+        task_id: &str,
+        summary: &str,
+    ) -> HiveoryCodeOrchestrationResult<hiveory_protocol::CodeRunDetail> {
+        validate_orchestration_text(summary)?;
+        let detail = self.detail(run_id).await?;
+        let task =
+            find_task(&detail.tasks, task_id).ok_or(HiveoryCodeOrchestrationError::NotFound)?;
+        if task.state != CodeTaskState::Running || task.active_dispatch_id.is_some() {
+            return Err(HiveoryCodeOrchestrationError::InvalidState(
+                "only an active visible task can report completion".to_owned(),
+            ));
+        }
+        let next_state = match detail.summary.review_policy {
+            CodeReviewPolicy::Automatic => CodeTaskState::AwaitingReview,
+            CodeReviewPolicy::Manual => CodeTaskState::Completed,
+        };
+        self.persistence
+            .set_orchestration_task_state(run_id, task_id, next_state, None, None, None, None, None)
+            .await?;
+        self.emit_status(run_id, Some(task_id), None, summary, true)
+            .await?;
+        self.reconcile_run(run_id).await?;
+        self.detail(run_id).await
     }
 
     pub async fn update_task(
@@ -3375,6 +3469,75 @@ mod tests {
         assert_eq!(accepted.summary.state, CodeRunState::Ready);
         assert_eq!(accepted.tasks.len(), 2);
         assert_eq!(accepted.dependencies.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn visible_worker_lifecycle_tracks_the_task_without_a_headless_dispatch() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let persistence = HiveoryPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = HiveoryWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                hiveory_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = HiveoryCodeOrchestration::new(
+            persistence,
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Visible worker".to_owned(),
+                objective: "Track a supervised pane task".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(1),
+                model: None,
+                coordinator_id: Some("lead-session".to_owned()),
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Track a supervised pane task".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "visible-worker".to_owned(),
+                        title: "Implement".to_owned(),
+                        specification: "Complete the visible task".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let task_id = run.tasks[0].id.clone();
+        let assigned = service
+            .start_visible_task(&run.summary.id, &task_id)
+            .await
+            .unwrap();
+        assert_eq!(assigned.summary.state, CodeRunState::Running);
+        assert_eq!(assigned.tasks[0].state, CodeTaskState::Running);
+        assert!(assigned.tasks[0].active_dispatch_id.is_none());
+        assert!(assigned.dispatches.is_empty());
+
+        let completed = service
+            .complete_visible_task(&run.summary.id, &task_id, "Visible worker finished")
+            .await
+            .unwrap();
+        assert_eq!(completed.tasks[0].state, CodeTaskState::Completed);
+        assert!(completed.dispatches.is_empty());
     }
 
     #[tokio::test]

@@ -16,7 +16,7 @@ describe('code launch preset builder', () => {
   })
 
   it('keeps fallback pet names as one word after the catalog is exhausted', () => {
-    expect(nextPetPaneTitle(['Biscuit', 'Button', 'Clover', 'Doodle', 'Fable', 'Fidget', 'Gizmo', 'Mochi', 'Noodle', 'Pebble', 'Pickle', 'Pippin', 'Poppy', 'Sprout', 'Tango', 'Waffles', 'Whisker', 'Wicket', 'Ziggy'], 0)).toBe('Biscuit2')
+    expect(nextPetPaneTitle(['Biscuit', 'Button', 'Clover', 'Comet', 'Doodle', 'Fidget', 'Gizmo', 'Juniper', 'Kestrel', 'Mochi', 'Nimbus', 'Noodle', 'Pebble', 'Pickle', 'Pippin', 'Poppy', 'Quartz', 'Rocket', 'Saffron', 'Sprout', 'Tango', 'Waffles', 'Whisker', 'Wicket', 'Ziggy'], 0)).toBe('Biscuit2')
   })
 
   it('treats pane names case-insensitively when checking uniqueness', () => {

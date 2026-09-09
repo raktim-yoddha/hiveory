@@ -1,6 +1,8 @@
 import type { CodeLaunchPresetEntry, CodeLaunchPresetPaneKind } from '../../../shared/api/hiveory-client'
 
-const PET_NAMES = ['Biscuit', 'Button', 'Clover', 'Doodle', 'Fable', 'Fidget', 'Gizmo', 'Mochi', 'Noodle', 'Pebble', 'Pickle', 'Pippin', 'Poppy', 'Sprout', 'Tango', 'Waffles', 'Whisker', 'Wicket', 'Ziggy']
+// Keep preset editing pleasant offline. The host remains the authority for
+// final pane names at launch, using the same catalog and collision checks.
+const PET_NAMES = ['Biscuit', 'Button', 'Clover', 'Comet', 'Doodle', 'Fidget', 'Gizmo', 'Juniper', 'Kestrel', 'Mochi', 'Nimbus', 'Noodle', 'Pebble', 'Pickle', 'Pippin', 'Poppy', 'Quartz', 'Rocket', 'Saffron', 'Sprout', 'Tango', 'Waffles', 'Whisker', 'Wicket', 'Ziggy']
 
 export interface CodeLaunchPresetGroup {
   key: string
