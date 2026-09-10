@@ -390,6 +390,13 @@ struct CliOpenAgentPaneRequest {
     rows: u16,
 }
 
+#[derive(Debug, Deserialize)]
+struct CliRenameAgentPaneRequest {
+    #[serde(default)]
+    pane_id: Option<String>,
+    title: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct CliAgentPaneOpenedEvent {
     layout: CodePaneLayout,
@@ -672,6 +679,88 @@ impl HiveoryCliAgentPaneProvider {
             "layout": layout,
             "terminal": terminal,
         }))
+    }
+
+    /// Renames one managed coding-agent pane.  When no pane ID is supplied,
+    /// the most recently launched agent is selected from durable terminal
+    /// metadata, which makes follow-ups such as "name the previous agent Max"
+    /// deterministic even after several conversational turns.
+    async fn rename(&self, arguments: &Value) -> Result<Value, String> {
+        let request = serde_json::from_value::<CliRenameAgentPaneRequest>(arguments.clone())
+            .map_err(|error| format!("invalid agent-pane rename request: {error}"))?;
+        let title = request.title.trim();
+        if title.is_empty() {
+            return Err("title is required".to_owned());
+        }
+
+        for attempt in 0..4 {
+            let current = self
+                .foundation
+                .persistence
+                .code_layout(&self.workspace_id)
+                .await
+                .map_err(|error| error.to_string())?
+                .unwrap_or_else(|| default_layout(&self.workspace_id));
+            let terminals = self
+                .foundation
+                .terminal_host
+                .list()
+                .await
+                .map_err(|error| error.to_string())?;
+            let pane_id = match request.pane_id.as_deref() {
+                Some(pane_id) => pane_id.to_owned(),
+                None => current
+                    .nodes
+                    .iter()
+                    .filter(|node| {
+                        node.children.is_empty() && node.kind == CodePaneKind::CodingAgent
+                    })
+                    .max_by_key(|node| {
+                        node.resource_id
+                            .as_deref()
+                            .and_then(|terminal_id| {
+                                terminals.iter().find(|terminal| terminal.id == terminal_id)
+                            })
+                            .map(|terminal| terminal.started_at_unix_ms)
+                            .unwrap_or(i64::MIN)
+                    })
+                    .map(|node| node.pane_id.clone())
+                    .ok_or_else(|| {
+                        "There is no previously opened coding-agent pane to rename.".to_owned()
+                    })?,
+            };
+            let renamed = hiveory_code_domain::rename_pane(&current, &pane_id, title)
+                .map_err(|error| error.to_string())?;
+            match self
+                .foundation
+                .persistence
+                .mutate_code_layout(&self.workspace_id, current.revision, &renamed)
+                .await
+            {
+                Ok(layout) => {
+                    let saved_title = layout
+                        .nodes
+                        .iter()
+                        .find(|node| node.pane_id == pane_id)
+                        .and_then(|node| node.title.clone())
+                        .ok_or_else(|| "The renamed pane was not saved.".to_owned())?;
+                    let _ = self
+                        .app
+                        .emit_to("main", "hiveory-code-layout-updated", layout.clone());
+                    return Ok(json!({
+                        "workspace_id": self.workspace_id,
+                        "pane_id": pane_id,
+                        "title": saved_title,
+                        "layout": layout,
+                    }));
+                }
+                Err(error) if error.to_string().contains("layout_conflict") && attempt < 3 => {
+                    continue
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Err("The workspace changed while the pane was being renamed. Try again.".to_owned())
     }
 }
 
@@ -1531,6 +1620,10 @@ impl HiveoryCliSessionTools {
                     serde_json::to_string(&self.agent_panes.open(arguments).await?)
                         .map_err(|error| error.to_string())
                 }
+                "agent_panes.rename" => {
+                    serde_json::to_string(&self.agent_panes.rename(arguments).await?)
+                        .map_err(|error| error.to_string())
+                }
                 _ => Err("agent-pane tool is not available".to_owned()),
             }
         } else if name.starts_with("session.") {
@@ -2021,6 +2114,7 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
     const INBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"include_acknowledged":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["run_id"],"additionalProperties":false}"#;
     const ACK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"delivery_id":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","delivery_id"],"additionalProperties":false}"#;
     const OPEN_AGENT: &str = r#"{"type":"object","properties":{"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","codex","claude","agy","open-code"]},"model":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"additionalProperties":false}"#;
+    const RENAME_AGENT: &str = r#"{"type":"object","properties":{"pane_id":{"type":"string","description":"Optional durable pane ID. Omit to rename the most recently opened coding-agent pane."},"title":{"type":"string"}},"required":["title"],"additionalProperties":false}"#;
     [
         (
             "session.status",
@@ -2108,7 +2202,7 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
         ),
         (
             "orchestration.adapter_catalog",
-            "List installed coding-agent adapters and their available models before opening a worker pane.",
+            "List installed coding-agent adapters and their available models only when the user did not specify an adapter or model.",
             EMPTY,
             AgentToolRisk::ReadOnly,
         ),
@@ -2150,9 +2244,15 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
         ),
         (
             "agent_panes.open",
-            "Open a visible coding-agent pane. Use orchestration.open_worker_pane for the orchestration-oriented name.",
+            "Open a visible coding-agent pane. For a direct user request with adapter, model, launch mode, or title, call this immediately with those values; do not inspect source files, skills, adapters, or existing panes first. Treat its returned pane_id and title as the durable record of the opened agent.",
             OPEN_AGENT,
             AgentToolRisk::FilesystemMutation,
+        ),
+        (
+            "agent_panes.rename",
+            "Rename a visible coding-agent pane and return the saved title. Omit pane_id for a request referring to the previous or most recently opened agent. Do not say the name changed until this tool succeeds.",
+            RENAME_AGENT,
+            AgentToolRisk::InternalMutation,
         ),
     ]
     .into_iter()
@@ -6354,6 +6454,9 @@ async fn prepare_cli_session_integration(
     instructions.push_str(&format!(
         "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. Hiveory orchestration is available in this pane: call `session.status` before saying it is unavailable. When another agent assigns work, use `orchestration.inbox` with the run ID (the recipient defaults to this address), then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.assign_task` to open a visible worker pane and deliver a tracked task. A visible worker completes by calling `orchestration.report_completion`; use `orchestration.wait` rather than polling for replies.\n"
     ));
+    instructions.push_str(
+        "\n## Direct pane commands\n\nFor a user request to open a coding-agent pane, call `agent_panes.open` immediately when the adapter, model, launch mode, or title is specified. Pass every specified value in that one call. Do not first open Codex, inspect source files, read skills, list adapters, list panes, or probe the bridge. The successful response is the authoritative record: retain its `pane_id` and returned title. When the user later refers to the previous agent, use `agent_panes.rename` with its pane ID; if the ID is unavailable, omit it and Hiveory will select the most recently opened coding-agent pane. Never claim a pane was opened or renamed until the corresponding tool succeeds and returns the saved state.\n",
+    );
     for skill in skill_store.catalog().await.map_err(|error| {
         application_error(
             "skill_catalog_unavailable",
@@ -10873,6 +10976,7 @@ mod cli_orchestration_tests {
             "orchestration.wait",
             "agent_panes.list",
             "agent_panes.open",
+            "agent_panes.rename",
         ] {
             assert!(
                 names.contains(expected),

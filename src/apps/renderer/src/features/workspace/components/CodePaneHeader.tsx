@@ -37,7 +37,7 @@ interface CodePaneHeaderProps {
   terminalHistoryBusy?: boolean
   voiceState?: CodeTerminalVoiceState | null
   onFocus: () => void
-  onRename: (newTitle: string) => void
+  onRename: (newTitle: string) => Promise<boolean>
   onSplitAndLaunch: (
     placement: CodePanePlacement,
     kind: 'shell' | 'coding_agent' | 'markdown' | 'preview',
@@ -92,6 +92,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   voiceState,
 }) => {
   const [isEditing, setIsEditing] = useState(false)
+  const [isSavingRename, setIsSavingRename] = useState(false)
   const [titleValue, setTitleValue] = useState(node.title || '')
   const [menuOpen, setMenuOpen] = useState(false)
   const [splitMenuOpen, setSplitMenuOpen] = useState(false)
@@ -125,12 +126,16 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
 
   useBrowserSurfaceBlocker(menuOpen || splitMenuOpen, 'pane-header-menu')
 
-  const handleCommitRename = () => {
-    setIsEditing(false)
+  const handleCommitRename = async () => {
+    if (isSavingRename) return
     const trimmed = titleValue.trim()
     if (trimmed && trimmed !== node.title) {
-      onRename(trimmed)
+      setIsSavingRename(true)
+      const saved = await onRename(trimmed).catch(() => false)
+      setIsSavingRename(false)
+      if (saved) setIsEditing(false)
     } else {
+      setIsEditing(false)
       setTitleValue(node.title || '')
     }
   }
@@ -139,7 +144,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
     if (e.key === 'Enter') {
       e.preventDefault()
       e.stopPropagation()
-      handleCommitRename()
+      void handleCommitRename()
     } else if (e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
@@ -223,10 +228,11 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
               className="code-pane-rename-input"
               value={titleValue}
               onChange={(e) => setTitleValue(e.target.value)}
-              onBlur={handleCommitRename}
+              onBlur={() => void handleCommitRename()}
               onKeyDown={handleKeyDown}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
+              disabled={isSavingRename}
             />
           ) : null}
         </div>

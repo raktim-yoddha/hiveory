@@ -239,7 +239,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           terminalHistoryBusy={historyBusy}
           voiceState={hasTerminalVoice ? voiceState : null}
           onFocus={focusCurrentPane}
-          onRename={(title) => void renamePane(node.pane_id, title)}
+          onRename={(title) => renamePane(node.pane_id, title)}
           onSplitAndLaunch={(placement, kind, adapterId, model, url, agentLaunchMode) => {
             void splitAndLaunch(node.pane_id, placement, kind, adapterId, model, url, agentLaunchMode)
           }}

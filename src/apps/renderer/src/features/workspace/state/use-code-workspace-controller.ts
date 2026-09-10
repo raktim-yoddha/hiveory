@@ -35,7 +35,7 @@ export interface CodeWorkspaceController {
     url?: string,
     agentLaunchMode?: CodeAgentLaunchMode,
   ) => Promise<void>
-  renamePane: (paneId: string, title: string) => Promise<void>
+  renamePane: (paneId: string, title: string) => Promise<boolean>
   movePane: (paneId: string, targetPaneId: string, placement: CodePanePlacement) => Promise<void>
   resizeSplit: (splitId: string, ratioPercent: number) => Promise<void>
   focusPane: (paneId: string) => Promise<void>
@@ -218,6 +218,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     let disposed = false
     let unlistenPreviewOpened: (() => void) | null = null
     let unlistenAgentPaneOpened: (() => void) | null = null
+    let unlistenLayoutUpdated: (() => void) | null = null
     void listen<{ layout: CodeWorkspaceState['layout']; preview: CodePreviewSummary }>('hiveory-code-preview-opened', (event) => {
       if (disposed || !event.payload.layout || !event.payload.preview) return
       if (event.payload.layout.workspace_id !== stateRef.current.workspaceId) return
@@ -236,10 +237,18 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (disposed) remove()
       else unlistenAgentPaneOpened = remove
     }).catch(() => undefined)
+    void listen<CodeWorkspaceState['layout']>('hiveory-code-layout-updated', (event) => {
+      if (disposed || !event.payload || event.payload.workspace_id !== stateRef.current.workspaceId) return
+      commitLayout(event.payload)
+    }).then((remove) => {
+      if (disposed) remove()
+      else unlistenLayoutUpdated = remove
+    }).catch(() => undefined)
     return () => {
       disposed = true
       unlistenPreviewOpened?.()
       unlistenAgentPaneOpened?.()
+      unlistenLayoutUpdated?.()
     }
   }, [commitLayout, commitPreview, commitTerminal])
 
@@ -253,7 +262,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     dispatch({ type: 'CLEAR_WORKSPACE' })
   }, [])
 
-  const applyMutation = useCallback((mutation: CodePaneMutation, trackMutation = true) => {
+  const applyMutation = useCallback((mutation: CodePaneMutation, trackMutation = true): Promise<boolean> => {
     if (mutation.type !== 'focus' && focusPersistTimerRef.current !== null) {
       window.clearTimeout(focusPersistTimerRef.current)
       focusPersistTimerRef.current = null
@@ -261,7 +270,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     }
     const run = mutationQueueRef.current.then(async () => {
       const { workspaceId, revision } = stateRef.current
-      if (!workspaceId) return
+      if (!workspaceId) return false
       try {
         if (trackMutation) dispatch({ type: 'SET_MUTATING', isMutating: true })
         const save = (expectedRevision: number) => hiveoryClient.applyCodePaneMutation({
@@ -269,15 +278,18 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
           expected_revision: expectedRevision,
           mutation,
         })
-        let res
-        try {
-          res = await save(revision)
-        } catch (err: unknown) {
-          if (!formatError(err).includes('layout_conflict')) throw err
-          await refreshWorkspace(workspaceId)
-          res = await save(stateRef.current.revision)
+        let expectedRevision = revision
+        for (let attempt = 0; ; attempt += 1) {
+          try {
+            const res = await save(expectedRevision)
+            commitLayout(res.layout)
+            return true
+          } catch (err: unknown) {
+            if (!formatError(err).includes('layout_conflict') || attempt === 3) throw err
+            await refreshWorkspace(workspaceId)
+            expectedRevision = stateRef.current.revision
+          }
         }
-        commitLayout(res.layout)
       } catch (err: unknown) {
         const msg = formatError(err)
         if (msg.includes('layout_conflict')) {
@@ -285,11 +297,12 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
         } else {
           dispatch({ type: 'SET_ERROR', error: msg })
         }
+        return false
       } finally {
         if (trackMutation) dispatch({ type: 'SET_MUTATING', isMutating: false })
       }
     })
-    mutationQueueRef.current = run.catch(() => undefined)
+    mutationQueueRef.current = run.then(() => undefined, () => undefined)
     return run
   }, [commitLayout, refreshWorkspace])
 
@@ -441,8 +454,8 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   const renamePane = useCallback(
     async (paneId: string, title: string) => {
       const trimmed = title.trim()
-      if (!trimmed) return
-      await applyMutation({ type: 'rename', pane_id: paneId, title: trimmed })
+      if (!trimmed) return false
+      return applyMutation({ type: 'rename', pane_id: paneId, title: trimmed })
     },
     [applyMutation]
   )
