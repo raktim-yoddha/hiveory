@@ -810,7 +810,7 @@ fn browser_snapshot_expression() -> &'static str {
 }
 
 const COMPUTER_USE_RUNTIME_PS1: &str =
-    include_str!("../../../../../../techn/orca/native/computer-use-windows/runtime.ps1");
+    include_str!("../../assets/computer-use-windows-runtime.ps1");
 
 fn computer_operation_tool(operation: &Value) -> Result<&str, String> {
     let tool = operation
