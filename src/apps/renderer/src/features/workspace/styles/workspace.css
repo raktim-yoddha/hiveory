@@ -5707,7 +5707,7 @@
   --code-accent-glow: rgba(174, 183, 194, 0.12);
 }
 
-.code-workspace-root :is(button, input, textarea, select):focus-visible {
+.code-workspace-root button:focus-visible {
   outline: 2px solid #778391 !important;
   outline-offset: 2px;
 }
