@@ -1562,3 +1562,32 @@ a:focus-visible {
 .hiveory-diagnostic-provider-list { display: grid; gap: 6px; margin-top: 5px; }
 .hiveory-diagnostic-provider-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #2d2e31; padding: 9px 0; color: #cfd0d3; font-size: 13px; }
 .hiveory-diagnostic-provider-row strong { color: #9ed3ff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+
+/* Field baseline: the desktop shell is always dark.  This last-resort layer
+   prevents browser-native light input surfaces and the old white focus box
+   from leaking into a feature that does not declare its own field styling. */
+:where(input, textarea, select) {
+  color-scheme: dark;
+  caret-color: #eef0f2;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) {
+  color: #eef0f2;
+  background-color: #101114;
+  border-color: #3b3e45;
+}
+
+:where(input, textarea, select):focus {
+  outline: none !important;
+}
+
+:where(input, textarea, select):focus-visible {
+  outline: 1px solid #74777d !important;
+  outline-offset: 2px;
+}
+
+:where(input, textarea, select):-webkit-autofill {
+  -webkit-text-fill-color: #eef0f2;
+  -webkit-box-shadow: 0 0 0 1000px #101114 inset;
+  caret-color: #eef0f2;
+}
