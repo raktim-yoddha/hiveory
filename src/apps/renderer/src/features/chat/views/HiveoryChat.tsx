@@ -319,6 +319,7 @@ export function HiveoryChat() {
   const [modelSearch, setModelSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [draftDirty, setDraftDirty] = useState(false)
+  const draftDirtyRef = useRef(false)
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const [chatProfile, setChatProfile] = useState<ChatProfile>(() => readChatProfile(null))
@@ -447,7 +448,7 @@ export function HiveoryChat() {
     }
   }, [])
 
-  const reloadConversation = useCallback(async (conversationId: string) => {
+  const reloadConversation = useCallback(async (conversationId: string, preserveDirtyDraft = false) => {
     const request = detailRequestRef.current + 1
     detailRequestRef.current = request
     setConversationLoading(true)
@@ -455,8 +456,11 @@ export function HiveoryChat() {
       const next = await hiveoryClient.chatConversation(conversationId)
       if (request !== detailRequestRef.current) return
       setConversation(next)
-      setDraft(next.draft)
-      setDraftDirty(false)
+      if (!preserveDirtyDraft || !draftDirtyRef.current) {
+        setDraft(next.draft)
+        setDraftDirty(false)
+        draftDirtyRef.current = false
+      }
       setTitleDraft(next.title)
       const firstTurn = next.turns.find((turn) => turn.provider_account_id)
       if (firstTurn) {
@@ -566,6 +570,7 @@ export function HiveoryChat() {
       setConversation(null)
       setDraft('')
       setDraftDirty(false)
+      draftDirtyRef.current = false
       setTitleDraft('New chat')
       setChatProfile(readChatProfile(null))
       return
@@ -615,7 +620,7 @@ export function HiveoryChat() {
   useEffect(() => {
     const unsubscribe = hiveoryClient.subscribeChat((event) => {
       if (!selectedId || event.conversation_id !== selectedId) return
-      window.setTimeout(() => void reloadConversation(selectedId), 80)
+      window.setTimeout(() => void reloadConversation(selectedId, true), 80)
     })
     return unsubscribe
   }, [reloadConversation, selectedId])
@@ -719,6 +724,7 @@ export function HiveoryChat() {
     setChatProfile(readChatProfile(null))
     setDraft('')
     setDraftDirty(false)
+    draftDirtyRef.current = false
     setPendingAttachments([])
     setError(null)
     setStatusMessage(null)
@@ -874,6 +880,7 @@ export function HiveoryChat() {
       setConversation(next)
       setDraft('')
       setDraftDirty(false)
+      draftDirtyRef.current = false
       setPendingAttachments([])
       if (target.title === 'New chat' && text) {
         const titled = await hiveoryClient.updateChat({ conversation_id: target.id, title: titleFromPrompt(text) })
@@ -1651,6 +1658,7 @@ export function HiveoryChat() {
             onChange={(event) => {
               setDraft(event.target.value)
               setDraftDirty(true)
+              draftDirtyRef.current = true
             }}
             onKeyDown={onComposerKeyDown}
             onPaste={handlePaste}

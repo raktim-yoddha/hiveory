@@ -39,6 +39,7 @@ use hiveory_persistence::{
     chat::{HiveoryChatStore, HiveoryChatStoreError},
     HiveoryPersistence, HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID,
 };
+use hiveory_platform_process::configure_background_command;
 use hiveory_plugin_runtime::{HiveoryPluginRuntime, HiveoryPluginRuntimeError};
 use hiveory_protocol::{
     canonical_code_adapter_id, current_protocol_version, AgentApprovalDecisionRequest,
@@ -118,7 +119,7 @@ use std::{
     collections::{HashMap, HashSet},
     io,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, RwLock,
@@ -7021,12 +7022,17 @@ async fn configure_antigravity_session_bridge(
         )
     })?;
     let mut remove = tokio::process::Command::new(program.clone());
+    configure_background_command(remove.as_std_mut());
     remove.args(prefix.clone());
     let _ = remove
         .args(["mcp", "remove", "hiveory-desktop"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .await;
     let mut command = tokio::process::Command::new(program);
+    configure_background_command(command.as_std_mut());
     command.args(prefix);
     let status = command
         .args([
@@ -7037,6 +7043,9 @@ async fn configure_antigravity_session_bridge(
             "--",
         ])
         .args(&integration.bridge_args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
         .status()
         .await
         .map_err(|error| {

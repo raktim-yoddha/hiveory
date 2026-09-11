@@ -517,7 +517,7 @@ impl HiveoryChatStore {
                 "a message or attachment is required".to_owned(),
             ));
         }
-        self.start_turn_internal(request, job_id, None, None, command_request_id)
+        self.start_turn_internal(request, job_id, None, None, command_request_id, true)
             .await
     }
 
@@ -572,6 +572,7 @@ impl HiveoryChatStore {
         existing_user_message_id: Option<&str>,
         user_text_override: Option<&str>,
         command_request_id: Option<&str>,
+        clear_draft: bool,
     ) -> Result<HiveoryChatTurnStart, HiveoryChatStoreError> {
         let mut tx = self.persistence.pool().begin().await?;
         if let Some(command_request_id) = command_request_id {
@@ -684,6 +685,12 @@ impl HiveoryChatStore {
             .bind(&request.conversation_id)
             .execute(&mut *tx)
             .await?;
+        if clear_draft {
+            sqlx::query("DELETE FROM hiveory_chat_drafts WHERE conversation_id=?")
+                .bind(&request.conversation_id)
+                .execute(&mut *tx)
+                .await?;
+        }
         tx.commit().await?;
         Ok(HiveoryChatTurnStart {
             conversation_id: request.conversation_id.clone(),
@@ -969,6 +976,7 @@ impl HiveoryChatStore {
             Some(&copied_user_id),
             None,
             command_request_id,
+            false,
         )
         .await
     }
@@ -1003,7 +1011,8 @@ impl HiveoryChatStore {
             reasoning_effort: request.reasoning_effort,
             profile: request.profile.clone(),
         };
-        self.start_turn(&send, job_id, command_request_id).await
+        self.start_turn_internal(&send, job_id, None, None, command_request_id, false)
+            .await
     }
 
     async fn source_message(
@@ -1596,6 +1605,13 @@ mod tests {
             reasoning_effort: ChatReasoningEffort::Auto,
             profile: None,
         };
+        store
+            .save_draft(&ChatDraftRequest {
+                conversation_id: created.id.clone(),
+                draft: request.text.clone(),
+            })
+            .await
+            .expect("save draft");
         let first = store
             .start_turn(&request, None, Some("send-1"))
             .await
@@ -1607,6 +1623,12 @@ mod tests {
         assert!(!first.already_started);
         assert!(replayed.already_started);
         assert_eq!(first.turn_id, replayed.turn_id);
+        assert!(store
+            .detail(&created.id)
+            .await
+            .expect("detail after send")
+            .draft
+            .is_empty());
 
         let delta = ChatProviderStreamEvent {
             provider_sequence: 7,
