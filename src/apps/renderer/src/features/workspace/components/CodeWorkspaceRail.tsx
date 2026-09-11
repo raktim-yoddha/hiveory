@@ -40,7 +40,7 @@ import { hiveoryClient, type CodeWorkspaceOpenTarget } from '../../../shared/api
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CliBrandIcon } from './CliIcons'
 import { CodeProjectGroupDialog } from './CodeWorkspaceDialogs'
-import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows } from '../model/code-workspace-rail-utils'
+import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows, visiblePaneLeaves } from '../model/code-workspace-rail-utils'
 import { useBrowserSurfaceBlocker } from '../../browser/hooks/use-browser-surface-blocker'
 
 interface CodeWorkspaceRailProps {
@@ -218,7 +218,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const actionNoticeTimerRef = useRef<number | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const addMenuRef = useRef<HTMLDivElement | null>(null)
-  const leaves = state.layout?.nodes.filter((node) => node.children.length === 0) ?? []
+  const leaves = visiblePaneLeaves(state.layout)
   const activeWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
 
   useEffect(() => {
@@ -685,7 +685,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   }
 
   const renderPaneTree = (workspaceId: string) => {
-    if (workspaceId !== activeWorkspaceId || activeGlobalSection !== 'workspace') return null
+    if (workspaceId !== activeWorkspaceId || activeGlobalSection !== 'workspace' || leaves.length === 0) return null
 
     const expanded = expandedPaneTrees.has(workspaceId)
 

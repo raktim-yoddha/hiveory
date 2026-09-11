@@ -280,10 +280,7 @@ fn adapter_capabilities(id: &str) -> Vec<CodeAdapterCapability> {
     ) {
         capabilities.push(CodeAdapterCapability::Resume);
     }
-    if matches!(
-        id,
-        CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID
-    ) {
+    if matches!(id, CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID) {
         capabilities.push(CodeAdapterCapability::ReasoningEffort);
     }
     capabilities.push(CodeAdapterCapability::PermissionModes);
@@ -476,16 +473,6 @@ fn claude_models() -> Vec<ChatModelSummary> {
 }
 
 fn fallback_models(adapter_id: &str) -> Vec<ChatModelSummary> {
-    let levels = match adapter_id {
-        OPENCODE_ADAPTER_ID => vec![ChatReasoningEffort::Auto],
-        CURSOR_ADAPTER_ID => vec![ChatReasoningEffort::Auto],
-        _ => vec![
-            ChatReasoningEffort::Auto,
-            ChatReasoningEffort::Low,
-            ChatReasoningEffort::Medium,
-            ChatReasoningEffort::High,
-        ],
-    };
     let entries: &[(&str, &str)] = match adapter_id {
         CURSOR_ADAPTER_ID => &[("default", "Cursor default")],
         GROK_ADAPTER_ID => &[("default", "Grok default")],
@@ -497,7 +484,7 @@ fn fallback_models(adapter_id: &str) -> Vec<ChatModelSummary> {
         .map(|(id, display_name)| ChatModelSummary {
             id: (*id).to_owned(),
             display_name: (*display_name).to_owned(),
-            effort_levels: levels.clone(),
+            effort_levels: vec![ChatReasoningEffort::Auto],
             default_effort: ChatReasoningEffort::Auto,
         })
         .collect()
@@ -517,12 +504,7 @@ async fn discover_antigravity_models(spec: AdapterSpec) -> Result<Vec<ChatModelS
             Some(ChatModelSummary {
                 id: id.to_owned(),
                 display_name: display_name.to_owned(),
-                effort_levels: vec![
-                    ChatReasoningEffort::Auto,
-                    ChatReasoningEffort::Low,
-                    ChatReasoningEffort::Medium,
-                    ChatReasoningEffort::High,
-                ],
+                effort_levels: vec![ChatReasoningEffort::Auto],
                 default_effort: ChatReasoningEffort::Auto,
             })
         })
@@ -2198,6 +2180,21 @@ mod tests {
         assert!(catalog.iter().all(|engine| engine.id != "hiveory-openai"));
         assert!(catalog.iter().any(|engine| engine.id == CURSOR_ADAPTER_ID));
         assert!(catalog.iter().any(|engine| engine.id == GROK_ADAPTER_ID));
+    }
+
+    #[test]
+    fn exposes_reasoning_effort_only_for_trustworthy_model_catalogs() {
+        assert!(adapter_capabilities(CODEX_ADAPTER_ID)
+            .contains(&CodeAdapterCapability::ReasoningEffort));
+        assert!(adapter_capabilities(CLAUDE_CODE_ADAPTER_ID)
+            .contains(&CodeAdapterCapability::ReasoningEffort));
+        assert!(!adapter_capabilities(ANTIGRAVITY_ADAPTER_ID)
+            .contains(&CodeAdapterCapability::ReasoningEffort));
+        assert!(!adapter_capabilities(GROK_ADAPTER_ID)
+            .contains(&CodeAdapterCapability::ReasoningEffort));
+        assert!(fallback_models(GROK_ADAPTER_ID)
+            .iter()
+            .all(|model| model.effort_levels == vec![ChatReasoningEffort::Auto]));
     }
 
     #[test]

@@ -11,6 +11,15 @@ describe('code launch preset builder', () => {
     expect(entryGroupKey(entries[0])).not.toBe(entryGroupKey(entries[1]))
   })
 
+  it('keeps terminal shell profiles in separate quantity groups', () => {
+    const entries = [
+      { id: 'default', kind: 'terminal' as const, title: 'Biscuit', adapter_id: null, url: null, agent_launch_mode: 'standard' as const },
+      { id: 'powershell', kind: 'terminal' as const, title: 'Button', adapter_id: 'powershell', url: null, agent_launch_mode: 'standard' as const },
+      { id: 'git-bash', kind: 'terminal' as const, title: 'Clover', adapter_id: 'git-bash', url: null, agent_launch_mode: 'standard' as const },
+    ]
+    expect(groupPresetEntries(entries).map((group) => group.adapterId)).toEqual([null, 'powershell', 'git-bash'])
+  })
+
   it('creates a unique one-word pet name even when its first choice is already used', () => {
     expect(nextPetPaneTitle(['Biscuit'], 0)).toBe('Button')
   })

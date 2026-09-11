@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronUp, CircleMinus, CirclePlus, Edit3, FileText, FolderOpen, Globe, LayoutTemplate, MonitorPlay, Plus, Terminal, X, Zap } from 'lucide-react'
 import { DEFAULT_BROWSER_HOME, hiveoryClient, type CodeAdapterSummary, type CodeLaunchPresetEntry, type CodeLaunchPresetPaneKind, type CodeLaunchPresetSummary } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
+import { SHELL_PANE_OPTIONS } from './CodeSplitPanePicker.utils'
 import { supportsYoloLaunch } from '../model/code-yolo-preferences'
 import { entryGroupKey, groupPresetEntries, hasDuplicatePaneTitles, nextPetPaneTitle } from '../model/code-launch-preset-builder'
 
@@ -30,7 +31,7 @@ const createEntry = (
   id: `preset-entry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
   kind,
   title: nextPetPaneTitle(existingTitles),
-  adapter_id: kind === 'coding_agent' ? adapterId ?? null : null,
+  adapter_id: kind === 'coding_agent' || kind === 'terminal' ? adapterId ?? null : null,
   url: kind === 'browser' ? DEFAULT_BROWSER_HOME : null,
   agent_launch_mode: kind === 'coding_agent' ? launchMode : 'standard',
 })
@@ -45,6 +46,9 @@ const paneIcon = (kind: CodeLaunchPresetPaneKind, adapterId: string | null, adap
   return <FileText size={16} />
 }
 
+const terminalProfileName = (adapterId: string | null): string =>
+  SHELL_PANE_OPTIONS.find((option) => (option.adapterId ?? null) === adapterId)?.title ?? 'Terminal'
+
 const paneTypeName = (kind: CodeLaunchPresetPaneKind): string => {
   if (kind === 'coding_agent') return 'Coding agent'
   if (kind === 'terminal') return 'Terminal'
@@ -56,7 +60,7 @@ export const CodeLayoutPresetLibrary: React.FC<CodeLayoutPresetLibraryProps> = (
   const detectedAdapters = useMemo(() => adapters.filter((adapter) => adapter.detected), [adapters])
   const paneOptions = useMemo<PaneOption[]>(() => [
     ...detectedAdapters.map((adapter) => ({ id: `agent:${adapter.id}`, kind: 'coding_agent' as const, adapterId: adapter.id, title: adapter.display_name, description: 'Command-line coding agent', icon: <CliBrandIcon identifier={adapter.id} size={16} /> })),
-    { id: 'terminal', kind: 'terminal' as const, title: 'Terminal', description: 'Interactive local shell', icon: <Terminal size={16} /> },
+    ...SHELL_PANE_OPTIONS.map((option) => ({ ...option, kind: 'terminal' as const, icon: <Terminal size={16} /> })),
     { id: 'browser', kind: 'browser' as const, title: 'Browser', description: 'Open Google or a web address', icon: <Globe size={16} /> },
     { id: 'markdown', kind: 'markdown' as const, title: 'Markdown', description: 'Create a Markdown document', icon: <FileText size={16} /> },
   ], [detectedAdapters])
@@ -161,7 +165,7 @@ export const CodeLayoutPresetLibrary: React.FC<CodeLayoutPresetLibraryProps> = (
             const adapter = detectedAdapters.find((candidate) => candidate.id === group.adapterId)
             const isYolo = group.launchMode === 'yolo'
             const isExpanded = expandedGroups.has(group.key)
-            const groupName = adapter?.display_name ?? paneTypeName(group.kind)
+            const groupName = adapter?.display_name ?? (group.kind === 'terminal' ? terminalProfileName(group.adapterId) : paneTypeName(group.kind))
             return <article key={group.key} className={`code-launch-preset-group ${isYolo ? 'is-yolo' : ''}`}>
               <div className="code-launch-preset-group-summary">
                 <span className="code-launch-preset-entry-icon">{paneIcon(group.kind, group.adapterId, adapters)}</span>

@@ -445,8 +445,8 @@ const previewChatEngines: ChatEngineCatalog = {
       ['grok', 'Grok'],
     ].map(([id, display_name]) => ({
       id, display_name, executable: id, availability: 'ready' as const, detected: true, authenticated: true,
-      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: (id === 'cursor' || id === 'opencode' ? ['auto'] : ['auto', 'low', 'medium', 'high']) as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
-      capabilities: (id === 'cursor' || id === 'opencode' ? ['model_selection'] : ['model_selection', 'reasoning_effort']) as CodeAdapterCapability[], message: null, recovery_action: null,
+      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: (id === 'codex-cli' || id === 'claude-code' ? ['auto', 'low', 'medium', 'high'] : ['auto']) as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
+      capabilities: (id === 'codex-cli' || id === 'claude-code' ? ['model_selection', 'reasoning_effort'] : ['model_selection']) as CodeAdapterCapability[], message: null, recovery_action: null,
     })),
   ],
 }

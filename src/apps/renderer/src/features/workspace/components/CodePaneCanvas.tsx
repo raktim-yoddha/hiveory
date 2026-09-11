@@ -23,6 +23,8 @@ import type { CodePanePlacement, CodePanePreset } from '../../../shared/api/hive
 import type { CodeWorkspaceController } from '../state/use-code-workspace-controller'
 import { CodePaneTree } from './CodePaneTree'
 import { CodePaneLeaf } from './CodePaneLeaf'
+import { CodePaneLauncher } from './CodePaneLauncher'
+import { isEmptyPanePlaceholder, visiblePaneLeaves } from '../model/code-workspace-rail-utils'
 import {
   PRIMARY_PRESETS,
   type CodePanePresetMeta,
@@ -197,10 +199,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
     [layout?.nodes],
   )
 
-  const currentPaneCount = useMemo(() => {
-    if (!layout) return 0
-    return layout.nodes.filter((n) => n.children.length === 0).length
-  }, [layout])
+  const currentPaneCount = useMemo(() => visiblePaneLeaves(layout).length, [layout])
 
   const handleDragStart = ({ active }: DragStartEvent) => {
     const paneId = active.data.current?.paneId
@@ -251,6 +250,24 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
   }
 
   const maximizedNode = maximizedPaneId ? layout.nodes.find((node) => node.pane_id === maximizedPaneId) : null
+  const emptyPlaceholder = layout.nodes.find((node) => isEmptyPanePlaceholder(node, layout)) ?? null
+
+  const launchFromPlaceholder = emptyPlaceholder ? (
+    <CodePaneLauncher
+      workspaceId={layout.workspace_id}
+      allowPresets
+      onLaunch={(kind, adapterId, url, agentLaunchMode) => {
+        if (kind === 'shell' || kind === 'coding_agent') {
+          void controller.launchTerminal(emptyPlaceholder.pane_id, kind, adapterId, null, agentLaunchMode)
+        } else if (kind === 'preview') {
+          void controller.openPreview(emptyPlaceholder.pane_id, url ?? 'https://www.google.com')
+        } else {
+          void controller.createMarkdown(emptyPlaceholder.pane_id)
+        }
+      }}
+      onOpenPreset={controller.openLaunchPreset}
+    />
+  ) : null
 
   return (
     <main className="code-workspace-canvas" aria-label="Code workspace canvas">
@@ -284,7 +301,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
         )}
 
         <div className="code-pane-canvas-body">
-          {maximizedNode ? (
+          {launchFromPlaceholder ?? (maximizedNode ? (
             <CodePaneLeaf
               node={maximizedNode}
               controller={controller}
@@ -300,7 +317,7 @@ export const CodePaneCanvas: React.FC<CodePaneCanvasProps> = ({ controller, onOp
               isDragActive={Boolean(activePaneId)}
               draggedPaneId={activePaneId}
             />
-          )}
+          ))}
         </div>
 
         <DragOverlay

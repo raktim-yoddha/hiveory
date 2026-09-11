@@ -11,6 +11,19 @@ export interface SplitMenuPosition {
   above: boolean
 }
 
+export interface ShellPaneOption {
+  id: string
+  title: string
+  description: string
+  adapterId?: string
+}
+
+export const SHELL_PANE_OPTIONS: ShellPaneOption[] = [
+  { id: 'terminal', title: 'Terminal', description: 'Interactive default shell' },
+  { id: 'powershell', title: 'PowerShell', description: 'Interactive PowerShell session', adapterId: 'powershell' },
+  { id: 'git-bash', title: 'Git Bash', description: 'Interactive Git Bash session', adapterId: 'git-bash' },
+]
+
 export function getSplitMenuPosition(
   anchorRect: Pick<DOMRect, 'top' | 'right' | 'bottom'>,
   viewport: Pick<Window, 'innerWidth' | 'innerHeight'>,

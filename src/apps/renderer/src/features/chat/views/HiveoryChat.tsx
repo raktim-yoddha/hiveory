@@ -45,6 +45,7 @@ import {
   type ChatMessage,
   type ChatMessagePart,
   type ChatProfileSnapshot,
+  type ChatReasoningEffort,
   type ChatSidebarPage,
   type AgentSkillSummary,
   type PluginCatalogEntry,
@@ -314,6 +315,7 @@ export function HiveoryChat() {
   const [engineLoading, setEngineLoading] = useState(true)
   const [selectedEngineId, setSelectedEngineId] = useState('')
   const [selectedModelId, setSelectedModelId] = useState('default')
+  const [selectedEffort, setSelectedEffort] = useState<ChatReasoningEffort>('auto')
   const [engineMenuOpen, setEngineMenuOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
@@ -342,6 +344,11 @@ export function HiveoryChat() {
 
   const selectedEngine = engineCatalog?.engines.find((engine) => engine.id === selectedEngineId)
   const selectedModel = selectedEngine?.models.find((model) => model.id === selectedModelId)
+  const supportedEfforts = selectedEngine?.capabilities.includes('reasoning_effort')
+    ? selectedModel?.effort_levels ?? []
+    : []
+  const selectableEfforts = supportedEfforts.filter((effort) => effort !== 'auto')
+  const effectiveEffort = supportedEfforts.includes(selectedEffort) ? selectedEffort : 'auto'
   const visibleModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase()
     const models = selectedEngine?.models ?? []
@@ -610,6 +617,19 @@ export function HiveoryChat() {
   }, [selectedEngine, selectedModelId])
 
   useEffect(() => {
+    if (!selectedModel) {
+      setSelectedEffort('auto')
+      return
+    }
+    const levels = selectedEngine?.capabilities.includes('reasoning_effort')
+      ? selectedModel.effort_levels
+      : []
+    if (!levels.includes(selectedEffort)) {
+      setSelectedEffort(levels.includes(selectedModel.default_effort) ? selectedModel.default_effort : 'auto')
+    }
+  }, [selectedEffort, selectedEngine?.capabilities, selectedModel])
+
+  useEffect(() => {
     if (!draftDirty || !conversation) return
     const timer = window.setTimeout(() => {
       void hiveoryClient.saveChatDraft(conversation.id, draft).catch((reason: unknown) => setError(errorMessage(reason, 'The draft could not be saved.')))
@@ -654,6 +674,7 @@ export function HiveoryChat() {
     const modelId = engine.models[0]?.id ?? 'default'
     setSelectedEngineId(engine.id)
     setSelectedModelId(modelId)
+    setSelectedEffort(engine.models[0]?.default_effort ?? 'auto')
     persistChatIdentity(conversation?.id ?? selectedId, { engineId: engine.id, modelId })
     setEngineMenuOpen(false)
     setModelMenuOpen(false)
@@ -874,7 +895,7 @@ export function HiveoryChat() {
         attachment_ids: imported.map((item) => item.id),
         provider_account_id: selectedEngine.id,
         model: selectedModelId || 'default',
-        reasoning_effort: 'auto',
+        reasoning_effort: effectiveEffort,
         profile: toChatProfileSnapshot(chatProfile),
       })
       setConversation(next)
@@ -909,9 +930,15 @@ export function HiveoryChat() {
     if (!conversation || busyAction) return
     const turn = turnById.get(turnId)
     if (!turn) return
+    const retryEngine = engineCatalog?.engines.find((engine) => engine.id === turn.provider_account_id)
+    const retryModel = retryEngine?.models.find((model) => model.id === turn.model)
+    const retryEffort = retryEngine?.capabilities.includes('reasoning_effort')
+      && retryModel?.effort_levels.includes(turn.reasoning_effort)
+      ? turn.reasoning_effort
+      : 'auto'
     setBusyAction('retry')
     try {
-      setConversation(await hiveoryClient.retryChatTurn({ conversation_id: conversation.id, turn_id: turn.id, model: turn.model || null, reasoning_effort: 'auto', profile: toChatProfileSnapshot(chatProfile) }))
+      setConversation(await hiveoryClient.retryChatTurn({ conversation_id: conversation.id, turn_id: turn.id, model: turn.model || null, reasoning_effort: retryEffort, profile: toChatProfileSnapshot(chatProfile) }))
     } catch (reason: unknown) {
       setError(errorMessage(reason, 'The response could not be retried.'))
     } finally {
@@ -937,7 +964,7 @@ export function HiveoryChat() {
     if (!conversation || !editingMessageId || !editingText.trim() || busyAction || !selectedEngine) return
     setBusyAction('edit')
     try {
-      setConversation(await hiveoryClient.editChatMessage({ conversation_id: conversation.id, message_id: editingMessageId, text: editingText.trim(), provider_account_id: selectedEngine.id, model: selectedModelId || 'default', reasoning_effort: 'auto', profile: toChatProfileSnapshot(chatProfile) }))
+      setConversation(await hiveoryClient.editChatMessage({ conversation_id: conversation.id, message_id: editingMessageId, text: editingText.trim(), provider_account_id: selectedEngine.id, model: selectedModelId || 'default', reasoning_effort: effectiveEffort, profile: toChatProfileSnapshot(chatProfile) }))
       setEditingMessageId(null)
       setEditingText('')
     } catch (reason: unknown) {
@@ -1786,6 +1813,7 @@ export function HiveoryChat() {
                           className={`chat-model-option-btn ${model.id === selectedModelId ? 'is-selected' : ''}`}
                           onClick={() => {
                             setSelectedModelId(model.id)
+                            setSelectedEffort(model.default_effort)
                             persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: model.id })
                             setModelMenuOpen(false)
                             setModelSearch('')
@@ -1802,6 +1830,19 @@ export function HiveoryChat() {
                   </div>
                 )}
               </div>
+
+              {selectableEfforts.length > 0 && (
+                <select
+                  className="chat-pill-select"
+                  aria-label="Reasoning effort"
+                  value={effectiveEffort}
+                  onChange={(event) => setSelectedEffort(event.target.value as ChatReasoningEffort)}
+                >
+                  {supportedEfforts.map((effort) => (
+                    <option key={effort} value={effort}>{effort === 'auto' ? 'Auto effort' : `${effort[0].toUpperCase()}${effort.slice(1)} effort`}</option>
+                  ))}
+                </select>
+              )}
 
               <div className="chat-toolbar-divider" />
 

@@ -1,4 +1,17 @@
-import type { CodeWorkspaceSummary } from '../../../shared/api/hiveory-client'
+import type { CodePaneLayout, CodePaneNode, CodeWorkspaceSummary } from '../../../shared/api/hiveory-client'
+
+export function isEmptyPanePlaceholder(node: CodePaneNode, layout: CodePaneLayout): boolean {
+  return layout.nodes.length === 1
+    && layout.root_id === node.pane_id
+    && node.kind === 'empty'
+    && node.children.length === 0
+    && node.resource_id === null
+}
+
+export function visiblePaneLeaves(layout: CodePaneLayout | null): CodePaneNode[] {
+  if (!layout) return []
+  return layout.nodes.filter((node) => node.children.length === 0 && !isEmptyPanePlaceholder(node, layout))
+}
 
 export function shouldShowProjectWorkspaceRows(workspaceCount: number): boolean {
   return workspaceCount > 1

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Columns, FileText, Globe, Rows, Search, Terminal, X } from 'lucide-react'
 import { DEFAULT_BROWSER_HOME, type CodeAdapterSummary, type CodeAgentLaunchMode, type CodePanePlacement } from '../../../shared/api/hiveory-client'
 import { CliBrandIcon } from './CliIcons'
-import { getSplitMenuPosition, type SplitMenuPosition } from './CodeSplitPanePicker.utils'
+import { getSplitMenuPosition, SHELL_PANE_OPTIONS, type SplitMenuPosition } from './CodeSplitPanePicker.utils'
 import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch, type YoloPreferences } from '../model/code-yolo-preferences'
 
 interface CodeSplitPanePickerProps {
@@ -124,7 +124,7 @@ export const CodeSplitPanePicker: React.FC<CodeSplitPanePickerProps> = ({
     }))
     agentOptions.sort((left, right) => Number(Boolean(right.isDefaultAgent)) - Number(Boolean(left.isDefaultAgent)))
     return [
-      { id: 'terminal', title: 'Terminal', description: 'Interactive local shell', kind: 'shell' as const, icon: <Terminal size={16} /> },
+      ...SHELL_PANE_OPTIONS.map((option) => ({ ...option, kind: 'shell' as const, icon: <Terminal size={16} /> })),
       ...agentOptions,
       { id: 'markdown', title: 'Markdown', description: 'Create a Markdown document', kind: 'markdown' as const, icon: <FileText size={16} /> },
       { id: 'preview', title: 'Browser', description: 'Open a local app or the web', kind: 'preview' as const, url: DEFAULT_BROWSER_HOME, icon: <Globe size={16} /> },

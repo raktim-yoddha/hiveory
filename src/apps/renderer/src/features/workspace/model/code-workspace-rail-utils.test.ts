@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CodeWorkspaceSummary } from '../../../shared/api/hiveory-client'
-import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows } from './code-workspace-rail-utils'
+import type { CodePaneLayout, CodeWorkspaceSummary } from '../../../shared/api/hiveory-client'
+import { eligibleParentWorkspaces, shouldShowProjectWorkspaceRows, visiblePaneLeaves } from './code-workspace-rail-utils'
 
 function workspace(overrides: Partial<CodeWorkspaceSummary> = {}): CodeWorkspaceSummary {
   return {
@@ -30,6 +30,19 @@ describe('workspace rail hierarchy helpers', () => {
   it('hides the primary row for a project with one workspace', () => {
     expect(shouldShowProjectWorkspaceRows(1)).toBe(false)
     expect(shouldShowProjectWorkspaceRows(2)).toBe(true)
+  })
+
+  it('hides the sole unbound empty placeholder from pane rows', () => {
+    const layout: CodePaneLayout = {
+      workspace_id: 'workspace-child',
+      version: 1,
+      root_id: 'root',
+      nodes: [{ pane_id: 'root', parent_id: null, kind: 'empty', orientation: null, ratio_percent: null, children: [], resource_id: null }],
+    }
+    expect(visiblePaneLeaves(layout)).toEqual([])
+
+    layout.nodes[0] = { ...layout.nodes[0], kind: 'terminal', resource_id: 'terminal-1' }
+    expect(visiblePaneLeaves(layout).map((node) => node.pane_id)).toEqual(['root'])
   })
 
   it('keeps parent choices in-project and prevents descendant cycles', () => {

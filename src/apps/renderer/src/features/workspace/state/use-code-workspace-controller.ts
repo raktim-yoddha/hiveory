@@ -740,7 +740,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       if (target.entry.kind === 'coding_agent') {
         await launchTerminal(target.pane_id, 'coding_agent', target.entry.adapter_id, null, target.entry.agent_launch_mode)
       } else if (target.entry.kind === 'terminal') {
-        await launchTerminal(target.pane_id, 'shell')
+        await launchTerminal(target.pane_id, 'shell', target.entry.adapter_id)
       } else if (target.entry.kind === 'browser') {
         await openPreview(target.pane_id, target.entry.url ?? DEFAULT_BROWSER_HOME)
       } else {

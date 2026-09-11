@@ -1,5 +1,13 @@
 import { expect, test } from 'vitest'
-import { getSplitMenuPosition } from './CodeSplitPanePicker.utils'
+import { getSplitMenuPosition, SHELL_PANE_OPTIONS } from './CodeSplitPanePicker.utils'
+
+test('offers default, PowerShell, and Git Bash profiles', () => {
+  expect(SHELL_PANE_OPTIONS.map(({ id, adapterId }) => [id, adapterId ?? null])).toEqual([
+    ['terminal', null],
+    ['powershell', 'powershell'],
+    ['git-bash', 'git-bash'],
+  ])
+})
 
 test('keeps the split picker inside the viewport and opens above when needed', () => {
   const below = getSplitMenuPosition(
