@@ -4,9 +4,9 @@ use hiveory_protocol::{
     ChatConversationFolderRequest, ChatConversationSummary, ChatCreateRequest,
     ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEventEnvelope, ChatFolderCreateRequest,
     ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest, ChatMessage,
-    ChatMessagePart, ChatMessageRole, ChatMetadataRequest, ChatProviderStreamEvent,
-    ChatProviderStreamEventKind, ChatReasoningEffort, ChatSendRequest, ChatSidebarPage,
-    ChatSidebarQuery, ChatTurnState, ChatTurnSummary,
+    ChatMessagePart, ChatMessageRole, ChatMetadataRequest, ChatProfileSnapshot,
+    ChatProviderStreamEvent, ChatProviderStreamEventKind, ChatReasoningEffort, ChatSendRequest,
+    ChatSidebarPage, ChatSidebarQuery, ChatTurnState, ChatTurnSummary,
 };
 use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteRow, Row, Sqlite, Transaction};
@@ -38,6 +38,7 @@ pub struct HiveoryChatTurnStart {
     pub user_message_id: String,
     pub assistant_message_id: String,
     pub job_id: Option<String>,
+    pub profile: Option<ChatProfileSnapshot>,
     pub already_started: bool,
 }
 
@@ -121,7 +122,11 @@ impl HiveoryChatStore {
                 (SELECT substr(json_extract(p.payload_json, '$.text'), 1, 160)
                  FROM hiveory_chat_messages m
                  JOIN hiveory_chat_message_parts p ON p.message_id=m.id AND p.kind='text'
-                 WHERE m.conversation_id=c.id ORDER BY m.created_at_unix_ms DESC LIMIT 1) AS preview
+                 WHERE m.conversation_id=c.id ORDER BY m.created_at_unix_ms DESC LIMIT 1) AS preview,
+                (SELECT t.provider_account_id
+                 FROM hiveory_chat_turns t
+                 WHERE t.conversation_id=c.id AND t.provider_account_id <> ''
+                 ORDER BY t.created_at_unix_ms ASC LIMIT 1) AS provider_account_id
              FROM hiveory_chat_conversations c
              WHERE c.archived=? AND (? IS NULL OR c.folder_id=?) AND (c.title LIKE ? ESCAPE '\\' OR EXISTS (
                  SELECT 1 FROM hiveory_chat_messages sm
@@ -173,7 +178,7 @@ impl HiveoryChatStore {
             .into_iter().map(branch_from_row).collect();
         let active_branch_id: String = conversation.get(2);
         let messages = self.messages(conversation_id, &active_branch_id).await?;
-        let turns = sqlx::query("SELECT id, message_id, assistant_message_id, branch_id, provider_account_id, model, reasoning_effort, state, job_id, input_tokens, output_tokens, created_at_unix_ms, updated_at_unix_ms FROM hiveory_chat_turns WHERE conversation_id=? ORDER BY created_at_unix_ms")
+        let turns = sqlx::query("SELECT id, message_id, assistant_message_id, branch_id, provider_account_id, model, reasoning_effort, profile_json, state, job_id, input_tokens, output_tokens, created_at_unix_ms, updated_at_unix_ms FROM hiveory_chat_turns WHERE conversation_id=? ORDER BY created_at_unix_ms")
             .bind(conversation_id).fetch_all(self.persistence.pool()).await?
             .into_iter().filter_map(|row| turn_from_row(row).ok()).collect();
         let draft = sqlx::query("SELECT draft FROM hiveory_chat_drafts WHERE conversation_id=?")
@@ -520,7 +525,7 @@ impl HiveoryChatStore {
         &self,
         command_request_id: &str,
     ) -> Result<Option<HiveoryChatTurnStart>, HiveoryChatStoreError> {
-        Ok(sqlx::query("SELECT conversation_id, branch_id, id, message_id, assistant_message_id, job_id FROM hiveory_chat_turns WHERE command_request_id=?")
+        Ok(sqlx::query("SELECT conversation_id, branch_id, id, message_id, assistant_message_id, job_id, profile_json FROM hiveory_chat_turns WHERE command_request_id=?")
             .bind(command_request_id)
             .fetch_optional(self.persistence.pool())
             .await?
@@ -531,6 +536,9 @@ impl HiveoryChatStore {
                 user_message_id: row.get(3),
                 assistant_message_id: row.get(4),
                 job_id: row.get(5),
+                profile: row
+                    .get::<Option<String>, _>(6)
+                    .and_then(|value| serde_json::from_str(&value).ok()),
                 already_started: true,
             }))
     }
@@ -539,15 +547,22 @@ impl HiveoryChatStore {
         &self,
         conversation_id: &str,
         turn_id: &str,
-    ) -> Result<Option<(String, String)>, HiveoryChatStoreError> {
+    ) -> Result<Option<(String, String, Option<ChatProfileSnapshot>)>, HiveoryChatStoreError> {
         Ok(sqlx::query(
-            "SELECT provider_account_id, model FROM hiveory_chat_turns WHERE conversation_id=? AND id=?",
+            "SELECT provider_account_id, model, profile_json FROM hiveory_chat_turns WHERE conversation_id=? AND id=?",
         )
         .bind(conversation_id)
         .bind(turn_id)
         .fetch_optional(self.persistence.pool())
         .await?
-        .map(|row| (row.get(0), row.get(1))))
+        .map(|row| {
+            (
+                row.get(0),
+                row.get(1),
+                row.get::<Option<String>, _>(2)
+                    .and_then(|value| serde_json::from_str(&value).ok()),
+            )
+        }))
     }
 
     async fn start_turn_internal(
@@ -560,7 +575,7 @@ impl HiveoryChatStore {
     ) -> Result<HiveoryChatTurnStart, HiveoryChatStoreError> {
         let mut tx = self.persistence.pool().begin().await?;
         if let Some(command_request_id) = command_request_id {
-            if let Some(row) = sqlx::query("SELECT conversation_id, branch_id, id, message_id, assistant_message_id, job_id FROM hiveory_chat_turns WHERE command_request_id=?")
+            if let Some(row) = sqlx::query("SELECT conversation_id, branch_id, id, message_id, assistant_message_id, job_id, profile_json FROM hiveory_chat_turns WHERE command_request_id=?")
                 .bind(command_request_id)
                 .fetch_optional(&mut *tx)
                 .await?
@@ -573,6 +588,9 @@ impl HiveoryChatStore {
                     user_message_id: row.get(3),
                     assistant_message_id: row.get(4),
                     job_id: row.get(5),
+                    profile: row
+                        .get::<Option<String>, _>(6)
+                        .and_then(|value| serde_json::from_str(&value).ok()),
                     already_started: true,
                 });
             }
@@ -632,8 +650,13 @@ impl HiveoryChatStore {
             .bind(&assistant_message_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO hiveory_chat_turns (id, conversation_id, branch_id, message_id, assistant_message_id, provider_account_id, model, reasoning_effort, state, job_id, command_request_id, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)")
-            .bind(&turn_id).bind(&request.conversation_id).bind(&request.branch_id).bind(&user_message_id).bind(&assistant_message_id).bind(&request.provider_account_id).bind(&request.model).bind(reasoning_value(&request.reasoning_effort)).bind(job_id).bind(command_request_id).bind(now).bind(now).execute(&mut *tx).await?;
+        let profile_json = request
+            .profile
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
+        sqlx::query("INSERT INTO hiveory_chat_turns (id, conversation_id, branch_id, message_id, assistant_message_id, provider_account_id, model, reasoning_effort, profile_json, state, job_id, command_request_id, created_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?, ?)")
+            .bind(&turn_id).bind(&request.conversation_id).bind(&request.branch_id).bind(&user_message_id).bind(&assistant_message_id).bind(&request.provider_account_id).bind(&request.model).bind(reasoning_value(&request.reasoning_effort)).bind(profile_json).bind(job_id).bind(command_request_id).bind(now).bind(now).execute(&mut *tx).await?;
         append_event(
             &mut tx,
             ChatEventInput {
@@ -669,6 +692,7 @@ impl HiveoryChatStore {
             user_message_id,
             assistant_message_id,
             job_id: job_id.map(str::to_owned),
+            profile: request.profile.clone(),
             already_started: false,
         })
     }
@@ -977,6 +1001,7 @@ impl HiveoryChatStore {
             provider_account_id: request.provider_account_id.clone(),
             model: request.model.clone(),
             reasoning_effort: request.reasoning_effort,
+            profile: request.profile.clone(),
         };
         self.start_turn(&send, job_id, command_request_id).await
     }
@@ -1264,6 +1289,7 @@ fn conversation_summary_from_row(row: SqliteRow) -> ChatConversationSummary {
         folder_position: row.get(6),
         updated_at_unix_ms: row.get(7),
         preview: row.get(8),
+        provider_account_id: row.get(9),
     }
 }
 
@@ -1406,12 +1432,15 @@ fn turn_from_row(row: SqliteRow) -> Result<ChatTurnSummary, HiveoryChatStoreErro
         provider_account_id: row.get(4),
         model: row.get(5),
         reasoning_effort: reasoning_from_value(&row.get::<String, _>(6))?,
-        state: turn_state_from_value(&row.get::<String, _>(7))?,
-        job_id: row.get(8),
-        input_tokens: row.get::<Option<i64>, _>(9).map(|v| v as u64),
-        output_tokens: row.get::<Option<i64>, _>(10).map(|v| v as u64),
-        created_at_unix_ms: row.get(11),
-        updated_at_unix_ms: row.get(12),
+        profile: row
+            .get::<Option<String>, _>(7)
+            .and_then(|value| serde_json::from_str(&value).ok()),
+        state: turn_state_from_value(&row.get::<String, _>(8))?,
+        job_id: row.get(9),
+        input_tokens: row.get::<Option<i64>, _>(10).map(|v| v as u64),
+        output_tokens: row.get::<Option<i64>, _>(11).map(|v| v as u64),
+        created_at_unix_ms: row.get(12),
+        updated_at_unix_ms: row.get(13),
     })
 }
 fn reasoning_value(value: &ChatReasoningEffort) -> &'static str {
@@ -1565,6 +1594,7 @@ mod tests {
             provider_account_id: "provider".to_owned(),
             model: "model-a".to_owned(),
             reasoning_effort: ChatReasoningEffort::Auto,
+            profile: None,
         };
         let first = store
             .start_turn(&request, None, Some("send-1"))
@@ -1650,6 +1680,7 @@ mod tests {
             provider_account_id: "provider".to_owned(),
             model: "model-b".to_owned(),
             reasoning_effort: ChatReasoningEffort::Low,
+            profile: None,
         };
         let second = store
             .start_turn(&second_request, None, Some("send-2"))

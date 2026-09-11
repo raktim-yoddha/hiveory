@@ -25,7 +25,8 @@ use hiveory_code_domain::{
 };
 use hiveory_code_orchestration::{HiveoryCodeOrchestration, HiveoryCodeOrchestrationError};
 use hiveory_code_runtime::{
-    resolved_adapter_command, stream_cli_chat_turn, HiveoryCodeRuntime, HiveoryCodeRuntimeError,
+    bundled_chat_engines, resolved_adapter_command, stream_cli_chat_turn_with_options,
+    ChatSessionOptions, HiveoryCodeRuntime, HiveoryCodeRuntimeError,
 };
 use hiveory_git_service::{HiveoryGitError, HiveoryGitService};
 use hiveory_job_runtime::HiveoryJobRuntime;
@@ -53,13 +54,13 @@ use hiveory_protocol::{
     BuildInformation, ChatAttachmentBytesRequest, ChatAttachmentImportRequest,
     ChatAttachmentSummary, ChatBranchRequest, ChatConversationDetail,
     ChatConversationFolderRequest, ChatCreateRequest, ChatDeleteRequest,
-    ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest, ChatEngineAvailability,
-    ChatEngineCatalog, ChatEngineSummary, ChatEventEnvelope, ChatEventsQuery, ChatExportRequest,
-    ChatFolderCreateRequest, ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest,
-    ChatMessagePart, ChatMetadataRequest, ChatModelSummary, ChatModelTurnRequest,
-    ChatProviderMessage, ChatProviderPart, ChatProviderStreamEvent, ChatReasoningEffort,
-    ChatSendRequest, ChatSidebarPage, ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest,
-    CloseCodePaneRequest, CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
+    ChatDiscardAttachmentRequest, ChatDraftRequest, ChatEditRequest, ChatEngineCatalog,
+    ChatEventEnvelope, ChatEventsQuery, ChatExportRequest, ChatFolderCreateRequest,
+    ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest, ChatMessagePart,
+    ChatMetadataRequest, ChatModelTurnRequest, ChatProviderMessage, ChatProviderPart,
+    ChatProviderStreamEvent, ChatReasoningEffort, ChatSendRequest, ChatSidebarPage,
+    ChatSidebarQuery, ChatStreamRequest, ChatTurnRequest, CloseCodePaneRequest,
+    CodeCheckpointDiffRequest, CodeCleanupConfirmRequest, CodeCleanupPreview,
     CodeCleanupPreviewRequest, CodeDagProposal, CodeDagProposalAcceptRequest,
     CodeDagProposalRequest, CodeDecisionGate, CodeDispatchCancelRequest, CodeDispatchResumeRequest,
     CodeDispatchTerminalRequest, CodeDocument, CodeFileTree, CodeFileTreeQuery,
@@ -118,7 +119,10 @@ use std::{
     io,
     path::{Path, PathBuf},
     process::Command,
-    sync::{Arc, RwLock},
+    sync::{
+        atomic::{AtomicBool, AtomicU32, Ordering},
+        Arc, RwLock,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{ipc::Channel, Emitter, Manager, State};
@@ -330,6 +334,10 @@ struct HiveoryCliSessionTools {
     orchestration: HiveoryCodeOrchestration,
     session_id: String,
     workspace_id: String,
+    /// Chat sessions receive a narrowed, immutable capability profile. Code
+    /// sessions leave this unset and retain their existing workspace tool set.
+    chat_profile: Option<hiveory_protocol::ChatProfileSnapshot>,
+    chat_tool_calls: Arc<AtomicU32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -601,6 +609,7 @@ impl HiveoryCliAgentPaneProvider {
             self.workspace_id.clone(),
             Some(&adapter_id),
             Some(session_id.clone()),
+            None,
         ))
         .await
         .map_err(|error| error.message)?
@@ -1580,11 +1589,50 @@ impl HiveoryCliSessionTools {
         definitions.extend(browser_definitions);
         definitions.extend(self.computer.definitions().await);
         definitions.extend(cli_session_management_definitions());
+        if let Some(profile) = self.chat_profile.as_ref() {
+            // Chat is intentionally detached from a Code workspace. Expose
+            // only the profile's validated plugin tools, selected skills, and
+            // explicit folder context instead of browser/computer/
+            // orchestration controls that require a workspace or global UI.
+            definitions.retain(|definition| {
+                (definition.name.starts_with("plugin.")
+                    && chat_plugin_tool_selected(profile, &definition.name))
+                    || (definition.name.starts_with("skills.")
+                        && (!profile.skill_ids.is_empty() || definition.name == "skills.list"))
+            });
+            if !profile.folder_paths.is_empty() {
+                definitions.extend(chat_folder_definitions());
+            }
+        }
         Ok(definitions)
     }
 
     async fn execute(&self, name: &str, arguments: &Value) -> Result<String, String> {
         let name = self.canonical_tool_name(name).await;
+        if self.chat_profile.is_some() {
+            if !self.chat_tool_allowed(&name, arguments) {
+                return Err("This tool is not enabled for the current chat profile.".to_owned());
+            }
+            let risk = self.chat_tool_risk(&name).await;
+            if self.chat_tool_requires_approval(risk) {
+                return Err(
+                    "This chat profile requires approval before that tool can mutate state. Set the profile approval policy to Allow within scope or use a read-only tool.".to_owned(),
+                );
+            }
+            let max_tool_calls = self
+                .chat_profile
+                .as_ref()
+                .map(|profile| profile.max_tool_calls.max(1))
+                .unwrap_or(1);
+            let used = self.chat_tool_calls.fetch_add(1, Ordering::AcqRel);
+            if used >= max_tool_calls {
+                self.chat_tool_calls.fetch_sub(1, Ordering::AcqRel);
+                return Err(format!(
+                    "The chat profile reached its {} tool-call limit.",
+                    max_tool_calls
+                ));
+            }
+        }
         let arguments_json = serde_json::to_string(arguments)
             .map_err(|error| format!("tool arguments could not be encoded: {error}"))?;
         if name.starts_with("plugin.") {
@@ -1630,10 +1678,163 @@ impl HiveoryCliSessionTools {
             self.execute_session(&name, arguments).await
         } else if name.starts_with("skills.") {
             self.execute_skill(&name, arguments).await
+        } else if name.starts_with("chat.folders.") {
+            self.execute_chat_folder(&name, arguments).await
         } else if name.starts_with("orchestration.") {
             self.execute_orchestration(&name, arguments).await
         } else {
             Err("This Hiveory CLI session does not provide that tool.".to_owned())
+        }
+    }
+
+    async fn chat_tool_risk(&self, name: &str) -> AgentToolRisk {
+        if name.starts_with("plugin.") {
+            return self
+                .plugin
+                .session_definitions()
+                .await
+                .ok()
+                .and_then(|definitions| {
+                    definitions
+                        .into_iter()
+                        .find(|definition| definition.name == name)
+                        .map(|definition| definition.risk)
+                })
+                .unwrap_or(AgentToolRisk::ExternallyVisible);
+        }
+        // Skills and the explicit chat folder bridge are read-only. Unknown
+        // names stay conservative and require the profile's scoped policy.
+        if name == "skills.list"
+            || name == "skills.read"
+            || name == "chat.folders.list"
+            || name == "chat.folders.read"
+        {
+            AgentToolRisk::ReadOnly
+        } else {
+            AgentToolRisk::ExternallyVisible
+        }
+    }
+
+    fn chat_tool_requires_approval(&self, risk: AgentToolRisk) -> bool {
+        let Some(profile) = self.chat_profile.as_ref() else {
+            return false;
+        };
+        match profile.approval_policy {
+            hiveory_protocol::AgentApprovalPolicy::Deny => true,
+            hiveory_protocol::AgentApprovalPolicy::AllowWithinScope => false,
+            hiveory_protocol::AgentApprovalPolicy::AlwaysAsk
+            | hiveory_protocol::AgentApprovalPolicy::AskForMutations => {
+                !matches!(risk, AgentToolRisk::ReadOnly)
+            }
+        }
+    }
+
+    fn chat_tool_allowed(&self, name: &str, arguments: &Value) -> bool {
+        let Some(profile) = self.chat_profile.as_ref() else {
+            return true;
+        };
+        if name.starts_with("plugin.") {
+            return chat_plugin_tool_selected(profile, name);
+        }
+        if name == "skills.list" {
+            return true;
+        }
+        if name == "skills.read" {
+            return arguments
+                .get("skill_id")
+                .and_then(Value::as_str)
+                .is_some_and(|skill_id| profile.skill_ids.iter().any(|id| id == skill_id));
+        }
+        name.starts_with("chat.folders.") && !profile.folder_paths.is_empty()
+    }
+
+    async fn execute_chat_folder(&self, name: &str, arguments: &Value) -> Result<String, String> {
+        let profile = self
+            .chat_profile
+            .as_ref()
+            .ok_or_else(|| "chat folder access is not enabled".to_owned())?;
+        let roots = chat_profile_roots(profile)?;
+        match name {
+            "chat.folders.list" => {
+                let requested = arguments
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty());
+                let directories = if let Some(path) = requested {
+                    vec![chat_profile_path(profile, path)?]
+                } else {
+                    roots
+                };
+                let mut entries = Vec::new();
+                for directory in directories {
+                    if !directory.is_dir() {
+                        continue;
+                    }
+                    let read_dir = std::fs::read_dir(&directory)
+                        .map_err(|error| format!("folder could not be listed: {error}"))?;
+                    for item in read_dir.take(200) {
+                        let item = item
+                            .map_err(|error| format!("folder entry could not be read: {error}"))?;
+                        // Check the directory entry itself before asking for
+                        // metadata; `DirEntry::metadata` follows links on
+                        // some platforms and would otherwise make a link
+                        // look like an ordinary file.
+                        if item
+                            .file_type()
+                            .map_err(|error| format!("folder entry type unavailable: {error}"))?
+                            .is_symlink()
+                        {
+                            continue;
+                        }
+                        let metadata = item.metadata().map_err(|error| {
+                            format!("folder entry metadata unavailable: {error}")
+                        })?;
+                        entries.push(json!({
+                            "name": item.file_name().to_string_lossy(),
+                            "path": item.path().to_string_lossy(),
+                            "kind": if metadata.is_dir() { "directory" } else { "file" },
+                            "bytes": metadata.len(),
+                        }));
+                    }
+                }
+                serde_json::to_string(&entries).map_err(|error| error.to_string())
+            }
+            "chat.folders.read" => {
+                let path = arguments
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "path is required".to_owned())?;
+                let path = chat_profile_path(profile, path)?;
+                if !path.is_file() {
+                    return Err("the requested folder context path is not a file".to_owned());
+                }
+                let max_bytes = arguments
+                    .get("max_bytes")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(64 * 1024)
+                    .clamp(1, 256 * 1024) as usize;
+                let bytes = std::fs::read(&path)
+                    .map_err(|error| format!("file could not be read: {error}"))?;
+                let truncated = bytes.len() > max_bytes;
+                let bytes = &bytes[..bytes.len().min(max_bytes)];
+                if let Ok(text) = std::str::from_utf8(bytes) {
+                    serde_json::to_string(&json!({
+                        "path": path.to_string_lossy(),
+                        "text": text,
+                        "truncated": truncated,
+                    }))
+                    .map_err(|error| error.to_string())
+                } else {
+                    serde_json::to_string(&json!({
+                        "path": path.to_string_lossy(),
+                        "data_base64": STANDARD.encode(bytes),
+                        "truncated": truncated,
+                    }))
+                    .map_err(|error| error.to_string())
+                }
+            }
+            _ => Err("chat folder tool is not available".to_owned()),
         }
     }
 
@@ -1669,10 +1870,19 @@ impl HiveoryCliSessionTools {
                     .catalog()
                     .await
                     .map_err(|error| error.to_string())?;
+                let selected = self.chat_profile.as_ref().map(|profile| {
+                    profile
+                        .skill_ids
+                        .iter()
+                        .collect::<std::collections::HashSet<_>>()
+                });
                 serde_json::to_string(
                     &catalog
                         .into_iter()
-                        .filter(|skill| skill.valid)
+                        .filter(|skill| {
+                            skill.valid
+                                && selected.as_ref().is_none_or(|ids| ids.contains(&skill.id))
+                        })
                         .collect::<Vec<_>>(),
                 )
                 .map_err(|error| error.to_string())
@@ -2100,6 +2310,82 @@ fn required_cli_string<'a>(arguments: &'a Value, name: &str) -> Result<&'a str, 
         .ok_or_else(|| format!("{name} is required"))
 }
 
+fn chat_plugin_tool_selected(
+    profile: &hiveory_protocol::ChatProfileSnapshot,
+    definition_name: &str,
+) -> bool {
+    let short_name = definition_name
+        .strip_prefix("plugin.")
+        .unwrap_or(definition_name);
+    let cli_alias = format!("hiveory_{}", definition_name.replace('.', "_"));
+    profile.plugin_tool_names.iter().any(|selected| {
+        selected == definition_name || selected == short_name || selected == &cli_alias
+    })
+}
+
+fn chat_profile_roots(
+    profile: &hiveory_protocol::ChatProfileSnapshot,
+) -> Result<Vec<PathBuf>, String> {
+    let mut roots = Vec::new();
+    for raw in profile.folder_paths.iter().take(32) {
+        let path = std::fs::canonicalize(raw)
+            .map_err(|error| format!("chat folder access is unavailable for {raw}: {error}"))?;
+        if !path.is_dir() {
+            return Err(format!("chat folder access path is not a directory: {raw}"));
+        }
+        if !roots.iter().any(|known| known == &path) {
+            roots.push(path);
+        }
+    }
+    if roots.is_empty() {
+        return Err("chat folder access is not enabled".to_owned());
+    }
+    Ok(roots)
+}
+
+fn chat_profile_path(
+    profile: &hiveory_protocol::ChatProfileSnapshot,
+    requested: &str,
+) -> Result<PathBuf, String> {
+    let requested = requested.trim();
+    if requested.is_empty() {
+        return Err("path is required".to_owned());
+    }
+    let roots = chat_profile_roots(profile)?;
+    let candidate = Path::new(requested);
+    let candidates = if candidate.is_absolute() {
+        vec![candidate.to_path_buf()]
+    } else {
+        roots.iter().map(|root| root.join(candidate)).collect()
+    };
+    for candidate in candidates {
+        let Ok(path) = std::fs::canonicalize(&candidate) else {
+            continue;
+        };
+        if roots.iter().any(|root| path.starts_with(root)) {
+            return Ok(path);
+        }
+    }
+    Err("the requested path is outside the chat profile's explicit folders".to_owned())
+}
+
+fn chat_folder_definitions() -> Vec<AgentToolDefinition> {
+    vec![
+        agent_tool(
+            "chat.folders.list",
+            "List files and directories inside the folders explicitly granted to this conversation.",
+            r#"{"type":"object","properties":{"path":{"type":"string"}},"additionalProperties":false}"#,
+            AgentToolRisk::ReadOnly,
+        ),
+        agent_tool(
+            "chat.folders.read",
+            "Read a bounded UTF-8 or base64 file from a folder explicitly granted to this conversation.",
+            r#"{"type":"object","properties":{"path":{"type":"string"},"max_bytes":{"type":"integer","minimum":1,"maximum":262144}},"required":["path"],"additionalProperties":false}"#,
+            AgentToolRisk::ReadOnly,
+        ),
+    ]
+}
+
 fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
     const EMPTY: &str = r#"{"type":"object","additionalProperties":false}"#;
     const RUN_ID: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"}},"required":["run_id"],"additionalProperties":false}"#;
@@ -2273,6 +2559,7 @@ fn start_cli_session_bridge(
     browser: BrowserManager,
     session_id: String,
     workspace_id: String,
+    chat_profile: Option<hiveory_protocol::ChatProfileSnapshot>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<CliSessionBridge, ApiError>> + Send>>
 {
     let foundation = foundation.clone();
@@ -2314,6 +2601,8 @@ fn start_cli_session_bridge(
             orchestration: foundation.code_orchestration.clone(),
             session_id,
             workspace_id,
+            chat_tool_calls: Arc::new(AtomicU32::new(0)),
+            chat_profile,
         };
         let expected_token = token.clone();
         tauri::async_runtime::spawn(async move {
@@ -2439,6 +2728,7 @@ struct HiveoryFoundation {
     code_workspaces: HiveoryWorkspaceService,
     code_workspaces_root: PathBuf,
     code_runtime: HiveoryCodeRuntime,
+    chat_catalog_refreshing: Arc<AtomicBool>,
     terminal_host: HiveoryTerminalHostClient,
     code_git: HiveoryGitService,
     code_orchestration: HiveoryCodeOrchestration,
@@ -2652,6 +2942,7 @@ impl HiveoryFoundation {
             code_workspaces,
             code_workspaces_root,
             code_runtime: HiveoryCodeRuntime::new(),
+            chat_catalog_refreshing: Arc::new(AtomicBool::new(false)),
             terminal_host,
             code_git: HiveoryGitService,
             code_orchestration,
@@ -4957,6 +5248,7 @@ async fn hiveory_command_open_code_dispatch_terminal(
             terminal_start.workspace_id.clone(),
             terminal_start.adapter_id.as_deref(),
             None,
+            None,
         )
         .await?;
     }
@@ -6416,6 +6708,7 @@ async fn prepare_cli_session_integration(
     workspace_id: String,
     adapter_id: Option<&str>,
     requested_session_id: Option<String>,
+    chat_profile: Option<hiveory_protocol::ChatProfileSnapshot>,
 ) -> Result<Option<hiveory_protocol::CodeCliSessionIntegration>, ApiError> {
     let Some(adapter_id) = adapter_id.and_then(canonical_code_adapter_id) else {
         return Ok(None);
@@ -6424,9 +6717,15 @@ async fn prepare_cli_session_integration(
     let session_id = requested_session_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     // A bridged CLI can summon another pane. The bridge factory returns an
     // erased Send future, preventing the recursive handler/tool type cycle.
-    let bridge =
-        start_cli_session_bridge(foundation, app, browser, session_id.clone(), workspace_id)
-            .await?;
+    let bridge = start_cli_session_bridge(
+        foundation,
+        app,
+        browser,
+        session_id.clone(),
+        workspace_id,
+        chat_profile.clone(),
+    )
+    .await?;
     let session_root = foundation
         .code_workspaces_root
         .parent()
@@ -6451,12 +6750,18 @@ async fn prepare_cli_session_integration(
     } else {
         format!("coordinator:{session_id}")
     };
-    instructions.push_str(&format!(
-        "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. Hiveory orchestration is available in this pane: call `session.status` before saying it is unavailable. When another agent assigns work, use `orchestration.inbox` with the run ID (the recipient defaults to this address), then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.assign_task` to open a visible worker pane and deliver a tracked task. A visible worker completes by calling `orchestration.report_completion`; use `orchestration.wait` rather than polling for replies.\n"
-    ));
-    instructions.push_str(
-        "\n## Direct pane commands\n\nFor a user request to open a coding-agent pane, call `agent_panes.open` immediately when the adapter, model, launch mode, or title is specified. Pass every specified value in that one call. Do not first open Codex, inspect source files, read skills, list adapters, list panes, or probe the bridge. The successful response is the authoritative record: retain its `pane_id` and returned title. When the user later refers to the previous agent, use `agent_panes.rename` with its pane ID; if the ID is unavailable, omit it and Hiveory will select the most recently opened coding-agent pane. Never claim a pane was opened or renamed until the corresponding tool succeeds and returns the saved state.\n",
-    );
+    if chat_profile.is_none() {
+        instructions.push_str(&format!(
+            "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. Hiveory orchestration is available in this pane: call `session.status` before saying it is unavailable. When another agent assigns work, use `orchestration.inbox` with the run ID (the recipient defaults to this address), then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.assign_task` to open a visible worker pane and deliver a tracked task. A visible worker completes by calling `orchestration.report_completion`; use `orchestration.wait` rather than polling for replies.\n"
+        ));
+        instructions.push_str(
+            "\n## Direct pane commands\n\nFor a user request to open a coding-agent pane, call `agent_panes.open` immediately when the adapter, model, launch mode, or title is specified. Pass every specified value in that one call. Do not first open Codex, inspect source files, read skills, list adapters, list panes, or probe the bridge. The successful response is the authoritative record: retain its `pane_id` and returned title. When the user later refers to the previous agent, use `agent_panes.rename` with its pane ID; if the ID is unavailable, omit it and Hiveory will select the most recently opened coding-agent pane. Never claim a pane was opened or renamed until the corresponding tool succeeds and returns the saved state.\n",
+        );
+    } else {
+        instructions.push_str(
+            "\n## Chat capability boundary\n\nThis is an isolated Hiveory Chat session. Use only the selected skill, plugin, and explicit folder tools exposed by this bridge. Ask before any mutation according to the chat profile, and never access a path outside its explicit folders.\n",
+        );
+    }
     for skill in skill_store.catalog().await.map_err(|error| {
         application_error(
             "skill_catalog_unavailable",
@@ -6464,7 +6769,14 @@ async fn prepare_cli_session_integration(
             RetryClass::Safe,
         )
     })? {
-        if !skill.valid {
+        if !skill.valid
+            || chat_profile.as_ref().is_some_and(|profile| {
+                !profile
+                    .skill_ids
+                    .iter()
+                    .any(|skill_id| skill_id == &skill.id)
+            })
+        {
             continue;
         }
         if let Some((summary, body)) =
@@ -6606,6 +6918,93 @@ async fn prepare_cli_session_integration(
     Ok(Some(integration))
 }
 
+async fn prepare_chat_session_integration(
+    foundation: &HiveoryFoundation,
+    app: tauri::AppHandle,
+    browser: BrowserManager,
+    engine_id: &str,
+    profile: Option<&hiveory_protocol::ChatProfileSnapshot>,
+) -> Result<Option<hiveory_protocol::CodeCliSessionIntegration>, ApiError> {
+    let Some(profile) = profile else {
+        return Ok(None);
+    };
+    // Cursor and Grok do not expose a stable per-process MCP/config contract
+    // yet. They still work as provider-only Chat engines; the four CLIs below
+    // can load Hiveory's scoped bridge and selected skills.
+    if !matches!(
+        canonical_code_adapter_id(engine_id),
+        Some("codex-cli" | "claude-code" | "antigravity" | "opencode")
+    ) {
+        return Ok(None);
+    }
+    Box::pin(prepare_cli_session_integration(
+        foundation,
+        app,
+        browser,
+        String::new(),
+        Some(engine_id),
+        Some(format!("chat-{}", uuid::Uuid::now_v7())),
+        Some(profile.clone()),
+    ))
+    .await
+}
+
+fn validate_chat_profile(
+    profile: Option<&hiveory_protocol::ChatProfileSnapshot>,
+) -> Result<(), ApiError> {
+    let Some(profile) = profile else {
+        return Ok(());
+    };
+    if !(1..=256).contains(&profile.max_tool_calls) {
+        return Err(validation_error(
+            "Chat tool limit must be between 1 and 256.",
+        ));
+    }
+    if !matches!(
+        profile.execution_target,
+        hiveory_protocol::AgentExecutionTarget::Desktop
+    ) {
+        return Err(validation_error(
+            "Remote chat execution is not available on this desktop.",
+        ));
+    }
+    if profile.skill_ids.len() > 256 || profile.plugin_tool_names.len() > 512 {
+        return Err(validation_error(
+            "Chat profile capability selections are too large.",
+        ));
+    }
+    if profile
+        .skill_ids
+        .iter()
+        .chain(profile.plugin_tool_names.iter())
+        .any(|value| value.trim().is_empty() || value.chars().count() > 256)
+    {
+        return Err(validation_error(
+            "Chat profile capability IDs must be non-empty and at most 256 characters.",
+        ));
+    }
+    if profile.folder_paths.len() > 32
+        || profile
+            .folder_paths
+            .iter()
+            .any(|path| path.trim().is_empty() || path.chars().count() > 4_096)
+    {
+        return Err(validation_error(
+            "Chat folder access must contain at most 32 valid paths.",
+        ));
+    }
+    if profile
+        .folder_paths
+        .iter()
+        .any(|path| !Path::new(path).is_absolute())
+    {
+        return Err(validation_error(
+            "Chat folder access paths must be absolute paths selected from the folder picker.",
+        ));
+    }
+    Ok(())
+}
+
 /// Antigravity's CLI exposes MCP only through its own server registry rather
 /// than a per-process config flag. Replace the Hiveory-owned entry before
 /// launch: `mcp add` alone leaves the old endpoint in place on versions that
@@ -6685,6 +7084,7 @@ async fn hiveory_command_start_code_terminal(
             (*browser).clone(),
             payload.workspace_id.clone(),
             payload.adapter_id.as_deref(),
+            None,
             None,
         )
         .await?;
@@ -7484,6 +7884,7 @@ async fn hiveory_command_launch_code_pane_terminal(
                 terminal_start.workspace_id.clone(),
                 terminal_start.adapter_id.as_deref(),
                 None,
+                None,
             )
             .await?;
         }
@@ -7541,6 +7942,7 @@ async fn hiveory_command_launch_code_pane_terminal(
             (*browser).clone(),
             terminal_start.workspace_id.clone(),
             terminal_start.adapter_id.as_deref(),
+            None,
             None,
         )
         .await?;
@@ -8189,71 +8591,65 @@ async fn hiveory_query_chat_sidebar(
 
 #[tauri::command]
 async fn hiveory_query_chat_engines(
+    force: Option<bool>,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<ChatEngineCatalog, ApiError> {
-    let mut engines = foundation.code_runtime.chat_engines().await;
-    let provider = foundation
+    const CACHE_KEY: &str = "chat.provider_catalog.v1";
+    const CACHE_TTL_MS: i64 = 15 * 60 * 1000;
+    let cached = foundation
         .persistence
-        .provider_accounts()
+        .get_setting(CACHE_KEY)
         .await
         .map_err(database_error)?
-        .into_iter()
-        .find(|account| account.id == HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID);
-    let provider = provider.unwrap_or_else(|| hiveory_protocol::ProviderAccountSummary {
-        id: HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
-        kind: hiveory_protocol::ProviderKind::OpenAiResponses,
-        display_name: "OpenAI Responses".to_owned(),
-        default_model: None,
-        secret_configured: false,
-        enabled: false,
+        .and_then(|value| serde_json::from_str::<ChatEngineCatalog>(&value).ok());
+    let stale = force.unwrap_or(false)
+        || cached
+            .as_ref()
+            .map(|catalog| now_ms().saturating_sub(catalog.generated_at_unix_ms) > CACHE_TTL_MS)
+            .unwrap_or(true);
+
+    // Never put CLI probes on the renderer's critical path. The first call
+    // returns a deterministic six-provider catalog; subsequent calls return
+    // the last-known-good snapshot while a refresh runs at most once per TTL.
+    if stale
+        && !foundation
+            .chat_catalog_refreshing
+            .swap(true, Ordering::AcqRel)
+    {
+        let runtime = foundation.code_runtime.clone();
+        let persistence = foundation.persistence.clone();
+        let refreshing = foundation.chat_catalog_refreshing.clone();
+        tauri::async_runtime::spawn(async move {
+            let engines = runtime.chat_engines().await;
+            if !engines.is_empty() {
+                let catalog = ChatEngineCatalog {
+                    engines,
+                    generated_at_unix_ms: now_ms(),
+                };
+                if let Ok(value) = serde_json::to_string(&catalog) {
+                    let _ = persistence.set_setting(CACHE_KEY, &value).await;
+                }
+            }
+            refreshing.store(false, Ordering::Release);
+        });
+    }
+
+    let mut response = cached.unwrap_or_else(|| ChatEngineCatalog {
+        engines: bundled_chat_engines(),
+        // Zero is a stable sentinel so the renderer can poll for the first
+        // background snapshot without treating each fallback response as a
+        // catalog change.
+        generated_at_unix_ms: 0,
     });
-    let provider_ready = provider.enabled && provider.secret_configured;
-    let provider_models = vec![ChatModelSummary {
-        id: provider
-            .default_model
-            .clone()
-            .unwrap_or_else(|| "default".to_owned()),
-        display_name: provider
-            .default_model
-            .clone()
-            .unwrap_or_else(|| "Configured model".to_owned()),
-        effort_levels: vec![
-            ChatReasoningEffort::Auto,
-            ChatReasoningEffort::Low,
-            ChatReasoningEffort::Medium,
-            ChatReasoningEffort::High,
-        ],
-        default_effort: ChatReasoningEffort::Auto,
-    }];
-    engines.insert(
-        0,
-        ChatEngineSummary {
-            id: HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
-            display_name: provider.display_name,
-            executable: "Hosted provider".to_owned(),
-            availability: if provider_ready {
-                ChatEngineAvailability::Ready
-            } else {
-                ChatEngineAvailability::Unauthenticated
-            },
-            detected: true,
-            authenticated: provider_ready,
-            models: provider_models,
-            capabilities: vec![
-                hiveory_protocol::CodeAdapterCapability::ModelSelection,
-                hiveory_protocol::CodeAdapterCapability::ReasoningEffort,
-            ],
-            message: (!provider_ready).then_some(
-                "Configure an API key in Settings before using the hosted provider.".to_owned(),
-            ),
-            recovery_action: (!provider_ready)
-                .then_some("Open Settings → Provider and save an API key.".to_owned()),
-        },
-    );
-    Ok(ChatEngineCatalog {
-        engines,
-        generated_at_unix_ms: now_ms(),
-    })
+    if stale && response.generated_at_unix_ms != 0 {
+        // Preserve the last-known-good states and models, but give the
+        // renderer a deterministic signal to keep polling while an expired
+        // or manually refreshed snapshot is being replaced.
+        for engine in &mut response.engines {
+            engine.message = Some("Refreshing CLI status in the background…".to_owned());
+        }
+    }
+    Ok(response)
 }
 
 #[tauri::command]
@@ -8574,13 +8970,47 @@ async fn resolve_chat_engine_secret(
     Ok(None)
 }
 
+/// A chat has one provider identity after its first turn. Keeping this check
+/// in the host (rather than only hiding the renderer picker) prevents a stale
+/// window, retry, or direct IPC request from mixing providers in one history.
+async fn validate_chat_conversation_identity(
+    foundation: &HiveoryFoundation,
+    request: &ChatSendRequest,
+) -> Result<(), ApiError> {
+    let detail = foundation
+        .chat
+        .detail(&request.conversation_id)
+        .await
+        .map_err(chat_error)?;
+    let Some(identity) = detail
+        .turns
+        .iter()
+        .find(|turn| !turn.provider_account_id.trim().is_empty())
+    else {
+        return Ok(());
+    };
+    if identity.provider_account_id == request.provider_account_id
+        && identity.model == request.model
+        && identity.reasoning_effort == request.reasoning_effort
+    {
+        return Ok(());
+    }
+    Err(validation_error(format!(
+        "This chat is locked to {} · {} · {:?}. Start a new chat to use a different provider, model, or effort.",
+        identity.provider_account_id, identity.model, identity.reasoning_effort
+    )))
+}
+
 #[tauri::command]
 async fn hiveory_command_start_chat_turn(
     command: CommandEnvelope<ChatSendRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<ChatConversationDetail>, ApiError> {
     validate_chat_command(&command)?;
     validate_send_request(&command.payload).map_err(|error| validation_error(error.to_string()))?;
+    validate_chat_profile(command.payload.profile.as_ref())?;
     if let Some(existing) = foundation
         .chat
         .turn_for_command(&command.request_id)
@@ -8597,7 +9027,16 @@ async fn hiveory_command_start_chat_turn(
         ));
     }
     let engine_id = command.payload.provider_account_id.clone();
+    validate_chat_conversation_identity(&foundation, &command.payload).await?;
     let secret = resolve_chat_engine_secret(&foundation, &engine_id, "starting a chat").await?;
+    let session_integration = prepare_chat_session_integration(
+        &foundation,
+        app,
+        (*browser).clone(),
+        &engine_id,
+        command.payload.profile.as_ref(),
+    )
+    .await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn")
@@ -8664,6 +9103,7 @@ async fn hiveory_command_start_chat_turn(
         engine_id,
         command.payload.model.clone(),
         command.payload.reasoning_effort,
+        session_integration,
         cancellation,
     ));
     let detail = foundation
@@ -8705,8 +9145,11 @@ async fn hiveory_command_cancel_chat_turn(
 async fn hiveory_command_retry_chat_turn(
     command: CommandEnvelope<ChatTurnRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<ChatConversationDetail>, ApiError> {
     validate_chat_command(&command)?;
+    validate_chat_profile(command.payload.profile.as_ref())?;
     if let Some(existing) = foundation
         .chat
         .turn_for_command(&command.request_id)
@@ -8722,7 +9165,7 @@ async fn hiveory_command_retry_chat_turn(
                 .map_err(chat_error)?,
         ));
     }
-    let (engine_id, stored_model) = foundation
+    let (engine_id, stored_model, stored_profile) = foundation
         .chat
         .turn_configuration(&command.payload.conversation_id, &command.payload.turn_id)
         .await
@@ -8759,8 +9202,19 @@ async fn hiveory_command_retry_chat_turn(
         provider_account_id: engine_id.clone(),
         model,
         reasoning_effort: effort,
+        profile: command.payload.profile.clone().or(stored_profile),
     };
+    validate_chat_profile(request.profile.as_ref())?;
+    validate_chat_conversation_identity(&foundation, &request).await?;
     let secret = resolve_chat_engine_secret(&foundation, &engine_id, "retrying a chat").await?;
+    let session_integration = prepare_chat_session_integration(
+        &foundation,
+        app,
+        (*browser).clone(),
+        &engine_id,
+        request.profile.as_ref(),
+    )
+    .await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn_retry")
@@ -8819,6 +9273,7 @@ async fn hiveory_command_retry_chat_turn(
         engine_id,
         request.model,
         request.reasoning_effort,
+        session_integration,
         cancellation,
     ));
     Ok(response(
@@ -8835,8 +9290,11 @@ async fn hiveory_command_retry_chat_turn(
 async fn hiveory_command_edit_chat_message(
     command: CommandEnvelope<ChatEditRequest>,
     foundation: State<'_, HiveoryFoundation>,
+    app: tauri::AppHandle,
+    browser: State<'_, BrowserManager>,
 ) -> Result<ResponseEnvelope<ChatConversationDetail>, ApiError> {
     validate_chat_command(&command)?;
+    validate_chat_profile(command.payload.profile.as_ref())?;
     if command.payload.text.trim().is_empty() {
         return Err(validation_error("Edited message cannot be empty."));
     }
@@ -8856,7 +9314,26 @@ async fn hiveory_command_edit_chat_message(
         ));
     }
     let engine_id = command.payload.provider_account_id.clone();
+    let identity_request = ChatSendRequest {
+        conversation_id: command.payload.conversation_id.clone(),
+        branch_id: String::new(),
+        text: command.payload.text.clone(),
+        attachment_ids: Vec::new(),
+        provider_account_id: engine_id.clone(),
+        model: command.payload.model.clone(),
+        reasoning_effort: command.payload.reasoning_effort,
+        profile: command.payload.profile.clone(),
+    };
+    validate_chat_conversation_identity(&foundation, &identity_request).await?;
     let secret = resolve_chat_engine_secret(&foundation, &engine_id, "editing a chat").await?;
+    let session_integration = prepare_chat_session_integration(
+        &foundation,
+        app,
+        (*browser).clone(),
+        &engine_id,
+        command.payload.profile.as_ref(),
+    )
+    .await?;
     let (job, cancellation) = foundation
         .jobs
         .create("chat_turn_edit")
@@ -8909,6 +9386,7 @@ async fn hiveory_command_edit_chat_message(
         engine_id,
         command.payload.model.clone(),
         command.payload.reasoning_effort,
+        session_integration,
         cancellation,
     ));
     Ok(response(
@@ -9010,6 +9488,7 @@ async fn hiveory_stream_chat_events(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_chat_turn(
     foundation: HiveoryFoundation,
     start: hiveory_persistence::chat::HiveoryChatTurnStart,
@@ -9017,6 +9496,7 @@ async fn run_chat_turn(
     engine_id: String,
     model: String,
     reasoning_effort: ChatReasoningEffort,
+    session_integration: Option<hiveory_protocol::CodeCliSessionIntegration>,
     cancellation: CancellationToken,
 ) {
     let request = match build_chat_model_request(
@@ -9067,6 +9547,8 @@ async fn run_chat_turn(
         &engine_id,
         secret.as_deref(),
         request,
+        start.profile.as_ref(),
+        session_integration.as_ref(),
         cancellation.clone(),
         callback,
     );
@@ -9158,11 +9640,14 @@ async fn run_chat_turn(
         .map(|mut values| values.remove(&start.turn_id));
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn stream_chat_engine(
     foundation: &HiveoryFoundation,
     engine_id: &str,
     secret: Option<&str>,
     request: ChatModelTurnRequest,
+    profile: Option<&hiveory_protocol::ChatProfileSnapshot>,
+    session_integration: Option<&hiveory_protocol::CodeCliSessionIntegration>,
     cancellation: CancellationToken,
     callback: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static>,
 ) -> Result<(), HiveoryProviderError> {
@@ -9177,12 +9662,16 @@ async fn stream_chat_engine(
             )
             .await;
     }
-    let prompt = render_chat_cli_prompt(&request);
-    stream_cli_chat_turn(
+    let prompt = render_chat_cli_prompt(&request, profile);
+    stream_cli_chat_turn_with_options(
         engine_id,
         &request.model,
         request.reasoning_effort,
         &prompt,
+        ChatSessionOptions {
+            profile,
+            session_integration,
+        },
         cancellation,
         callback,
     )
@@ -9298,11 +9787,60 @@ async fn build_chat_model_request(
     })
 }
 
-fn render_chat_cli_prompt(request: &ChatModelTurnRequest) -> String {
+fn render_chat_cli_prompt(
+    request: &ChatModelTurnRequest,
+    profile: Option<&hiveory_protocol::ChatProfileSnapshot>,
+) -> String {
     const MAX_PROMPT_BYTES: usize = 180 * 1024;
     let mut prompt = String::from(
-        "You are responding in a focused desktop chat. Tools, file access, and workspace edits are disabled. Use the conversation below as context and answer the latest user message directly.\n\n",
+        "You are responding in a focused desktop chat. Use the conversation below as context and answer the latest user message directly.\n\n",
     );
+    if let Some(profile) = profile {
+        let approval_policy = serde_json::to_string(&profile.approval_policy)
+            .unwrap_or_else(|_| "\"ask_for_mutations\"".to_owned());
+        let execution_target = serde_json::to_string(&profile.execution_target)
+            .unwrap_or_else(|_| "\"desktop\"".to_owned());
+        prompt.push_str("## Chat profile\n");
+        prompt.push_str("This turn is isolated to the current conversation.\n");
+        prompt.push_str("Approval policy: ");
+        prompt.push_str(approval_policy.trim_matches('"'));
+        prompt.push_str(". Execution target: ");
+        prompt.push_str(execution_target.trim_matches('"'));
+        prompt.push_str(".\n");
+        if profile.skill_ids.is_empty() {
+            prompt.push_str("Enabled skills: none.\n");
+        } else {
+            prompt.push_str("Enabled skill IDs: ");
+            prompt.push_str(&profile.skill_ids.join(", "));
+            prompt.push_str(".\n");
+        }
+        if profile.plugin_tool_names.is_empty() {
+            prompt.push_str("Enabled plugin tools: none.\n");
+        } else {
+            prompt.push_str("Enabled plugin tools: ");
+            prompt.push_str(&profile.plugin_tool_names.join(", "));
+            prompt.push_str(".\n");
+        }
+        if profile.folder_paths.is_empty() {
+            prompt.push_str("Explicit folder access: none; do not read or modify local folders.\n");
+        } else {
+            prompt.push_str(
+                "Explicit folder access (read-only context unless the user approves a mutation):\n",
+            );
+            for path in profile.folder_paths.iter().take(32) {
+                prompt.push_str("- ");
+                prompt.push_str(path);
+                prompt.push('\n');
+            }
+        }
+        prompt.push_str(&format!(
+            "Maximum tool calls: {}.\n\n",
+            profile.max_tool_calls
+        ));
+        prompt.push_str("Use the enabled Hiveory tools when they are needed; do not claim they are unavailable. Never access paths outside the explicit folders above.\n\n");
+    } else {
+        prompt.push_str("No chat tools or folder access are enabled for this turn.\n\n");
+    }
     for message in &request.messages {
         prompt.push_str("[ ");
         prompt.push_str(&format!("{:?}", message.role).to_lowercase());

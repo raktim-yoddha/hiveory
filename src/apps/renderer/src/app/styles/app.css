@@ -1559,3 +1559,6 @@ a:focus-visible {
 .hiveory-browser-external-form input { box-sizing: border-box; width: 100%; border: 1px solid #45464a; border-radius: 8px; padding: 9px 10px; color: #f0f0f1; background: #0e0f10; }
 .hiveory-capability-note { display: flex; align-items: flex-start; gap: 9px; }
 .hiveory-capability-note svg { flex: 0 0 auto; margin-top: 2px; }
+.hiveory-diagnostic-provider-list { display: grid; gap: 6px; margin-top: 5px; }
+.hiveory-diagnostic-provider-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #2d2e31; padding: 9px 0; color: #cfd0d3; font-size: 13px; }
+.hiveory-diagnostic-provider-row strong { color: #9ed3ff; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }

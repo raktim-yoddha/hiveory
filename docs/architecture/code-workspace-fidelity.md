@@ -36,7 +36,7 @@ The renderer does not invent pane topology. It only dispatches user intent and r
 
 ## Terminal lifecycle
 
-1. A trusted workspace requests a structured shell or installed coding-adapter launch. Windows profiles include CMD, PowerShell, and Git Bash when available; coding adapters include Codex CLI, Claude Code, Antigravity, and OpenCode when installed.
+1. A trusted workspace requests a structured shell or installed coding-adapter launch. Windows profiles include CMD, PowerShell, and Git Bash when available; coding adapters include Codex CLI, Claude Code, Antigravity, OpenCode, Cursor Agent, and Grok when installed.
 2. The runtime starts a PTY in the approved workspace root.
 3. The first event is sequence `1`; output, errors, and exit events increment the same counter.
 4. Output is appended to a 1 MiB ring buffer and broadcast to live subscribers.

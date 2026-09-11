@@ -10,7 +10,6 @@ import {
   Download,
   FolderArchive,
   Globe2,
-  KeyRound,
   Keyboard,
   ListTodo,
   MessageSquare,
@@ -33,6 +32,7 @@ import {
   type BrowserConfiguration,
   type BrowserSettings,
   type DiagnosticSnapshot,
+  type ChatEngineCatalog,
   type UpdateSnapshot,
 } from '../../shared/api/hiveory-client'
 import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
@@ -230,6 +230,29 @@ export function HiveoryShell() {
       window.removeEventListener('hiveory-open-browser-settings', openBrowserSettings)
       window.removeEventListener('hiveory-open-help', openHelp)
     }
+  }, [])
+
+  // Global rails (including Chat) share the same destinations. Keep the
+  // navigation event host-owned so switching surfaces never destroys an
+  // active run; the destination component simply mounts and rehydrates.
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode?: ApplicationMode; section?: string }>).detail ?? {}
+      const mode = detail.mode
+      if (mode !== 'agent' && mode !== 'code' && mode !== 'chat') return
+      setScreen('workspace')
+      setCommandOpen(false)
+      setNotificationsOpen(false)
+      setActiveMode(mode)
+      void hiveoryClient.setActiveMode(mode).catch(() => undefined)
+      if (mode === 'code' && detail.section) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('hiveory-code-workspace-section', { detail: { section: detail.section } }))
+        }, 0)
+      }
+    }
+    window.addEventListener('hiveory-navigate-section', navigate)
+    return () => window.removeEventListener('hiveory-navigate-section', navigate)
   }, [])
 
   useEffect(() => {
@@ -692,7 +715,7 @@ export function HiveoryShell() {
           className={screen === 'settings' ? 'hiveory-workspace is-code-app is-settings-app' : 'hiveory-workspace is-code-app'}
         >
           {screen === 'diagnostics' ? (
-            <HiveoryDiagnostics snapshot={snapshot} refresh={refresh} />
+            <HiveoryDiagnostics />
           ) : screen === 'settings' ? (
             <HiveorySettings
               preferences={preferences}
@@ -1278,28 +1301,18 @@ function HiveorySettings({
   )
 }
 
-function HiveoryDiagnostics({
-  snapshot,
-  refresh,
-}: {
-  snapshot: DiagnosticSnapshot
-  refresh: () => void | Promise<void>
-}) {
-  const provider = snapshot.providers[0]
-  const [secret, setSecret] = useState('')
-  const [busy, setBusy] = useState<string | null>(null)
+function HiveoryDiagnostics() {
+  const [catalog, setCatalog] = useState<ChatEngineCatalog | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const run = async (name: string, action: () => Promise<void>) => {
-    setBusy(name)
-    try {
-      await action()
-      await refresh()
-    } catch {
-      // ignore
-    } finally {
-      setBusy(null)
-    }
-  }
+  useEffect(() => {
+    let disposed = false
+    void hiveoryClient.chatEngines()
+      .then((next) => { if (!disposed) setCatalog(next) })
+      .catch(() => { if (!disposed) setCatalog(null) })
+      .finally(() => { if (!disposed) setLoading(false) })
+    return () => { disposed = true }
+  }, [])
 
   return (
     <section className="hiveory-diagnostics" aria-labelledby="hiveory-diagnostics-title">
@@ -1313,29 +1326,20 @@ function HiveoryDiagnostics({
       <div className="hiveory-diagnostic-grid">
         <section className="hiveory-diagnostic-card">
           <div className="hiveory-card-heading">
-            <KeyRound size={17} />
-            <h2>OpenAI Responses</h2>
+            <Activity size={17} />
+            <h2>Chat providers</h2>
           </div>
-          <label htmlFor="hiveory-secret">API key</label>
-          <input
-            id="hiveory-secret"
-            type="password"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
-            placeholder={provider?.secret_configured ? 'Stored securely' : 'Paste API key'}
-            autoComplete="off"
-          />
-          <button
-            disabled={busy !== null || !secret}
-            onClick={() =>
-              run('secret', async () => {
-                await hiveoryClient.setSecret(secret)
-                setSecret('')
-              })
-            }
-          >
-            {busy === 'secret' ? 'Storing…' : 'Store in credential manager'}
-          </button>
+          <p>Chat uses the installed local CLIs. Discovery is cached for fast startup and refreshed in the background.</p>
+          <div className="hiveory-diagnostic-provider-list">
+            {loading && <span>Checking installed CLIs…</span>}
+            {!loading && !catalog?.engines.length && <span>No supported CLIs were found.</span>}
+            {catalog?.engines.map((engine) => (
+              <div className="hiveory-diagnostic-provider-row" key={engine.id}>
+                <span>{engine.display_name}</span>
+                <strong>{engine.availability === 'ready' ? 'Ready' : engine.availability === 'missing' ? 'Not installed' : engine.availability === 'unauthenticated' ? 'Not configured' : 'Checking'}</strong>
+              </div>
+            ))}
+          </div>
         </section>
       </div>
     </section>

@@ -84,7 +84,8 @@ Code runs are durable task graphs rather than transient terminal tabs.
 
 ## Chat mode
 
-Chat mode is intentionally independent from Code workspaces and agent tools.
+Chat mode is intentionally independent from Code workspaces while still
+supporting an explicit, per-conversation capability profile.
 
 - Create, rename, organize, and delete conversations.
 - Stream text and reasoning events from the configured model.
@@ -93,8 +94,15 @@ Chat mode is intentionally independent from Code workspaces and agent tools.
 - Import bounded PDF, image, text, and Markdown attachments into application-managed storage.
 - Render Markdown, syntax-highlighted code, tables, task lists, links, images, and mathematical notation.
 - Export a conversation and its attachments as a sanitized portable archive.
+- Use installed local Codex CLI, Claude Code, Antigravity, OpenCode, Cursor
+  Agent, or Grok CLIs, with cached discovery and background health refresh.
+- Configure conversation-only memory, approval policy, selected valid skills,
+  validated plugin tools, and explicitly granted read-only folders from the
+  chat inspector. The selected profile is recorded with each turn.
 
-Chat does not inherit terminal, Git, workspace, or plugin capabilities.
+Chat never inherits terminal, Git, or the active Code workspace. Skills,
+validated plugin tools, and folders are available only when selected in the
+conversation profile; folder access is never granted automatically.
 
 ## Tasks and workspace board
 
@@ -225,8 +233,10 @@ Optional tools unlock their related features:
 
 - GitHub CLI (`gh`) for GitHub source intelligence and Tasks;
 - Git for Windows for Git Bash panes;
-- Codex CLI, Claude Code, Antigravity, or OpenCode for their coding-agent panes;
-- an OpenAI API key and explicit model name for model-backed Chat and Agent runs.
+- Codex CLI, Claude Code, Antigravity, OpenCode, Cursor Agent, or Grok for
+  their coding-agent panes and local Chat providers;
+- an OpenAI API key and explicit model name only when using the legacy hosted
+  OpenAI Agent provider.
 
 ## Development
 
@@ -251,7 +261,10 @@ pnpm --dir src/apps/renderer dev
 
 Native filesystem, terminal, keyring, provider, and persistence functions are unavailable in the browser-only renderer.
 
-Configure the OpenAI Responses provider from Hiveory Settings/Diagnostics before starting a model-backed workflow. The API key is written directly to the OS credential manager.
+Chat discovers and launches the installed local CLIs above using each CLI's
+own sign-in flow. The legacy hosted OpenAI Agent provider can be configured
+from Hiveory Settings/Diagnostics; its API key is written directly to the OS
+credential manager.
 
 ## Building
 

@@ -267,7 +267,9 @@ export const CODEX_ADAPTER_ID = 'codex-cli'
 export const CLAUDE_CODE_ADAPTER_ID = 'claude-code'
 export const ANTIGRAVITY_ADAPTER_ID = 'antigravity'
 export const OPENCODE_ADAPTER_ID = 'opencode'
-export const CODE_ADAPTER_IDS = [CODEX_ADAPTER_ID, CLAUDE_CODE_ADAPTER_ID, ANTIGRAVITY_ADAPTER_ID, OPENCODE_ADAPTER_ID] as const
+export const CURSOR_ADAPTER_ID = 'cursor'
+export const GROK_ADAPTER_ID = 'grok'
+export const CODE_ADAPTER_IDS = [CODEX_ADAPTER_ID, CLAUDE_CODE_ADAPTER_ID, ANTIGRAVITY_ADAPTER_ID, OPENCODE_ADAPTER_ID, CURSOR_ADAPTER_ID, GROK_ADAPTER_ID] as const
 export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; coordinator_id: string; adapter_id: string; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
 export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type TaskBoardStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
@@ -285,6 +287,8 @@ export type CodeDagProposal = { objective: string; tasks: CodeDagProposalTask[];
 export type CodeRunDetail = { summary: CodeRunSummary; tasks: CodeTask[]; dependencies: CodeTaskDependency[]; dispatches: CodeDispatch[]; worktrees: CodeManagedWorktree[]; checkpoints: CodeCheckpoint[]; reviews: CodeReview[]; questions: CodeQuestion[]; messages: CodeOrchestrationMessage[]; events: CodeOrchestrationEventEnvelope[]; event_cursor: number; proposal: CodeDagProposal | null }
 
 export type ChatAttachmentSummary = { id: string; display_name: string; mime_type: string; bytes: number; sha256: string }
+export type ChatMemoryMode = 'conversation'
+export type ChatProfileSnapshot = { skill_ids: string[]; plugin_tool_names: string[]; folder_paths: string[]; memory_mode: ChatMemoryMode; approval_policy: AgentApprovalPolicy; execution_target: AgentExecutionTarget; max_tool_calls: number }
 export type ChatMessagePart =
   | { kind: 'text'; text: string }
   | { kind: 'reasoning_summary'; text: string }
@@ -298,8 +302,8 @@ export type ChatMessagePart =
   | { kind: 'tool_result'; call_id: string; result: string }
 export type ChatMessage = { id: string; branch_id: string; role: 'user' | 'assistant' | 'system'; parts: ChatMessagePart[]; created_at_unix_ms: number; turn_id: string | null }
 export type ChatBranchSummary = { id: string; parent_branch_id: string | null; forked_after_message_id: string | null; label: string; created_at_unix_ms: number; active: boolean }
-export type ChatTurnSummary = { id: string; message_id: string; assistant_message_id: string; branch_id: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort; state: ChatTurnState; job_id: string | null; input_tokens: number | null; output_tokens: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
-export type ChatConversationSummary = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; folder_id: string | null; folder_position: number; updated_at_unix_ms: number; preview: string | null }
+export type ChatTurnSummary = { id: string; message_id: string; assistant_message_id: string; branch_id: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort; profile?: ChatProfileSnapshot | null; state: ChatTurnState; job_id: string | null; input_tokens: number | null; output_tokens: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
+export type ChatConversationSummary = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; folder_id: string | null; folder_position: number; updated_at_unix_ms: number; preview: string | null; provider_account_id: string | null }
 export type ChatConversationDetail = { id: string; title: string; active_branch_id: string; pinned: boolean; archived: boolean; folder_id: string | null; folder_position: number; branches: ChatBranchSummary[]; messages: ChatMessage[]; turns: ChatTurnSummary[]; draft: string; event_cursor: number; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type ChatFolderSummary = { id: string; name: string; position: number; conversation_count: number }
 export type ChatSidebarPage = { conversations: ChatConversationSummary[]; folders: ChatFolderSummary[]; next_cursor: string | null }
@@ -319,9 +323,9 @@ type ChatDraftRequest = { conversation_id: string; draft: string }
 export type ChatAttachmentImportRequest = { conversation_id: string; message_id: string | null; paths: string[] }
 export type ChatAttachmentBytesRequest = { conversation_id: string; message_id: string | null; display_name: string; mime_type: string; data_base64: string }
 export type ChatDiscardAttachmentRequest = { conversation_id: string; attachment_id: string }
-export type ChatSendRequest = { conversation_id: string; branch_id: string; text: string; attachment_ids: string[]; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort }
-type ChatTurnRequest = { conversation_id: string; turn_id: string; model: string | null; reasoning_effort: ChatReasoningEffort | null }
-type ChatEditRequest = { conversation_id: string; message_id: string; text: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort }
+export type ChatSendRequest = { conversation_id: string; branch_id: string; text: string; attachment_ids: string[]; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort; profile?: ChatProfileSnapshot | null }
+type ChatTurnRequest = { conversation_id: string; turn_id: string; model: string | null; reasoning_effort: ChatReasoningEffort | null; profile?: ChatProfileSnapshot | null }
+type ChatEditRequest = { conversation_id: string; message_id: string; text: string; provider_account_id: string; model: string; reasoning_effort: ChatReasoningEffort; profile?: ChatProfileSnapshot | null }
 type ChatBranchRequest = { conversation_id: string; message_id: string }
 type ChatDeleteAttachmentRequest = { conversation_id: string; message_id: string; attachment_id: string }
 type ChatExportRequest = { conversation_id: string; branch_id: string; destination: string }
@@ -432,19 +436,17 @@ const previewRoutines: RoutineDetail[] = [{ summary: { id: 'preview-routine-1', 
 const previewChatEngines: ChatEngineCatalog = {
   generated_at_unix_ms: Date.now(),
   engines: [
-    {
-      id: 'hiveory-openai', display_name: 'Hosted provider', executable: 'Hosted provider', availability: 'ready', detected: true, authenticated: true,
-      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: ['auto', 'low', 'medium', 'high'], default_effort: 'auto' }], capabilities: ['model_selection', 'reasoning_effort'], message: null, recovery_action: null,
-    },
     ...[
       ['codex-cli', 'Codex CLI'],
       ['claude-code', 'Claude Code'],
       ['antigravity', 'Antigravity'],
       ['opencode', 'OpenCode'],
+      ['cursor', 'Cursor'],
+      ['grok', 'Grok'],
     ].map(([id, display_name]) => ({
       id, display_name, executable: id, availability: 'ready' as const, detected: true, authenticated: true,
-      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: ['auto', 'low', 'medium', 'high'] as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
-      capabilities: ['model_selection', 'reasoning_effort'] as CodeAdapterCapability[], message: null, recovery_action: null,
+      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: (id === 'cursor' || id === 'opencode' ? ['auto'] : ['auto', 'low', 'medium', 'high']) as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
+      capabilities: (id === 'cursor' || id === 'opencode' ? ['model_selection'] : ['model_selection', 'reasoning_effort']) as CodeAdapterCapability[], message: null, recovery_action: null,
     })),
   ],
 }
@@ -462,7 +464,7 @@ function previewDetail(title = 'New chat'): ChatConversationDetail {
 }
 function previewSummary(detail: ChatConversationDetail): ChatConversationSummary {
   const text = detail.messages.flatMap((message) => message.parts).find((part): part is Extract<ChatMessagePart, { kind: 'text' }> => part.kind === 'text')?.text ?? null
-  return { id: detail.id, title: detail.title, active_branch_id: detail.active_branch_id, pinned: detail.pinned, archived: detail.archived, folder_id: detail.folder_id, folder_position: detail.folder_position, updated_at_unix_ms: detail.updated_at_unix_ms, preview: text?.slice(0, 160) ?? null }
+  return { id: detail.id, title: detail.title, active_branch_id: detail.active_branch_id, pinned: detail.pinned, archived: detail.archived, folder_id: detail.folder_id, folder_position: detail.folder_position, updated_at_unix_ms: detail.updated_at_unix_ms, preview: text?.slice(0, 160) ?? null, provider_account_id: detail.turns.find((turn) => turn.provider_account_id)?.provider_account_id ?? null }
 }
 function previewEvent(detail: ChatConversationDetail, kind: string, messageId: string | null, textDelta: string | null, message: string | null): ChatEventEnvelope {
   detail.event_cursor += 1
@@ -703,6 +705,8 @@ function previewCodeSummary(): CodeSnapshot {
       { id: CLAUDE_CODE_ADAPTER_ID, display_name: 'Claude Code', executable: 'claude', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
       { id: ANTIGRAVITY_ADAPTER_ID, display_name: 'Antigravity', executable: 'agy', detected: false, authenticated: false, capabilities: ['model_selection', 'permission_modes'] },
       { id: OPENCODE_ADAPTER_ID, display_name: 'OpenCode', executable: 'opencode', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
+      { id: CURSOR_ADAPTER_ID, display_name: 'Cursor', executable: 'cursor-agent', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
+      { id: GROK_ADAPTER_ID, display_name: 'Grok', executable: 'grok', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] },
     ],
   }
 }
@@ -2100,8 +2104,8 @@ export const hiveoryClient = {
     return typeof selected === 'string' ? selected : null
   },
 
-  async chatEngines(): Promise<ChatEngineCatalog> {
-    if (hiveoryIsTauri) return tauriQuery<ChatEngineCatalog>('hiveory_query_chat_engines')
+  async chatEngines(force = false): Promise<ChatEngineCatalog> {
+    if (hiveoryIsTauri) return tauriQuery<ChatEngineCatalog>('hiveory_query_chat_engines', force ? { force: true } : undefined)
     return previewResponse(structuredClone(previewChatEngines))
   },
   async chatSidebar(query: { search?: string; archived: boolean; folder_id?: string | null; limit?: number }): Promise<ChatSidebarPage> {
@@ -2193,16 +2197,30 @@ export const hiveoryClient = {
     const assistantId = previewId('message')
     const turnId = previewId('turn')
     detail.messages.push({ id: userId, branch_id: request.branch_id, role: 'user', parts: [{ kind: 'text', text: request.text }], created_at_unix_ms: now, turn_id: turnId })
-    detail.messages.push({ id: assistantId, branch_id: request.branch_id, role: 'assistant', parts: [{ kind: 'text', text: 'Preview response: your local chat vertical slice is connected and ready for a provider key.' }], created_at_unix_ms: now, turn_id: turnId })
-    detail.turns.push({ id: turnId, message_id: userId, assistant_message_id: assistantId, branch_id: request.branch_id, provider_account_id: request.provider_account_id, model: request.model, reasoning_effort: request.reasoning_effort, state: 'completed', job_id: 'preview-job', input_tokens: null, output_tokens: null, created_at_unix_ms: now, updated_at_unix_ms: now })
+    detail.messages.push({ id: assistantId, branch_id: request.branch_id, role: 'assistant', parts: [{ kind: 'text', text: 'Preview response: the local chat surface is connected.' }], created_at_unix_ms: now, turn_id: turnId })
+    detail.turns.push({ id: turnId, message_id: userId, assistant_message_id: assistantId, branch_id: request.branch_id, provider_account_id: request.provider_account_id, model: request.model, reasoning_effort: request.reasoning_effort, profile: request.profile ?? null, state: 'completed', job_id: 'preview-job', input_tokens: null, output_tokens: null, created_at_unix_ms: now, updated_at_unix_ms: now })
     detail.updated_at_unix_ms = now
-    previewEvent(detail, 'assistant_text_appended', assistantId, 'Preview response: your local chat vertical slice is connected and ready for a provider key.', null)
+    previewEvent(detail, 'assistant_text_appended', assistantId, 'Preview response: the local chat surface is connected.', null)
     previewEvent(detail, 'turn_completed', assistantId, null, null)
     return previewResponse(structuredClone(detail))
   },
   async cancelChatTurn(request: ChatTurnRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<ChatTurnRequest, boolean>('hiveory_command_cancel_chat_turn', request) : true },
-  async retryChatTurn(request: ChatTurnRequest): Promise<ChatConversationDetail> { return hiveoryIsTauri ? tauriCommand<ChatTurnRequest, ChatConversationDetail>('hiveory_command_retry_chat_turn', request) : this.startChatTurn({ conversation_id: request.conversation_id, branch_id: previewConversations.get(request.conversation_id)?.active_branch_id ?? '', text: 'Retry the previous response.', attachment_ids: [], provider_account_id: previewProvider.id, model: request.model ?? previewProvider.default_model ?? 'preview', reasoning_effort: request.reasoning_effort ?? 'auto' }) },
-  async editChatMessage(request: ChatEditRequest): Promise<ChatConversationDetail> { return hiveoryIsTauri ? tauriCommand<ChatEditRequest, ChatConversationDetail>('hiveory_command_edit_chat_message', request) : this.startChatTurn({ conversation_id: request.conversation_id, branch_id: previewConversations.get(request.conversation_id)?.active_branch_id ?? '', text: request.text, attachment_ids: [], provider_account_id: request.provider_account_id, model: request.model, reasoning_effort: request.reasoning_effort }) },
+  async retryChatTurn(request: ChatTurnRequest): Promise<ChatConversationDetail> {
+    if (hiveoryIsTauri) return tauriCommand<ChatTurnRequest, ChatConversationDetail>('hiveory_command_retry_chat_turn', request)
+    const detail = previewConversations.get(request.conversation_id)
+    const previous = detail?.turns.find((turn) => turn.id === request.turn_id)
+    return this.startChatTurn({
+      conversation_id: request.conversation_id,
+      branch_id: detail?.active_branch_id ?? '',
+      text: 'Retry the previous response.',
+      attachment_ids: [],
+      provider_account_id: previous?.provider_account_id ?? previewChatEngines.engines[0]?.id ?? 'codex-cli',
+      model: request.model ?? previous?.model ?? 'preview',
+      reasoning_effort: request.reasoning_effort ?? previous?.reasoning_effort ?? 'auto',
+      profile: request.profile ?? null,
+    })
+  },
+  async editChatMessage(request: ChatEditRequest): Promise<ChatConversationDetail> { return hiveoryIsTauri ? tauriCommand<ChatEditRequest, ChatConversationDetail>('hiveory_command_edit_chat_message', request) : this.startChatTurn({ conversation_id: request.conversation_id, branch_id: previewConversations.get(request.conversation_id)?.active_branch_id ?? '', text: request.text, attachment_ids: [], provider_account_id: request.provider_account_id, model: request.model, reasoning_effort: request.reasoning_effort, profile: request.profile ?? null }) },
   async branchChat(request: ChatBranchRequest): Promise<ChatConversationDetail> { return hiveoryIsTauri ? tauriCommand<ChatBranchRequest, ChatConversationDetail>('hiveory_command_branch_chat', request) : this.chatConversation(request.conversation_id) },
   async exportChat(request: ChatExportRequest): Promise<boolean> { return hiveoryIsTauri ? tauriCommand<ChatExportRequest, boolean>('hiveory_command_export_chat', request) : true },
   subscribeChat(onEvent: (event: ChatEventEnvelope) => void, afterGlobalSequence = 0): () => void {

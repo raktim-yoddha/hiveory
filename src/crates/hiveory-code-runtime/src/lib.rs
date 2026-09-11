@@ -8,10 +8,11 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use hiveory_platform_process::configure_background_command;
 use hiveory_protocol::{
     canonical_code_adapter_id, ChatEngineAvailability, ChatEngineSummary, ChatModelSummary,
-    ChatProviderStreamEvent, ChatProviderStreamEventKind, ChatReasoningEffort,
-    CodeAdapterCapability, CodeAdapterSummary, CodeAgentLaunchMode, CodeTerminalEvent,
-    CodeTerminalEventKind, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
-    CodeTerminalStartRequest, CodeTerminalState, CodeTerminalStopRequest, CodeTerminalSummary,
+    ChatProfileSnapshot, ChatProviderStreamEvent, ChatProviderStreamEventKind, ChatReasoningEffort,
+    CodeAdapterCapability, CodeAdapterSummary, CodeAgentLaunchMode, CodeCliSessionIntegration,
+    CodeTerminalEvent, CodeTerminalEventKind, CodeTerminalInputRequest, CodeTerminalKind,
+    CodeTerminalResizeRequest, CodeTerminalStartRequest, CodeTerminalState,
+    CodeTerminalStopRequest, CodeTerminalSummary,
 };
 use portable_pty::{native_pty_system, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde_json::Value;
@@ -42,6 +43,10 @@ pub const ANTIGRAVITY_ADAPTER_ID: &str = "antigravity";
 pub const ANTIGRAVITY_EXECUTABLE: &str = "agy";
 pub const OPENCODE_ADAPTER_ID: &str = "opencode";
 pub const OPENCODE_EXECUTABLE: &str = "opencode";
+pub const CURSOR_ADAPTER_ID: &str = "cursor";
+pub const CURSOR_EXECUTABLE: &str = "cursor-agent";
+pub const GROK_ADAPTER_ID: &str = "grok";
+pub const GROK_EXECUTABLE: &str = "grok";
 pub type TerminalEventSink = Arc<dyn Fn(CodeTerminalEvent) + Send + Sync + 'static>;
 
 fn process_path(path: &Path) -> PathBuf {
@@ -101,6 +106,16 @@ const ADAPTER_SPECS: &[AdapterSpec] = &[
         id: OPENCODE_ADAPTER_ID,
         display_name: "OpenCode",
         executable: OPENCODE_EXECUTABLE,
+    },
+    AdapterSpec {
+        id: CURSOR_ADAPTER_ID,
+        display_name: "Cursor",
+        executable: CURSOR_EXECUTABLE,
+    },
+    AdapterSpec {
+        id: GROK_ADAPTER_ID,
+        display_name: "Grok",
+        executable: GROK_EXECUTABLE,
     },
 ];
 
@@ -215,10 +230,27 @@ fn command_with_prefix(program: &ResolvedExecutable) -> StdCommand {
 fn probe_adapter(spec: AdapterSpec) -> bool {
     command_with_prefix(&resolve_executable(spec.executable))
         .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()
-        .map(|output| output.status.success())
+        .map(|output| {
+            if output.status.success() {
+                return true;
+            }
+            // Grok 0.2.x may return a non-zero status from --version while
+            // it refreshes an unauthenticated model cache. The executable is
+            // still present and its version probe is useful for discovery.
+            if spec.id != GROK_ADAPTER_ID {
+                return false;
+            }
+            let text = format!(
+                "{} {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .to_ascii_lowercase();
+            text.contains("grok ") && !text.contains("not recognized")
+        })
         .unwrap_or(false)
 }
 
@@ -240,11 +272,18 @@ fn adapter_capabilities(id: &str) -> Vec<CodeAdapterCapability> {
     let mut capabilities = vec![CodeAdapterCapability::ModelSelection];
     if matches!(
         id,
-        CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID | OPENCODE_ADAPTER_ID
+        CODEX_ADAPTER_ID
+            | CLAUDE_CODE_ADAPTER_ID
+            | OPENCODE_ADAPTER_ID
+            | CURSOR_ADAPTER_ID
+            | GROK_ADAPTER_ID
     ) {
         capabilities.push(CodeAdapterCapability::Resume);
     }
-    if id == CODEX_ADAPTER_ID {
+    if matches!(
+        id,
+        CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID
+    ) {
         capabilities.push(CodeAdapterCapability::ReasoningEffort);
     }
     capabilities.push(CodeAdapterCapability::PermissionModes);
@@ -279,6 +318,11 @@ async fn discover_chat_engine(spec: AdapterSpec) -> ChatEngineSummary {
         }
         _ if authenticated => discover_cli_models(spec).await.unwrap_or_default(),
         _ => Vec::new(),
+    };
+    let models = if authenticated && models.is_empty() {
+        fallback_models(spec.id)
+    } else {
+        models
     };
     let catalog_failed = authenticated && models.is_empty();
     let availability = if !authenticated {
@@ -373,6 +417,19 @@ async fn chat_authentication(spec: AdapterSpec) -> (bool, Option<String>) {
             Ok(_) => (true, None),
             Err(error) => (false, Some(sanitize_cli_error(&error))),
         },
+        // Cursor authenticates inside the ACP session. A successful version
+        // probe is the only portable, non-interactive health check. Grok has
+        // a cheap model command that explicitly reports missing credentials,
+        // so use that to avoid advertising an unauthenticated CLI as Ready.
+        CURSOR_ADAPTER_ID => (true, None),
+        GROK_ADAPTER_ID => match run_cli_capture(spec, &["models"]).await {
+            Ok(output) if output.to_ascii_lowercase().contains("not authenticated") => (
+                false,
+                Some("Sign in with Grok before using it in Chat.".to_owned()),
+            ),
+            Ok(_) => (true, None),
+            Err(error) => (false, Some(sanitize_cli_error(&error))),
+        },
         _ => (false, Some("This CLI is not supported by Chat.".to_owned())),
     }
 }
@@ -385,12 +442,17 @@ fn authentication_recovery(id: &str) -> &'static str {
         ANTIGRAVITY_ADAPTER_ID => {
             "Open the CLI once and complete its sign-in flow, then refresh Chat."
         }
+        CURSOR_ADAPTER_ID => {
+            "Open Cursor Agent once and complete its sign-in flow, then refresh Chat."
+        }
+        GROK_ADAPTER_ID => "Run `grok login` in a terminal, then refresh Chat.",
         _ => "Check the CLI configuration and refresh Chat.",
     }
 }
 
 fn claude_models() -> Vec<ChatModelSummary> {
     let effort_levels = vec![
+        ChatReasoningEffort::Auto,
         ChatReasoningEffort::Low,
         ChatReasoningEffort::Medium,
         ChatReasoningEffort::High,
@@ -411,6 +473,34 @@ fn claude_models() -> Vec<ChatModelSummary> {
         default_effort: ChatReasoningEffort::Medium,
     })
     .collect()
+}
+
+fn fallback_models(adapter_id: &str) -> Vec<ChatModelSummary> {
+    let levels = match adapter_id {
+        OPENCODE_ADAPTER_ID => vec![ChatReasoningEffort::Auto],
+        CURSOR_ADAPTER_ID => vec![ChatReasoningEffort::Auto],
+        _ => vec![
+            ChatReasoningEffort::Auto,
+            ChatReasoningEffort::Low,
+            ChatReasoningEffort::Medium,
+            ChatReasoningEffort::High,
+        ],
+    };
+    let entries: &[(&str, &str)] = match adapter_id {
+        CURSOR_ADAPTER_ID => &[("default", "Cursor default")],
+        GROK_ADAPTER_ID => &[("default", "Grok default")],
+        OPENCODE_ADAPTER_ID => &[("default", "Provider default")],
+        _ => &[("default", "CLI default")],
+    };
+    entries
+        .iter()
+        .map(|(id, display_name)| ChatModelSummary {
+            id: (*id).to_owned(),
+            display_name: (*display_name).to_owned(),
+            effort_levels: levels.clone(),
+            default_effort: ChatReasoningEffort::Auto,
+        })
+        .collect()
 }
 
 async fn discover_antigravity_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
@@ -473,8 +563,67 @@ async fn discover_cli_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>,
                 .ok_or_else(|| "No models were returned by the CLI.".to_owned())
         }
         CODEX_ADAPTER_ID => discover_codex_models(spec).await,
+        CURSOR_ADAPTER_ID => discover_cursor_models(spec).await,
+        GROK_ADAPTER_ID => discover_grok_models(spec).await,
         _ => Err("This CLI does not expose a model catalog.".to_owned()),
     }
+}
+
+async fn discover_cursor_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
+    // Cursor Agent exposes model inventory through ACP rather than a stable
+    // top-level command. Keep a deterministic default and let the session
+    // negotiate the selected model when ACP starts.
+    let _ = spec;
+    Ok(fallback_models(CURSOR_ADAPTER_ID))
+}
+
+async fn discover_grok_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
+    let output = run_cli_capture(spec, &["models"]).await;
+    if let Ok(output) = output {
+        let models = output
+            .lines()
+            .filter_map(|line| {
+                let mut line = line.trim();
+                if line.is_empty()
+                    || line.to_ascii_lowercase().contains("not authenticated")
+                    || line.to_ascii_lowercase().starts_with("default model:")
+                    || line.to_ascii_lowercase().starts_with("available models")
+                {
+                    return None;
+                }
+                // `grok models` prints defaults as `* model-id (default)`.
+                // Normalize that presentation while still accepting future
+                // whitespace-delimited inventories.
+                line = line.trim_start_matches('*').trim();
+                line = line.strip_suffix("(default)").unwrap_or(line).trim();
+                let mut fields = line.splitn(2, char::is_whitespace);
+                let id = fields.next()?.trim();
+                if id.is_empty() || id == "*" {
+                    return None;
+                }
+                let display_name = fields.next().unwrap_or(id).trim();
+                Some(ChatModelSummary {
+                    id: id.to_owned(),
+                    display_name: if display_name.is_empty() {
+                        id.to_owned()
+                    } else {
+                        display_name.to_owned()
+                    },
+                    effort_levels: vec![
+                        ChatReasoningEffort::Auto,
+                        ChatReasoningEffort::Low,
+                        ChatReasoningEffort::Medium,
+                        ChatReasoningEffort::High,
+                    ],
+                    default_effort: ChatReasoningEffort::Auto,
+                })
+            })
+            .collect::<Vec<_>>();
+        if !models.is_empty() {
+            return Ok(models);
+        }
+    }
+    Ok(fallback_models(GROK_ADAPTER_ID))
 }
 
 async fn discover_codex_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
@@ -774,9 +923,18 @@ impl HiveoryCodeRuntime {
     /// changes made outside the application without copying CLI-specific
     /// configuration into the database.
     pub async fn chat_engines(&self) -> Vec<ChatEngineSummary> {
-        let mut engines = Vec::with_capacity(ADAPTER_SPECS.len());
-        for spec in ADAPTER_SPECS {
-            engines.push(discover_chat_engine(*spec).await);
+        // Discovery probes can involve several seconds of CLI startup. Run
+        // them concurrently so a slow provider cannot serialize the catalog.
+        let handles = ADAPTER_SPECS
+            .iter()
+            .copied()
+            .map(|spec| tokio::spawn(discover_chat_engine(spec)))
+            .collect::<Vec<_>>();
+        let mut engines = Vec::with_capacity(handles.len());
+        for handle in handles {
+            if let Ok(engine) = handle.await {
+                engines.push(engine);
+            }
         }
         engines
     }
@@ -1189,6 +1347,27 @@ impl HiveoryCodeRuntime {
     }
 }
 
+/// A deterministic catalog used on the first paint while the host refreshes
+/// real CLI state in the background. It intentionally contains no hosted
+/// provider: Chat is backed by the local/T3 provider set only.
+pub fn bundled_chat_engines() -> Vec<ChatEngineSummary> {
+    ADAPTER_SPECS
+        .iter()
+        .map(|spec| ChatEngineSummary {
+            id: spec.id.to_owned(),
+            display_name: spec.display_name.to_owned(),
+            executable: spec.executable.to_owned(),
+            availability: ChatEngineAvailability::Unavailable,
+            detected: false,
+            authenticated: false,
+            models: fallback_models(spec.id),
+            capabilities: adapter_capabilities(spec.id),
+            message: Some("Checking this CLI in the background…".to_owned()),
+            recovery_action: Some("Refresh Chat after installing or signing in.".to_owned()),
+        })
+        .collect()
+}
+
 fn command_for(
     request: &CodeTerminalStartRequest,
     workspace_root: &Path,
@@ -1278,6 +1457,22 @@ fn command_for(
                         command.args(["--session", session_id]);
                     }
                 }
+                CURSOR_ADAPTER_ID => {
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    }
+                    if let Some(session_id) = resume_session_id {
+                        command.args(["--resume", session_id]);
+                    }
+                }
+                GROK_ADAPTER_ID => {
+                    if let Some(argument) = yolo_argument {
+                        command.arg(argument);
+                    }
+                    if let Some(session_id) = resume_session_id {
+                        command.args(["--resume", session_id]);
+                    }
+                }
                 _ => return Err(HiveoryCodeRuntimeError::UnsupportedAdapter),
             }
             if let Some(model) = request
@@ -1297,14 +1492,26 @@ fn yolo_mode_argument(adapter_id: &str) -> Result<&'static str, HiveoryCodeRunti
         CODEX_ADAPTER_ID => Ok("--dangerously-bypass-approvals-and-sandbox"),
         CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID => Ok("--dangerously-skip-permissions"),
         OPENCODE_ADAPTER_ID => Ok("--auto"),
+        CURSOR_ADAPTER_ID => Ok("--force"),
+        // Grok's current CLI uses --always-approve for the equivalent of a
+        // yolo launch.
+        GROK_ADAPTER_ID => Ok("--always-approve"),
         _ => Err(HiveoryCodeRuntimeError::UnsupportedYoloMode),
     }
 }
 
 /// Streams a provider-neutral Chat response from one of the installed coding
-/// CLIs. Chat gets a fresh temporary directory and the commands are launched
-/// in read-only/no-tool modes where the CLI supports that distinction, so a
-/// chat turn cannot accidentally inherit a Code workspace.
+/// CLIs. Chat always gets a fresh temporary directory, and an optional
+/// session integration supplies only the profile-scoped MCP bridge and
+/// instructions. Without an integration the commands remain provider-only,
+/// so a chat turn cannot accidentally inherit a Code workspace.
+pub struct ChatSessionOptions<'a> {
+    pub profile: Option<&'a ChatProfileSnapshot>,
+    pub session_integration: Option<&'a CodeCliSessionIntegration>,
+}
+
+/// Backwards-compatible provider-only entry point for callers that do not
+/// need a profile-scoped Hiveory session bridge.
 pub async fn stream_cli_chat_turn(
     adapter_id: &str,
     model: &str,
@@ -1313,12 +1520,44 @@ pub async fn stream_cli_chat_turn(
     cancellation: CancellationToken,
     on_event: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static>,
 ) -> Result<(), HiveoryCodeRuntimeError> {
+    stream_cli_chat_turn_with_options(
+        adapter_id,
+        model,
+        reasoning_effort,
+        prompt,
+        ChatSessionOptions {
+            profile: None,
+            session_integration: None,
+        },
+        cancellation,
+        on_event,
+    )
+    .await
+}
+
+pub async fn stream_cli_chat_turn_with_options(
+    adapter_id: &str,
+    model: &str,
+    reasoning_effort: ChatReasoningEffort,
+    prompt: &str,
+    options: ChatSessionOptions<'_>,
+    cancellation: CancellationToken,
+    on_event: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static>,
+) -> Result<(), HiveoryCodeRuntimeError> {
     let spec = adapter_spec(adapter_id).ok_or(HiveoryCodeRuntimeError::UnsupportedAdapter)?;
     let chat_root = std::env::temp_dir().join(format!("hiveory-chat-{}", uuid::Uuid::now_v7()));
     std::fs::create_dir_all(&chat_root)
         .map_err(|error| HiveoryCodeRuntimeError::Operation(error.to_string()))?;
 
-    let mut command = cli_chat_command(spec, model, reasoning_effort, prompt, &chat_root);
+    let mut command = cli_chat_command(
+        spec,
+        model,
+        reasoning_effort,
+        prompt,
+        &chat_root,
+        options.profile,
+        options.session_integration,
+    );
     let child_result = command.spawn();
     let mut child = match child_result {
         Ok(child) => child,
@@ -1409,6 +1648,8 @@ fn cli_chat_command(
     reasoning_effort: ChatReasoningEffort,
     prompt: &str,
     chat_root: &Path,
+    profile: Option<&ChatProfileSnapshot>,
+    session_integration: Option<&CodeCliSessionIntegration>,
 ) -> TokioCommand {
     let resolved = resolve_executable(spec.executable);
     let mut command = TokioCommand::new(resolved.program);
@@ -1434,21 +1675,54 @@ fn cli_chat_command(
                 "--cd",
             ]);
             command.arg(chat_root);
+            if let Some(integration) = session_integration {
+                command.args([
+                    "-c",
+                    &format!(
+                        "mcp_servers.hiveory.command={}",
+                        serde_json::to_string(&integration.bridge_command)
+                            .unwrap_or_else(|_| "\"\"".to_owned())
+                    ),
+                    "-c",
+                    &format!(
+                        "mcp_servers.hiveory.args={}",
+                        serde_json::to_string(&integration.bridge_args)
+                            .unwrap_or_else(|_| "[]".to_owned())
+                    ),
+                ]);
+                if let Some(profile) = profile {
+                    for path in profile.folder_paths.iter().take(32) {
+                        command.args(["--add-dir", path]);
+                    }
+                }
+            }
             append_model_arg(&mut command, model);
             append_effort_arg(&mut command, spec.id, reasoning_effort);
             command.arg(prompt);
         }
         CLAUDE_CODE_ADAPTER_ID => {
-            command.args([
-                "-p",
-                prompt,
-                "--output-format",
-                "stream-json",
-                "--bare",
-                "--no-session-persistence",
-                "--tools",
-                "",
-            ]);
+            command.args(["-p", prompt, "--output-format", "stream-json"]);
+            if session_integration.is_none() {
+                command.args(["--bare", "--no-session-persistence", "--tools", ""]);
+            } else {
+                // MCP remains the only tool channel for a profiled Chat
+                // session. Disable Claude's built-in filesystem/shell tools
+                // and ignore user-level MCP registrations so the host bridge
+                // remains the complete capability boundary.
+                command.args([
+                    "--no-session-persistence",
+                    "--strict-mcp-config",
+                    "--tools",
+                    "",
+                ]);
+                if let Some(integration) = session_integration {
+                    command.args(["--mcp-config", &integration.mcp_config_path]);
+                    command.args([
+                        "--append-system-prompt-file",
+                        &integration.instructions_path,
+                    ]);
+                }
+            }
             append_model_arg(&mut command, model);
             append_effort_arg(&mut command, spec.id, reasoning_effort);
         }
@@ -1464,10 +1738,28 @@ fn cli_chat_command(
             append_effort_arg(&mut command, spec.id, reasoning_effort);
         }
         OPENCODE_ADAPTER_ID => {
-            command.args(["run", "--format", "json", "--pure", "--dir"]);
+            command.args(["run", "--format", "json"]);
+            if session_integration.is_none() {
+                command.arg("--pure");
+            }
+            command.arg("--dir");
             command.arg(chat_root);
+            if let Some(integration) = session_integration {
+                command.env("OPENCODE_CONFIG", &integration.mcp_config_path);
+            }
             append_model_arg(&mut command, model);
             command.arg(prompt);
+        }
+        CURSOR_ADAPTER_ID => {
+            command.args(["-p", "--output-format", "stream-json"]);
+            command.arg(prompt);
+            append_model_arg(&mut command, model);
+        }
+        GROK_ADAPTER_ID => {
+            command.args(["-p", prompt, "--output-format", "streaming-json", "--cwd"]);
+            command.arg(chat_root);
+            append_model_arg(&mut command, model);
+            append_effort_arg(&mut command, spec.id, reasoning_effort);
         }
         _ => {}
     }
@@ -1482,7 +1774,7 @@ fn append_effort_arg(command: &mut TokioCommand, adapter_id: &str, effort: ChatR
         CODEX_ADAPTER_ID => {
             command.args(["--config", &format!("model_reasoning_effort={value}")]);
         }
-        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID => {
+        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | CURSOR_ADAPTER_ID | GROK_ADAPTER_ID => {
             command.args(["--effort", value]);
         }
         _ => {}
@@ -1615,6 +1907,30 @@ fn cli_text_candidates(value: &Value) -> Vec<(String, bool)> {
     let Some(object) = value.as_object() else {
         return candidates;
     };
+    // Antigravity's `agy --output-format stream-json` uses an event envelope
+    // instead of the `type`/`delta` shape used by the other supported CLIs.
+    // Its visible answer arrives in `step_update.text_delta`; without this
+    // special case Chat completes successfully but renders an empty answer.
+    if object.get("event").and_then(Value::as_str) == Some("step_update") {
+        if let Some(step_update) = object.get("step_update").and_then(Value::as_object) {
+            if step_update.get("step_type").and_then(Value::as_str) == Some("agent_response") {
+                if let Some(text) = step_update.get("text_delta").and_then(value_text) {
+                    candidates.push((text, false));
+                }
+            }
+        }
+        return candidates;
+    }
+    if object.get("event").and_then(Value::as_str) == Some("result") {
+        if let Some(text) = object
+            .get("result")
+            .and_then(|result| result.get("response"))
+            .and_then(value_text)
+        {
+            candidates.push((text, true));
+        }
+        return candidates;
+    }
     let event_type = object
         .get("type")
         .and_then(Value::as_str)
@@ -1868,6 +2184,20 @@ mod tests {
         assert!(adapters
             .iter()
             .any(|adapter| adapter.id == OPENCODE_ADAPTER_ID));
+        assert!(adapters
+            .iter()
+            .any(|adapter| adapter.id == CURSOR_ADAPTER_ID));
+        assert!(adapters.iter().any(|adapter| adapter.id == GROK_ADAPTER_ID));
+    }
+
+    #[test]
+    fn bundled_chat_catalog_is_local_and_ready_for_background_refresh() {
+        let catalog = bundled_chat_engines();
+        assert_eq!(catalog.len(), 6);
+        assert!(catalog.iter().all(|engine| engine.message.is_some()));
+        assert!(catalog.iter().all(|engine| engine.id != "hiveory-openai"));
+        assert!(catalog.iter().any(|engine| engine.id == CURSOR_ADAPTER_ID));
+        assert!(catalog.iter().any(|engine| engine.id == GROK_ADAPTER_ID));
     }
 
     #[test]
@@ -1885,6 +2215,11 @@ mod tests {
             "--dangerously-skip-permissions"
         );
         assert_eq!(yolo_mode_argument(OPENCODE_ADAPTER_ID).unwrap(), "--auto");
+        assert_eq!(yolo_mode_argument(CURSOR_ADAPTER_ID).unwrap(), "--force");
+        assert_eq!(
+            yolo_mode_argument(GROK_ADAPTER_ID).unwrap(),
+            "--always-approve"
+        );
         assert!(matches!(
             yolo_mode_argument("unsupported"),
             Err(HiveoryCodeRuntimeError::UnsupportedYoloMode)
@@ -1941,6 +2276,39 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].text.as_deref(), Some("Hello "));
         assert_eq!(events[1].text.as_deref(), Some("world"));
+        assert!(error.is_none());
+    }
+
+    #[test]
+    fn renders_antigravity_stream_json_response_deltas() {
+        let events = Arc::new(Mutex::new(Vec::<ChatProviderStreamEvent>::new()));
+        let captured = events.clone();
+        let callback: Arc<dyn Fn(ChatProviderStreamEvent) + Send + Sync + 'static> =
+            Arc::new(move |event| captured.lock().unwrap().push(event));
+        let mut text = String::new();
+        let mut sequence = 0;
+        let mut error = None;
+        process_cli_json_line(
+            ANTIGRAVITY_ADAPTER_ID,
+            r#"{"event":"step_update","step_update":{"step_type":"agent_response","text_delta":"OK"}}"#,
+            &callback,
+            &mut text,
+            &mut sequence,
+            &mut error,
+        );
+        process_cli_json_line(
+            ANTIGRAVITY_ADAPTER_ID,
+            r#"{"event":"result","result":{"status":"SUCCESS","response":"OK\n"}}"#,
+            &callback,
+            &mut text,
+            &mut sequence,
+            &mut error,
+        );
+        let events = events.lock().unwrap();
+        assert_eq!(text, "OK\n");
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].text.as_deref(), Some("OK"));
+        assert_eq!(events[1].text.as_deref(), Some("\n"));
         assert!(error.is_none());
     }
 

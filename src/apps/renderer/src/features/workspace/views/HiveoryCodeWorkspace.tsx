@@ -139,6 +139,17 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }, [])
 
   useEffect(() => {
+    const handleGlobalSection = (event: Event) => {
+      const section = (event as CustomEvent<{ section?: string }>).detail?.section
+      if (section === 'dashboard' || section === 'routines' || section === 'plugins' || section === 'skills' || section === 'workspace') {
+        setActiveSection(section)
+      }
+    }
+    window.addEventListener('hiveory-code-workspace-section', handleGlobalSection)
+    return () => window.removeEventListener('hiveory-code-workspace-section', handleGlobalSection)
+  }, [])
+
+  useEffect(() => {
     const revealActiveWorkspace = () => {
       if (activeWorkspaceId) setActiveSection('workspace')
     }

@@ -40,7 +40,7 @@ The main boundaries are:
 
 ## Agent, Chat, plugin, and automation controls
 
-- Chat starts with no mounted workspace and sends no tool definitions. Provider input contains only active-branch messages and explicitly imported attachments.
+- Chat starts with no mounted workspace. Provider input contains only active-branch messages, explicitly imported attachments, and the selected profile instructions. The host exposes selected valid skills, validated plugin tools, and bounded read-only folder tools through a per-session bridge; it never inherits Code workspace, terminal, or Git capabilities.
 - Attachment imports reject links and non-regular files, validate supported content, enforce byte limits, and copy data into a content-addressed managed root. Portable export sanitizes archive names.
 - Agent folder, skill, tool, and plugin access is explicit. Approval decisions are bound to the action fingerprint; changed actions require a new decision.
 - Plugin credentials are resolved only for the selected connection. Host allow-lists prevent a manifest from redirecting a request to another service.

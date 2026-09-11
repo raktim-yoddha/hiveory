@@ -2,6 +2,8 @@ import {
   ANTIGRAVITY_ADAPTER_ID,
   CLAUDE_CODE_ADAPTER_ID,
   CODEX_ADAPTER_ID,
+  CURSOR_ADAPTER_ID,
+  GROK_ADAPTER_ID,
   OPENCODE_ADAPTER_ID,
 } from '../../../shared/api/hiveory-client'
 
@@ -10,6 +12,8 @@ export const YOLO_ADAPTER_IDS = [
   CLAUDE_CODE_ADAPTER_ID,
   ANTIGRAVITY_ADAPTER_ID,
   OPENCODE_ADAPTER_ID,
+  CURSOR_ADAPTER_ID,
+  GROK_ADAPTER_ID,
 ] as const
 
 export type YoloAdapterId = typeof YOLO_ADAPTER_IDS[number]
@@ -22,6 +26,8 @@ const defaults = (): YoloPreferences => ({
   [CLAUDE_CODE_ADAPTER_ID]: false,
   [ANTIGRAVITY_ADAPTER_ID]: false,
   [OPENCODE_ADAPTER_ID]: false,
+  [CURSOR_ADAPTER_ID]: false,
+  [GROK_ADAPTER_ID]: false,
 })
 
 export function supportsYoloLaunch(adapterId: string | undefined): adapterId is YoloAdapterId {

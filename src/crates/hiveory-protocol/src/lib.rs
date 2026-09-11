@@ -22,6 +22,10 @@ pub fn canonical_code_adapter_id(value: &str) -> Option<&'static str> {
         Some("antigravity")
     } else if value.eq_ignore_ascii_case("opencode") || value.eq_ignore_ascii_case("open-code") {
         Some("opencode")
+    } else if value.eq_ignore_ascii_case("cursor") || value.eq_ignore_ascii_case("cursor-agent") {
+        Some("cursor")
+    } else if value.eq_ignore_ascii_case("grok") || value.eq_ignore_ascii_case("xai") {
+        Some("grok")
     } else {
         None
     }
@@ -333,6 +337,8 @@ pub struct ChatTurnSummary {
     pub provider_account_id: String,
     pub model: String,
     pub reasoning_effort: ChatReasoningEffort,
+    #[serde(default)]
+    pub profile: Option<ChatProfileSnapshot>,
     pub state: ChatTurnState,
     pub job_id: Option<String>,
     pub input_tokens: Option<u64>,
@@ -353,6 +359,7 @@ pub struct ChatConversationSummary {
     pub folder_position: i64,
     pub updated_at_unix_ms: i64,
     pub preview: Option<String>,
+    pub provider_account_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -453,6 +460,31 @@ pub struct ChatProviderStreamEvent {
     pub error_code: Option<String>,
 }
 
+/// The capabilities and safety boundary selected for one chat conversation.
+///
+/// Chat profiles deliberately carry IDs and paths rather than resolved
+/// definitions. Persisting those references with each turn keeps the profile
+/// portable across renderer reloads and gives the host a stable boundary to
+/// validate against the current installed skill/plugin catalog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatMemoryMode {
+    Conversation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ChatProfileSnapshot {
+    pub skill_ids: Vec<String>,
+    pub plugin_tool_names: Vec<String>,
+    pub folder_paths: Vec<String>,
+    pub memory_mode: ChatMemoryMode,
+    pub approval_policy: AgentApprovalPolicy,
+    pub execution_target: AgentExecutionTarget,
+    pub max_tool_calls: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct ChatCreateRequest {
@@ -537,6 +569,8 @@ pub struct ChatSendRequest {
     pub provider_account_id: String,
     pub model: String,
     pub reasoning_effort: ChatReasoningEffort,
+    #[serde(default)]
+    pub profile: Option<ChatProfileSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -546,6 +580,8 @@ pub struct ChatTurnRequest {
     pub turn_id: String,
     pub model: Option<String>,
     pub reasoning_effort: Option<ChatReasoningEffort>,
+    #[serde(default)]
+    pub profile: Option<ChatProfileSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -557,6 +593,8 @@ pub struct ChatEditRequest {
     pub provider_account_id: String,
     pub model: String,
     pub reasoning_effort: ChatReasoningEffort,
+    #[serde(default)]
+    pub profile: Option<ChatProfileSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -2806,8 +2844,6 @@ pub struct TaskSourceConnectRequest {
     pub label: String,
     pub endpoint: Option<String>,
     pub account_email: Option<String>,
-    /// A one-time user owned token. The desktop host stores it in the OS
-    /// keyring and intentionally never returns it.
     pub token: Option<String>,
 }
 
@@ -3456,6 +3492,8 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     ChatModelTurnRequest::export_all(&config)?;
     ChatProviderStreamEventKind::export_all(&config)?;
     ChatProviderStreamEvent::export_all(&config)?;
+    ChatMemoryMode::export_all(&config)?;
+    ChatProfileSnapshot::export_all(&config)?;
     ChatCreateRequest::export_all(&config)?;
     ChatMetadataRequest::export_all(&config)?;
     ChatFolderCreateRequest::export_all(&config)?;
@@ -3758,6 +3796,8 @@ mod tests {
         assert_eq!(canonical_code_adapter_id("CLAUDE"), Some("claude-code"));
         assert_eq!(canonical_code_adapter_id("agy"), Some("antigravity"));
         assert_eq!(canonical_code_adapter_id("open-code"), Some("opencode"));
+        assert_eq!(canonical_code_adapter_id("cursor-agent"), Some("cursor"));
+        assert_eq!(canonical_code_adapter_id("xai"), Some("grok"));
         assert_eq!(canonical_code_adapter_id("unknown"), None);
     }
 }

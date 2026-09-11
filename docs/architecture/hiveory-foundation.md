@@ -40,11 +40,11 @@ Code mode owns registered projects, trusted workspaces, documents, pane layouts,
 - `hiveory-git-service` owns repository inspection and the bounded Git operations required by managed workspaces and checkpoints.
 - `hiveory-code-orchestration` owns task graphs, dispatch leases, managed worktrees, questions, checkpoints, reviews, recovery, mailboxes, and gates.
 
-Windows terminal profiles include CMD, PowerShell, and Git Bash when installed. Coding CLI panes support Codex CLI, Claude Code, Antigravity, and OpenCode when their executables are available. Browser panes are native child webviews and start at `https://www.google.com`.
+Windows terminal profiles include CMD, PowerShell, and Git Bash when installed. Coding CLI panes support Codex CLI, Claude Code, Antigravity, OpenCode, Cursor Agent, and Grok when their executables are available. Browser panes are native child webviews and start at `https://www.google.com`.
 
 ### Chat
 
-Chat is a standalone conversation domain. It owns folders, conversations, branches, typed message parts, turns, drafts, imports, and portable exports. It does not inherit Code workspace, terminal, Git, Agent, skill, or plugin access.
+Chat is a standalone conversation domain. It owns folders, conversations, branches, typed message parts, turns, drafts, imports, and portable exports. It never inherits the active Code workspace, terminal, or Git access. Each conversation can persist a capability profile containing valid skills, validated plugin tools, explicit read-only folders, conversation-only memory, approval policy, and a bounded tool-call limit. The host validates that profile and exposes only its selected capabilities through a per-session bridge.
 
 `hiveory-chat-domain` validates turn policy and context. `hiveory-artifact-store` imports bounded PDF, image, text, and Markdown attachments into application-managed storage. Provider events and read-model changes are persisted transactionally so interrupted turns remain inspectable and retryable.
 

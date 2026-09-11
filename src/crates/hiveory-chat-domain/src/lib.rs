@@ -90,6 +90,7 @@ mod tests {
             provider_account_id: "provider".to_owned(),
             model: "model".to_owned(),
             reasoning_effort: ChatReasoningEffort::Auto,
+            profile: None,
         }
     }
 

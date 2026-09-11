@@ -93,6 +93,14 @@ export const CursorIcon: React.FC<CliIconProps> = (props) => (
   </BrandSvg>
 )
 
+/** xAI/Grok mark. Kept monochrome so it remains legible in the dark rail. */
+export const GrokIcon: React.FC<CliIconProps> = (props) => (
+  <BrandSvg {...props} color="#F0F2F5">
+    <path d="M4.3 5.2 12 1l7.7 4.2v8.7L12 18l-7.7-4.1V5.2Zm2.2 1.3v6.1l5.5 3V9.5L6.5 6.5Zm7.7 3v6.1l3.3-1.8V7.7l-3.3 1.8Z" fill="currentColor" />
+    <path d="m12 5.3 5.4 2.9-1.9 1.1-3.5-1.9-3.5 1.9-1.9-1.1L12 5.3Z" fill="currentColor" opacity=".65" />
+  </BrandSvg>
+)
+
 export interface CliBrandIconProps extends CliIconProps {
   identifier?: string | null
 }
@@ -108,6 +116,7 @@ export const CliBrandIcon: React.FC<CliBrandIconProps> = ({ identifier, ...props
   if (id.includes('gemini')) return <GeminiIcon {...props} />
   if (id.includes('copilot')) return <CopilotIcon {...props} />
   if (id.includes('cursor')) return <CursorIcon {...props} />
+  if (id.includes('grok') || id.includes('xai')) return <GrokIcon {...props} />
 
   return <Terminal size={props.size ?? 14} className={props.className} style={{ color: '#AEB7C2', flexShrink: 0, ...props.style }} aria-hidden="true" />
 }
