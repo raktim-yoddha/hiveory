@@ -45,7 +45,6 @@ import {
   type ChatMessage,
   type ChatMessagePart,
   type ChatProfileSnapshot,
-  type ChatReasoningEffort,
   type ChatSidebarPage,
   type AgentSkillSummary,
   type PluginCatalogEntry,
@@ -128,10 +127,6 @@ function titleFromPrompt(value: string): string {
   return firstLine.replace(/^#+\s*/, '').slice(0, 68) || 'New chat'
 }
 
-function effortLabel(value: ChatReasoningEffort): string {
-  return value === 'xhigh' ? 'Extra high' : value.charAt(0).toUpperCase() + value.slice(1)
-}
-
 function statusLabel(value: ChatEngineSummary['availability']): string {
   if (value === 'missing') return 'Not installed'
   if (value === 'unauthenticated') return 'Not configured'
@@ -186,7 +181,6 @@ function chatProfileStorageKey(conversationId: string | null): string {
 type ChatIdentity = {
   engineId: string
   modelId: string
-  effort: ChatReasoningEffort
 }
 
 function chatIdentityStorageKey(conversationId: string | null): string {
@@ -197,9 +191,8 @@ function readChatIdentity(conversationId: string | null): ChatIdentity | null {
   if (typeof window === 'undefined') return null
   try {
     const parsed = JSON.parse(window.localStorage.getItem(chatIdentityStorageKey(conversationId)) ?? '') as Partial<ChatIdentity>
-    const efforts: ChatReasoningEffort[] = ['auto', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
-    if (typeof parsed.engineId !== 'string' || !parsed.engineId.trim() || typeof parsed.modelId !== 'string' || !parsed.modelId.trim() || !efforts.includes(parsed.effort as ChatReasoningEffort)) return null
-    return { engineId: parsed.engineId, modelId: parsed.modelId, effort: parsed.effort as ChatReasoningEffort }
+    if (typeof parsed.engineId !== 'string' || !parsed.engineId.trim() || typeof parsed.modelId !== 'string' || !parsed.modelId.trim()) return null
+    return { engineId: parsed.engineId, modelId: parsed.modelId }
   } catch {
     return null
   }
@@ -210,7 +203,7 @@ function persistChatIdentity(conversationId: string | null, identity: ChatIdenti
     localStorage.setItem(chatIdentityStorageKey(conversationId), JSON.stringify(identity))
   } catch {
     // Selection persistence is best effort; each completed turn also stores
-    // its provider/model/effort in the durable transcript.
+    // its provider and model in the durable transcript.
   }
 }
 
@@ -321,7 +314,6 @@ export function HiveoryChat() {
   const [engineLoading, setEngineLoading] = useState(true)
   const [selectedEngineId, setSelectedEngineId] = useState('')
   const [selectedModelId, setSelectedModelId] = useState('default')
-  const [selectedEffort, setSelectedEffort] = useState<ChatReasoningEffort>('auto')
   const [engineMenuOpen, setEngineMenuOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
@@ -466,16 +458,18 @@ export function HiveoryChat() {
       setDraft(next.draft)
       setDraftDirty(false)
       setTitleDraft(next.title)
-      const firstTurn = next.turns.find((turn) => turn.provider_account_id && turn.model)
+      const firstTurn = next.turns.find((turn) => turn.provider_account_id)
       if (firstTurn) {
-        persistChatIdentity(conversationId, {
-          engineId: firstTurn.provider_account_id,
-          modelId: firstTurn.model || 'default',
-          effort: firstTurn.reasoning_effort,
-        })
+        const identity = readChatIdentity(conversationId)
         setSelectedEngineId(firstTurn.provider_account_id)
-        setSelectedModelId(firstTurn.model || 'default')
-        setSelectedEffort(firstTurn.reasoning_effort)
+        if (!identity || identity.engineId !== firstTurn.provider_account_id) {
+          const latestModel = [...next.turns].reverse().find((turn) => turn.provider_account_id === firstTurn.provider_account_id && turn.model)?.model || 'default'
+          setSelectedModelId(latestModel)
+          persistChatIdentity(conversationId, {
+            engineId: firstTurn.provider_account_id,
+            modelId: latestModel,
+          })
+        }
       }
     } catch (reason: unknown) {
       if (request === detailRequestRef.current) setError(errorMessage(reason, 'The conversation could not be opened.'))
@@ -582,7 +576,6 @@ export function HiveoryChat() {
     if (identity) {
       setSelectedEngineId(identity.engineId)
       setSelectedModelId(identity.modelId)
-      setSelectedEffort(identity.effort)
     }
     void reloadConversation(selectedId)
   }, [reloadConversation, selectedId])
@@ -602,19 +595,14 @@ export function HiveoryChat() {
   useEffect(() => {
     if (!lockedTurn) return
     setSelectedEngineId(lockedTurn.provider_account_id)
-    setSelectedModelId(lockedTurn.model || 'default')
-    setSelectedEffort(lockedTurn.reasoning_effort)
   }, [lockedTurn])
 
   useEffect(() => {
     const models = selectedEngine?.models ?? []
     if (!models.some((model) => model.id === selectedModelId)) {
       setSelectedModelId(models[0]?.id ?? 'default')
-      setSelectedEffort(models[0]?.default_effort ?? 'auto')
-      return
     }
-    if (selectedModel && !selectedModel.effort_levels.includes(selectedEffort)) setSelectedEffort(selectedModel.default_effort)
-  }, [selectedEngine, selectedModel, selectedModelId, selectedEffort])
+  }, [selectedEngine, selectedModelId])
 
   useEffect(() => {
     if (!draftDirty || !conversation) return
@@ -658,13 +646,10 @@ export function HiveoryChat() {
       setStatusMessage(engine.message ?? `${engine.display_name} is not ready.`)
       return
     }
-    const model = engine.models[0]
-    const modelId = model?.id ?? 'default'
-    const effort = model?.default_effort ?? 'auto'
+    const modelId = engine.models[0]?.id ?? 'default'
     setSelectedEngineId(engine.id)
     setSelectedModelId(modelId)
-    setSelectedEffort(effort)
-    persistChatIdentity(conversation?.id ?? selectedId, { engineId: engine.id, modelId, effort })
+    persistChatIdentity(conversation?.id ?? selectedId, { engineId: engine.id, modelId })
     setEngineMenuOpen(false)
     setModelMenuOpen(false)
     setModelSearch('')
@@ -883,7 +868,7 @@ export function HiveoryChat() {
         attachment_ids: imported.map((item) => item.id),
         provider_account_id: selectedEngine.id,
         model: selectedModelId || 'default',
-        reasoning_effort: selectedEffort,
+        reasoning_effort: 'auto',
         profile: toChatProfileSnapshot(chatProfile),
       })
       setConversation(next)
@@ -919,7 +904,7 @@ export function HiveoryChat() {
     if (!turn) return
     setBusyAction('retry')
     try {
-      setConversation(await hiveoryClient.retryChatTurn({ conversation_id: conversation.id, turn_id: turn.id, model: turn.model || null, reasoning_effort: turn.reasoning_effort, profile: toChatProfileSnapshot(chatProfile) }))
+      setConversation(await hiveoryClient.retryChatTurn({ conversation_id: conversation.id, turn_id: turn.id, model: turn.model || null, reasoning_effort: 'auto', profile: toChatProfileSnapshot(chatProfile) }))
     } catch (reason: unknown) {
       setError(errorMessage(reason, 'The response could not be retried.'))
     } finally {
@@ -945,7 +930,7 @@ export function HiveoryChat() {
     if (!conversation || !editingMessageId || !editingText.trim() || busyAction || !selectedEngine) return
     setBusyAction('edit')
     try {
-      setConversation(await hiveoryClient.editChatMessage({ conversation_id: conversation.id, message_id: editingMessageId, text: editingText.trim(), provider_account_id: selectedEngine.id, model: selectedModelId || 'default', reasoning_effort: selectedEffort, profile: toChatProfileSnapshot(chatProfile) }))
+      setConversation(await hiveoryClient.editChatMessage({ conversation_id: conversation.id, message_id: editingMessageId, text: editingText.trim(), provider_account_id: selectedEngine.id, model: selectedModelId || 'default', reasoning_effort: 'auto', profile: toChatProfileSnapshot(chatProfile) }))
       setEditingMessageId(null)
       setEditingText('')
     } catch (reason: unknown) {
@@ -1747,11 +1732,6 @@ export function HiveoryChat() {
               {/* Searchable model picker. Native selects cannot search large
                   OpenCode catalogs, so this stays keyboard/focus friendly and
                   keeps the search field at the top of the popover. */}
-              {chatIsLocked ? (
-                <div className="chat-pill-btn chat-model-pill is-locked" title="This chat is locked to its first model">
-                  <span>{selectedModel?.display_name ?? lockedTurn?.model}</span>
-                </div>
-              ) : (
               <div className="chat-model-picker-wrapper" ref={modelPickerRef}>
                 <button
                   type="button"
@@ -1797,10 +1777,8 @@ export function HiveoryChat() {
                           aria-selected={model.id === selectedModelId}
                           className={`chat-model-option-btn ${model.id === selectedModelId ? 'is-selected' : ''}`}
                           onClick={() => {
-                            const effort = model.effort_levels.includes(selectedEffort) ? selectedEffort : model.default_effort
                             setSelectedModelId(model.id)
-                            setSelectedEffort(effort)
-                            persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: model.id, effort })
+                            persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: model.id })
                             setModelMenuOpen(false)
                             setModelSearch('')
                           }}
@@ -1816,33 +1794,6 @@ export function HiveoryChat() {
                   </div>
                 )}
               </div>
-              )}
-
-              {/* Reasoning Effort Pill */}
-              {selectedEngine?.capabilities.includes('reasoning_effort') && (chatIsLocked ? (
-                <span className="chat-pill-select is-locked" title="This chat is locked to its first reasoning effort">
-                  {effortLabel(selectedEffort)}
-                </span>
-              ) : (
-                <select
-                  className="chat-pill-select"
-                  aria-label="Reasoning effort"
-                  value={selectedEffort}
-                  onChange={(event) =>
-                    (() => {
-                      const effort = event.target.value as ChatReasoningEffort
-                      setSelectedEffort(effort)
-                      persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: selectedModelId, effort })
-                    })()
-                  }
-                >
-                  {(selectedModel?.effort_levels ?? ['auto']).map((effort) => (
-                    <option key={effort} value={effort}>
-                      {effortLabel(effort)}
-                    </option>
-                  ))}
-                </select>
-              ))}
 
               <div className="chat-toolbar-divider" />
 
@@ -1943,16 +1894,6 @@ export function HiveoryChat() {
                 <CliBrandIcon identifier={selectedEngine?.id} size={14} />
                 <span>{selectedEngine?.display_name ?? 'Choose a provider'}</span>
               </div>
-              <label className="chat-inspector-field">
-                <span>Reasoning effort</span>
-                  <select value={selectedEffort} disabled={chatIsLocked || !selectedEngine?.capabilities.includes('reasoning_effort')} onChange={(event) => {
-                    const effort = event.target.value as ChatReasoningEffort
-                    setSelectedEffort(effort)
-                    persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: selectedModelId, effort })
-                  }}>
-                  {(selectedModel?.effort_levels ?? ['auto']).map((effort) => <option key={effort} value={effort}>{effortLabel(effort)}</option>)}
-                </select>
-              </label>
             </section>
 
             <section className="chat-inspector-section">

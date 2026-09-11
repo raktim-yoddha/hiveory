@@ -8973,6 +8973,7 @@ async fn resolve_chat_engine_secret(
 /// A chat has one provider identity after its first turn. Keeping this check
 /// in the host (rather than only hiding the renderer picker) prevents a stale
 /// window, retry, or direct IPC request from mixing providers in one history.
+/// Models remain selectable per turn within that provider.
 async fn validate_chat_conversation_identity(
     foundation: &HiveoryFoundation,
     request: &ChatSendRequest,
@@ -8989,15 +8990,12 @@ async fn validate_chat_conversation_identity(
     else {
         return Ok(());
     };
-    if identity.provider_account_id == request.provider_account_id
-        && identity.model == request.model
-        && identity.reasoning_effort == request.reasoning_effort
-    {
+    if identity.provider_account_id == request.provider_account_id {
         return Ok(());
     }
     Err(validation_error(format!(
-        "This chat is locked to {} · {} · {:?}. Start a new chat to use a different provider, model, or effort.",
-        identity.provider_account_id, identity.model, identity.reasoning_effort
+        "This chat is locked to {}. Start a new chat to use a different provider.",
+        identity.provider_account_id
     )))
 }
 
