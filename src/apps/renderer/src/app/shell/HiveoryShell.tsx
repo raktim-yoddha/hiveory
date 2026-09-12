@@ -100,13 +100,6 @@ type CommandAction = {
 const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false, sidebarCollapsed: false }
 const updateCheckIntervalMs = 24 * 60 * 60 * 1000
 const dismissedUpdateStorageKey = 'hiveory.dismissed-update-version'
-const devAgentModeStorageKey = 'hiveory.dev.agent-mode-enabled'
-
-function readDevAgentMode(): boolean {
-  try { return isHiveoryDev && window.localStorage.getItem(devAgentModeStorageKey) === 'true' }
-  catch { return false }
-}
-
 function readPreferences(): ShellPreferences {
   if (typeof window === 'undefined') return defaultPreferences
   try {
@@ -147,7 +140,7 @@ function rememberDismissedUpdateVersion(version: string): void {
 
 export function HiveoryShell() {
   const [activeMode, setActiveMode] = useState<ApplicationMode>('code')
-  const [agentEnabled, setAgentEnabled] = useState(readDevAgentMode)
+  const agentEnabled = isHiveoryDev
   const [screen, setScreen] = useState<ShellScreen>('workspace')
   const [snapshot, setSnapshot] = useState<DiagnosticSnapshot>(previewSnapshot)
   const [preferences, setPreferences] = useState<ShellPreferences>(readPreferences)
@@ -200,7 +193,7 @@ export function HiveoryShell() {
     void hiveoryClient
       .bootstrap()
       .then((item) => {
-        setActiveMode(item.active_mode === 'agent' && !readDevAgentMode() ? 'code' : item.active_mode)
+        setActiveMode(item.active_mode === 'agent' && !agentEnabled ? 'code' : item.active_mode)
       })
       .catch(() => undefined)
     void refresh()
@@ -214,15 +207,7 @@ export function HiveoryShell() {
       diagnosticsRefreshTimerRef.current = null
       diagnosticsRefreshQueuedRef.current = false
     }
-  }, [refresh, scheduleDiagnosticsRefresh])
-
-  useEffect(() => {
-    try { window.localStorage.setItem(devAgentModeStorageKey, String(agentEnabled)) } catch { /* Optional local preference. */ }
-    if (!agentEnabled && activeMode === 'agent') {
-      setActiveMode('code')
-      void hiveoryClient.setActiveMode('code').catch(() => undefined)
-    }
-  }, [agentEnabled, activeMode])
+  }, [agentEnabled, refresh, scheduleDiagnosticsRefresh])
 
   useEffect(() => {
     const openGlobalSettings = () => {
@@ -748,7 +733,6 @@ export function HiveoryShell() {
               preferences={preferences}
               setPreferences={setPreferences}
               agentEnabled={agentEnabled}
-              setAgentEnabled={setAgentEnabled}
               update={update}
               onCheckUpdate={() => checkForUpdates(false)}
               onInstallUpdate={installUpdate}
@@ -1073,7 +1057,6 @@ function HiveorySettings({
   preferences,
   setPreferences,
   agentEnabled,
-  setAgentEnabled,
   update,
   onCheckUpdate,
   onInstallUpdate,
@@ -1085,7 +1068,6 @@ function HiveorySettings({
   preferences: ShellPreferences
   setPreferences: React.Dispatch<React.SetStateAction<ShellPreferences>>
   agentEnabled: boolean
-  setAgentEnabled: React.Dispatch<React.SetStateAction<boolean>>
   update: UpdateSnapshot | null
   onCheckUpdate: () => Promise<UpdateSnapshot>
   onInstallUpdate: () => Promise<void>
@@ -1210,8 +1192,8 @@ function HiveorySettings({
           <div className="hiveory-card-heading"><Bot size={17} aria-hidden="true" /><h2>Modes and premium features</h2></div>
           <p>Chat and Code are ready to use.</p>
           <label className="hiveory-settings-check">
-            <input type="checkbox" checked={agentEnabled} disabled={!isHiveoryDev} onChange={(event) => setAgentEnabled(event.target.checked)} />
-            Enable Agent mode
+            <input type="checkbox" checked={agentEnabled} disabled readOnly />
+            Agent mode {agentEnabled ? 'enabled in Dev' : 'unavailable in Production'}
           </label>
           {!isHiveoryDev && <p>Agent mode, Auto Plugins, and Themes are unavailable in this build.</p>}
           {isHiveoryDev && <p>Agent mode uses the private local Dev implementation.</p>}

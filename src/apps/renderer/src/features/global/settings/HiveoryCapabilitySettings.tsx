@@ -26,6 +26,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { isHiveoryDev } from '../../../app/edition'
 import {
   hiveoryClient,
   type CodeAdapterSummary,
@@ -35,7 +36,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch } from '../../modes/code/workspace/model/code-yolo-preferences'
 
-type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'general' | 'unavailable'
+type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'general' | 'integrations' | 'unavailable'
 type OnboardingStep = 'notifications' | 'agent' | 'cli' | 'integrations' | 'setup' | 'projects' | 'multi-task' | 'browser'
 type CapabilityPreferences = {
   defaultAdapterId: string | null
@@ -209,6 +210,7 @@ export function HiveoryCapabilitySettings({
       { id: 'computer-use', label: 'Computer Use', icon: MonitorCog },
       { id: 'browser-use', label: 'Browser Use', icon: Globe2 },
       { id: 'general', label: 'General', icon: SlidersHorizontal },
+      { id: 'integrations', label: 'Integrations', icon: Link2 },
     ]
     return term ? rows.filter((row) => row.label.toLowerCase().includes(term)) : rows
   }, [search])
@@ -318,6 +320,8 @@ export function HiveoryCapabilitySettings({
             ? <BrowserUsePanel installed={browserUseInstalled} busy={busy} preferences={preferences} onInstall={() => void installSkill('Hiveory Browser Use', browserUseSkill)} onRefresh={() => void refresh()} onOpenWorkbench={onOpenWorkbench} onOpenExternal={(url) => void run('browser-external', async () => { await hiveoryClient.openExternalUrl({ url }) }, 'Opened the page in the default external browser.')} onUpdate={updatePreferences} />
           : section === 'general'
             ? children
+            : section === 'integrations'
+              ? <IntegrationsPanel />
             : <UnavailablePanel {...placeholderCopy('This settings category')} />
 
   return <div className="hiveory-capability-settings">
@@ -332,7 +336,7 @@ export function HiveoryCapabilitySettings({
         <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><Sparkles size={16} />Voice</button>
         <p>Set up</p>
         <SettingsNavButton item={{ id: 'general', label: 'General', icon: SlidersHorizontal }} section={section} onSelect={setSection} />
-        <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><Link2 size={16} />Integrations</button>
+        <SettingsNavButton item={{ id: 'integrations', label: 'Integrations', icon: Link2 }} section={section} onSelect={setSection} />
         <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><PanelTop size={16} />Appearance</button>
       </div>
     </aside>
@@ -347,6 +351,20 @@ export function HiveoryCapabilitySettings({
 function SettingsNavButton({ item, section, onSelect }: { item: { id: SettingsSection; label: string; icon: typeof ListChecks }; section: SettingsSection; onSelect: (value: SettingsSection) => void }) {
   const Icon = item.icon
   return <button type="button" className={section === item.id ? 'is-selected' : ''} onClick={() => onSelect(item.id)}><Icon size={16} />{item.label}</button>
+}
+
+function IntegrationsPanel() {
+  const openAgentMode = () => window.dispatchEvent(new CustomEvent('hiveory-navigate-section', { detail: { mode: 'agent' } }))
+  return <section className="hiveory-capability-page" aria-labelledby="hiveory-integrations-title">
+    <header><h1 id="hiveory-integrations-title">Integrations</h1><p>See which modes are available in this edition.</p></header>
+    <section className="hiveory-capability-surface">
+      <h2>Agent mode</h2>
+      <p>{isHiveoryDev ? 'Agent mode is enabled in this Dev build and uses the private local implementation.' : 'Agent mode requires the private edition and is unavailable in this Production build.'}</p>
+      <SettingsRow title="Agent mode integration" detail={isHiveoryDev ? 'Ready to use in Dev.' : 'Locked in Production. Activation will be available when premium services launch.'}>
+        <button type="button" disabled={!isHiveoryDev} onClick={openAgentMode}>{isHiveoryDev ? 'Open Agent mode' : 'Unavailable'}</button>
+      </SettingsRow>
+    </section>
+  </section>
 }
 
 function OnboardingPanel({ adapters, detectedAdapters, plugins, connectedPluginIds, snapshot, preferences, steps, selectedStep, busy, orchestrationInstalled, computerUseInstalled, browserUseInstalled, completedSetup, onSelectStep, onConfirmNotifications, onSelectAgent, onInstallSkills, onRefresh, onOpenWorkbench, onAddProject, onSaveSetup, onUpdatePreferences }: {

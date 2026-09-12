@@ -21,6 +21,7 @@ export function createTauriEditionConfig({ edition, disableUpdater = false }) {
       ...config.bundle,
       active: false,
       createUpdaterArtifacts: false,
+      icon: config.bundle.icon.map((icon) => icon.replace(/^icons\//, 'icons/dev/')),
     }
   } else if (edition !== 'production') {
     throw new Error(`Unsupported Hiveory edition: ${edition}`)
