@@ -1,6 +1,6 @@
 # Foundation architecture
 
-This document describes the current local-first desktop boundary for Hiveory `0.1.4`.
+This document describes the current local-first desktop boundary for Hiveory `0.2.0`.
 
 ## Runtime shape
 

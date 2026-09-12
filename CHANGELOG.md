@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — 2026-09-12
+
+### Dev and Production editions
+
+- Dev builds now enable the private local Agent mode immediately and show it in the mode switcher.
+- Settings now includes an edition-aware Integrations page: Dev can open Agent mode, while Production clearly shows the feature as unavailable.
+- Added a distinct Dev executable icon with a white `DEV` badge below the Hiveory mark; Production retains the standard icon.
+
+### Release
+
+- Bumped desktop, renderer, Rust workspace, and package metadata to `0.2.0`.
+
 ## 0.1.4 — 2026-09-07
 
 ### Pane preset builder

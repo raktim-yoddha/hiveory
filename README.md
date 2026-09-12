@@ -6,7 +6,7 @@ The React renderer presents application state, while the Rust host owns privileg
 
 ## Project status
 
-Hiveory is currently version `0.1.4`. The repository includes a production Windows build pipeline that creates a portable executable, an NSIS installer, and an MSI package. Local builds are unsigned unless a Tauri signing key is configured.
+Hiveory is currently version `0.2.0`. The repository includes a production Windows build pipeline that creates a portable executable, an NSIS installer, and an MSI package. Local builds are unsigned unless a Tauri signing key is configured.
 
 ## Application modes
 
