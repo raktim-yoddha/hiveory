@@ -10,7 +10,7 @@ Hiveory is currently version `0.1.4`. The repository includes a production Windo
 
 ## Application modes
 
-Hiveory keeps three modes separate so each one has a clear capability boundary.
+Hiveory keeps public Chat and Code modes separate while preserving Agent compatibility contracts for private Dev features.
 
 | Mode | Purpose | Main capabilities |
 | --- | --- | --- |
@@ -207,12 +207,11 @@ See [docs/security/threat-model.md](docs/security/threat-model.md) for the detai
 ## Repository layout
 
 ```text
-src/apps/renderer/              React, TypeScript, Vite, xterm, Monaco, and UI state
-src/apps/desktop/src-tauri/     Tauri application host and native commands
-src/crates/hiveory-protocol/    Shared typed command, event, and data contracts
-src/crates/hiveory-persistence/ SQLite schema, migrations, and durable projections
-src/crates/hiveory-*-runtime/   Agent, code, job, plugin, terminal, and tool runtimes
-src/crates/hiveory-*-service/   Workspace, Git, notification, and supporting services
+src/apps/renderer/              React shell; mode and global feature views
+src/apps/desktop/src-tauri/     Tauri host and native command adapters
+src/crates/core/               Protocol, persistence, security, and shared services
+src/crates/modes/              Chat and Code crates; public Agent compatibility contracts
+src/crates/global/             Shared plugin and automation crates
 docs/                           Architecture, decisions, security, phases, and build notes
 tools/scripts/                  Development, release, and repository audit scripts
 releases/                       Generated local production and development artifacts
@@ -282,7 +281,7 @@ releases/production/Hiveory-setup.exe
 releases/production/Hiveory.msi
 ```
 
-Create a portable development edition with isolated application data and a visible `DEV` label:
+Create a portable development edition with isolated application data, a visible `DEV` label, and private feature UI from the sibling `hiveory-private` checkout:
 
 ```powershell
 pnpm app:build:dev

@@ -9,25 +9,25 @@ build = "build.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-hiveory-protocol = { path = "../../../crates/hiveory-protocol" }
-hiveory-platform-process = { path = "../../../crates/hiveory-platform-process" }
-hiveory-artifact-store = { path = "../../../crates/hiveory-artifact-store" }
-hiveory-agent-runtime = { path = "../../../crates/hiveory-agent-runtime" }
-hiveory-plugin-runtime = { path = "../../../crates/hiveory-plugin-runtime" }
-hiveory-chat-domain = { path = "../../../crates/hiveory-chat-domain" }
-hiveory-code-domain = { path = "../../../crates/hiveory-code-domain" }
-hiveory-code-orchestration = { path = "../../../crates/hiveory-code-orchestration" }
-hiveory-code-runtime = { path = "../../../crates/hiveory-code-runtime" }
-hiveory-terminal-host = { path = "../../../crates/hiveory-terminal-host" }
-hiveory-git-service = { path = "../../../crates/hiveory-git-service" }
-hiveory-job-runtime = { path = "../../../crates/hiveory-job-runtime" }
-hiveory-model-gateway = { path = "../../../crates/hiveory-model-gateway" }
-hiveory-notification-service = { path = "../../../crates/hiveory-notification-service" }
-hiveory-persistence = { path = "../../../crates/hiveory-persistence" }
-hiveory-secret-store = { path = "../../../crates/hiveory-secret-store" }
-hiveory-tool-runtime = { path = "../../../crates/hiveory-tool-runtime" }
-hiveory-routine-scheduler = { path = "../../../crates/hiveory-routine-scheduler" }
-hiveory-workspace-service = { path = "../../../crates/hiveory-workspace-service" }
+hiveory-protocol = { path = "../../../crates/core/hiveory-protocol" }
+hiveory-platform-process = { path = "../../../crates/core/hiveory-platform-process" }
+hiveory-artifact-store = { path = "../../../crates/core/hiveory-artifact-store" }
+hiveory-agent-runtime = { path = "../../../crates/modes/agent/hiveory-agent-runtime" }
+hiveory-plugin-runtime = { path = "../../../crates/global/plugins/hiveory-plugin-runtime" }
+hiveory-chat-domain = { path = "../../../crates/modes/chat/hiveory-chat-domain" }
+hiveory-code-domain = { path = "../../../crates/modes/code/hiveory-code-domain" }
+hiveory-code-orchestration = { path = "../../../crates/modes/code/hiveory-code-orchestration" }
+hiveory-code-runtime = { path = "../../../crates/modes/code/hiveory-code-runtime" }
+hiveory-terminal-host = { path = "../../../crates/modes/code/hiveory-terminal-host" }
+hiveory-git-service = { path = "../../../crates/modes/code/hiveory-git-service" }
+hiveory-job-runtime = { path = "../../../crates/core/hiveory-job-runtime" }
+hiveory-model-gateway = { path = "../../../crates/core/hiveory-model-gateway" }
+hiveory-notification-service = { path = "../../../crates/core/hiveory-notification-service" }
+hiveory-persistence = { path = "../../../crates/core/hiveory-persistence" }
+hiveory-secret-store = { path = "../../../crates/core/hiveory-secret-store" }
+hiveory-tool-runtime = { path = "../../../crates/core/hiveory-tool-runtime" }
+hiveory-routine-scheduler = { path = "../../../crates/global/automations/hiveory-routine-scheduler" }
+hiveory-workspace-service = { path = "../../../crates/modes/code/hiveory-workspace-service" }
 serde.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true

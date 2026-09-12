@@ -1,9 +1,27 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const rendererRoot = import.meta.dirname
+const privateRoot = resolve(rendererRoot, '../../../../hiveory-private')
+const privateFeatures = resolve(privateRoot, 'src/features/index.tsx')
+const devEdition = process.env.VITE_HIVEORY_EDITION === 'dev'
+if (devEdition && !existsSync(privateFeatures)) {
+  throw new Error(`Hiveory Dev requires the private sibling checkout at ${privateRoot}`)
+}
 
 export default defineConfig({
   plugins: [react()],
-  server: { port: 1420, strictPort: true },
+  resolve: {
+    alias: {
+      '@hiveory/premium-features': devEdition ? privateFeatures : resolve(rendererRoot, 'src/app/premium-features.tsx'),
+      '@hiveory/premium-theme-style': devEdition ? resolve(privateRoot, 'src/features/themes/theme.css') : resolve(rendererRoot, 'src/app/premium-theme-empty.css'),
+      '@hiveory/public': resolve(rendererRoot, 'src'),
+    },
+    dedupe: ['react', 'react-dom', 'lucide-react'],
+  },
+  server: { port: 1420, strictPort: true, fs: { allow: [resolve(rendererRoot, '../../../..')] } },
   build: {
     rollupOptions: {
       output: {

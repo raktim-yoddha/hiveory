@@ -1,0 +1,15 @@
+[package]
+name = "hiveory-agent-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hiveory-agent-domain = { path = "../hiveory-agent-domain" }
+hiveory-artifact-store = { path = "../../../core/hiveory-artifact-store" }
+hiveory-model-gateway = { path = "../../../core/hiveory-model-gateway" }
+hiveory-persistence = { path = "../../../core/hiveory-persistence" }
+hiveory-protocol = { path = "../../../core/hiveory-protocol" }
+hiveory-tool-runtime = { path = "../../../core/hiveory-tool-runtime" }
+thiserror.workspace = true
+tokio.workspace = true

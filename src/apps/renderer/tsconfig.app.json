@@ -14,7 +14,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@hiveory/premium-features": ["src/app/premium-features.tsx"],
+      "@hiveory/premium-theme-style": ["src/app/premium-theme-empty.css"]
+    }
   },
   "include": ["src"]
 }

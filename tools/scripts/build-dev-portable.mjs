@@ -10,10 +10,12 @@ import {
   tauriCli,
   tauriDir,
 } from './tauri-edition-config.mjs'
+import { usePrivateRustRuntime } from './private-rust-runtime.mjs'
 
 const buildDir = mkdtempSync(join(tmpdir(), 'hiveory-dev-build-'))
 const releaseDir = resolve(projectRoot, 'releases', 'dev')
 let temporaryConfigPath = null
+let restoreRustRuntime = null
 
 function stopRunningDevPortable(executablePath) {
   if (process.platform !== 'win32') return
@@ -53,6 +55,7 @@ function waitForReplacement(source, destination) {
 
 try {
   console.log('Building the Hiveory Dev portable executable …')
+  restoreRustRuntime = usePrivateRustRuntime()
   temporaryConfigPath = createTauriEditionConfig({ edition: 'dev', disableUpdater: true })
   const result = spawnSync(process.execPath, [tauriCli, 'build', '--no-bundle', '--config', configArgument(temporaryConfigPath)], {
     cwd: tauriDir,
@@ -60,6 +63,7 @@ try {
       ...process.env,
       CARGO_TARGET_DIR: buildDir,
       VITE_HIVEORY_EDITION: 'dev',
+      HIVEORY_EDITION: 'dev',
     },
     stdio: 'inherit',
   })
@@ -76,6 +80,7 @@ try {
   console.log('Hiveory Dev portable executable created:')
   console.log('  releases/dev/Hiveory-Dev-portable.exe')
 } finally {
+  restoreRustRuntime?.()
   removeTauriEditionConfig(temporaryConfigPath)
   try {
     rmSync(buildDir, { force: true, recursive: true })

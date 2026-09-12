@@ -5,4 +5,4 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-hiveory-protocol = { path = "../src/crates/hiveory-protocol" }
+hiveory-protocol = { path = "../src/crates/core/hiveory-protocol" }

@@ -1,10 +1,10 @@
-#[path = "../browser.rs"]
+#[path = "platform/browser.rs"]
 mod browser;
-#[path = "../hosted_source.rs"]
+#[path = "platform/hosted_source.rs"]
 mod hosted_source;
-#[path = "../release.rs"]
+#[path = "platform/release.rs"]
 mod release;
-#[path = "../task_sources.rs"]
+#[path = "platform/task_sources.rs"]
 mod task_sources;
 
 use async_trait::async_trait;
@@ -4018,11 +4018,32 @@ impl HiveoryFoundation {
     }
 }
 
+fn hiveory_dev_edition() -> bool {
+    option_env!("HIVEORY_EDITION") == Some("dev")
+}
+
+fn ensure_agent_edition() -> Result<(), ApiError> {
+    if hiveory_dev_edition() {
+        Ok(())
+    } else {
+        Err(application_error(
+            "feature_unavailable",
+            "Agent mode is not available in this edition.",
+            RetryClass::Never,
+        ))
+    }
+}
+
 #[tauri::command]
 fn hiveory_query_bootstrap(
     state: State<'_, HiveoryShellState>,
 ) -> Result<BootstrapSnapshot, ApiError> {
     let active_mode = *state.active_mode.read().map_err(|_| unavailable_error())?;
+    let active_mode = if active_mode == ApplicationMode::Agent && !hiveory_dev_edition() {
+        ApplicationMode::Code
+    } else {
+        active_mode
+    };
     Ok(BootstrapSnapshot {
         protocol: current_protocol_version(),
         active_mode,
@@ -4036,6 +4057,13 @@ async fn hiveory_command_set_active_mode(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<BootstrapSnapshot, ApiError> {
     let mode = command.mode;
+    if mode == ApplicationMode::Agent && !hiveory_dev_edition() {
+        return Err(application_error(
+            "feature_unavailable",
+            "Agent mode is not available in this edition.",
+            RetryClass::Never,
+        ));
+    }
     {
         let mut active_mode = state.active_mode.write().map_err(|_| unavailable_error())?;
         *active_mode = mode;
@@ -4166,6 +4194,7 @@ async fn hiveory_command_prepare_restore(
 async fn hiveory_query_agent_dashboard(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDashboard, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .dashboard()
@@ -4177,6 +4206,9 @@ async fn hiveory_query_agent_dashboard(
 async fn hiveory_query_agents(
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<hiveory_protocol::AgentSummary>, ApiError> {
+    if !hiveory_dev_edition() {
+        return Ok(Vec::new());
+    }
     foundation
         .agent_runtime
         .list_agents()
@@ -4189,6 +4221,7 @@ async fn hiveory_query_agent(
     request: AgentIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .agent_detail(&request.agent_id)
@@ -4201,6 +4234,7 @@ async fn hiveory_command_create_agent(
     request: AgentCreateRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .create_agent(&request)
@@ -4213,6 +4247,7 @@ async fn hiveory_command_update_agent(
     request: AgentUpdateRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .update_agent(&request)
@@ -4226,6 +4261,7 @@ async fn hiveory_command_archive_agent(
     archived: bool,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .archive_agent(&request.agent_id, archived)
@@ -4238,6 +4274,7 @@ async fn hiveory_command_delete_agent(
     request: AgentIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .delete_agent(&request.agent_id)
@@ -4250,6 +4287,7 @@ async fn hiveory_command_add_agent_folder(
     request: AgentFolderGrantRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentFolderGrant, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .add_folder(&request)
@@ -4262,6 +4300,7 @@ async fn hiveory_command_delete_agent_folder(
     request: AgentFolderGrantDeleteRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .delete_folder(&request)
@@ -4315,6 +4354,7 @@ async fn hiveory_command_toggle_agent_skill(
     request: AgentSkillToggleRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .set_skill(&request)
@@ -4327,6 +4367,7 @@ async fn hiveory_command_resolve_agent_skill_conflict(
     request: AgentSkillConflictResolutionRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .set_skill_conflict(&request)
@@ -4339,6 +4380,7 @@ async fn hiveory_query_agent_memory(
     query: AgentMemoryQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<AgentMemorySummary>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .memory(&query)
@@ -4351,6 +4393,7 @@ async fn hiveory_command_remember_agent_memory(
     request: AgentMemoryMutationRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentMemorySummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .remember(&request)
@@ -4363,6 +4406,7 @@ async fn hiveory_command_delete_agent_memory(
     request: AgentMemoryDeleteRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .delete_memory(&request)
@@ -4375,6 +4419,7 @@ async fn hiveory_query_agent_conversations(
     query: AgentConversationQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<AgentConversationSummary>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .conversations(&query)
@@ -4387,6 +4432,7 @@ async fn hiveory_query_agent_conversation(
     conversation_id: String,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentConversationDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .conversation(&conversation_id)
@@ -4399,6 +4445,7 @@ async fn hiveory_command_create_agent_conversation(
     request: AgentConversationCreateRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentConversationDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .create_conversation(&request)
@@ -4411,6 +4458,7 @@ async fn hiveory_query_agent_runs(
     query: AgentRunsQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<AgentRunSummary>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .runs(&query)
@@ -4423,6 +4471,7 @@ async fn hiveory_query_agent_run(
     run_id: String,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .run_detail(&run_id)
@@ -4435,6 +4484,7 @@ async fn hiveory_query_agent_events(
     query: AgentEventsQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<AgentEventEnvelope>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .events(&query)
@@ -4448,6 +4498,7 @@ async fn hiveory_stream_agent_events(
     foundation: State<'_, HiveoryFoundation>,
     channel: Channel<AgentEventEnvelope>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     let mut receiver = foundation.agent_runtime.subscribe();
     let backlog = foundation
         .agent_runtime
@@ -4482,6 +4533,7 @@ async fn hiveory_command_start_agent_run(
     request: AgentRunStartRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunSummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .start_run(&request)
@@ -4494,6 +4546,7 @@ async fn hiveory_command_resume_agent_run(
     request: AgentRunControlRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunSummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .resume_run(&request)
@@ -4506,6 +4559,7 @@ async fn hiveory_command_cancel_agent_run(
     request: AgentRunControlRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunSummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .cancel_run(&request)
@@ -4518,6 +4572,7 @@ async fn hiveory_command_decide_agent_approval(
     request: AgentApprovalDecisionRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunSummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .decide_approval(&request)
@@ -4530,6 +4585,7 @@ async fn hiveory_command_submit_agent_input(
     request: AgentInputRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentRunSummary, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .submit_input(&request)
@@ -4542,6 +4598,7 @@ async fn hiveory_command_export_agent(
     request: AgentExportRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .agent_runtime
         .export_agent(&request)
@@ -4554,6 +4611,9 @@ async fn hiveory_query_routines(
     query: RoutineQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<RoutineSummary>, ApiError> {
+    if !hiveory_dev_edition() {
+        return Ok(Vec::new());
+    }
     foundation
         .routine_scheduler
         .list(&query)
@@ -4566,6 +4626,7 @@ async fn hiveory_query_routine(
     request: RoutineIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<RoutineDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .detail(&request.routine_id)
@@ -4578,6 +4639,7 @@ async fn hiveory_command_create_routine(
     request: RoutineCreateRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<RoutineDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .create(&request)
@@ -4590,6 +4652,7 @@ async fn hiveory_command_update_routine(
     request: RoutineUpdateRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<RoutineDetail, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .update(&request)
@@ -4602,6 +4665,7 @@ async fn hiveory_command_archive_routine(
     request: RoutineIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<(), ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .archive(&request)
@@ -4614,6 +4678,7 @@ async fn hiveory_command_run_routine_now(
     request: RoutineIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<RoutineExecution, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .run_now(&request.routine_id)
@@ -4626,6 +4691,7 @@ async fn hiveory_query_routine_executions(
     query: RoutineExecutionsQuery,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<RoutineExecution>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .routine_scheduler
         .executions(&query.routine_id, query.limit.unwrap_or(50))
@@ -4765,6 +4831,7 @@ async fn hiveory_query_agent_plugin_grants(
     request: AgentIdRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<Vec<AgentPluginGrant>, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .plugin_runtime
         .agent_grants(&request.agent_id)
@@ -4777,6 +4844,7 @@ async fn hiveory_command_set_agent_plugin_grant(
     request: AgentPluginGrantRequest,
     foundation: State<'_, HiveoryFoundation>,
 ) -> Result<AgentPluginGrant, ApiError> {
+    ensure_agent_edition()?;
     foundation
         .plugin_runtime
         .set_agent_grant(&request)
@@ -11078,7 +11146,12 @@ pub fn run() {
             .ok()
             .flatten()
             .and_then(|value| serde_json::from_str(&value).ok())
-            .unwrap_or(ApplicationMode::Agent);
+            .unwrap_or(ApplicationMode::Code);
+            let active_mode = if active_mode == ApplicationMode::Agent && !hiveory_dev_edition() {
+                ApplicationMode::Code
+            } else {
+                active_mode
+            };
             if let Some(window) = app.get_webview_window("main") {
                 let saved_window = tauri::async_runtime::block_on(
                     foundation.persistence.get_setting("shell.window_state"),
@@ -11105,10 +11178,12 @@ pub fn run() {
                 active_mode: RwLock::new(active_mode),
             });
             app.manage(HiveoryUpdateState::default());
-            let routine_scheduler = foundation.routine_scheduler.clone();
-            tauri::async_runtime::spawn(async move {
-                routine_scheduler.run().await;
-            });
+            if hiveory_dev_edition() {
+                let routine_scheduler = foundation.routine_scheduler.clone();
+                tauri::async_runtime::spawn(async move {
+                    routine_scheduler.run().await;
+                });
+            }
             start_native_notification_bridge(app.handle().clone(), foundation.jobs.clone());
             app.manage(browser_manager);
             app.manage(foundation);

@@ -12,7 +12,8 @@
     "check": "pnpm --dir src/apps/renderer check",
     "test": "pnpm --dir src/apps/renderer test",
     "verify": "pnpm check && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
-    "release:check": "pnpm verify && pnpm audit:identity && pnpm audit:references",
+    "release:check": "pnpm verify && pnpm audit:identity && pnpm audit:references && pnpm audit:private-boundary",
+    "audit:private-boundary": "node tools/scripts/audit-private-boundary.mjs",
     "audit:identity": "node tools/scripts/hiveory-prohibited-name-scan.mjs",
     "audit:references": "node tools/scripts/hiveory-reference-guard.mjs"
   },

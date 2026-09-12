@@ -35,16 +35,17 @@ import {
   type ChatEngineCatalog,
   type UpdateSnapshot,
 } from '../../shared/api/hiveory-client'
-import { PRIMARY_PRESETS } from '../../features/workspace/model/code-layout-presets-meta'
-import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/browser/model/browser-models'
+import { PRIMARY_PRESETS } from '../../features/modes/code/workspace/model/code-layout-presets-meta'
+import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/global/browser/model/browser-models'
 import { isHiveoryDev } from '../edition'
-import { useBrowserSurfaceBlocker } from '../../features/browser/hooks/use-browser-surface-blocker'
+import { useBrowserSurfaceBlocker } from '../../features/global/browser/hooks/use-browser-surface-blocker'
 
-const HiveoryChat = lazy(async () => ({ default: (await import('../../features/chat/views/HiveoryChat')).HiveoryChat }))
-const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
-const HiveoryAgent = lazy(async () => ({ default: (await import('../../features/agent/views/HiveoryAgent')).HiveoryAgent }))
-const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/workspace/views/HiveoryTasks')).HiveoryTasks }))
-const HiveoryCapabilitySettings = lazy(async () => ({ default: (await import('../../features/settings/HiveoryCapabilitySettings')).HiveoryCapabilitySettings }))
+const HiveoryChat = lazy(async () => ({ default: (await import('../../features/modes/chat/views/HiveoryChat')).HiveoryChat }))
+const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/modes/code/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
+const HiveoryAgent = lazy(async () => ({ default: (await import('@hiveory/premium-features')).HiveoryAgent }))
+const PremiumThemeSettings = lazy(async () => ({ default: (await import('@hiveory/premium-features')).PremiumThemeSettings }))
+const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/global/tasks/views/HiveoryTasks')).HiveoryTasks }))
+const HiveoryCapabilitySettings = lazy(async () => ({ default: (await import('../../features/global/settings/HiveoryCapabilitySettings')).HiveoryCapabilitySettings }))
 
 type ModeDefinition = {
   mode: ApplicationMode
@@ -99,6 +100,12 @@ type CommandAction = {
 const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false, sidebarCollapsed: false }
 const updateCheckIntervalMs = 24 * 60 * 60 * 1000
 const dismissedUpdateStorageKey = 'hiveory.dismissed-update-version'
+const devAgentModeStorageKey = 'hiveory.dev.agent-mode-enabled'
+
+function readDevAgentMode(): boolean {
+  try { return isHiveoryDev && window.localStorage.getItem(devAgentModeStorageKey) === 'true' }
+  catch { return false }
+}
 
 function readPreferences(): ShellPreferences {
   if (typeof window === 'undefined') return defaultPreferences
@@ -140,6 +147,7 @@ function rememberDismissedUpdateVersion(version: string): void {
 
 export function HiveoryShell() {
   const [activeMode, setActiveMode] = useState<ApplicationMode>('code')
+  const [agentEnabled, setAgentEnabled] = useState(readDevAgentMode)
   const [screen, setScreen] = useState<ShellScreen>('workspace')
   const [snapshot, setSnapshot] = useState<DiagnosticSnapshot>(previewSnapshot)
   const [preferences, setPreferences] = useState<ShellPreferences>(readPreferences)
@@ -155,6 +163,7 @@ export function HiveoryShell() {
   const diagnosticsRefreshTimerRef = useRef<number | null>(null)
   const diagnosticsRefreshInFlightRef = useRef(false)
   const diagnosticsRefreshQueuedRef = useRef(false)
+  const availableModes = modes.filter(({ mode }) => mode !== 'agent' || agentEnabled)
   useBrowserSurfaceBlocker(
     commandOpen || notificationsOpen || codeLayoutMenuOpen || updatePromptOpen,
     'application-shell-overlay',
@@ -191,7 +200,7 @@ export function HiveoryShell() {
     void hiveoryClient
       .bootstrap()
       .then((item) => {
-        setActiveMode(item.active_mode)
+        setActiveMode(item.active_mode === 'agent' && !readDevAgentMode() ? 'code' : item.active_mode)
       })
       .catch(() => undefined)
     void refresh()
@@ -206,6 +215,14 @@ export function HiveoryShell() {
       diagnosticsRefreshQueuedRef.current = false
     }
   }, [refresh, scheduleDiagnosticsRefresh])
+
+  useEffect(() => {
+    try { window.localStorage.setItem(devAgentModeStorageKey, String(agentEnabled)) } catch { /* Optional local preference. */ }
+    if (!agentEnabled && activeMode === 'agent') {
+      setActiveMode('code')
+      void hiveoryClient.setActiveMode('code').catch(() => undefined)
+    }
+  }, [agentEnabled, activeMode])
 
   useEffect(() => {
     const openGlobalSettings = () => {
@@ -240,6 +257,7 @@ export function HiveoryShell() {
       const detail = (event as CustomEvent<{ mode?: ApplicationMode; section?: string }>).detail ?? {}
       const mode = detail.mode
       if (mode !== 'agent' && mode !== 'code' && mode !== 'chat') return
+      if (mode === 'agent' && !agentEnabled) return
       setScreen('workspace')
       setCommandOpen(false)
       setNotificationsOpen(false)
@@ -253,7 +271,7 @@ export function HiveoryShell() {
     }
     window.addEventListener('hiveory-navigate-section', navigate)
     return () => window.removeEventListener('hiveory-navigate-section', navigate)
-  }, [])
+  }, [agentEnabled])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--hiveory-font-scale', String(preferences.fontScale / 100))
@@ -265,6 +283,14 @@ export function HiveoryShell() {
       // optional
     }
   }, [preferences])
+
+  useEffect(() => {
+    if (!isHiveoryDev) return
+    const theme = window.localStorage.getItem('hiveory.dev.theme')
+    if (theme === 'graphite' || theme === 'ocean' || theme === 'forest') document.documentElement.dataset.hiveoryTheme = theme
+    const accent = window.localStorage.getItem('hiveory.dev.accent')
+    if (accent && /^#[0-9a-fA-F]{6}$/.test(accent)) document.documentElement.style.setProperty('--hiveory-neutral-accent', accent)
+  }, [])
 
   const checkForUpdates = useCallback(async (showPrompt: boolean): Promise<UpdateSnapshot> => {
     const next = await hiveoryClient.checkForUpdate()
@@ -367,6 +393,7 @@ export function HiveoryShell() {
   }, [])
 
   const selectMode = (mode: ApplicationMode) => {
+    if (mode === 'agent' && !agentEnabled) return
     setScreen('workspace')
     setNotificationsOpen(false)
     setCodeLayoutMenuOpen(false)
@@ -418,7 +445,7 @@ export function HiveoryShell() {
   }
 
   const commandActions: CommandAction[] = [
-    ...modes.map(({ mode, label, description }) => ({
+    ...availableModes.map(({ mode, label, description }) => ({
       id: `mode-${mode}`,
       label: `Switch to ${label}`,
       description,
@@ -564,7 +591,7 @@ export function HiveoryShell() {
           </div>
 
           <nav className="hiveory-mode-switch" aria-label="Workspace mode">
-            {modes.map(({ mode, label }) => (
+            {availableModes.map(({ mode, label }) => (
               <button
                 type="button"
                 key={mode}
@@ -720,6 +747,8 @@ export function HiveoryShell() {
             <HiveorySettings
               preferences={preferences}
               setPreferences={setPreferences}
+              agentEnabled={agentEnabled}
+              setAgentEnabled={setAgentEnabled}
               update={update}
               onCheckUpdate={() => checkForUpdates(false)}
               onInstallUpdate={installUpdate}
@@ -1043,6 +1072,8 @@ function HiveoryHelp({ onOpenSettings }: { onOpenSettings: () => void }) {
 function HiveorySettings({
   preferences,
   setPreferences,
+  agentEnabled,
+  setAgentEnabled,
   update,
   onCheckUpdate,
   onInstallUpdate,
@@ -1053,6 +1084,8 @@ function HiveorySettings({
 }: {
   preferences: ShellPreferences
   setPreferences: React.Dispatch<React.SetStateAction<ShellPreferences>>
+  agentEnabled: boolean
+  setAgentEnabled: React.Dispatch<React.SetStateAction<boolean>>
   update: UpdateSnapshot | null
   onCheckUpdate: () => Promise<UpdateSnapshot>
   onInstallUpdate: () => Promise<void>
@@ -1173,6 +1206,17 @@ function HiveorySettings({
         Tune the shared shell, protect local data, and verify the release channel. Secrets remain in the operating-system credential manager.
       </p>
       <div className="hiveory-settings-grid">
+        <section className="hiveory-settings-card">
+          <div className="hiveory-card-heading"><Bot size={17} aria-hidden="true" /><h2>Modes and premium features</h2></div>
+          <p>Chat and Code are ready to use.</p>
+          <label className="hiveory-settings-check">
+            <input type="checkbox" checked={agentEnabled} disabled={!isHiveoryDev} onChange={(event) => setAgentEnabled(event.target.checked)} />
+            Enable Agent mode
+          </label>
+          {!isHiveoryDev && <p>Agent mode, Auto Plugins, and Themes are unavailable in this build.</p>}
+          {isHiveoryDev && <p>Agent mode uses the private local Dev implementation.</p>}
+        </section>
+        <PremiumThemeSettings />
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">
             <Keyboard size={17} aria-hidden="true" />

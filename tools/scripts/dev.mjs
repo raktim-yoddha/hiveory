@@ -6,19 +6,22 @@ import {
   tauriCli,
   tauriDir,
 } from './tauri-edition-config.mjs'
+import { usePrivateRustRuntime } from './private-rust-runtime.mjs'
 
+const restoreRustRuntime = usePrivateRustRuntime()
 const temporaryConfigPath = createTauriEditionConfig({ edition: 'dev', disableUpdater: true })
 let cleanedUp = false
 
 function cleanup() {
   if (cleanedUp) return
   cleanedUp = true
+  restoreRustRuntime()
   removeTauriEditionConfig(temporaryConfigPath)
 }
 
 const child = spawn(process.execPath, [tauriCli, 'dev', '--config', configArgument(temporaryConfigPath)], {
   cwd: tauriDir,
-  env: { ...process.env, INIT_CWD: tauriDir, VITE_HIVEORY_EDITION: 'dev' },
+  env: { ...process.env, INIT_CWD: tauriDir, VITE_HIVEORY_EDITION: 'dev', HIVEORY_EDITION: 'dev' },
   windowsHide: process.platform === 'win32',
   stdio: 'inherit',
 })

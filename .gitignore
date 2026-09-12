@@ -6,7 +6,8 @@ dist/
 /releases/dev/
 /releases/*.msi
 /releases/*.exe
-/src/crates/hiveory-protocol/bindings/
+/src/crates/core/hiveory-protocol/bindings/
+/src/apps/desktop/src-tauri/.tauri.*.json
 *.log
 .env
 .env.*

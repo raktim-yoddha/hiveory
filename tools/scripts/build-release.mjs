@@ -90,10 +90,13 @@ function requiredFile(path, description) {
 
 try {
   console.log('Building the production Hiveory application in a temporary directory outside the project …')
+  const boundary = spawnSync(process.execPath, [resolve(projectRoot, 'tools', 'scripts', 'audit-private-boundary.mjs')], { cwd: projectRoot, stdio: 'inherit' })
+  if (boundary.error) throw boundary.error
+  if (boundary.status !== 0) throw new Error('Public/private source boundary audit failed')
   const configPath = resolveBuildConfig()
   const result = spawnSync(process.execPath, [tauriCli, 'build', '--config', configArgument(configPath)], {
     cwd: tauriDir,
-    env: { ...process.env, CARGO_TARGET_DIR: buildDir, VITE_HIVEORY_EDITION: 'production' },
+    env: { ...process.env, CARGO_TARGET_DIR: buildDir, VITE_HIVEORY_EDITION: 'production', HIVEORY_EDITION: 'production' },
     stdio: 'inherit',
   })
   if (result.error) throw result.error

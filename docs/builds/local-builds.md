@@ -8,7 +8,7 @@ pnpm app:build
 
 This creates the production MSI, setup executable, and portable executable in `releases/production/`.
 
-For a portable-only local test build with isolated Hiveory Dev data and a visible `DEV` title-bar label:
+For a portable-only local test build with isolated Hiveory Dev data, private feature UI and Agent runtime from the sibling `hiveory-private` checkout, and a white `DEV` label:
 
 ```bash
 pnpm app:build:dev

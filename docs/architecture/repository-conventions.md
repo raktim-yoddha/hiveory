@@ -9,7 +9,9 @@ area without navigating unrelated application code.
 | --- | --- |
 | `src/apps/renderer/` | React user interface and client-side interaction state. |
 | `src/apps/desktop/` | Tauri desktop host, native window lifecycle, and native commands. |
-| `src/crates/` | Rust domain, runtime, persistence, and integration crates. |
+| `src/crates/core/` | Shared protocol, persistence, security, and services. |
+| `src/crates/modes/` | Chat and Code crates, plus public Agent compatibility contracts. |
+| `src/crates/global/` | Plugin and automation crates shared across modes. |
 | `tools/` | Build, release, and protocol-generation tooling. |
 | `docs/` | Architecture decisions, verification evidence, and contributor guidance. |
 
@@ -20,7 +22,13 @@ src/
   apps/
     desktop/             desktop application host
     renderer/            frontend application
-  crates/                Rust capability crates
+  crates/
+    core/                cross-mode foundations
+    modes/agent/         public Agent compatibility contracts and inert receiver
+    modes/chat/          Chat domain
+    modes/code/          Code runtime and workspace
+    global/plugins/      manual plugin runtime
+    global/automations/  scheduling
 tools/                   repository automation and generators
 docs/                    architecture and verification records
 ```
@@ -30,27 +38,32 @@ docs/                    architecture and verification records
 ```text
 src/
   app/                 application composition and global styles
-  features/            independently owned product capabilities
-    browser/
-    workspace/
-    chat/
-    agent/
-    automation/
-    code/
+  features/
+    modes/
+      chat/
+      code/workspace/
+    global/
+      browser/
+      plugins/
+      skills/
+      automations/
+      tasks/
+      settings/
   shared/              cross-feature code with no feature ownership
     api/                typed desktop-client boundary
   generated/           generated protocol code; never hand-edit
   main.tsx             the renderer entry point only
 ```
 
-The desktop host keeps `src/lib.rs` as a stable public facade. Its application
-composition lives in `src/application/`; native browser, release, and hosted
-source integrations remain separate modules until they are split further by
-their command families.
+The desktop host keeps `src/lib.rs` as its public facade. Its application
+composition lives in `src/application/`, with platform-specific modules under
+`src/application/platform/`. Command families will be split from the existing
+host module as their ownership boundaries are extracted.
 
-A feature may import from `shared/` and its own folder. Cross-feature imports
-are deliberate and should use that feature's public component or model, not
-its internal state implementation.
+A feature may import from `shared/` and its own folder. Shared screens such as
+Plugins and Automations live in `features/global/`; Chat and Code consume their
+public views directly. Premium UI resolves through an edition provider, whose
+public implementation is an unavailable receiver.
 
 ## Naming rules
 
