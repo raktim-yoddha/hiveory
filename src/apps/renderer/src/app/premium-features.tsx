@@ -4,9 +4,9 @@ export function HiveoryAgent() {
 }
 
 export function AutoPluginPanel() {
-  return <section className="hiveory-settings-card"><h2>Auto Plugins</h2><p>One-click connections are unavailable in this build.</p></section>
+  return null
 }
 
 export function PremiumThemeSettings() {
-  return <section className="hiveory-settings-card"><h2>Themes</h2><p>Custom color themes are unavailable in this build.</p></section>
+  return null
 }

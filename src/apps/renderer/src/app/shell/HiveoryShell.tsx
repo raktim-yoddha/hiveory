@@ -43,7 +43,6 @@ import { useBrowserSurfaceBlocker } from '../../features/global/browser/hooks/us
 const HiveoryChat = lazy(async () => ({ default: (await import('../../features/modes/chat/views/HiveoryChat')).HiveoryChat }))
 const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/modes/code/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
 const HiveoryAgent = lazy(async () => ({ default: (await import('@hiveory/premium-features')).HiveoryAgent }))
-const PremiumThemeSettings = lazy(async () => ({ default: (await import('@hiveory/premium-features')).PremiumThemeSettings }))
 const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/global/tasks/views/HiveoryTasks')).HiveoryTasks }))
 const HiveoryCapabilitySettings = lazy(async () => ({ default: (await import('../../features/global/settings/HiveoryCapabilitySettings')).HiveoryCapabilitySettings }))
 
@@ -732,7 +731,6 @@ export function HiveoryShell() {
             <HiveorySettings
               preferences={preferences}
               setPreferences={setPreferences}
-              agentEnabled={agentEnabled}
               update={update}
               onCheckUpdate={() => checkForUpdates(false)}
               onInstallUpdate={installUpdate}
@@ -1056,7 +1054,6 @@ function HiveoryHelp({ onOpenSettings }: { onOpenSettings: () => void }) {
 function HiveorySettings({
   preferences,
   setPreferences,
-  agentEnabled,
   update,
   onCheckUpdate,
   onInstallUpdate,
@@ -1067,7 +1064,6 @@ function HiveorySettings({
 }: {
   preferences: ShellPreferences
   setPreferences: React.Dispatch<React.SetStateAction<ShellPreferences>>
-  agentEnabled: boolean
   update: UpdateSnapshot | null
   onCheckUpdate: () => Promise<UpdateSnapshot>
   onInstallUpdate: () => Promise<void>
@@ -1188,17 +1184,6 @@ function HiveorySettings({
         Tune the shared shell, protect local data, and verify the release channel. Secrets remain in the operating-system credential manager.
       </p>
       <div className="hiveory-settings-grid">
-        <section className="hiveory-settings-card">
-          <div className="hiveory-card-heading"><Bot size={17} aria-hidden="true" /><h2>Modes and premium features</h2></div>
-          <p>Chat and Code are ready to use.</p>
-          <label className="hiveory-settings-check">
-            <input type="checkbox" checked={agentEnabled} disabled readOnly />
-            Agent mode {agentEnabled ? 'enabled in Dev' : 'unavailable in Production'}
-          </label>
-          {!isHiveoryDev && <p>Agent mode, Auto Plugins, and Themes are unavailable in this build.</p>}
-          {isHiveoryDev && <p>Agent mode uses the private local Dev implementation.</p>}
-        </section>
-        <PremiumThemeSettings />
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">
             <Keyboard size={17} aria-hidden="true" />

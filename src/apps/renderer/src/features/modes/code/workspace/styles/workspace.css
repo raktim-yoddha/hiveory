@@ -8110,8 +8110,8 @@
 .hiveory-skills-page .code-activity-desc { color: #a2a3a8; font-size: 10px; }
 .hiveory-skills-page .code-skill-badge { color: #8e9096; font-size: 10px; }
 .hiveory-skills-page .hiveory-skill-row-actions { gap: 8px; }
-.hiveory-skills-page .hiveory-skill-row-actions button { min-width: 82px; min-height: 28px; justify-content: center; border-color: #494a50; color: #dedee1; background: #292a2e; font-size: 10px; }
-.hiveory-skills-page .hiveory-skill-row-actions button:hover:not(:disabled) { border-color: #66686e; background: #38393e; }
+.hiveory-skills-page .hiveory-skill-state { min-width: 58px; color: var(--code-text-secondary); font-size: 10px; text-align: right; }
+.hiveory-skills-page .hiveory-switch { flex: 0 0 auto; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar { width: 10px; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar-track { background: #171718; }
 .hiveory-skills-page .hiveory-skills-list::-webkit-scrollbar-thumb { border: 3px solid #171718; border-radius: 99px; background: #515157; }

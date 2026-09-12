@@ -71,7 +71,7 @@ export function HiveoryPlugins() {
   return <section className="hiveory-plugin-page hiveory-plugin-page-list" aria-labelledby="hiveory-plugins-title">
     <header className="hiveory-plugin-page-toolbar">
       <div className="hiveory-plugin-page-title"><div><h1 id="hiveory-plugins-title">Plugins</h1><p>Local integrations available to Hiveory sessions.</p></div></div>
-      <div className="hiveory-plugin-page-actions"><span className="hiveory-local-badge"><LockKeyhole size={12} />Credentials stay local</span><button className="is-secondary" onClick={() => setShowCreator(true)} disabled={busy !== null}><Plus size={14} />Add custom</button><button className="is-secondary" onClick={() => void importManifest()} disabled={busy !== null}>Import</button><button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh plugins" disabled={busy !== null}><RefreshCw size={15} /></button></div>
+      <div className="hiveory-plugin-page-actions"><button className="is-secondary" onClick={() => setShowCreator(true)} disabled={busy !== null}><Plus size={14} />Add custom</button><button className="is-secondary" onClick={() => void importManifest()} disabled={busy !== null}>Import</button><button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh plugins" disabled={busy !== null}><RefreshCw size={15} /></button></div>
     </header>
     <Suspense fallback={null}><AutoPluginPanel /></Suspense>
     <label className="hiveory-plugin-search"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins" aria-label="Search plugins" /></label>

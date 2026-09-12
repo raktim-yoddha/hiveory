@@ -3,7 +3,6 @@ import {
   AlertCircle,
   Archive,
   ArrowUp,
-  AudioWaveform,
   Check,
   ChevronDown,
   ChevronRight,
@@ -1360,15 +1359,6 @@ export function HiveoryChat() {
             >
               <RefreshCw size={13} />
             </button>
-            <button
-              type="button"
-              className="chat-rail-icon-btn"
-              aria-label="New chat"
-              title="New chat"
-              onClick={createNewChat}
-            >
-              <Plus size={14} />
-            </button>
           </div>
         </div>
 
@@ -1394,8 +1384,8 @@ export function HiveoryChat() {
           <button
             type="button"
             role="tab"
-            aria-selected={!showArchived && folderFilter === null}
-            className={`chat-rail-filter-tab ${!showArchived && folderFilter === null ? 'is-active' : ''}`}
+            aria-selected={!showArchived}
+            className={`chat-rail-filter-tab ${!showArchived ? 'is-active' : ''}`}
             onClick={() => {
               setShowArchived(false)
               setFolderFilter(null)
@@ -1403,7 +1393,7 @@ export function HiveoryChat() {
               setSelectedId(null)
             }}
           >
-            Recent
+            Active
           </button>
           <button
             type="button"
@@ -1412,25 +1402,13 @@ export function HiveoryChat() {
             className={`chat-rail-filter-tab ${showArchived ? 'is-active' : ''}`}
             onClick={() => {
               setShowArchived(true)
+              setFolderFilter(null)
               setIsNewChatDraft(false)
               setSelectedId(null)
             }}
           >
             <Archive size={11} />
             Archived
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={folderFilter === null && !showArchived}
-            className={`chat-rail-filter-tab ${folderFilter === null ? 'is-active' : ''}`}
-            onClick={() => {
-              setFolderFilter(null)
-              setIsNewChatDraft(false)
-              setSelectedId(null)
-            }}
-          >
-            All
           </button>
         </div>
 
@@ -1443,14 +1421,7 @@ export function HiveoryChat() {
           {!sidebarLoading && !sidebar.conversations.length && (
             <div className="chat-rail-empty">
               <MessageCircle size={20} />
-              <p>
-                {showArchived
-                  ? 'No archived chats.'
-                  : 'Your conversations will appear here.'}
-              </p>
-              <button type="button" onClick={createNewChat}>
-                Start a new chat
-              </button>
+              <p>{showArchived ? 'No archived chats.' : 'No chats yet.'}</p>
             </div>
           )}
           {sidebarLoading && (
@@ -1478,24 +1449,19 @@ export function HiveoryChat() {
         <header className="chat-header">
           <div className="chat-header-title-wrap">
             {chatIsLocked ? <CliBrandIcon identifier={lockedTurn?.provider_account_id} size={16} /> : <MessageCircle size={16} />}
-            <div>
-              <input
-                className="chat-header-input"
-                aria-label="Conversation title"
-                value={titleDraft}
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onBlur={() => void saveTitle()}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    event.currentTarget.blur()
-                  }
-                }}
-              />
-              <p className="chat-header-subtitle">
-                Private chat · profile-scoped tools and context stay in this conversation
-              </p>
-            </div>
+            <input
+              className="chat-header-input"
+              aria-label="Conversation title"
+              value={titleDraft}
+              onChange={(event) => setTitleDraft(event.target.value)}
+              onBlur={() => void saveTitle()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                }
+              }}
+            />
           </div>
           <div className="chat-header-actions">
             {conversation && conversation.branches.length > 1 && (
@@ -1516,15 +1482,6 @@ export function HiveoryChat() {
               }}
             >
               <Settings2 size={14} />
-            </button>
-            <button
-              type="button"
-              className="chat-rail-icon-btn"
-              aria-label="New chat"
-              title="New chat"
-              onClick={createNewChat}
-            >
-              <Plus size={15} />
             </button>
             {conversation && (
               <button
@@ -1555,15 +1512,6 @@ export function HiveoryChat() {
 
         {chatSurface === 'chat' ? (
           <>
-        {/* Context Bar */}
-        <div className="chat-context-bar">
-          <div className="chat-context-bar-left">
-            <Check size={13} />
-            <span>No project or repository is mounted</span>
-          </div>
-          <span>Files, folders, and screenshots are opt-in</span>
-        </div>
-
         {/* Transcript */}
         <div className="chat-transcript-viewport" ref={transcriptRef} aria-live="polite">
           <div className="chat-transcript-column">
@@ -1578,11 +1526,8 @@ export function HiveoryChat() {
                 <span className="chat-empty-icon">
                   <CliBrandIcon identifier={selectedEngine?.id} size={22} />
                 </span>
-                <h2>Start a focused conversation</h2>
-                <p>
-                  Ask a question, compare answers across your installed CLIs, or attach only the
-                  files you want the active model to see.
-                </p>
+                <h2>Start a conversation</h2>
+                <p>Ask a question or attach files for context.</p>
               </div>
             )}
             {conversation?.messages.map(renderMessage)}
@@ -1870,18 +1815,6 @@ export function HiveoryChat() {
             </div>
 
             <div className="chat-composer-actions">
-              {/* Mic / Waveform Button (White circular button from Image 2) */}
-              <button
-                type="button"
-                className="chat-mic-btn"
-                aria-disabled="true"
-                title="Voice input is temporarily unavailable"
-                disabled
-              >
-                <AudioWaveform size={16} />
-              </button>
-
-              {/* Send / Stop Button (Image 2 circular button) */}
               {activeTurn ? (
                 <button
                   type="button"

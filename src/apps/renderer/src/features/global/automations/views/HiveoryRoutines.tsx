@@ -112,13 +112,13 @@ export function HiveoryRoutines() {
         </button>)}
       </div>}
       {!visibleRoutines.length && <div className="hiveory-automation-desktop-empty">
-        <strong>{routines.length ? 'No matching automations' : 'No automations across loaded hosts'}</strong>
-        <span>{routines.length ? 'Change the search or filter to see configured schedules.' : 'Create a schedule or start from one of the local templates below.'}</span>
+        <strong>{routines.length ? 'No matches' : 'No automations yet'}</strong>
+        <span>{routines.length ? 'Try another search or filter.' : 'Create one or use a template.'}</span>
       </div>}
       {agents.length > 0 && <div className="hiveory-automation-desktop-templates" aria-labelledby="hiveory-template-title">
-        <h2 id="hiveory-template-title">Start from a template</h2>
+        <h2 id="hiveory-template-title">Templates</h2>
         {automationTemplates.map((item) => <button key={item.name} type="button" disabled={busy !== null} onClick={() => { setEditing(null); setTemplate(item); setShowForm(true) }}>
-          <small>{item.category}</small><strong>{item.name}</strong><span>{item.description}</span>
+          <small>{item.category}</small><strong>{item.name}</strong>
         </button>)}
       </div>}
     </section>

@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Circle,
   CircleAlert,
-  Cpu,
   FolderPlus,
   GitBranch,
   Globe2,
@@ -14,16 +13,13 @@ import {
   ListChecks,
   MonitorCog,
   Network,
-  PanelTop,
   PlugZap,
   RefreshCw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   Terminal,
   Workflow,
-  Wrench,
 } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { isHiveoryDev } from '../../../app/edition'
@@ -36,7 +32,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch } from '../../modes/code/workspace/model/code-yolo-preferences'
 
-type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'general' | 'integrations' | 'unavailable'
+type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'general' | 'integrations'
 type OnboardingStep = 'notifications' | 'agent' | 'cli' | 'integrations' | 'setup' | 'projects' | 'multi-task' | 'browser'
 type CapabilityPreferences = {
   defaultAdapterId: string | null
@@ -136,13 +132,6 @@ function readPreferences(): CapabilityPreferences {
 
 function adapterLabel(adapter: CodeAdapterSummary): string {
   return adapter.display_name || adapter.executable
-}
-
-function placeholderCopy(label: string): { title: string; detail: string } {
-  return {
-    title: `${label} is not configured in this build`,
-    detail: 'This category is intentionally unavailable until Hiveory exposes a durable service for it. The AI capabilities and onboarding areas above are live and connected to the desktop host.',
-  }
 }
 
 export function HiveoryCapabilitySettings({
@@ -320,9 +309,7 @@ export function HiveoryCapabilitySettings({
             ? <BrowserUsePanel installed={browserUseInstalled} busy={busy} preferences={preferences} onInstall={() => void installSkill('Hiveory Browser Use', browserUseSkill)} onRefresh={() => void refresh()} onOpenWorkbench={onOpenWorkbench} onOpenExternal={(url) => void run('browser-external', async () => { await hiveoryClient.openExternalUrl({ url }) }, 'Opened the page in the default external browser.')} onUpdate={updatePreferences} />
           : section === 'general'
             ? children
-            : section === 'integrations'
-              ? <IntegrationsPanel />
-            : <UnavailablePanel {...placeholderCopy('This settings category')} />
+            : <IntegrationsPanel />
 
   return <div className="hiveory-capability-settings">
     <aside className="hiveory-capability-sidebar" aria-label="Settings navigation">
@@ -332,12 +319,8 @@ export function HiveoryCapabilitySettings({
         {filteredSections.filter((item) => item.id === 'onboarding').map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
         <p>AI capabilities</p>
         {filteredSections.filter((item) => ['agents', 'orchestration', 'computer-use', 'browser-use'].includes(item.id)).map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
-        <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><Cpu size={16} />AI Provider Accounts <small>optional</small></button>
-        <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><Sparkles size={16} />Voice</button>
-        <p>Set up</p>
-        <SettingsNavButton item={{ id: 'general', label: 'General', icon: SlidersHorizontal }} section={section} onSelect={setSection} />
-        <SettingsNavButton item={{ id: 'integrations', label: 'Integrations', icon: Link2 }} section={section} onSelect={setSection} />
-        <button type="button" className="hiveory-capability-nav-placeholder" onClick={() => setSection('unavailable')}><PanelTop size={16} />Appearance</button>
+        <p>Application</p>
+        {filteredSections.filter((item) => ['general', 'integrations'].includes(item.id)).map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
       </div>
     </aside>
     <main className="hiveory-capability-main">
@@ -419,4 +402,3 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (che
 function CapabilityCard({ icon, title, detail, state }: { icon: ReactNode; title: string; detail: string; state?: string }) { return <article className="hiveory-capability-card"><span>{icon}</span><h3>{title}</h3><p>{detail}</p>{state && <b className={state === 'Installed' ? 'is-connected' : ''}>{state}</b>}</article> }
 function ProjectPreview({ projects }: { projects: CodeSnapshot['projects'] }) { return <div className="hiveory-project-preview">{projects.length ? projects.map((project) => <div key={project.id}><GitBranch size={15} /><span><strong>{project.display_name}</strong><small>{project.root_path}</small></span><b>{project.workspace_count} workspace{project.workspace_count === 1 ? '' : 's'}</b></div>) : <p>No projects have been added.</p>}</div> }
 function WorkspacePreview({ count }: { count: number }) { return <div className="hiveory-workspace-preview"><span><Workflow size={17} /><b>{count}</b><small>open workspace{count === 1 ? '' : 's'}</small></span><span><GitBranch size={17} /><b>{Math.max(0, count - 1)}</b><small>parallel worktrees</small></span></div> }
-function UnavailablePanel({ title, detail }: { title: string; detail: string }) { return <section className="hiveory-capability-page"><header><h1>{title}</h1><p>{detail}</p></header><div className="hiveory-capability-placeholder"><Wrench size={22} /><strong>Not available yet</strong><span>This screen contains no simulated controls.</span></div></section> }
