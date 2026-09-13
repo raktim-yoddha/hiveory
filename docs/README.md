@@ -1,6 +1,6 @@
 # Hiveory documentation
 
-This directory separates current product documentation from historical engineering records. The root [README](../README.md) is the user and developer overview. The documents listed under **Current documentation** describe version `0.2.0` and must be updated whenever their corresponding behavior changes.
+This directory separates current product documentation from historical engineering records. The root [README](../README.md) is the user and developer overview. The documents listed under **Current documentation** describe version `0.2.1` and must be updated whenever their corresponding behavior changes.
 
 ## Current documentation
 

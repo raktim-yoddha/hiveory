@@ -3238,9 +3238,48 @@ pub(crate) fn normalize_browser_input(value: &str) -> Result<Url, String> {
         return Url::parse(DEFAULT_HOME).map_err(|error| error.to_string());
     }
 
+    // An explicit scheme is an address intent even when the address is
+    // rejected by the allow-list. Do not reinterpret unsafe schemes such as
+    // `file:` or `mailto:` as a Google search.
+    if trimmed.contains("://")
+        || trimmed.starts_with("//")
+        || Url::parse(trimmed)
+            .map(|url| !url.scheme().is_empty())
+            .unwrap_or(false)
+    {
+        return normalize_browser_address(trimmed);
+    }
+
+    if let Ok(url) = normalize_browser_address(trimmed) {
+        return Ok(url);
+    }
+
+    let mut search = Url::parse("https://www.google.com/search")
+        .map_err(|error| format!("Google search URL could not be created: {error}"))?;
+    search.query_pairs_mut().append_pair("q", trimmed);
+    Ok(search)
+}
+
+/// Parse only a destination that is already an address.  This deliberately
+/// does not fall back to Google so callers with an explicit `url` intent can
+/// never turn an ambiguous phrase into an accidental search.
+pub(crate) fn normalize_browser_address(value: &str) -> Result<Url, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("Browser address cannot be empty; use query for a search.".to_owned());
+    }
+    if trimmed.eq_ignore_ascii_case("about:blank") {
+        return Url::parse(DEFAULT_HOME).map_err(|error| error.to_string());
+    }
+
+    if let Some(site_url) = recognized_site_url(trimmed) {
+        return Url::parse(site_url).map_err(|error| error.to_string());
+    }
+
     if trimmed.contains("://") || trimmed.starts_with("//") {
-        let url = Url::parse(trimmed)
-            .map_err(|_| "Browser address must be a valid URL or search text.".to_owned())?;
+        let url = Url::parse(trimmed).map_err(|_| {
+            "Browser address must be a valid URL; use query for a search.".to_owned()
+        })?;
         return validate_browser_url(&url);
     }
 
@@ -3250,20 +3289,35 @@ pub(crate) fn normalize_browser_input(value: &str) -> Result<Url, String> {
         } else {
             "https"
         };
-        return validate_browser_url(
-            &Url::parse(&format!("{scheme}://{candidate}"))
-                .map_err(|_| "Browser address must be a valid URL or search text.".to_owned())?,
-        );
+        return validate_browser_url(&Url::parse(&format!("{scheme}://{candidate}")).map_err(
+            |_| "Browser address must be a valid URL; use query for a search.".to_owned(),
+        )?);
     }
 
     if let Ok(url) = Url::parse(trimmed) {
         return validate_browser_url(&url);
     }
 
-    let mut search = Url::parse("https://www.google.com/search")
-        .map_err(|error| format!("Google search URL could not be created: {error}"))?;
-    search.query_pairs_mut().append_pair("q", trimmed);
-    Ok(search)
+    Err("Browser address must be a valid URL; use query for a search.".to_owned())
+}
+
+fn recognized_site_url(value: &str) -> Option<&'static str> {
+    match value
+        .trim()
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "github" => Some("https://github.com/"),
+        "google" => Some("https://www.google.com/"),
+        "youtube" => Some("https://www.youtube.com/"),
+        "gitlab" => Some("https://gitlab.com/"),
+        "stackoverflow" | "stack overflow" => Some("https://stackoverflow.com/"),
+        "npm" | "npmjs" => Some("https://www.npmjs.com/"),
+        "crates" | "crates.io" => Some("https://crates.io/"),
+        "docs.rs" => Some("https://docs.rs/"),
+        _ => None,
+    }
 }
 
 fn bare_host_candidate(value: &str) -> Option<String> {
@@ -3274,13 +3328,10 @@ fn bare_host_candidate(value: &str) -> Option<String> {
         return None;
     }
     let candidate = value.trim_end_matches('/');
-    if candidate.is_empty() || candidate.contains('#') || candidate.contains('?') {
+    if candidate.is_empty() {
         return None;
     }
-    let host = candidate
-        .split_once('/')
-        .map(|(host, _)| host)
-        .unwrap_or(candidate);
+    let host = candidate.split(['/', '?', '#']).next().unwrap_or(candidate);
     if host.contains('@') {
         return None;
     }
@@ -3403,7 +3454,7 @@ fn now_ms() -> i64 {
 mod tests {
     use super::{
         accepts_browser_load_event, build_annotation_overlay_script, build_picker_script,
-        is_allowed_browser_url, normalize_browser_input, DEFAULT_HOME,
+        is_allowed_browser_url, normalize_browser_address, normalize_browser_input, DEFAULT_HOME,
     };
 
     #[test]
@@ -3439,6 +3490,27 @@ mod tests {
     fn hostname_defaults_to_https() {
         let url = normalize_browser_input("example.com/docs").unwrap();
         assert_eq!(url.as_str(), "https://example.com/docs");
+        let url = normalize_browser_input("example.com/docs?tab=issues#comments").unwrap();
+        assert_eq!(url.as_str(), "https://example.com/docs?tab=issues#comments");
+    }
+
+    #[test]
+    fn recognized_site_names_navigate_directly() {
+        assert_eq!(
+            normalize_browser_input("GitHub").unwrap().as_str(),
+            "https://github.com/"
+        );
+        assert_eq!(
+            normalize_browser_input("stack overflow").unwrap().as_str(),
+            "https://stackoverflow.com/"
+        );
+        assert!(normalize_browser_address("rust tauri webview").is_err());
+        assert_eq!(
+            normalize_browser_address("example.com/docs")
+                .unwrap()
+                .as_str(),
+            "https://example.com/docs"
+        );
     }
 
     #[test]

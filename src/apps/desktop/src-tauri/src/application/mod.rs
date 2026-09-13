@@ -7,6 +7,10 @@ mod release;
 #[path = "platform/task_sources.rs"]
 mod task_sources;
 
+use aes_gcm::{
+    aead::{Aead, KeyInit, Payload},
+    Aes256Gcm, Nonce,
+};
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use browser::{
@@ -80,19 +84,19 @@ use hiveory_protocol::{
     CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodeMailboxAckRequest,
     CodeMailboxDelivery, CodeMailboxQuery, CodeMailboxSendRequest, CodeOrchestrationEventEnvelope,
     CodeOrchestrationEventsQuery, CodePaneKind, CodePaneLayout, CodePaneMutation,
-    CodePaneMutationRequest, CodePaneMutationResult, CodePanePlacement, CodePanePreset,
-    CodePreviewRequest, CodePreviewState, CodePreviewSummary, CodeProjectAddRequest,
-    CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary, CodeQuestionAnswerRequest,
-    CodeReadFileRequest, CodeRenameFileRequest, CodeRenameFileResult, CodeReviewRequest,
-    CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary, CodeRunUpdateRequest,
-    CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot, CodeTaskCreateRequest,
-    CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest, CodeTerminalEvent,
-    CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest, CodeTerminalSnapshot,
-    CodeTerminalSnapshotQuery, CodeTerminalStartRequest, CodeTerminalStopRequest,
-    CodeTerminalSubscribeRequest, CodeTerminalSummary, CodeWorkspaceCreateRequest,
-    CodeWorkspaceDetail, CodeWorkspaceOpenInRequest, CodeWorkspaceOpenRequest,
-    CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest, CodeWorkspaceQuery,
-    CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodePaneMutationRequest, CodePaneMutationResult, CodePaneNode, CodePanePlacement,
+    CodePanePreset, CodePreviewRequest, CodePreviewState, CodePreviewSummary,
+    CodeProjectAddRequest, CodeProjectKind, CodeProjectRemoveRequest, CodeProjectSummary,
+    CodeQuestionAnswerRequest, CodeReadFileRequest, CodeRenameFileRequest, CodeRenameFileResult,
+    CodeReviewRequest, CodeRunCreateRequest, CodeRunDetail, CodeRunRequest, CodeRunSummary,
+    CodeRunUpdateRequest, CodeSaveFileRequest, CodeSaveLayoutRequest, CodeSnapshot,
+    CodeTaskCreateRequest, CodeTaskDeleteRequest, CodeTaskRetryRequest, CodeTaskUpdateRequest,
+    CodeTerminalEvent, CodeTerminalInputRequest, CodeTerminalKind, CodeTerminalResizeRequest,
+    CodeTerminalSnapshot, CodeTerminalSnapshotQuery, CodeTerminalStartRequest,
+    CodeTerminalStopRequest, CodeTerminalSubscribeRequest, CodeTerminalSummary,
+    CodeWorkspaceCreateRequest, CodeWorkspaceDetail, CodeWorkspaceOpenInRequest,
+    CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest,
+    CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
     CodeWorkspaceTrustRequest, CodeWorkspaceUpdateRequest, CommandEnvelope,
     CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState,
     LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePaneMarkdownRequest,
@@ -115,6 +119,7 @@ use hiveory_workspace_service::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     io,
@@ -388,7 +393,11 @@ struct CliOpenAgentPaneRequest {
     #[serde(default)]
     model: Option<String>,
     #[serde(default)]
+    reasoning_effort: Option<hiveory_protocol::ChatReasoningEffort>,
+    #[serde(default)]
     title: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
     #[serde(default)]
     reuse_pane_id: Option<String>,
     #[serde(default)]
@@ -404,6 +413,14 @@ struct CliRenameAgentPaneRequest {
     #[serde(default)]
     pane_id: Option<String>,
     title: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CliSendAgentPaneRequest {
+    target: String,
+    prompt: String,
+    #[serde(default)]
+    client_request_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -464,18 +481,76 @@ fn browser_js_string(value: &str, label: &str, max_chars: usize) -> Result<Strin
 }
 
 impl HiveoryCliAgentPaneProvider {
+    /// Older layouts could contain coding-agent leaves without a title. Give
+    /// those leaves a durable host-owned name before exposing the registry so
+    /// a later "tell Max" lookup never depends on renderer-local state.
+    async fn repair_unnamed_agent_panes(&self) -> Result<CodePaneLayout, String> {
+        for _ in 0..4 {
+            let current = self
+                .foundation
+                .persistence
+                .code_layout(&self.workspace_id)
+                .await
+                .map_err(|error| error.to_string())?
+                .unwrap_or_else(|| default_layout(&self.workspace_id));
+            let mut next = current.clone();
+            let mut used = current
+                .nodes
+                .iter()
+                .filter(|node| node.children.is_empty() && node.kind == CodePaneKind::CodingAgent)
+                .filter_map(|node| node.title.as_deref())
+                .map(agent_name_key)
+                .filter(|title| !title.is_empty())
+                .collect::<HashSet<_>>();
+            let mut changed = false;
+            for node in next
+                .nodes
+                .iter_mut()
+                .filter(|node| node.children.is_empty() && node.kind == CodePaneKind::CodingAgent)
+            {
+                if node
+                    .title
+                    .as_deref()
+                    .map(str::trim)
+                    .is_none_or(|title| title.is_empty())
+                {
+                    node.title = Some(next_generated_pane_title(&mut used));
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Ok(current);
+            }
+            validate_layout(&next).map_err(|error| error.to_string())?;
+            match self
+                .foundation
+                .persistence
+                .mutate_code_layout(&self.workspace_id, current.revision, &next)
+                .await
+            {
+                Ok(saved) => return Ok(saved),
+                Err(error) if error.to_string().contains("layout_conflict") => continue,
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        Err(
+            "The workspace changed while unnamed agent panes were being named. Try again."
+                .to_owned(),
+        )
+    }
+
     async fn list(&self) -> Result<Value, String> {
-        let layout = self
-            .foundation
-            .persistence
-            .code_layout(&self.workspace_id)
-            .await
-            .map_err(|error| error.to_string())?
-            .unwrap_or_else(|| default_layout(&self.workspace_id));
+        let layout = self.repair_unnamed_agent_panes().await?;
         let terminals = self
             .foundation
             .terminal_host
             .list()
+            .await
+            .map_err(|error| error.to_string())?;
+        let persisted_terminals = self
+            .foundation
+            .persistence
+            .code_terminals(&self.workspace_id)
             .await
             .map_err(|error| error.to_string())?;
         let panes = layout
@@ -485,12 +560,18 @@ impl HiveoryCliAgentPaneProvider {
             .map(|node| {
                 let terminal = node.resource_id.as_deref().and_then(|terminal_id| {
                     terminals.iter().find(|terminal| terminal.id == terminal_id)
+                        .or_else(|| persisted_terminals.iter().find(|terminal| terminal.id == terminal_id))
                 });
                 json!({
                     "pane_id": node.pane_id,
                     "title": node.title,
                     "terminal": terminal,
-                    "reusable": terminal.is_none_or(|terminal| matches!(
+                    "address": format!(
+                        "worker:{}",
+                        pane_worker_session_id(&self.workspace_id, &node.pane_id)
+                    ),
+                    "provider_session_id": terminal.and_then(|terminal| terminal.session_id.as_deref()),
+                    "reusable": terminal.is_some_and(|terminal| matches!(
                         terminal.state,
                         hiveory_protocol::CodeTerminalState::Exited
                             | hiveory_protocol::CodeTerminalState::Failed
@@ -515,6 +596,37 @@ impl HiveoryCliAgentPaneProvider {
                 .to_owned(),
             None => "codex-cli".to_owned(),
         };
+        let adapter = self
+            .foundation
+            .code_runtime
+            .adapters()
+            .into_iter()
+            .find(|adapter| adapter.id == adapter_id)
+            .ok_or_else(|| "The requested coding-agent adapter is unavailable.".to_owned())?;
+        if !adapter.detected {
+            return Err(format!(
+                "{} is not installed or could not be probed.",
+                adapter.display_name
+            ));
+        }
+        if !cli_adapter_has_session_bridge(&adapter_id) {
+            return Err(format!(
+                "{} cannot open an orchestrated pane with Hiveory tools: this CLI launch path has no verified session-scoped MCP configuration. Update the adapter integration before requesting this feature.",
+                adapter.display_name
+            ));
+        }
+        if request
+            .reasoning_effort
+            .is_some_and(|effort| effort != hiveory_protocol::ChatReasoningEffort::Auto)
+            && !adapter
+                .capabilities
+                .contains(&hiveory_protocol::CodeAdapterCapability::ReasoningEffort)
+        {
+            return Err(format!(
+                "{} does not support a launch reasoning effort.",
+                adapter.display_name
+            ));
+        }
         self.foundation
             .code_workspaces
             .require(
@@ -527,13 +639,7 @@ impl HiveoryCliAgentPaneProvider {
             .code_workspaces
             .root_path(&self.workspace_id)
             .map_err(|error| error.to_string())?;
-        let current = self
-            .foundation
-            .persistence
-            .code_layout(&self.workspace_id)
-            .await
-            .map_err(|error| error.to_string())?
-            .unwrap_or_else(|| default_layout(&self.workspace_id));
+        let current = self.repair_unnamed_agent_panes().await?;
         let terminals = self
             .foundation
             .terminal_host
@@ -598,8 +704,63 @@ impl HiveoryCliAgentPaneProvider {
                 .ok_or_else(|| "The coding-agent pane could not be created.".to_owned())?;
             (next, pane_id)
         };
+        let pane_name =
+            if request.reuse_pane_id.is_some() && request.name.is_none() && request.title.is_none()
+            {
+                current
+                    .nodes
+                    .iter()
+                    .find(|node| node.pane_id == pane_id)
+                    .and_then(|node| node.title.clone())
+                    .unwrap_or_else(|| generated_pane_title_for_layout(&current))
+            } else if let Some(explicit_name) = request.name.as_deref() {
+                ensure_unique_agent_name(&current, explicit_name, Some(&pane_id))?;
+                explicit_name.trim().to_owned()
+            } else {
+                resolve_new_agent_name(
+                    &current,
+                    request.title.as_deref(),
+                    &adapter_id,
+                    request.model.as_deref(),
+                    Some(&pane_id),
+                )?
+            };
 
-        let session_id = format!("cli-worker-{}", uuid::Uuid::now_v7());
+        if let Some(reuse_pane_id) = request.reuse_pane_id.as_deref() {
+            if let Some(old_terminal_id) = current
+                .nodes
+                .iter()
+                .find(|node| node.pane_id == reuse_pane_id)
+                .and_then(|node| node.resource_id.as_deref())
+            {
+                let live = terminals.iter().any(|terminal| {
+                    terminal.id == old_terminal_id
+                        && matches!(
+                            terminal.state,
+                            hiveory_protocol::CodeTerminalState::Starting
+                                | hiveory_protocol::CodeTerminalState::Running
+                        )
+                });
+                if !live {
+                    self.foundation
+                        .persistence
+                        .invalidate_pane_prompts_for_terminal(
+                            &self.workspace_id,
+                            reuse_pane_id,
+                            old_terminal_id,
+                            "The pane session was replaced before this prompt was delivered.",
+                        )
+                        .await
+                        .map_err(|error| error.to_string())?;
+                }
+            }
+        }
+
+        // A pane ID is durable in the workspace layout, so derive the worker
+        // address from it instead of a per-request UUID. Follow-ups and
+        // orchestration mailboxes therefore keep the same identity after a
+        // renderer or terminal-host restart.
+        let session_id = pane_worker_session_id(&self.workspace_id, &pane_id);
         // Opening a pane creates another CLI bridge, whose tool set can in
         // turn open a pane. Box this recursive async edge so the bridge
         // connection future remains sized and Send for Tauri's runtime.
@@ -626,6 +787,7 @@ impl HiveoryCliAgentPaneProvider {
                     rows: request.rows,
                     adapter_id: Some(adapter_id.clone()),
                     model: request.model.clone(),
+                    reasoning_effort: request.reasoning_effort,
                     agent_launch_mode: request.agent_launch_mode,
                     resume_session_id: None,
                     session_integration: Some(session_integration),
@@ -644,10 +806,7 @@ impl HiveoryCliAgentPaneProvider {
             .ok_or_else(|| "The coding-agent pane could not be found after launch.".to_owned())?;
         node.kind = CodePaneKind::CodingAgent;
         node.resource_id = Some(terminal.id.clone());
-        node.title = request
-            .title
-            .filter(|title| !title.trim().is_empty())
-            .or_else(|| Some(generated_pane_title_for_layout(&current)));
+        node.title = Some(pane_name);
         next.focused_pane_id = Some(pane_id.clone());
         validate_layout(&next).map_err(|error| error.to_string())?;
         let layout = match self
@@ -704,17 +863,17 @@ impl HiveoryCliAgentPaneProvider {
         }
 
         for attempt in 0..4 {
-            let current = self
-                .foundation
-                .persistence
-                .code_layout(&self.workspace_id)
-                .await
-                .map_err(|error| error.to_string())?
-                .unwrap_or_else(|| default_layout(&self.workspace_id));
+            let current = self.repair_unnamed_agent_panes().await?;
             let terminals = self
                 .foundation
                 .terminal_host
                 .list()
+                .await
+                .map_err(|error| error.to_string())?;
+            let persisted_terminals = self
+                .foundation
+                .persistence
+                .code_terminals(&self.workspace_id)
                 .await
                 .map_err(|error| error.to_string())?;
             let pane_id = match request.pane_id.as_deref() {
@@ -729,7 +888,14 @@ impl HiveoryCliAgentPaneProvider {
                         node.resource_id
                             .as_deref()
                             .and_then(|terminal_id| {
-                                terminals.iter().find(|terminal| terminal.id == terminal_id)
+                                terminals
+                                    .iter()
+                                    .find(|terminal| terminal.id == terminal_id)
+                                    .or_else(|| {
+                                        persisted_terminals
+                                            .iter()
+                                            .find(|terminal| terminal.id == terminal_id)
+                                    })
                             })
                             .map(|terminal| terminal.started_at_unix_ms)
                             .unwrap_or(i64::MIN)
@@ -739,6 +905,14 @@ impl HiveoryCliAgentPaneProvider {
                         "There is no previously opened coding-agent pane to rename.".to_owned()
                     })?,
             };
+            if !current.nodes.iter().any(|node| {
+                node.pane_id == pane_id
+                    && node.children.is_empty()
+                    && node.kind == CodePaneKind::CodingAgent
+            }) {
+                return Err("Only a coding-agent pane can be renamed.".to_owned());
+            }
+            ensure_unique_agent_name(&current, title, Some(&pane_id))?;
             let renamed = hiveory_code_domain::rename_pane(&current, &pane_id, title)
                 .map_err(|error| error.to_string())?;
             match self
@@ -771,6 +945,537 @@ impl HiveoryCliAgentPaneProvider {
             }
         }
         Err("The workspace changed while the pane was being renamed. Try again.".to_owned())
+    }
+
+    async fn send(&self, arguments: &Value) -> Result<Value, String> {
+        let request = serde_json::from_value::<CliSendAgentPaneRequest>(arguments.clone())
+            .map_err(|error| format!("invalid agent-pane send request: {error}"))?;
+        let target = request.target.trim();
+        let prompt = request.prompt.trim();
+        if target.is_empty()
+            || target.chars().count() > 256
+            || target.chars().any(char::is_control)
+            || prompt.is_empty()
+            || prompt.len() > 64 * 1024
+            || prompt
+                .chars()
+                .any(|ch| ch.is_control() && !matches!(ch, '\n' | '\r' | '\t'))
+        {
+            return Err("A target and a bounded text prompt are required.".to_owned());
+        }
+        let layout = self.repair_unnamed_agent_panes().await?;
+        let pane = resolve_named_agent_pane(&layout, target)?;
+        let terminal_id = pane
+            .resource_id
+            .as_deref()
+            .ok_or_else(|| "The named pane has no terminal session.".to_owned())?;
+        let terminal = self
+            .foundation
+            .persistence
+            .code_terminal(terminal_id)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "The named pane's terminal no longer exists.".to_owned())?;
+        if terminal.workspace_id != self.workspace_id
+            || terminal.kind != CodeTerminalKind::CodingAgent
+        {
+            return Err("The target is not a coding agent in this workspace.".to_owned());
+        }
+        if matches!(
+            terminal.state,
+            hiveory_protocol::CodeTerminalState::Exited
+                | hiveory_protocol::CodeTerminalState::Failed
+                | hiveory_protocol::CodeTerminalState::Interrupted
+                | hiveory_protocol::CodeTerminalState::Dormant
+        ) {
+            return Err(
+                "The named pane's CLI is no longer running. Reopen the same pane before sending a follow-up."
+                    .to_owned(),
+            );
+        }
+        let request_id = match request.client_request_id {
+            Some(value) => {
+                let value = value.trim().to_owned();
+                if value.is_empty() {
+                    return Err("client_request_id cannot be empty.".to_owned());
+                }
+                value
+            }
+            None => uuid::Uuid::now_v7().to_string(),
+        };
+        if request_id.chars().count() > 256 || request_id.chars().any(char::is_control) {
+            return Err(
+                "client_request_id must be between 1 and 256 non-control characters.".to_owned(),
+            );
+        }
+        let cipher = pane_prompt_cipher(&self.foundation).await?;
+        let sealed_prompt = seal_pane_prompt(
+            &cipher,
+            &self.workspace_id,
+            &pane.pane_id,
+            &request_id,
+            prompt,
+        )?;
+        let delivery = self
+            .foundation
+            .persistence
+            .enqueue_pane_prompt(
+                &self.workspace_id,
+                &pane.pane_id,
+                terminal_id,
+                terminal.session_id.as_deref(),
+                &sealed_prompt,
+                &request_id,
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        if delivery.pane_id != pane.pane_id
+            || delivery.terminal_id != terminal_id
+            || open_pane_prompt(
+                &cipher,
+                &self.workspace_id,
+                &pane.pane_id,
+                &request_id,
+                &delivery.prompt,
+            )? != prompt
+        {
+            return Err(
+                "The client_request_id was already used for a different pane or prompt.".to_owned(),
+            );
+        }
+        let foundation = self.foundation.clone();
+        let delivery_id = delivery.id.clone();
+        tauri::async_runtime::spawn(async move {
+            deliver_queued_pane_prompt(foundation, delivery_id).await;
+        });
+        let blocker = self
+            .foundation
+            .persistence
+            .first_unresolved_pane_prompt_for_terminal(
+                &self.workspace_id,
+                &pane.pane_id,
+                terminal_id,
+            )
+            .await
+            .map_err(|error| error.to_string())?
+            .filter(|first| first.id != delivery.id)
+            .map(|first| json!({"delivery_id": first.id, "state": first.state}));
+        Ok(
+            json!({"delivery": delivery, "target_name": pane.title, "pane_id": pane.pane_id, "terminal": terminal, "blocked_by": blocker}),
+        )
+    }
+}
+
+async fn pane_prompt_cipher(foundation: &HiveoryFoundation) -> Result<Aes256Gcm, String> {
+    let key_ref = ensure_terminal_history_key(&foundation.persistence, &foundation.secrets).await?;
+    let encoded = foundation
+        .secrets
+        .get(&key_ref)
+        .map_err(|error| error.to_string())?;
+    let key = STANDARD
+        .decode(encoded)
+        .map_err(|error| error.to_string())?;
+    Aes256Gcm::new_from_slice(&key).map_err(|_| "The pane prompt key is invalid.".to_owned())
+}
+
+fn seal_pane_prompt(
+    cipher: &Aes256Gcm,
+    workspace_id: &str,
+    pane_id: &str,
+    request_id: &str,
+    prompt: &str,
+) -> Result<String, String> {
+    let nonce_id = uuid::Uuid::now_v7();
+    let nonce = &nonce_id.as_bytes()[..12];
+    let aad = format!("{workspace_id}:{pane_id}:{request_id}");
+    let encrypted = cipher
+        .encrypt(
+            Nonce::from_slice(nonce),
+            Payload {
+                msg: prompt.as_bytes(),
+                aad: aad.as_bytes(),
+            },
+        )
+        .map_err(|_| "The pane prompt could not be encrypted.".to_owned())?;
+    let mut sealed = nonce.to_vec();
+    sealed.extend(encrypted);
+    Ok(STANDARD.encode(sealed))
+}
+
+fn open_pane_prompt(
+    cipher: &Aes256Gcm,
+    workspace_id: &str,
+    pane_id: &str,
+    request_id: &str,
+    sealed: &str,
+) -> Result<String, String> {
+    let bytes = STANDARD
+        .decode(sealed)
+        .map_err(|_| "The pane prompt is corrupt.".to_owned())?;
+    if bytes.len() < 12 {
+        return Err("The pane prompt is truncated.".to_owned());
+    }
+    let aad = format!("{workspace_id}:{pane_id}:{request_id}");
+    let plaintext = cipher
+        .decrypt(
+            Nonce::from_slice(&bytes[..12]),
+            Payload {
+                msg: &bytes[12..],
+                aad: aad.as_bytes(),
+            },
+        )
+        .map_err(|_| "The pane prompt cannot be decrypted.".to_owned())?;
+    String::from_utf8(plaintext).map_err(|_| "The pane prompt is not UTF-8.".to_owned())
+}
+
+fn terminal_prompt_ready(adapter_id: Option<&str>, output: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(output);
+    let tail = text
+        .chars()
+        .rev()
+        .take(4096)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect::<String>();
+    if let Some(start) = tail.rfind("\u{1b}]0;") {
+        let title = tail[start + 4..]
+            .split(['\u{7}', '\u{1b}'])
+            .next()
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        if title.ends_with(" idle") || title.ends_with(" ready") {
+            return true;
+        }
+        if title.contains("working") || title.contains("thinking") {
+            return false;
+        }
+    }
+    let normalized = strip_terminal_escape_sequences(&tail).replace('\r', "\n");
+    let lines = normalized
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    let last = lines.last().copied().unwrap_or_default();
+    let marker = matches!(last, ">" | "❯" | "›") || last.starts_with("› ");
+    let adapter = adapter_id.unwrap_or_default();
+    let recent = lines
+        .iter()
+        .rev()
+        .take(15)
+        .map(|line| line.to_ascii_lowercase())
+        .collect::<Vec<_>>();
+    let labelled = recent.iter().any(|line| {
+        line.contains(match adapter {
+            "codex-cli" => "codex",
+            "claude-code" => "claude",
+            "antigravity" => "antigravity",
+            "opencode" => "opencode",
+            "cursor" => "cursor",
+            "grok" => "grok",
+            _ => "\0",
+        })
+    });
+    let bracketed_paste = tail.contains("\u{1b}[?2004h");
+    let alt_screen = tail.contains("\u{1b}[?1049h")
+        && !tail
+            .rsplit("\u{1b}[?1049h")
+            .next()
+            .unwrap_or_default()
+            .contains("\u{1b}[?1049l");
+    match adapter {
+        // Orca's TUI scanner anchors these signals on the mode switches so a
+        // shell prompt left in scrollback cannot consume a follow-up.
+        "codex-cli" => (bracketed_paste && tail.contains('›')) || (labelled && marker),
+        "opencode" => (bracketed_paste && tail.contains("\u{1b}[?25h")) || (labelled && marker),
+        "grok" => {
+            (alt_screen && tail.contains('❯'))
+                || (bracketed_paste && tail.contains('❯'))
+                || (labelled && marker && !tail.contains("\u{1b}[?1049l"))
+        }
+        "claude-code" | "antigravity" | "cursor" => labelled && marker,
+        _ => false,
+    }
+}
+
+/// Reduce terminal styling and cursor-control sequences before inspecting the
+/// final prompt line.  The readiness scanner keeps the original tail above
+/// for OSC/CSI feature markers, then uses this printable view so a colored
+/// `❯` or `›` cannot be mistaken for an unknown prompt.
+fn strip_terminal_escape_sequences(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\u{1b}' {
+            output.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('[') => {
+                // CSI sequences end at a final byte in the @-~ range.
+                for next in chars.by_ref() {
+                    if ('@'..='~').contains(&next) {
+                        break;
+                    }
+                }
+            }
+            Some(']') => {
+                // OSC sequences end with BEL or ST (ESC backslash).
+                while let Some(next) = chars.next() {
+                    if next == '\u{7}' {
+                        break;
+                    }
+                    if next == '\u{1b}' {
+                        if chars.peek() == Some(&'\\') {
+                            chars.next();
+                        }
+                        break;
+                    }
+                }
+            }
+            Some(_) | None => {}
+        }
+    }
+    output
+}
+
+async fn deliver_queued_pane_prompt(foundation: HiveoryFoundation, delivery_id: String) {
+    loop {
+        let record = match foundation.persistence.pane_prompt(&delivery_id).await {
+            Ok(Some(record)) if record.state == "queued" => record,
+            _ => return,
+        };
+        let first = match foundation
+            .persistence
+            .first_unresolved_pane_prompt_for_terminal(
+                &record.workspace_id,
+                &record.pane_id,
+                &record.terminal_id,
+            )
+            .await
+        {
+            Ok(first) => first,
+            Err(_) => return,
+        };
+        if first.is_none_or(|first| first.id != record.id) {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+        let terminal = foundation
+            .terminal_host
+            .list()
+            .await
+            .ok()
+            .and_then(|items| items.into_iter().find(|item| item.id == record.terminal_id));
+        let Some(terminal) = terminal else {
+            // A missing PTY can be a normal desktop restart, so leave the
+            // queue intact while the pane still points at this terminal ID.
+            // If the layout has moved on, the prompt is stale and must fail
+            // instead of waiting forever or landing in a replacement CLI.
+            let still_bound = foundation
+                .persistence
+                .code_layout(&record.workspace_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|layout| {
+                    layout
+                        .nodes
+                        .into_iter()
+                        .find(|node| node.pane_id == record.pane_id)
+                })
+                .and_then(|node| node.resource_id)
+                .is_some_and(|resource_id| resource_id == record.terminal_id);
+            let persisted_terminal = foundation
+                .persistence
+                .code_terminal(&record.terminal_id)
+                .await
+                .ok()
+                .flatten();
+            let terminal_is_recoverable = persisted_terminal.as_ref().is_some_and(|terminal| {
+                terminal.workspace_id == record.workspace_id
+                    && matches!(
+                        terminal.state,
+                        hiveory_protocol::CodeTerminalState::Starting
+                            | hiveory_protocol::CodeTerminalState::Running
+                    )
+            });
+            if !still_bound || !terminal_is_recoverable {
+                let _ = foundation
+                    .persistence
+                    .invalidate_pane_prompts_for_terminal(
+                        &record.workspace_id,
+                        &record.pane_id,
+                        &record.terminal_id,
+                        "The target pane session no longer exists.",
+                    )
+                    .await;
+                return;
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        };
+        if terminal.session_id != record.session_id || terminal.workspace_id != record.workspace_id
+        {
+            if foundation
+                .persistence
+                .claim_pane_prompt(&record.id)
+                .await
+                .ok()
+                == Some(true)
+            {
+                let _ = foundation
+                    .persistence
+                    .settle_pane_prompt(
+                        &record.id,
+                        "failed",
+                        Some("The target session changed before delivery."),
+                        None,
+                    )
+                    .await;
+            }
+            return;
+        }
+        if matches!(
+            terminal.state,
+            hiveory_protocol::CodeTerminalState::Exited
+                | hiveory_protocol::CodeTerminalState::Failed
+                | hiveory_protocol::CodeTerminalState::Interrupted
+                | hiveory_protocol::CodeTerminalState::Dormant
+        ) {
+            if foundation
+                .persistence
+                .claim_pane_prompt(&record.id)
+                .await
+                .ok()
+                == Some(true)
+            {
+                let _ = foundation
+                    .persistence
+                    .settle_pane_prompt(
+                        &record.id,
+                        "failed",
+                        Some("The target CLI is no longer running."),
+                        None,
+                    )
+                    .await;
+            }
+            return;
+        }
+        if terminal.state != hiveory_protocol::CodeTerminalState::Running {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+        let snapshot = foundation
+            .terminal_host
+            .snapshot(&CodeTerminalSnapshotQuery {
+                terminal_id: record.terminal_id.clone(),
+            })
+            .await
+            .ok();
+        let last_sequence = foundation
+            .persistence
+            .last_delivered_pane_sequence_for_terminal(
+                &record.workspace_id,
+                &record.pane_id,
+                &record.terminal_id,
+            )
+            .await
+            .ok()
+            .flatten();
+        let ready = snapshot.as_ref().is_some_and(|snapshot| {
+            last_sequence.is_none_or(|last| snapshot.sequence > last)
+                && STANDARD
+                    .decode(&snapshot.output_base64)
+                    .ok()
+                    .is_some_and(|output| {
+                        terminal_prompt_ready(terminal.adapter_id.as_deref(), &output)
+                    })
+        });
+        if !ready {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            continue;
+        }
+        let prompt = match pane_prompt_cipher(&foundation).await.and_then(|cipher| {
+            open_pane_prompt(
+                &cipher,
+                &record.workspace_id,
+                &record.pane_id,
+                &record.client_request_id,
+                &record.prompt,
+            )
+        }) {
+            Ok(prompt) => prompt,
+            Err(error) => {
+                if foundation
+                    .persistence
+                    .claim_pane_prompt(&record.id)
+                    .await
+                    .ok()
+                    == Some(true)
+                {
+                    let _ = foundation
+                        .persistence
+                        .settle_pane_prompt(&record.id, "failed", Some(&error), None)
+                        .await;
+                }
+                return;
+            }
+        };
+        if foundation
+            .persistence
+            .claim_pane_prompt(&record.id)
+            .await
+            .ok()
+            != Some(true)
+        {
+            return;
+        }
+        let paste = format!("\u{1b}[200~{}\u{1b}[201~", prompt);
+        let paste_result = foundation
+            .terminal_host
+            .write(&CodeTerminalInputRequest {
+                terminal_id: record.terminal_id.clone(),
+                data_base64: STANDARD.encode(paste),
+            })
+            .await;
+        // The TUI can take longer to render a bracketed paste than the PTY
+        // write takes to return, particularly under Windows ConPTY. Submit
+        // separately so Enter cannot race the paste into the composer.
+        let result = if paste_result.is_ok() {
+            tokio::time::sleep(Duration::from_millis(if cfg!(windows) {
+                1_500
+            } else {
+                500
+            }))
+            .await;
+            foundation
+                .terminal_host
+                .write(&CodeTerminalInputRequest {
+                    terminal_id: record.terminal_id,
+                    data_base64: STANDARD.encode("\r"),
+                })
+                .await
+        } else {
+            paste_result
+        };
+        let state = if result.is_ok() {
+            "delivered"
+        } else {
+            "uncertain"
+        };
+        let error = result.err().map(|error| error.to_string());
+        let _ = foundation
+            .persistence
+            .settle_pane_prompt(
+                &record.id,
+                state,
+                error.as_deref(),
+                snapshot.map(|snapshot| snapshot.sequence),
+            )
+            .await;
+        return;
     }
 }
 
@@ -1039,8 +1744,8 @@ impl HiveoryBrowserToolProvider {
             ),
             agent_tool(
                 "browser.open",
-                "Open or reconnect an embedded Hiveory Browser pane for a workspace.",
-                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"}},"required":["browser_id","workspace_id","url"],"additionalProperties":false}"#,
+                "Open or reconnect an embedded Hiveory Browser pane for a workspace. Supply url for a known address, site for a recognized website name, or query for a Google search.",
+                r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"},"site":{"type":"string"},"query":{"type":"string"},"new_pane":{"type":"boolean"}},"required":["browser_id","workspace_id"],"oneOf":[{"required":["url"]},{"required":["site"]},{"required":["query"]}],"additionalProperties":false}"#,
                 AgentToolRisk::InternalMutation,
             ),
             agent_tool(
@@ -1132,7 +1837,7 @@ impl HiveoryBrowserToolProvider {
         };
         let manager = self.manager.clone();
         let app = self.app.clone();
-        let state = self
+        let mut state = self
             .main_thread(move || manager.open(&app, &request))
             .await?;
 
@@ -1152,6 +1857,22 @@ impl HiveoryBrowserToolProvider {
                 return Err(error);
             }
         };
+
+        // `BrowserManager::open` is intentionally a reconnect operation for
+        // an existing native WebView.  The CLI contract, however, says that
+        // `browser.open` names a destination, so an explicit open on an
+        // existing resource must navigate that same pane exactly once.
+        if state.url != normalized_url.as_str() {
+            let manager = self.manager.clone();
+            let app = self.app.clone();
+            let request = BrowserNavigationRequest {
+                browser_id: browser_id.clone(),
+                url: normalized_url.to_string(),
+            };
+            state = self
+                .main_thread(move || manager.navigate(&app, &request))
+                .await?;
+        }
 
         let _ = self.app.emit_to(
             "main",
@@ -1349,11 +2070,24 @@ impl HiveoryBrowserToolProvider {
         let args: Value = serde_json::from_str(arguments_json)
             .map_err(|_| "browser tool arguments are not valid JSON".to_owned())?;
         if name == "browser.open_external_url" {
-            let url = browser_argument(&args, "url")?;
+            let raw_url = browser_argument(&args, "url")?;
+            let url = browser::normalize_browser_address(&raw_url)?.to_string();
             let opened = self.manager.open_external_url(&url)?;
             return Ok(json!({ "opened": opened, "url": url }).to_string());
         }
-        let browser_id = browser_argument(&args, "browser_id")?;
+        // A direct browser.open call may explicitly request a fresh pane. In
+        // that case the caller does not need to invent an ID (and a stale ID
+        // must never accidentally reconnect an existing resource).
+        let new_pane = name == "browser.open"
+            && args
+                .get("new_pane")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        let browser_id = if new_pane {
+            format!("browser-{}", uuid::Uuid::now_v7())
+        } else {
+            browser_argument(&args, "browser_id")?
+        };
         if name != "browser.open" {
             if let Err(error) = self.ensure_cli_browser_entry(&browser_id).await {
                 // Some CLI tool planners begin with state/snapshot and then
@@ -1364,7 +2098,8 @@ impl HiveoryBrowserToolProvider {
                 // error.
                 if name == "browser.navigate" {
                     let workspace_id = self.default_workspace_id.clone().ok_or(error.clone())?;
-                    let url = browser_argument(&args, "url")?;
+                    let url = browser::normalize_browser_address(&browser_argument(&args, "url")?)?
+                        .to_string();
                     return self.open_cli_browser(browser_id, workspace_id, url).await;
                 }
                 return Err(error);
@@ -1421,11 +2156,12 @@ impl HiveoryBrowserToolProvider {
             }
             "browser.open" => {
                 let workspace_id = browser_argument(&args, "workspace_id")?;
-                let url = browser_argument(&args, "url")?;
+                let url = cli_browser_destination(&args)?;
                 self.open_cli_browser(browser_id, workspace_id, url).await
             }
             "browser.navigate" => {
-                let url = browser_argument(&args, "url")?;
+                let url = browser::normalize_browser_address(&browser_argument(&args, "url")?)?
+                    .to_string();
                 let manager = self.manager.clone();
                 let app = self.app.clone();
                 let request = BrowserNavigationRequest { browser_id, url };
@@ -1538,10 +2274,20 @@ fn canonical_cli_tool_alias(name: &str) -> Option<&'static str> {
         "hiveory_orchestration_create_task" => "orchestration.create_task",
         "hiveory_orchestration_start_run" => "orchestration.start_run",
         "hiveory_orchestration_send_message" => "orchestration.send_message",
+        "hiveory_orchestration_inbox" => "orchestration.inbox",
         "hiveory_orchestration_wait" => "orchestration.wait",
+        "hiveory_orchestration_acknowledge_message" => "orchestration.acknowledge_message",
+        "hiveory_orchestration_adapter_catalog" => "orchestration.adapter_catalog",
+        "hiveory_orchestration_list_workers" => "orchestration.list_workers",
         "hiveory_orchestration_list_participants" => "orchestration.list_participants",
+        "hiveory_orchestration_open_worker_pane" => "orchestration.open_worker_pane",
         "hiveory_orchestration_assign_task" => "orchestration.assign_task",
         "hiveory_orchestration_report_completion" => "orchestration.report_completion",
+        "hiveory_agent_panes_list" => "agent_panes.list",
+        "hiveory_agent_panes_open" => "agent_panes.open",
+        "hiveory_agent_panes_rename" => "agent_panes.rename",
+        "hiveory_agent_panes_send" => "agent_panes.send",
+        "hiveory_agent_panes_delivery" => "agent_panes.delivery",
         _ => return None,
     })
 }
@@ -1584,8 +2330,8 @@ impl HiveoryCliSessionTools {
             .iter_mut()
             .find(|definition| definition.name == "browser.open")
         {
-            open.description = "Open an embedded Hiveory Browser pane in this workspace. Supply only url to let Hiveory create a new browser pane; browser_id and workspace_id are optional when reconnecting an existing pane.".to_owned();
-            open.input_schema_json = r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"}},"required":["url"],"additionalProperties":false}"#.to_owned();
+            open.description = "Open the workspace browser at exactly one destination: url for a known address, site for a recognized website name, or query for a Google search. Reuse the active browser pane by default; set new_pane only when the user requests another pane. Do not open Google first when the destination is already known.".to_owned();
+            open.input_schema_json = r#"{"type":"object","properties":{"browser_id":{"type":"string"},"workspace_id":{"type":"string"},"url":{"type":"string"},"site":{"type":"string"},"query":{"type":"string"},"new_pane":{"type":"boolean"}},"oneOf":[{"required":["url"]},{"required":["site"]},{"required":["query"]}],"additionalProperties":false}"#.to_owned();
         }
         definitions.extend(browser_definitions);
         definitions.extend(self.computer.definitions().await);
@@ -1642,22 +2388,97 @@ impl HiveoryCliSessionTools {
                 .await
                 .map_err(|error| error.to_string())
         } else if name.starts_with("browser.") {
-            let arguments_json = if name == "browser.open" {
-                let mut browser_arguments = arguments.clone();
-                let object = browser_arguments
-                    .as_object_mut()
-                    .ok_or_else(|| "browser tool arguments must be an object".to_owned())?;
-                object
-                    .entry("browser_id")
-                    .or_insert_with(|| Value::String(format!("browser-{}", uuid::Uuid::now_v7())));
-                object
-                    .entry("workspace_id")
-                    .or_insert_with(|| Value::String(self.workspace_id.clone()));
-                serde_json::to_string(&browser_arguments)
-                    .map_err(|error| format!("tool arguments could not be encoded: {error}"))?
+            let mut browser_arguments = arguments.clone();
+            let new_pane = browser_arguments
+                .get("new_pane")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let destination = (name == "browser.open")
+                .then(|| cli_browser_destination(&browser_arguments))
+                .transpose()?;
+            let active_browser_id = if !new_pane && name != "browser.open_external_url" {
+                let open_previews = self
+                    .browser
+                    .persistence
+                    .code_previews(&self.workspace_id)
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .into_iter()
+                    .filter(|preview| preview.state == CodePreviewState::Open)
+                    .map(|preview| preview.id)
+                    .collect::<HashSet<_>>();
+                let layout = self
+                    .browser
+                    .persistence
+                    .code_layout(&self.workspace_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                layout.and_then(|layout| active_browser_for_layout(&layout, &open_previews))
             } else {
-                arguments_json
+                None
             };
+            let object = browser_arguments
+                .as_object_mut()
+                .ok_or_else(|| "browser tool arguments must be an object".to_owned())?;
+            object.remove("new_pane");
+            if let Some(url) = destination.as_deref() {
+                object.insert("url".to_owned(), Value::String(url.to_owned()));
+                object.remove("site");
+                object.remove("query");
+            }
+            if name == "browser.open" && new_pane {
+                object.remove("browser_id");
+            }
+            if name != "browser.open_external_url" {
+                object.entry("browser_id").or_insert_with(|| {
+                    Value::String(
+                        active_browser_id
+                            .clone()
+                            .unwrap_or_else(|| format!("browser-{}", uuid::Uuid::now_v7())),
+                    )
+                });
+            }
+            if name == "browser.open" {
+                object.insert(
+                    "workspace_id".to_owned(),
+                    Value::String(self.workspace_id.clone()),
+                );
+            }
+            let browser_id = object
+                .get("browser_id")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            if !matches!(
+                name.as_str(),
+                "browser.open_external" | "browser.open_external_url"
+            ) {
+                let browser_id = browser_id
+                    .as_deref()
+                    .ok_or_else(|| "A browser_id is required.".to_owned())?;
+                let existing = self
+                    .browser
+                    .persistence
+                    .code_preview(browser_id)
+                    .await
+                    .map_err(|error| error.to_string())?;
+                if name == "browser.open" {
+                    if existing.is_some_and(|preview| preview.workspace_id != self.workspace_id) {
+                        return Err(
+                            "This browser resource belongs to another workspace.".to_owned()
+                        );
+                    }
+                } else if !existing.is_some_and(|preview| {
+                    preview.workspace_id == self.workspace_id
+                        && preview.state == CodePreviewState::Open
+                }) {
+                    return Err(
+                        "The Browser pane is not open in this workspace. Call browser.open first."
+                            .to_owned(),
+                    );
+                }
+            }
+            let arguments_json = serde_json::to_string(&browser_arguments)
+                .map_err(|error| format!("tool arguments could not be encoded: {error}"))?;
             self.browser.execute(&name, &arguments_json).await
         } else if name.starts_with("computer.") {
             self.computer.execute(&name, &arguments_json).await
@@ -1672,6 +2493,25 @@ impl HiveoryCliSessionTools {
                 "agent_panes.rename" => {
                     serde_json::to_string(&self.agent_panes.rename(arguments).await?)
                         .map_err(|error| error.to_string())
+                }
+                "agent_panes.send" => {
+                    serde_json::to_string(&self.agent_panes.send(arguments).await?)
+                        .map_err(|error| error.to_string())
+                }
+                "agent_panes.delivery" => {
+                    let id = required_cli_string(arguments, "delivery_id")?;
+                    let delivery = self
+                        .agent_panes
+                        .foundation
+                        .persistence
+                        .pane_prompt(id)
+                        .await
+                        .map_err(|error| error.to_string())?
+                        .filter(|delivery| delivery.workspace_id == self.workspace_id)
+                        .ok_or_else(|| {
+                            "The delivery was not found in this workspace.".to_owned()
+                        })?;
+                    serde_json::to_string(&delivery).map_err(|error| error.to_string())
                 }
                 _ => Err("agent-pane tool is not available".to_owned()),
             }
@@ -1852,9 +2692,11 @@ impl HiveoryCliSessionTools {
                         "orchestration.start_run", "orchestration.open_worker_pane",
                         "orchestration.assign_task", "orchestration.report_completion",
                         "orchestration.send_message", "orchestration.inbox",
-                        "orchestration.wait", "orchestration.acknowledge_message",
+                    "orchestration.wait", "orchestration.acknowledge_message",
                         "orchestration.list_participants"
                     ],
+                    "pane_tools": ["agent_panes.list", "agent_panes.open", "agent_panes.rename", "agent_panes.send", "agent_panes.delivery"],
+                    "browser_tools": ["browser.snapshot", "browser.state", "browser.open", "browser.navigate", "browser.back", "browser.forward", "browser.reload", "browser.click", "browser.fill", "browser.press", "browser.scroll", "browser.capture"],
                     "guidance": "Hiveory orchestration is available in this pane. Call this status tool before reporting that orchestration is unavailable."
                 }))
                 .map_err(|error| error.to_string())
@@ -2221,31 +3063,29 @@ impl HiveoryCliSessionTools {
                     })
                     .await
                     .map_err(|error| error.to_string())?;
-                if let Some(terminal_id) = opened
-                    .get("terminal")
-                    .and_then(|terminal| terminal.get("id"))
-                    .and_then(Value::as_str)
-                {
-                    let terminal_host = self.agent_panes.foundation.terminal_host.clone();
-                    let terminal_id = terminal_id.to_owned();
-                    let prompt = format!(
-                        "You are now assigned a Hiveory task. Call session.status, then orchestration.inbox with run_id {run_id:?}. Read and acknowledge the assignment before working."
-                    );
-                    tauri::async_runtime::spawn(async move {
-                        tokio::time::sleep(Duration::from_millis(750)).await;
-                        let _ = terminal_host
-                            .write(&CodeTerminalInputRequest {
-                                terminal_id,
-                                data_base64: STANDARD.encode(format!("{prompt}\n")),
-                            })
-                            .await;
-                    });
-                }
+                // Bootstrap the worker through the same durable, readiness-
+                // gated prompt queue used for direct follow-ups. A fixed
+                // sleep and raw PTY write can race the TUI startup and cannot
+                // distinguish a lost write from a delivered one.
+                let bootstrap = self
+                    .agent_panes
+                    .send(&json!({
+                        "target": opened
+                            .get("pane_id")
+                            .and_then(Value::as_str)
+                            .ok_or_else(|| "The worker pane did not return a pane ID.".to_owned())?,
+                        "prompt": format!(
+                            "You are now assigned a Hiveory task. Call session.status, then orchestration.inbox with run_id {run_id:?}. Read and acknowledge the assignment before working."
+                        ),
+                        "client_request_id": format!("assign-bootstrap-{task_id}-{}", uuid::Uuid::now_v7()),
+                    }))
+                    .await?;
                 Ok(json!({
                     "run_id": run_id,
                     "task_id": task_id,
                     "worker": opened,
                     "delivery": delivery,
+                    "bootstrap": bootstrap,
                 }))
             }
             "orchestration.report_completion" => {
@@ -2393,15 +3233,17 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
     const SKILL_ID: &str = r#"{"type":"object","properties":{"skill_id":{"type":"string"}},"required":["skill_id"],"additionalProperties":false}"#;
     const RUN_LIST: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"}},"additionalProperties":false}"#;
     const WAIT: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"timeout_ms":{"type":"integer","minimum":1,"maximum":60000}},"required":["run_id"],"additionalProperties":false}"#;
-    const ASSIGN: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"task_id":{"type":"string"},"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","codex","claude","agy","open-code"]},"model":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"required":["run_id","task_id"],"additionalProperties":false}"#;
+    const ASSIGN: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"task_id":{"type":"string"},"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","cursor","grok","codex","claude","agy","open-code","cursor-agent","xai"]},"model":{"type":"string"},"reasoning_effort":{"type":"string","enum":["auto","low","medium","high","xhigh","max","ultra"]},"name":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"required":["run_id","task_id"],"additionalProperties":false}"#;
     const COMPLETE: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"task_id":{"type":"string"},"summary":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","task_id","summary"],"additionalProperties":false}"#;
     const CREATE_RUN: &str = r#"{"type":"object","properties":{"workspace_id":{"type":"string"},"title":{"type":"string"},"objective":{"type":"string"},"review_policy":{"type":"string","enum":["manual","automatic"]},"concurrency_limit":{"type":"integer","minimum":1},"model":{"type":"string"},"coordinator_id":{"type":"string"},"adapter_id":{"type":"string"}},"required":["title","objective","review_policy"],"additionalProperties":false}"#;
     const CREATE_TASK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"client_id":{"type":"string"},"title":{"type":"string"},"specification":{"type":"string"},"depends_on":{"type":"array","items":{"type":"string"}}},"required":["run_id","title","specification"],"additionalProperties":false}"#;
     const MAILBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"sender_address":{"type":"string"},"recipient_address":{"type":"string"},"kind":{"type":"string","enum":["status","heartbeat","question","answer","escalation","progress","completion"]},"payload":{"type":"string"},"thread_id":{"type":"string"},"client_request_id":{"type":"string"}},"required":["run_id","recipient_address","kind","payload"],"additionalProperties":false}"#;
     const INBOX: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"recipient_address":{"type":"string"},"include_acknowledged":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":200}},"required":["run_id"],"additionalProperties":false}"#;
     const ACK: &str = r#"{"type":"object","properties":{"run_id":{"type":"string"},"delivery_id":{"type":"string"},"recipient_address":{"type":"string"}},"required":["run_id","delivery_id"],"additionalProperties":false}"#;
-    const OPEN_AGENT: &str = r#"{"type":"object","properties":{"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","codex","claude","agy","open-code"]},"model":{"type":"string"},"title":{"type":"string"},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"additionalProperties":false}"#;
+    const OPEN_AGENT: &str = r#"{"type":"object","properties":{"adapter_id":{"type":"string","enum":["codex-cli","claude-code","antigravity","opencode","cursor","grok","codex","claude","agy","open-code","cursor-agent","xai"]},"model":{"type":"string"},"reasoning_effort":{"type":"string","enum":["auto","low","medium","high","xhigh","max","ultra"]},"name":{"type":"string","description":"Only pass a name explicitly requested by the user; omit for an automatic pet name."},"title":{"type":"string","description":"Legacy alias for name; omit unless the user explicitly requested this name."},"reuse_pane_id":{"type":"string"},"agent_launch_mode":{"type":"string","enum":["standard","yolo"]},"cols":{"type":"integer","minimum":20,"maximum":500},"rows":{"type":"integer","minimum":10,"maximum":500}},"additionalProperties":false}"#;
     const RENAME_AGENT: &str = r#"{"type":"object","properties":{"pane_id":{"type":"string","description":"Optional durable pane ID. Omit to rename the most recently opened coding-agent pane."},"title":{"type":"string"}},"required":["title"],"additionalProperties":false}"#;
+    const SEND_AGENT: &str = r#"{"type":"object","properties":{"target":{"type":"string","description":"Exact pane ID or case-insensitive pane name from agent_panes.list."},"prompt":{"type":"string"},"client_request_id":{"type":"string","description":"Stable idempotency key for retries."}},"required":["target","prompt"],"additionalProperties":false}"#;
+    const DELIVERY_ID: &str = r#"{"type":"object","properties":{"delivery_id":{"type":"string"}},"required":["delivery_id"],"additionalProperties":false}"#;
     [
         (
             "session.status",
@@ -2531,7 +3373,7 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
         ),
         (
             "agent_panes.open",
-            "Open a visible coding-agent pane. For a direct user request with adapter, model, launch mode, or title, call this immediately with those values; do not inspect source files, skills, adapters, or existing panes first. Treat its returned pane_id and title as the durable record of the opened agent.",
+            "Open a visible coding-agent pane. Pass adapter and model separately. Pass name only when the user explicitly named the pane; otherwise Hiveory assigns a short unique pet name. Never compose a name from the CLI or model. Use agent_panes.send for follow-ups to an existing named pane.",
             OPEN_AGENT,
             AgentToolRisk::FilesystemMutation,
         ),
@@ -2540,6 +3382,18 @@ fn cli_session_management_definitions() -> Vec<AgentToolDefinition> {
             "Rename a visible coding-agent pane and return the saved title. Omit pane_id for a request referring to the previous or most recently opened agent. Do not say the name changed until this tool succeeds.",
             RENAME_AGENT,
             AgentToolRisk::InternalMutation,
+        ),
+        (
+            "agent_panes.send",
+            "Send a prompt to an existing named coding-agent pane in this workspace. Never create a new pane for a named follow-up. Returns a durable delivery receipt; queued does not mean delivered.",
+            SEND_AGENT,
+            AgentToolRisk::InternalMutation,
+        ),
+        (
+            "agent_panes.delivery",
+            "Inspect a durable direct-prompt delivery by its returned ID.",
+            DELIVERY_ID,
+            AgentToolRisk::ReadOnly,
         ),
     ]
     .into_iter()
@@ -2605,6 +3459,18 @@ fn start_cli_session_bridge(
             chat_tool_calls: Arc::new(AtomicU32::new(0)),
             chat_profile,
         };
+        if let Ok(pending) = foundation
+            .persistence
+            .pending_pane_prompts(&tools.workspace_id)
+            .await
+        {
+            for delivery in pending {
+                let foundation = foundation.clone();
+                tauri::async_runtime::spawn(async move {
+                    deliver_queued_pane_prompt(foundation, delivery.id).await;
+                });
+            }
+        }
         let expected_token = token.clone();
         tauri::async_runtime::spawn(async move {
             loop {
@@ -2804,6 +3670,39 @@ impl HiveoryFoundation {
             .code_workspaces()
             .await
             .map_err(|error| error.to_string())?;
+        // The terminal host is the owner of PTYs. If it was restarted, rows
+        // that still say `running` no longer identify a live process. Mark
+        // those bindings dormant before queue recovery so a named follow-up
+        // fails or can be explicitly reopened instead of waiting forever.
+        if let Ok(live_terminals) = terminal_host.list().await {
+            let live_ids = live_terminals
+                .into_iter()
+                .map(|terminal| terminal.id)
+                .collect::<HashSet<_>>();
+            for workspace in &persisted_workspaces {
+                for terminal in persistence
+                    .code_terminals(&workspace.id)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    if matches!(
+                        terminal.state,
+                        hiveory_protocol::CodeTerminalState::Starting
+                            | hiveory_protocol::CodeTerminalState::Running
+                    ) && !live_ids.contains(&terminal.id)
+                    {
+                        persistence
+                            .finish_code_terminal(
+                                &terminal.id,
+                                hiveory_protocol::CodeTerminalState::Dormant,
+                                None,
+                            )
+                            .await
+                            .map_err(|error| error.to_string())?;
+                    }
+                }
+            }
+        }
         let persisted_context = persistence
             .get_setting(CODE_WORKSPACE_CONTEXT_SETTING)
             .await
@@ -5305,11 +6204,28 @@ async fn hiveory_command_open_code_dispatch_terminal(
         rows: command.payload.rows,
         adapter_id: coding_agent.then_some(context.adapter_id),
         model: coding_agent.then_some(context.model).flatten(),
+        reasoning_effort: None,
         agent_launch_mode: hiveory_protocol::CodeAgentLaunchMode::Standard,
         resume_session_id: coding_agent.then_some(context.resume_session_id).flatten(),
         session_integration: None,
     };
     if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        let adapter_id = terminal_start
+            .adapter_id
+            .as_deref()
+            .and_then(canonical_code_adapter_id)
+            .ok_or_else(|| validation_error("The coding-agent adapter is unavailable."))?;
+        if !cli_adapter_has_session_bridge(adapter_id) {
+            return Err(application_error(
+                "cli_session_bridge_unsupported",
+                format!(
+                    "{} cannot expose Hiveory's in-session tools: this installed CLI has no verified session-scoped MCP configuration.",
+                    adapter_display_name(adapter_id)
+                ),
+                RetryClass::AfterUserAction,
+            ));
+        }
+        terminal_start.adapter_id = Some(adapter_id.to_owned());
         terminal_start.session_integration = prepare_cli_session_integration(
             &foundation,
             app,
@@ -6782,6 +7698,16 @@ async fn prepare_cli_session_integration(
     let Some(adapter_id) = adapter_id.and_then(canonical_code_adapter_id) else {
         return Ok(None);
     };
+    if !cli_adapter_has_session_bridge(adapter_id) {
+        return Err(application_error(
+            "cli_session_bridge_unsupported",
+            format!(
+                "{} cannot expose Hiveory's in-session tools: this installed CLI has no verified session-scoped MCP configuration.",
+                adapter_display_name(adapter_id)
+            ),
+            RetryClass::AfterUserAction,
+        ));
+    }
 
     let session_id = requested_session_id.unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
     // A bridged CLI can summon another pane. The bridge factory returns an
@@ -6824,7 +7750,7 @@ async fn prepare_cli_session_integration(
             "\n## Hiveory orchestration identity\n\nYour durable mailbox address is `{participant_address}`. Hiveory orchestration is available in this pane: call `session.status` before saying it is unavailable. When another agent assigns work, use `orchestration.inbox` with the run ID (the recipient defaults to this address), then call `orchestration.acknowledge_message` after handling each delivery. Use `orchestration.assign_task` to open a visible worker pane and deliver a tracked task. A visible worker completes by calling `orchestration.report_completion`; use `orchestration.wait` rather than polling for replies.\n"
         ));
         instructions.push_str(
-            "\n## Direct pane commands\n\nFor a user request to open a coding-agent pane, call `agent_panes.open` immediately when the adapter, model, launch mode, or title is specified. Pass every specified value in that one call. Do not first open Codex, inspect source files, read skills, list adapters, list panes, or probe the bridge. The successful response is the authoritative record: retain its `pane_id` and returned title. When the user later refers to the previous agent, use `agent_panes.rename` with its pane ID; if the ID is unavailable, omit it and Hiveory will select the most recently opened coding-agent pane. Never claim a pane was opened or renamed until the corresponding tool succeeds and returns the saved state.\n",
+            "\n## Direct pane commands\n\nFor a request to open a coding-agent pane, call `agent_panes.open` with the requested adapter and model. Supply `name` only if the user explicitly named the pane; otherwise Hiveory assigns a unique pet name. Never derive a name from the adapter or model. Before addressing a named agent from an earlier turn, use `agent_panes.list`; send the follow-up to that existing pane with `agent_panes.send`. Do not open a replacement pane. Treat tool receipts as authoritative; a queued prompt is not yet delivered or complete. For browser use, open a known URL or site directly, use query only for searches, and reuse the active browser unless the user requested a new pane.\n",
         );
     } else {
         instructions.push_str(
@@ -7074,11 +8000,10 @@ fn validate_chat_profile(
     Ok(())
 }
 
-/// Antigravity's CLI exposes MCP only through its own server registry rather
-/// than a per-process config flag. Replace the Hiveory-owned entry before
-/// launch: `mcp add` alone leaves the old endpoint in place on versions that
-/// treat an existing name as an error, which was the source of stale bridges
-/// after a desktop restart.
+/// Antigravity's CLI exposes MCP through its own server registry rather than a
+/// per-process config flag. Register one uniquely named bridge per session;
+/// replacing a shared `hiveory-desktop` entry would route an older pane to the
+/// newest pane after two agents are opened.
 async fn configure_antigravity_session_bridge(
     integration: &hiveory_protocol::CodeCliSessionIntegration,
 ) -> Result<(), ApiError> {
@@ -7089,16 +8014,30 @@ async fn configure_antigravity_session_bridge(
             RetryClass::Safe,
         )
     })?;
+    let session_id = integration
+        .bridge_args
+        .windows(2)
+        .find(|pair| pair[0] == "--session-id")
+        .map(|pair| pair[1].as_str())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("unknown");
+    let safe_session_id = session_id
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>();
+    let server_name = format!("hiveory-desktop-{safe_session_id}");
+    // Reopening the same pane reuses its durable worker address. Remove only
+    // that session's prior entry before adding the fresh endpoint; entries
+    // for every other pane remain untouched and cannot be rerouted.
     let mut remove = tokio::process::Command::new(program.clone());
     configure_background_command(remove.as_std_mut());
-    remove.args(prefix.clone());
-    let _ = remove
-        .args(["mcp", "remove", "hiveory-desktop"])
+    remove
+        .args(&prefix)
+        .args(["mcp", "remove", &server_name])
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
+        .stderr(Stdio::null());
+    let _ = remove.status().await;
     let mut command = tokio::process::Command::new(program);
     configure_background_command(command.as_std_mut());
     command.args(prefix);
@@ -7106,7 +8045,7 @@ async fn configure_antigravity_session_bridge(
         .args([
             "mcp",
             "add",
-            "hiveory-desktop",
+            &server_name,
             &integration.bridge_command,
             "--",
         ])
@@ -7155,6 +8094,23 @@ async fn hiveory_command_start_code_terminal(
         .map_err(workspace_error)?;
     let mut payload = command.payload.clone();
     if payload.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        let adapter_id = match payload.adapter_id.as_deref() {
+            Some(raw) => canonical_code_adapter_id(raw).ok_or_else(|| {
+                validation_error("The requested coding-agent adapter is not supported.")
+            })?,
+            None => "codex-cli",
+        };
+        if !cli_adapter_has_session_bridge(adapter_id) {
+            return Err(application_error(
+                "cli_session_bridge_unsupported",
+                format!(
+                    "{} cannot expose Hiveory's in-session tools: this installed CLI has no verified session-scoped MCP configuration.",
+                    adapter_display_name(adapter_id)
+                ),
+                RetryClass::AfterUserAction,
+            ));
+        }
+        payload.adapter_id = Some(adapter_id.to_owned());
         payload.session_integration = prepare_cli_session_integration(
             &foundation,
             app,
@@ -7915,6 +8871,54 @@ async fn hiveory_command_launch_code_pane_terminal(
                 )
             })
         {
+            if existing_terminal.kind != command.payload.kind {
+                return Err(validation_error(
+                    "The pane already contains a different terminal kind.",
+                ));
+            }
+            if command.payload.kind == CodeTerminalKind::CodingAgent {
+                let requested_adapter = match command
+                    .payload
+                    .adapter_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|adapter| !adapter.is_empty())
+                {
+                    Some(raw) => Some(canonical_code_adapter_id(raw).ok_or_else(|| {
+                        validation_error("The requested coding-agent adapter is not supported.")
+                    })?),
+                    None => None,
+                };
+                if requested_adapter.is_some()
+                    && existing_terminal.adapter_id.as_deref() != requested_adapter
+                {
+                    return Err(validation_error(
+                        "The pane already runs a different coding-agent adapter.",
+                    ));
+                }
+                if command
+                    .payload
+                    .model
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("default"))
+                    .is_some_and(|model| existing_terminal.model.as_deref() != Some(model))
+                {
+                    return Err(validation_error(
+                        "The pane already runs a different coding-agent model.",
+                    ));
+                }
+                if command
+                    .payload
+                    .reasoning_effort
+                    .filter(|effort| *effort != hiveory_protocol::ChatReasoningEffort::Auto)
+                    .is_some_and(|effort| existing_terminal.reasoning_effort != Some(effort))
+                {
+                    return Err(validation_error(
+                        "The pane already runs with a different reasoning effort.",
+                    ));
+                }
+            }
             forward_terminal_events(
                 foundation.terminal_host.clone(),
                 existing_terminal.id.clone(),
@@ -7937,13 +8941,80 @@ async fn hiveory_command_launch_code_pane_terminal(
             .code_terminal_session(terminal_id)
             .await
             .map_err(database_error)?;
+        if let Some(persisted_terminal) = persisted.as_ref() {
+            if persisted_terminal.summary.workspace_id != command.payload.workspace_id {
+                return Err(validation_error(
+                    "The pane resource belongs to a different workspace.",
+                ));
+            }
+            if persisted_terminal.summary.kind != command.payload.kind {
+                return Err(validation_error(
+                    "The pane resource has a different terminal kind.",
+                ));
+            }
+            if command.payload.kind == CodeTerminalKind::CodingAgent {
+                if let Some(raw) = command
+                    .payload
+                    .adapter_id
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|adapter| !adapter.is_empty())
+                {
+                    let requested = canonical_code_adapter_id(raw).ok_or_else(|| {
+                        validation_error("The requested coding-agent adapter is not supported.")
+                    })?;
+                    if persisted_terminal.summary.adapter_id.as_deref() != Some(requested) {
+                        return Err(validation_error(
+                            "The pane resource has a different coding-agent adapter.",
+                        ));
+                    }
+                }
+                if command
+                    .payload
+                    .model
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("default"))
+                    .is_some_and(|model| persisted_terminal.summary.model.as_deref() != Some(model))
+                {
+                    return Err(validation_error(
+                        "The pane resource has a different coding-agent model.",
+                    ));
+                }
+                if command
+                    .payload
+                    .reasoning_effort
+                    .filter(|effort| *effort != ChatReasoningEffort::Auto)
+                    .is_some_and(|effort| {
+                        persisted_terminal.summary.reasoning_effort != Some(effort)
+                    })
+                {
+                    return Err(validation_error(
+                        "The pane resource has a different reasoning effort.",
+                    ));
+                }
+            }
+        }
         let mut terminal_start = CodeTerminalStartRequest {
             workspace_id: command.payload.workspace_id.clone(),
             kind: command.payload.kind,
             cols: command.payload.cols,
             rows: command.payload.rows,
-            adapter_id: command.payload.adapter_id.clone(),
-            model: command.payload.model.clone(),
+            adapter_id: command.payload.adapter_id.clone().or_else(|| {
+                persisted
+                    .as_ref()
+                    .and_then(|record| record.summary.adapter_id.clone())
+            }),
+            model: command.payload.model.clone().or_else(|| {
+                persisted
+                    .as_ref()
+                    .and_then(|record| record.summary.model.clone())
+            }),
+            reasoning_effort: command.payload.reasoning_effort.or_else(|| {
+                persisted
+                    .as_ref()
+                    .and_then(|record| record.summary.reasoning_effort)
+            }),
             agent_launch_mode: persisted
                 .as_ref()
                 .map(|record| record.summary.agent_launch_mode)
@@ -7954,13 +9025,33 @@ async fn hiveory_command_launch_code_pane_terminal(
             session_integration: None,
         };
         if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+            let adapter_id = match terminal_start.adapter_id.as_deref() {
+                Some(raw) => canonical_code_adapter_id(raw).ok_or_else(|| {
+                    validation_error("The requested coding-agent adapter is not supported.")
+                })?,
+                None => "codex-cli",
+            };
+            if !cli_adapter_has_session_bridge(adapter_id) {
+                return Err(application_error(
+                    "cli_session_bridge_unsupported",
+                    format!(
+                        "{} cannot expose Hiveory's in-session tools: this installed CLI has no verified session-scoped MCP configuration.",
+                        adapter_display_name(adapter_id)
+                    ),
+                    RetryClass::AfterUserAction,
+                ));
+            }
+            terminal_start.adapter_id = Some(adapter_id.to_owned());
             terminal_start.session_integration = prepare_cli_session_integration(
                 &foundation,
                 app.clone(),
                 (*browser).clone(),
                 terminal_start.workspace_id.clone(),
                 terminal_start.adapter_id.as_deref(),
-                None,
+                Some(pane_worker_session_id(
+                    &command.payload.workspace_id,
+                    &command.payload.pane_id,
+                )),
                 None,
             )
             .await?;
@@ -8008,18 +9099,38 @@ async fn hiveory_command_launch_code_pane_terminal(
         rows: command.payload.rows,
         adapter_id: command.payload.adapter_id.clone(),
         model: command.payload.model.clone(),
+        reasoning_effort: command.payload.reasoning_effort,
         agent_launch_mode: command.payload.agent_launch_mode,
         resume_session_id: None,
         session_integration: None,
     };
     if terminal_start.kind == hiveory_protocol::CodeTerminalKind::CodingAgent {
+        let adapter_id = terminal_start
+            .adapter_id
+            .as_deref()
+            .and_then(canonical_code_adapter_id)
+            .ok_or_else(|| validation_error("The coding-agent adapter is unavailable."))?;
+        if !cli_adapter_has_session_bridge(adapter_id) {
+            return Err(application_error(
+                "cli_session_bridge_unsupported",
+                format!(
+                    "{} cannot expose Hiveory's in-session tools: this installed CLI has no verified session-scoped MCP configuration.",
+                    adapter_display_name(adapter_id)
+                ),
+                RetryClass::AfterUserAction,
+            ));
+        }
+        terminal_start.adapter_id = Some(adapter_id.to_owned());
         terminal_start.session_integration = prepare_cli_session_integration(
             &foundation,
             app,
             (*browser).clone(),
             terminal_start.workspace_id.clone(),
             terminal_start.adapter_id.as_deref(),
-            None,
+            Some(pane_worker_session_id(
+                &command.payload.workspace_id,
+                &command.payload.pane_id,
+            )),
             None,
         )
         .await?;
@@ -10088,9 +11199,10 @@ fn is_empty_workspace_layout(layout: &CodePaneLayout) -> bool {
         && layout.nodes[0].resource_id.is_none()
 }
 
-/// Old preset records used two-word descriptive titles. Presets are workspace
-/// setups, so every launch gets a distinct, compact pet name while preserving
-/// one-word names that were already assigned by the current preset builder.
+/// Presets are workspace setups, so every launch gets a distinct, compact pet
+/// name.  Legacy records sometimes used an adapter display name (including a
+/// one-word name such as `Antigravity`) as the pane title; those descriptions
+/// are regenerated while existing user pet names remain stable.
 const PANE_CODENAMES: &[&str] = &[
     "Biscuit", "Button", "Clover", "Comet", "Doodle", "Fidget", "Gizmo", "Juniper", "Kestrel",
     "Mochi", "Nimbus", "Noodle", "Pebble", "Pickle", "Pippin", "Poppy", "Quartz", "Rocket",
@@ -10106,7 +11218,7 @@ fn next_generated_pane_title(used: &mut HashSet<String>) -> String {
     let start = (uuid::Uuid::now_v7().as_u128() as usize) % PANE_CODENAMES.len();
     for offset in 0..PANE_CODENAMES.len() {
         let candidate = PANE_CODENAMES[(start + offset) % PANE_CODENAMES.len()];
-        if used.insert(candidate.to_ascii_lowercase()) {
+        if used.insert(agent_name_key(candidate)) {
             return candidate.to_owned();
         }
     }
@@ -10114,7 +11226,7 @@ fn next_generated_pane_title(used: &mut HashSet<String>) -> String {
     let mut suffix = 2;
     loop {
         let candidate = format!("{base}{suffix}");
-        if used.insert(candidate.to_ascii_lowercase()) {
+        if used.insert(agent_name_key(&candidate)) {
             return candidate;
         }
         suffix += 1;
@@ -10126,10 +11238,256 @@ fn generated_pane_title_for_layout(layout: &CodePaneLayout) -> String {
         .nodes
         .iter()
         .filter_map(|node| node.title.as_deref())
-        .map(|title| title.trim().to_ascii_lowercase())
+        .map(agent_name_key)
         .filter(|title| !title.is_empty())
         .collect::<HashSet<_>>();
     next_generated_pane_title(&mut used)
+}
+
+fn pane_worker_session_id(workspace_id: &str, pane_id: &str) -> String {
+    let safe_component = |value: &str| {
+        let mut safe = value
+            .chars()
+            .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+            .collect::<String>();
+        if safe.is_empty() {
+            safe.push_str("unknown");
+        }
+        safe
+    };
+    let mut workspace = safe_component(workspace_id);
+    let mut pane = safe_component(pane_id);
+    let workspace_needs_digest = workspace_id.is_empty()
+        || workspace_id.chars().count() > 64
+        || workspace_id
+            .chars()
+            .any(|ch| !ch.is_ascii_alphanumeric() && ch != '-');
+    let pane_needs_digest = pane_id.is_empty()
+        || pane_id.chars().count() > 64
+        || pane_id
+            .chars()
+            .any(|ch| !ch.is_ascii_alphanumeric() && ch != '-');
+    workspace.truncate(64);
+    pane.truncate(64);
+    // Sanitizing arbitrary durable IDs is necessary for CLI/config filenames,
+    // but replacing `/` and `-` with the same character can otherwise merge
+    // two workspaces or panes. Keep the readable prefix and add a stable
+    // digest of the original pair so the bridge identity remains unique after
+    // restarts and across workspace roots.
+    if workspace_needs_digest || pane_needs_digest {
+        let digest = format!("{:x}", Sha256::digest(format!("{workspace_id}\0{pane_id}")));
+        format!("cli-worker-pane-{workspace}-{pane}-{}", &digest[..12])
+    } else {
+        format!("cli-worker-pane-{workspace}-{pane}")
+    }
+}
+
+fn agent_name_key(value: &str) -> String {
+    value.trim().to_lowercase()
+}
+
+fn known_browser_site(site: &str) -> Option<&'static str> {
+    match site
+        .trim()
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "github" | "github.com" => Some("https://github.com/"),
+        "google" | "google.com" => Some("https://www.google.com/"),
+        "youtube" | "youtube.com" => Some("https://www.youtube.com/"),
+        "gitlab" | "gitlab.com" => Some("https://gitlab.com/"),
+        "stackoverflow" | "stack overflow" => Some("https://stackoverflow.com/"),
+        "npm" | "npmjs" => Some("https://www.npmjs.com/"),
+        "crates.io" | "crates" => Some("https://crates.io/"),
+        "docs.rs" => Some("https://docs.rs/"),
+        _ => None,
+    }
+}
+
+fn active_browser_for_layout(
+    layout: &CodePaneLayout,
+    open_previews: &HashSet<String>,
+) -> Option<String> {
+    let focused = layout.focused_pane_id.as_deref();
+    let candidates = layout.nodes.iter().filter(|node| {
+        node.children.is_empty()
+            && node.kind == CodePaneKind::Preview
+            && node
+                .resource_id
+                .as_ref()
+                .is_some_and(|id| open_previews.contains(id))
+    });
+    candidates
+        .clone()
+        .find(|node| Some(node.pane_id.as_str()) == focused)
+        .or_else(|| candidates.into_iter().next())
+        .and_then(|node| node.resource_id.clone())
+}
+
+fn cli_adapter_has_session_bridge(adapter_id: &str) -> bool {
+    matches!(
+        adapter_id,
+        "codex-cli" | "claude-code" | "antigravity" | "opencode"
+    )
+}
+
+fn adapter_display_name(adapter_id: &str) -> &'static str {
+    match adapter_id {
+        "codex-cli" => "Codex CLI",
+        "claude-code" => "Claude Code",
+        "antigravity" => "Antigravity",
+        "opencode" => "OpenCode",
+        "cursor" => "Cursor",
+        "grok" => "Grok",
+        _ => "This coding-agent adapter",
+    }
+}
+
+fn cli_browser_destination(args: &Value) -> Result<String, String> {
+    let values = ["url", "site", "query"]
+        .into_iter()
+        .filter_map(|key| {
+            args.get(key)
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| (key, value))
+        })
+        .collect::<Vec<_>>();
+    if values.len() != 1 {
+        return Err("Supply exactly one of url, site, or query.".to_owned());
+    }
+    let (kind, value) = values[0];
+    match kind {
+        "url" => browser::normalize_browser_address(value).map(|url| url.to_string()),
+        "site" => known_browser_site(value).map(str::to_owned).ok_or_else(|| {
+            format!(
+                "{value:?} is not a recognized site; use url for an address or query to search."
+            )
+        }),
+        "query" => {
+            let mut url = url::Url::parse("https://www.google.com/search")
+                .map_err(|error| error.to_string())?;
+            url.query_pairs_mut().append_pair("q", value);
+            Ok(url.to_string())
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn ensure_unique_agent_name(
+    layout: &CodePaneLayout,
+    name: &str,
+    except_pane_id: Option<&str>,
+) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("The agent name cannot be empty.".to_owned());
+    }
+    hiveory_code_domain::validate_title(name)
+        .map_err(|_| "The agent name must be 1-80 non-control characters.".to_owned())?;
+    if layout.nodes.iter().any(|pane| {
+        pane.children.is_empty()
+            && pane.kind == CodePaneKind::CodingAgent
+            && Some(pane.pane_id.as_str()) != except_pane_id
+            && pane
+                .title
+                .as_deref()
+                .is_some_and(|title| agent_name_key(title) == agent_name_key(name))
+    }) {
+        return Err(format!(
+            "A coding-agent pane named {name:?} already exists in this workspace."
+        ));
+    }
+    Ok(())
+}
+
+fn resolve_named_agent_pane<'a>(
+    layout: &'a CodePaneLayout,
+    target: &str,
+) -> Result<&'a CodePaneNode, String> {
+    // Durable pane IDs are authoritative. A user supplied ID must win over
+    // a coincidental title match; only title lookups participate in
+    // ambiguity checks.
+    if let Some(pane) = layout.nodes.iter().find(|node| {
+        node.pane_id == target && node.children.is_empty() && node.kind == CodePaneKind::CodingAgent
+    }) {
+        return Ok(pane);
+    }
+    let matches = layout
+        .nodes
+        .iter()
+        .filter(|node| node.children.is_empty() && node.kind == CodePaneKind::CodingAgent)
+        .filter(|node| {
+            node.title
+                .as_deref()
+                .is_some_and(|title| agent_name_key(title) == agent_name_key(target))
+        })
+        .collect::<Vec<_>>();
+    match matches.as_slice() {
+        [pane] => Ok(pane),
+        [] => Err(format!("No coding-agent pane named {target:?} exists in this workspace. Call agent_panes.list; do not open a replacement.")),
+        _ => Err(format!("The target {target:?} is ambiguous. Use an exact pane_id from agent_panes.list.")),
+    }
+}
+
+fn resolve_new_agent_name(
+    layout: &CodePaneLayout,
+    requested_name: Option<&str>,
+    adapter_id: &str,
+    model: Option<&str>,
+    except_pane_id: Option<&str>,
+) -> Result<String, String> {
+    let requested_name = requested_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty());
+    let generic =
+        requested_name.is_some_and(|name| looks_like_generic_agent_title(name, adapter_id, model));
+    if generic || requested_name.is_none() {
+        return Ok(generated_pane_title_for_layout(layout));
+    }
+    let name = requested_name.unwrap();
+    ensure_unique_agent_name(layout, name, except_pane_id)?;
+    Ok(name.to_owned())
+}
+
+fn looks_like_generic_agent_title(title: &str, adapter_id: &str, model: Option<&str>) -> bool {
+    let lower = title.trim().to_ascii_lowercase();
+    let normalized = |value: &str| {
+        value
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric())
+            .collect::<String>()
+    };
+    let title_key = normalized(&lower);
+    let adapter_key = normalized(adapter_id);
+    let model_key = normalized(model.unwrap_or_default());
+    lower == "cli"
+        || lower == "default"
+        || lower.contains(" cli")
+        || lower.ends_with("agent")
+        || lower.contains("coding agent")
+        || lower.contains("model")
+        || (!adapter_id.is_empty() && lower.contains(adapter_id))
+        || (!adapter_key.is_empty() && title_key.contains(&adapter_key))
+        || [
+            "codex",
+            "claude",
+            "antigravity",
+            "opencode",
+            "cursor",
+            "grok",
+            "gemini",
+            "gpt",
+            "flash",
+            "sonnet",
+            "opus",
+            "haiku",
+        ]
+        .iter()
+        .any(|adapter| lower.contains(adapter))
+        || (!model_key.is_empty() && title_key.contains(&model_key))
 }
 
 fn normalize_launch_preset_pane_titles(
@@ -10141,8 +11499,19 @@ fn normalize_launch_preset_pane_titles(
         .map(|entry| {
             let mut entry = entry.clone();
             let title = entry.title.trim();
-            let title_key = title.to_ascii_lowercase();
+            let generic_agent_title = entry.kind == CodeLaunchPresetPaneKind::CodingAgent
+                && looks_like_generic_agent_title(
+                    title,
+                    entry
+                        .adapter_id
+                        .as_deref()
+                        .and_then(canonical_code_adapter_id)
+                        .unwrap_or_default(),
+                    None,
+                );
+            let title_key = agent_name_key(title);
             if !title.is_empty()
+                && !generic_agent_title
                 && !title.chars().any(char::is_whitespace)
                 && used.insert(title_key)
             {
@@ -11597,11 +12966,241 @@ mod cli_orchestration_tests {
             "agent_panes.list",
             "agent_panes.open",
             "agent_panes.rename",
+            "agent_panes.send",
+            "agent_panes.delivery",
         ] {
             assert!(
                 names.contains(expected),
                 "missing CLI control tool: {expected}"
             );
         }
+    }
+
+    #[test]
+    fn session_bridge_contract_covers_all_six_adapters() {
+        for adapter in ["codex-cli", "claude-code", "antigravity", "opencode"] {
+            assert!(cli_adapter_has_session_bridge(adapter), "{adapter}");
+        }
+        for adapter in ["cursor", "grok"] {
+            assert!(!cli_adapter_has_session_bridge(adapter), "{adapter}");
+        }
+    }
+
+    #[test]
+    fn agent_names_are_unique_and_generic_descriptions_become_pet_names() {
+        let mut layout = default_layout("workspace");
+        layout.nodes[0].kind = CodePaneKind::CodingAgent;
+        layout.nodes[0].title = Some("Max".to_owned());
+        assert!(resolve_new_agent_name(&layout, Some("max"), "antigravity", None, None).is_err());
+        assert!(ensure_unique_agent_name(&layout, "MAX", None).is_err());
+        assert_eq!(
+            resolve_new_agent_name(&layout, Some("Milo"), "antigravity", None, None).unwrap(),
+            "Milo"
+        );
+        let generated = resolve_new_agent_name(
+            &layout,
+            Some("Antigravity Gemini CLI"),
+            "antigravity",
+            Some("gemini"),
+            None,
+        )
+        .unwrap();
+        assert!(!generated.eq_ignore_ascii_case("Max"));
+        assert!(!generated.to_ascii_lowercase().contains("antigravity"));
+        let generated = resolve_new_agent_name(
+            &layout,
+            Some("Gemini 3.7 Flash Low"),
+            "antigravity",
+            Some("gemini-3.7-flash"),
+            None,
+        )
+        .unwrap();
+        assert!(!generated.to_ascii_lowercase().contains("gemini"));
+        assert!(looks_like_generic_agent_title(
+            "Open Code",
+            "opencode",
+            None
+        ));
+    }
+
+    #[test]
+    fn named_agent_lookup_is_case_insensitive_and_never_creates_a_pane() {
+        let mut layout = default_layout("workspace-a");
+        layout.nodes[0].kind = CodePaneKind::CodingAgent;
+        layout.nodes[0].title = Some("Max".to_owned());
+        assert_eq!(
+            resolve_named_agent_pane(&layout, "mAx").unwrap().pane_id,
+            "root"
+        );
+        assert_eq!(
+            resolve_named_agent_pane(&layout, "root")
+                .unwrap()
+                .title
+                .as_deref(),
+            Some("Max")
+        );
+        assert!(resolve_named_agent_pane(&layout, "stale-pane-id").is_err());
+        assert!(resolve_named_agent_pane(&default_layout("workspace-b"), "Max").is_err());
+
+        let mut id_collision = layout.clone();
+        let mut second = id_collision.nodes[0].clone();
+        second.pane_id = "Max".to_owned();
+        second.title = Some("Other".to_owned());
+        id_collision.nodes.push(second);
+        assert_eq!(
+            resolve_named_agent_pane(&id_collision, "Max")
+                .unwrap()
+                .title
+                .as_deref(),
+            Some("Other")
+        );
+    }
+
+    #[test]
+    fn pane_worker_addresses_are_stable_and_safe() {
+        let stable = pane_worker_session_id("workspace-a", "pane-123");
+        assert_eq!(stable, "cli-worker-pane-workspace-a-pane-123");
+        assert!(stable
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-'));
+        assert_eq!(stable, pane_worker_session_id("workspace-a", "pane-123"));
+        assert!(pane_worker_session_id("workspace-a", "pane with spaces")
+            .starts_with("cli-worker-pane-workspace-a-pane-with-spaces-"));
+        assert_ne!(
+            pane_worker_session_id("workspace-a", "pane-a"),
+            pane_worker_session_id("workspace-a", "pane-b")
+        );
+        assert_ne!(
+            pane_worker_session_id("workspace-a", "root"),
+            pane_worker_session_id("workspace-b", "root")
+        );
+        assert_ne!(
+            pane_worker_session_id("workspace/a", "root"),
+            pane_worker_session_id("workspace-a", "root")
+        );
+    }
+
+    #[test]
+    fn browser_destination_keeps_search_and_navigation_distinct() {
+        assert_eq!(
+            cli_browser_destination(&json!({"site":"GitHub"})).unwrap(),
+            "https://github.com/"
+        );
+        assert_eq!(
+            cli_browser_destination(&json!({"url":"GitHub"})).unwrap(),
+            "https://github.com/"
+        );
+        assert_eq!(
+            cli_browser_destination(&json!({"url":"example.com/docs"})).unwrap(),
+            "https://example.com/docs"
+        );
+        assert_eq!(
+            cli_browser_destination(&json!({"url":"localhost:5173"})).unwrap(),
+            "http://localhost:5173/"
+        );
+        assert!(cli_browser_destination(&json!({"query":"tauri webview"}))
+            .unwrap()
+            .starts_with("https://www.google.com/search?q=tauri+webview"));
+        assert!(cli_browser_destination(&json!({"site":"unknown-site"})).is_err());
+        assert!(cli_browser_destination(&json!({"site":"GitHub","query":"issues"})).is_err());
+        assert!(cli_browser_destination(&json!({"url":"rust tauri webview"})).is_err());
+    }
+
+    #[test]
+    fn launch_preset_agent_adapter_titles_become_pet_names() {
+        let entries = vec![
+            CodeLaunchPresetEntry {
+                id: "one".to_owned(),
+                kind: CodeLaunchPresetPaneKind::CodingAgent,
+                title: "Antigravity".to_owned(),
+                adapter_id: Some("antigravity".to_owned()),
+                url: None,
+                agent_launch_mode: hiveory_protocol::CodeAgentLaunchMode::Standard,
+            },
+            CodeLaunchPresetEntry {
+                id: "two".to_owned(),
+                kind: CodeLaunchPresetPaneKind::CodingAgent,
+                title: "Max".to_owned(),
+                adapter_id: Some("grok".to_owned()),
+                url: None,
+                agent_launch_mode: hiveory_protocol::CodeAgentLaunchMode::Standard,
+            },
+        ];
+        let normalized = normalize_launch_preset_pane_titles(&entries);
+        assert!(!normalized[0].title.eq_ignore_ascii_case("antigravity"));
+        assert_eq!(normalized[1].title, "Max");
+    }
+
+    #[test]
+    fn active_browser_reuse_ignores_closed_previews() {
+        let mut layout = default_layout("workspace");
+        layout.nodes[0].kind = CodePaneKind::Preview;
+        layout.nodes[0].resource_id = Some("browser-a".to_owned());
+        let open = HashSet::from(["browser-a".to_owned()]);
+        assert_eq!(
+            active_browser_for_layout(&layout, &open).as_deref(),
+            Some("browser-a")
+        );
+        assert_eq!(active_browser_for_layout(&layout, &HashSet::new()), None);
+    }
+
+    #[test]
+    fn prompt_readiness_rejects_working_and_unknown_screens() {
+        assert!(terminal_prompt_ready(
+            Some("antigravity"),
+            b"Antigravity CLI\nGemini Flash\n>"
+        ));
+        assert!(terminal_prompt_ready(
+            Some("codex-cli"),
+            b"\x1b]0;Codex idle\x07"
+        ));
+        assert!(!terminal_prompt_ready(
+            Some("codex-cli"),
+            b"\x1b]0;Codex working\x07"
+        ));
+        assert!(!terminal_prompt_ready(Some("grok"), b"some output\n>"));
+        assert!(terminal_prompt_ready(
+            Some("opencode"),
+            b"\x1b[?2004h\x1b[?25h"
+        ));
+        assert!(terminal_prompt_ready(
+            Some("claude-code"),
+            b"Claude Code\n\x1b[38;5;45m>\x1b[0m"
+        ));
+        assert!(terminal_prompt_ready(
+            Some("grok"),
+            "\x1b[?1049h\nWelcome Grok\n❯".as_bytes()
+        ));
+        assert!(!terminal_prompt_ready(
+            Some("grok"),
+            "\x1b[?1049h\nWelcome Grok\n❯\x1b[?1049l\n❯".as_bytes()
+        ));
+    }
+
+    #[test]
+    fn queued_prompts_are_sealed_to_their_pane_and_request() {
+        let cipher = Aes256Gcm::new_from_slice(&[7_u8; 32]).unwrap();
+        let sealed = seal_pane_prompt(
+            &cipher,
+            "workspace-a",
+            "max-pane",
+            "request-1",
+            "continue privately",
+        )
+        .unwrap();
+        assert!(!sealed.contains("continue privately"));
+        assert_eq!(
+            open_pane_prompt(&cipher, "workspace-a", "max-pane", "request-1", &sealed,).unwrap(),
+            "continue privately"
+        );
+        assert!(
+            open_pane_prompt(&cipher, "workspace-a", "other-pane", "request-1", &sealed).is_err()
+        );
+        assert!(
+            open_pane_prompt(&cipher, "workspace-a", "max-pane", "request-2", &sealed).is_err()
+        );
+        assert!(
+            open_pane_prompt(&cipher, "workspace-b", "max-pane", "request-1", &sealed).is_err()
+        );
     }
 }

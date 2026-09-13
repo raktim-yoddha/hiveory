@@ -157,7 +157,7 @@ export type CodeLaunchPresetUpdateRequest = { preset_id: string; workspace_id: s
 export type CodeLaunchPresetOpenRequest = { preset_id: string; workspace_id: string; expected_revision: number }
 export type CodeLaunchPresetLaunchTarget = { pane_id: string; entry: CodeLaunchPresetEntry }
 export type CodeLaunchPresetOpenResult = { layout: CodePaneLayout; targets: CodeLaunchPresetLaunchTarget[] }
-export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; cols: number; rows: number }
+export type LaunchCodePaneTerminalRequest = { workspace_id: string; pane_id: string; expected_revision: number; kind: CodeTerminalKind; adapter_id: string | null; model: string | null; reasoning_effort: ChatReasoningEffort | null; agent_launch_mode: CodeAgentLaunchMode; cols: number; rows: number }
 export type LaunchCodePaneTerminalResult = { layout: CodePaneLayout; terminal: CodeTerminalSummary }
 export type OpenCodePanePreviewRequest = { workspace_id: string; pane_id: string; expected_revision: number; url: string }
 export type OpenCodePanePreviewResult = { layout: CodePaneLayout; preview: CodePreviewSummary }
@@ -174,7 +174,7 @@ export type CodePaneLayout = { workspace_id: string; version: number; root_id: s
 export type CodeTerminalKind = 'shell' | 'coding_agent'
 export type CodeTerminalState = 'starting' | 'running' | 'exited' | 'failed' | 'interrupted' | 'dormant'
 export type CodeAgentLaunchMode = 'standard' | 'yolo'
-export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
+export type CodeTerminalSummary = { id: string; workspace_id: string; kind: CodeTerminalKind; state: CodeTerminalState; pid: number | null; adapter_id: string | null; model: string | null; reasoning_effort: ChatReasoningEffort | null; agent_launch_mode: CodeAgentLaunchMode; session_id: string | null; exit_code: number | null; started_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeTerminalEventKind = 'started' | 'output' | 'exited' | 'error'
 export type CodeTerminalEvent = { terminal_id: string; sequence: number; kind: CodeTerminalEventKind; data_base64: string | null; exit_code: number | null; message: string | null; emitted_at_unix_ms: number }
 export type CodeAdapterCapability = 'resume' | 'model_selection' | 'reasoning_effort' | 'permission_modes'
@@ -354,7 +354,7 @@ export type CodeGitBranchDeleteRequest = { workspace_id: string; name: string; f
 export type CodeGitRemoteRequest = { workspace_id: string; remote: string | null; branch: string | null }
 export type CodeGitStashSaveRequest = { workspace_id: string; message: string | null }
 export type CodeGitStashIndexRequest = { workspace_id: string; index: number }
-type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; agent_launch_mode: CodeAgentLaunchMode; resume_session_id: string | null }
+type CodeTerminalStartRequest = { workspace_id: string; kind: CodeTerminalKind; cols: number; rows: number; adapter_id: string | null; model: string | null; reasoning_effort: ChatReasoningEffort | null; agent_launch_mode: CodeAgentLaunchMode; resume_session_id: string | null }
 type CodeTerminalInputRequest = { terminal_id: string; data_base64: string }
 type CodeTerminalInput = { terminal_id: string; data: string }
 type CodeTerminalResizeRequest = { terminal_id: string; cols: number; rows: number }
@@ -445,8 +445,8 @@ const previewChatEngines: ChatEngineCatalog = {
       ['grok', 'Grok'],
     ].map(([id, display_name]) => ({
       id, display_name, executable: id, availability: 'ready' as const, detected: true, authenticated: true,
-      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: (id === 'codex-cli' || id === 'claude-code' ? ['auto', 'low', 'medium', 'high'] : ['auto']) as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
-      capabilities: (id === 'codex-cli' || id === 'claude-code' ? ['model_selection', 'reasoning_effort'] : ['model_selection']) as CodeAdapterCapability[], message: null, recovery_action: null,
+      models: [{ id: 'preview-model', display_name: 'Preview model', effort_levels: (['codex-cli', 'claude-code', 'antigravity', 'grok'].includes(id) ? ['auto', 'low', 'medium', 'high'] : ['auto']) as ChatReasoningEffort[], default_effort: 'auto' as ChatReasoningEffort }],
+      capabilities: (['codex-cli', 'claude-code', 'antigravity', 'grok'].includes(id) ? ['model_selection', 'reasoning_effort'] : ['model_selection']) as CodeAdapterCapability[], message: null, recovery_action: null,
     })),
   ],
 }
@@ -703,7 +703,7 @@ function previewCodeSummary(): CodeSnapshot {
     adapters: [
       { id: CODEX_ADAPTER_ID, display_name: 'Codex CLI', executable: 'codex', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] },
       { id: CLAUDE_CODE_ADAPTER_ID, display_name: 'Claude Code', executable: 'claude', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
-      { id: ANTIGRAVITY_ADAPTER_ID, display_name: 'Antigravity', executable: 'agy', detected: false, authenticated: false, capabilities: ['model_selection', 'permission_modes'] },
+      { id: ANTIGRAVITY_ADAPTER_ID, display_name: 'Antigravity', executable: 'agy', detected: false, authenticated: false, capabilities: ['model_selection', 'reasoning_effort', 'permission_modes'] },
       { id: OPENCODE_ADAPTER_ID, display_name: 'OpenCode', executable: 'opencode', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
       { id: CURSOR_ADAPTER_ID, display_name: 'Cursor', executable: 'cursor-agent', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'permission_modes'] },
       { id: GROK_ADAPTER_ID, display_name: 'Grok', executable: 'grok', detected: false, authenticated: false, capabilities: ['resume', 'model_selection', 'reasoning_effort', 'permission_modes'] },
@@ -949,6 +949,7 @@ async function launchConfiguredWorkspaceSetup(detail: CodeWorkspaceDetail): Prom
       kind: 'shell',
       adapter_id: null,
       model: null,
+      reasoning_effort: null,
       agent_launch_mode: 'standard',
       cols: 120,
       rows: 32,
@@ -1481,7 +1482,7 @@ export const hiveoryClient = {
     if (workspace.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, reasoning_effort: request.reasoning_effort, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     const layout = previewCommitLayout(workspace, (next) => previewBindPane(next, request.pane_id, request.kind === 'coding_agent' ? 'coding_agent' : 'terminal', id, request.kind === 'coding_agent' ? (request.adapter_id ?? 'Coding Agent') : 'Terminal'))
     onEvent?.({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
@@ -1680,7 +1681,7 @@ export const hiveoryClient = {
     if (hiveoryIsTauri) return tauriQuery<CodeTerminalSnapshot>('hiveory_query_code_terminal_snapshot', { query: { terminal_id: terminalId } })
     const previewTerminal = [...previewCodeWorkspaces.values()].flatMap((item) => item.detail.terminals).find((terminal) => terminal.id === terminalId)
     return {
-      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, model: null, agent_launch_mode: 'standard', session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
+      summary: previewTerminal ?? { id: terminalId, workspace_id: 'preview', kind: 'shell', state: 'running', pid: null, adapter_id: null, model: null, reasoning_effort: null, agent_launch_mode: 'standard', session_id: null, exit_code: null, started_at_unix_ms: previewNow(), updated_at_unix_ms: previewNow() },
       cols: 80,
       rows: 24,
       output_base64: btoa('Preview terminal snapshot\r\n'),
@@ -1837,7 +1838,7 @@ export const hiveoryClient = {
     if (previewCodeWorkspaces.get(request.workspace_id)?.detail.summary.trust !== 'trusted') throw new Error('Trust this workspace before starting a terminal.')
     const id = previewId('terminal')
     const now = previewNow()
-    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
+    const summary: CodeTerminalSummary = { id, workspace_id: request.workspace_id, kind: request.kind, state: 'running', pid: null, adapter_id: request.adapter_id, model: request.model, reasoning_effort: request.reasoning_effort, agent_launch_mode: request.agent_launch_mode, session_id: null, exit_code: null, started_at_unix_ms: now, updated_at_unix_ms: now }
     const workspace = previewCodeWorkspaces.get(request.workspace_id)
     if (workspace) workspace.detail.terminals = [summary, ...workspace.detail.terminals.filter((item) => item.id !== id)]
     onEvent({ terminal_id: id, sequence: 1, kind: 'started', data_base64: null, exit_code: null, message: null, emitted_at_unix_ms: now })
@@ -2054,7 +2055,7 @@ export const hiveoryClient = {
     const detail = previewCodeRunDetail(request.run_id)
     const dispatch = detail.dispatches.find((candidate) => candidate.id === request.dispatch_id)
     if (!dispatch) throw new Error('The dispatch was not found.')
-    return this.startCodeTerminal({ workspace_id: detail.summary.workspace_id, kind: 'coding_agent', cols: request.cols, rows: request.rows, adapter_id: dispatch.adapter_id, model: detail.summary.model, agent_launch_mode: 'standard', resume_session_id: dispatch.session_id }, onEvent)
+    return this.startCodeTerminal({ workspace_id: detail.summary.workspace_id, kind: 'coding_agent', cols: request.cols, rows: request.rows, adapter_id: dispatch.adapter_id, model: detail.summary.model, reasoning_effort: null, agent_launch_mode: 'standard', resume_session_id: dispatch.session_id }, onEvent)
   },
   async answerCodeQuestion(request: CodeQuestionAnswerRequest): Promise<CodeRunDetail> {
     if (hiveoryIsTauri) return tauriCommand<CodeQuestionAnswerRequest, CodeRunDetail>('hiveory_command_answer_code_question', request)

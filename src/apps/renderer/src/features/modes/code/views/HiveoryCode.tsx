@@ -214,7 +214,7 @@ export function HiveoryCode() {
     setBusy(kind)
     setTerminalOutput('')
     try {
-      const terminal = await hiveoryClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? selectedAdapterId : null, model: kind === 'coding_agent' ? (adapterModel.trim() || null) : null, agent_launch_mode: 'standard', resume_session_id: null }, handleTerminalEvent)
+      const terminal = await hiveoryClient.startCodeTerminal({ workspace_id: selectedWorkspace.id, kind, cols: 100, rows: 28, adapter_id: kind === 'coding_agent' ? selectedAdapterId : null, model: kind === 'coding_agent' ? (adapterModel.trim() || null) : null, reasoning_effort: null, agent_launch_mode: 'standard', resume_session_id: null }, handleTerminalEvent)
       setDetail((current) => current ? { ...current, terminals: [terminal, ...current.terminals.filter((item) => item.id !== terminal.id)] } : current)
       setActiveTerminalId(terminal.id)
       setFeedback(kind === 'coding_agent' ? `${adapter?.display_name ?? 'Coding engine'} terminal started with workspace-scoped permissions.` : 'Workspace shell started.')

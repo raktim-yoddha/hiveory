@@ -1,6 +1,6 @@
 # Architecture documentation
 
-These documents describe the current Hiveory `0.2.0` implementation. The Rust desktop host owns durable and privileged state; the React renderer is a replaceable projection that communicates through typed Tauri commands and event streams.
+These documents describe the current Hiveory `0.2.1` implementation. The Rust desktop host owns durable and privileged state; the React renderer is a replaceable projection that communicates through typed Tauri commands and event streams.
 
 Start with [Foundation architecture](hiveory-foundation.md), then follow the domain document relevant to a change. The complete documentation map and maintenance policy are in [docs/README.md](../README.md).
 

@@ -5,12 +5,14 @@ use hiveory_code_domain::{migrate_layout_v1, migrate_layout_v2, CODE_LAYOUT_VERS
 use hiveory_protocol::{
     CodeAgentLaunchMode, CodeDocumentSummary, CodeLaunchPresetCreateRequest, CodeLaunchPresetEntry,
     CodeLaunchPresetSummary, CodeLaunchPresetUpdateRequest, CodeLayoutPresetCreateRequest,
-    CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodePaneLayout, CodePreviewState,
-    CodePreviewSummary, CodeProjectKind, CodeProjectSummary, CodeTerminalKind, CodeTerminalState,
-    CodeTerminalSummary, CodeWorkspaceKind, CodeWorkspaceSummary, CodeWorkspaceTrust,
+    CodeLayoutPresetSummary, CodeLayoutPresetUpdateRequest, CodePaneKind, CodePaneLayout,
+    CodePreviewState, CodePreviewSummary, CodeProjectKind, CodeProjectSummary, CodeTerminalKind,
+    CodeTerminalState, CodeTerminalSummary, CodeWorkspaceKind, CodeWorkspaceSummary,
+    CodeWorkspaceTrust,
 };
 use serde_json::Value;
 use sqlx::Row;
+use std::collections::HashSet;
 use uuid::Uuid;
 
 /// Encrypted terminal history as stored by the durable terminal host.
@@ -241,6 +243,7 @@ impl HiveoryPersistence {
     }
 
     pub async fn save_code_layout(&self, layout: &CodePaneLayout) -> Result<(), sqlx::Error> {
+        validate_code_agent_names(layout)?;
         let layout_json = serde_json::to_string(layout)
             .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
         sqlx::query(
@@ -262,6 +265,7 @@ impl HiveoryPersistence {
         expected_revision: u64,
         new_layout: &CodePaneLayout,
     ) -> Result<CodePaneLayout, sqlx::Error> {
+        validate_code_agent_names(new_layout)?;
         let mut layout = new_layout.clone();
         layout.revision = expected_revision + 1;
         let layout_json = serde_json::to_string(&layout)
@@ -527,7 +531,7 @@ impl HiveoryPersistence {
         terminal: &CodeTerminalSummary,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO hiveory_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, agent_launch_mode=excluded.agent_launch_mode, session_id=excluded.session_id, exit_code=excluded.exit_code, updated_at_unix_ms=excluded.updated_at_unix_ms",
+            "INSERT INTO hiveory_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, reasoning_effort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, agent_launch_mode=excluded.agent_launch_mode, session_id=excluded.session_id, exit_code=excluded.exit_code, updated_at_unix_ms=excluded.updated_at_unix_ms, reasoning_effort=excluded.reasoning_effort",
         )
         .bind(&terminal.id)
         .bind(&terminal.workspace_id)
@@ -541,6 +545,7 @@ impl HiveoryPersistence {
         .bind(terminal.exit_code)
         .bind(terminal.started_at_unix_ms)
         .bind(terminal.updated_at_unix_ms)
+        .bind(terminal.reasoning_effort.map(|effort| format!("{:?}", effort).to_ascii_lowercase()))
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -560,7 +565,7 @@ impl HiveoryPersistence {
         host_instance_id: &str,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO hiveory_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workspace_id=excluded.workspace_id, kind=excluded.kind, state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, agent_launch_mode=excluded.agent_launch_mode, session_id=excluded.session_id, exit_code=excluded.exit_code, started_at_unix_ms=excluded.started_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, root_path=excluded.root_path, cols=excluded.cols, rows=excluded.rows, history_enabled=excluded.history_enabled, host_instance_id=excluded.host_instance_id",
+            "INSERT INTO hiveory_code_terminals (id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id, reasoning_effort) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET workspace_id=excluded.workspace_id, kind=excluded.kind, state=excluded.state, pid=excluded.pid, adapter_id=excluded.adapter_id, model=excluded.model, agent_launch_mode=excluded.agent_launch_mode, session_id=excluded.session_id, exit_code=excluded.exit_code, started_at_unix_ms=excluded.started_at_unix_ms, updated_at_unix_ms=excluded.updated_at_unix_ms, root_path=excluded.root_path, cols=excluded.cols, rows=excluded.rows, history_enabled=excluded.history_enabled, host_instance_id=excluded.host_instance_id, reasoning_effort=excluded.reasoning_effort",
         )
         .bind(&terminal.id)
         .bind(&terminal.workspace_id)
@@ -579,6 +584,7 @@ impl HiveoryPersistence {
         .bind(i64::from(rows))
         .bind(if history_enabled { 1_i64 } else { 0_i64 })
         .bind(host_instance_id)
+        .bind(terminal.reasoning_effort.map(|effort| format!("{:?}", effort).to_ascii_lowercase()))
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -589,7 +595,7 @@ impl HiveoryPersistence {
         terminal_id: &str,
     ) -> Result<Option<CodeTerminalSummary>, sqlx::Error> {
         Ok(sqlx::query(
-            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms FROM hiveory_code_terminals WHERE id=?",
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, reasoning_effort FROM hiveory_code_terminals WHERE id=?",
         )
         .bind(terminal_id)
         .fetch_optional(&self.pool)
@@ -602,7 +608,7 @@ impl HiveoryPersistence {
         terminal_id: &str,
     ) -> Result<Option<CodeTerminalSessionRecord>, sqlx::Error> {
         let Some(row) = sqlx::query(
-            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id FROM hiveory_code_terminals WHERE id=?",
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, root_path, cols, rows, history_enabled, host_instance_id, reasoning_effort FROM hiveory_code_terminals WHERE id=?",
         )
         .bind(terminal_id)
         .fetch_optional(&self.pool)
@@ -693,7 +699,7 @@ impl HiveoryPersistence {
         workspace_id: &str,
     ) -> Result<Vec<CodeTerminalSummary>, sqlx::Error> {
         let rows = sqlx::query(
-            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms FROM hiveory_code_terminals WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC LIMIT 50",
+            "SELECT id, workspace_id, kind, state, pid, adapter_id, model, agent_launch_mode, session_id, exit_code, started_at_unix_ms, updated_at_unix_ms, reasoning_effort FROM hiveory_code_terminals WHERE workspace_id=? ORDER BY updated_at_unix_ms DESC LIMIT 50",
         )
         .bind(workspace_id)
         .fetch_all(&self.pool)
@@ -761,6 +767,31 @@ impl HiveoryPersistence {
         .await?;
         Ok(rows.into_iter().map(preview_from_row).collect())
     }
+
+    pub async fn code_preview(
+        &self,
+        preview_id: &str,
+    ) -> Result<Option<CodePreviewSummary>, sqlx::Error> {
+        Ok(sqlx::query(
+            "SELECT id, workspace_id, url, origin, state FROM hiveory_code_previews WHERE id = ?",
+        )
+        .bind(preview_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .map(preview_from_row))
+    }
+
+    pub async fn open_code_preview_ids(
+        &self,
+        workspace_id: &str,
+    ) -> Result<Vec<String>, sqlx::Error> {
+        sqlx::query_scalar(
+            "SELECT id FROM hiveory_code_previews WHERE workspace_id = ? AND state = 'open'",
+        )
+        .bind(workspace_id)
+        .fetch_all(&self.pool)
+        .await
+    }
 }
 
 fn code_layout_pane_count(layout: &CodePaneLayout) -> u32 {
@@ -769,6 +800,30 @@ fn code_layout_pane_count(layout: &CodePaneLayout) -> u32 {
         .iter()
         .filter(|node| node.children.is_empty())
         .count() as u32
+}
+
+fn validate_code_agent_names(layout: &CodePaneLayout) -> Result<(), sqlx::Error> {
+    let mut names = HashSet::new();
+    for node in layout
+        .nodes
+        .iter()
+        .filter(|node| node.children.is_empty() && node.kind == CodePaneKind::CodingAgent)
+    {
+        let Some(title) = node
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
+        else {
+            continue;
+        };
+        if !names.insert(title.to_lowercase()) {
+            return Err(sqlx::Error::Protocol(format!(
+                "agent pane name collision: {title:?}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn code_layout_preset_summary_from_row(
@@ -948,6 +1003,11 @@ fn terminal_from_row_with_offset(
         pid: row.get::<Option<i64>, _>(offset + 4).map(|pid| pid as u32),
         adapter_id: row.get(offset + 5),
         model: row.get(offset + 6),
+        reasoning_effort: row
+            .try_get::<Option<String>, _>("reasoning_effort")
+            .ok()
+            .flatten()
+            .and_then(|value| serde_json::from_value(Value::String(value)).ok()),
         agent_launch_mode: match row.get::<String, _>(offset + 7).as_str() {
             "yolo" => CodeAgentLaunchMode::Yolo,
             _ => CodeAgentLaunchMode::Standard,
@@ -1013,6 +1073,18 @@ mod tests {
     use hiveory_protocol::CodeTerminalKind;
     use uuid::Uuid;
 
+    #[test]
+    fn code_agent_names_are_unique_case_insensitively() {
+        let mut layout = hiveory_code_domain::default_layout("workspace");
+        layout.nodes[0].kind = CodePaneKind::CodingAgent;
+        layout.nodes[0].title = Some("Max".to_owned());
+        let mut second = layout.nodes[0].clone();
+        second.pane_id = "second".to_owned();
+        second.title = Some("mAx".to_owned());
+        layout.nodes.push(second);
+        assert!(validate_code_agent_names(&layout).is_err());
+    }
+
     fn cleanup(path: &std::path::Path) {
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(path.with_extension("sqlite3-shm"));
@@ -1061,6 +1133,7 @@ mod tests {
             pid: None,
             adapter_id: None,
             model: None,
+            reasoning_effort: None,
             agent_launch_mode: CodeAgentLaunchMode::Standard,
             session_id: Some("session-history".to_owned()),
             exit_code: None,

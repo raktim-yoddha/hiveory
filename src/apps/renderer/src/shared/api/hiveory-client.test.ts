@@ -57,6 +57,7 @@ test('preview Code enforces trust before saving and preserves the pane contract'
     kind: 'shell',
     adapter_id: null,
     model: null,
+    reasoning_effort: null,
     agent_launch_mode: 'standard',
     cols: 80,
     rows: 24,
@@ -219,7 +220,7 @@ test('preview makes workspace menu mutations durable and rejects hierarchy cycle
   await expect(hiveoryClient.setCodeWorkspaceParent({ workspace_id: primary.summary.id, parent_workspace_id: child.summary.id })).rejects.toThrow()
 
   const trusted = await hiveoryClient.trustCodeWorkspace(child.summary.id, true)
-  const terminal = await hiveoryClient.startCodeTerminal({ workspace_id: child.summary.id, kind: 'shell', cols: 80, rows: 24, adapter_id: null, model: null, agent_launch_mode: 'standard', resume_session_id: null }, () => undefined)
+  const terminal = await hiveoryClient.startCodeTerminal({ workspace_id: child.summary.id, kind: 'shell', cols: 80, rows: 24, adapter_id: null, model: null, reasoning_effort: null, agent_launch_mode: 'standard', resume_session_id: null }, () => undefined)
   expect(terminal.state).toBe('running')
   await expect(hiveoryClient.stopCodeTerminal({ terminal_id: terminal.id, force: true })).resolves.toBe(true)
   const slept = await hiveoryClient.codeWorkspace(trusted.summary.id)

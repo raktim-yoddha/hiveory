@@ -9,25 +9,25 @@ pub const CODE_ORCHESTRATION_DEFAULT_COORDINATOR_ID: &str = "local-coordinator";
 pub const CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID: &str = "codex-cli";
 
 /// Return the canonical adapter ID used by the runtime and orchestration
-/// layers.  A few early launch presets stored the short executable name
-/// (`codex`, `claude`, or `agy`), so accepting those aliases keeps existing
-/// workspaces compatible with the current per-session integration bridge.
+/// layers. A few early launch presets stored the short executable name
+/// (`codex`, `claude`, or `agy`), while voice input commonly adds spaces or
+/// hyphens (for example, "anti-cavity"), so normalize those aliases before
+/// selecting the adapter.
 pub fn canonical_code_adapter_id(value: &str) -> Option<&'static str> {
-    let value = value.trim();
-    if value.eq_ignore_ascii_case("codex") || value.eq_ignore_ascii_case("codex-cli") {
-        Some("codex-cli")
-    } else if value.eq_ignore_ascii_case("claude") || value.eq_ignore_ascii_case("claude-code") {
-        Some("claude-code")
-    } else if value.eq_ignore_ascii_case("agy") || value.eq_ignore_ascii_case("antigravity") {
-        Some("antigravity")
-    } else if value.eq_ignore_ascii_case("opencode") || value.eq_ignore_ascii_case("open-code") {
-        Some("opencode")
-    } else if value.eq_ignore_ascii_case("cursor") || value.eq_ignore_ascii_case("cursor-agent") {
-        Some("cursor")
-    } else if value.eq_ignore_ascii_case("grok") || value.eq_ignore_ascii_case("xai") {
-        Some("grok")
-    } else {
-        None
+    let value = value
+        .trim()
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    match value.as_str() {
+        "codex" | "codexcli" => Some("codex-cli"),
+        "claude" | "claudecode" => Some("claude-code"),
+        "agy" | "antigravity" | "anticavity" | "anticavitycli" => Some("antigravity"),
+        "opencode" => Some("opencode"),
+        "cursor" | "cursoragent" => Some("cursor"),
+        "grok" | "xai" => Some("grok"),
+        _ => None,
     }
 }
 
@@ -1169,6 +1169,8 @@ pub struct LaunchCodePaneTerminalRequest {
     pub adapter_id: Option<String>,
     pub model: Option<String>,
     #[serde(default)]
+    pub reasoning_effort: Option<ChatReasoningEffort>,
+    #[serde(default)]
     pub agent_launch_mode: CodeAgentLaunchMode,
     pub cols: u16,
     pub rows: u16,
@@ -1305,6 +1307,8 @@ pub struct CodeTerminalSummary {
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
+    pub reasoning_effort: Option<ChatReasoningEffort>,
+    #[serde(default)]
     pub agent_launch_mode: CodeAgentLaunchMode,
     pub session_id: Option<String>,
     pub exit_code: Option<i32>,
@@ -1330,6 +1334,8 @@ pub struct CodeTerminalStartRequest {
     pub rows: u16,
     pub adapter_id: Option<String>,
     pub model: Option<String>,
+    #[serde(default)]
+    pub reasoning_effort: Option<ChatReasoningEffort>,
     #[serde(default)]
     pub agent_launch_mode: CodeAgentLaunchMode,
     pub resume_session_id: Option<String>,
@@ -3795,6 +3801,11 @@ mod tests {
         assert_eq!(canonical_code_adapter_id("codex"), Some("codex-cli"));
         assert_eq!(canonical_code_adapter_id("CLAUDE"), Some("claude-code"));
         assert_eq!(canonical_code_adapter_id("agy"), Some("antigravity"));
+        assert_eq!(
+            canonical_code_adapter_id("anti-cavity CLI"),
+            Some("antigravity")
+        );
+        assert_eq!(canonical_code_adapter_id("Open Code"), Some("opencode"));
         assert_eq!(canonical_code_adapter_id("open-code"), Some("opencode"));
         assert_eq!(canonical_code_adapter_id("cursor-agent"), Some("cursor"));
         assert_eq!(canonical_code_adapter_id("xai"), Some("grok"));

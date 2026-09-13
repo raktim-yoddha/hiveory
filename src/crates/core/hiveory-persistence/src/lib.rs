@@ -1,6 +1,7 @@
 use hiveory_protocol::{
     JobState, JobSummary, NotificationSummary, ProviderAccountSummary, ProviderKind,
 };
+use sha2::{Digest, Sha384};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Row, SqlitePool,
@@ -18,6 +19,7 @@ pub mod code;
 pub mod gates;
 pub mod mailbox;
 pub mod orchestration;
+pub mod pane_prompts;
 pub mod plugin;
 pub mod routine;
 pub mod source;
@@ -26,6 +28,19 @@ pub use source::TaskSourceSaveRequest;
 
 pub const HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "hiveory-openai";
 static HIVEORY_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+const HIVEORY_MIGRATION_RECEIPT_RANGE: std::ops::RangeInclusive<i64> = 16..=24;
+const LEGACY_HIVEORY_MIGRATION_RECEIPTS: &[(i64, &str)] = &[
+    (16, "78e736c0ddfbb69e3f46168f3c394eb6fd33fc8080e6578f169c61187c94a22435ddd0dd2a523050be0828cadf5b307d"),
+    (17, "4bacc140916075eb1a72bbb2ed75b74819199822f4c0c06e7bf993aca2fae89052389704b2569fbd68a28528f895e293"),
+    (18, "7deaa98f90a6cea8a090550cf86ed307166f448f204e0b9d7f2961d5ccd08c051dc1ee911b364d4ee2a5825f409668ee"),
+    (19, "b59d7bda55f79553d2b2582ffa2591c6539303223e91819a7371e7308c853b9727075586a204c7d156faac1116bb0697"),
+    (20, "fa478f1fe8a72b0dd94b1a2f0bc196fc07334f8df82f5a4a03b3c80d722a2ded110eb680b269d9a4c328bedcf4e23815"),
+    (21, "ee1b6abc12eacdb185fb862dd97aab9b4d2f58490a5fbb940b43f2c096380b728e223e8b072ffd6b6d97eabc11fd4d0a"),
+    (22, "461259b1da6d2c13b11b80953954d7c84e71dbebf4ea5027b1f3b32b8e454a69cb5b822b955b46f8bc79d76372b3168a"),
+    (23, "c285f997d84bf59aee40597a98f322af45a88e49bd304cf185e6bd141116e99f7db86c3a1db22f0b5e9746236d971a74"),
+    (24, "01a53e25aa42a7fda152c50716aa64be692df208c3f63bd4566f68321950e22cb3f11b5d6daac189a94e72fef27b02f4"),
+];
 
 #[derive(Clone)]
 pub struct HiveoryPersistence {
@@ -50,7 +65,10 @@ impl HiveoryPersistence {
             .max_connections(5)
             .connect_with(options)
             .await?;
+        reconcile_hiveory_migration_receipts(&pool).await?;
         HIVEORY_MIGRATOR.run(&pool).await?;
+        sqlx::query("UPDATE hiveory_code_pane_prompts SET state = 'uncertain', error = 'Delivery was interrupted; inspect the target before retrying.' WHERE state = 'delivering'")
+            .execute(&pool).await?;
         sqlx::query("INSERT OR IGNORE INTO hiveory_provider_accounts (id, provider_kind, display_name, enabled, created_at_unix_ms, updated_at_unix_ms) VALUES (?, 'open_ai_responses', 'OpenAI Responses', 1, ?, ?)")
             .bind(HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID).bind(now_ms()).bind(now_ms()).execute(&pool).await?;
         Ok(Self { pool })
@@ -315,5 +333,179 @@ fn job_from_row(row: sqlx::sqlite::SqliteRow) -> JobSummary {
         created_at_unix_ms: row.get(3),
         updated_at_unix_ms: row.get(4),
         error_code: row.get(5),
+    }
+}
+
+fn hiveory_migration_checksum(version: i64) -> Option<Vec<u8>> {
+    let migration: &[u8] = match version {
+        16 => include_bytes!("../migrations/0016_hiveory_namespace.sql"),
+        17 => include_bytes!("../migrations/0017_code_workspace_parent.sql"),
+        18 => include_bytes!("../migrations/0018_chat_folders.sql"),
+        19 => include_bytes!("../migrations/0019_code_terminal_host_history.sql"),
+        20 => include_bytes!("../migrations/0020_task_sources.sql"),
+        21 => include_bytes!("../migrations/0021_code_terminal_launch_mode.sql"),
+        22 => include_bytes!("../migrations/0022_code_layout_presets.sql"),
+        23 => include_bytes!("../migrations/0023_code_launch_presets.sql"),
+        24 => include_bytes!("../migrations/0024_chat_profiles.sql"),
+        _ => return None,
+    };
+    Some(Sha384::digest(migration).to_vec())
+}
+
+fn legacy_hiveory_migration_checksum(version: i64) -> Option<Vec<u8>> {
+    let (_, encoded) = LEGACY_HIVEORY_MIGRATION_RECEIPTS
+        .iter()
+        .find(|(legacy_version, _)| *legacy_version == version)?;
+    Some(
+        (0..encoded.len())
+            .step_by(2)
+            .map(|offset| {
+                u8::from_str_radix(&encoded[offset..offset + 2], 16).expect("valid checksum")
+            })
+            .collect(),
+    )
+}
+
+/// Repairs receipts from pre-release builds that had the completed schema but
+/// stale migration content. Unknown mismatches are intentionally left for
+/// SQLx to reject.
+async fn reconcile_hiveory_migration_receipts(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let migrations_table_exists: i64 = sqlx::query(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='_sqlx_migrations')",
+    )
+    .fetch_one(pool)
+    .await?
+    .get(0);
+    if migrations_table_exists == 0 {
+        return Ok(());
+    }
+
+    let receipts = sqlx::query(
+        "SELECT version, checksum FROM _sqlx_migrations WHERE version BETWEEN ? AND ? AND success=1",
+    )
+    .bind(*HIVEORY_MIGRATION_RECEIPT_RANGE.start())
+    .bind(*HIVEORY_MIGRATION_RECEIPT_RANGE.end())
+    .fetch_all(pool)
+    .await?;
+    let repairs = receipts
+        .into_iter()
+        .filter_map(|receipt| {
+            let version: i64 = receipt.get(0);
+            let checksum: Vec<u8> = receipt.get(1);
+            let legacy_checksum = legacy_hiveory_migration_checksum(version)?;
+            if checksum == legacy_checksum {
+                hiveory_migration_checksum(version)
+                    .map(|current_checksum| (version, legacy_checksum, current_checksum))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    if repairs.is_empty() {
+        return Ok(());
+    }
+
+    let schema_is_complete: i64 = sqlx::query(
+        "SELECT
+            EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_settings')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_agents')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_release_metadata')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_chat_folders')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_code_terminal_history')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_task_sources')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_code_layout_presets')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_code_launch_presets')
+            AND NOT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='agentic_super_app_settings')
+            AND NOT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='agentic_super_app_agents')
+            AND NOT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='agentic_super_app_release_metadata')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_workspaces') WHERE name='parent_workspace_id')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_chat_conversations') WHERE name='folder_id')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_terminals') WHERE name='root_path')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_terminals') WHERE name='agent_launch_mode')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_chat_turns') WHERE name='profile_json')",
+    )
+    .fetch_one(pool)
+    .await?
+    .get(0);
+    if schema_is_complete == 0 {
+        return Ok(());
+    }
+
+    let mut transaction = pool.begin().await?;
+    for (version, legacy_checksum, current_checksum) in repairs {
+        sqlx::query(
+            "UPDATE _sqlx_migrations SET checksum=? WHERE version=? AND success=1 AND checksum=?",
+        )
+        .bind(current_checksum)
+        .bind(version)
+        .bind(legacy_checksum)
+        .execute(&mut *transaction)
+        .await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn open_repairs_the_known_hiveory_migration_receipts() {
+        let path = std::env::temp_dir().join(format!(
+            "hiveory-migration-receipt-{}.sqlite3",
+            Uuid::now_v7()
+        ));
+        let persistence = HiveoryPersistence::open(&path)
+            .await
+            .expect("create database");
+        for (version, _) in LEGACY_HIVEORY_MIGRATION_RECEIPTS {
+            sqlx::query("UPDATE _sqlx_migrations SET checksum=? WHERE version=?")
+                .bind(legacy_hiveory_migration_checksum(*version).expect("legacy checksum"))
+                .bind(version)
+                .execute(persistence.pool())
+                .await
+                .expect("seed legacy migration receipt");
+        }
+        persistence.close().await;
+
+        let reopened = HiveoryPersistence::open(&path)
+            .await
+            .expect("repair migration receipt");
+        for (version, _) in LEGACY_HIVEORY_MIGRATION_RECEIPTS {
+            let checksum: Vec<u8> =
+                sqlx::query("SELECT checksum FROM _sqlx_migrations WHERE version=?")
+                    .bind(version)
+                    .fetch_one(reopened.pool())
+                    .await
+                    .expect("migration receipt")
+                    .get(0);
+            assert_eq!(
+                checksum,
+                hiveory_migration_checksum(*version).expect("current checksum")
+            );
+        }
+        reopened.close().await;
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn open_rejects_an_unknown_hiveory_namespace_migration_receipt() {
+        let path = std::env::temp_dir().join(format!(
+            "hiveory-migration-receipt-{}.sqlite3",
+            Uuid::now_v7()
+        ));
+        let persistence = HiveoryPersistence::open(&path)
+            .await
+            .expect("create database");
+        sqlx::query("UPDATE _sqlx_migrations SET checksum=? WHERE version=16")
+            .bind(vec![0_u8; 48])
+            .execute(persistence.pool())
+            .await
+            .expect("seed unknown migration receipt");
+        persistence.close().await;
+
+        assert!(HiveoryPersistence::open(&path).await.is_err());
+        let _ = std::fs::remove_file(path);
     }
 }

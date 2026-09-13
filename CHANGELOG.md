@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-09-14
+
+### Production startup and code workspace
+
+- Fixed portable Production startup when existing databases contain legacy migration receipts.
+- Added code workspace terminal and pane-prompt persistence updates.
+- Rebuilt the portable executable, NSIS installer, and MSI package.
+
 ## 0.2.0 — 2026-09-12
 
 ### Dev and Production editions

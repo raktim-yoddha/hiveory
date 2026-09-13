@@ -280,7 +280,10 @@ fn adapter_capabilities(id: &str) -> Vec<CodeAdapterCapability> {
     ) {
         capabilities.push(CodeAdapterCapability::Resume);
     }
-    if matches!(id, CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID) {
+    if matches!(
+        id,
+        CODEX_ADAPTER_ID | CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID
+    ) {
         capabilities.push(CodeAdapterCapability::ReasoningEffort);
     }
     capabilities.push(CodeAdapterCapability::PermissionModes);
@@ -484,10 +487,23 @@ fn fallback_models(adapter_id: &str) -> Vec<ChatModelSummary> {
         .map(|(id, display_name)| ChatModelSummary {
             id: (*id).to_owned(),
             display_name: (*display_name).to_owned(),
-            effort_levels: vec![ChatReasoningEffort::Auto],
+            effort_levels: launch_effort_levels(adapter_id),
             default_effort: ChatReasoningEffort::Auto,
         })
         .collect()
+}
+
+fn launch_effort_levels(adapter_id: &str) -> Vec<ChatReasoningEffort> {
+    if matches!(adapter_id, ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID) {
+        vec![
+            ChatReasoningEffort::Auto,
+            ChatReasoningEffort::Low,
+            ChatReasoningEffort::Medium,
+            ChatReasoningEffort::High,
+        ]
+    } else {
+        vec![ChatReasoningEffort::Auto]
+    }
 }
 
 async fn discover_antigravity_models(spec: AdapterSpec) -> Result<Vec<ChatModelSummary>, String> {
@@ -504,7 +520,7 @@ async fn discover_antigravity_models(spec: AdapterSpec) -> Result<Vec<ChatModelS
             Some(ChatModelSummary {
                 id: id.to_owned(),
                 display_name: display_name.to_owned(),
-                effort_levels: vec![ChatReasoningEffort::Auto],
+                effort_levels: launch_effort_levels(ANTIGRAVITY_ADAPTER_ID),
                 default_effort: ChatReasoningEffort::Auto,
             })
         })
@@ -738,10 +754,14 @@ fn codex_model(value: &Value) -> Option<ChatModelSummary> {
 }
 
 fn parse_reasoning_effort(value: &str) -> Option<ChatReasoningEffort> {
-    match value {
-        "auto" => Some(ChatReasoningEffort::Auto),
+    let normalized = value
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['-', '_', ' '], "");
+    match normalized.as_str() {
+        "auto" | "default" => Some(ChatReasoningEffort::Auto),
         "low" => Some(ChatReasoningEffort::Low),
-        "medium" => Some(ChatReasoningEffort::Medium),
+        "medium" | "med" => Some(ChatReasoningEffort::Medium),
         "high" => Some(ChatReasoningEffort::High),
         "xhigh" => Some(ChatReasoningEffort::Xhigh),
         "max" => Some(ChatReasoningEffort::Max),
@@ -1023,6 +1043,7 @@ impl HiveoryCodeRuntime {
             pid,
             adapter_id: request.adapter_id.clone(),
             model: request.model.clone(),
+            reasoning_effort: request.reasoning_effort,
             agent_launch_mode: request.agent_launch_mode,
             session_id: request.resume_session_id.clone(),
             exit_code: None,
@@ -1460,9 +1481,28 @@ fn command_for(
             if let Some(model) = request
                 .model
                 .as_deref()
-                .filter(|model| !model.trim().is_empty() && *model != "default")
+                .map(str::trim)
+                .filter(|model| !model.is_empty() && !model.eq_ignore_ascii_case("default"))
             {
                 command.args(["--model", model]);
+            }
+            if let Some(effort) = request.reasoning_effort {
+                if let Some(value) = reasoning_effort_value(effort) {
+                    match spec.id {
+                        CODEX_ADAPTER_ID => {
+                            command.args(["-c", &format!("model_reasoning_effort={value}")]);
+                        }
+                        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID => {
+                            command.args(["--effort", value]);
+                        }
+                        _ => {
+                            return Err(HiveoryCodeRuntimeError::Operation(format!(
+                                "{} does not support a launch reasoning effort.",
+                                spec.display_name
+                            )))
+                        }
+                    }
+                }
             }
             Ok(command)
         }
@@ -1756,7 +1796,7 @@ fn append_effort_arg(command: &mut TokioCommand, adapter_id: &str, effort: ChatR
         CODEX_ADAPTER_ID => {
             command.args(["--config", &format!("model_reasoning_effort={value}")]);
         }
-        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | CURSOR_ADAPTER_ID | GROK_ADAPTER_ID => {
+        CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID => {
             command.args(["--effort", value]);
         }
         _ => {}
@@ -2183,18 +2223,120 @@ mod tests {
     }
 
     #[test]
-    fn exposes_reasoning_effort_only_for_trustworthy_model_catalogs() {
+    fn reports_launch_effort_for_adapters_with_effort_flags() {
         assert!(adapter_capabilities(CODEX_ADAPTER_ID)
             .contains(&CodeAdapterCapability::ReasoningEffort));
         assert!(adapter_capabilities(CLAUDE_CODE_ADAPTER_ID)
             .contains(&CodeAdapterCapability::ReasoningEffort));
-        assert!(!adapter_capabilities(ANTIGRAVITY_ADAPTER_ID)
+        assert!(adapter_capabilities(ANTIGRAVITY_ADAPTER_ID)
             .contains(&CodeAdapterCapability::ReasoningEffort));
-        assert!(!adapter_capabilities(GROK_ADAPTER_ID)
+        assert!(
+            adapter_capabilities(GROK_ADAPTER_ID).contains(&CodeAdapterCapability::ReasoningEffort)
+        );
+        assert!(!adapter_capabilities(CURSOR_ADAPTER_ID)
+            .contains(&CodeAdapterCapability::ReasoningEffort));
+        assert!(!adapter_capabilities(OPENCODE_ADAPTER_ID)
             .contains(&CodeAdapterCapability::ReasoningEffort));
         assert!(fallback_models(GROK_ADAPTER_ID)
             .iter()
-            .all(|model| model.effort_levels == vec![ChatReasoningEffort::Auto]));
+            .all(|model| model.effort_levels.contains(&ChatReasoningEffort::Low)));
+        assert!(fallback_models(ANTIGRAVITY_ADAPTER_ID)
+            .iter()
+            .all(|model| model.effort_levels.contains(&ChatReasoningEffort::Low)));
+    }
+
+    #[test]
+    fn parses_reasoning_effort_labels_from_cli_catalogs() {
+        assert_eq!(
+            parse_reasoning_effort("LOW"),
+            Some(ChatReasoningEffort::Low)
+        );
+        assert_eq!(
+            parse_reasoning_effort("x-high"),
+            Some(ChatReasoningEffort::Xhigh)
+        );
+        assert_eq!(
+            parse_reasoning_effort(" default "),
+            Some(ChatReasoningEffort::Auto)
+        );
+        assert_eq!(parse_reasoning_effort("unknown"), None);
+    }
+
+    #[test]
+    fn all_adapter_launches_keep_model_and_effort_separate() {
+        let root = std::env::current_dir().unwrap();
+        for adapter in [
+            CODEX_ADAPTER_ID,
+            CLAUDE_CODE_ADAPTER_ID,
+            ANTIGRAVITY_ADAPTER_ID,
+            OPENCODE_ADAPTER_ID,
+            CURSOR_ADAPTER_ID,
+            GROK_ADAPTER_ID,
+        ] {
+            let request = CodeTerminalStartRequest {
+                workspace_id: "workspace".to_owned(),
+                kind: CodeTerminalKind::CodingAgent,
+                cols: 80,
+                rows: 24,
+                adapter_id: Some(adapter.to_owned()),
+                model: Some("chosen-model".to_owned()),
+                reasoning_effort: matches!(
+                    adapter,
+                    CODEX_ADAPTER_ID
+                        | CLAUDE_CODE_ADAPTER_ID
+                        | ANTIGRAVITY_ADAPTER_ID
+                        | GROK_ADAPTER_ID
+                )
+                .then_some(ChatReasoningEffort::Low),
+                agent_launch_mode: CodeAgentLaunchMode::Standard,
+                resume_session_id: None,
+                session_integration: None,
+            };
+            let command = command_for(&request, &root).unwrap();
+            let args = command
+                .get_argv()
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect::<Vec<_>>();
+            assert!(
+                args.windows(2)
+                    .any(|pair| pair == ["--model", "chosen-model"]),
+                "{adapter}: {args:?}"
+            );
+            if adapter == CODEX_ADAPTER_ID {
+                assert!(
+                    args.iter().any(|arg| arg == "model_reasoning_effort=low"),
+                    "{args:?}"
+                );
+            } else if matches!(
+                adapter,
+                CLAUDE_CODE_ADAPTER_ID | ANTIGRAVITY_ADAPTER_ID | GROK_ADAPTER_ID
+            ) {
+                assert!(
+                    args.windows(2).any(|pair| pair == ["--effort", "low"]),
+                    "{adapter}: {args:?}"
+                );
+            }
+        }
+        let unsupported = CodeTerminalStartRequest {
+            workspace_id: "workspace".to_owned(),
+            kind: CodeTerminalKind::CodingAgent,
+            cols: 80,
+            rows: 24,
+            adapter_id: Some(OPENCODE_ADAPTER_ID.to_owned()),
+            model: None,
+            reasoning_effort: Some(ChatReasoningEffort::Low),
+            agent_launch_mode: CodeAgentLaunchMode::Standard,
+            resume_session_id: None,
+            session_integration: None,
+        };
+        assert!(command_for(&unsupported, &root).is_err());
+        let cursor_unsupported = CodeTerminalStartRequest {
+            adapter_id: Some(CURSOR_ADAPTER_ID.to_owned()),
+            reasoning_effort: Some(ChatReasoningEffort::Low),
+            ..unsupported
+        };
+        assert!(command_for(&cursor_unsupported, &root).is_err());
     }
 
     #[test]
@@ -2326,6 +2468,7 @@ mod tests {
                     rows: 24,
                     adapter_id: None,
                     model: None,
+                    reasoning_effort: None,
                     agent_launch_mode: CodeAgentLaunchMode::Standard,
                     resume_session_id: None,
                     session_integration: None,
@@ -2366,6 +2509,7 @@ mod tests {
                     rows: 24,
                     adapter_id: None,
                     model: None,
+                    reasoning_effort: None,
                     agent_launch_mode: CodeAgentLaunchMode::Standard,
                     resume_session_id: None,
                     session_integration: None,
