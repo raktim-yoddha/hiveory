@@ -45,7 +45,12 @@ function stopRunningProductionPortable(executablePath) {
     $target = [System.IO.Path]::GetFullPath($env:HIVEORY_PRODUCTION_PORTABLE_PATH)
     Get-CimInstance Win32_Process -Filter "Name = 'Hiveory-portable.exe'" |
       Where-Object { $_.ExecutablePath -and [System.IO.Path]::GetFullPath($_.ExecutablePath) -ieq $target } |
-      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop; Write-Output $_.ProcessId }
+      ForEach-Object {
+        # The process can exit between CIM discovery and Stop-Process. Treat
+        # that race as success so a completed build is not reported as failed.
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+        Write-Output $_.ProcessId
+      }
   `
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], {
     cwd: projectRoot,
