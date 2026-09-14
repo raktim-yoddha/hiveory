@@ -1689,15 +1689,18 @@ impl HiveoryCodeOrchestration {
             .persistence
             .mark_stale_orchestration_dispatches(run_id, now_ms() - WORKER_STALE_AFTER_MS)
             .await?;
-        for dispatch_id in stale_dispatches {
-            self.emit_status(
-                run_id,
-                None,
-                Some(&dispatch_id),
-                "Worker heartbeat expired; dispatch marked stale",
-                false,
-            )
-            .await?;
+        if !stale_dispatches.is_empty() {
+            for dispatch_id in &stale_dispatches {
+                self.emit_status(
+                    run_id,
+                    None,
+                    Some(dispatch_id),
+                    "Worker heartbeat expired; dispatch marked stale",
+                    false,
+                )
+                .await?;
+            }
+            self.cancel_workers_for_run(run_id).await;
         }
         let detail = self.detail(run_id).await?;
         if detail.summary.state != CodeRunState::Running {
@@ -2053,6 +2056,7 @@ impl HiveoryCodeOrchestration {
             self.persistence
                 .set_orchestration_run_state(&dispatch.run_id, CodeRunState::Failed, Some(error))
                 .await?;
+            self.cancel_workers_for_run(&dispatch.run_id).await;
         }
         Ok(())
     }
@@ -2151,6 +2155,7 @@ impl HiveoryCodeOrchestration {
                     let _ = service
                         .fail_dispatch(&launch.dispatch, &launch.task, &error.to_string())
                         .await;
+                    service.release_failed_run_worktree(&launch).await;
                     let _ = service
                         .emit_status(
                             &launch.dispatch.run_id,
@@ -2460,12 +2465,39 @@ impl HiveoryCodeOrchestration {
         Ok(())
     }
 
+    async fn release_failed_run_worktree(&self, launch: &WorkerLaunch) {
+        let Ok(detail) = self.detail(&launch.dispatch.run_id).await else {
+            return;
+        };
+        if detail.summary.state != CodeRunState::Failed {
+            return;
+        }
+        let Ok(root) = self.workspaces.root_path(&detail.summary.workspace_id) else {
+            return;
+        };
+        let name = worktree_name(&launch.worktree.path);
+        let _ = self.git.unlock_worktree(&root, &name);
+        if let Ok(inspection) = self.git.inspect_worktree(&root, &name) {
+            let _ = self
+                .persistence
+                .update_orchestration_worktree(
+                    &launch.worktree.id,
+                    CodeManagedWorktreeState::Ready,
+                    !inspection.dirty_files.is_empty(),
+                    inspection.locked,
+                    None,
+                )
+                .await;
+        }
+    }
+
     async fn finish_worker(
         &self,
         launch: &WorkerLaunch,
         result: WorkerResult,
     ) -> HiveoryCodeOrchestrationResult<()> {
         if !self.worker_lease_is_current(launch).await? {
+            self.release_failed_run_worktree(launch).await;
             return Ok(());
         }
         if let Some(question) = result.question {
@@ -2544,6 +2576,7 @@ impl HiveoryCodeOrchestration {
         if !result.success {
             self.fail_dispatch(&launch.dispatch, &launch.task, &result.summary)
                 .await?;
+            self.release_failed_run_worktree(launch).await;
             self.emit_status(
                 &launch.dispatch.run_id,
                 Some(&launch.task.id),
@@ -3352,7 +3385,8 @@ fn limit_text(bytes: &[u8], limit: usize) -> String {
 mod tests {
     use super::*;
     use hiveory_protocol::{
-        CodeDagProposalAcceptRequest, CodeDispatch, CodeOrchestrationEventOrigin,
+        CodeCheckpoint, CodeCheckpointKind, CodeCheckpointState, CodeDagProposalAcceptRequest,
+        CodeDispatch, CodeManagedWorktree, CodeManagedWorktreeState, CodeOrchestrationEventOrigin,
         CodeOrchestrationMessageKind, CodeReviewPolicy, CodeRunCreateRequest,
     };
 
@@ -3660,6 +3694,625 @@ mod tests {
         assert_eq!(detail.summary.state, CodeRunState::Failed);
         assert_eq!(detail.tasks[0].state, CodeTaskState::Failed);
         assert_eq!(detail.dispatches[0].state, CodeDispatchState::Failed);
+    }
+
+    #[tokio::test]
+    async fn run_failure_cancels_all_of_the_runs_workers() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let persistence = HiveoryPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = HiveoryWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                hiveory_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = HiveoryCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Failure test".to_owned(),
+                objective: "Close failed worker leases".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(2),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Close failed worker leases".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "worker".to_owned(),
+                        title: "Worker".to_owned(),
+                        specification: "Run the worker".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let run_id = run.summary.id.clone();
+        let task = run.tasks[0].clone();
+        let dispatch = CodeDispatch {
+            id: "dispatch-failure".to_owned(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            attempt: 1,
+            state: CodeDispatchState::Preparing,
+            adapter_id: CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned(),
+            lease_generation: 1,
+            session_id: None,
+            pid: None,
+            worktree_id: None,
+            checkpoint_id: None,
+            last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
+            started_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+            error: None,
+            result_summary: None,
+        };
+        assert!(persistence
+            .claim_orchestration_dispatch(&dispatch)
+            .await
+            .unwrap());
+
+        let failing = CancellationToken::new();
+        let sibling_one = CancellationToken::new();
+        let sibling_two = CancellationToken::new();
+        service.worker_controls.lock().await.insert(
+            dispatch.id.clone(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: failing.clone(),
+            },
+        );
+        service.worker_controls.lock().await.insert(
+            "dispatch-sibling-a".to_owned(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: sibling_one.clone(),
+            },
+        );
+        service.worker_controls.lock().await.insert(
+            "dispatch-sibling-b".to_owned(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: sibling_two.clone(),
+            },
+        );
+
+        service
+            .fail_dispatch(&dispatch, &task, "worker unavailable")
+            .await
+            .unwrap();
+
+        assert!(failing.is_cancelled());
+        assert!(sibling_one.is_cancelled());
+        assert!(sibling_two.is_cancelled());
+
+        let detail = service.detail(&run_id).await.unwrap();
+        assert_eq!(detail.summary.state, CodeRunState::Failed);
+        assert_eq!(detail.tasks[0].state, CodeTaskState::Failed);
+        assert_eq!(detail.dispatches[0].state, CodeDispatchState::Failed);
+    }
+
+    #[tokio::test]
+    async fn heartbeat_expiration_cancels_the_runs_workers() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let persistence = HiveoryPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = HiveoryWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                hiveory_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = HiveoryCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Stale test".to_owned(),
+                objective: "Cancel workers after a heartbeat expires".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(2),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Cancel workers after a heartbeat expires".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "stale-worker".to_owned(),
+                        title: "Stale worker".to_owned(),
+                        specification: "Run the worker".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let run_id = run.summary.id.clone();
+        let task = run.tasks[0].clone();
+        assert!(persistence
+            .set_orchestration_run_state(&run_id, CodeRunState::Running, None)
+            .await
+            .unwrap());
+        let dispatch = CodeDispatch {
+            id: "dispatch-stale".to_owned(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            attempt: 1,
+            state: CodeDispatchState::Preparing,
+            adapter_id: CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned(),
+            lease_generation: 1,
+            session_id: None,
+            pid: None,
+            worktree_id: None,
+            checkpoint_id: None,
+            last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
+            started_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+            error: None,
+            result_summary: None,
+        };
+        assert!(persistence
+            .claim_orchestration_dispatch(&dispatch)
+            .await
+            .unwrap());
+        assert!(persistence
+            .update_orchestration_dispatch(
+                &dispatch.id,
+                dispatch.lease_generation,
+                CodeDispatchState::Running,
+                None,
+                None,
+                None,
+                None,
+                Some(now_ms() - WORKER_STALE_AFTER_MS - 1),
+                None,
+                None,
+            )
+            .await
+            .unwrap());
+
+        let stale_worker = CancellationToken::new();
+        let sibling = CancellationToken::new();
+        service.worker_controls.lock().await.insert(
+            dispatch.id.clone(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: stale_worker.clone(),
+            },
+        );
+        service.worker_controls.lock().await.insert(
+            "dispatch-sibling".to_owned(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: sibling.clone(),
+            },
+        );
+
+        service.schedule_once(&run_id).await.unwrap();
+
+        assert!(stale_worker.is_cancelled());
+        assert!(sibling.is_cancelled());
+
+        let detail = service.detail(&run_id).await.unwrap();
+        assert_eq!(detail.summary.state, CodeRunState::Failed);
+        assert_eq!(detail.tasks[0].state, CodeTaskState::Failed);
+        assert_eq!(detail.dispatches[0].state, CodeDispatchState::Stale);
+    }
+
+    #[tokio::test]
+    async fn failed_worker_releases_its_worktree_lock() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let git = HiveoryGitService;
+        let base_oid = git.ensure_repository(&workspace_root).unwrap();
+        let persistence = HiveoryPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = HiveoryWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                hiveory_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = HiveoryCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Worktree test".to_owned(),
+                objective: "Release the worktree when a worker fails".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(1),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Release the worktree when a worker fails".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "failing-worker".to_owned(),
+                        title: "Failing worker".to_owned(),
+                        specification: "Run the worker".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let run_id = run.summary.id.clone();
+        let task = run.tasks[0].clone();
+        let worktree_name = format!(
+            "orchestration-{}-{}-1",
+            short_id(&run_id),
+            short_id(&task.id)
+        );
+        let worktree_path = directory
+            .path()
+            .join("orchestration")
+            .join("worktrees")
+            .join(&worktree_name);
+        let branch = format!("agentic/{}/{}-1", short_id(&run_id), short_id(&task.id));
+        let created = git
+            .create_worktree(
+                &workspace_root,
+                &worktree_name,
+                &worktree_path,
+                &branch,
+                &base_oid,
+            )
+            .unwrap();
+
+        let worktree_id = "worktree-failed".to_owned();
+        let worktree = CodeManagedWorktree {
+            id: worktree_id.clone(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            dispatch_id: "dispatch-failed".to_owned(),
+            path: created.path.to_string_lossy().into_owned(),
+            branch: created.branch.clone(),
+            base_checkpoint_id: None,
+            state: CodeManagedWorktreeState::Ready,
+            dirty: false,
+            locked: true,
+            error: None,
+            created_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+        };
+        persistence
+            .insert_orchestration_worktree(&worktree)
+            .await
+            .unwrap();
+
+        let dispatch = CodeDispatch {
+            id: "dispatch-failed".to_owned(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            attempt: 1,
+            state: CodeDispatchState::Preparing,
+            adapter_id: CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned(),
+            lease_generation: 1,
+            session_id: None,
+            pid: Some(4242),
+            worktree_id: Some(worktree_id.clone()),
+            checkpoint_id: None,
+            last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
+            started_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+            error: None,
+            result_summary: None,
+        };
+        assert!(persistence
+            .claim_orchestration_dispatch(&dispatch)
+            .await
+            .unwrap());
+        assert!(persistence
+            .update_orchestration_dispatch(
+                &dispatch.id,
+                dispatch.lease_generation,
+                CodeDispatchState::Running,
+                None,
+                Some(4242),
+                Some(&worktree_id),
+                None,
+                Some(now_ms()),
+                None,
+                None,
+            )
+            .await
+            .unwrap());
+        let running_dispatch = CodeDispatch {
+            state: CodeDispatchState::Running,
+            worktree_id: Some(worktree_id.clone()),
+            ..dispatch
+        };
+        let launch = WorkerLaunch {
+            dispatch: running_dispatch,
+            worktree,
+            task: task.clone(),
+            model: None,
+            secret: Vec::new(),
+            resume_session_id: None,
+            answer: None,
+        };
+        service
+            .finish_worker(
+                &launch,
+                WorkerResult {
+                    success: false,
+                    session_id: None,
+                    summary: "worker reported failure".to_owned(),
+                    question: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        let detail = service.detail(&run_id).await.unwrap();
+        assert_eq!(detail.summary.state, CodeRunState::Failed);
+        assert_eq!(detail.tasks[0].state, CodeTaskState::Failed);
+        assert_eq!(detail.dispatches[0].state, CodeDispatchState::Failed);
+        assert!(!detail.worktrees[0].locked);
+        let inspection = git
+            .inspect_worktree(&workspace_root, &worktree_name)
+            .unwrap();
+        assert!(!inspection.locked);
+    }
+
+    #[tokio::test]
+    async fn successful_worker_completion_preserves_sibling_workers_and_worktree() {
+        let directory = tempfile::tempdir().unwrap();
+        let workspace_root = directory.path().join("workspace");
+        std::fs::create_dir_all(&workspace_root).unwrap();
+        let git = HiveoryGitService;
+        let base_oid = git.ensure_repository(&workspace_root).unwrap();
+        let persistence = HiveoryPersistence::open(&directory.path().join("state.sqlite"))
+            .await
+            .unwrap();
+        let workspaces = HiveoryWorkspaceService::new();
+        let workspace = workspaces
+            .open_workspace(
+                &workspace_root,
+                None,
+                hiveory_protocol::CodeWorkspaceTrust::Trusted,
+            )
+            .unwrap();
+        persistence.save_code_workspace(&workspace).await.unwrap();
+        let service = HiveoryCodeOrchestration::new(
+            persistence.clone(),
+            workspaces,
+            directory.path().join("orchestration"),
+        );
+        let run = service
+            .create_run(&CodeRunCreateRequest {
+                workspace_id: workspace.id,
+                title: "Success test".to_owned(),
+                objective: "Complete a worker without disturbing siblings".to_owned(),
+                review_policy: CodeReviewPolicy::Manual,
+                concurrency_limit: Some(2),
+                model: None,
+                coordinator_id: None,
+                adapter_id: None,
+            })
+            .await
+            .unwrap();
+        let run = service
+            .accept_proposal(&CodeDagProposalAcceptRequest {
+                run_id: run.summary.id,
+                proposal: CodeDagProposal {
+                    objective: "Complete a worker without disturbing siblings".to_owned(),
+                    tasks: vec![CodeDagProposalTask {
+                        client_id: "succeeding-worker".to_owned(),
+                        title: "Succeeding worker".to_owned(),
+                        specification: "Run the worker".to_owned(),
+                        depends_on: Vec::new(),
+                    }],
+                    warnings: Vec::new(),
+                },
+            })
+            .await
+            .unwrap();
+        let run_id = run.summary.id.clone();
+        let mut task = run.tasks[0].clone();
+        task.base_checkpoint_id = Some("checkpoint-base".to_owned());
+        persistence
+            .insert_orchestration_checkpoint(&CodeCheckpoint {
+                id: "checkpoint-base".to_owned(),
+                run_id: run_id.clone(),
+                task_id: None,
+                dispatch_id: None,
+                kind: CodeCheckpointKind::Source,
+                state: CodeCheckpointState::Ready,
+                ref_name: "refs/heads/main".to_owned(),
+                commit_oid: Some(base_oid.clone()),
+                parent_checkpoint_id: None,
+                summary: "base".to_owned(),
+                created_at_unix_ms: now_ms(),
+            })
+            .await
+            .unwrap();
+        let worktree_name = format!(
+            "orchestration-{}-{}-1",
+            short_id(&run_id),
+            short_id(&task.id)
+        );
+        let worktree_path = directory
+            .path()
+            .join("orchestration")
+            .join("worktrees")
+            .join(&worktree_name);
+        let branch = format!("agentic/{}/{}-1", short_id(&run_id), short_id(&task.id));
+        let created = git
+            .create_worktree(
+                &workspace_root,
+                &worktree_name,
+                &worktree_path,
+                &branch,
+                &base_oid,
+            )
+            .unwrap();
+
+        let worktree_id = "worktree-success".to_owned();
+        let worktree = CodeManagedWorktree {
+            id: worktree_id.clone(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            dispatch_id: "dispatch-success".to_owned(),
+            path: created.path.to_string_lossy().into_owned(),
+            branch: created.branch.clone(),
+            base_checkpoint_id: Some("checkpoint-base".to_owned()),
+            state: CodeManagedWorktreeState::Ready,
+            dirty: false,
+            locked: true,
+            error: None,
+            created_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+        };
+        persistence
+            .insert_orchestration_worktree(&worktree)
+            .await
+            .unwrap();
+
+        let dispatch = CodeDispatch {
+            id: "dispatch-success".to_owned(),
+            run_id: run_id.clone(),
+            task_id: task.id.clone(),
+            attempt: 1,
+            state: CodeDispatchState::Preparing,
+            adapter_id: CODE_ORCHESTRATION_DEFAULT_ADAPTER_ID.to_owned(),
+            lease_generation: 1,
+            session_id: None,
+            pid: Some(4242),
+            worktree_id: Some(worktree_id.clone()),
+            checkpoint_id: None,
+            last_heartbeat_at_unix_ms: Some(now_ms()),
+            terminal_id: None,
+            cancel_requested_at_unix_ms: None,
+            started_at_unix_ms: now_ms(),
+            updated_at_unix_ms: now_ms(),
+            error: None,
+            result_summary: None,
+        };
+        assert!(persistence
+            .claim_orchestration_dispatch(&dispatch)
+            .await
+            .unwrap());
+        assert!(persistence
+            .update_orchestration_dispatch(
+                &dispatch.id,
+                dispatch.lease_generation,
+                CodeDispatchState::Running,
+                None,
+                Some(4242),
+                Some(&worktree_id),
+                None,
+                Some(now_ms()),
+                None,
+                None,
+            )
+            .await
+            .unwrap());
+        let running_dispatch = CodeDispatch {
+            state: CodeDispatchState::Running,
+            worktree_id: Some(worktree_id.clone()),
+            ..dispatch
+        };
+
+        let sibling = CancellationToken::new();
+        service.worker_controls.lock().await.insert(
+            "dispatch-sibling".to_owned(),
+            WorkerControl {
+                run_id: run_id.clone(),
+                cancellation: sibling.clone(),
+            },
+        );
+
+        let launch = WorkerLaunch {
+            dispatch: running_dispatch,
+            worktree,
+            task: task.clone(),
+            model: None,
+            secret: Vec::new(),
+            resume_session_id: None,
+            answer: None,
+        };
+        service
+            .finish_worker(
+                &launch,
+                WorkerResult {
+                    success: true,
+                    session_id: Some("session-1".to_owned()),
+                    summary: "completed".to_owned(),
+                    question: None,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(!sibling.is_cancelled());
+        let detail = service.detail(&run_id).await.unwrap();
+        assert_ne!(detail.summary.state, CodeRunState::Failed);
+        assert_eq!(detail.tasks[0].state, CodeTaskState::AwaitingReview);
+        assert_eq!(detail.dispatches[0].state, CodeDispatchState::Succeeded);
+        assert!(!detail.worktrees[0].locked);
+        let inspection = git
+            .inspect_worktree(&workspace_root, &worktree_name)
+            .unwrap();
+        assert!(!inspection.locked);
     }
 
     #[tokio::test]
