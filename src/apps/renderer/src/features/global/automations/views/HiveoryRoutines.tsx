@@ -69,6 +69,16 @@ export function HiveoryRoutines() {
 
   useEffect(() => { void refresh() }, [refresh])
 
+  useEffect(() => {
+    const openRoutine = (event: Event) => {
+      const routineId = (event as CustomEvent<{ routineId?: string }>).detail?.routineId
+      if (!routineId) return
+      void hiveoryClient.routine(routineId).then((detail) => { setSelected(detail); setShowDetail(true) }).catch(() => setFeedback('That automation is no longer available.'))
+    }
+    window.addEventListener('hiveory-open-routine', openRoutine)
+    return () => window.removeEventListener('hiveory-open-routine', openRoutine)
+  }, [])
+
   const visibleRoutines = routines.filter((routine) => {
     const needle = query.trim().toLocaleLowerCase()
     return !needle || [routine.name, routine.description, routine.agent_name, scheduleLabel(routine)]

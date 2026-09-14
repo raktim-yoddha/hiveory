@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
 import {
   AlertCircle,
   Archive,
@@ -13,8 +13,11 @@ import {
   Folder,
   FolderInput,
   FolderPlus,
+  Globe2,
   Image as ImageIcon,
+  LayoutDashboard,
   LoaderCircle,
+  ListTodo,
   MessageCircle,
   Paperclip,
   Pin,
@@ -26,6 +29,7 @@ import {
   Settings2,
   Square,
   Trash2,
+  Workflow,
   X,
 } from 'lucide-react'
 import {
@@ -47,13 +51,8 @@ import {
 } from '../../../../shared/api/hiveory-client'
 import { CliBrandIcon } from '../../code/workspace/components/CliIcons'
 import { ChatMarkdown } from '../components/ChatMarkdown'
+import type { GlobalDestination } from '../../../global/navigation/HiveoryGlobalSurface'
 import '../styles/chat.css'
-
-const HiveoryCodeDashboard = lazy(async () => ({ default: (await import('../../code/workspace/views/HiveoryCodeDashboard')).HiveoryCodeDashboard }))
-const HiveoryRoutines = lazy(async () => ({ default: (await import('../../../global/automations/views/HiveoryRoutines')).HiveoryRoutines }))
-const HiveoryPlugins = lazy(async () => ({ default: (await import('../../../global/plugins/views/HiveoryPlugins')).HiveoryPlugins }))
-
-type ChatSurface = 'chat' | 'dashboard' | 'routines' | 'plugins'
 
 type PendingAttachment = {
   key: string
@@ -274,7 +273,7 @@ function fromChatProfileSnapshot(snapshot: ChatProfileSnapshot): ChatProfile {
   }
 }
 
-export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWidthChange, onActivateCanvas }: { embedded?: boolean; sharedRailWidth?: number; onSharedRailWidthChange?: (width: number) => void; onActivateCanvas?: () => void }) {
+export function HiveoryChat({ embedded = false, globalDestination = null, sharedRailWidth, onSharedRailWidthChange, onActivateCanvas }: { embedded?: boolean; globalDestination?: GlobalDestination | null; sharedRailWidth?: number; onSharedRailWidthChange?: (width: number) => void; onActivateCanvas?: () => void }) {
   const DEFAULT_RAIL_WIDTH = 228
   const MIN_RAIL_WIDTH = 180
   const MAX_RAIL_WIDTH = 480
@@ -302,7 +301,6 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
   const [folderFilter, setFolderFilter] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(readSelectedChatId)
   const [isNewChatDraft, setIsNewChatDraft] = useState(false)
-  const [chatSurface, setChatSurface] = useState<ChatSurface>('chat')
   const [conversation, setConversation] = useState<ChatConversationDetail | null>(null)
   const [conversationLoading, setConversationLoading] = useState(false)
   const [engineCatalog, setEngineCatalog] = useState<ChatEngineCatalog | null>(null)
@@ -422,6 +420,14 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
   const handleResetWidth = useCallback(() => {
     setEffectiveRailWidth(DEFAULT_RAIL_WIDTH)
   }, [DEFAULT_RAIL_WIDTH, setEffectiveRailWidth])
+
+  const handleResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const maxAllowed = Math.min(MAX_RAIL_WIDTH, window.innerWidth * 0.5)
+    if (event.key === 'ArrowLeft') { event.preventDefault(); setEffectiveRailWidth(Math.max(MIN_RAIL_WIDTH, effectiveRailWidth - 10)) }
+    if (event.key === 'ArrowRight') { event.preventDefault(); setEffectiveRailWidth(Math.min(maxAllowed, effectiveRailWidth + 10)) }
+    if (event.key === 'Home') { event.preventDefault(); setEffectiveRailWidth(MIN_RAIL_WIDTH) }
+    if (event.key === 'End') { event.preventDefault(); setEffectiveRailWidth(maxAllowed) }
+  }, [effectiveRailWidth, setEffectiveRailWidth])
 
   const reloadSidebar = useCallback(async () => {
     setSidebarLoading(true)
@@ -595,7 +601,6 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
       if (!conversationId) return
       setSelectedId(conversationId)
       setIsNewChatDraft(false)
-      setChatSurface('chat')
     }
     window.addEventListener('hiveory-open-chat-conversation', openConversation)
     return () => window.removeEventListener('hiveory-open-chat-conversation', openConversation)
@@ -747,7 +752,6 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
   }
 
   const createNewChat = () => {
-    setChatSurface('chat')
     setIsNewChatDraft(true)
     setSelectedId(null)
     setConversation(null)
@@ -992,10 +996,6 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
 
   const handleComposerDragOver = (event: DragEvent<HTMLDivElement>) => event.preventDefault()
 
-  const navItems: Array<{ id: ChatSurface; label: string; icon: ReactNode }> = [
-    { id: 'chat' as const, label: 'Chats', icon: <MessageCircle size={15} strokeWidth={1.8} aria-hidden="true" /> },
-  ]
-
   const renderConversationRow = (item: ChatConversationSummary) => {
     const isSelected = item.id === selectedId
     return (
@@ -1011,7 +1011,6 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
           onClick={() => {
             setSelectedId(item.id)
             setIsNewChatDraft(false)
-            setChatSurface('chat')
             setRowMenuId(null)
           }}
           title={item.title}
@@ -1321,26 +1320,27 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
         aria-label="Chat history"
         onClick={onActivateCanvas}
       >
-        <nav className="chat-rail-global-nav" aria-label="Chat navigation">
-          {navItems.map(({ id, label, icon }) => (
+        <nav className="chat-rail-global-nav" aria-label="Global navigation">
+          {([
+            ['dashboard', 'Dashboard', LayoutDashboard],
+            ['automations', 'Automations', Workflow],
+            ['plugins', 'Plugins', Globe2],
+            ['tasks', 'Tasks', ListTodo],
+          ] as const).map(([destination, label, Icon]) => (
             <button
+              key={destination}
               type="button"
-              key={id}
-              className={`chat-rail-nav-item ${chatSurface === id ? 'is-selected' : ''}`}
-              onClick={() => {
-                setChatSurface(id)
-                setInspectorOpen(false)
+              className={`chat-rail-nav-item${globalDestination === destination ? ' is-selected' : ''}`}
+              aria-current={globalDestination === destination ? 'page' : undefined}
+              onClick={(event) => {
+                event.stopPropagation()
+                window.dispatchEvent(new CustomEvent('hiveory-open-global-destination', { detail: { destination } }))
               }}
             >
-              <span className="chat-rail-nav-left">
-                {icon}
-                <span>{label}</span>
-              </span>
+              <span className="chat-rail-nav-left"><Icon size={15} aria-hidden="true" /><span>{label}</span></span>
             </button>
           ))}
         </nav>
-
-        {/* Chats Section Header */}
         <div className="chat-rail-section-header">
           <span>Chats</span>
           <div className="chat-rail-header-actions">
@@ -1442,10 +1442,12 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
           className="chat-rail-resizer"
           onPointerDown={handleResizeStart}
           onDoubleClick={handleResetWidth}
+          onKeyDown={handleResizeKeyDown}
           title="Drag to resize sidebar • Double-click to reset"
           aria-label="Resize chat sidebar"
           role="separator"
           aria-orientation="vertical"
+          tabIndex={0}
         />
       </aside>
 
@@ -1516,8 +1518,7 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
           </div>
         </header>
 
-        {chatSurface === 'chat' ? (
-          <>
+        <>
         {/* Transcript */}
         <div className="chat-transcript-viewport" ref={transcriptRef} aria-live="polite">
           <div className="chat-transcript-column">
@@ -1851,18 +1852,9 @@ export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWid
             </div>
           </div>
         </div>
-          </>
-        ) : (
-          <section className="chat-global-section" aria-live="polite">
-            <Suspense fallback={<div className="chat-turn-meta"><LoaderCircle size={14} className="hiveory-chat-spin" /> Opening {chatSurface}…</div>}>
-              {chatSurface === 'dashboard' && <HiveoryCodeDashboard />}
-              {chatSurface === 'routines' && <HiveoryRoutines />}
-              {chatSurface === 'plugins' && <HiveoryPlugins />}
-            </Suspense>
-          </section>
-        )}
+        </>
       </main>
-      {chatSurface === 'chat' && inspectorOpen && (
+      {inspectorOpen && (
         <aside className="chat-inspector" aria-label="Chat inspector">
           <div className="chat-inspector-header">
             <div>

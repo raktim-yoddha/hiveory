@@ -2710,6 +2710,29 @@ pub struct AgentDashboard {
     pub recent_runs: Vec<AgentRunSummary>,
 }
 
+/// Read-only cross-mode data for the desktop operations dashboard. The source
+/// records remain authoritative; this only makes them cheap to scan together.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GlobalDashboardChatTurn {
+    pub turn_id: String,
+    pub conversation_id: String,
+    pub conversation_title: String,
+    pub state: ChatTurnState,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GlobalDashboardSnapshot {
+    pub code_runs: Vec<CodeRunSummary>,
+    pub agent_dashboard: Option<AgentDashboard>,
+    pub routines: Vec<RoutineSummary>,
+    pub chat_turns: Vec<GlobalDashboardChatTurn>,
+    pub source_errors: Vec<String>,
+    pub generated_at_unix_ms: i64,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct AgentCreateRequest {

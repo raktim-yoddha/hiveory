@@ -214,7 +214,7 @@
 /* Phase 8 shared shell: keyboard-first controls, durable activity access, and
    scalable preferences. The PRD layout stays dense while every global action
    has a visible focus target and a non-colour status label. */
-:root { --hiveory-font-scale: 1; --hiveory-surface: #141519; --hiveory-surface-raised: #1d1f24; --hiveory-border: #2d3036; --hiveory-accent: #22c55e; --hiveory-focus: #c9ccd1; }
+:root { --hiveory-font-scale: 1; --hiveory-surface: #141519; --hiveory-surface-raised: #1d1f24; --hiveory-border: #2d3036; --hiveory-accent: #22c55e; --hiveory-focus: #61768f; }
 body { font-size: calc(14px * var(--hiveory-font-scale)); }
 button, input, select, textarea { min-height: 34px; }
 button:focus-visible, a:focus-visible { outline: 2px solid var(--hiveory-focus); outline-offset: 2px; }
@@ -443,8 +443,8 @@ body { background: var(--hiveory-canvas); color: var(--hiveory-text); }
 .hiveory-brand { color: #f6f7fa; font-size: 12.5px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
 .hiveory-brand-logo { width: 23px; height: 23px; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .16); border-radius: 6px; object-fit: cover; box-shadow: 0 2px 7px rgba(0, 0, 0, .35); }
 .hiveory-brand-name { display: inline-block; color: #f8fafc; font-family: "Arial Black", "Trebuchet MS", sans-serif; font-size: 14px; font-weight: 900; letter-spacing: .04em; line-height: 1; text-shadow: 0 1px 0 #aab2bd, 0 2px 0 #6d7581, 0 3px 0 #3f4650, 0 4px 7px rgba(0, 0, 0, .65); }
-.hiveory-mode-switch { gap: 1.5px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; padding: 1.5px; background: rgba(255, 255, 255, 0.04); }
-.hiveory-mode-switch button { border-radius: 14px; padding: 2.5px 12px; color: #8a8f98; font-size: 11.5px; font-weight: 500; min-height: 20px; line-height: 1.2; }
+.hiveory-mode-switch { gap: 1.5px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 1.5px; background: rgba(255, 255, 255, 0.04); }
+.hiveory-mode-switch button { border-radius: 5px; padding: 2.5px 12px; color: #8a8f98; font-size: 11.5px; font-weight: 500; min-height: 20px; line-height: 1.2; }
 .hiveory-mode-switch button:hover { color: #f4f5f7; background: rgba(255, 255, 255, 0.06); }
 .hiveory-mode-switch button.is-active { color: #fff; background: #27272a; font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
 .hiveory-title-actions { gap: 4px; }
@@ -853,26 +853,42 @@ a:focus-visible {
 }
 
 .hiveory-command-palette,
-.hiveory-notification-center,
+.hiveory-notification-center {
+  border-color: var(--hiveory-graphite-border);
+  background: var(--hiveory-graphite-surface);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, .48);
+}
+
 .hiveory-update-prompt,
 .hiveory-layout-dropdown {
   border-color: var(--hiveory-graphite-border);
-  background: #141519;
+  background: var(--hiveory-graphite-surface);
 }
 
-.hiveory-command-search,
+.hiveory-command-search {
+  border-color: var(--hiveory-graphite-border);
+  border-radius: 6px;
+  color: var(--hiveory-graphite-muted);
+  background: var(--hiveory-graphite-raised);
+}
+
 .hiveory-command-list button:hover,
 .hiveory-command-list button.is-selected,
 .hiveory-notification-list article.is-unread,
 .hiveory-layout-option:hover,
 .hiveory-layout-option:focus-visible {
-  border-color: #4b4e55;
+  border-color: var(--hiveory-graphite-strong-border);
   background: var(--hiveory-graphite-hover);
 }
 
-.hiveory-command-search {
-  color: #c9ccd1;
-}
+.hiveory-command-search input::placeholder { color: var(--hiveory-graphite-muted); }
+.hiveory-command-search input { color: var(--hiveory-graphite-text); }
+
+.hiveory-notification-center { border-radius: 8px; }
+.hiveory-notification-heading { padding: 15px 16px 11px; }
+.hiveory-notification-list { gap: 4px; padding: 5px 8px 10px; }
+.hiveory-notification-list article { border-radius: 6px; }
+.hiveory-notification-list article.is-unread { border-color: var(--hiveory-graphite-strong-border); background: var(--hiveory-graphite-hover); }
 
 .hiveory-notification-empty svg,
 .hiveory-text-button,
@@ -1669,10 +1685,23 @@ a:focus-visible {
   border-color: #3b3e45;
 }
 
+:where(input, textarea, select, [contenteditable="true"]):focus,
 :where(input, textarea, select, [contenteditable="true"]):focus-visible {
-  outline: 2px solid var(--hiveory-focus, #c9ccd1) !important;
-  outline-offset: 2px !important;
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
 }
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a505a #121417;
+}
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: #121417; }
+*::-webkit-scrollbar-thumb { border: 3px solid #121417; border-radius: 999px; background: #4a505a; }
+*::-webkit-scrollbar-thumb:hover { background: #616975; }
+*::-webkit-scrollbar-corner { background: #121417; }
 
 :where(input, textarea, select):-webkit-autofill {
   -webkit-text-fill-color: #eef0f2;
@@ -2088,6 +2117,36 @@ a:focus-visible {
   box-sizing: border-box;
   border-radius: 12px;
   box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--code-card-border, #1f2126);
+  padding: 10px 8px 12px;
+  color: var(--code-text-primary, #fff);
+  background: var(--code-surface-bg, #111215);
+}
+
+.hiveory-global-sidebar-heading {
+  padding: 12px 10px 8px;
+  color: var(--code-text-dim, #636773);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.hiveory-global-sidebar nav { display: grid; gap: 2px; }
+.hiveory-global-sidebar nav button {
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--code-text-secondary, #8a8f98);
+  font-size: 13px;
+  font-weight: 500;
+}
+.hiveory-global-sidebar nav button:hover,
+.hiveory-global-sidebar nav button.is-selected {
+  border-color: #2b2d34;
+  color: #fff;
+  background: #1a1b20;
 }
 
 .hiveory-global-sidebar-resizer {
@@ -2112,8 +2171,22 @@ a:focus-visible {
 }
 
 .hiveory-global-sidebar-resizer:hover::after,
-.hiveory-global-sidebar-resizer:focus-visible::after {
-  background: #71747b;
+.hiveory-global-sidebar-resizer:focus-visible::after,
+.hiveory-global-sidebar.is-resizing .hiveory-global-sidebar-resizer::after {
+  background: rgba(95, 111, 130, .7);
+  box-shadow: none;
+}
+
+/* Keep form fields quiet; buttons and resizers retain keyboard focus styles. */
+.hiveory-chat-composer:focus-within,
+.chat-composer-container:focus-within {
+  border-color: var(--code-card-border, #1f2126) !important;
+  box-shadow: none !important;
+}
+
+.chat-header-input:focus {
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .hiveory-workbench .hiveory-global-surface {
@@ -2152,4 +2225,278 @@ a:focus-visible {
   .hiveory-workbench { padding: 6px; gap: 6px; }
   .hiveory-workbench-canvas-page,
   .hiveory-global-surface { border-radius: 8px; }
+
+  .hiveory-workbench.is-narrow-left-open .code-workspace-rail,
+  .hiveory-workbench.is-narrow-left-open .chat-rail {
+    position: fixed;
+    z-index: 40;
+    top: 42px;
+    bottom: 6px;
+    left: 6px;
+    width: min(320px, calc(100vw - 12px)) !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 12px) !important;
+    box-shadow: 16px 0 36px rgba(0, 0, 0, .42);
+  }
+
+  .hiveory-workbench.is-narrow-right-open .hiveory-global-sidebar {
+    position: fixed;
+    z-index: 45;
+    top: 42px;
+    right: 6px;
+    bottom: 6px;
+    width: min(300px, calc(100vw - 12px));
+    height: auto;
+    box-shadow: -16px 0 36px rgba(0, 0, 0, .42);
+  }
+
+  .hiveory-workbench .hiveory-chat-root.is-shell-embedded .chat-inspector {
+    top: 48px;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    max-width: none;
+  }
+
+  .hiveory-task-sources { overflow: auto; }
+  .hiveory-task-sources .hiveory-tasks-header,
+  .hiveory-task-header-actions { align-items: flex-start; flex-wrap: wrap; }
+  .hiveory-task-header-actions select { min-width: 0; max-width: 100%; }
+}
+
+@media (max-width: 520px) {
+  .hiveory-titlebar { padding: 0 6px; }
+  .hiveory-title-actions .hiveory-layout-menu,
+  .hiveory-title-actions .hiveory-command-trigger,
+  .hiveory-title-actions .hiveory-notification-trigger,
+  .hiveory-title-actions > button[aria-label="Open settings"],
+  .hiveory-title-actions .hiveory-window-controls { display: none; }
+}
+
+/* Final neutral surface pass for the global overlays and the general
+   settings page. These surfaces share the same graphite hierarchy as the
+   workbench so overlays do not introduce a second visual language. */
+.hiveory-overlay {
+  background: rgba(5, 6, 8, .68);
+}
+
+.hiveory-command-palette,
+.hiveory-notification-center {
+  border-color: var(--hiveory-workbench-border);
+  border-radius: 8px;
+  background: var(--hiveory-workbench-surface);
+  color: var(--hiveory-workbench-text);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, .52);
+}
+
+.hiveory-command-heading h2,
+.hiveory-notification-heading h2,
+.hiveory-command-list button,
+.hiveory-notification-list article,
+.hiveory-notification-list strong {
+  color: var(--hiveory-workbench-text);
+}
+
+.hiveory-command-heading .hiveory-eyebrow,
+.hiveory-notification-heading .hiveory-eyebrow,
+.hiveory-command-list small,
+.hiveory-command-empty,
+.hiveory-command-footer,
+.hiveory-notification-list p,
+.hiveory-notification-list time,
+.hiveory-notification-empty,
+.hiveory-notification-empty small {
+  color: var(--hiveory-workbench-muted);
+}
+
+.hiveory-command-search {
+  border-color: var(--hiveory-workbench-border);
+  border-radius: 6px;
+  color: var(--hiveory-workbench-muted);
+  background: var(--hiveory-workbench-card);
+}
+
+.hiveory-command-search input {
+  color: var(--hiveory-workbench-text);
+  background: transparent;
+}
+
+.hiveory-command-search input::placeholder { color: var(--hiveory-workbench-muted); }
+
+.hiveory-command-list button:hover,
+.hiveory-command-list button.is-selected {
+  border-color: var(--hiveory-workbench-border-active);
+  color: var(--hiveory-workbench-text);
+  background: var(--hiveory-workbench-hover);
+}
+
+.hiveory-command-list kbd,
+.hiveory-command-footer kbd {
+  border-color: var(--hiveory-workbench-border);
+  color: var(--hiveory-workbench-muted);
+  background: var(--hiveory-workbench-card);
+}
+
+.hiveory-command-footer { border-top-color: var(--hiveory-workbench-border); }
+.hiveory-notification-heading { border-bottom-color: var(--hiveory-workbench-border); }
+.hiveory-notification-list article.is-unread {
+  border-color: var(--hiveory-workbench-border-active);
+  background: var(--hiveory-workbench-hover);
+}
+.hiveory-notification-empty svg { color: var(--hiveory-workbench-muted); }
+.hiveory-text-button { color: var(--hiveory-workbench-muted); }
+.hiveory-text-button:hover { color: var(--hiveory-workbench-text); }
+
+.hiveory-settings {
+  max-width: 1120px;
+  color: var(--hiveory-workbench-text);
+  background: transparent;
+}
+
+.hiveory-settings > .hiveory-content-header { margin-bottom: 8px; }
+.hiveory-settings > .hiveory-content-header h1 {
+  margin: 0;
+  color: var(--hiveory-workbench-text);
+  font-size: clamp(28px, 4vw, 42px);
+  letter-spacing: -.035em;
+}
+
+.hiveory-settings > .hiveory-description {
+  margin: 12px 0 26px;
+  color: var(--hiveory-workbench-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.hiveory-settings-card {
+  border-color: var(--hiveory-workbench-border);
+  border-radius: 8px;
+  background: var(--hiveory-workbench-card);
+  color: var(--hiveory-workbench-text);
+}
+
+.hiveory-settings-card .hiveory-card-heading,
+.hiveory-settings-card .hiveory-card-heading h2 {
+  color: var(--hiveory-workbench-text);
+}
+
+.hiveory-settings-card > p,
+.hiveory-settings-card > label:not(.hiveory-settings-check),
+.hiveory-settings-check,
+.hiveory-settings-list {
+  color: var(--hiveory-workbench-muted);
+}
+
+.hiveory-settings-card select,
+.hiveory-settings-card input:not([type="checkbox"]),
+.hiveory-browser-settings-card > input {
+  border-color: var(--hiveory-workbench-border-active);
+  border-radius: 6px;
+  color: var(--hiveory-workbench-text);
+  background: var(--hiveory-workbench-surface);
+}
+
+.hiveory-settings-card button {
+  border-color: var(--hiveory-workbench-border-active);
+  border-radius: 6px;
+  color: var(--hiveory-workbench-text);
+  background: var(--hiveory-workbench-hover);
+}
+
+.hiveory-settings-card button:hover:not(:disabled) {
+  border-color: var(--hiveory-workbench-border-active);
+  background: #303238;
+}
+
+.hiveory-settings-card button.is-secondary {
+  border-color: var(--hiveory-workbench-border);
+  color: var(--hiveory-workbench-muted);
+  background: var(--hiveory-workbench-surface);
+}
+
+.hiveory-settings-version,
+.hiveory-browser-profile-row {
+  border-color: var(--hiveory-workbench-border);
+  border-radius: 6px;
+  background: var(--hiveory-workbench-surface);
+  color: var(--hiveory-workbench-muted);
+}
+
+.hiveory-settings-version strong { color: var(--hiveory-workbench-text); }
+.hiveory-settings-card .hiveory-update-status { color: var(--hiveory-workbench-muted); }
+
+/* Keep rail resize affordances identical and quiet across Code, Chat, and the
+   reserved global rail. */
+.code-workspace-rail-resizer:hover::after,
+.code-workspace-rail.is-resizing .code-workspace-rail-resizer::after,
+.chat-rail-resizer:hover::after,
+.chat-rail.is-resizing .chat-rail-resizer::after,
+.hiveory-global-sidebar-resizer:hover::after,
+.hiveory-global-sidebar-resizer:focus-visible::after,
+.hiveory-global-sidebar.is-resizing .hiveory-global-sidebar-resizer::after {
+  background: rgba(95, 111, 130, .42);
+  box-shadow: none;
+}
+
+/* Inputs keep a stable border while focused. Focus remains keyboard
+   navigable through the surrounding control and caret without a bright box
+   appearing around the field. */
+:where(input, textarea, select, [contenteditable="true"]):focus,
+:where(input, textarea, select, [contenteditable="true"]):focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--hiveory-workbench-border) !important;
+}
+
+.hiveory-search-field:focus-within,
+.chat-rail-search:focus-within,
+.chat-composer-container:focus-within,
+.hiveory-chat-composer:focus-within,
+.hiveory-agent-composer:focus-within,
+.hiveory-command-search:focus-within,
+.code-preview-url-bar:focus-within,
+.code-split-search:focus-within,
+.hiveory-plugin-search:focus-within,
+.hiveory-automation-desktop-search:focus-within,
+.hiveory-capability-search:focus-within,
+.hiveory-tasks-filter:focus-within {
+  border-color: var(--hiveory-workbench-border) !important;
+  box-shadow: none !important;
+}
+
+.hiveory-chat-title-wrap input:focus,
+.hiveory-agent-composer textarea:focus,
+.hiveory-code-preview-form input:focus,
+.hiveory-code-engine-select select:focus,
+.hiveory-code-model-input:focus,
+.code-cli-model-input:focus,
+.code-preview-url-bar input:focus,
+.code-preview-url-bar input:focus-visible,
+.code-dialog-form input:focus,
+.code-dialog-form select:focus,
+.code-coordination-create input:focus,
+.code-coordination-create textarea:focus,
+.code-coordination-create select:focus,
+.code-coordination-add-task input:focus,
+.code-coordination-add-task textarea:focus,
+.code-coordination-question input:focus,
+.code-coordination-message-compose input:focus,
+.code-coordination-message-compose textarea:focus,
+.code-coordination-message-compose select:focus,
+.code-coordination-gate-compose input:focus,
+.code-source-inline-form input:focus,
+.code-source-inline-form select:focus,
+.code-source-commit-box input:focus,
+.code-source-form-card input:focus,
+.code-source-form-card textarea:focus,
+.hiveory-markdown-name-input:focus,
+.hiveory-markdown-file-search:focus-within,
+.hiveory-markdown-popover input:focus,
+.hiveory-chat-composer-controls select:focus,
+.hiveory-chat-composer-controls input:focus,
+.hiveory-chat-edit textarea:focus,
+.hiveory-browser-settings-card > input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+  border-color: var(--hiveory-workbench-border) !important;
 }

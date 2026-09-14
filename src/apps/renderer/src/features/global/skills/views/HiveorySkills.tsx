@@ -1,4 +1,4 @@
-import { Check, FilePlus2, FileText, RefreshCw, X } from 'lucide-react'
+import { Check, FilePlus2, FileText, Search, X } from 'lucide-react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { hiveoryClient, type AgentSkillSummary, type AgentSummary } from '../../../../shared/api/hiveory-client'
 
@@ -10,7 +10,7 @@ function skillMarkdown(draft: SkillDraft) {
   return `---\nid: ${draft.id.trim()}\nname: ${draft.name.trim()}\nversion: 1.0.0\ndescription: ${draft.description.trim()}\ntriggers: [${triggers}]\npermissions: []\n---\n${draft.instructions.trim()}\n`
 }
 
-export const HiveorySkills: React.FC = () => {
+export const HiveorySkills: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const [skills, setSkills] = useState<AgentSkillSummary[]>([])
   const [agents, setAgents] = useState<AgentSummary[]>([])
   const [selectedAgentId, setSelectedAgentId] = useState('')
@@ -20,6 +20,7 @@ export const HiveorySkills: React.FC = () => {
   const [busySkillId, setBusySkillId] = useState<string | null>(null)
   const [showCreator, setShowCreator] = useState(false)
   const [draft, setDraft] = useState<SkillDraft>(emptyDraft)
+  const [query, setQuery] = useState('')
 
   const refresh = useCallback(async (preferredAgentId?: string) => {
     setLoading(true)
@@ -42,6 +43,11 @@ export const HiveorySkills: React.FC = () => {
   }, [selectedAgentId])
 
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    const handleRefresh = () => { void refresh() }
+    window.addEventListener('hiveory-refresh-skills', handleRefresh)
+    return () => window.removeEventListener('hiveory-refresh-skills', handleRefresh)
+  }, [refresh])
 
   const importSkill = async () => {
     setImporting(true)
@@ -86,20 +92,19 @@ export const HiveorySkills: React.FC = () => {
   }
 
   const activeCount = useMemo(() => skills.filter((skill) => skill.enabled).length, [skills])
+  const visibleSkills = useMemo(() => skills.filter((skill) => `${skill.name} ${skill.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())), [query, skills])
 
-  return <section className="code-page-container hiveory-skills-page" aria-labelledby="hiveory-code-skills-title">
-    <header className="code-page-header hiveory-skills-header">
-      <h1 id="hiveory-code-skills-title" className="code-page-title">Skills</h1>
-      <div className="hiveory-inline-actions"><button type="button" className="is-secondary" onClick={() => setShowCreator(true)} disabled={importing}><FilePlus2 size={15} />Create</button><button type="button" className="is-secondary" onClick={() => void importSkill()} disabled={importing}><FileText size={15} />Import SKILL.md</button><button type="button" className="hiveory-icon-button" onClick={() => void refresh()} disabled={loading || importing} aria-label="Refresh skills"><RefreshCw size={15} /></button></div>
-    </header>
-    <div className="hiveory-skills-toolbar"><label>Agent<select value={selectedAgentId} onChange={(event) => void refresh(event.target.value)} disabled={!agents.length}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><span>{activeCount} assigned · {skills.length} available</span></div>
+  return <section className={`code-page-container hiveory-skills-page ${embedded ? 'is-embedded' : ''}`} aria-labelledby="hiveory-code-skills-title">
+    {!embedded && <header className="code-page-header hiveory-skills-header"><h1 id="hiveory-code-skills-title" className="code-page-title">Skills</h1></header>}
+    <div className="hiveory-skills-toolbar"><label>Agent<select value={selectedAgentId} onChange={(event) => void refresh(event.target.value)} disabled={!agents.length}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><span>{activeCount} assigned · {skills.length} available</span><label className="hiveory-capability-search"><Search size={17} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search skills" aria-label="Search skills" /></label></div>
+    <div className="hiveory-skills-section-heading"><h2>Available skills</h2><div className="hiveory-inline-actions"><button type="button" className="is-secondary" onClick={() => setShowCreator(true)} disabled={importing}><FilePlus2 size={15} />Create</button><button type="button" className="is-secondary" onClick={() => void importSkill()} disabled={importing}><FileText size={15} />Import SKILL.md</button></div></div>
     {error && <div className="hiveory-feedback" role="alert">{error}</div>}
     <section className="code-rows-container hiveory-skills-list" aria-busy={loading}>
-      {skills.map((skill) => <article key={skill.id} className="code-skill-row">
+      {visibleSkills.map((skill) => <article key={skill.id} className="code-skill-row">
         <div className="code-activity-left"><div className="code-activity-icon-box"><FileText size={15} /></div><div className="code-activity-info"><span className="code-skill-name">{skill.name}</span><span className="code-activity-desc">{skill.description}</span></div></div>
         <div className="hiveory-skill-row-actions">{skill.origin !== 'builtin' && <span className="code-skill-badge">Custom</span>}<span className="hiveory-skill-state">{skill.enabled ? 'Assigned' : 'Available'}</span><label className="hiveory-switch" title={`${skill.enabled ? 'Unassign' : 'Assign'} ${skill.name}`}><input type="checkbox" checked={skill.enabled} onChange={() => void toggleSkill(skill)} disabled={!selectedAgentId || busySkillId !== null} aria-label={`${skill.enabled ? 'Unassign' : 'Assign'} ${skill.name}`} /><span /></label></div>
       </article>)}
-      {!loading && !skills.length && <div className="hiveory-empty-panel"><FileText size={24} /><p>No skills installed.</p></div>}
+      {!loading && !visibleSkills.length && <div className="hiveory-empty-panel"><FileText size={24} /><p>{skills.length ? 'No skills match your search.' : 'No skills installed.'}</p></div>}
     </section>
     {showCreator && <SkillCreator draft={draft} busy={importing} onChange={setDraft} onCancel={() => { if (!importing) setShowCreator(false) }} onCreate={() => void createSkill()} />}
   </section>

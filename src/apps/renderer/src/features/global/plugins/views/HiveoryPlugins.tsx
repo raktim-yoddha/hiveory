@@ -1,13 +1,9 @@
-import { Check, CircleCheck, Eye, KeyRound, Link2, LockKeyhole, MoreHorizontal, PlugZap, Plus, RefreshCw, Search, TestTube2, Trash2, UserRound, X } from 'lucide-react'
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { Check, Eye, KeyRound, Link2, LockKeyhole, MoreHorizontal, PlugZap, Plus, RefreshCw, Search, TestTube2, Trash2, UserRound, X } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import { hiveoryClient, type AgentPluginGrant, type AgentSummary, type PluginCatalogEntry, type PluginConnectionCreateRequest, type PluginConnectionSummary, type PluginManifest } from '../../../../shared/api/hiveory-client'
+import { HiveorySkills } from '../../skills/views/HiveorySkills'
 
 function riskLabel(value: string) { return value.replaceAll('_', ' ') }
-function pluginStatus(entry: PluginCatalogEntry, pluginConnections: PluginConnectionSummary[]) {
-  if (!entry.enabled) return 'Disabled'
-  if (pluginConnections.some((connection) => connection.validated_at_unix_ms)) return 'Ready'
-  return pluginConnections.length ? 'Test connection' : 'Connect'
-}
 const providerTokenDefaults: Record<string, { header: string; origin?: string; hint: string }> = {
   github: { header: 'Authorization', hint: 'Paste `Bearer <GitHub fine-grained token>`.' },
   linear: { header: 'Authorization', hint: 'Paste `Bearer <Linear personal API key>`.' },
@@ -22,7 +18,8 @@ const providerTokenDefaults: Record<string, { header: string; origin?: string; h
 }
 type PluginDraft = { id: string; name: string; description: string; host: string; toolName: string; method: 'json_http_get' | 'json_http_post' }
 const emptyPluginDraft: PluginDraft = { id: '', name: '', description: '', host: '', toolName: 'get', method: 'json_http_get' }
-const AutoPluginPanel = lazy(async () => ({ default: (await import('@hiveory/premium-features')).AutoPluginPanel }))
+type CapabilityTab = 'plugins' | 'mcp' | 'skills'
+type PluginSubtab = 'manual' | 'connected'
 function customPluginManifest(draft: PluginDraft): PluginManifest {
   const host = draft.host.trim().replace(/^https:\/\//, '').replace(/\/$/, '')
   const adapter = draft.method
@@ -34,10 +31,12 @@ function customPluginManifest(draft: PluginDraft): PluginManifest {
   }
 }
 function pluginMark(entry: PluginCatalogEntry) {
-  return <span className="hiveory-plugin-mark" aria-hidden="true">{entry.manifest.name.trim().slice(0, 2).toUpperCase()}</span>
+  return <span className={`hiveory-plugin-mark is-${entry.manifest.id.replaceAll(/[^a-z0-9-]/gi, '-').toLocaleLowerCase()}`} aria-hidden="true">{entry.manifest.name.trim().slice(0, 2).toUpperCase()}</span>
 }
 
 export function HiveoryPlugins() {
+  const [activeTab, setActiveTab] = useState<CapabilityTab>('plugins')
+  const [pluginSubtab, setPluginSubtab] = useState<PluginSubtab>('manual')
   const [catalog, setCatalog] = useState<PluginCatalogEntry[]>([])
   const [connections, setConnections] = useState<PluginConnectionSummary[]>([])
   const [agents, setAgents] = useState<AgentSummary[]>([])
@@ -58,37 +57,57 @@ export function HiveoryPlugins() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'Plugin catalog could not be loaded.') }
   }, [])
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    const selectTab = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: CapabilityTab }>).detail?.tab
+      if (tab === 'plugins' || tab === 'mcp' || tab === 'skills') setActiveTab(tab)
+    }
+    window.addEventListener('hiveory-capability-tab', selectTab)
+    return () => window.removeEventListener('hiveory-capability-tab', selectTab)
+  }, [])
 
   const selected = catalog.find((entry) => entry.manifest.id === selectedId) ?? catalog[0]
   const selectedConnections = connections.filter((connection) => connection.plugin_id === selected?.manifest.id)
-  const visibleCatalog = catalog.filter((entry) => `${entry.manifest.name} ${entry.manifest.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const visibleCatalog = catalog.filter((entry) => {
+    const pluginConnections = connections.filter((connection) => connection.plugin_id === entry.manifest.id)
+    const searchText = `${entry.manifest.name} ${entry.manifest.description} ${pluginConnections.map((connection) => `${connection.name} ${connection.origin}`).join(' ')}`.toLocaleLowerCase()
+    return (pluginSubtab === 'manual' || pluginConnections.length > 0) && searchText.includes(query.trim().toLocaleLowerCase())
+  })
   const action = async (key: string, work: () => Promise<void>, message: string) => { setBusy(key); setFeedback(null); try { await work(); setFeedback(message); await refresh() } catch (error) { setFeedback(error instanceof Error ? error.message : 'The plugin action could not be completed.') } finally { setBusy(null) } }
   const importManifest = async () => { setBusy('import'); setFeedback(null); try { const imported = await hiveoryClient.importPluginManifest(); if (imported) { setFeedback(`${imported.manifest.name} imported.`); await refresh() } } catch (error) { setFeedback(error instanceof Error ? error.message : 'The plugin manifest could not be imported.') } finally { setBusy(null) } }
   const createPlugin = async () => { setBusy('create'); setFeedback(null); try { const created = await hiveoryClient.registerPluginManifest(customPluginManifest(creator)); setCreator(emptyPluginDraft); setShowCreator(false); setSelectedId(created.manifest.id); setFeedback(`${created.manifest.name} created. Connect it with a user-owned token to use its tool.`); await refresh() } catch (error) { setFeedback(error instanceof Error ? error.message : 'The custom plugin could not be created.') } finally { setBusy(null) } }
 
   const openConfiguration = (pluginId: string) => { setSelectedId(pluginId); setOpenMenuId(null); setShowConfiguration(true) }
+  const selectPluginSubtab = (next: PluginSubtab) => { setPluginSubtab(next); setQuery('') }
+  const openConnection = (pluginId: string) => { setSelectedId(pluginId); setOpenMenuId(null); setShowConnection(true) }
 
-  return <section className="hiveory-plugin-page hiveory-plugin-page-list" aria-labelledby="hiveory-plugins-title">
-    <header className="hiveory-plugin-page-toolbar">
-      <div className="hiveory-plugin-page-title"><div><h1 id="hiveory-plugins-title">Plugins</h1><p>Local integrations available to Hiveory sessions.</p></div></div>
-      <div className="hiveory-plugin-page-actions"><button className="is-secondary" onClick={() => setShowCreator(true)} disabled={busy !== null}><Plus size={14} />Add custom</button><button className="is-secondary" onClick={() => void importManifest()} disabled={busy !== null}>Import</button><button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh plugins" disabled={busy !== null}><RefreshCw size={15} /></button></div>
+  return <section className="hiveory-capability-hub" aria-labelledby="hiveory-capability-title">
+    <header className="hiveory-capability-header">
+      <div><h1 id="hiveory-capability-title">Plugins</h1><p>Connect plugins, manage MCP servers, and assign skills.</p></div>
+      <button className="hiveory-icon-button hiveory-capability-refresh" onClick={() => activeTab === 'skills' ? window.dispatchEvent(new Event('hiveory-refresh-skills')) : void refresh()} aria-label={`Refresh ${activeTab}`} disabled={busy !== null}><RefreshCw size={18} /></button>
     </header>
-    <Suspense fallback={null}><AutoPluginPanel /></Suspense>
-    <label className="hiveory-plugin-search"><Search size={15} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins" aria-label="Search plugins" /></label>
-    <div className="hiveory-plugin-full-list" aria-label="Available local plugins">
-      {visibleCatalog.map((entry) => {
-        const pluginConnections = connections.filter((connection) => connection.plugin_id === entry.manifest.id)
-        const status = pluginStatus(entry, pluginConnections)
-        return <div key={entry.manifest.id} className="hiveory-plugin-full-row">
-          {pluginMark(entry)}
-          <button className="hiveory-plugin-row-copy" onClick={() => openConfiguration(entry.manifest.id)}><strong>{entry.manifest.name}</strong><small>{entry.manifest.description}</small></button>
-          <span className={`hiveory-plugin-status ${status.toLocaleLowerCase().replaceAll(' ', '-')}`}>{status === 'Ready' ? <CircleCheck size={12} /> : null}{status}</span>
-          <label className="hiveory-switch" title={entry.enabled ? `Disable ${entry.manifest.name}` : `Enable ${entry.manifest.name}`}><input type="checkbox" checked={entry.enabled} disabled={busy !== null} onChange={() => void action(`install-${entry.manifest.id}`, () => hiveoryClient.installPlugin({ plugin_id: entry.manifest.id, enabled: !entry.enabled }), entry.enabled ? `${entry.manifest.name} disabled.` : `${entry.manifest.name} enabled.`)} /><span /></label>
-          <div className="hiveory-plugin-menu-wrap"><button className="hiveory-icon-button" aria-label={`More options for ${entry.manifest.name}`} aria-expanded={openMenuId === entry.manifest.id} onClick={() => setOpenMenuId((current) => current === entry.manifest.id ? null : entry.manifest.id)}><MoreHorizontal size={17} /></button>{openMenuId === entry.manifest.id && <div className="hiveory-plugin-menu" role="menu"><button onClick={() => openConfiguration(entry.manifest.id)}>Configure</button><button onClick={() => { setSelectedId(entry.manifest.id); setOpenMenuId(null); setShowConfiguration(true); setShowConnection(true) }} disabled={!entry.enabled}>Add connection</button><button onClick={() => void action(`install-${entry.manifest.id}`, () => hiveoryClient.installPlugin({ plugin_id: entry.manifest.id, enabled: !entry.enabled }), entry.enabled ? `${entry.manifest.name} disabled.` : `${entry.manifest.name} enabled.`)}>{entry.enabled ? 'Disable' : 'Enable'}</button></div>}</div>
-        </div>
-      })}
-      {!visibleCatalog.length && <div className="hiveory-empty-panel"><PlugZap size={24} />{catalog.length ? <p>No plugins match your search.</p> : <><p>Plugins are loading from the local runtime.</p><small>Refresh after the desktop runtime finishes starting.</small></>}</div>}
-    </div>
+    <nav className="hiveory-capability-tabs" aria-label="Capability sections">
+      {(['plugins', 'mcp', 'skills'] as CapabilityTab[]).map((tab) => <button key={tab} type="button" className={activeTab === tab ? 'is-active' : ''} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => setActiveTab(tab)}>{tab === 'mcp' ? 'MCP' : `${tab[0].toUpperCase()}${tab.slice(1)}`}</button>)}
+    </nav>
+    {activeTab === 'plugins' && <>
+      <div className="hiveory-capability-toolbar">
+        <div className="hiveory-plugin-subtabs" role="tablist" aria-label="Plugin views"><button role="tab" aria-selected={pluginSubtab === 'manual'} className={pluginSubtab === 'manual' ? 'is-active' : ''} onClick={() => selectPluginSubtab('manual')}>Manual</button><button role="tab" aria-selected={pluginSubtab === 'connected'} className={pluginSubtab === 'connected' ? 'is-active' : ''} onClick={() => selectPluginSubtab('connected')}>Connected {connections.length}</button></div>
+        <label className="hiveory-capability-search"><Search size={17} aria-hidden="true" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plugins" aria-label="Search plugins" /></label>
+      </div>
+      <div className="hiveory-capability-section-heading"><h2>{pluginSubtab === 'manual' ? 'Available plugins' : 'Connected plugins'}</h2><div className="hiveory-capability-actions"><button className="is-secondary" onClick={() => setShowCreator(true)} disabled={busy !== null}><Plus size={15} />Add custom</button><button className="is-secondary" onClick={() => void importManifest()} disabled={busy !== null}>Import</button></div></div>
+      <div className="hiveory-plugin-catalog-grid" aria-label={pluginSubtab === 'manual' ? 'Available plugins' : 'Connected plugins'}>
+        {visibleCatalog.map((entry) => {
+          const pluginConnections = connections.filter((connection) => connection.plugin_id === entry.manifest.id)
+          return <article key={entry.manifest.id} className="hiveory-plugin-provider">
+            <div className="hiveory-plugin-provider-main">{pluginMark(entry)}<button className="hiveory-plugin-provider-copy" onClick={() => openConfiguration(entry.manifest.id)}><strong>{entry.manifest.name}</strong><small>{entry.manifest.description}</small></button><div className="hiveory-plugin-menu-wrap"><button className="hiveory-icon-button" aria-label={`More options for ${entry.manifest.name}`} aria-expanded={openMenuId === entry.manifest.id} onClick={() => setOpenMenuId((current) => current === entry.manifest.id ? null : entry.manifest.id)}><MoreHorizontal size={18} /></button>{openMenuId === entry.manifest.id && <div className="hiveory-plugin-menu" role="menu"><button onClick={() => openConfiguration(entry.manifest.id)}>Configure</button><button onClick={() => openConnection(entry.manifest.id)} disabled={!entry.enabled}>Add connection</button><button onClick={() => void action(`install-${entry.manifest.id}`, () => hiveoryClient.installPlugin({ plugin_id: entry.manifest.id, enabled: !entry.enabled }), entry.enabled ? `${entry.manifest.name} disabled.` : `${entry.manifest.name} enabled.`)}>{entry.enabled ? 'Disable' : 'Enable'}</button></div>}</div><button className="hiveory-plugin-connect-button" onClick={() => openConnection(entry.manifest.id)} disabled={!entry.enabled || busy !== null}>{pluginConnections.length ? 'Add account' : 'Connect'}</button></div>
+            {pluginConnections.length > 0 && <div className="hiveory-plugin-account-list">{pluginConnections.map((connection) => <div key={connection.id} className="hiveory-plugin-account"><span><strong>{connection.name}</strong><small>{connection.origin}</small></span><b className={connection.validated_at_unix_ms ? 'is-validated' : 'is-untested'}>{connection.validated_at_unix_ms ? <><Check size={13} />Validated</> : 'Not tested'}</b><button className="hiveory-icon-button" onClick={() => void action(`test-${connection.id}`, async () => { await hiveoryClient.testPluginConnection(connection.id) }, 'Connection validated.')} disabled={busy !== null} aria-label={`Test ${connection.name}`}><TestTube2 size={15} /></button><button className="hiveory-plugin-disconnect" onClick={() => void action(`delete-${connection.id}`, () => hiveoryClient.deletePluginConnection(connection.id), 'Connection removed.')} disabled={busy !== null}>Disconnect</button></div>)}</div>}
+          </article>
+        })}
+        {!visibleCatalog.length && <div className="hiveory-capability-empty"><PlugZap size={24} /><h2>{query ? 'No plugins match your search.' : pluginSubtab === 'connected' ? 'No connections yet.' : 'Plugins are loading.'}</h2>{!query && pluginSubtab === 'connected' && <p>Connect a plugin to manage its accounts here.</p>}</div>}
+      </div>
+    </>}
+    {activeTab === 'mcp' && <div className="hiveory-capability-empty hiveory-mcp-empty"><PlugZap size={24} /><h2>MCP server management is not available yet.</h2><p>Hiveory currently supplies its MCP bridge through the active session.</p></div>}
+    {activeTab === 'skills' && <HiveorySkills embedded />}
     {feedback && <div className="hiveory-feedback" role="status">{feedback}</div>}
     {showConfiguration && selected && <div className="hiveory-modal-backdrop" role="presentation"><section className="hiveory-modal hiveory-plugin-config-modal" role="dialog" aria-modal="true" aria-labelledby="hiveory-plugin-detail-title"><div className="hiveory-modal-heading"><div className="hiveory-plugin-config-title">{pluginMark(selected)}<div><p className="hiveory-eyebrow">Local provider adapter</p><h2 id="hiveory-plugin-detail-title">{selected.manifest.name}</h2></div></div><button className="hiveory-icon-button" onClick={() => { setShowConfiguration(false); setShowConnection(false) }} aria-label="Close plugin configuration"><X size={17} /></button></div><p className="hiveory-muted-copy">{selected.manifest.description}</p><div className="hiveory-plugin-meta"><span><strong>Transport</strong>{riskLabel(selected.manifest.adapter)}</span><span><strong>Credentials</strong>{selected.manifest.connection_kind === 'api_key_header' ? 'OS keyring' : 'No secret required'}</span><span><strong>Allow-list</strong>{selected.manifest.allowed_hosts.join(', ') || 'None declared'}</span></div><div className="hiveory-plugin-permissions"><div className="hiveory-card-heading"><LockKeyhole size={15} /><h3>Permissions</h3></div>{selected.manifest.permissions.map((permission) => <div key={permission.capability}><strong>{permission.capability}</strong><span>{permission.explanation}</span></div>)}</div><div className="hiveory-plugin-tools"><div className="hiveory-card-heading"><PlugZap size={15} /><h3>Available tools</h3><span>{selected.manifest.tools.length}</span></div>{selected.manifest.tools.map((tool) => <div key={tool.name} className="hiveory-plugin-tool"><span><strong>{tool.name}</strong><small>{tool.description}</small></span><span className={`hiveory-risk-badge ${tool.risk}`}>{riskLabel(tool.risk)}</span></div>)}</div><div className="hiveory-plugin-connections"><div className="hiveory-card-heading"><Link2 size={15} /><h3>Connections</h3><button className="is-secondary" onClick={() => setShowConnection(true)} disabled={!selected.enabled}><Plus size={14} />Add connection</button></div>{selectedConnections.length ? selectedConnections.map((connection) => <ConnectionRow key={connection.id} connection={connection} busy={busy} onTest={() => void action(`test-${connection.id}`, async () => { await hiveoryClient.testPluginConnection(connection.id) }, 'Connection validated.')} onDelete={() => void action(`delete-${connection.id}`, () => hiveoryClient.deletePluginConnection(connection.id), 'Connection removed.')} />) : <p className="hiveory-muted-copy">Add and test a connection before granting this provider to an agent.</p>}</div><PluginGrantEditor plugin={selected} connections={selectedConnections} agents={agents} busy={busy} onAction={action} /><PluginDryRun selected={selected} connections={selectedConnections} /></section></div>}
     {showConnection && selected && <ConnectionForm plugin={selected} busy={busy === 'connection'} onCancel={() => setShowConnection(false)} onSave={async (request) => { setBusy('connection'); setFeedback(null); try { await hiveoryClient.createPluginConnection(request); setShowConnection(false); setFeedback('Connection saved. Test it before granting it to an Agent.'); await refresh() } catch (error) { setFeedback(error instanceof Error ? error.message : 'The connection could not be saved.') } finally { setBusy(null) } }} />}

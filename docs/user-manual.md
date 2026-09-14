@@ -9,7 +9,7 @@ This guide explains how to use and test the local Plugins, Skills, Automations, 
 3. Create at least one Hiveory Agent before testing Skills or Automations. The application cannot assign a skill or schedule work without an agent.
 4. Do not enter a real provider token merely to explore a form. Connections are intended for user-owned credentials and are stored in the operating-system keyring after a successful save.
 
-The left workspace rail contains **Automations**, **Plugins**, and **Skills**. The title-bar Tasks button opens Tasks. The Workspace board button is in the lower-left workspace tools area.
+The right sidebar button in the title bar opens the shared **Dashboard**, **Automations**, and **Plugins** navigation. These pages are available from Code, Chat, and Agent mode without changing the active mode. The left rail stays dedicated to local work: workspaces in Code, conversations in Chat, and agents in Agent mode. Plugins contains the global MCP and Skills tabs. The title-bar Tasks button opens Tasks. The Workspace board button is in the lower-left workspace tools area.
 
 ## Plugins
 
@@ -17,7 +17,7 @@ Plugins are local, declarative HTTPS adapters. They are not downloaded executabl
 
 ### Use an existing plugin
 
-1. Select **Plugins** in the workspace rail.
+1. Open the global right sidebar and select **Plugins**.
 2. Use **Search plugins** to find a provider.
 3. Read the provider row before enabling it. The row shows its description, current connection status, enable switch, and the three-dot menu.
 4. Turn the switch on to make the manifest available on this device. Turn it off to remove it from the active catalog. This does not delete an existing connection.
@@ -100,7 +100,7 @@ Automations are durable local schedules. They run while Hiveory and its local sc
 
 ### Inspect existing automations
 
-1. Select **Automations** in the workspace rail.
+1. Open the global right sidebar and select **Automations**.
 2. Search by name, description, agent, schedule, or timezone.
 3. Select an automation row to open its details.
 4. Verify the schedule, next run, catch-up policy, concurrency policy, delivery setting, limits, prompt snapshot, and recent executions.
@@ -207,7 +207,7 @@ Moving a provider item between board lanes changes Hiveory's local board prefere
 
 ## Troubleshooting and evidence to collect
 
-If a global surface does not open from the workspace rail, record the active mode, workspace name, the exact button pressed, and a screenshot before restarting Hiveory. The expected behavior is that Plugins, Skills, and Automations replace the Code workspace canvas.
+If a global surface does not open from the right sidebar, record the active mode, workspace name, the exact button pressed, and a screenshot before restarting Hiveory. The expected behavior is that Dashboard, Automations, and Plugins replace only the center pane while the mode's left rail remains available.
 
 For a failed connection, record the provider name and visible error message, but never copy tokens, API keys, raw request headers, or browser cookies into a bug report.
 

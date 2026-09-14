@@ -13,7 +13,10 @@ import {
   FolderSearch,
   FolderTree,
   Globe,
+  Globe2,
   GitBranch,
+  LayoutDashboard,
+  ListTodo,
   PanelsTopLeft,
   MoreVertical,
   Moon,
@@ -27,6 +30,7 @@ import {
   Columns3,
   SquareTerminal,
   Trash2,
+  Workflow,
 } from 'lucide-react'
 import type {
   CodePaneNode,
@@ -45,6 +49,7 @@ interface CodeWorkspaceRailProps {
   projects: CodeProjectSummary[]
   workspaces: CodeWorkspaceSummary[]
   activeWorkspaceId: string | null
+  activeGlobalDestination: 'dashboard' | 'automations' | 'plugins' | 'tasks' | null
   activeGlobalSection: 'workspace'
   onSelectWorkspace: (workspaceId: string) => void
   onAddProject: () => void
@@ -122,6 +127,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   projects,
   workspaces,
   activeWorkspaceId,
+  activeGlobalDestination,
   activeGlobalSection,
   onSelectWorkspace,
   onAddProject,
@@ -203,6 +209,14 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   const handleResetWidth = useCallback(() => {
     setEffectiveRailWidth(DEFAULT_RAIL_WIDTH)
   }, [setEffectiveRailWidth])
+
+  const handleResizeKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const maximum = Math.min(MAX_RAIL_WIDTH, window.innerWidth * 0.5)
+    if (event.key === 'ArrowLeft') { event.preventDefault(); setEffectiveRailWidth(Math.max(MIN_RAIL_WIDTH, effectiveRailWidth - 10)) }
+    if (event.key === 'ArrowRight') { event.preventDefault(); setEffectiveRailWidth(Math.min(maximum, effectiveRailWidth + 10)) }
+    if (event.key === 'Home') { event.preventDefault(); setEffectiveRailWidth(MIN_RAIL_WIDTH) }
+    if (event.key === 'End') { event.preventDefault(); setEffectiveRailWidth(maximum) }
+  }, [effectiveRailWidth, setEffectiveRailWidth])
 
   const { state, focusPane } = controller
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -735,6 +749,27 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
       aria-label="Code workspace"
       onClick={onActivateCanvas}
     >
+      <nav className="code-rail-global-nav" aria-label="Global navigation">
+        {([
+          ['dashboard', 'Dashboard', LayoutDashboard],
+          ['automations', 'Automations', Workflow],
+          ['plugins', 'Plugins', Globe2],
+          ['tasks', 'Tasks', ListTodo],
+        ] as const).map(([destination, label, Icon]) => (
+          <button
+            key={destination}
+            type="button"
+            className={`code-rail-nav-item${activeGlobalDestination === destination ? ' is-selected' : ''}`}
+            aria-current={activeGlobalDestination === destination ? 'page' : undefined}
+            onClick={(event) => {
+              event.stopPropagation()
+              window.dispatchEvent(new CustomEvent('hiveory-open-global-destination', { detail: { destination } }))
+            }}
+          >
+            <span className="code-rail-nav-left"><Icon size={15} aria-hidden="true" /><span>{label}</span></span>
+          </button>
+        ))}
+      </nav>
       <div className="code-rail-section-header">
         <span>Workspaces</span>
         <div className="code-rail-add-wrapper">
@@ -906,10 +941,12 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         className="code-workspace-rail-resizer"
         onPointerDown={handleResizeStart}
         onDoubleClick={handleResetWidth}
+        onKeyDown={handleResizeKeyDown}
         title="Drag to resize sidebar • Double-click to reset"
         aria-label="Resize workspace sidebar"
         role="separator"
         aria-orientation="vertical"
+        tabIndex={0}
       />
     </aside>
   )

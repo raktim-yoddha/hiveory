@@ -39,6 +39,7 @@ interface HiveoryCodeWorkspaceProps {
   initialSection?: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
   children?: ReactNode
   embedded?: boolean
+  globalDestination?: 'dashboard' | 'automations' | 'plugins' | 'tasks' | null
   sharedRailWidth?: number
   onSharedRailWidthChange?: (width: number) => void
   onActivateCanvas?: () => void
@@ -56,6 +57,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   initialWorkspaceId,
   initialSection = 'workspace',
   embedded = false,
+  globalDestination = null,
   sharedRailWidth,
   onSharedRailWidthChange,
   onActivateCanvas,
@@ -361,13 +363,6 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         return
       }
 
-      // Ctrl+Shift+P -> Layout menu
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
-        e.preventDefault()
-        window.dispatchEvent(new Event('hiveory-open-code-layout-menu'))
-        return
-      }
-
       // Ctrl+W -> Close active pane
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'w') {
         if (state.focusedPaneId) {
@@ -431,6 +426,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         projects={projects}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
+        activeGlobalDestination={globalDestination}
         activeGlobalSection="workspace"
         onSelectWorkspace={handleSelectWorkspace}
         onAddProject={() => void handleAddProject()}

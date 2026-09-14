@@ -41,6 +41,8 @@ export type AgentMessage = { id: string; run_id: string; role: string; kind: str
 export type AgentRunDetail = { summary: AgentRunSummary; messages: AgentMessage[]; tool_calls: AgentToolCallSummary[]; approvals: AgentApprovalSummary[]; skills: AgentSkillSummary[]; memories: AgentMemorySummary[]; artifacts: AgentArtifactSummary[]; child_runs: AgentRunSummary[]; event_cursor: number }
 export type AgentDetail = { summary: AgentSummary; operating_brief: string; system_instructions: string; approval_policy: AgentApprovalPolicy; memory_policy: AgentMemoryPolicy; runtime_limits: AgentRuntimeLimits; folders: AgentFolderGrant[]; tools: AgentToolDefinition[]; skills: AgentSkillSummary[]; conflicts: AgentSkillConflict[]; recent_runs: AgentRunSummary[] }
 export type AgentDashboard = { agents: AgentSummary[]; active_runs: AgentRunSummary[]; pending_approvals: AgentApprovalSummary[]; recent_runs: AgentRunSummary[] }
+export type GlobalDashboardChatTurn = { turn_id: string; conversation_id: string; conversation_title: string; state: ChatTurnState; updated_at_unix_ms: number }
+export type GlobalDashboardSnapshot = { code_runs: CodeRunSummary[]; agent_dashboard: AgentDashboard | null; routines: RoutineSummary[]; chat_turns: GlobalDashboardChatTurn[]; source_errors: string[]; generated_at_unix_ms: number }
 export type AgentCreateRequest = { name: string; description: string; operating_brief: string; avatar_color: string; provider_account_id: string; model: string; system_instructions: string; approval_policy: AgentApprovalPolicy; memory_policy: AgentMemoryPolicy; runtime_limits: AgentRuntimeLimits }
 export type AgentUpdateRequest = AgentCreateRequest & { agent_id: string }
 export type AgentFolderGrantRequest = { agent_id: string; path: string; read: boolean; write: boolean }
@@ -982,6 +984,11 @@ export const hiveoryClient = {
   async restartRecovery(): Promise<void> { if (hiveoryIsTauri) await invoke('hiveory_command_prepare_restart_recovery') },
 
   async agentDashboard(): Promise<AgentDashboard> { return hiveoryIsTauri ? tauriQuery<AgentDashboard>('hiveory_query_agent_dashboard') : previewAgentDashboard() },
+  async globalDashboard(): Promise<GlobalDashboardSnapshot> {
+    return hiveoryIsTauri
+      ? tauriQuery<GlobalDashboardSnapshot>('hiveory_query_global_dashboard')
+      : { code_runs: [], agent_dashboard: previewAgentDashboard(), routines: previewRoutines.map(previewRoutineSummary), chat_turns: [], source_errors: [], generated_at_unix_ms: Date.now() }
+  },
   async agents(): Promise<AgentSummary[]> { return hiveoryIsTauri ? tauriQuery<AgentSummary[]>('hiveory_query_agents') : [structuredClone(previewAgentSummary)] },
   async agent(agentId: string): Promise<AgentDetail> { return hiveoryIsTauri ? tauriQuery<AgentDetail>('hiveory_query_agent', { request: { agent_id: agentId } }) : previewAgentDetail() },
   async createAgent(request: AgentCreateRequest): Promise<AgentDetail> {

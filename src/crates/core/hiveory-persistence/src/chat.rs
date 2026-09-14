@@ -6,7 +6,7 @@ use hiveory_protocol::{
     ChatFolderDeleteRequest, ChatFolderSummary, ChatFolderUpdateRequest, ChatMessage,
     ChatMessagePart, ChatMessageRole, ChatMetadataRequest, ChatProfileSnapshot,
     ChatProviderStreamEvent, ChatProviderStreamEventKind, ChatReasoningEffort, ChatSendRequest,
-    ChatSidebarPage, ChatSidebarQuery, ChatTurnState, ChatTurnSummary,
+    ChatSidebarPage, ChatSidebarQuery, ChatTurnState, ChatTurnSummary, GlobalDashboardChatTurn,
 };
 use serde_json::{json, Value};
 use sqlx::{sqlite::SqliteRow, Row, Sqlite, Transaction};
@@ -164,6 +164,33 @@ impl HiveoryChatStore {
             folders,
             next_cursor: None,
         })
+    }
+
+    pub async fn dashboard_turns(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<GlobalDashboardChatTurn>, HiveoryChatStoreError> {
+        let rows = sqlx::query(
+            "SELECT t.id, t.conversation_id, c.title, t.state, t.updated_at_unix_ms
+             FROM hiveory_chat_turns t
+             JOIN hiveory_chat_conversations c ON c.id=t.conversation_id
+             WHERE c.archived=0
+             ORDER BY t.updated_at_unix_ms DESC LIMIT ?",
+        )
+        .bind(i64::from(limit.clamp(1, 200)))
+        .fetch_all(self.persistence.pool())
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(GlobalDashboardChatTurn {
+                    turn_id: row.get(0),
+                    conversation_id: row.get(1),
+                    conversation_title: row.get(2),
+                    state: turn_state_from_value(&row.get::<String, _>(3))?,
+                    updated_at_unix_ms: row.get(4),
+                })
+            })
+            .collect()
     }
 
     pub async fn detail(

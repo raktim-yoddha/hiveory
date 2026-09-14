@@ -98,17 +98,17 @@ use hiveory_protocol::{
     CodeWorkspaceOpenRequest, CodeWorkspaceOpenTarget, CodeWorkspaceParentRequest,
     CodeWorkspaceQuery, CodeWorkspaceRemoveRequest, CodeWorkspaceSummary, CodeWorkspaceTrust,
     CodeWorkspaceTrustRequest, CodeWorkspaceUpdateRequest, CommandEnvelope,
-    CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot, JobState,
-    LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult, OpenCodePaneMarkdownRequest,
-    OpenCodePaneMarkdownResult, OpenCodePanePreviewRequest, OpenCodePanePreviewResult,
-    PluginCatalogEntry, PluginConnectionCreateRequest, PluginConnectionIdRequest,
-    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginDryRunRequest,
-    PluginInstallRequest, PluginInvocationSummary, PluginManifest, ProviderDiagnosticRequest,
-    ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail, RoutineExecution,
-    RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary, RoutineUpdateRequest,
-    SetActiveModeCommand, SharedEventEnvelope, SharedEventKind, TaskSourceConnectRequest,
-    TaskSourceIdRequest, TaskSourceQuery, TaskSourceSnapshot, UpdateSnapshot,
-    HIVEORY_PROTOCOL_VERSION,
+    CreateCodePaneMarkdownRequest, CreateCodePaneMarkdownResult, DiagnosticSnapshot,
+    GlobalDashboardSnapshot, JobState, LaunchCodePaneTerminalRequest, LaunchCodePaneTerminalResult,
+    OpenCodePaneMarkdownRequest, OpenCodePaneMarkdownResult, OpenCodePanePreviewRequest,
+    OpenCodePanePreviewResult, PluginCatalogEntry, PluginConnectionCreateRequest,
+    PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
+    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, PluginManifest,
+    ProviderDiagnosticRequest, ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail,
+    RoutineExecution, RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary,
+    RoutineUpdateRequest, SetActiveModeCommand, SharedEventEnvelope, SharedEventKind,
+    TaskSourceConnectRequest, TaskSourceIdRequest, TaskSourceQuery, TaskSourceSnapshot,
+    UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
@@ -5099,6 +5099,62 @@ async fn hiveory_query_agent_dashboard(
         .dashboard()
         .await
         .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
+async fn hiveory_query_global_dashboard(
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<GlobalDashboardSnapshot, ApiError> {
+    let mut source_errors = Vec::new();
+    let code_runs = match foundation.code_orchestration.runs(None).await {
+        Ok(runs) => runs,
+        Err(error) => {
+            source_errors.push(format!("Code activity: {error}"));
+            Vec::new()
+        }
+    };
+    let chat_turns = match foundation.chat.dashboard_turns(100).await {
+        Ok(turns) => turns,
+        Err(error) => {
+            source_errors.push(format!("Chat activity: {error}"));
+            Vec::new()
+        }
+    };
+    let (agent_dashboard, routines) = if hiveory_dev_edition() {
+        let agent_dashboard = match foundation.agent_runtime.dashboard().await {
+            Ok(dashboard) => Some(dashboard),
+            Err(error) => {
+                source_errors.push(format!("Agent activity: {error}"));
+                None
+            }
+        };
+        let routines = match foundation
+            .routine_scheduler
+            .list(&RoutineQuery {
+                enabled: None,
+                include_archived: false,
+                limit: Some(100),
+            })
+            .await
+        {
+            Ok(routines) => routines,
+            Err(error) => {
+                source_errors.push(format!("Automations: {error}"));
+                Vec::new()
+            }
+        };
+        (agent_dashboard, routines)
+    } else {
+        (None, Vec::new())
+    };
+    Ok(GlobalDashboardSnapshot {
+        code_runs,
+        agent_dashboard,
+        routines,
+        chat_turns,
+        source_errors,
+        generated_at_unix_ms: now_ms(),
+    })
 }
 
 #[tauri::command]
@@ -12629,6 +12685,7 @@ pub fn run() {
             hiveory_command_create_backup,
             hiveory_command_prepare_restore,
             hiveory_query_agent_dashboard,
+            hiveory_query_global_dashboard,
             hiveory_query_agents,
             hiveory_query_agent,
             hiveory_command_create_agent,

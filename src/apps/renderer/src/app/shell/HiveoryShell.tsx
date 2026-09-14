@@ -1,24 +1,22 @@
 import {
-  Activity,
   Bell,
   Bot,
   CheckCircle2,
   CircleHelp,
   Code2,
-  Command,
   Copy,
   Download,
   FolderArchive,
   Globe2,
   Keyboard,
-  ListTodo,
   MessageSquare,
   Minus,
   PanelLeft,
   PanelRight,
   Plus,
+  Search,
+  Settings,
   Settings2,
-  Sparkles,
   Trash2,
   UserRound,
   X,
@@ -33,10 +31,8 @@ import {
   type BrowserConfiguration,
   type BrowserSettings,
   type DiagnosticSnapshot,
-  type ChatEngineCatalog,
   type UpdateSnapshot,
 } from '../../shared/api/hiveory-client'
-import { PRIMARY_PRESETS } from '../../features/modes/code/workspace/model/code-layout-presets-meta'
 import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/global/browser/model/browser-models'
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/global/browser/hooks/use-browser-surface-blocker'
@@ -45,7 +41,6 @@ import { HiveoryGlobalSurface, type GlobalDestination } from '../../features/glo
 const HiveoryChat = lazy(async () => ({ default: (await import('../../features/modes/chat/views/HiveoryChat')).HiveoryChat }))
 const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/modes/code/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
 const HiveoryAgent = lazy(async () => ({ default: (await import('@hiveory/premium-features')).HiveoryAgent }))
-const HiveoryTasks = lazy(async () => ({ default: (await import('../../features/global/tasks/views/HiveoryTasks')).HiveoryTasks }))
 const HiveoryCapabilitySettings = lazy(async () => ({ default: (await import('../../features/global/settings/HiveoryCapabilitySettings')).HiveoryCapabilitySettings }))
 
 type ModeDefinition = {
@@ -87,7 +82,7 @@ const previewSnapshot: DiagnosticSnapshot = {
   recovery_message: null,
 }
 
-type ShellScreen = 'workspace' | 'diagnostics' | 'settings' | 'tasks' | 'help'
+type ShellScreen = 'workspace' | 'settings' | 'help'
 type ShellPreferences = { fontScale: 100 | 110 | 125; compact: boolean; reducedMotion: boolean; sidebarCollapsed: boolean }
 type CommandAction = {
   id: string
@@ -165,9 +160,10 @@ export function HiveoryShell() {
   const [preferences, setPreferences] = useState<ShellPreferences>(readPreferences)
   const [commandOpen, setCommandOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [codeLayoutMenuOpen, setCodeLayoutMenuOpen] = useState(false)
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true)
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false)
   const [rightSidebarRequested, setRightSidebarRequested] = useState(false)
+  const [narrowLeftRailOpen, setNarrowLeftRailOpen] = useState(false)
+  const [rightRailIsResizing, setRightRailIsResizing] = useState(false)
   const [leftRailWidth, setLeftRailWidth] = useState(() => {
     const sharedWidth = readRailWidth('hiveory.shared.rail.width', Number.NaN)
     const codeWidth = readRailWidth('hiveory_rail_width', Number.NaN)
@@ -186,19 +182,21 @@ export function HiveoryShell() {
   const [updatePromptOpen, setUpdatePromptOpen] = useState(false)
   const [updateInstalling, setUpdateInstalling] = useState(false)
   const [updatePromptError, setUpdatePromptError] = useState<string | null>(null)
-  const diagnosticsRefreshTimerRef = useRef<number | null>(null)
-  const diagnosticsRefreshInFlightRef = useRef(false)
-  const diagnosticsRefreshQueuedRef = useRef(false)
+  const activityRefreshTimerRef = useRef<number | null>(null)
+  const activityRefreshInFlightRef = useRef(false)
+  const activityRefreshQueuedRef = useRef(false)
   const availableModes = modes.filter(({ mode }) => mode !== 'agent' || agentEnabled)
   const requiresAllThreeColumns = leftRailWidth + rightRailWidth + minCanvasWidth + workbenchGutter
+  const narrowLayout = viewportWidth < 760
   const autoCollapseLeft = rightSidebarOpen && rightSidebarRequested && viewportWidth < requiresAllThreeColumns
+  const leftRailVisible = !preferences.sidebarCollapsed && !autoCollapseLeft && (!narrowLayout || narrowLeftRailOpen)
   const rightSidebarVisible = rightSidebarOpen && (viewportWidth >= requiresAllThreeColumns || rightSidebarRequested)
   const maximumRightRailWidth = Math.max(
     minGlobalRailWidth,
     Math.min(maxGlobalRailWidth, viewportWidth - (preferences.sidebarCollapsed || autoCollapseLeft ? 0 : leftRailWidth) - minCanvasWidth - workbenchGutter),
   )
   useBrowserSurfaceBlocker(
-    commandOpen || notificationsOpen || codeLayoutMenuOpen || updatePromptOpen,
+    commandOpen || notificationsOpen || updatePromptOpen,
     'application-shell-overlay',
   )
 
@@ -207,6 +205,10 @@ export function HiveoryShell() {
     window.addEventListener('resize', updateViewportWidth)
     return () => window.removeEventListener('resize', updateViewportWidth)
   }, [])
+
+  useEffect(() => {
+    if (!narrowLayout) setNarrowLeftRailOpen(false)
+  }, [narrowLayout])
 
   useEffect(() => {
     try {
@@ -225,28 +227,28 @@ export function HiveoryShell() {
   }, [rightRailWidth])
 
   const refresh = useCallback(async () => {
-    if (diagnosticsRefreshInFlightRef.current) {
-      diagnosticsRefreshQueuedRef.current = true
+    if (activityRefreshInFlightRef.current) {
+      activityRefreshQueuedRef.current = true
       return
     }
-    diagnosticsRefreshInFlightRef.current = true
+    activityRefreshInFlightRef.current = true
     try {
       setSnapshot(await hiveoryClient.diagnostics())
     } catch {
       // preview fallback
     } finally {
-      diagnosticsRefreshInFlightRef.current = false
-      if (diagnosticsRefreshQueuedRef.current) {
-        diagnosticsRefreshQueuedRef.current = false
+      activityRefreshInFlightRef.current = false
+      if (activityRefreshQueuedRef.current) {
+        activityRefreshQueuedRef.current = false
         void refresh()
       }
     }
   }, [])
 
-  const scheduleDiagnosticsRefresh = useCallback(() => {
-    if (diagnosticsRefreshTimerRef.current !== null) return
-    diagnosticsRefreshTimerRef.current = window.setTimeout(() => {
-      diagnosticsRefreshTimerRef.current = null
+  const scheduleActivityRefresh = useCallback(() => {
+    if (activityRefreshTimerRef.current !== null) return
+    activityRefreshTimerRef.current = window.setTimeout(() => {
+      activityRefreshTimerRef.current = null
       void refresh()
     }, 120)
   }, [refresh])
@@ -260,16 +262,14 @@ export function HiveoryShell() {
       .catch(() => undefined)
     void refresh()
     hiveoryClient.subscribe((event) => {
-      // Text chunks can arrive many times per second, while the diagnostics UI
-      // only changes when the run reaches a new state.
-      if (event.kind !== 'provider_text_delta') scheduleDiagnosticsRefresh()
+      if (event.kind !== 'provider_text_delta') scheduleActivityRefresh()
     })
     return () => {
-      if (diagnosticsRefreshTimerRef.current !== null) window.clearTimeout(diagnosticsRefreshTimerRef.current)
-      diagnosticsRefreshTimerRef.current = null
-      diagnosticsRefreshQueuedRef.current = false
+      if (activityRefreshTimerRef.current !== null) window.clearTimeout(activityRefreshTimerRef.current)
+      activityRefreshTimerRef.current = null
+      activityRefreshQueuedRef.current = false
     }
-  }, [agentEnabled, refresh, scheduleDiagnosticsRefresh])
+  }, [agentEnabled, refresh, scheduleActivityRefresh])
 
   useEffect(() => {
     const openGlobalSettings = () => {
@@ -323,11 +323,9 @@ export function HiveoryShell() {
   useEffect(() => {
     const openGlobalDestination = (event: Event) => {
       const destination = (event as CustomEvent<{ destination?: GlobalDestination }>).detail?.destination
-      if (destination !== 'dashboard' && destination !== 'automations' && destination !== 'plugins') return
+      if (destination !== 'dashboard' && destination !== 'automations' && destination !== 'plugins' && destination !== 'tasks') return
       setScreen('workspace')
       setGlobalDestination(destination)
-      setRightSidebarOpen(true)
-      setRightSidebarRequested(true)
     }
     window.addEventListener('hiveory-open-global-destination', openGlobalDestination)
     return () => window.removeEventListener('hiveory-open-global-destination', openGlobalDestination)
@@ -462,7 +460,6 @@ export function HiveoryShell() {
     setScreen('workspace')
     setGlobalDestination(null)
     setNotificationsOpen(false)
-    setCodeLayoutMenuOpen(false)
     setActiveMode(mode)
     void hiveoryClient
       .setActiveMode(mode)
@@ -505,6 +502,10 @@ export function HiveoryShell() {
   }
 
   const handleToggleSidebar = () => {
+    if (narrowLayout) {
+      setNarrowLeftRailOpen((open) => !open)
+      return
+    }
     const collapsed = !preferences.sidebarCollapsed
     setPreferences((current) => ({ ...current, sidebarCollapsed: collapsed }))
     window.dispatchEvent(new CustomEvent('hiveory-sidebar-toggle', { detail: { collapsed } }))
@@ -523,6 +524,7 @@ export function HiveoryShell() {
 
   const handleRightRailResizeStart = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    setRightRailIsResizing(true)
     const startX = event.clientX
     const startWidth = rightRailWidth
     const resize = (moveEvent: PointerEvent) => {
@@ -531,6 +533,7 @@ export function HiveoryShell() {
       setRightRailWidth(Math.max(minGlobalRailWidth, Math.min(maximum, Math.round(startWidth - (moveEvent.clientX - startX)))))
     }
     const finish = () => {
+      setRightRailIsResizing(false)
       window.removeEventListener('pointermove', resize)
       window.removeEventListener('pointerup', finish)
     }
@@ -547,18 +550,6 @@ export function HiveoryShell() {
       keywords: [label, 'mode', 'workspace'],
       run: () => selectMode(mode),
     })),
-    {
-      id: 'diagnostics',
-      label: 'Open diagnostics',
-      description: 'Inspect providers, jobs, notifications, and recovery state.',
-      shortcut: 'Ctrl Shift D',
-      keywords: ['system', 'health', 'provider'],
-      run: () => {
-        setScreen('diagnostics')
-        setCommandOpen(false)
-        void refresh()
-      },
-    },
     {
       id: 'settings',
       label: 'Open settings',
@@ -585,14 +576,6 @@ export function HiveoryShell() {
   ]
 
   useEffect(() => {
-    const openCodeLayoutMenu = () => {
-      if (activeMode === 'code' && screen === 'workspace') setCodeLayoutMenuOpen(true)
-    }
-    window.addEventListener('hiveory-open-code-layout-menu', openCodeLayoutMenu)
-    return () => window.removeEventListener('hiveory-open-code-layout-menu', openCodeLayoutMenu)
-  }, [activeMode, screen])
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey
       if (modifier && event.key.toLowerCase() === 'k') {
@@ -608,12 +591,6 @@ export function HiveoryShell() {
         event.preventDefault()
         setScreen('settings')
         setCommandOpen(false)
-      }
-      if (modifier && event.shiftKey && event.key.toLowerCase() === 'd') {
-        event.preventDefault()
-        setScreen('diagnostics')
-        setCommandOpen(false)
-        void refresh()
       }
       if (modifier && event.shiftKey && event.key.toLowerCase() === 'n') {
         event.preventDefault()
@@ -635,7 +612,6 @@ export function HiveoryShell() {
       if (event.key === 'Escape') {
         setCommandOpen(false)
         setNotificationsOpen(false)
-        setCodeLayoutMenuOpen(false)
         if (rightSidebarOpen) {
           setRightSidebarOpen(false)
           setRightSidebarRequested(false)
@@ -649,8 +625,8 @@ export function HiveoryShell() {
 
   const unreadNotifications = snapshot.notifications.filter((item) => !item.read).length
   const canvasPageOpen = screen !== 'workspace' || globalDestination !== null
-  const visibleLeftWidth = preferences.sidebarCollapsed || autoCollapseLeft ? 0 : leftRailWidth
-  const visibleRightWidth = rightSidebarVisible ? rightRailWidth : 0
+  const visibleLeftWidth = leftRailVisible && !narrowLayout ? leftRailWidth : 0
+  const visibleRightWidth = rightSidebarVisible && !narrowLayout ? rightRailWidth : 0
 
   return (
     <>
@@ -670,21 +646,11 @@ export function HiveoryShell() {
             {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
             <button
               type="button"
-              className={screen === 'tasks' ? 'hiveory-icon-button is-active' : 'hiveory-icon-button'}
-              onClick={() => { setScreen('tasks'); setCommandOpen(false); setNotificationsOpen(false) }}
-              aria-label="Open tasks"
-              title="Tasks"
-            >
-              <ListTodo size={13} />
-            </button>
-
-            <button
-              type="button"
               className="hiveory-icon-button hiveory-sidebar-toggle"
               onClick={handleToggleSidebar}
               onDoubleClick={(event) => event.stopPropagation()}
-              aria-label={preferences.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-              aria-expanded={!preferences.sidebarCollapsed}
+              aria-label={narrowLayout ? (narrowLeftRailOpen ? 'Close sidebar' : 'Open sidebar') : (preferences.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar')}
+              aria-expanded={leftRailVisible}
               aria-keyshortcuts="Control+B"
               title={`${preferences.sidebarCollapsed ? 'Show' : 'Hide'} sidebar (Ctrl B)`}
             >
@@ -708,44 +674,6 @@ export function HiveoryShell() {
           </nav>
 
           <div className="hiveory-title-actions" onDoubleClick={(event) => event.stopPropagation()}>
-            {screen === 'workspace' && activeMode === 'code' && (
-              <div className="hiveory-layout-menu">
-                <button
-                  type="button"
-                  className="hiveory-title-action"
-                  aria-haspopup="menu"
-                  aria-expanded={codeLayoutMenuOpen}
-                  onClick={() => setCodeLayoutMenuOpen((value) => !value)}
-                >
-                  <Sparkles size={12} aria-hidden="true" />
-                  Layout
-                  <span className="hiveory-layout-chevron" aria-hidden="true">⌄</span>
-                </button>
-                {codeLayoutMenuOpen && (
-                  <div className="hiveory-layout-dropdown" role="menu" aria-label="Workspace layout">
-                    {PRIMARY_PRESETS.map((preset) => (
-                      <button
-                        type="button"
-                        key={preset.id}
-                        role="menuitem"
-                        className="hiveory-layout-option"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent('hiveory-apply-code-layout-preset', { detail: { preset: preset.id } }))
-                          setCodeLayoutMenuOpen(false)
-                        }}
-                      >
-                        <span className="hiveory-layout-option-icon"><Sparkles size={13} aria-hidden="true" /></span>
-                        <span>
-                          <strong>{preset.label}</strong>
-                          <small>{preset.description}</small>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
             <button
               ref={rightSidebarToggleRef}
               type="button"
@@ -769,7 +697,7 @@ export function HiveoryShell() {
               aria-label="Open command palette"
               title="Command palette (Ctrl K)"
             >
-              <Command size={13} />
+              <Search size={13} aria-hidden="true" />
             </button>
 
             <button
@@ -805,7 +733,7 @@ export function HiveoryShell() {
               aria-label="Open settings"
               title="Settings (Ctrl ,)"
             >
-              <Settings2 size={13} />
+              <Settings size={13} />
             </button>
 
             {windowControlError && (
@@ -853,7 +781,7 @@ export function HiveoryShell() {
         <section
           id="hiveory-main-content"
           tabIndex={-1}
-          className={`hiveory-workbench${canvasPageOpen ? ' has-canvas-page' : ''}${preferences.sidebarCollapsed || autoCollapseLeft ? ' is-left-collapsed' : ''}`}
+          className={`hiveory-workbench${canvasPageOpen ? ' has-canvas-page' : ''}${!leftRailVisible ? ' is-left-collapsed' : ''}${narrowLeftRailOpen ? ' is-narrow-left-open' : ''}${narrowLayout && rightSidebarVisible ? ' is-narrow-right-open' : ''}`}
           style={{
             gridTemplateColumns: `${visibleLeftWidth}px minmax(0, 1fr) ${visibleRightWidth}px`,
             '--hiveory-global-rail-width': `${visibleRightWidth}px`,
@@ -865,15 +793,13 @@ export function HiveoryShell() {
               {activeMode === 'agent' ? (
                 <HiveoryAgent embedded onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
               ) : activeMode === 'chat' ? (
-                <HiveoryChat embedded sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
+                <HiveoryChat embedded globalDestination={globalDestination} sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
               ) : (
-                <HiveoryCodeWorkspace embedded sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
+                <HiveoryCodeWorkspace embedded globalDestination={globalDestination} sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
               )}
             </Suspense>
           </div>
-          {screen === 'diagnostics' ? (
-            <div className="hiveory-workbench-canvas-page"><HiveoryDiagnostics /></div>
-          ) : screen === 'settings' ? (
+          {screen === 'settings' ? (
             <div className="hiveory-workbench-canvas-page"><HiveorySettings
               preferences={preferences}
               setPreferences={setPreferences}
@@ -881,18 +807,17 @@ export function HiveoryShell() {
               onCheckUpdate={() => checkForUpdates(false)}
               onInstallUpdate={installUpdate}
               updateInstalling={updateInstalling}
-              onOpenDiagnostics={() => { setScreen('diagnostics'); void refresh() }}
               onBackToApp={() => setScreen('workspace')}
               onOpenWorkbench={() => { setScreen('workspace'); selectMode('code') }}
             /></div>
           ) : screen === 'help' ? (
             <div className="hiveory-workbench-canvas-page"><HiveoryHelp onOpenSettings={() => setScreen('settings')} /></div>
-          ) : screen === 'tasks' ? (
-            <div className="hiveory-workbench-canvas-page"><HiveoryTasks onOpenWorkspace={(workspaceId) => { void hiveoryClient.setCodeWorkspaceContext({ workspace_id: workspaceId, section: 'workspace' }).finally(() => selectMode('code')) }} onStartLocalWork={() => selectMode('code')} /></div>
           ) : null}
           {screen === 'workspace' && globalDestination && (
             <HiveoryGlobalSurface
               destination={globalDestination}
+              onOpenWorkspace={(workspaceId) => { void hiveoryClient.setCodeWorkspaceContext({ workspace_id: workspaceId, section: 'workspace' }).finally(() => selectMode('code')) }}
+              onStartLocalWork={() => selectMode('code')}
               onOpenSource={(target) => {
                 if (target.source === 'automation') {
                   setGlobalDestination('automations')
@@ -917,15 +842,7 @@ export function HiveoryShell() {
             />
           )}
           {rightSidebarVisible && (
-            <aside ref={rightSidebarRef} id="hiveory-global-sidebar" className="hiveory-global-sidebar" aria-label="Global navigation">
-              <div className="hiveory-global-sidebar-heading"><span>Global</span><button type="button" className="hiveory-icon-button" onClick={() => { setRightSidebarOpen(false); setRightSidebarRequested(false); window.setTimeout(() => rightSidebarToggleRef.current?.focus(), 0) }} aria-label="Close global sidebar"><X size={15} /></button></div>
-              <nav>
-                {([
-                  ['dashboard', 'Dashboard', Activity],
-                  ['automations', 'Automations', Sparkles],
-                  ['plugins', 'Plugins', Globe2],
-                ] as const).map(([destination, label, Icon]) => <button key={destination} type="button" aria-current={globalDestination === destination ? 'page' : undefined} className={globalDestination === destination ? 'is-selected' : ''} onClick={() => { setScreen('workspace'); setGlobalDestination(destination) }}><Icon size={16} /><span>{label}</span></button>)}
-              </nav>
+            <aside ref={rightSidebarRef} id="hiveory-global-sidebar" className={`hiveory-global-sidebar${rightRailIsResizing ? ' is-resizing' : ''}`} aria-label="Reserved sidebar">
               <div className="hiveory-global-sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize global sidebar" tabIndex={0} onPointerDown={handleRightRailResizeStart} onDoubleClick={() => setRightRailWidth(defaultGlobalRailWidth)} onKeyDown={(event) => {
                 if (event.key === 'ArrowLeft') { event.preventDefault(); setRightRailWidth((width) => Math.min(maximumRightRailWidth, width + 10)) }
                 if (event.key === 'ArrowRight') { event.preventDefault(); setRightRailWidth((width) => Math.max(minGlobalRailWidth, width - 10)) }
@@ -1026,7 +943,7 @@ function HiveoryCommandPalette({
           </button>
         </div>
         <label className="hiveory-command-search">
-          <Command size={16} aria-hidden="true" />
+          <Search size={16} aria-hidden="true" />
           <input
             ref={inputRef}
             value={query}
@@ -1233,7 +1150,6 @@ function HiveorySettings({
   onCheckUpdate,
   onInstallUpdate,
   updateInstalling,
-  onOpenDiagnostics,
   onBackToApp,
   onOpenWorkbench,
 }: {
@@ -1243,7 +1159,6 @@ function HiveorySettings({
   onCheckUpdate: () => Promise<UpdateSnapshot>
   onInstallUpdate: () => Promise<void>
   updateInstalling: boolean
-  onOpenDiagnostics: () => void
   onBackToApp: () => void
   onOpenWorkbench: () => void
 }) {
@@ -1349,11 +1264,7 @@ function HiveorySettings({
     <HiveoryCapabilitySettings onBackToApp={onBackToApp} onOpenWorkbench={onOpenWorkbench}>
     <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
       <div className="hiveory-content-header">
-        <Settings2 size={22} aria-hidden="true" />
-        <div>
-          <p className="hiveory-eyebrow">Global preferences</p>
-          <h1 id="hiveory-settings-title">Settings</h1>
-        </div>
+        <h1 id="hiveory-settings-title">Settings</h1>
       </div>
       <p className="hiveory-description">
         Tune the shared shell, protect local data, and verify the release channel. Secrets remain in the operating-system credential manager.
@@ -1449,10 +1360,6 @@ function HiveorySettings({
               {busy === 'restore' ? 'Preparing restore…' : 'Restore from backup'}
             </button>
           </div>
-          <button type="button" className="is-secondary" onClick={onOpenDiagnostics}>
-            <Activity size={15} aria-hidden="true" />
-            Open diagnostics
-          </button>
         </section>
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">
@@ -1484,50 +1391,5 @@ function HiveorySettings({
     </section>
     </HiveoryCapabilitySettings>
     </Suspense>
-  )
-}
-
-function HiveoryDiagnostics() {
-  const [catalog, setCatalog] = useState<ChatEngineCatalog | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let disposed = false
-    void hiveoryClient.chatEngines()
-      .then((next) => { if (!disposed) setCatalog(next) })
-      .catch(() => { if (!disposed) setCatalog(null) })
-      .finally(() => { if (!disposed) setLoading(false) })
-    return () => { disposed = true }
-  }, [])
-
-  return (
-    <section className="hiveory-diagnostics" aria-labelledby="hiveory-diagnostics-title">
-      <div className="hiveory-content-header">
-        <Settings2 size={22} aria-hidden="true" />
-        <div>
-          <p className="hiveory-eyebrow">Global utility</p>
-          <h1 id="hiveory-diagnostics-title">Diagnostics</h1>
-        </div>
-      </div>
-      <div className="hiveory-diagnostic-grid">
-        <section className="hiveory-diagnostic-card">
-          <div className="hiveory-card-heading">
-            <Activity size={17} />
-            <h2>Chat providers</h2>
-          </div>
-          <p>Chat uses the installed local CLIs. Discovery is cached for fast startup and refreshed in the background.</p>
-          <div className="hiveory-diagnostic-provider-list">
-            {loading && <span>Checking installed CLIs…</span>}
-            {!loading && !catalog?.engines.length && <span>No supported CLIs were found.</span>}
-            {catalog?.engines.map((engine) => (
-              <div className="hiveory-diagnostic-provider-row" key={engine.id}>
-                <span>{engine.display_name}</span>
-                <strong>{engine.availability === 'ready' ? 'Ready' : engine.availability === 'missing' ? 'Not installed' : engine.availability === 'unauthenticated' ? 'Not configured' : 'Checking'}</strong>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </section>
   )
 }
