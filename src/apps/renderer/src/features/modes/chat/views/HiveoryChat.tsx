@@ -1168,6 +1168,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
       .join('\n')
     const isUser = message.role === 'user'
     const engine = engineCatalog?.engines.find((candidate) => candidate.id === turn?.provider_account_id)
+    const usage = message.parts.find((part): part is Extract<ChatMessagePart, { kind: 'usage' }> => part.kind === 'usage')
 
     // Calculate thought duration if available
     const thoughtDurationSec = turn?.updated_at_unix_ms && turn?.created_at_unix_ms
@@ -1200,31 +1201,36 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
                 />
               ))}
           </div>
-          <div className="chat-message-actions">
-            {text && (
-              <button
-                type="button"
-                className="chat-msg-action-btn"
-                aria-label="Copy message"
-                title="Copy message"
-                onClick={() => void navigator.clipboard?.writeText(text)}
-              >
-                <Copy size={13} />
-              </button>
-            )}
-            <button
-              type="button"
-              className="chat-msg-action-btn"
-              aria-label="Edit message"
-              title="Edit message"
-              onClick={() => {
-                setEditingMessageId(message.id)
-                setEditingText(text)
-              }}
-            >
-              <Settings2 size={13} />
-            </button>
-          </div>
+          <details className="chat-message-details">
+            <summary className="chat-message-details-summary"><ChevronRight size={13} className="chat-message-details-arrow" /><span>Details</span></summary>
+            <div className="chat-message-details-content">
+              <div className="chat-message-actions">
+                {text && (
+                  <button
+                    type="button"
+                    className="chat-msg-action-btn"
+                    aria-label="Copy message"
+                    title="Copy message"
+                    onClick={() => void navigator.clipboard?.writeText(text)}
+                  >
+                    <Copy size={13} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="chat-msg-action-btn"
+                  aria-label="Edit message"
+                  title="Edit message"
+                  onClick={() => {
+                    setEditingMessageId(message.id)
+                    setEditingText(text)
+                  }}
+                >
+                  <Settings2 size={13} />
+                </button>
+              </div>
+            </div>
+          </details>
         </article>
       )
     }
@@ -1252,56 +1258,59 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
             </span>
           )}
           {message.parts
-            .filter((part) => part.kind !== 'text' && part.kind !== 'reasoning_summary')
+            .filter((part) => part.kind !== 'text' && part.kind !== 'reasoning_summary' && part.kind !== 'usage')
             .map((part, index) => (
               <MessagePartView key={`${message.id}-part-${index}`} part={part} />
             ))}
         </div>
 
-        <div className="chat-message-actions">
-          {text && (
-            <button
-              type="button"
-              className="chat-msg-action-btn"
-              aria-label="Copy message"
-              title="Copy message"
-              onClick={() => void navigator.clipboard?.writeText(text)}
-            >
-              <Copy size={13} />
-            </button>
-          )}
-          {turn && (
-            <button
-              type="button"
-              className="chat-msg-action-btn"
-              aria-label="Retry response"
-              title="Retry response"
-              disabled={busyAction !== null || turn.state === 'streaming'}
-              onClick={() => void retryTurn(turn.id)}
-            >
-              <RotateCcw size={13} />
-            </button>
-          )}
-          <button
-            type="button"
-            className="chat-msg-action-btn"
-            aria-label="Create branch here"
-            title="Create branch here"
-            disabled={busyAction !== null}
-            onClick={() => void branchFromMessage(message.id)}
-          >
-            <Plus size={13} />
-          </button>
-        </div>
-
-        {turn && (
-          <div className="chat-turn-meta">
-            <span>
-              {engine?.display_name ?? turn.provider_account_id} · {modelLabel(engine, turn.model)}
-            </span>
-            <time>{formatDate(message.created_at_unix_ms)}</time>
+        <details className="chat-message-details">
+          <summary className="chat-message-details-summary"><ChevronRight size={13} className="chat-message-details-arrow" /><span>Details</span></summary>
+          <div className="chat-message-details-content">
+            <div className="chat-message-actions">
+              {text && (
+                <button
+                  type="button"
+                  className="chat-msg-action-btn"
+                  aria-label="Copy message"
+                  title="Copy message"
+                  onClick={() => void navigator.clipboard?.writeText(text)}
+                >
+                  <Copy size={13} />
+                </button>
+              )}
+              {turn && (
+                <button
+                  type="button"
+                  className="chat-msg-action-btn"
+                  aria-label="Retry response"
+                  title="Retry response"
+                  disabled={busyAction !== null || turn.state === 'streaming'}
+                  onClick={() => void retryTurn(turn.id)}
+                >
+                  <RotateCcw size={13} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="chat-msg-action-btn"
+                aria-label="Create branch here"
+                title="Create branch here"
+                disabled={busyAction !== null}
+                onClick={() => void branchFromMessage(message.id)}
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+            {usage && <MessagePartView part={usage} />}
+            {turn && (
+              <div className="chat-turn-meta">
+                <span>{engine?.display_name ?? turn.provider_account_id} · {modelLabel(engine, turn.model)}</span>
+                <time>{formatDate(message.created_at_unix_ms)}</time>
+              </div>
+            )}
           </div>
-        )}
+        </details>
       </article>
     )
   }

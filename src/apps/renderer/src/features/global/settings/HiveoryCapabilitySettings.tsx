@@ -13,6 +13,7 @@ import {
   ListChecks,
   MonitorCog,
   Network,
+  Palette,
   PlugZap,
   RefreshCw,
   Search,
@@ -32,7 +33,7 @@ import {
 } from '../../../shared/api/hiveory-client'
 import { loadYoloPreferences, saveYoloPreferences, supportsYoloLaunch } from '../../modes/code/workspace/model/code-yolo-preferences'
 
-type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'general' | 'integrations'
+type SettingsSection = 'onboarding' | 'agents' | 'orchestration' | 'computer-use' | 'browser-use' | 'appearance' | 'general' | 'integrations'
 type OnboardingStep = 'notifications' | 'agent' | 'cli' | 'integrations' | 'setup' | 'projects' | 'multi-task' | 'browser'
 type CapabilityPreferences = {
   defaultAdapterId: string | null
@@ -137,11 +138,13 @@ function adapterLabel(adapter: CodeAdapterSummary): string {
 export function HiveoryCapabilitySettings({
   onBackToApp,
   onOpenWorkbench,
-  children,
+  appearanceContent,
+  generalContent,
 }: {
   onBackToApp: () => void
   onOpenWorkbench: () => void
-  children: ReactNode
+  appearanceContent: ReactNode
+  generalContent: ReactNode
 }) {
   const [section, setSection] = useState<SettingsSection>('onboarding')
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('notifications')
@@ -198,6 +201,7 @@ export function HiveoryCapabilitySettings({
       { id: 'orchestration', label: 'Orchestration', icon: Workflow },
       { id: 'computer-use', label: 'Computer Use', icon: MonitorCog },
       { id: 'browser-use', label: 'Browser Use', icon: Globe2 },
+      { id: 'appearance', label: 'Appearance', icon: Palette },
       { id: 'general', label: 'General', icon: SlidersHorizontal },
       { id: 'integrations', label: 'Integrations', icon: Link2 },
     ]
@@ -307,9 +311,11 @@ export function HiveoryCapabilitySettings({
           ? <ComputerUsePanel installed={computerUseInstalled} busy={busy} onInstall={() => void installSkill('Hiveory Computer Use', computerUseSkill)} onRefresh={() => void refresh()} onOpenWorkbench={onOpenWorkbench} />
           : section === 'browser-use'
             ? <BrowserUsePanel installed={browserUseInstalled} busy={busy} preferences={preferences} onInstall={() => void installSkill('Hiveory Browser Use', browserUseSkill)} onRefresh={() => void refresh()} onOpenWorkbench={onOpenWorkbench} onOpenExternal={(url) => void run('browser-external', async () => { await hiveoryClient.openExternalUrl({ url }) }, 'Opened the page in the default external browser.')} onUpdate={updatePreferences} />
-          : section === 'general'
-            ? children
-            : <IntegrationsPanel />
+          : section === 'appearance'
+            ? appearanceContent
+            : section === 'general'
+              ? generalContent
+              : <IntegrationsPanel />
 
   return <div className="hiveory-capability-settings">
     <aside className="hiveory-capability-sidebar" aria-label="Settings navigation">
@@ -320,7 +326,7 @@ export function HiveoryCapabilitySettings({
         <p>AI capabilities</p>
         {filteredSections.filter((item) => ['agents', 'orchestration', 'computer-use', 'browser-use'].includes(item.id)).map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
         <p>Application</p>
-        {filteredSections.filter((item) => ['general', 'integrations'].includes(item.id)).map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
+        {filteredSections.filter((item) => ['appearance', 'general', 'integrations'].includes(item.id)).map((item) => <SettingsNavButton key={item.id} item={item} section={section} onSelect={setSection} />)}
       </div>
     </aside>
     <main className="hiveory-capability-main">

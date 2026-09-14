@@ -8,11 +8,14 @@ import {
   Download,
   FolderArchive,
   Globe2,
+  Image as ImageIcon,
+  ImagePlus,
   Keyboard,
   MessageSquare,
   Minus,
   PanelLeft,
   PanelRight,
+  Palette,
   Plus,
   Search,
   Settings,
@@ -23,6 +26,8 @@ import {
   Square as SquareIcon,
 } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { convertFileSrc } from '@tauri-apps/api/core'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   formatHiveoryClientError,
@@ -83,7 +88,14 @@ const previewSnapshot: DiagnosticSnapshot = {
 }
 
 type ShellScreen = 'workspace' | 'settings' | 'help'
-type ShellPreferences = { fontScale: 100 | 110 | 125; compact: boolean; reducedMotion: boolean; sidebarCollapsed: boolean }
+type ShellPreferences = {
+  fontScale: 100 | 110 | 125
+  compact: boolean
+  reducedMotion: boolean
+  sidebarCollapsed: boolean
+  backgroundColor: string
+  wallpaperPath: string | null
+}
 type CommandAction = {
   id: string
   label: string
@@ -93,7 +105,21 @@ type CommandAction = {
   run: () => void
 }
 
-const defaultPreferences: ShellPreferences = { fontScale: 100, compact: false, reducedMotion: false, sidebarCollapsed: false }
+const defaultPreferences: ShellPreferences = {
+  fontScale: 100,
+  compact: false,
+  reducedMotion: false,
+  sidebarCollapsed: false,
+  backgroundColor: '#0d0e11',
+  wallpaperPath: null,
+}
+const backgroundColorPresets = [
+  { label: 'Graphite', value: '#0d0e11' },
+  { label: 'Slate', value: '#17212b' },
+  { label: 'Forest', value: '#13231c' },
+  { label: 'Plum', value: '#251827' },
+  { label: 'Warm', value: '#251d17' },
+] as const
 const defaultRailWidth = 228
 const defaultGlobalRailWidth = 240
 const minRailWidth = 180
@@ -113,6 +139,12 @@ function readPreferences(): ShellPreferences {
       ...value,
       fontScale: value.fontScale === 110 || value.fontScale === 125 ? value.fontScale : 100,
       sidebarCollapsed: value.sidebarCollapsed === true,
+      backgroundColor: typeof value.backgroundColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.backgroundColor)
+        ? value.backgroundColor
+        : defaultPreferences.backgroundColor,
+      wallpaperPath: typeof value.wallpaperPath === 'string' && value.wallpaperPath.trim()
+        ? value.wallpaperPath
+        : null,
     }
   } catch {
     return defaultPreferences
@@ -150,6 +182,31 @@ function rememberDismissedUpdateVersion(version: string): void {
   } catch {
     // Optional; the prompt can still be dismissed for the current session.
   }
+}
+
+function validateWallpaper(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const image = new window.Image()
+    const timeout = window.setTimeout(() => {
+      image.src = ''
+      reject(new Error('Hiveory could not read that image.'))
+    }, 8_000)
+
+    image.onload = () => {
+      window.clearTimeout(timeout)
+      const pixels = image.naturalWidth * image.naturalHeight
+      if (image.naturalWidth > 7_680 || image.naturalHeight > 7_680 || pixels > 32_000_000) {
+        reject(new Error('Choose an image up to 7,680 pixels on a side and 32 megapixels.'))
+        return
+      }
+      resolve()
+    }
+    image.onerror = () => {
+      window.clearTimeout(timeout)
+      reject(new Error('Hiveory could not read that image. Choose a PNG, JPEG, or WebP file.'))
+    }
+    image.src = convertFileSrc(path)
+  })
 }
 
 export function HiveoryShell() {
@@ -340,6 +397,11 @@ export function HiveoryShell() {
     document.documentElement.style.setProperty('--hiveory-font-scale', String(preferences.fontScale / 100))
     document.documentElement.dataset.hiveoryDensity = preferences.compact ? 'compact' : 'comfortable'
     document.documentElement.dataset.reducedMotion = preferences.reducedMotion ? 'true' : 'false'
+    document.documentElement.style.setProperty('--hiveory-backdrop-color', preferences.backgroundColor)
+    document.documentElement.style.setProperty(
+      '--hiveory-backdrop-image',
+      preferences.wallpaperPath ? `url("${convertFileSrc(preferences.wallpaperPath)}")` : 'none',
+    )
     try {
       window.localStorage.setItem('hiveory.preferences', JSON.stringify(preferences))
     } catch {
@@ -1165,6 +1227,7 @@ function HiveorySettings({
   const [version, setVersion] = useState('0.1.0')
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [wallpaperError, setWallpaperError] = useState<string | null>(null)
   const [browserConfiguration, setBrowserConfiguration] = useState<BrowserConfiguration | null>(null)
   const [browserSettings, setBrowserSettings] = useState<BrowserSettings | null>(null)
 
@@ -1230,6 +1293,31 @@ function HiveorySettings({
       return 'Restore staged. The application will restart.'
     })
 
+  const selectBackgroundColor = (backgroundColor: string) => {
+    setWallpaperError(null)
+    setPreferences((current) => ({ ...current, backgroundColor, wallpaperPath: null }))
+  }
+
+  const chooseWallpaper = async () => {
+    setWallpaperError(null)
+    try {
+      const selection = await openDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'Wallpaper image', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+      })
+      if (typeof selection !== 'string') return
+
+      setBusy('wallpaper')
+      await validateWallpaper(selection)
+      setPreferences((current) => ({ ...current, wallpaperPath: selection }))
+    } catch (error) {
+      setWallpaperError(error instanceof Error ? error.message : 'Hiveory could not use that wallpaper.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const saveBrowserSettings = () =>
     action('browser-settings', async () => {
       if (!browserSettings) return 'Browser settings are still loading.'
@@ -1261,15 +1349,14 @@ function HiveorySettings({
 
   return (
     <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading settings…</div>}>
-    <HiveoryCapabilitySettings onBackToApp={onBackToApp} onOpenWorkbench={onOpenWorkbench}>
-    <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
-      <div className="hiveory-content-header">
-        <h1 id="hiveory-settings-title">Settings</h1>
-      </div>
-      <p className="hiveory-description">
-        Tune the shared shell, protect local data, and verify the release channel. Secrets remain in the operating-system credential manager.
-      </p>
-      <div className="hiveory-settings-grid">
+    <HiveoryCapabilitySettings
+      onBackToApp={onBackToApp}
+      onOpenWorkbench={onOpenWorkbench}
+      appearanceContent={
+        <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-appearance-title">
+          <div className="hiveory-content-header"><h1 id="hiveory-appearance-title">Appearance</h1></div>
+          <p className="hiveory-description">Control Hiveory’s scale, motion, navigation density, and shared canvas.</p>
+          <div className="hiveory-settings-grid is-single-column">
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">
             <Keyboard size={17} aria-hidden="true" />
@@ -1308,6 +1395,65 @@ function HiveorySettings({
           </label>
           <p>Keyboard shortcuts: <kbd>Ctrl K</kbd> palette, <kbd>Ctrl 1–3</kbd> modes, <kbd>Ctrl ,</kbd> settings.</p>
         </section>
+        <section className="hiveory-settings-card hiveory-background-settings-card">
+          <div className="hiveory-card-heading">
+            <Palette size={17} aria-hidden="true" />
+            <h2>Background</h2>
+          </div>
+          <p>Choose a color or add one local wallpaper behind Hiveory’s floating panels.</p>
+          <div
+            className="hiveory-background-preview"
+            style={{
+              backgroundColor: preferences.backgroundColor,
+              backgroundImage: preferences.wallpaperPath ? `url("${convertFileSrc(preferences.wallpaperPath)}")` : undefined,
+            }}
+            aria-label={preferences.wallpaperPath ? 'Current wallpaper preview' : 'Current color preview'}
+          />
+          <div className="hiveory-background-presets" aria-label="Background color presets">
+            {backgroundColorPresets.map((preset) => (
+              <button
+                key={preset.value}
+                type="button"
+                className={preferences.wallpaperPath === null && preferences.backgroundColor === preset.value ? 'is-selected' : ''}
+                onClick={() => selectBackgroundColor(preset.value)}
+                aria-pressed={preferences.wallpaperPath === null && preferences.backgroundColor === preset.value}
+              >
+                <span style={{ background: preset.value }} aria-hidden="true" />
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <label className="hiveory-background-custom-color" htmlFor="hiveory-background-color">
+            <span>Custom color</span>
+            <input
+              id="hiveory-background-color"
+              type="color"
+              value={preferences.backgroundColor}
+              onChange={(event) => selectBackgroundColor(event.target.value)}
+            />
+          </label>
+          <div className="hiveory-background-actions">
+            <button type="button" disabled={busy === 'wallpaper'} onClick={() => void chooseWallpaper()}>
+              <ImagePlus size={14} aria-hidden="true" />
+              {busy === 'wallpaper' ? 'Checking image…' : 'Choose wallpaper'}
+            </button>
+            {preferences.wallpaperPath && (
+              <button type="button" className="is-secondary" onClick={() => setPreferences((current) => ({ ...current, wallpaperPath: null }))}>
+                <ImageIcon size={14} aria-hidden="true" />
+                Use color only
+              </button>
+            )}
+          </div>
+          {wallpaperError && <p className="hiveory-background-error" role="alert">{wallpaperError}</p>}
+        </section>
+          </div>
+        </section>
+      }
+      generalContent={
+        <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
+          <div className="hiveory-content-header"><h1 id="hiveory-settings-title">General</h1></div>
+          <p className="hiveory-description">Manage local data, browser defaults, and the Hiveory release channel.</p>
+          <div className="hiveory-settings-grid is-single-column">
         <section id="hiveory-browser-settings" className="hiveory-settings-card hiveory-browser-settings-card" tabIndex={-1}>
           <div className="hiveory-card-heading">
             <Globe2 size={17} aria-hidden="true" />
@@ -1386,10 +1532,11 @@ function HiveorySettings({
             </>
           )}
         </section>
-      </div>
-      {message && <div className="hiveory-feedback" role="status">{message}</div>}
-    </section>
-    </HiveoryCapabilitySettings>
+          </div>
+          {message && <div className="hiveory-feedback" role="status">{message}</div>}
+        </section>
+      }
+    />
     </Suspense>
   )
 }

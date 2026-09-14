@@ -8146,3 +8146,21 @@
 .agent-mode-main.is-global-surface .agent-main-content > .hiveory-plugin-page,
 .agent-mode-main.is-global-surface .agent-main-content > .hiveory-automation,
 .agent-mode-main.is-global-surface .agent-main-content > .hiveory-skills-page { height: 100%; min-height: 0; }
+
+/* The code canvas is a layout host rather than a visible middle panel. The
+   pane leaves and optional side panels provide all of the visual surfaces. */
+.hiveory-workbench .code-workspace-main {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.hiveory-workbench .code-workspace-canvas,
+.hiveory-workbench .code-workspace-empty {
+  padding: 0;
+  background: transparent;
+}
+
+.hiveory-workbench .code-pane-canvas-body {
+  min-height: 0;
+}

@@ -2500,3 +2500,179 @@ a:focus-visible {
   box-shadow: none !important;
   border-color: var(--hiveory-workbench-border) !important;
 }
+
+/* Floating shell: the wallpaper is the only continuous surface. Navigation,
+   rails, and content cards sit above it as independent pieces. */
+:root {
+  --hiveory-backdrop-color: #0d0e11;
+  --hiveory-backdrop-image: none;
+}
+
+.hiveory-shell {
+  grid-template-rows: 52px minmax(0, 1fr);
+  background-color: var(--hiveory-backdrop-color);
+  background-image: linear-gradient(rgba(5, 6, 8, .16), rgba(5, 6, 8, .16)), var(--hiveory-backdrop-image);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.hiveory-titlebar {
+  height: 52px;
+  min-height: 52px;
+  max-height: 52px;
+  padding: 8px 12px 6px;
+  border: 0;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.hiveory-titlebar .hiveory-brand,
+.hiveory-titlebar .hiveory-mode-switch,
+.hiveory-titlebar .hiveory-title-actions {
+  min-height: 34px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 10px;
+  background: rgba(12, 13, 16, .82);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+  backdrop-filter: blur(18px);
+}
+
+.hiveory-titlebar .hiveory-brand {
+  justify-self: start;
+  padding: 4px 7px 4px 8px;
+}
+
+.hiveory-titlebar .hiveory-mode-switch {
+  justify-self: center;
+  padding: 2px;
+}
+
+.hiveory-titlebar .hiveory-title-actions {
+  justify-self: end;
+  padding: 4px;
+}
+
+.hiveory-titlebar .hiveory-window-controls {
+  margin-left: 2px;
+  padding-left: 3px;
+  border-left: 1px solid rgba(255, 255, 255, .09);
+}
+
+.hiveory-workbench {
+  background: transparent;
+}
+
+.hiveory-background-settings-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.hiveory-background-preview {
+  min-height: 92px;
+  border: 1px solid var(--hiveory-workbench-border);
+  border-radius: 7px;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.hiveory-background-presets {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.hiveory-background-presets button {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 6px 3px;
+  color: var(--hiveory-workbench-muted);
+  font-size: 10px;
+}
+
+.hiveory-background-presets button > span {
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 50%;
+}
+
+.hiveory-background-presets button.is-selected {
+  border-color: #777b84;
+  color: var(--hiveory-workbench-text);
+}
+
+.hiveory-background-custom-color,
+.hiveory-background-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hiveory-background-custom-color {
+  justify-content: space-between;
+  color: var(--hiveory-workbench-muted) !important;
+  font-size: 12px;
+}
+
+.hiveory-background-custom-color input[type="color"] {
+  width: 40px;
+  height: 28px;
+  border: 1px solid var(--hiveory-workbench-border-active) !important;
+  border-radius: 6px;
+  padding: 3px;
+  background: var(--hiveory-workbench-surface);
+  cursor: pointer;
+}
+
+.hiveory-background-actions { flex-wrap: wrap; }
+.hiveory-background-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.hiveory-background-error { margin: 0 !important; color: #efaaa8 !important; font-size: 12px; }
+
+@media (max-width: 760px) {
+  .hiveory-shell { grid-template-rows: 48px minmax(0, 1fr); }
+  .hiveory-titlebar { height: 48px; min-height: 48px; max-height: 48px; padding: 7px 8px 5px; }
+  .hiveory-titlebar .hiveory-brand,
+  .hiveory-titlebar .hiveory-mode-switch,
+  .hiveory-titlebar .hiveory-title-actions { min-height: 32px; }
+  .hiveory-workbench.is-narrow-left-open .code-workspace-rail,
+  .hiveory-workbench.is-narrow-left-open .chat-rail,
+  .hiveory-workbench.is-narrow-right-open .hiveory-global-sidebar { top: 54px; }
+}
+
+/* Compact the floating navigation without changing the control grouping. */
+.hiveory-shell { grid-template-rows: 42px minmax(0, 1fr); }
+.hiveory-titlebar { height: 42px; min-height: 42px; max-height: 42px; padding: 5px 12px 3px; }
+.hiveory-titlebar .hiveory-brand,
+.hiveory-titlebar .hiveory-mode-switch,
+.hiveory-titlebar .hiveory-title-actions { min-height: 28px; border-radius: 8px; }
+.hiveory-titlebar .hiveory-brand { gap: 5px; padding: 3px 5px 3px 6px; }
+.hiveory-titlebar .hiveory-brand-logo { width: 20px; height: 20px; border-radius: 5px; }
+.hiveory-titlebar .hiveory-brand-name { font-size: 13px; }
+.hiveory-titlebar .hiveory-sidebar-toggle,
+.hiveory-titlebar .hiveory-icon-button { width: 22px; height: 22px; }
+.hiveory-titlebar .hiveory-mode-switch { padding: 1px; }
+.hiveory-titlebar .hiveory-mode-switch button { min-height: 22px; padding: 2px 10px; font-size: 11px; }
+.hiveory-titlebar .hiveory-title-actions { gap: 2px; padding: 2px; }
+.hiveory-titlebar .hiveory-window-controls { margin-left: 1px; padding-left: 2px; }
+.hiveory-titlebar .hiveory-win-btn { width: 24px; height: 22px; }
+
+.hiveory-settings { max-width: 900px; }
+.hiveory-settings-grid.is-single-column { grid-template-columns: minmax(0, 1fr); }
+
+@media (max-width: 760px) {
+  .hiveory-shell { grid-template-rows: 40px minmax(0, 1fr); }
+  .hiveory-titlebar { height: 40px; min-height: 40px; max-height: 40px; padding: 5px 8px 3px; }
+  .hiveory-titlebar .hiveory-brand,
+  .hiveory-titlebar .hiveory-mode-switch,
+  .hiveory-titlebar .hiveory-title-actions { min-height: 27px; }
+  .hiveory-workbench.is-narrow-left-open .code-workspace-rail,
+  .hiveory-workbench.is-narrow-left-open .chat-rail,
+  .hiveory-workbench.is-narrow-right-open .hiveory-global-sidebar { top: 46px; }
+}

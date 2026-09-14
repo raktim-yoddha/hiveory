@@ -971,6 +971,48 @@
 }
 
 /* Message Actions Bar (Copy, Edit, Retry, Branch) */
+.chat-message-details {
+  margin-top: 2px;
+}
+
+.chat-message-details-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  color: #626670;
+  cursor: pointer;
+  font-size: 10.5px;
+  list-style: none;
+  user-select: none;
+}
+
+.chat-message-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-message-details-summary:hover {
+  color: #aeb2ba;
+}
+
+.chat-message-details-arrow {
+  transition: transform .15s ease;
+}
+
+.chat-message-details[open] .chat-message-details-arrow {
+  transform: rotate(90deg);
+}
+
+.chat-message-details-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 28px;
+  margin-top: 3px;
+  padding: 2px 0;
+}
+
 .chat-message-actions {
   display: flex;
   align-items: center;
@@ -978,6 +1020,19 @@
   opacity: 0.72;
   transition: opacity 0.12s ease;
   padding-top: 2px;
+}
+
+.chat-message-details .chat-message-actions {
+  padding-top: 0;
+  opacity: 1;
+}
+
+.chat-message-details .chat-turn-meta {
+  margin-top: 0;
+}
+
+.chat-message-details .hiveory-chat-usage {
+  color: #747986;
 }
 
 .chat-message-row:hover .chat-message-actions,
