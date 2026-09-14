@@ -1,5 +1,5 @@
 // Public feature receiver; Dev resolves this import to the private checkout.
-export function HiveoryAgent() {
+export function HiveoryAgent(_props: { embedded?: boolean; onActivateCanvas?: () => void }) {
   return null
 }
 

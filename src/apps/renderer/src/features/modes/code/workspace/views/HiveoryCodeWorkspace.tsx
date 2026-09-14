@@ -18,10 +18,6 @@ import { CodeDestructiveActionDialog, CodeParentWorkspaceDialog, CodeProjectSett
 import { eligibleParentWorkspaces } from '../model/code-workspace-rail-utils'
 import '../styles/workspace.css'
 
-const HiveoryCodeDashboard = lazy(async () => ({ default: (await import('./HiveoryCodeDashboard')).HiveoryCodeDashboard }))
-const HiveoryRoutines = lazy(async () => ({ default: (await import('../../../../global/automations/views/HiveoryRoutines')).HiveoryRoutines }))
-const HiveoryPlugins = lazy(async () => ({ default: (await import('../../../../global/plugins/views/HiveoryPlugins')).HiveoryPlugins }))
-const HiveorySkills = lazy(async () => ({ default: (await import('../../../../global/skills/views/HiveorySkills')).HiveorySkills }))
 const CodeSourcePanel = lazy(async () => ({ default: (await import('../components/CodeSourcePanel')).CodeSourcePanel }))
 const CodeCoordinationPanel = lazy(async () => ({ default: (await import('../components/CodeCoordinationPanel')).CodeCoordinationPanel }))
 const HiveoryWorkspaceBoard = lazy(async () => ({ default: (await import('../components/HiveoryWorkspaceBoard')).HiveoryWorkspaceBoard }))
@@ -42,6 +38,10 @@ interface HiveoryCodeWorkspaceProps {
   initialWorkspaceId?: string | null
   initialSection?: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
   children?: ReactNode
+  embedded?: boolean
+  sharedRailWidth?: number
+  onSharedRailWidthChange?: (width: number) => void
+  onActivateCanvas?: () => void
 }
 
 type PendingDestructiveAction = {
@@ -55,11 +55,15 @@ type PendingDestructiveAction = {
 export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   initialWorkspaceId,
   initialSection = 'workspace',
+  embedded = false,
+  sharedRailWidth,
+  onSharedRailWidthChange,
+  onActivateCanvas,
 }) => {
   const [projects, setProjects] = useState<CodeProjectSummary[]>([])
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(initialWorkspaceId ?? null)
-  const [activeSection, setActiveSection] = useState<CodeWorkspaceSection>(initialSection)
+  const [activeSection, setActiveSection] = useState<Exclude<CodeWorkspaceSection, 'skills'>>(initialSection === 'skills' ? 'plugins' : initialSection)
   const [contextHydrated, setContextHydrated] = useState(false)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [createWorkspaceProjectId, setCreateWorkspaceProjectId] = useState<string | null>(null)
@@ -98,7 +102,11 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       setWorkspaces(snapshot.workspaces)
       if (!contextHydratedRef.current) {
         contextHydratedRef.current = true
-        setActiveSection(context.section)
+        if (context.section !== 'workspace') {
+          const destination = context.section === 'routines' ? 'automations' : context.section === 'dashboard' ? 'dashboard' : 'plugins'
+          window.setTimeout(() => window.dispatchEvent(new CustomEvent('hiveory-open-global-destination', { detail: { destination } })), 0)
+        }
+        setActiveSection('workspace')
         setContextHydrated(true)
       }
       const activeWorkspaceStillAvailable = Boolean(activeWorkspaceId && snapshot.workspaces.some((workspace) => workspace.id === activeWorkspaceId && workspace.available))
@@ -141,7 +149,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   useEffect(() => {
     const handleGlobalSection = (event: Event) => {
       const section = (event as CustomEvent<{ section?: string }>).detail?.section
-      if (section === 'dashboard' || section === 'routines' || section === 'plugins' || section === 'skills' || section === 'workspace') {
+      if (section === 'workspace') {
         setActiveSection(section)
       }
     }
@@ -157,15 +165,24 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
     return () => window.removeEventListener('hiveory-reveal-active-workspace', revealActiveWorkspace)
   }, [activeWorkspaceId])
 
+  useEffect(() => {
+    const openCodeRun = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceId?: string }>).detail
+      if (!detail?.workspaceId) return
+      setActiveWorkspaceId(detail.workspaceId)
+      setActiveSection('workspace')
+      setCoordinationPanelOpen(true)
+    }
+    window.addEventListener('hiveory-open-code-run', openCodeRun)
+    return () => window.removeEventListener('hiveory-open-code-run', openCodeRun)
+  }, [])
+
   const handleSelectWorkspace = (wsId: string) => {
     if (wsId === activeWorkspaceId) return
     setActiveWorkspaceId(wsId)
     setActiveSection('workspace')
   }
 
-  const handleSelectGlobalSection = (section: CodeWorkspaceSection) => {
-    setActiveSection(section)
-  }
 
   const handleAddProject = async () => {
     try {
@@ -408,13 +425,13 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }, [applyPreset, focusPane, requestClosePane, setError, state.focusedPaneId, toggleMaximize])
 
   return (
-    <div className={`code-workspace-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+    <div className={`code-workspace-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}${embedded ? ' is-shell-embedded' : ''}`}>
       <CodeWorkspaceRail
         controller={controller}
         projects={projects}
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
-        activeGlobalSection={activeSection}
+        activeGlobalSection="workspace"
         onSelectWorkspace={handleSelectWorkspace}
         onAddProject={() => void handleAddProject()}
         onAddWorkspace={handleAddWorkspace}
@@ -423,19 +440,18 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         onOpenParentWorkspaceDialog={handleOpenParentWorkspace}
         onRemoveProject={(projectId) => void handleRemoveProject(projectId)}
         onRemoveWorkspace={(workspaceId) => void handleRemoveWorkspace(workspaceId)}
-        onSelectGlobalSection={handleSelectGlobalSection}
+        onSelectGlobalSection={() => setActiveSection('workspace')}
         sourcePanelOpen={sourcePanelOpen}
         coordinationPanelOpen={coordinationPanelOpen}
         onToggleSourcePanel={handleToggleSourcePanel}
         onToggleCoordinationPanel={handleToggleCoordinationPanel}
         onOpenWorkspaceBoard={() => setWorkspaceBoardOpen(true)}
+        sharedRailWidth={sharedRailWidth}
+        onSharedRailWidthChange={onSharedRailWidthChange}
+        onActivateCanvas={onActivateCanvas}
       />
 
       <main className="code-workspace-main">
-        {activeSection === 'dashboard' && <Suspense fallback={sectionFallback}><HiveoryCodeDashboard /></Suspense>}
-        {activeSection === 'routines' && <Suspense fallback={sectionFallback}><HiveoryRoutines /></Suspense>}
-        {activeSection === 'plugins' && <Suspense fallback={sectionFallback}><HiveoryPlugins /></Suspense>}
-        {activeSection === 'skills' && <Suspense fallback={sectionFallback}><HiveorySkills /></Suspense>}
         {activeSection === 'workspace' && (
           <div className="code-workspace-workspace-view">
             <div className={`code-workspace-canvas-shell ${sourcePanelOpen && activeWorkspace ? 'has-source-panel' : ''} ${coordinationPanelOpen && activeWorkspace ? 'has-coordination-panel' : ''}`}>

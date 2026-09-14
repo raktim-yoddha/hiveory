@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
-  CalendarClock,
   ExternalLink,
   FileText,
   Folder,
@@ -22,12 +21,10 @@ import {
   Pencil,
   Pin,
   Plus,
-  Blocks,
   Settings,
   Settings2,
   CircleHelp,
   Columns3,
-  BrainCircuit,
   SquareTerminal,
   Trash2,
 } from 'lucide-react'
@@ -48,7 +45,7 @@ interface CodeWorkspaceRailProps {
   projects: CodeProjectSummary[]
   workspaces: CodeWorkspaceSummary[]
   activeWorkspaceId: string | null
-  activeGlobalSection: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
+  activeGlobalSection: 'workspace'
   onSelectWorkspace: (workspaceId: string) => void
   onAddProject: () => void
   onAddWorkspace: (projectId?: string) => void
@@ -57,12 +54,15 @@ interface CodeWorkspaceRailProps {
   onOpenParentWorkspaceDialog: (workspace: CodeWorkspaceSummary) => void
   onRemoveProject: (projectId: string) => void
   onRemoveWorkspace: (workspaceId: string) => void
-  onSelectGlobalSection?: (section: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace') => void
+  onSelectGlobalSection?: (section: 'workspace') => void
   sourcePanelOpen: boolean
   coordinationPanelOpen: boolean
   onToggleSourcePanel: (open?: boolean) => void
   onToggleCoordinationPanel: (open?: boolean) => void
   onOpenWorkspaceBoard: () => void
+  sharedRailWidth?: number
+  onSharedRailWidthChange?: (width: number) => void
+  onActivateCanvas?: () => void
 }
 
 type ProjectIconId = 'folder' | 'git' | 'briefcase' | 'package'
@@ -137,6 +137,9 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   onToggleSourcePanel,
   onToggleCoordinationPanel,
   onOpenWorkspaceBoard,
+  sharedRailWidth,
+  onSharedRailWidthChange,
+  onActivateCanvas,
 }) => {
   const DEFAULT_RAIL_WIDTH = 228
   const MIN_RAIL_WIDTH = 180
@@ -156,21 +159,24 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
 
   const [isResizing, setIsResizing] = useState(false)
   const resizeStartRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const effectiveRailWidth = sharedRailWidth ?? railWidth
+  const setEffectiveRailWidth = onSharedRailWidthChange ?? setRailWidth
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--code-rail-width', `${railWidth}px`)
+    document.documentElement.style.setProperty('--code-rail-width', `${effectiveRailWidth}px`)
+    if (sharedRailWidth !== undefined) return
     try {
       localStorage.setItem('hiveory_rail_width', String(railWidth))
     } catch {
       // Browser preview storage is optional.
     }
-  }, [railWidth])
+  }, [effectiveRailWidth, railWidth, sharedRailWidth])
 
   const handleResizeStart = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsResizing(true)
-    resizeStartRef.current = { startX: e.clientX, startWidth: railWidth }
+    resizeStartRef.current = { startX: e.clientX, startWidth: effectiveRailWidth }
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (!resizeStartRef.current) return
@@ -180,7 +186,7 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         maxAllowed,
         Math.max(MIN_RAIL_WIDTH, Math.round(resizeStartRef.current.startWidth + deltaX))
       )
-      setRailWidth(newWidth)
+      setEffectiveRailWidth(newWidth)
     }
 
     const handlePointerUp = () => {
@@ -192,11 +198,11 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
 
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
-  }, [railWidth])
+  }, [effectiveRailWidth, setEffectiveRailWidth])
 
   const handleResetWidth = useCallback(() => {
-    setRailWidth(DEFAULT_RAIL_WIDTH)
-  }, [])
+    setEffectiveRailWidth(DEFAULT_RAIL_WIDTH)
+  }, [setEffectiveRailWidth])
 
   const { state, focusPane } = controller
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false)
@@ -309,12 +315,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
     }
   }, [openContextMenu, isAddMenuOpen])
 
-  const navItems: { id: 'dashboard' | 'routines' | 'plugins' | 'skills'; label: string; badge?: string; icon: React.ReactNode }[] = [
-    { id: 'dashboard', label: 'Dashboard', badge: '1', icon: <PanelsTopLeft size={16} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'routines', label: 'Automations', icon: <CalendarClock size={16} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'plugins', label: 'Plugins', icon: <Blocks size={16} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'skills', label: 'Skills', icon: <BrainCircuit size={16} strokeWidth={1.8} aria-hidden="true" /> },
-  ]
 
   const toggleProject = (projectId: string) => {
     setCollapsedProjects((current) => {
@@ -731,23 +731,10 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   return (
     <aside
       className={`code-workspace-rail ${isResizing ? 'is-resizing' : ''}`}
-      style={{ width: `${railWidth}px`, minWidth: `${railWidth}px`, maxWidth: `${railWidth}px` }}
+      style={{ width: `${effectiveRailWidth}px`, minWidth: `${effectiveRailWidth}px`, maxWidth: `${effectiveRailWidth}px` }}
       aria-label="Code workspace"
+      onClick={onActivateCanvas}
     >
-      <nav className="code-rail-global-nav" aria-label="Application sections">
-        {navItems.map(({ id, label, badge, icon }) => (
-          <button
-            type="button"
-            key={id}
-            className={`code-rail-nav-item ${activeGlobalSection === id ? 'is-selected' : ''}`}
-            onClick={() => onSelectGlobalSection?.(id)}
-          >
-            <span className="code-rail-nav-left">{icon}<span>{label}</span></span>
-            {badge && <span className="code-rail-badge-count">{badge}</span>}
-          </button>
-        ))}
-      </nav>
-
       <div className="code-rail-section-header">
         <span>Workspaces</span>
         <div className="code-rail-add-wrapper">

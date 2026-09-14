@@ -6,7 +6,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  CalendarClock,
   Copy,
   Ellipsis,
   File,
@@ -15,19 +14,16 @@ import {
   FolderInput,
   FolderPlus,
   Image as ImageIcon,
-  PanelsTopLeft,
   LoaderCircle,
   MessageCircle,
   Paperclip,
   Pin,
   PinOff,
   Plus,
-  Blocks,
   RefreshCw,
   RotateCcw,
   Search,
   Settings2,
-  BrainCircuit,
   Square,
   Trash2,
   X,
@@ -56,9 +52,8 @@ import '../styles/chat.css'
 const HiveoryCodeDashboard = lazy(async () => ({ default: (await import('../../code/workspace/views/HiveoryCodeDashboard')).HiveoryCodeDashboard }))
 const HiveoryRoutines = lazy(async () => ({ default: (await import('../../../global/automations/views/HiveoryRoutines')).HiveoryRoutines }))
 const HiveoryPlugins = lazy(async () => ({ default: (await import('../../../global/plugins/views/HiveoryPlugins')).HiveoryPlugins }))
-const HiveorySkills = lazy(async () => ({ default: (await import('../../../global/skills/views/HiveorySkills')).HiveorySkills }))
 
-type ChatSurface = 'chat' | 'dashboard' | 'routines' | 'plugins' | 'skills'
+type ChatSurface = 'chat' | 'dashboard' | 'routines' | 'plugins'
 
 type PendingAttachment = {
   key: string
@@ -279,7 +274,7 @@ function fromChatProfileSnapshot(snapshot: ChatProfileSnapshot): ChatProfile {
   }
 }
 
-export function HiveoryChat() {
+export function HiveoryChat({ embedded = false, sharedRailWidth, onSharedRailWidthChange, onActivateCanvas }: { embedded?: boolean; sharedRailWidth?: number; onSharedRailWidthChange?: (width: number) => void; onActivateCanvas?: () => void }) {
   const DEFAULT_RAIL_WIDTH = 228
   const MIN_RAIL_WIDTH = 180
   const MAX_RAIL_WIDTH = 480
@@ -340,6 +335,8 @@ export function HiveoryChat() {
   const enginePickerRef = useRef<HTMLDivElement>(null)
   const modelPickerRef = useRef<HTMLDivElement>(null)
   const detailRequestRef = useRef(0)
+  const effectiveRailWidth = sharedRailWidth ?? railWidth
+  const setEffectiveRailWidth = onSharedRailWidthChange ?? setRailWidth
 
   const selectedEngine = engineCatalog?.engines.find((engine) => engine.id === selectedEngineId)
   const selectedModel = selectedEngine?.models.find((model) => model.id === selectedModelId)
@@ -364,12 +361,13 @@ export function HiveoryChat() {
   const chatIsLocked = Boolean(lockedTurn)
 
   useEffect(() => {
+    if (sharedRailWidth !== undefined) return
     try {
       localStorage.setItem('hiveory_chat_rail_width', String(railWidth))
     } catch {
       // ignore
     }
-  }, [railWidth])
+  }, [railWidth, sharedRailWidth])
 
   useEffect(() => {
     try {
@@ -397,7 +395,7 @@ export function HiveoryChat() {
     e.preventDefault()
     e.stopPropagation()
     setIsResizing(true)
-    resizeStartRef.current = { startX: e.clientX, startWidth: railWidth }
+    resizeStartRef.current = { startX: e.clientX, startWidth: effectiveRailWidth }
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (!resizeStartRef.current) return
@@ -407,7 +405,7 @@ export function HiveoryChat() {
         maxAllowed,
         Math.max(MIN_RAIL_WIDTH, Math.round(resizeStartRef.current.startWidth + deltaX))
       )
-      setRailWidth(newWidth)
+      setEffectiveRailWidth(newWidth)
     }
 
     const handlePointerUp = () => {
@@ -419,11 +417,11 @@ export function HiveoryChat() {
 
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', handlePointerUp)
-  }, [railWidth])
+  }, [effectiveRailWidth, setEffectiveRailWidth])
 
   const handleResetWidth = useCallback(() => {
-    setRailWidth(DEFAULT_RAIL_WIDTH)
-  }, [DEFAULT_RAIL_WIDTH])
+    setEffectiveRailWidth(DEFAULT_RAIL_WIDTH)
+  }, [DEFAULT_RAIL_WIDTH, setEffectiveRailWidth])
 
   const reloadSidebar = useCallback(async () => {
     setSidebarLoading(true)
@@ -590,6 +588,18 @@ export function HiveoryChat() {
     }
     void reloadConversation(selectedId)
   }, [reloadConversation, selectedId])
+
+  useEffect(() => {
+    const openConversation = (event: Event) => {
+      const conversationId = (event as CustomEvent<{ conversationId?: string }>).detail?.conversationId
+      if (!conversationId) return
+      setSelectedId(conversationId)
+      setIsNewChatDraft(false)
+      setChatSurface('chat')
+    }
+    window.addEventListener('hiveory-open-chat-conversation', openConversation)
+    return () => window.removeEventListener('hiveory-open-chat-conversation', openConversation)
+  }, [])
 
   useEffect(() => {
     if (!engineCatalog) return
@@ -984,10 +994,6 @@ export function HiveoryChat() {
 
   const navItems: Array<{ id: ChatSurface; label: string; icon: ReactNode }> = [
     { id: 'chat' as const, label: 'Chats', icon: <MessageCircle size={15} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'dashboard', label: 'Dashboard', icon: <PanelsTopLeft size={15} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'routines', label: 'Automations', icon: <CalendarClock size={15} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'plugins', label: 'Plugins', icon: <Blocks size={15} strokeWidth={1.8} aria-hidden="true" /> },
-    { id: 'skills', label: 'Skills', icon: <BrainCircuit size={15} strokeWidth={1.8} aria-hidden="true" /> },
   ]
 
   const renderConversationRow = (item: ChatConversationSummary) => {
@@ -1303,7 +1309,7 @@ export function HiveoryChat() {
 
   return (
     <div
-      className={`hiveory-chat-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}
+      className={`hiveory-chat-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}${embedded ? ' is-shell-embedded' : ''}`}
       onClick={() => {
         setRowMenuId(null)
         setFolderMenuId(null)
@@ -1311,11 +1317,11 @@ export function HiveoryChat() {
     >
       <aside
         className={`chat-rail ${isResizing ? 'is-resizing' : ''}`}
-        style={{ width: `${railWidth}px`, minWidth: `${railWidth}px`, maxWidth: `${railWidth}px` }}
+        style={{ width: `${effectiveRailWidth}px`, minWidth: `${effectiveRailWidth}px`, maxWidth: `${effectiveRailWidth}px` }}
         aria-label="Chat history"
+        onClick={onActivateCanvas}
       >
-        {/* Global Navigation matching Code rail */}
-        <nav className="chat-rail-global-nav" aria-label="Application sections">
+        <nav className="chat-rail-global-nav" aria-label="Chat navigation">
           {navItems.map(({ id, label, icon }) => (
             <button
               type="button"
@@ -1852,7 +1858,6 @@ export function HiveoryChat() {
               {chatSurface === 'dashboard' && <HiveoryCodeDashboard />}
               {chatSurface === 'routines' && <HiveoryRoutines />}
               {chatSurface === 'plugins' && <HiveoryPlugins />}
-              {chatSurface === 'skills' && <HiveorySkills />}
             </Suspense>
           </section>
         )}
