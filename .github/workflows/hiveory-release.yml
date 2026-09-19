@@ -55,6 +55,10 @@ jobs:
           Copy-Item .release-tools/src/crates/modes/code/hiveory-code-orchestration/src/lib.rs src/crates/modes/code/hiveory-code-orchestration/src/lib.rs -Force
           Copy-Item .release-tools/src/crates/global/automations/hiveory-routine-scheduler/src/lib.rs src/crates/global/automations/hiveory-routine-scheduler/src/lib.rs -Force
           Copy-Item .release-tools/src/crates/modes/code/hiveory-dispatch-bridge/src/main.rs src/crates/modes/code/hiveory-dispatch-bridge/src/main.rs -Force
+          $applicationPath = 'src/apps/desktop/src-tauri/src/application/mod.rs'
+          $applicationSource = Get-Content $applicationPath -Raw
+          $applicationSource = $applicationSource.Replace("Orca's TUI scanner", 'The TUI scanner')
+          Set-Content $applicationPath $applicationSource -NoNewline -Encoding utf8
           Remove-Item .release-tools -Recurse -Force
 
       - name: Exclude historical binaries from repair gate
