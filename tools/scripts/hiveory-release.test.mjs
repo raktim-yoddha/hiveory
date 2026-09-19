@@ -20,7 +20,7 @@ test('release notes contain the stable Windows updater contract', () => {
   assert.match(output, /## Highlights/)
   assert.match(output, /Hiveory-portable\.exe/)
   assert.match(output, /latest\.json/)
-  assert.match(output, /compare\/v0\.2\.1\.\.\.v0\.2\.2/)
+  assert.match(output, /compare\/0\.2\.1\.\.\.v0\.2\.2/)
 })
 
 test('release validation rejects an unprefixed future tag', () => {

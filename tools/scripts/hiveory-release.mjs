@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -82,6 +83,20 @@ function previousVersion(version) {
   return index >= 0 ? versions[index + 1] : undefined
 }
 
+function previousTag(version) {
+  const previous = previousVersion(version)
+  if (!previous) return undefined
+  for (const candidate of [`v${previous}`, previous]) {
+    try {
+      execFileSync('git', ['rev-parse', '--verify', `refs/tags/${candidate}`], { cwd: root, stdio: 'ignore' })
+      return candidate
+    } catch {
+      // Try the legacy unprefixed tag before falling back to the standard form.
+    }
+  }
+  return `v${previous}`
+}
+
 function bullets(section) {
   return section.split('\n').filter((line) => /^\s*-\s+/.test(line)).map((line) => line.replace(/^\s*-\s+/, '').trim())
 }
@@ -104,9 +119,9 @@ function notes(version) {
   const allBullets = bullets(section)
   const highlights = allBullets.slice(0, 3)
   const summary = highlights[0] ?? `Hiveory ${version} is available for Windows x64.`
-  const previous = previousVersion(version)
+  const previous = previousTag(version)
   const compare = previous
-    ? `https://github.com/raktim-yoddha/hiveory/compare/v${previous}...v${version}`
+    ? `https://github.com/raktim-yoddha/hiveory/compare/${previous}...v${version}`
     : `https://github.com/raktim-yoddha/hiveory/releases/tag/v${version}`
   const output = [
     summary,
