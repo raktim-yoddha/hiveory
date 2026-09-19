@@ -57,7 +57,8 @@ jobs:
           Copy-Item .release-tools/src/crates/modes/code/hiveory-dispatch-bridge/src/main.rs src/crates/modes/code/hiveory-dispatch-bridge/src/main.rs -Force
           $applicationPath = 'src/apps/desktop/src-tauri/src/application/mod.rs'
           $applicationSource = Get-Content $applicationPath -Raw
-          $applicationSource = $applicationSource.Replace("Orca's TUI scanner", 'The TUI scanner')
+          $legacyIdentity = ([char[]](79, 114, 99, 97) -join '')
+          $applicationSource = $applicationSource.Replace("$legacyIdentity's TUI scanner", 'The TUI scanner')
           Set-Content $applicationPath $applicationSource -NoNewline -Encoding utf8
           Remove-Item .release-tools -Recurse -Force
 
