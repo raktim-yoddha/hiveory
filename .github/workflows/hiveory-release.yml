@@ -93,6 +93,21 @@ jobs:
           $body = node tools/scripts/hiveory-release.mjs notes --version $version
           @('body<<HIVEORY_RELEASE_BODY', $body, 'HIVEORY_RELEASE_BODY') -join "`n" | Add-Content -Path $env:GITHUB_OUTPUT
 
+      - name: Verify updater signing credentials
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP 'hiveory-signing-probe.bin'
+          [System.IO.File]::WriteAllBytes($probe, [System.Text.Encoding]::UTF8.GetBytes('Hiveory release signing preflight'))
+          try {
+            node node_modules/@tauri-apps/cli/tauri.js signer sign $probe
+            if ($LASTEXITCODE -ne 0) { throw 'Updater signing credentials could not sign the release preflight payload.' }
+          } finally {
+            Remove-Item -LiteralPath $probe, "$probe.sig" -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Build and publish signed release artifacts
         uses: tauri-apps/tauri-action@v1
         env:
