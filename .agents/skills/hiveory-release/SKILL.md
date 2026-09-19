@@ -13,6 +13,7 @@ Use this skill for an explicit `$hiveory-release` request or natural-language re
 - If no version is supplied, calculate the next patch version from the current synchronized version. Require an explicit version for major, minor, or prerelease releases.
 - Release builds are Windows x64 only. Do not add macOS or Linux release jobs or assets; keep their ordinary CI compile coverage unchanged.
 - Stop on a dirty worktree, a branch that is not up to date with its upstream default branch, a duplicate tag/version, a failed gate, missing signing credentials, a malformed changelog section, or any upload/verification failure.
+- The workflow signs a temporary probe before the release build; a private-key/password mismatch is a credential failure, not a reason to publish unsigned updater metadata.
 - Never force-push, move, or delete tags. Never call a release successful until the verification command passes.
 
 ## Standard workflow
@@ -22,7 +23,7 @@ Use this skill for an explicit `$hiveory-release` request or natural-language re
 3. Run `node tools/scripts/hiveory-release.mjs validate --version X.Y.Z --tag vX.Y.Z` and `pnpm release:check`. Also run the repository-required design, renderer, Rust, and release-utility checks when they are not already included by `release:check`.
 4. Generate the release text with `node tools/scripts/hiveory-release.mjs notes --version X.Y.Z`. Use that exact output for the annotated tag message and GitHub release body. Do not replace it with a raw commit dump or an ad-hoc summary.
 5. Commit the version/changelog/release-support changes, push the default branch, create the annotated `vX.Y.Z` tag at that commit, and push the tag. Do not tag before gates pass.
-6. Wait for the Windows release workflow. Verify the release, tag target, stable/latest status, required Windows assets, signatures, `latest.json`, manifest version, signed NSIS URL, and absence of macOS/Linux assets with `node tools/scripts/hiveory-release.mjs verify-release --tag vX.Y.Z`.
+6. Wait for the Windows release workflow. The workflow must pass its signing preflight before the expensive build. Verify the release, tag target, stable/latest status, required Windows assets, signatures, `latest.json`, manifest version, signed NSIS URL, and absence of macOS/Linux assets with `node tools/scripts/hiveory-release.mjs verify-release --tag vX.Y.Z`.
 
 ## Release description contract
 
@@ -41,5 +42,7 @@ Use imperative-free, professional language. Describe observable changes, omit un
 ## Repair mode
 
 For the one-time `0.2.2` repair, run the release workflow manually with `repair_existing=true`, `release_tag=0.2.2`, and `source_ref=0.2.2`. This rebuilds that exact immutable tag, replaces only its Windows assets, publishes signatures and `latest.json`, and runs the same verification. Do not create a `v0.2.2` alias or rewrite the existing tag.
+
+If the signing preflight reports a wrong password, stop and have the repository owner update `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` to match the existing `TAURI_SIGNING_PRIVATE_KEY`. Do not rotate the updater key during historical repair: the public key is compiled into existing installations, so rotation would strand them.
 
 Read [references/release-contract.md](references/release-contract.md) when preparing notes or diagnosing a failed verification.
