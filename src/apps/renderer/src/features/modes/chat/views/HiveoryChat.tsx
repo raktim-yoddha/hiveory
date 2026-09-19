@@ -48,9 +48,11 @@ import {
   type ChatSidebarPage,
   type AgentSkillSummary,
   type PluginCatalogEntry,
+  OPENCODE_ADAPTER_ID,
 } from '../../../../shared/api/hiveory-client'
 import { CliBrandIcon } from '../../code/workspace/components/CliIcons'
 import { ChatMarkdown } from '../components/ChatMarkdown'
+import { openCodeModelParts } from '../model/chat-model-labels'
 import type { GlobalDestination } from '../../../global/navigation/HiveoryGlobalSurface'
 import '../styles/chat.css'
 
@@ -91,6 +93,10 @@ function chatPluginToolId(pluginId: string, toolName: string): string {
 
 function modelLabel(engine: ChatEngineSummary | undefined, modelId: string): string {
   return engine?.models.find((model) => model.id === modelId)?.display_name ?? modelId
+}
+
+function effortLabel(effort: ChatReasoningEffort): string {
+  return effort === 'auto' ? 'Auto effort' : `${effort[0].toUpperCase()}${effort.slice(1)} effort`
 }
 
 function textFromMessage(message: ChatMessage): string {
@@ -310,6 +316,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   const [selectedEffort, setSelectedEffort] = useState<ChatReasoningEffort>('auto')
   const [engineMenuOpen, setEngineMenuOpen] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const [effortMenuOpen, setEffortMenuOpen] = useState(false)
   const [modelSearch, setModelSearch] = useState('')
   const [draft, setDraft] = useState('')
   const [draftDirty, setDraftDirty] = useState(false)
@@ -332,12 +339,20 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   const transcriptRef = useRef<HTMLDivElement>(null)
   const enginePickerRef = useRef<HTMLDivElement>(null)
   const modelPickerRef = useRef<HTMLDivElement>(null)
+  const effortPickerRef = useRef<HTMLDivElement>(null)
+  const inspectorRef = useRef<HTMLElement>(null)
+  const inspectorTriggerRef = useRef<HTMLButtonElement>(null)
   const detailRequestRef = useRef(0)
   const effectiveRailWidth = sharedRailWidth ?? railWidth
   const setEffectiveRailWidth = onSharedRailWidthChange ?? setRailWidth
 
   const selectedEngine = engineCatalog?.engines.find((engine) => engine.id === selectedEngineId)
   const selectedModel = selectedEngine?.models.find((model) => model.id === selectedModelId)
+  const selectedModelLabel = selectedModel
+    ? selectedEngineId === OPENCODE_ADAPTER_ID
+      ? openCodeModelParts(selectedModel).modelName
+      : selectedModel.display_name
+    : 'Select model'
   const supportedEfforts = selectedEngine?.capabilities.includes('reasoning_effort')
     ? selectedModel?.effort_levels ?? []
     : []
@@ -660,15 +675,30 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   }, [reloadConversation, selectedId])
 
   useEffect(() => {
-    if (!engineMenuOpen && !modelMenuOpen) return
+    if (!engineMenuOpen && !modelMenuOpen && !effortMenuOpen && !inspectorOpen) return
     const close = (event: MouseEvent) => {
       const target = event.target as Node
       if (!enginePickerRef.current?.contains(target)) setEngineMenuOpen(false)
       if (!modelPickerRef.current?.contains(target)) setModelMenuOpen(false)
+      if (!effortPickerRef.current?.contains(target)) setEffortMenuOpen(false)
+      if (!inspectorRef.current?.contains(target) && !inspectorTriggerRef.current?.contains(target)) {
+        setInspectorOpen(false)
+      }
+    }
+    const closeWithEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setEngineMenuOpen(false)
+      setModelMenuOpen(false)
+      setEffortMenuOpen(false)
+      setInspectorOpen(false)
     }
     document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
-  }, [engineMenuOpen, modelMenuOpen])
+    document.addEventListener('keydown', closeWithEscape)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', closeWithEscape)
+    }
+  }, [effortMenuOpen, engineMenuOpen, inspectorOpen, modelMenuOpen])
 
   const lastMessageParts = conversation?.messages.at(-1)?.parts
 
@@ -692,6 +722,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
     persistChatIdentity(conversation?.id ?? selectedId, { engineId: engine.id, modelId })
     setEngineMenuOpen(false)
     setModelMenuOpen(false)
+    setEffortMenuOpen(false)
     setModelSearch('')
     setStatusMessage(null)
   }
@@ -1315,12 +1346,78 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
     )
   }
 
+  const chatInspector = inspectorOpen ? (
+    <aside ref={inspectorRef} className="chat-inspector" aria-label="Chat inspector">
+      <div className="chat-inspector-header">
+        <div>
+          <strong>Chat profile</strong>
+          <span>Tools and context for this conversation</span>
+        </div>
+        <button type="button" className="chat-rail-icon-btn" onClick={() => setInspectorOpen(false)} aria-label="Close chat inspector">
+          <X size={14} />
+        </button>
+      </div>
+
+      <div className="chat-inspector-scroll">
+        <section className="chat-inspector-section">
+          <div className="chat-inspector-section-title">Provider</div>
+          <div className="chat-inspector-value">
+            <CliBrandIcon identifier={selectedEngine?.id} size={14} />
+            <span>{selectedEngine?.display_name ?? 'Choose a provider'}</span>
+          </div>
+        </section>
+
+        <section className="chat-inspector-section">
+          <div className="chat-inspector-section-title">Safety & memory</div>
+          <label className="chat-inspector-field"><span>Approval policy</span><select value={chatProfile.approvalPolicy} onChange={(event) => updateChatProfile({ approvalPolicy: event.target.value as ChatProfile['approvalPolicy'] })}><option value="ask_for_mutations">Ask for mutations</option><option value="always_ask">Always ask</option><option value="allow_within_scope">Allow within scope</option><option value="deny">Deny tools</option></select></label>
+          <div className="chat-inspector-row"><span>Memory</span><strong>Conversation only</strong></div>
+          <div className="chat-inspector-row"><span>Execution</span><strong>Desktop</strong></div>
+          <label className="chat-inspector-row chat-inspector-limit"><span>Tool limit</span><input type="number" min={1} max={256} value={chatProfile.maxToolCalls} onChange={(event) => updateChatProfile({ maxToolCalls: Math.max(1, Math.min(256, Number(event.target.value) || 1)) })} /></label>
+        </section>
+
+        <section className="chat-inspector-section">
+          <div className="chat-inspector-section-title">Skills</div>
+          {capabilitiesLoading && <span className="chat-inspector-muted">Loading installed skills…</span>}
+          {!capabilitiesLoading && !availableSkills.length && <span className="chat-inspector-muted">No valid skills installed.</span>}
+          {availableSkills.map((skill) => (
+            <label className="chat-inspector-check" key={skill.id}>
+              <input type="checkbox" checked={chatProfile.skillIds.includes(skill.id)} onChange={(event) => updateChatProfile({ skillIds: event.target.checked ? [...new Set([...chatProfile.skillIds, skill.id])] : chatProfile.skillIds.filter((id) => id !== skill.id) })} />
+              <span><strong>{skill.name}</strong><small>{skill.description}</small></span>
+            </label>
+          ))}
+        </section>
+
+        <section className="chat-inspector-section">
+          <div className="chat-inspector-section-title">Plugin tools</div>
+          {!capabilitiesLoading && !availablePlugins.some((plugin) => plugin.enabled && validatedPluginIds.has(plugin.manifest.id)) && <span className="chat-inspector-muted">No enabled, validated plugin connections.</span>}
+          {availablePlugins.filter((plugin) => plugin.enabled && validatedPluginIds.has(plugin.manifest.id)).flatMap((plugin) => plugin.manifest.tools.map((tool) => ({ plugin, tool }))).map(({ plugin, tool }) => (
+            <label className="chat-inspector-check" key={`${plugin.manifest.id}:${tool.name}`}>
+              <input type="checkbox" checked={chatProfile.pluginToolNames.includes(chatPluginToolId(plugin.manifest.id, tool.name)) || chatProfile.pluginToolNames.includes(tool.name)} onChange={(event) => { const id = chatPluginToolId(plugin.manifest.id, tool.name); updateChatProfile({ pluginToolNames: event.target.checked ? [...new Set([...chatProfile.pluginToolNames.filter((name) => name !== tool.name), id])] : chatProfile.pluginToolNames.filter((name) => name !== id && name !== tool.name) }) }} />
+              <span><strong>{tool.name}</strong><small>{plugin.manifest.name}</small></span>
+            </label>
+          ))}
+        </section>
+
+        <section className="chat-inspector-section">
+          <div className="chat-inspector-section-title">Folder access</div>
+          <span className="chat-inspector-muted">Folders are never granted automatically.</span>
+          {chatProfile.folderPaths.map((path) => <div className="chat-inspector-path" key={path}><Folder size={12} /><span title={path}>{pathName(path)}</span><button type="button" onClick={() => updateChatProfile({ folderPaths: chatProfile.folderPaths.filter((candidate) => candidate !== path) })} aria-label={`Remove ${pathName(path)}`}><X size={12} /></button></div>)}
+          <button type="button" className="chat-inspector-add" onClick={() => void attachProfileFolder()}><FolderPlus size={13} /> Add folder access</button>
+        </section>
+      </div>
+    </aside>
+  ) : null
+
   return (
     <div
       className={`hiveory-chat-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}${embedded ? ' is-shell-embedded' : ''}`}
-      onClick={() => {
+      onClick={(event) => {
         setRowMenuId(null)
         setFolderMenuId(null)
+        const target = event.target as Node
+        if (!inspectorRef.current?.contains(target) && !inspectorTriggerRef.current?.contains(target)) {
+          setInspectorOpen(false)
+        }
       }}
     >
       <aside
@@ -1490,12 +1587,16 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
             <button
               type="button"
               className={`chat-rail-icon-btn ${inspectorOpen ? 'is-active' : ''}`}
+              ref={inspectorTriggerRef}
               aria-label="Toggle chat inspector"
               aria-expanded={inspectorOpen}
               title="Chat tools and profile"
               onClick={(event) => {
                 event.stopPropagation()
                 setInspectorOpen((open) => !open)
+                setEngineMenuOpen(false)
+                setModelMenuOpen(false)
+                setEffortMenuOpen(false)
               }}
             >
               <Settings2 size={14} />
@@ -1524,6 +1625,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
                 <Trash2 size={14} />
               </button>
             )}
+            {chatInspector}
           </div>
         </header>
 
@@ -1670,7 +1772,10 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
                   aria-expanded={engineMenuOpen}
                   onClick={(event) => {
                     event.stopPropagation()
-                    setEngineMenuOpen(!engineMenuOpen)
+                    setEngineMenuOpen((open) => !open)
+                    setModelMenuOpen(false)
+                    setEffortMenuOpen(false)
+                    setInspectorOpen(false)
                   }}
                   disabled={engineLoading}
                 >
@@ -1740,10 +1845,12 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
                     event.stopPropagation()
                     setModelMenuOpen((open) => !open)
                     setEngineMenuOpen(false)
+                    setEffortMenuOpen(false)
+                    setInspectorOpen(false)
                     setModelSearch('')
                   }}
                 >
-                  <span>{selectedModel?.display_name ?? 'Select model'}</span>
+                  <span>{selectedModelLabel}</span>
                   <ChevronDown size={12} />
                 </button>
                 {modelMenuOpen && (
@@ -1765,26 +1872,36 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
                       />
                     </div>
                     <div className="chat-model-options">
-                      {visibleModels.length ? visibleModels.map((model) => (
-                        <button
-                          type="button"
-                          role="option"
-                          key={model.id}
-                          aria-selected={model.id === selectedModelId}
-                          className={`chat-model-option-btn ${model.id === selectedModelId ? 'is-selected' : ''}`}
-                          onClick={() => {
-                            setSelectedModelId(model.id)
-                            setSelectedEffort(model.default_effort)
-                            persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: model.id })
-                            setModelMenuOpen(false)
-                            setModelSearch('')
-                          }}
-                        >
-                          <span>{model.display_name}</span>
-                          <small>{model.id}</small>
-                          {model.id === selectedModelId && <Check size={13} />}
-                        </button>
-                      )) : (
+                      {visibleModels.length ? visibleModels.map((model) => {
+                        const parts = selectedEngineId === OPENCODE_ADAPTER_ID ? openCodeModelParts(model) : null
+                        return (
+                          <button
+                            type="button"
+                            role="option"
+                            key={model.id}
+                            title={model.id}
+                            aria-selected={model.id === selectedModelId}
+                            className={`chat-model-option-btn ${model.id === selectedModelId ? 'is-selected' : ''}`}
+                            onClick={() => {
+                              setSelectedModelId(model.id)
+                              setSelectedEffort(model.default_effort)
+                              persistChatIdentity(conversation?.id ?? selectedId, { engineId: selectedEngineId, modelId: model.id })
+                              setModelMenuOpen(false)
+                              setModelSearch('')
+                            }}
+                          >
+                            {parts ? (
+                              <span className="chat-model-option-copy">
+                                <strong>{parts.modelName}</strong>
+                                <small>{parts.providerName}</small>
+                              </span>
+                            ) : (
+                              <span>{model.display_name}</span>
+                            )}
+                            {model.id === selectedModelId && <Check size={13} />}
+                          </button>
+                        )
+                      }) : (
                         <span className="chat-model-empty">No models match “{modelSearch}”.</span>
                       )}
                     </div>
@@ -1793,16 +1910,45 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
               </div>
 
               {selectableEfforts.length > 0 && (
-                <select
-                  className="chat-pill-select"
-                  aria-label="Reasoning effort"
-                  value={effectiveEffort}
-                  onChange={(event) => setSelectedEffort(event.target.value as ChatReasoningEffort)}
-                >
-                  {supportedEfforts.map((effort) => (
-                    <option key={effort} value={effort}>{effort === 'auto' ? 'Auto effort' : `${effort[0].toUpperCase()}${effort.slice(1)} effort`}</option>
-                  ))}
-                </select>
+                <div className="chat-effort-picker" ref={effortPickerRef}>
+                  <button
+                    type="button"
+                    className="chat-pill-btn chat-effort-pill"
+                    aria-label="Reasoning effort"
+                    aria-haspopup="listbox"
+                    aria-expanded={effortMenuOpen}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setEffortMenuOpen((open) => !open)
+                      setEngineMenuOpen(false)
+                      setModelMenuOpen(false)
+                      setInspectorOpen(false)
+                    }}
+                  >
+                    <span>{effortLabel(effectiveEffort)}</span>
+                    <ChevronDown size={12} aria-hidden="true" />
+                  </button>
+                  {effortMenuOpen && (
+                    <div className="chat-effort-dropdown" role="listbox" aria-label="Reasoning effort levels">
+                      {supportedEfforts.map((effort) => (
+                        <button
+                          type="button"
+                          role="option"
+                          key={effort}
+                          aria-selected={effort === effectiveEffort}
+                          className={`chat-engine-option-btn chat-effort-option-btn ${effort === effectiveEffort ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setSelectedEffort(effort)
+                            setEffortMenuOpen(false)
+                          }}
+                        >
+                          <span>{effortLabel(effort)}</span>
+                          {effort === effectiveEffort && <Check size={13} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="chat-toolbar-divider" />
@@ -1863,67 +2009,6 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
         </div>
         </>
       </main>
-      {inspectorOpen && (
-        <aside className="chat-inspector" aria-label="Chat inspector">
-          <div className="chat-inspector-header">
-            <div>
-              <strong>Chat profile</strong>
-              <span>Tools and context for this conversation</span>
-            </div>
-            <button type="button" className="chat-rail-icon-btn" onClick={() => setInspectorOpen(false)} aria-label="Close chat inspector">
-              <X size={14} />
-            </button>
-          </div>
-
-          <div className="chat-inspector-scroll">
-            <section className="chat-inspector-section">
-              <div className="chat-inspector-section-title">Provider</div>
-              <div className="chat-inspector-value">
-                <CliBrandIcon identifier={selectedEngine?.id} size={14} />
-                <span>{selectedEngine?.display_name ?? 'Choose a provider'}</span>
-              </div>
-            </section>
-
-            <section className="chat-inspector-section">
-              <div className="chat-inspector-section-title">Safety & memory</div>
-              <label className="chat-inspector-field"><span>Approval policy</span><select value={chatProfile.approvalPolicy} onChange={(event) => updateChatProfile({ approvalPolicy: event.target.value as ChatProfile['approvalPolicy'] })}><option value="ask_for_mutations">Ask for mutations</option><option value="always_ask">Always ask</option><option value="allow_within_scope">Allow within scope</option><option value="deny">Deny tools</option></select></label>
-              <div className="chat-inspector-row"><span>Memory</span><strong>Conversation only</strong></div>
-              <div className="chat-inspector-row"><span>Execution</span><strong>Desktop</strong></div>
-              <label className="chat-inspector-row chat-inspector-limit"><span>Tool limit</span><input type="number" min={1} max={256} value={chatProfile.maxToolCalls} onChange={(event) => updateChatProfile({ maxToolCalls: Math.max(1, Math.min(256, Number(event.target.value) || 1)) })} /></label>
-            </section>
-
-            <section className="chat-inspector-section">
-              <div className="chat-inspector-section-title">Skills</div>
-              {capabilitiesLoading && <span className="chat-inspector-muted">Loading installed skills…</span>}
-              {!capabilitiesLoading && !availableSkills.length && <span className="chat-inspector-muted">No valid skills installed.</span>}
-              {availableSkills.map((skill) => (
-                <label className="chat-inspector-check" key={skill.id}>
-                  <input type="checkbox" checked={chatProfile.skillIds.includes(skill.id)} onChange={(event) => updateChatProfile({ skillIds: event.target.checked ? [...new Set([...chatProfile.skillIds, skill.id])] : chatProfile.skillIds.filter((id) => id !== skill.id) })} />
-                  <span><strong>{skill.name}</strong><small>{skill.description}</small></span>
-                </label>
-              ))}
-            </section>
-
-            <section className="chat-inspector-section">
-              <div className="chat-inspector-section-title">Plugin tools</div>
-              {!capabilitiesLoading && !availablePlugins.some((plugin) => plugin.enabled && validatedPluginIds.has(plugin.manifest.id)) && <span className="chat-inspector-muted">No enabled, validated plugin connections.</span>}
-              {availablePlugins.filter((plugin) => plugin.enabled && validatedPluginIds.has(plugin.manifest.id)).flatMap((plugin) => plugin.manifest.tools.map((tool) => ({ plugin, tool }))).map(({ plugin, tool }) => (
-                <label className="chat-inspector-check" key={`${plugin.manifest.id}:${tool.name}`}>
-                  <input type="checkbox" checked={chatProfile.pluginToolNames.includes(chatPluginToolId(plugin.manifest.id, tool.name)) || chatProfile.pluginToolNames.includes(tool.name)} onChange={(event) => { const id = chatPluginToolId(plugin.manifest.id, tool.name); updateChatProfile({ pluginToolNames: event.target.checked ? [...new Set([...chatProfile.pluginToolNames.filter((name) => name !== tool.name), id])] : chatProfile.pluginToolNames.filter((name) => name !== id && name !== tool.name) }) }} />
-                  <span><strong>{tool.name}</strong><small>{plugin.manifest.name}</small></span>
-                </label>
-              ))}
-            </section>
-
-            <section className="chat-inspector-section">
-              <div className="chat-inspector-section-title">Folder access</div>
-              <span className="chat-inspector-muted">Folders are never granted automatically.</span>
-              {chatProfile.folderPaths.map((path) => <div className="chat-inspector-path" key={path}><Folder size={12} /><span title={path}>{pathName(path)}</span><button type="button" onClick={() => updateChatProfile({ folderPaths: chatProfile.folderPaths.filter((candidate) => candidate !== path) })} aria-label={`Remove ${pathName(path)}`}><X size={12} /></button></div>)}
-              <button type="button" className="chat-inspector-add" onClick={() => void attachProfileFolder()}><FolderPlus size={13} /> Add folder access</button>
-            </section>
-          </div>
-        </aside>
-      )}
     </div>
   )
 }

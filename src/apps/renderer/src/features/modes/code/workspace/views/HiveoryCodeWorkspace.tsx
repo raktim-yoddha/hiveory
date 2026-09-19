@@ -168,15 +168,15 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   }, [activeWorkspaceId])
 
   useEffect(() => {
-    const openCodeRun = (event: Event) => {
+    const openCodeWorkspace = (event: Event) => {
       const detail = (event as CustomEvent<{ workspaceId?: string }>).detail
       if (!detail?.workspaceId) return
       setActiveWorkspaceId(detail.workspaceId)
       setActiveSection('workspace')
-      setCoordinationPanelOpen(true)
+      setCoordinationPanelOpen(false)
     }
-    window.addEventListener('hiveory-open-code-run', openCodeRun)
-    return () => window.removeEventListener('hiveory-open-code-run', openCodeRun)
+    window.addEventListener('hiveory-open-code-workspace', openCodeWorkspace)
+    return () => window.removeEventListener('hiveory-open-code-workspace', openCodeWorkspace)
   }, [])
 
   const handleSelectWorkspace = (wsId: string) => {

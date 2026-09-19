@@ -1,6 +1,6 @@
 # Threat model
 
-This threat model covers the current Hiveory `0.2.1` desktop application. Security reports follow the private process in the root [security policy](../../SECURITY.md).
+This threat model covers the current Hiveory `0.2.2` desktop application. Security reports follow the private process in the root [security policy](../../SECURITY.md).
 
 ## Assets and trust boundaries
 

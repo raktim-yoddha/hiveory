@@ -1,6 +1,7 @@
 import { CheckCircle2, Edit3, History, Play, Plus, RefreshCw, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { hiveoryClient, type AgentFolderGrant, type AgentPluginGrant, type AgentSummary, type PluginCatalogEntry, type PluginConnectionSummary, type RoutineCreateRequest, type RoutineDetail, type RoutineExecution, type RoutineSummary, type RoutineUpdateRequest } from '../../../../shared/api/hiveory-client'
+import { HiveoryButton, HiveoryEmptyState, HiveoryIconButton, HiveoryPageHeader, HiveorySearchField } from '../../../../shared/ui/HiveoryDesign'
 
 const defaultRoutineRequest = (agentId: string): RoutineCreateRequest => ({
   name: 'Weekday repo audit',
@@ -103,16 +104,13 @@ export function HiveoryRoutines() {
     } catch (error) { setFeedback(error instanceof Error ? error.message : 'The routine could not be saved.') } finally { setBusy(null) }
   }
 
-  return <section className="hiveory-automation hiveory-automation-desktop" aria-labelledby="hiveory-routines-title">
-    <header className="hiveory-automation-desktop-header">
-      <h1 id="hiveory-routines-title">Automations</h1>
-      <div className="hiveory-automation-desktop-controls">
-        <label className="hiveory-automation-desktop-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search..." aria-label="Search automations" /></label>
+  return <section className="hiveory-page hiveory-automation hiveory-automation-desktop" aria-labelledby="hiveory-routines-title">
+    <HiveoryPageHeader id="hiveory-routines-title" title="Automations" subtitle="Schedule durable, local work with clear status and history." className="hiveory-automation-desktop-header" actions={<div className="hiveory-automation-desktop-controls">
+        <label className="hiveory-automation-desktop-search"><Search size={15} /><HiveorySearchField value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search automations" aria-label="Search automations" /></label>
         <label className="hiveory-automation-desktop-filter"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Show archived</label>
-        <button className="hiveory-icon-button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></button>
-        <button onClick={() => { setEditing(null); setTemplate(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</button>
-      </div>
-    </header>
+        <HiveoryIconButton type="button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></HiveoryIconButton>
+        <HiveoryButton type="button" intent="primary" onClick={() => { setEditing(null); setTemplate(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</HiveoryButton>
+      </div>} />
     <section className="hiveory-automation-desktop-surface" aria-label="Local automations">
       {visibleRoutines.length > 0 && <div className="hiveory-automation-desktop-list">
         {visibleRoutines.map((routine) => <button key={routine.id} className="hiveory-automation-desktop-row" onClick={() => void selectRoutine(routine)} disabled={busy === `select-${routine.id}`}>
@@ -121,10 +119,7 @@ export function HiveoryRoutines() {
           <span className="hiveory-automation-desktop-row-meta">{routine.enabled ? 'Enabled' : routine.archived ? 'Archived' : 'Paused'} · next {formatTime(routine.next_run_unix_ms)}</span>
         </button>)}
       </div>}
-      {!visibleRoutines.length && <div className="hiveory-automation-desktop-empty">
-        <strong>{routines.length ? 'No matches' : 'No automations yet'}</strong>
-        <span>{routines.length ? 'Try another search or filter.' : 'Create one or use a template.'}</span>
-      </div>}
+      {!visibleRoutines.length && <HiveoryEmptyState title={routines.length ? 'No matches' : 'No automations yet'}>{routines.length ? 'Try another search or filter.' : 'Create one or use a template.'}</HiveoryEmptyState>}
       {agents.length > 0 && <div className="hiveory-automation-desktop-templates" aria-labelledby="hiveory-template-title">
         <h2 id="hiveory-template-title">Templates</h2>
         {automationTemplates.map((item) => <button key={item.name} type="button" disabled={busy !== null} onClick={() => { setEditing(null); setTemplate(item); setShowForm(true) }}>

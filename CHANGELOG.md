@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-09-19
+
+### Workspace and renderer refinements
+
+- Included the accumulated desktop, renderer, workspace, persistence, and UI changes since 0.2.1.
+- Refined the middle-canvas pane layout and compact resize affordance.
+- Rebuilt the portable executable, NSIS installer, and MSI package.
+
 ## 0.2.1 — 2026-09-14
 
 ### Production startup and code workspace

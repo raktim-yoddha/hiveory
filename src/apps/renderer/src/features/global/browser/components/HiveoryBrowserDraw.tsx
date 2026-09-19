@@ -23,7 +23,7 @@ interface HiveoryBrowserDrawProps {
   onError: (message: string) => void
 }
 
-const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#111827', '#ffffff']
+const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#999999', '#1c1c1c', '#ffffff']
 const widths = [2, 4, 8]
 const fontSizes = [14, 18, 24, 32, 48]
 

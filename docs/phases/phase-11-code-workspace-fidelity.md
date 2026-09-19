@@ -14,7 +14,7 @@ Opening Code mode now presents one compact application rail and one bounded canv
 
 - Removed the duplicate navigation rail from Code workbench.
 - Bounded the shell to the application viewport so the document cannot create a phantom right scrollbar.
-- Added compact graphite surfaces, muted borders, restrained blue actions, terminal typography, status dots, and reference-shaped pane chrome.
+- Added compact graphite surfaces, muted borders, restrained silver actions, terminal typography, status dots, and reference-shaped pane chrome.
 - Added a top-bar Tidy action and a keyboard-accessible layout preset dialog.
 - Kept global Dashboard, Routines, Plugins, and Skills navigation available from the Code rail.
 - Restored the trust affordance for read-only workspaces before process execution.
@@ -51,4 +51,3 @@ Opening Code mode now presents one compact application rail and one bounded canv
 ## Scope boundary
 
 This phase improves the Code workspace itself. It does not claim that every external command is installed, authenticated, or compatible with a user's machine. Detection and launch errors are surfaced in the UI; users still control workspace trust and credentials.
-

@@ -112,13 +112,13 @@ function renderPaneRailIcon(node: CodePaneNode, adapterId?: string | null) {
     case 'coding_agent':
       return <CliBrandIcon identifier={adapterId} size={13} />
     case 'preview':
-      return <Globe size={13} style={{ color: '#aeb7c2' }} aria-hidden="true" />
+      return <Globe size={13} style={{ color: '#b8b8b8' }} aria-hidden="true" />
     case 'markdown':
-      return <FileText size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+      return <FileText size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
     case 'terminal':
-      return <SquareTerminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+      return <SquareTerminal size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
     default:
-      return <PanelsTopLeft size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+      return <PanelsTopLeft size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
   }
 }
 

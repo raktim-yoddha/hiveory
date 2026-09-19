@@ -1426,7 +1426,7 @@ mod tests {
             name: "Release helper".to_owned(),
             description: "A bounded release assistant".to_owned(),
             operating_brief: "Stay inside explicitly granted folders.".to_owned(),
-            avatar_color: "#22d3ee".to_owned(),
+            avatar_color: "#888888".to_owned(),
             provider_account_id: super::super::HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID.to_owned(),
             model: "gpt-5.6-mini".to_owned(),
             system_instructions: "Be concise and inspectable.".to_owned(),

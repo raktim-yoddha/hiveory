@@ -8,15 +8,12 @@ import {
   CheckCheck,
   Clock3,
   CircleAlert,
-  Inbox,
-  MessageSquare,
   Pause,
   Play,
   Plus,
   RefreshCw,
   RotateCcw,
   Send,
-  ShieldCheck,
   Square,
   Workflow,
   X,
@@ -34,6 +31,7 @@ import {
   type CodeTask,
   type CodeWorkspaceSummary,
 } from '../../../../../shared/api/hiveory-client'
+import { HiveoryButton, HiveoryDialog } from '../../../../../shared/ui/HiveoryDesign'
 
 interface CodeCoordinationPanelProps {
   workspace: CodeWorkspaceSummary
@@ -73,6 +71,7 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
   const [messagePayload, setMessagePayload] = useState('')
   const [gateTitle, setGateTitle] = useState('')
   const [gateReason, setGateReason] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
 
   const loadRuns = useCallback(async () => {
     setLoading(true)
@@ -170,6 +169,7 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
       setDetail(nextDetail)
       setSelectedRunId(nextDetail.summary.id)
       setRuns((current) => [nextDetail.summary, ...current.filter((run) => run.id !== nextDetail.summary.id)])
+      setCreateOpen(false)
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : String(reason))
     } finally {
@@ -309,13 +309,7 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
           </div>
         </section>
 
-        <section className="code-coordination-create" aria-labelledby="code-coordination-create-title">
-          <div className="code-coordination-section-heading"><span id="code-coordination-create-title">New run</span><span>bounded</span></div>
-          <label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-          <label>Objective<textarea rows={3} value={objective} onChange={(event) => setObjective(event.target.value)} /></label>
-          <label>Coordinator adapter<select value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)}>{adapters.map((adapter) => <option key={adapter.id} value={adapter.id}>{adapter.display_name}{adapter.detected ? '' : ' · unavailable'}</option>)}</select></label>
-          <button type="button" onClick={() => void createRun()} disabled={busy !== null || !title.trim() || !objective.trim() || !selectedAdapter}><Plus size={13} aria-hidden="true" />Create run</button>
-        </section>
+        <HiveoryButton type="button" intent="secondary" className="code-coordination-create-trigger" onClick={() => setCreateOpen(true)}><Plus size={13} aria-hidden="true" />New run</HiveoryButton>
 
         {detail && <section className="code-coordination-detail" aria-labelledby="code-coordination-detail-title">
           <div className="code-coordination-detail-header"><div><span className="code-coordination-eyebrow">Selected run</span><h2 id="code-coordination-detail-title">{detail.summary.title}</h2><p>{detail.summary.objective}</p></div><span className={`code-coordination-run-badge ${detail.summary.state}`}>{runStateLabel(detail.summary.state)}</span></div>
@@ -338,8 +332,8 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
 
           {activeQuestion && <QuestionCard question={activeQuestion} answer={questionAnswer} setAnswer={setQuestionAnswer} busy={busy !== null} onAnswer={() => void answerQuestion(activeQuestion)} />}
 
-          <section className="code-coordination-mailbox" aria-labelledby="code-coordination-mailbox-title">
-            <div className="code-coordination-block-heading"><Inbox size={13} aria-hidden="true" /><span id="code-coordination-mailbox-title">Durable inbox</span><small>{mailbox.filter((delivery) => !delivery.acknowledged).length} unread</small></div>
+          <details className="code-coordination-disclosure code-coordination-mailbox">
+            <summary><span>Durable inbox</span><small>{mailbox.filter((delivery) => !delivery.acknowledged).length} unread</small></summary>
             <div className="code-coordination-message-list">
               {mailbox.length === 0 ? <p>No addressed messages yet. Worker progress and escalations appear here.</p> : mailbox.slice(-8).reverse().map((delivery) => <div key={delivery.id} className={delivery.acknowledged ? 'is-acknowledged' : ''}><div><strong>{delivery.kind}</strong><small>from {delivery.sender_address} · #{delivery.sequence}</small></div><p>{delivery.payload}</p>{!delivery.acknowledged && <button type="button" className="code-coordination-inline-button" onClick={() => void acknowledgeMailbox(delivery)} disabled={busy !== null} aria-label="Acknowledge message" title="Acknowledge message"><CheckCheck size={12} aria-hidden="true" /></button>}</div>)}
             </div>
@@ -349,20 +343,25 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
               <label className="code-coordination-message-field">Message<textarea rows={2} value={messagePayload} onChange={(event) => setMessagePayload(event.target.value)} placeholder="Send a bounded instruction or status request" /></label>
               <button type="button" onClick={() => void sendMailboxMessage()} disabled={busy !== null || !messagePayload.trim() || !recipientAddress.trim() || recipientAddress.trim() === coordinatorAddress}><Send size={12} aria-hidden="true" />Queue message</button>
             </div>
-          </section>
+          </details>
 
-          <section className="code-coordination-gates" aria-labelledby="code-coordination-gates-title">
-            <div className="code-coordination-block-heading"><ShieldCheck size={13} aria-hidden="true" /><span id="code-coordination-gates-title">Decision gates</span><small>{gates.filter((gate) => gate.state === 'open').length} open</small></div>
+          <details className="code-coordination-disclosure code-coordination-gates">
+            <summary><span>Decision gates</span><small>{gates.filter((gate) => gate.state === 'open').length} open</small></summary>
             <div className="code-coordination-gate-list">
               {gates.length === 0 ? <p>No gates are blocking this run.</p> : gates.slice(0, 8).map((gate) => <div key={gate.id} className={`code-coordination-gate-row ${gate.state}`}><div><strong>{gate.title}</strong><p>{gate.reason}</p><small>{gate.state.replaceAll('_', ' ')} · actor {gate.allowed_actor}</small></div>{gate.state === 'open' && <div className="code-coordination-gate-actions"><button type="button" onClick={() => void resolveGate(gate, 'approved')} disabled={busy !== null}><Check size={11} aria-hidden="true" />Approve</button><button type="button" className="is-danger" onClick={() => void resolveGate(gate, 'rejected')} disabled={busy !== null}><Ban size={11} aria-hidden="true" />Reject</button></div>}</div>)}
             </div>
             <div className="code-coordination-gate-compose"><input value={gateTitle} onChange={(event) => setGateTitle(event.target.value)} placeholder="Gate title" /><input value={gateReason} onChange={(event) => setGateReason(event.target.value)} placeholder="What needs an explicit decision?" /><button type="button" onClick={() => void openGate()} disabled={busy !== null || !gateTitle.trim() || !gateReason.trim()}><Clock3 size={12} aria-hidden="true" />Open gate</button></div>
-          </section>
+          </details>
 
-          <div className="code-coordination-block-heading"><MessageSquare size={13} aria-hidden="true" /><span>Durable activity</span><small>{detail.events.length} retained events</small></div>
-          <div className="code-coordination-event-list" aria-live="polite">{detail.events.slice(-8).reverse().map((event) => <div key={event.event_id}><span className={`code-coordination-event-origin ${event.origin}`}>{event.origin}</span><span>{event.payload}</span><small>#{event.sequence}</small></div>)}</div>
+          <details className="code-coordination-disclosure">
+            <summary><span>Durable activity</span><small>{detail.events.length} retained events</small></summary>
+            <div className="code-coordination-event-list" aria-live="polite">{detail.events.slice(-8).reverse().map((event) => <div key={event.event_id}><span className={`code-coordination-event-origin ${event.origin}`}>{event.origin}</span><span>{event.payload}</span><small>#{event.sequence}</small></div>)}</div>
+          </details>
         </section>}
       </div>
+      <HiveoryDialog title="Create coordination run" open={createOpen} onClose={() => setCreateOpen(false)} actions={<><HiveoryButton type="button" intent="secondary" onClick={() => setCreateOpen(false)}>Cancel</HiveoryButton><HiveoryButton type="button" intent="primary" onClick={() => void createRun()} disabled={busy !== null || !title.trim() || !objective.trim() || !selectedAdapter}><Plus size={13} aria-hidden="true" />Create run</HiveoryButton></>}>
+        <section className="code-coordination-create" aria-label="New run details"><label>Title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Objective<textarea rows={3} value={objective} onChange={(event) => setObjective(event.target.value)} /></label><label>Coordinator adapter<select value={selectedAdapterId} onChange={(event) => setSelectedAdapterId(event.target.value)}>{adapters.map((adapter) => <option key={adapter.id} value={adapter.id}>{adapter.display_name}{adapter.detected ? '' : ' · unavailable'}</option>)}</select></label></section>
+      </HiveoryDialog>
     </aside>
   )
 }

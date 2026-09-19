@@ -4,7 +4,7 @@
 
 - [x] Code workbench uses one rail instead of nested global and Code rails.
 - [x] The shell, workspace, canvas, panel groups, and terminal containers have bounded height and `overflow: hidden` where appropriate.
-- [x] The canvas matches the compact dark reference direction: graphite surfaces, thin borders, compact headers, muted text, and restrained blue focus state.
+- [x] The canvas matches the compact dark reference direction: graphite surfaces, thin borders, compact headers, muted text, and restrained silver focus state.
 - [x] Tidy and layout presets are available from the title bar and keyboard shortcut.
 - [x] Preset dialog uses the same CSS token system as the rest of Code mode.
 - [x] Read-only workspaces expose a trust action before process launch.

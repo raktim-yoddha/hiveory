@@ -2132,22 +2132,22 @@ fn build_annotation_overlay_script(annotations: &str, nonce: &str) -> String {
     :host { all: initial; position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; color-scheme: dark; }
     * { box-sizing: border-box; }
     .marker { position: fixed; display: flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 2px solid rgba(255,255,255,.92); border-radius: 999px; background: #626262; color: white; box-shadow: 0 2px 9px rgba(0,0,0,.38); font: 700 11px/1 Segoe UI, sans-serif; pointer-events: none; transform: translate(-50%, -50%); }
-    .tray { position: fixed; right: 12px; bottom: 12px; display: flex; width: min(320px, calc(100vw - 24px)); max-height: 45vh; flex-direction: column; overflow: hidden; border: 1px solid #38434d; border-radius: 9px; background: rgba(15,18,21,.97); color: #e8edf1; box-shadow: 0 12px 30px rgba(0,0,0,.42); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
-    .head { display: flex; align-items: center; gap: 7px; min-height: 43px; padding: 7px 8px 7px 11px; border-bottom: 1px solid #303940; }
+    .tray { position: fixed; right: 12px; bottom: 12px; display: flex; width: min(320px, calc(100vw - 24px)); max-height: 45vh; flex-direction: column; overflow: hidden; border: 1px solid #424242; border-radius: 9px; background: rgba(18,18,18,.97); color: #ededed; box-shadow: 0 12px 30px rgba(0,0,0,.42); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
+    .head { display: flex; align-items: center; gap: 7px; min-height: 43px; padding: 7px 8px 7px 11px; border-bottom: 1px solid #383838; }
     .head strong { min-width: 0; flex: 1; font-size: 13px; }
-    button { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; border: 1px solid #494949; border-radius: 6px; padding: 4px 8px; background: #2f2f2f; color: #e8edf1; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
+    button { display: inline-flex; min-height: 28px; align-items: center; justify-content: center; border: 1px solid #494949; border-radius: 6px; padding: 4px 8px; background: #2f2f2f; color: #ededed; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
     button:hover { background: #3b3b3b; }
     button:focus-visible { outline: 2px solid #b8b8b8; outline-offset: 1px; }
-    button.icon { width: 28px; padding: 0; color: #aab6bf; }
+    button.icon { width: 28px; padding: 0; color: #b4b4b4; }
     .list { min-height: 0; overflow: auto; padding: 6px; }
     .row { display: flex; gap: 8px; border-radius: 6px; padding: 7px 6px; }
-    .row:hover { background: #22292f; }
+    .row:hover { background: #292929; }
     .number { display: flex; width: 20px; height: 20px; flex: 0 0 20px; align-items: center; justify-content: center; border-radius: 999px; background: #626262; color: white; font-weight: 700; }
     .body { min-width: 0; flex: 1; }
     .body strong, .body span, .body small { display: block; overflow: hidden; text-overflow: ellipsis; }
     .body strong { white-space: nowrap; font-size: 12px; }
-    .body span { display: -webkit-box; margin-top: 2px; color: #aab6bf; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-    .body small { margin-top: 3px; color: #7f8c96; text-transform: capitalize; }
+    .body span { display: -webkit-box; margin-top: 2px; color: #b4b4b4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+    .body small { margin-top: 3px; color: #8b8b8b; text-transform: capitalize; }
     .delete { align-self: start; opacity: 0; }
     .row:hover .delete, .delete:focus-visible { opacity: 1; }
   `;
@@ -2257,23 +2257,23 @@ fn build_picker_script(action: &str, nonce: &str) -> String {
     * { box-sizing: border-box; }
     .box { position: fixed; pointer-events: none; border: 2px solid rgba(255,255,255,.92); background: rgba(255,255,255,.08); border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.45) inset; transition: left 55ms linear, top 55ms linear, width 55ms linear, height 55ms linear; }
     .tag { position: fixed; max-width: min(360px, calc(100vw - 20px)); overflow: hidden; border-radius: 4px; padding: 4px 7px; background: #353535; color: white; box-shadow: 0 3px 10px rgba(0,0,0,.3); text-overflow: ellipsis; white-space: nowrap; font: 600 11px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace; pointer-events: none; }
-    .hint { position: fixed; top: 10px; left: 50%; display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid #3c4650; border-radius: 7px; padding: 7px 10px; background: rgba(17,20,23,.96); color: #dbe4ea; box-shadow: 0 7px 20px rgba(0,0,0,.32); font: 12px/1 Segoe UI, sans-serif; pointer-events: none; }
+    .hint { position: fixed; top: 10px; left: 50%; display: flex; align-items: center; gap: 8px; transform: translateX(-50%); border: 1px solid #464646; border-radius: 7px; padding: 7px 10px; background: rgba(20,20,20,.96); color: #e3e3e3; box-shadow: 0 7px 20px rgba(0,0,0,.32); font: 12px/1 Segoe UI, sans-serif; pointer-events: none; }
     .hint b { color: white; font-weight: 650; }
-    .hint kbd { border: 1px solid #4b5660; border-radius: 4px; padding: 2px 4px; background: #252b30; color: #b8c4cc; font: 10px/1 ui-monospace, Consolas, monospace; }
-    .menu, .panel { position: fixed; border: 1px solid #3b454d; border-radius: 9px; background: rgba(15,18,21,.98); color: #e9eef2; box-shadow: 0 14px 36px rgba(0,0,0,.45); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
+    .hint kbd { border: 1px solid #565656; border-radius: 4px; padding: 2px 4px; background: #2b2b2b; color: #c2c2c2; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .menu, .panel { position: fixed; border: 1px solid #444444; border-radius: 9px; background: rgba(18,18,18,.98); color: #eeeeee; box-shadow: 0 14px 36px rgba(0,0,0,.45); pointer-events: auto; font: 12px/1.4 Segoe UI, sans-serif; }
     .menu { min-width: 184px; padding: 5px; }
     .menu button { display: flex; width: 100%; min-height: 32px; align-items: center; justify-content: space-between; border: 0; border-radius: 5px; padding: 6px 8px; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
-    .menu button:hover, .menu button:focus-visible { background: #2a3035; outline: none; }
-    .menu button:last-child { margin-top: 4px; border-top: 1px solid #313940; border-radius: 0 0 5px 5px; color: #aeb9c1; }
-    .menu kbd { color: #86949e; font: 10px/1 ui-monospace, Consolas, monospace; }
+    .menu button:hover, .menu button:focus-visible { background: #303030; outline: none; }
+    .menu button:last-child { margin-top: 4px; border-top: 1px solid #393939; border-radius: 0 0 5px 5px; color: #b8b8b8; }
+    .menu kbd { color: #929292; font: 10px/1 ui-monospace, Consolas, monospace; }
     .panel { width: min(352px, calc(100vw - 24px)); padding: 12px; }
     .panel strong { display: block; overflow: hidden; margin-bottom: 2px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-    .panel small { display: block; overflow: hidden; margin-bottom: 9px; color: #96a4ae; text-overflow: ellipsis; white-space: nowrap; font: 10px/1.4 ui-monospace, Consolas, monospace; }
-    .panel textarea { width: 100%; min-height: 84px; resize: none; border: 1px solid #3d4851; border-radius: 6px; padding: 8px 9px; color: #edf2f5; background: #0b0e10; outline: none; font: 12px/1.45 Segoe UI, sans-serif; }
+    .panel small { display: block; overflow: hidden; margin-bottom: 9px; color: #a2a2a2; text-overflow: ellipsis; white-space: nowrap; font: 10px/1.4 ui-monospace, Consolas, monospace; }
+    .panel textarea { width: 100%; min-height: 84px; resize: none; border: 1px solid #474747; border-radius: 6px; padding: 8px 9px; color: #f1f1f1; background: #0e0e0e; outline: none; font: 12px/1.45 Segoe UI, sans-serif; }
     .panel textarea:focus { border-color: #a2a2a2; box-shadow: 0 0 0 2px rgba(162,162,162,.2); }
-    .intent-label { display: block; margin: 8px 0 5px; color: #96a4ae; font-size: 11px; }
+    .intent-label { display: block; margin: 8px 0 5px; color: #a2a2a2; font-size: 11px; }
     .intents { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-    .intents button, .actions button { min-height: 30px; border: 1px solid #3d4851; border-radius: 6px; padding: 5px 9px; color: #dce5ea; background: #20262b; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
+    .intents button, .actions button { min-height: 30px; border: 1px solid #474747; border-radius: 6px; padding: 5px 9px; color: #e3e3e3; background: #262626; cursor: pointer; font: 600 11px/1 Segoe UI, sans-serif; }
     .intents button.active { border-color: #777; background: #464646; color: white; }
     .actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }
     .actions button.primary { border-color: #d8d8d8; background: #d8d8d8; color: #171717; }

@@ -80,7 +80,10 @@ export const CodePaneTree: React.FC<CodePaneTreeProps> = ({
         />
       </Panel>
 
-      <Separator className="code-panel-resize-handle" />
+      <Separator
+        className="code-panel-resize-handle"
+        style={{ flexBasis: 'var(--hiveory-space-1)' }}
+      />
 
       <Panel id={rightChildId} defaultSize={`${100 - defaultRatio}%`} minSize="10%">
         <CodePaneTree

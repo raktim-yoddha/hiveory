@@ -24,7 +24,7 @@ type BoardTask = {
 const emptyPreferences: TaskBoardPreferences = { statuses: {}, pinned: [] }
 
 const statusDefinitions: Array<{ id: BoardStatus; label: string; color: string }> = [
-  { id: 'todo', label: 'Todo', color: '#7c818a' },
+  { id: 'todo', label: 'Todo', color: '#838383' },
   { id: 'in_progress', label: 'In progress', color: '#d7b900' },
   { id: 'in_review', label: 'In review', color: '#16a96b' },
   { id: 'done', label: 'Done', color: '#d4a892' },

@@ -1,0 +1,519 @@
+:root {
+  --hiveory-color-canvas: #0d0d0d;
+  --hiveory-color-surface: #111111;
+  --hiveory-color-raised: #1b1b1b;
+  --hiveory-color-interactive: #202020;
+  --hiveory-color-hover: #272727;
+  --hiveory-color-border-subtle: #242424;
+  --hiveory-color-border: #303030;
+  --hiveory-color-border-strong: #3a3a3a;
+  --hiveory-color-text: #f4f4f4;
+  --hiveory-color-text-secondary: #a7a7a7;
+  --hiveory-color-text-muted: #737373;
+  --hiveory-color-primary: #d6d6d6;
+  --hiveory-color-primary-hover: #f4f4f4;
+  --hiveory-color-success: #58e29a;
+  --hiveory-color-warning: #efb72d;
+  --hiveory-color-danger: #ef8f96;
+  --hiveory-space-1: 4px;
+  --hiveory-space-2: 8px;
+  --hiveory-space-3: 12px;
+  --hiveory-space-4: 16px;
+  --hiveory-space-5: 24px;
+  --hiveory-space-6: 32px;
+  --hiveory-radius-control: 8px;
+  --hiveory-radius-card: 10px;
+  --hiveory-radius-dialog: 12px;
+  --hiveory-control-height: 36px;
+  --hiveory-control-height-compact: 32px;
+  --hiveory-page-gutter: 32px;
+  --hiveory-font-page-size: 24px;
+  --hiveory-font-page-line: 30px;
+  --hiveory-font-section-size: 15px;
+  --hiveory-font-section-line: 21px;
+  --hiveory-font-body-size: 13px;
+  --hiveory-font-body-line: 20px;
+  --hiveory-font-label-size: 11px;
+  --hiveory-font-label-line: 16px;
+  --hiveory-font-meta-size: 10px;
+  --hiveory-font-meta-line: 14px;
+  --hiveory-transition: 160ms ease;
+  --hiveory-z-panel: 20;
+  --hiveory-z-backdrop: 40;
+  --hiveory-z-modal: 50;
+  --hiveory-z-toast: 60;
+  --hiveory-font-scale: 1;
+  --hiveory-backdrop-color: var(--hiveory-color-canvas);
+  --hiveory-backdrop-image: none;
+  --hiveory-graphite-canvas: var(--hiveory-color-canvas);
+  --hiveory-graphite-surface: var(--hiveory-color-surface);
+  --hiveory-graphite-raised: var(--hiveory-color-raised);
+  --hiveory-graphite-hover: var(--hiveory-color-hover);
+  --hiveory-graphite-border: var(--hiveory-color-border);
+  --hiveory-graphite-strong-border: var(--hiveory-color-border-strong);
+  --hiveory-graphite-text: var(--hiveory-color-text);
+  --hiveory-graphite-muted: var(--hiveory-color-text-secondary);
+  --hiveory-canvas: var(--hiveory-color-canvas);
+  --hiveory-surface: var(--hiveory-color-surface);
+  --hiveory-surface-raised: var(--hiveory-color-raised);
+  --hiveory-elevated: var(--hiveory-color-raised);
+  --hiveory-border: var(--hiveory-color-border);
+  --hiveory-strong-border: var(--hiveory-color-border-strong);
+  --hiveory-text: var(--hiveory-color-text);
+  --hiveory-muted: var(--hiveory-color-text-secondary);
+  --hiveory-accent: var(--hiveory-color-primary);
+  --hiveory-focus: var(--hiveory-color-primary);
+  --hiveory-neutral-accent: var(--hiveory-color-primary);
+  --hiveory-neutral-accent-strong: var(--hiveory-color-primary-hover);
+  --hiveory-neutral-accent-soft: color-mix(in srgb, var(--hiveory-color-primary) 14%, transparent);
+  --hiveory-amber: var(--hiveory-color-warning);
+  --hiveory-workbench-window: var(--hiveory-color-canvas);
+  --hiveory-workbench-surface: var(--hiveory-color-surface);
+  --hiveory-workbench-card: var(--hiveory-color-raised);
+  --hiveory-workbench-hover: var(--hiveory-color-hover);
+  --hiveory-workbench-border: var(--hiveory-color-border-subtle);
+  --hiveory-workbench-border-active: var(--hiveory-color-border-strong);
+  --hiveory-workbench-text: var(--hiveory-color-text);
+  --hiveory-workbench-muted: var(--hiveory-color-text-secondary);
+  --hiveory-workbench-dim: var(--hiveory-color-text-muted);
+  --code-window-bg: var(--hiveory-color-canvas);
+  --code-surface-bg: var(--hiveory-color-surface);
+  --code-card-bg: var(--hiveory-color-raised);
+  --code-card-hover: var(--hiveory-color-hover);
+  --code-card-border: var(--hiveory-color-border-subtle);
+  --code-border-active: var(--hiveory-color-border-strong);
+  --code-text-primary: var(--hiveory-color-text);
+  --code-text-secondary: var(--hiveory-color-text-secondary);
+  --code-text-dim: var(--hiveory-color-text-muted);
+  --code-neutral-accent: var(--hiveory-color-primary);
+  --code-neutral-accent-hover: var(--hiveory-color-primary-hover);
+}
+
+.hiveory-page,
+.hiveory-global-dashboard,
+.hiveory-automation-desktop,
+.hiveory-tasks-page,
+.hiveory-capability-main {
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-surface);
+}
+
+.hiveory-page-header,
+.hiveory-global-dashboard-header,
+.hiveory-automation-desktop-header,
+.hiveory-tasks-header,
+.hiveory-capability-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--hiveory-space-5);
+}
+
+.hiveory-page-heading { min-width: 0; }
+.hiveory-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--hiveory-space-2); }
+.hiveory-surface { border: 1px solid var(--hiveory-color-border); border-radius: var(--hiveory-radius-card); padding: var(--hiveory-space-4); color: var(--hiveory-color-text); background: var(--hiveory-color-raised); }
+.hiveory-search-field { width: 100%; }
+.hiveory-tabs { display: flex; flex-wrap: wrap; gap: var(--hiveory-space-1); }
+.hiveory-badge { display: inline-flex; align-items: center; min-height: var(--hiveory-control-height-compact); border: 1px solid var(--hiveory-color-border); border-radius: var(--hiveory-radius-control); padding: 0 var(--hiveory-space-2); color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-meta-size); font-weight: 600; line-height: var(--hiveory-font-meta-line); }
+.hiveory-badge--success { border-color: var(--hiveory-color-success); color: var(--hiveory-color-success); }
+.hiveory-badge--warning { border-color: var(--hiveory-color-warning); color: var(--hiveory-color-warning); }
+.hiveory-badge--danger { border-color: var(--hiveory-color-danger); color: var(--hiveory-color-danger); }
+.hiveory-empty-state { display: grid; width: 100%; max-width: none; justify-items: center; gap: var(--hiveory-space-2); padding: var(--hiveory-space-6); color: var(--hiveory-color-text-secondary); text-align: center; }
+.hiveory-empty-state strong { color: var(--hiveory-color-text); font-size: var(--hiveory-font-section-size); line-height: var(--hiveory-font-section-line); }
+.hiveory-empty-state p { max-width: 48ch; margin: 0; font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-loading-state { display: grid; min-height: 160px; place-items: center; align-content: center; gap: var(--hiveory-space-2); color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-loading-spinner { width: 16px; height: 16px; border: 2px solid var(--hiveory-color-border); border-top-color: var(--hiveory-color-primary); border-radius: 50%; animation: hiveory-loading-spin 700ms linear infinite; }
+@keyframes hiveory-loading-spin { to { transform: rotate(360deg); } }
+.hiveory-page-title,
+.hiveory-global-dashboard-header h1,
+.hiveory-automation-desktop-header h1,
+.hiveory-tasks-header h1,
+.hiveory-capability-header h1,
+.hiveory-settings > .hiveory-content-header h1 {
+  margin: 0;
+  color: var(--hiveory-color-text);
+  font-size: var(--hiveory-font-page-size);
+  font-weight: 700;
+  line-height: var(--hiveory-font-page-line);
+}
+.hiveory-settings .hiveory-page-title,
+.hiveory-capability-main .hiveory-page-title,
+.hiveory-global-dashboard .hiveory-page-title,
+.hiveory-automation-desktop .hiveory-page-title,
+.hiveory-tasks-page .hiveory-page-title {
+  font-size: var(--hiveory-font-page-size);
+  line-height: var(--hiveory-font-page-line);
+  letter-spacing: normal;
+}
+
+.hiveory-page-subtitle,
+.hiveory-global-dashboard-header p,
+.hiveory-automation-desktop-header p,
+.hiveory-tasks-header > p,
+.hiveory-capability-header p,
+.hiveory-settings > .hiveory-description {
+  margin: var(--hiveory-space-1) 0 0;
+  color: var(--hiveory-color-text-secondary);
+  font-size: var(--hiveory-font-body-size);
+  line-height: var(--hiveory-font-body-line);
+}
+
+.hiveory-button,
+.hiveory-icon-button,
+.hiveory-settings-card button,
+.hiveory-automation-desktop button,
+.hiveory-tasks-page button,
+.hiveory-capability-main button {
+  min-height: var(--hiveory-control-height);
+  border: 1px solid var(--hiveory-color-border-strong);
+  border-radius: var(--hiveory-radius-control);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-interactive);
+  cursor: pointer;
+  transition: background var(--hiveory-transition), border-color var(--hiveory-transition), color var(--hiveory-transition);
+}
+
+.hiveory-button:hover:not(:disabled),
+.hiveory-icon-button:hover:not(:disabled),
+.hiveory-settings-card button:hover:not(:disabled),
+.hiveory-automation-desktop button:hover:not(:disabled),
+.hiveory-tasks-page button:hover:not(:disabled),
+.hiveory-capability-main button:hover:not(:disabled) { background: var(--hiveory-color-hover); }
+.hiveory-button:disabled,
+.hiveory-icon-button:disabled { cursor: not-allowed; opacity: .48; }
+.hiveory-button--primary { border-color: var(--hiveory-color-primary); color: var(--hiveory-color-canvas); background: var(--hiveory-color-primary); }
+.hiveory-button--primary:hover:not(:disabled) { border-color: var(--hiveory-color-primary-hover); background: var(--hiveory-color-primary-hover); }
+.hiveory-button--secondary, .hiveory-settings-card button.is-secondary, .hiveory-tasks-page button.is-secondary { color: var(--hiveory-color-text-secondary); background: transparent; }
+.hiveory-button--ghost { border-color: transparent; color: var(--hiveory-color-text-secondary); background: transparent; }
+.hiveory-button--danger { border-color: var(--hiveory-color-danger); color: var(--hiveory-color-danger); background: transparent; }
+.hiveory-button--compact { min-height: var(--hiveory-control-height-compact); padding: 0 var(--hiveory-space-3); }
+.hiveory-button--standard { padding: 0 var(--hiveory-space-4); }
+.hiveory-button--icon, .hiveory-icon-button { display: inline-grid; width: var(--hiveory-control-height); min-width: var(--hiveory-control-height); place-items: center; padding: 0; }
+
+.hiveory-page [role="tablist"] button,
+.hiveory-capability-tabs button,
+.hiveory-tasks-provider-tabs button {
+  min-height: var(--hiveory-control-height-compact);
+  border-radius: var(--hiveory-radius-control);
+  color: var(--hiveory-color-text-secondary);
+  background: transparent;
+}
+.hiveory-page [role="tablist"] button[role="tab"],
+.hiveory-capability-tabs button[role="tab"],
+.hiveory-tasks-provider-tabs button[role="tab"] { cursor: pointer; }
+.hiveory-page [role="tablist"] button.is-selected,
+.hiveory-capability-tabs button.is-selected,
+.hiveory-tasks-provider-tabs button.is-selected { color: var(--hiveory-color-primary); border-color: var(--hiveory-color-primary); background: var(--hiveory-color-interactive); }
+
+.hiveory-page input,
+.hiveory-page select,
+.hiveory-page textarea,
+.hiveory-settings-card input:not([type="checkbox"]):not([type="color"]),
+.hiveory-settings-card select,
+.hiveory-settings-card textarea,
+.hiveory-capability-main input,
+.hiveory-capability-main select {
+  min-height: var(--hiveory-control-height);
+  border: 1px solid var(--hiveory-color-border-strong);
+  border-radius: var(--hiveory-radius-control);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-interactive);
+}
+
+:where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--hiveory-color-primary);
+  outline-offset: 2px;
+}
+
+.hiveory-global-surface { border-color: var(--hiveory-color-border-subtle); border-radius: var(--hiveory-radius-dialog); background: var(--hiveory-color-surface); }
+.hiveory-global-dashboard { padding: var(--hiveory-space-6); }
+.hiveory-global-dashboard-summary > div,
+.hiveory-dashboard-group,
+.hiveory-automation-desktop-surface,
+.hiveory-tasks-table,
+.hiveory-settings-card,
+.hiveory-capability-surface { border-color: var(--hiveory-color-border); border-radius: var(--hiveory-radius-card); background: var(--hiveory-color-raised); }
+.hiveory-global-dashboard-summary > div { padding: var(--hiveory-space-4); }
+.hiveory-global-dashboard-summary span,
+.hiveory-dashboard-group > p,
+.hiveory-dashboard-more,
+.hiveory-settings-card > p,
+.hiveory-settings-card > label:not(.hiveory-settings-check),
+.hiveory-settings-check,
+.hiveory-settings-list { color: var(--hiveory-color-text-secondary); }
+.hiveory-dashboard-card:hover { background: var(--hiveory-color-hover); }
+
+.hiveory-automation-desktop,
+.hiveory-tasks-page { padding: var(--hiveory-space-6); }
+.hiveory-automation-desktop-header,
+.hiveory-tasks-header { margin-bottom: var(--hiveory-space-5); }
+.hiveory-automation-desktop-surface,
+.hiveory-tasks-table { overflow: hidden; }
+.hiveory-automation-desktop-empty,
+.hiveory-tasks-empty { color: var(--hiveory-color-text-secondary); }
+
+.hiveory-capability-settings,
+.hiveory-capability-main { background: var(--hiveory-color-surface); }
+.hiveory-capability-sidebar { border-color: var(--hiveory-color-border-subtle); background: var(--hiveory-color-surface); }
+.hiveory-capability-main { padding: var(--hiveory-space-6); }
+.hiveory-capability-page { max-width: 1120px; }
+.hiveory-capability-header { margin-bottom: var(--hiveory-space-5); }
+.hiveory-capability-header > p { margin-top: var(--hiveory-space-1); }
+.hiveory-capability-page > .hiveory-page-header { margin-bottom: var(--hiveory-space-5); }
+.hiveory-capability-hub > .hiveory-tabs { margin: 0 0 var(--hiveory-space-5); border-bottom: 1px solid var(--hiveory-color-border-subtle); padding-bottom: var(--hiveory-space-2); }
+.hiveory-tasks-page > .hiveory-tabs { margin: 0 0 var(--hiveory-space-4); }
+.hiveory-capability-toolbar .hiveory-search-field,
+.hiveory-automation-desktop-search .hiveory-search-field,
+.hiveory-tasks-toolbar .hiveory-search-field { flex: 1; min-width: 0; border: 0; background: transparent; }
+.hiveory-automation-desktop-controls,
+.hiveory-task-header-actions { align-items: center; }
+.hiveory-settings { max-width: 1120px; }
+.hiveory-settings > .hiveory-description { margin: var(--hiveory-space-1) 0 var(--hiveory-space-5); }
+.hiveory-settings-grid { gap: var(--hiveory-space-4); }
+.hiveory-settings-card { gap: var(--hiveory-space-3); padding: var(--hiveory-space-4); }
+.hiveory-settings-row { gap: var(--hiveory-space-5); border-color: var(--hiveory-color-border-subtle); padding-top: var(--hiveory-space-4); }
+.hiveory-settings-row strong { color: var(--hiveory-color-text); font-size: var(--hiveory-font-body-size); }
+.hiveory-settings-row p { color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-settings-card h2,
+.hiveory-capability-surface > h2,
+.hiveory-capability-surface .hiveory-card-heading h2 { margin: 0; font-size: var(--hiveory-font-section-size); line-height: var(--hiveory-font-section-line); }
+.hiveory-settings-card > p,
+.hiveory-settings-card > label:not(.hiveory-settings-check),
+.hiveory-capability-surface > p { color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-settings-card select,
+.hiveory-settings-card input:not([type="checkbox"]),
+.hiveory-settings-card textarea { width: 100%; min-height: var(--hiveory-control-height); border-color: var(--hiveory-color-border-strong); border-radius: var(--hiveory-radius-control); padding: 0 var(--hiveory-space-3); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); }
+.hiveory-settings-card button { min-height: var(--hiveory-control-height); border-color: var(--hiveory-color-border-strong); border-radius: var(--hiveory-radius-control); padding: 0 var(--hiveory-space-3); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); }
+.hiveory-settings-card button:hover:not(:disabled) { border-color: var(--hiveory-color-primary); background: var(--hiveory-color-hover); }
+.hiveory-settings-card button.is-secondary { color: var(--hiveory-color-text-secondary); background: transparent; }
+
+.hiveory-dialog-backdrop { position: fixed; z-index: var(--hiveory-z-backdrop); inset: 0; background: color-mix(in srgb, var(--hiveory-color-canvas) 82%, transparent); }
+.hiveory-dialog { position: fixed; z-index: var(--hiveory-z-modal); top: 50%; left: 50%; width: min(680px, calc(100vw - var(--hiveory-space-6))); max-height: calc(100vh - var(--hiveory-space-6)); overflow: auto; border: 1px solid var(--hiveory-color-border-strong); border-radius: var(--hiveory-radius-dialog); padding: var(--hiveory-space-5); color: var(--hiveory-color-text); background: var(--hiveory-color-raised); box-shadow: 0 24px 80px color-mix(in srgb, var(--hiveory-color-canvas) 75%, transparent); transform: translate(-50%, -50%); }
+.hiveory-dialog__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--hiveory-space-4); padding-bottom: var(--hiveory-space-4); border-bottom: 1px solid var(--hiveory-color-border-subtle); }
+.hiveory-dialog__header h2 { margin: 0; font-size: var(--hiveory-font-section-size); line-height: var(--hiveory-font-section-line); }
+.hiveory-dialog__body { display: grid; gap: var(--hiveory-space-4); padding: var(--hiveory-space-5) 0; }
+.hiveory-dialog__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--hiveory-space-2); }
+
+.hiveory-dashboard-detail { display: grid; gap: var(--hiveory-space-4); }
+.hiveory-dashboard-detail-summary { margin: 0; color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-dashboard-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--hiveory-space-3); margin: 0; }
+.hiveory-dashboard-detail-meta div { border: 1px solid var(--hiveory-color-border-subtle); border-radius: var(--hiveory-radius-control); padding: var(--hiveory-space-3); background: var(--hiveory-color-interactive); }
+.hiveory-dashboard-detail-meta dt { color: var(--hiveory-color-text-muted); font-size: var(--hiveory-font-label-size); font-weight: 600; line-height: var(--hiveory-font-label-line); }
+.hiveory-dashboard-detail-meta dd { margin: var(--hiveory-space-1) 0 0; color: var(--hiveory-color-text); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-dashboard-detail-run { border-top: 1px solid var(--hiveory-color-border-subtle); padding-top: var(--hiveory-space-4); color: var(--hiveory-color-text-secondary); font-size: var(--hiveory-font-body-size); line-height: var(--hiveory-font-body-line); }
+.hiveory-dashboard-detail-run strong { display: block; margin-bottom: var(--hiveory-space-1); color: var(--hiveory-color-text); font-size: var(--hiveory-font-section-size); }
+
+.code-coordination-panel { flex: 0 1 400px; width: min(420px, calc(100vw - var(--hiveory-space-4))); min-width: min(360px, calc(100vw - var(--hiveory-space-4))); max-width: calc(100vw - var(--hiveory-space-4)); border-color: var(--hiveory-color-border-subtle); color: var(--hiveory-color-text); background: var(--hiveory-color-surface); }
+.code-coordination-panel-header { border-color: var(--hiveory-color-border-subtle); background: var(--hiveory-color-surface); }
+.code-coordination-summary { border-color: var(--hiveory-color-border-subtle); background: var(--hiveory-color-raised); }
+.code-coordination-body { gap: var(--hiveory-space-3); padding: var(--hiveory-space-3); background: var(--hiveory-color-surface); }
+.code-coordination-run-queue,
+.code-coordination-detail,
+.code-coordination-create { border-color: var(--hiveory-color-border); border-radius: var(--hiveory-radius-card); background: var(--hiveory-color-raised); }
+.code-coordination-disclosure { margin-top: var(--hiveory-space-3); border: 1px solid var(--hiveory-color-border-subtle); border-radius: var(--hiveory-radius-control); overflow: hidden; }
+.code-coordination-disclosure > summary { display: flex; align-items: center; justify-content: space-between; min-height: var(--hiveory-control-height); padding: 0 var(--hiveory-space-3); color: var(--hiveory-color-text); cursor: pointer; font-size: var(--hiveory-font-label-size); font-weight: 600; }
+.code-coordination-disclosure > summary::marker { color: var(--hiveory-color-primary); }
+.code-coordination-disclosure > :not(summary) { padding: 0 var(--hiveory-space-3) var(--hiveory-space-3); }
+.code-coordination-create-trigger { width: 100%; justify-content: center; }
+.code-coordination-panel :where(button, input, select, textarea) { font-size: var(--hiveory-font-label-size); }
+.code-coordination-panel :where(input, select, textarea) { min-height: var(--hiveory-control-height-compact); border-color: var(--hiveory-color-border); border-radius: var(--hiveory-radius-control); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); }
+.code-coordination-panel :where(button:not(.hiveory-button)) { min-height: var(--hiveory-control-height-compact); border-color: var(--hiveory-color-border-strong); border-radius: var(--hiveory-radius-control); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); transition: background var(--hiveory-transition), border-color var(--hiveory-transition), color var(--hiveory-transition), opacity var(--hiveory-transition); }
+.code-coordination-panel :where(button:not(.hiveory-button):hover:not(:disabled)) { border-color: var(--hiveory-color-primary); background: var(--hiveory-color-hover); }
+.code-coordination-panel :where(button.is-secondary) { color: var(--hiveory-color-text-secondary); background: transparent; }
+.code-coordination-panel :where(button.is-danger) { border-color: var(--hiveory-color-danger); color: var(--hiveory-color-danger); background: transparent; }
+
+.hiveory-chat-root,
+.code-workspace-root { color: var(--hiveory-color-text); background: var(--hiveory-color-canvas); }
+.hiveory-chat-root :where(.chat-rail, .chat-main-card, .chat-header, .chat-composer-container),
+.code-workspace-root :where(.code-workspace-rail, .code-workspace-canvas-shell, .code-source-panel, .code-coordination-panel) { border-color: var(--hiveory-color-border-subtle); }
+.hiveory-chat-root :where(.chat-rail, .chat-main-card),
+.code-workspace-root :where(.code-workspace-rail, .code-workspace-canvas-shell) { background: var(--hiveory-color-surface); }
+.hiveory-chat-root :where(button, input, select, textarea),
+.code-workspace-root :where(button, input, select, textarea) { border-color: var(--hiveory-color-border-strong); color: var(--hiveory-color-text); }
+.hiveory-chat-root :where(button:hover:not(:disabled), .chat-composer-container:focus-within),
+.code-workspace-root :where(button:hover:not(:disabled)) { border-color: var(--hiveory-color-primary); }
+
+/* Give the empty workspace launcher a clear graphite boundary without
+   turning the surrounding workbench canvas into another card. */
+.hiveory-workbench .code-launcher-container {
+  box-sizing: border-box;
+  border: 1px solid var(--hiveory-color-border);
+  border-radius: var(--hiveory-radius-card);
+  padding: var(--hiveory-space-4);
+  background: var(--hiveory-color-surface);
+}
+
+.hiveory-workbench .code-empty-workspace-card {
+  box-sizing: border-box;
+  border: 1px solid var(--hiveory-color-border);
+  border-radius: var(--hiveory-radius-card);
+  background: var(--hiveory-color-surface);
+}
+
+/* Settings controls that still carry feature-specific class names inherit the
+   same governed primitive contract as global page actions. */
+.hiveory-capability-main .hiveory-settings-row button,
+.hiveory-capability-main .hiveory-capability-actions button,
+.hiveory-capability-main .hiveory-skill-hero button,
+.hiveory-capability-main .hiveory-how-to > button,
+.hiveory-capability-main .hiveory-browser-use-target-card > button,
+.hiveory-capability-main .hiveory-browser-external-form button,
+.hiveory-capability-main .hiveory-capability-surface > button,
+.hiveory-capability-main .hiveory-capability-list-heading button,
+.hiveory-capability-main .hiveory-adapter-settings-list button {
+  min-height: var(--hiveory-control-height);
+  border: 1px solid var(--hiveory-color-border-strong);
+  border-radius: var(--hiveory-radius-control);
+  padding: 0 var(--hiveory-space-3);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-interactive);
+  transition: background var(--hiveory-transition), border-color var(--hiveory-transition), color var(--hiveory-transition), opacity var(--hiveory-transition);
+}
+.hiveory-capability-main .hiveory-settings-row button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-capability-actions button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-skill-hero button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-how-to > button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-browser-use-target-card > button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-browser-external-form button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-capability-surface > button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-capability-list-heading button:hover:not(:disabled),
+.hiveory-capability-main .hiveory-adapter-settings-list button:hover:not(:disabled) {
+  border-color: var(--hiveory-color-primary);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-hover);
+}
+.hiveory-capability-main .hiveory-settings-row button.is-secondary,
+.hiveory-capability-main .hiveory-capability-actions button.is-secondary,
+.hiveory-capability-main .hiveory-skill-hero button.is-secondary,
+.hiveory-capability-main .hiveory-capability-surface > button.is-secondary { color: var(--hiveory-color-text-secondary); background: transparent; }
+.hiveory-capability-main .hiveory-settings-row button:disabled,
+.hiveory-capability-main .hiveory-capability-actions button:disabled,
+.hiveory-capability-main .hiveory-skill-hero button:disabled,
+.hiveory-capability-main .hiveory-capability-list-heading button:disabled,
+.hiveory-capability-main .hiveory-adapter-settings-list button:disabled { cursor: not-allowed; opacity: .48; }
+.hiveory-capability-main .hiveory-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--hiveory-space-1);
+  border: 1px solid var(--hiveory-color-border);
+  border-radius: var(--hiveory-radius-control);
+  padding: var(--hiveory-space-1);
+  background: var(--hiveory-color-surface);
+}
+.hiveory-capability-main .hiveory-segmented button {
+  min-height: var(--hiveory-control-height-compact);
+  border-color: transparent;
+  padding: 0 var(--hiveory-space-3);
+  color: var(--hiveory-color-text-secondary);
+  background: transparent;
+}
+.hiveory-capability-main .hiveory-segmented button.is-selected { border-color: var(--hiveory-color-border-strong); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); }
+.hiveory-capability-main .hiveory-capability-nav button,
+.hiveory-capability-back { transition: background var(--hiveory-transition), border-color var(--hiveory-transition), color var(--hiveory-transition); }
+.hiveory-capability-main .hiveory-onboarding-steps button {
+  border-color: transparent;
+  color: var(--hiveory-color-text-secondary);
+  background: transparent;
+}
+.hiveory-capability-main .hiveory-onboarding-steps button:hover:not(:disabled) {
+  border-color: var(--hiveory-color-border);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-hover);
+}
+.hiveory-capability-main .hiveory-onboarding-steps button.is-selected {
+  border-color: var(--hiveory-color-border-strong);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-hover);
+}
+.hiveory-capability-main .hiveory-capability-card,
+.hiveory-capability-main .hiveory-skill-hero,
+.hiveory-capability-main .hiveory-browser-use-target-card,
+.hiveory-capability-main .hiveory-capability-placeholder { border-color: var(--hiveory-color-border); background: var(--hiveory-color-raised); }
+.hiveory-button.hiveory-button--primary,
+.hiveory-settings-card button.hiveory-button.hiveory-button--primary,
+.hiveory-capability-main .hiveory-button--primary {
+  border-color: var(--hiveory-color-primary);
+  color: var(--hiveory-color-canvas);
+  background: var(--hiveory-color-primary);
+}
+.hiveory-button.hiveory-button--primary:hover:not(:disabled),
+.hiveory-settings-card button.hiveory-button.hiveory-button--primary:hover:not(:disabled),
+.hiveory-capability-main .hiveory-button--primary:hover:not(:disabled) { border-color: var(--hiveory-color-primary-hover); background: var(--hiveory-color-primary-hover); }
+.hiveory-settings-card button.hiveory-button.hiveory-button--secondary { border-color: var(--hiveory-color-border-strong); color: var(--hiveory-color-text-secondary); background: transparent; }
+.hiveory-automation-desktop-controls > button.hiveory-button.hiveory-button--primary,
+.hiveory-tasks-page button.hiveory-button.hiveory-button--primary,
+.hiveory-capability-hub button.hiveory-button.hiveory-button--primary { border-color: var(--hiveory-color-primary); color: var(--hiveory-color-canvas); background: var(--hiveory-color-primary); }
+.hiveory-automation-desktop-controls > button.hiveory-button.hiveory-button--primary:hover:not(:disabled),
+.hiveory-tasks-page button.hiveory-button.hiveory-button--primary:hover:not(:disabled),
+.hiveory-capability-hub button.hiveory-button.hiveory-button--primary:hover:not(:disabled) { border-color: var(--hiveory-color-primary-hover); background: var(--hiveory-color-primary-hover); }
+.hiveory-capability-hub .hiveory-plugin-subtabs.hiveory-tabs { min-height: var(--hiveory-control-height); border-radius: var(--hiveory-radius-card); padding: var(--hiveory-space-1); background: var(--hiveory-color-interactive); }
+.hiveory-capability-hub .hiveory-plugin-subtabs .hiveory-button { min-height: var(--hiveory-control-height-compact); padding: 0 var(--hiveory-space-3); }
+.hiveory-capability-hub .hiveory-plugin-subtabs .hiveory-button.is-selected { border-color: var(--hiveory-color-border-strong); color: var(--hiveory-color-text); background: var(--hiveory-color-raised); }
+.hiveory-capability-hub .hiveory-skills-toolbar { gap: var(--hiveory-space-3); }
+.hiveory-capability-hub .hiveory-skills-toolbar select { min-height: var(--hiveory-control-height); border: 1px solid var(--hiveory-color-border-strong); border-radius: var(--hiveory-radius-control); padding: 0 var(--hiveory-space-3); color: var(--hiveory-color-text); background: var(--hiveory-color-interactive); }
+.hiveory-capability-hub .hiveory-skills-toolbar .hiveory-capability-search { border-color: var(--hiveory-color-border); border-radius: var(--hiveory-radius-control); background: var(--hiveory-color-interactive); }
+.hiveory-capability-hub .hiveory-skills-toolbar .hiveory-search-field { min-height: var(--hiveory-control-height); border: 0; border-radius: 0; padding: 0; background: transparent; }
+.hiveory-capability-hub .hiveory-skills-section-heading { margin-top: var(--hiveory-space-6); }
+.hiveory-capability-hub .hiveory-skills-empty { min-height: 180px; border: 1px solid var(--hiveory-color-border); border-radius: var(--hiveory-radius-card); background: var(--hiveory-color-raised); }
+.hiveory-dialog .hiveory-form-grid { margin: 0; }
+
+/* Keep the shell mode switch compact and legible without the stacked card
+   treatment inherited from the transitional app stylesheet. */
+.hiveory-titlebar .hiveory-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hiveory-space-1);
+  min-height: var(--hiveory-control-height-compact);
+  box-sizing: border-box;
+  border: 1px solid var(--hiveory-color-border);
+  border-radius: var(--hiveory-radius-control);
+  padding: var(--hiveory-space-1);
+  background: var(--hiveory-color-surface);
+  box-shadow: none;
+}
+.hiveory-titlebar .hiveory-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--hiveory-control-height-compact) + var(--hiveory-space-3));
+  min-height: calc(var(--hiveory-control-height-compact) - var(--hiveory-space-1));
+  border: 1px solid transparent;
+  border-radius: var(--hiveory-radius-control);
+  padding: 0 var(--hiveory-space-3);
+  color: var(--hiveory-color-text-secondary);
+  background: transparent;
+  font-size: var(--hiveory-font-label-size);
+  font-weight: 500;
+  line-height: var(--hiveory-font-label-line);
+}
+.hiveory-titlebar .hiveory-mode-switch button:hover:not(:disabled):not(.is-active) {
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-hover);
+}
+.hiveory-titlebar .hiveory-mode-switch button.is-active {
+  border-color: var(--hiveory-color-border-strong);
+  color: var(--hiveory-color-text);
+  background: var(--hiveory-color-hover);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .hiveory-global-dashboard,
+  .hiveory-automation-desktop,
+  .hiveory-tasks-page,
+  .hiveory-capability-main { padding: var(--hiveory-space-5) var(--hiveory-space-4); }
+  .hiveory-page-header,
+  .hiveory-global-dashboard-header,
+  .hiveory-automation-desktop-header,
+  .hiveory-tasks-header,
+  .hiveory-capability-header { gap: var(--hiveory-space-3); }
+  .hiveory-settings-row { grid-template-columns: minmax(0, 1fr); gap: var(--hiveory-space-3); }
+  .hiveory-settings-row > :last-child { width: 100%; }
+  .hiveory-dashboard-detail-meta { grid-template-columns: minmax(0, 1fr); }
+  .code-coordination-panel { flex-basis: calc(100vw - var(--hiveory-space-4)); min-width: calc(100vw - var(--hiveory-space-4)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto; transition-duration: 1ms; animation-duration: 1ms; animation-iteration-count: 1; }
+}

@@ -1,6 +1,6 @@
 {
   "name": "hiveory-workspace",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
@@ -9,7 +9,8 @@
     "app:build:dev": "node tools/scripts/build-dev-portable.mjs",
     "app:doctor": "pnpm exec tauri info",
     "build": "pnpm --dir src/apps/renderer build",
-    "check": "pnpm --dir src/apps/renderer check",
+    "design:check": "node tools/scripts/design-check.mjs",
+    "check": "pnpm design:check && pnpm --dir src/apps/renderer check",
     "test": "pnpm --dir src/apps/renderer test",
     "verify": "pnpm check && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace",
     "release:check": "pnpm verify && pnpm audit:identity && pnpm audit:references && pnpm audit:private-boundary",

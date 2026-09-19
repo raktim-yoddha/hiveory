@@ -29,8 +29,12 @@ pub use source::TaskSourceSaveRequest;
 pub const HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "hiveory-openai";
 static HIVEORY_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
-const HIVEORY_MIGRATION_RECEIPT_RANGE: std::ops::RangeInclusive<i64> = 16..=24;
+const HIVEORY_MIGRATION_RECEIPT_RANGE: std::ops::RangeInclusive<i64> = 7..=24;
 const LEGACY_HIVEORY_MIGRATION_RECEIPTS: &[(i64, &str)] = &[
+    // Migration 7 changed only the default agent avatar color so the
+    // graphite palette is used for new records. Existing databases may still
+    // carry the checksum from the pre-neutralized migration.
+    (7, "8c09933d6f3e8c2b1fd271473d1b90a2a21f6e9a8ee882e57c8aa953a7915c991a6942fe5dc986fc4f1b5ba7c7e21220"),
     (16, "78e736c0ddfbb69e3f46168f3c394eb6fd33fc8080e6578f169c61187c94a22435ddd0dd2a523050be0828cadf5b307d"),
     (17, "4bacc140916075eb1a72bbb2ed75b74819199822f4c0c06e7bf993aca2fae89052389704b2569fbd68a28528f895e293"),
     (18, "7deaa98f90a6cea8a090550cf86ed307166f448f204e0b9d7f2961d5ccd08c051dc1ee911b364d4ee2a5825f409668ee"),
@@ -338,6 +342,7 @@ fn job_from_row(row: sqlx::sqlite::SqliteRow) -> JobSummary {
 
 fn hiveory_migration_checksum(version: i64) -> Option<Vec<u8>> {
     let migration: &[u8] = match version {
+        7 => include_bytes!("../migrations/0007_agent_vertical_slice.sql"),
         16 => include_bytes!("../migrations/0016_hiveory_namespace.sql"),
         17 => include_bytes!("../migrations/0017_code_workspace_parent.sql"),
         18 => include_bytes!("../migrations/0018_chat_folders.sql"),

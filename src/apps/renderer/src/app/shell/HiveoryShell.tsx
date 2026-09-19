@@ -42,6 +42,7 @@ import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/g
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/global/browser/hooks/use-browser-surface-blocker'
 import { HiveoryGlobalSurface, type GlobalDestination } from '../../features/global/navigation/HiveoryGlobalSurface'
+import { HiveoryButton, HiveoryPageHeader } from '../../shared/ui/HiveoryDesign'
 
 const HiveoryChat = lazy(async () => ({ default: (await import('../../features/modes/chat/views/HiveoryChat')).HiveoryChat }))
 const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/modes/code/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
@@ -110,14 +111,14 @@ const defaultPreferences: ShellPreferences = {
   compact: false,
   reducedMotion: false,
   sidebarCollapsed: false,
-  backgroundColor: '#0d0e11',
+  backgroundColor: '#0f0f0f',
   wallpaperPath: null,
 }
 const backgroundColorPresets = [
-  { label: 'Graphite', value: '#0d0e11' },
-  { label: 'Slate', value: '#17212b' },
+  { label: 'Graphite', value: '#0f0f0f' },
+  { label: 'Steel', value: '#212121' },
   { label: 'Forest', value: '#13231c' },
-  { label: 'Plum', value: '#251827' },
+  { label: 'Smoke', value: '#202020' },
   { label: 'Warm', value: '#251d17' },
 ] as const
 const defaultRailWidth = 228
@@ -843,7 +844,7 @@ export function HiveoryShell() {
         <section
           id="hiveory-main-content"
           tabIndex={-1}
-          className={`hiveory-workbench${canvasPageOpen ? ' has-canvas-page' : ''}${!leftRailVisible ? ' is-left-collapsed' : ''}${narrowLeftRailOpen ? ' is-narrow-left-open' : ''}${narrowLayout && rightSidebarVisible ? ' is-narrow-right-open' : ''}`}
+          className={`hiveory-workbench${canvasPageOpen ? ' has-canvas-page' : ''}${!leftRailVisible ? ' is-left-collapsed' : ''}${narrowLeftRailOpen ? ' is-narrow-left-open' : ''}${rightSidebarVisible ? ' is-right-sidebar-open' : ''}${narrowLayout && rightSidebarVisible ? ' is-narrow-right-open' : ''}`}
           style={{
             gridTemplateColumns: `${visibleLeftWidth}px minmax(0, 1fr) ${visibleRightWidth}px`,
             '--hiveory-global-rail-width': `${visibleRightWidth}px`,
@@ -890,7 +891,7 @@ export function HiveoryShell() {
                 if (target.source === 'code') {
                   setActiveMode('code')
                   void hiveoryClient.setActiveMode('code')
-                  window.setTimeout(() => window.dispatchEvent(new CustomEvent('hiveory-open-code-run', { detail: target })), 0)
+                  window.setTimeout(() => window.dispatchEvent(new CustomEvent('hiveory-open-code-workspace', { detail: target })), 0)
                 } else if (target.source === 'agent') {
                   setActiveMode('agent')
                   void hiveoryClient.setActiveMode('agent')
@@ -1354,8 +1355,7 @@ function HiveorySettings({
       onOpenWorkbench={onOpenWorkbench}
       appearanceContent={
         <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-appearance-title">
-          <div className="hiveory-content-header"><h1 id="hiveory-appearance-title">Appearance</h1></div>
-          <p className="hiveory-description">Control Hiveory’s scale, motion, navigation density, and shared canvas.</p>
+          <HiveoryPageHeader id="hiveory-appearance-title" title="Appearance" subtitle="Control Hiveory’s scale, motion, navigation density, and shared canvas." />
           <div className="hiveory-settings-grid is-single-column">
         <section className="hiveory-settings-card">
           <div className="hiveory-card-heading">
@@ -1433,15 +1433,15 @@ function HiveorySettings({
             />
           </label>
           <div className="hiveory-background-actions">
-            <button type="button" disabled={busy === 'wallpaper'} onClick={() => void chooseWallpaper()}>
+            <HiveoryButton type="button" intent="primary" disabled={busy === 'wallpaper'} onClick={() => void chooseWallpaper()}>
               <ImagePlus size={14} aria-hidden="true" />
               {busy === 'wallpaper' ? 'Checking image…' : 'Choose wallpaper'}
-            </button>
+            </HiveoryButton>
             {preferences.wallpaperPath && (
-              <button type="button" className="is-secondary" onClick={() => setPreferences((current) => ({ ...current, wallpaperPath: null }))}>
+              <HiveoryButton type="button" intent="secondary" className="is-secondary" onClick={() => setPreferences((current) => ({ ...current, wallpaperPath: null }))}>
                 <ImageIcon size={14} aria-hidden="true" />
                 Use color only
-              </button>
+              </HiveoryButton>
             )}
           </div>
           {wallpaperError && <p className="hiveory-background-error" role="alert">{wallpaperError}</p>}
@@ -1451,8 +1451,7 @@ function HiveorySettings({
       }
       generalContent={
         <section className="hiveory-settings hiveory-content" aria-labelledby="hiveory-settings-title">
-          <div className="hiveory-content-header"><h1 id="hiveory-settings-title">General</h1></div>
-          <p className="hiveory-description">Manage local data, browser defaults, and the Hiveory release channel.</p>
+          <HiveoryPageHeader id="hiveory-settings-title" title="General" subtitle="Manage local data, browser defaults, and the Hiveory release channel." />
           <div className="hiveory-settings-grid is-single-column">
         <section id="hiveory-browser-settings" className="hiveory-settings-card hiveory-browser-settings-card" tabIndex={-1}>
           <div className="hiveory-card-heading">
@@ -1476,14 +1475,14 @@ function HiveorySettings({
               <select id="hiveory-browser-viewport" value={browserSettings.default_viewport_id} onChange={(event) => setBrowserSettings({ ...browserSettings, default_viewport_id: event.target.value })}>
                 {BROWSER_VIEWPORT_PRESETS.map((viewport) => <option key={viewport.id} value={viewport.id}>{browserViewportLabel(viewport.id)}</option>)}
               </select>
-              <button type="button" disabled={busy !== null} onClick={saveBrowserSettings}>{busy === 'browser-settings' ? 'Saving…' : 'Save browser settings'}</button>
+              <HiveoryButton type="button" intent="primary" disabled={busy !== null} onClick={saveBrowserSettings}>{busy === 'browser-settings' ? 'Saving…' : 'Save browser settings'}</HiveoryButton>
               <div className="hiveory-browser-profile-list" aria-label="Browser profiles">
-                <div className="hiveory-browser-profile-list-heading"><span>Profiles</span><button type="button" className="is-secondary" disabled={busy !== null} onClick={createBrowserProfile}><Plus size={14} /> New profile</button></div>
+                <div className="hiveory-browser-profile-list-heading"><span>Profiles</span><HiveoryButton type="button" intent="secondary" className="is-secondary" disabled={busy !== null} onClick={createBrowserProfile}><Plus size={14} /> New profile</HiveoryButton></div>
                 {browserConfiguration?.profiles.map((profile) => (
                   <div className="hiveory-browser-profile-row" key={profile.id}>
                     <UserRound size={14} aria-hidden="true" />
                     <span>{profile.name}</span>
-                    {profile.built_in ? <small>Built in</small> : <button type="button" className="hiveory-browser-profile-delete" disabled={busy !== null} onClick={() => deleteBrowserProfile(profile.id, profile.name)} aria-label={`Remove ${profile.name} profile`} title={`Remove ${profile.name} profile`}><Trash2 size={13} /></button>}
+                    {profile.built_in ? <small>Built in</small> : <HiveoryButton type="button" intent="danger" size="icon" className="hiveory-browser-profile-delete" disabled={busy !== null} onClick={() => deleteBrowserProfile(profile.id, profile.name)} aria-label={`Remove ${profile.name} profile`} title={`Remove ${profile.name} profile`}><Trash2 size={13} /></HiveoryButton>}
                   </div>
                 ))}
               </div>
@@ -1499,12 +1498,12 @@ function HiveorySettings({
           </div>
           <p>Backups include a consistent SQLite snapshot and application-managed artifacts.</p>
           <div className="hiveory-settings-actions">
-            <button type="button" disabled={busy !== null} onClick={createBackup}>
+            <HiveoryButton type="button" intent="primary" disabled={busy !== null} onClick={createBackup}>
               {busy === 'backup' ? 'Creating backup…' : 'Create backup'}
-            </button>
-            <button type="button" className="is-secondary" disabled={busy !== null} onClick={restoreBackup}>
+            </HiveoryButton>
+            <HiveoryButton type="button" intent="secondary" className="is-secondary" disabled={busy !== null} onClick={restoreBackup}>
               {busy === 'restore' ? 'Preparing restore…' : 'Restore from backup'}
-            </button>
+            </HiveoryButton>
           </div>
         </section>
         <section className="hiveory-settings-card">
@@ -1517,18 +1516,18 @@ function HiveorySettings({
             <span>Installed version</span>
             <strong>{version}</strong>
           </div>
-          <button type="button" disabled={busy !== null || updateInstalling} onClick={checkUpdate}>
+          <HiveoryButton type="button" intent="primary" disabled={busy !== null || updateInstalling} onClick={checkUpdate}>
             {busy === 'update' ? 'Checking…' : 'Check for updates'}
-          </button>
+          </HiveoryButton>
           {update?.status === 'available' && update.available_version && (
             <>
               <div className="hiveory-update-status available" role="status">
                 Version {update.available_version} is ready to install.
               </div>
               {update.notes && <p>{update.notes}</p>}
-            <button type="button" disabled={busy !== null || updateInstalling} onClick={installUpdate}>
+            <HiveoryButton type="button" intent="primary" disabled={busy !== null || updateInstalling} onClick={installUpdate}>
               {busy === 'install' ? 'Installing…' : `Install ${update.available_version}`}
-            </button>
+            </HiveoryButton>
             </>
           )}
         </section>

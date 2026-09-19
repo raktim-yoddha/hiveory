@@ -160,13 +160,13 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
       case 'coding_agent':
         return <CliBrandIcon identifier={adapterId} size={13} />
       case 'terminal':
-        return <Terminal size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+        return <Terminal size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
       case 'preview':
-        return <Globe size={13} style={{ color: '#aeb7c2' }} />
+        return <Globe size={13} style={{ color: '#b8b8b8' }} />
       case 'markdown':
-        return <FileText size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+        return <FileText size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
       default:
-        return <LayoutTemplate size={13} style={{ color: '#9ca3af' }} aria-hidden="true" />
+        return <LayoutTemplate size={13} style={{ color: '#a6a6a6' }} aria-hidden="true" />
     }
   }
 

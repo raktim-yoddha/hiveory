@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS agentic_super_app_agents (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  avatar_color TEXT NOT NULL DEFAULT '#22d3ee',
+  avatar_color TEXT NOT NULL DEFAULT '#888888',
   provider_account_id TEXT NOT NULL,
   model TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,

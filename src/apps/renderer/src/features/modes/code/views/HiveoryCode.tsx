@@ -387,7 +387,7 @@ function TerminalPane({ terminalId, output, onInput, onResize, onVoiceStateChang
     const container = containerRef.current
     if (!container) return
     let disposed = false
-    const terminal = new XTerm({ convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, theme: { background: '#0b1120', foreground: '#dbe4f0', cursor: '#22c55e', selectionBackground: '#334155' }, scrollback: 5000 })
+    const terminal = new XTerm({ convertEol: true, cursorBlink: true, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, theme: { background: '#161616', foreground: '#e5e5e5', cursor: '#22c55e', selectionBackground: '#444444' }, scrollback: 5000 })
     const fit = new FitAddon()
     terminal.loadAddon(fit)
     terminal.open(container)
