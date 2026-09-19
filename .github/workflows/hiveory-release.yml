@@ -52,6 +52,7 @@ jobs:
           Copy-Item .release-tools/tools/scripts/hiveory-release.mjs tools/scripts/hiveory-release.mjs -Force
           Copy-Item .release-tools/tools/scripts/hiveory-prohibited-name-scan.mjs tools/scripts/hiveory-prohibited-name-scan.mjs -Force
           Copy-Item .release-tools/tools/scripts/audit-private-boundary.mjs tools/scripts/audit-private-boundary.mjs -Force
+          Copy-Item .release-tools/src/crates/modes/code/hiveory-code-orchestration/src/lib.rs src/crates/modes/code/hiveory-code-orchestration/src/lib.rs -Force
           Remove-Item .release-tools -Recurse -Force
 
       - name: Exclude historical binaries from repair gate
