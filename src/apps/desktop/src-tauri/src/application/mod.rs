@@ -1185,7 +1185,7 @@ fn terminal_prompt_ready(adapter_id: Option<&str>, output: &[u8]) -> bool {
             .unwrap_or_default()
             .contains("\u{1b}[?1049l");
     match adapter {
-        // Orca's TUI scanner anchors these signals on the mode switches so a
+        // The TUI scanner anchors these signals on the mode switches so a
         // shell prompt left in scrollback cannot consume a follow-up.
         "codex-cli" => (bracketed_paste && tail.contains('›')) || (labelled && marker),
         "opencode" => (bracketed_paste && tail.contains("\u{1b}[?25h")) || (labelled && marker),
@@ -5030,6 +5030,7 @@ async fn hiveory_query_update(
 
 #[tauri::command]
 async fn hiveory_command_install_update(
+    app: tauri::AppHandle,
     state: State<'_, HiveoryUpdateState>,
 ) -> Result<(), ApiError> {
     let update = state
@@ -5047,7 +5048,12 @@ async fn hiveory_command_install_update(
     update
         .download_and_install(|_, _| {}, || {})
         .await
-        .map_err(updater_error)
+        .map_err(updater_error)?;
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        app.request_restart();
+    });
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Hiveory Release"
+  short_description: "Publish signed Windows Hiveory releases"
+  default_prompt: "Use $hiveory-release to prepare, tag, publish, or verify a Hiveory Windows release."
+
+policy:
+  allow_implicit_invocation: true

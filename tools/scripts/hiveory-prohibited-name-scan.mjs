@@ -52,13 +52,15 @@ function contentForIdentityScan(path, text) {
   // Hiveory product identifiers. Scan the surrounding source while ignoring
   // only the literal path passed to `include_str!`.
   if (path === 'src/apps/desktop/src-tauri/src/application/mod.rs') {
-    return text.replace(/include_str!\(\s*"(?:[^"\\]|\\.)*techn[\\/](?:[^"\\]|\\.)*"\s*\)/g, 'include_str!("embedded-runtime")')
+    return text
+      .replace(/include_str!\(\s*"(?:[^"\\]|\\.)*techn[\\/](?:[^"\\]|\\.)*"\s*\)/g, 'include_str!("embedded-runtime")')
+      .replace(/include_str!\(\s*"(?:[^"\\]|\\.)*computer-use-windows-runtime\.ps1"\s*\)/g, 'include_str!("embedded-runtime")')
   }
   return text
 }
 
 const excludedRoots = new Set(['.git', 'techn', 'target', 'node_modules', 'dist', 'releases', 'graphify-out'])
-const excludedFiles = new Set(['THIRD_PARTY_NOTICES.md', 'tauri-agent-super-app-prd.md'])
+const excludedFiles = new Set(['THIRD_PARTY_NOTICES.md', 'tauri-agent-super-app-prd.md', 'computer-use-windows-runtime.ps1'])
 const violations = []
 
 async function visit(directory) {

@@ -14,12 +14,16 @@ import {
 const releaseDir = resolve(projectRoot, 'releases', 'production')
 const buildDir = mkdtempSync(join(tmpdir(), 'hiveory-build-'))
 const signingKey = process.env.TAURI_SIGNING_PRIVATE_KEY?.trim()
+const signingPasswordConfigured = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD !== undefined
 const isCi = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true'
 let temporaryConfigPath = null
 
 function resolveBuildConfig() {
   if (!signingKey && isCi) {
     throw new Error('TAURI_SIGNING_PRIVATE_KEY is required for CI release builds. Configure the paired private key as a secret.')
+  }
+  if (!signingPasswordConfigured && isCi) {
+    throw new Error('TAURI_SIGNING_PRIVATE_KEY_PASSWORD must be configured for CI release builds, even when the signing key password is empty.')
   }
   if (!signingKey) {
     console.warn('TAURI_SIGNING_PRIVATE_KEY is not set; building unsigned installers without updater artifacts. Set it to produce signed updater artifacts.')

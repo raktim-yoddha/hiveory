@@ -4031,11 +4031,6 @@ mod tests {
             created_at_unix_ms: now_ms(),
             updated_at_unix_ms: now_ms(),
         };
-        persistence
-            .insert_orchestration_worktree(&worktree)
-            .await
-            .unwrap();
-
         let dispatch = CodeDispatch {
             id: "dispatch-failed".to_owned(),
             run_id: run_id.clone(),
@@ -4060,6 +4055,10 @@ mod tests {
             .claim_orchestration_dispatch(&dispatch)
             .await
             .unwrap());
+        persistence
+            .insert_orchestration_worktree(&worktree)
+            .await
+            .unwrap();
         assert!(persistence
             .update_orchestration_dispatch(
                 &dispatch.id,
@@ -4222,11 +4221,6 @@ mod tests {
             created_at_unix_ms: now_ms(),
             updated_at_unix_ms: now_ms(),
         };
-        persistence
-            .insert_orchestration_worktree(&worktree)
-            .await
-            .unwrap();
-
         let dispatch = CodeDispatch {
             id: "dispatch-success".to_owned(),
             run_id: run_id.clone(),
@@ -4251,6 +4245,10 @@ mod tests {
             .claim_orchestration_dispatch(&dispatch)
             .await
             .unwrap());
+        persistence
+            .insert_orchestration_worktree(&worktree)
+            .await
+            .unwrap();
         assert!(persistence
             .update_orchestration_dispatch(
                 &dispatch.id,

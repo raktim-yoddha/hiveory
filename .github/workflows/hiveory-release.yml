@@ -4,25 +4,61 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      repair_existing:
+        description: 'Repair an existing immutable release instead of creating a new one'
+        required: true
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Existing or new release tag (for example 0.2.2 or v0.2.3)'
+        required: true
+        default: '0.2.2'
+        type: string
+      source_ref:
+        description: 'Commit or tag to build'
+        required: true
+        default: '0.2.2'
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || github.ref_name }}
     steps:
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_REF }}
+          fetch-depth: 0
 
       - uses: actions/checkout@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .release-tools
+          fetch-depth: 1
+
+      - name: Load release utility for historical repair
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if ('${{ inputs.repair_existing }}' -ne 'true') { throw 'Manual runs are reserved for repair_existing=true.' }
+          Copy-Item .release-tools/tools/scripts/hiveory-release.mjs tools/scripts/hiveory-release.mjs -Force
+          Copy-Item .release-tools/tools/scripts/hiveory-prohibited-name-scan.mjs tools/scripts/hiveory-prohibited-name-scan.mjs -Force
+          Copy-Item .release-tools/tools/scripts/audit-private-boundary.mjs tools/scripts/audit-private-boundary.mjs -Force
+          Remove-Item .release-tools -Recurse -Force
+
+      - name: Exclude historical binaries from repair gate
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          git rm --cached --ignore-unmatch -- releases/production/Hiveory-portable.exe releases/production/Hiveory-setup.exe releases/production/Hiveory.msi
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -35,23 +71,55 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Validate release source and run release gates
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          node tools/scripts/hiveory-release.mjs validate --version $version --tag $env:RELEASE_TAG
+          pnpm release:check
+
+      - name: Generate canonical release notes
+        id: release-notes
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $body = node tools/scripts/hiveory-release.mjs notes --version $version
+          @('body<<HIVEORY_RELEASE_BODY', $body, 'HIVEORY_RELEASE_BODY') -join "`n" | Add-Content -Path $env:GITHUB_OUTPUT
+
       - name: Build and publish signed release artifacts
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tauriScript: node ../../../../node_modules/@tauri-apps/cli/tauri.js
           projectPath: src/apps/desktop/src-tauri
           args: --config tauri.conf.json
-          tagName: ${{ github.ref_name }}
+          tagName: ${{ env.RELEASE_TAG }}
           releaseName: Hiveory v__VERSION__
-          releaseBody: |
-            This release contains the signed Hiveory desktop installers and updater metadata.
-
-            See the commit history for the complete change list.
+          releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: false
           prerelease: false
-          includeUpdaterJson: true
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
           updaterJsonPreferNsis: true
+          releaseAssetNamePattern: '[name][setup].[ext]'
+
+      - name: Upload portable executable with stable name
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $source = 'src/apps/desktop/src-tauri/target/release/hiveory-desktop.exe'
+          if (-not (Test-Path $source)) { throw "Portable executable was not produced: $source" }
+          Copy-Item $source 'Hiveory-portable.exe' -Force
+          gh release upload $env:RELEASE_TAG Hiveory-portable.exe --clobber
+
+      - name: Verify release assets and updater manifest
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $expectedSha = git rev-parse $env:SOURCE_REF
+          node tools/scripts/hiveory-release.mjs verify-release --tag $env:RELEASE_TAG --expected-sha $expectedSha
