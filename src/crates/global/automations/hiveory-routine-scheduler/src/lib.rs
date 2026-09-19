@@ -273,7 +273,7 @@ impl HiveoryRoutineScheduler {
                                 "Routine execution updated",
                                 &format!(
                                     "Execution {} is {}.",
-                                    &updated.id,
+                                    updated.id,
                                     execution_state_label(updated.state)
                                 ),
                                 severity,
