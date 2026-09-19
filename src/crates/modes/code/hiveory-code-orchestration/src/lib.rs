@@ -3211,7 +3211,7 @@ fn hex_decode(value: &str) -> HiveoryCodeOrchestrationResult<Vec<u8>> {
     }
     let bytes = value.as_bytes();
     let mut result = Vec::with_capacity(bytes.len() / 2);
-    for chunk in bytes.chunks_exact(2) {
+    for chunk in bytes.as_chunks::<2>().0 {
         let high = hex_value(chunk[0]).ok_or(HiveoryCodeOrchestrationError::InvalidWorkerEvent)?;
         let low = hex_value(chunk[1]).ok_or(HiveoryCodeOrchestrationError::InvalidWorkerEvent)?;
         result.push((high << 4) | low);
