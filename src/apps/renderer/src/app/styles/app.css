@@ -2041,6 +2041,9 @@ a:focus-visible {
 .hiveory-chat-root.is-shell-embedded {
   display: contents;
 }
+.code-workspace-root.is-shell-embedded.is-mode-inactive {
+  display: none;
+}
 
 .hiveory-workbench .code-workspace-rail,
 .hiveory-workbench .chat-rail {
@@ -2052,8 +2055,7 @@ a:focus-visible {
 .hiveory-workbench .code-workspace-main,
 .hiveory-workbench .chat-main-card,
 .hiveory-workbench-canvas-page,
-.hiveory-global-surface,
-.hiveory-workbench .hiveory-workspace-board {
+.hiveory-global-surface {
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
@@ -2092,8 +2094,7 @@ a:focus-visible {
 }
 
 .hiveory-workbench.has-canvas-page .code-workspace-main,
-.hiveory-workbench.has-canvas-page .chat-main-card,
-.hiveory-workbench.has-canvas-page .hiveory-workspace-board {
+.hiveory-workbench.has-canvas-page .chat-main-card {
   visibility: hidden;
   pointer-events: none;
 }
@@ -2195,20 +2196,6 @@ a:focus-visible {
   left: auto;
   right: auto;
   bottom: auto;
-}
-
-.hiveory-workbench .hiveory-workspace-board {
-  position: relative;
-  inset: auto;
-  z-index: 3;
-  border: 1px solid var(--hiveory-workbench-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.hiveory-workbench .code-workspace-root.is-shell-embedded:has(.hiveory-workspace-board) .code-workspace-main {
-  visibility: hidden;
-  pointer-events: none;
 }
 
 @media (max-width: 760px) {

@@ -12,7 +12,8 @@ use hiveory_protocol::{
     AgentFolderGrantRequest, AgentInputRequest, AgentMemoryDeleteRequest,
     AgentMemoryMutationRequest, AgentMemoryQuery, AgentMemorySummary, AgentRunControlRequest,
     AgentRunDetail, AgentRunStartRequest, AgentRunSummary, AgentSkillCatalog,
-    AgentSkillConflictResolutionRequest, AgentSkillToggleRequest, AgentUpdateRequest,
+    AgentSkillConflictResolutionRequest, AgentSkillIdRequest, AgentSkillToggleRequest,
+    AgentUpdateRequest,
 };
 use hiveory_tool_runtime::{HiveoryAuditLog, HiveoryExternalToolProvider};
 use std::{fs, path::PathBuf, sync::Arc};
@@ -245,6 +246,57 @@ impl HiveoryAgentRuntime {
             return Err(error.into());
         }
         Ok(package.summary)
+    }
+
+    pub async fn delete_application_skill(
+        &self,
+        request: &AgentSkillIdRequest,
+    ) -> Result<(), HiveoryAgentRuntimeError> {
+        let skill_id = request.skill_id.trim();
+        if skill_id.is_empty()
+            || skill_id.contains(['/', '\\'])
+            || skill_id == "."
+            || skill_id == ".."
+        {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "A valid Hiveory-managed skill is required.".to_owned(),
+            ));
+        }
+        let Some((summary, _)) = self.store.skill_package(skill_id).await? else {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "The skill was not found.".to_owned(),
+            ));
+        };
+        if summary.origin != hiveory_protocol::AgentSkillOrigin::ApplicationData {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "Only Hiveory-managed skills can be deleted.".to_owned(),
+            ));
+        }
+        let skill_dir = self.skill_root.join(skill_id);
+        let skill_path = skill_dir.join("SKILL.md");
+        if !skill_path.is_file() {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "The managed skill files are unavailable; deletion was not started.".to_owned(),
+            ));
+        }
+        let staged_dir = self.skill_root.join(format!(".{skill_id}.deleting"));
+        if staged_dir.exists() {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(
+                "A previous deletion is still being recovered; try again.".to_owned(),
+            ));
+        }
+        fs::rename(&skill_dir, &staged_dir)
+            .map_err(|error| HiveoryAgentRuntimeError::InvalidInput(error.to_string()))?;
+        if let Err(error) = self.store.delete_application_skill(skill_id).await {
+            let _ = fs::rename(&staged_dir, &skill_dir);
+            return Err(error.into());
+        }
+        if let Err(error) = fs::remove_dir_all(&staged_dir) {
+            return Err(HiveoryAgentRuntimeError::InvalidInput(format!(
+                "Skill data was removed from the catalog but could not be cleaned up: {error}"
+            )));
+        }
+        Ok(())
     }
 
     pub async fn memory(

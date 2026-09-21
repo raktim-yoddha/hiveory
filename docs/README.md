@@ -7,6 +7,8 @@ This directory separates current product documentation from historical engineeri
 | Area | Document | Maintained with |
 | --- | --- | --- |
 | System boundaries | [Foundation architecture](architecture/hiveory-foundation.md) | application modes, service ownership, or trust boundaries |
+| Public/private editions | [Private Dev boundary](architecture/private-feature-boundary.md) | Dev-only sibling checkout, production isolation, private prototypes, and boundary audit |
+| Renderer UI | [Design system](design-system/README.md) | tokens, densities, shared primitives, accessibility, and private Dev exceptions |
 | Renderer/host contract | [Internal protocol](architecture/internal-protocol.md) | Tauri commands, DTOs, streams, or replay rules |
 | Storage | [Persistence architecture](architecture/persistence-schema-proposal.md) | SQLite migrations or secret-storage policy |
 | Code workspaces | [Project and workspace hierarchy](architecture/code-project-workspace-hierarchy.md) | projects, worktrees, workspace selection, or trust |
@@ -38,5 +40,7 @@ Historical records can contain old paths, commands, scope statements, or deferre
 2. Update the owning architecture document in the same change as a boundary, persistence, security, or lifecycle change.
 3. Add an ADR when responsibility, authority, or a lasting technical constraint changes.
 4. Keep historical records intact except for broken links, factual annotations, or corrections that do not rewrite the original decision.
-5. Run the documentation checks described in [Contributing](../CONTRIBUTING.md) after moving documentation.
+5. After documentation moves or public/private changes, run `pnpm verify`,
+   `pnpm audit:identity`, and `pnpm audit:references`; also run
+   `pnpm audit:private-boundary` when the edition boundary is affected.
 6. Never describe a planned or simulated flow as implemented. State provider, credential, operating-system, and local-runtime requirements explicitly.

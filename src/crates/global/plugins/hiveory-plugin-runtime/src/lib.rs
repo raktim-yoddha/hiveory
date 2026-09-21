@@ -11,9 +11,9 @@ use hiveory_persistence::routine::HiveoryRoutineStore;
 use hiveory_persistence::routine::HiveoryRoutineStoreError;
 use hiveory_protocol::{
     AgentPluginGrant, AgentPluginGrantRequest, AgentToolDefinition, AgentToolRisk,
-    PluginAdapterKind, PluginCatalogEntry, PluginConnectionCreateRequest,
+    PluginAdapterKind, PluginCatalogEntry, PluginCatalogOrigin, PluginConnectionCreateRequest,
     PluginConnectionIdRequest, PluginConnectionKind, PluginConnectionSummary,
-    PluginConnectionUpdateRequest, PluginDryRunRequest, PluginInstallRequest,
+    PluginConnectionUpdateRequest, PluginDryRunRequest, PluginIdRequest, PluginInstallRequest,
     PluginInvocationSummary, PluginManifest, PluginPermission, PluginToolDefinition,
 };
 use hiveory_secret_store::{HiveorySecretStoreError, HiveorySecretStoreHandle};
@@ -108,13 +108,29 @@ impl HiveoryPluginRuntime {
     }
 
     pub async fn catalog(&self) -> Result<Vec<PluginCatalogEntry>, HiveoryPluginRuntimeError> {
-        Ok(self.store.catalog().await?)
+        Ok(self
+            .store
+            .catalog()
+            .await?
+            .into_iter()
+            .map(|mut entry| {
+                if is_builtin_plugin_id(&entry.manifest.id) {
+                    entry.origin = PluginCatalogOrigin::Builtin;
+                }
+                entry
+            })
+            .collect())
     }
 
     pub async fn import_manifest(
         &self,
         mut manifest: PluginManifest,
     ) -> Result<PluginCatalogEntry, HiveoryPluginRuntimeError> {
+        if is_builtin_plugin_id(&manifest.id) {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "Built-in plugin identifiers are reserved.".to_owned(),
+            ));
+        }
         manifest.content_hash = manifest_content_hash(&manifest);
         self.store.upsert_manifest(&manifest).await?;
         self.store
@@ -123,6 +139,34 @@ impl HiveoryPluginRuntime {
             .into_iter()
             .find(|entry| entry.manifest.id == manifest.id)
             .ok_or_else(|| HiveoryPluginRuntimeError::NotFound(manifest.id))
+    }
+
+    pub async fn delete_user_plugin(
+        &self,
+        request: &PluginIdRequest,
+    ) -> Result<(), HiveoryPluginRuntimeError> {
+        let plugin_id = request.plugin_id.trim();
+        if plugin_id.is_empty() {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "A plugin is required.".to_owned(),
+            ));
+        }
+        if is_builtin_plugin_id(plugin_id) {
+            return Err(HiveoryPluginRuntimeError::InvalidInput(
+                "Built-in plugins cannot be deleted.".to_owned(),
+            ));
+        }
+        let catalog = self.store.catalog().await?;
+        if !catalog.iter().any(|entry| entry.manifest.id == plugin_id) {
+            return Err(HiveoryPluginRuntimeError::NotFound(plugin_id.to_owned()));
+        }
+        for secret_ref in self.store.secret_refs(plugin_id).await? {
+            self.secrets
+                .delete(&secret_ref)
+                .map_err(|error| HiveoryPluginRuntimeError::Secret(error.to_string()))?;
+        }
+        self.store.delete_manifest(plugin_id).await?;
+        Ok(())
     }
 
     pub async fn connections(
@@ -1014,6 +1058,22 @@ fn builtin_manifests() -> Vec<PluginManifest> {
     ]
 }
 
+fn is_builtin_plugin_id(plugin_id: &str) -> bool {
+    matches!(
+        plugin_id,
+        "github"
+            | "linear"
+            | "gmail"
+            | "slack"
+            | "notion"
+            | "cloudflare"
+            | "supabase"
+            | "vercel"
+            | "stripe"
+            | "shopify"
+    )
+}
+
 fn provider_manifest(
     id: &str,
     name: &str,
@@ -1096,7 +1156,9 @@ fn connection_test_request(plugin_id: &str) -> (&'static str, Option<Value>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_host_matches, builtin_manifests, reject_private_host};
+    use super::{
+        allowed_host_matches, builtin_manifests, is_builtin_plugin_id, reject_private_host,
+    };
 
     #[test]
     fn builtins_have_stable_strict_schemas_and_hashes() {
@@ -1125,5 +1187,12 @@ mod tests {
     fn private_plugin_hosts_are_rejected() {
         assert!(reject_private_host("127.0.0.1").is_err());
         assert!(reject_private_host("example.com").is_ok());
+    }
+
+    #[test]
+    fn builtin_plugin_ids_are_reserved() {
+        assert!(is_builtin_plugin_id("github"));
+        assert!(is_builtin_plugin_id("stripe"));
+        assert!(!is_builtin_plugin_id("user-created-plugin"));
     }
 }

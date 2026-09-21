@@ -1,6 +1,6 @@
 # Persistence architecture
 
-Despite the legacy filename, this document describes the deployed SQLite architecture. Migrations live in `src/crates/hiveory-persistence/migrations/` and are forward-only, ordered, and transactional.
+Despite the legacy filename, this document describes the deployed SQLite architecture. Migrations live in `src/crates/core/hiveory-persistence/migrations/` and are forward-only, ordered, and transactional.
 
 ## Database ownership
 

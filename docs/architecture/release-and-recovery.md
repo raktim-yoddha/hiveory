@@ -19,7 +19,7 @@ The window close event persists geometry and writes a clean-shutdown timestamp. 
 
 ## Portable backup format
 
-The host implementation in `src/apps/desktop/src-tauri/src/release.rs` creates a temporary consistent database snapshot using SQLite `VACUUM INTO`, then packages it with a versioned manifest and managed artifacts. The archive writer skips symlinks, bounds entry count and total size, and uses only application-generated archive names. Restore validates the manifest and archive names again immediately before extraction. User-selected paths are never used as extraction roots.
+The host implementation in `src/apps/desktop/src-tauri/src/application/platform/release.rs` creates a temporary consistent database snapshot using SQLite `VACUUM INTO`, then packages it with a versioned manifest and managed artifacts. The archive writer skips symlinks, bounds entry count and total size, and uses only application-generated archive names. Restore validates the manifest and archive names again immediately before extraction. User-selected paths are never used as extraction roots.
 
 ## Update boundary
 

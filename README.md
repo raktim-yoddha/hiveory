@@ -1,6 +1,6 @@
 # Hiveory
 
-Hiveory is a local-first desktop workspace for AI agents, software development, and standalone AI chat. It combines persistent agents, native terminals, coding CLIs, an embedded browser, Git-aware workspaces, task sources, a Kanban board, plugins, skills, and scheduled automations in one Tauri application.
+Hiveory is a local-first desktop workspace for AI agents, software development, and standalone AI chat. It combines persistent agents, native terminals, coding CLIs, an embedded browser, Git-aware workspaces, task sources, plugins, skills, and scheduled automations in one Tauri application.
 
 The React renderer presents application state, while the Rust host owns privileged operations such as filesystem access, process execution, credentials, persistence, networking, approvals, and recovery. Hiveory does not require a Hiveory-hosted backend. Features that contact services such as OpenAI, GitHub, Jira, Linear, Gmail, or Slack use credentials supplied by the user and communicate with those providers directly.
 
@@ -10,19 +10,30 @@ Hiveory is currently version `0.2.2`. The repository includes a production Windo
 
 ## Application modes
 
-Hiveory keeps public Chat and Code modes separate while preserving Agent compatibility contracts for private Dev features.
+Hiveory keeps public Chat and Code modes separate. Agent compatibility
+contracts remain in the public repository, while Agent execution is available
+only in Dev builds with the sibling `hiveory-private` checkout.
+
+| Edition | Available experience |
+| --- | --- |
+| **Production** | Public Chat and Code modes. Agent execution is hidden; no private checkout is required. |
+| **Dev** | The same shell and host plus private Agent execution, Auto Plugin preview, and premium theme prototypes. |
 
 | Mode | Purpose | Main capabilities |
 | --- | --- | --- |
-| **Agent** | Create durable, reusable AI assistants | Named agents, conversations, folder grants, skills, plugins, memory, artifacts, approvals, run history, and automations |
+| **Agent (Dev)** | Create durable, reusable AI assistants | Named agents, conversations, folder grants, skills, plugins, memory, artifacts, approvals, run history, and automations |
 | **Code** | Work on local repositories with terminals and coding agents | Trusted workspaces, multi-pane layouts, shells, coding CLIs, browser panes, Markdown, Monaco editing, Git, task orchestration, and coordination |
 | **Chat** | Hold standalone AI conversations | Streaming responses, conversation folders, branching, retry, attachments, Markdown rendering, drafts, and export |
 
-Use `Ctrl+1`, `Ctrl+2`, and `Ctrl+3` to switch between Agent, Code, and Chat. `Ctrl+K` opens the command palette, `Ctrl+B` toggles the sidebar, and `Ctrl+,` opens Settings.
+Use `Ctrl+1`, `Ctrl+2`, and `Ctrl+3` to switch between available modes.
+Agent appears only in a Dev build after it is enabled in Settings. `Ctrl+K`
+opens the command palette, `Ctrl+B` toggles the sidebar, and `Ctrl+,` opens
+Settings.
 
-## Agent mode
+## Agent mode (Dev edition)
 
-Agent mode is for assistants that retain an explicit configuration across sessions.
+Agent mode is available only in Dev builds with the private sibling checkout.
+It is for assistants that retain an explicit configuration across sessions.
 
 - Create and edit named agents with a selected model, instructions, runtime limits, and approval policy.
 - Grant specific local folders instead of exposing the whole filesystem.
@@ -34,6 +45,11 @@ Agent mode is for assistants that retain an explicit configuration across sessio
 - Schedule an agent through the local Automations system.
 
 The current model gateway uses the OpenAI Responses API. Provider requests are created by the Rust host and use `store: false`; credentials are never returned to the renderer.
+
+Production builds keep the Agent protocol and compatibility contracts but do
+not include private Agent execution. See
+[`docs/architecture/private-feature-boundary.md`](docs/architecture/private-feature-boundary.md)
+for the complete edition boundary.
 
 ## Code mode
 
@@ -240,6 +256,8 @@ Optional tools unlock their related features:
 ## Development
 
 Install dependencies and launch the native development application from the repository root:
+`pnpm app:dev` launches the Dev edition and requires the sibling
+`hiveory-private` checkout. Production builds do not require that checkout.
 
 ```powershell
 pnpm install

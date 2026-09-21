@@ -23,6 +23,7 @@ import {
 import { readClipboardText, writeClipboardText } from '../../../../shared/clipboard'
 import { useSpeechDictation } from '../../../../shared/speech-dictation'
 import { getTerminalShortcutAction } from '../../../../shared/terminal-shortcuts'
+import { useHiveoryDialogs } from '../../../../shared/ui/HiveoryDesign'
 import { CodePreviewPane } from '../workspace/components/panes/CodePreviewPane'
 import type { CodeTerminalVoiceState } from '../workspace/components/panes/CodeTerminalPane'
 import '../workspace/styles/workspace.css'
@@ -30,6 +31,7 @@ import '../workspace/styles/workspace.css'
 type MonacoEnvironment = { getWorker: () => Worker }
 
 export function HiveoryCode() {
+  const { confirm } = useHiveoryDialogs()
   const [workspaces, setWorkspaces] = useState<CodeWorkspaceSummary[]>([])
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
   const [selectedAdapterId, setSelectedAdapterId] = useState(CODEX_ADAPTER_ID)
@@ -227,7 +229,7 @@ export function HiveoryCode() {
 
   const stopTerminal = async (force: boolean) => {
     if (!activeTerminal) return
-    if (force && !window.confirm('Force-stop this terminal and its process tree?')) return
+    if (force && !await confirm({ title: 'Force-stop terminal?', description: 'This stops the terminal and its entire process tree.', confirmLabel: 'Force stop', intent: 'danger' })) return
     setBusy('stop')
     try {
       await hiveoryClient.stopCodeTerminal({ terminal_id: activeTerminal.id, force })

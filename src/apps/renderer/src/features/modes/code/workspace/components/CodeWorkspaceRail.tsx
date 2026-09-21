@@ -27,7 +27,6 @@ import {
   Settings,
   Settings2,
   CircleHelp,
-  Columns3,
   SquareTerminal,
   Trash2,
   Workflow,
@@ -64,7 +63,6 @@ interface CodeWorkspaceRailProps {
   coordinationPanelOpen: boolean
   onToggleSourcePanel: (open?: boolean) => void
   onToggleCoordinationPanel: (open?: boolean) => void
-  onOpenWorkspaceBoard: () => void
   sharedRailWidth?: number
   onSharedRailWidthChange?: (width: number) => void
   onActivateCanvas?: () => void
@@ -142,7 +140,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
   coordinationPanelOpen,
   onToggleSourcePanel,
   onToggleCoordinationPanel,
-  onOpenWorkspaceBoard,
   sharedRailWidth,
   onSharedRailWidthChange,
   onActivateCanvas,
@@ -920,7 +917,6 @@ export const CodeWorkspaceRail: React.FC<CodeWorkspaceRailProps> = ({
         <button type="button" className="code-rail-user-icon-btn" title="Settings" aria-label="Settings" onClick={() => window.dispatchEvent(new Event('hiveory-open-global-settings'))}><Settings size={15} aria-hidden="true" /></button>
         <button type="button" className="code-rail-user-icon-btn" title="Help" aria-label="Help" onClick={() => window.dispatchEvent(new Event('hiveory-open-help'))}><CircleHelp size={15} aria-hidden="true" /></button>
         <button type="button" className="code-rail-user-icon-btn" title="Reveal active workspace" aria-label="Reveal active workspace" onClick={() => window.dispatchEvent(new Event('hiveory-reveal-active-workspace'))}><FolderSearch size={15} aria-hidden="true" /></button>
-        <button type="button" className="code-rail-user-icon-btn" title="Workspace board" aria-label="Workspace board" onClick={onOpenWorkspaceBoard}><Columns3 size={15} aria-hidden="true" /></button>
       </footer>
 
       {renderActiveContextMenu()}

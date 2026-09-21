@@ -2,6 +2,7 @@ import { CheckCircle2, Edit3, History, Play, Plus, RefreshCw, Search, ShieldChec
 import { useCallback, useEffect, useState } from 'react'
 import { hiveoryClient, type AgentFolderGrant, type AgentPluginGrant, type AgentSummary, type PluginCatalogEntry, type PluginConnectionSummary, type RoutineCreateRequest, type RoutineDetail, type RoutineExecution, type RoutineSummary, type RoutineUpdateRequest } from '../../../../shared/api/hiveory-client'
 import { HiveoryButton, HiveoryEmptyState, HiveoryIconButton, HiveoryPageHeader, HiveorySearchField } from '../../../../shared/ui/HiveoryDesign'
+import { HiveoryBrandIcon } from '../../../../shared/ui/HiveoryBrandIcon'
 
 const defaultRoutineRequest = (agentId: string): RoutineCreateRequest => ({
   name: 'Weekday repo audit',
@@ -46,27 +47,26 @@ export function HiveoryRoutines() {
   const [selected, setSelected] = useState<RoutineDetail | null>(null)
   const [editing, setEditing] = useState<RoutineDetail | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [includeArchived, setIncludeArchived] = useState(false)
   const [query, setQuery] = useState('')
   const [template, setTemplate] = useState<AutomationTemplate | null>(null)
   const [showDetail, setShowDetail] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
 
-  const refresh = useCallback(async (selectId?: string) => {
+  const refresh = useCallback(async (selectId?: string | null) => {
     try {
       const [nextRoutines, nextAgents] = await Promise.all([
-        hiveoryClient.routines({ enabled: null, include_archived: includeArchived, limit: 100 }),
+        hiveoryClient.routines({ enabled: null, include_archived: false, limit: 100 }),
         hiveoryClient.agents(),
       ])
       setRoutines(nextRoutines); setAgents(nextAgents)
-      const nextId = selectId ?? selected?.summary.id ?? nextRoutines[0]?.id
+      const nextId = selectId === undefined ? selected?.summary.id ?? nextRoutines[0]?.id : selectId
       if (nextId) setSelected(await hiveoryClient.routine(nextId))
       else setSelected(null)
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Automations could not be loaded.')
     }
-  }, [includeArchived, selected?.summary.id])
+  }, [selected?.summary.id])
 
   useEffect(() => { void refresh() }, [refresh])
 
@@ -86,9 +86,9 @@ export function HiveoryRoutines() {
       .some((value) => value.toLocaleLowerCase().includes(needle))
   })
 
-  const runAction = async (key: string, action: () => Promise<void>, message: string) => {
+  const runAction = async (key: string, action: () => Promise<void>, message: string, selectId?: string | null) => {
     setBusy(key); setFeedback(null)
-    try { await action(); setFeedback(message); await refresh(selected?.summary.id) } catch (error) { setFeedback(error instanceof Error ? error.message : 'The routine action could not be completed.') } finally { setBusy(null) }
+    try { await action(); setFeedback(message); await refresh(selectId === undefined ? selected?.summary.id : selectId) } catch (error) { setFeedback(error instanceof Error ? error.message : 'The routine action could not be completed.') } finally { setBusy(null) }
   }
 
   const selectRoutine = async (routine: RoutineSummary) => {
@@ -107,7 +107,6 @@ export function HiveoryRoutines() {
   return <section className="hiveory-page hiveory-automation hiveory-automation-desktop" aria-labelledby="hiveory-routines-title">
     <HiveoryPageHeader id="hiveory-routines-title" title="Automations" subtitle="Schedule durable, local work with clear status and history." className="hiveory-automation-desktop-header" actions={<div className="hiveory-automation-desktop-controls">
         <label className="hiveory-automation-desktop-search"><Search size={15} /><HiveorySearchField value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search automations" aria-label="Search automations" /></label>
-        <label className="hiveory-automation-desktop-filter"><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Show archived</label>
         <HiveoryIconButton type="button" onClick={() => void refresh()} aria-label="Refresh automations"><RefreshCw size={16} /></HiveoryIconButton>
         <HiveoryButton type="button" intent="primary" onClick={() => { setEditing(null); setTemplate(null); setShowForm(true) }} disabled={!agents.length}><Plus size={15} />New automation</HiveoryButton>
       </div>} />
@@ -128,7 +127,7 @@ export function HiveoryRoutines() {
       </div>}
     </section>
     {feedback && <div className="hiveory-feedback" role="status">{feedback}</div>}
-    {showDetail && selected && <div className="hiveory-modal-backdrop" role="presentation"><RoutineDetailPanel detail={selected} busy={busy} onClose={() => setShowDetail(false)} onRun={() => void runAction(`run-${selected.summary.id}`, async () => { await hiveoryClient.runRoutineNow(selected.summary.id) }, 'Routine run queued.')} onEdit={() => { setEditing(selected); setShowDetail(false); setShowForm(true) }} onArchive={() => void runAction(`archive-${selected.summary.id}`, async () => { await hiveoryClient.archiveRoutine(selected.summary.id) }, 'Routine archived.')} /></div>}
+    {showDetail && selected && <div className="hiveory-modal-backdrop" role="presentation"><RoutineDetailPanel detail={selected} busy={busy} onClose={() => setShowDetail(false)} onRun={() => void runAction(`run-${selected.summary.id}`, async () => { await hiveoryClient.runRoutineNow(selected.summary.id) }, 'Routine run queued.')} onEdit={() => { setEditing(selected); setShowDetail(false); setShowForm(true) }} onArchive={() => void runAction(`archive-${selected.summary.id}`, async () => { await hiveoryClient.archiveRoutine(selected.summary.id); setShowDetail(false); setSelected(null) }, 'Routine archived.', null)} /></div>}
     {showForm && <RoutineFormDialog agents={agents} initial={editing} template={template} busy={busy === 'save'} onCancel={() => { setShowForm(false); setEditing(null); setTemplate(null) }} onSave={saveRoutine} />}
   </section>
 }
@@ -161,13 +160,13 @@ function RoutineFormDialog({ agents, initial, template, busy, onCancel, onSave }
   const tools = plugins.flatMap((plugin) => {
     const grants = agentGrants.filter((grant) => grant.plugin_id === plugin.manifest.id)
     if (!grants.length) return []
-    return plugin.manifest.tools.filter((tool) => grants.some((grant) => grant.tool_names.length === 0 || grant.tool_names.includes(tool.name) || grant.tool_names.includes(`plugin.${plugin.manifest.id}.${tool.name}`))).map((tool) => ({ id: `plugin.${plugin.manifest.id}.${tool.name}`, label: `${plugin.manifest.name} · ${tool.name}` }))
+    return plugin.manifest.tools.filter((tool) => grants.some((grant) => grant.tool_names.length === 0 || grant.tool_names.includes(tool.name) || grant.tool_names.includes(`plugin.${plugin.manifest.id}.${tool.name}`))).map((tool) => ({ id: `plugin.${plugin.manifest.id}.${tool.name}`, label: `${plugin.manifest.name} · ${tool.name}`, provider: plugin.manifest.id }))
   })
   const submit = () => {
     const request = { ...form, max_duration_seconds: Math.max(1, Number(form.max_duration_seconds)), max_tool_calls: Math.max(1, Number(form.max_tool_calls)), approval_timeout_seconds: Math.max(1, Number(form.approval_timeout_seconds)) }
     onSave(initial ? { ...request, routine_id: initial.summary.id } : request)
   }
-  return <div className="hiveory-modal-backdrop" role="presentation"><section className="hiveory-modal hiveory-routine-modal" role="dialog" aria-modal="true" aria-labelledby="hiveory-routine-form-title"><div className="hiveory-modal-heading"><div><p className="hiveory-eyebrow">Durable schedule</p><h2 id="hiveory-routine-form-title">{initial ? 'Edit automation' : 'Create automation'}</h2></div><button className="hiveory-icon-button" onClick={onCancel} aria-label="Close automation form"><X size={17} /></button></div><div className="hiveory-form-grid"><label>Name<input value={form.name} onChange={(event) => update('name', event.target.value)} autoFocus maxLength={120} /></label><label>Agent<select value={form.agent_id} onChange={(event) => update('agent_id', event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><label className="is-wide">Description<input value={form.description} onChange={(event) => update('description', event.target.value)} maxLength={240} /></label><label className="is-wide">Prompt template<textarea value={form.prompt_template} onChange={(event) => update('prompt_template', event.target.value)} rows={4} maxLength={64 * 1024} /></label><label>Cron expression<input value={form.schedule.expression} onChange={(event) => update('schedule', { ...form.schedule, expression: event.target.value })} placeholder="0 9 * * 1-5" /><small>minute hour day month weekday</small></label><label>Timezone<input value={form.schedule.timezone} onChange={(event) => update('schedule', { ...form.schedule, timezone: event.target.value })} placeholder="Asia/Kolkata" /></label><label>Catch-up<select value={form.catch_up} onChange={(event) => update('catch_up', event.target.value as RoutineCreateRequest['catch_up'])}><option value="skip">Skip missed</option><option value="run_latest">Run latest</option><option value="run_all_bounded">Run all, bounded</option></select></label><label>Concurrency<select value={form.concurrency} onChange={(event) => update('concurrency', event.target.value as RoutineCreateRequest['concurrency'])}><option value="skip">Skip if active</option><option value="queue_one">Queue one</option><option value="parallel_bounded">Parallel, max 4</option></select></label><label>Delivery<select value={form.delivery} onChange={(event) => update('delivery', event.target.value as RoutineCreateRequest['delivery'])}><option value="in_app">In-app only</option><option value="in_app_and_native">In-app + native</option></select></label><label>Max tool calls<input type="number" min="1" max="200" value={form.max_tool_calls} onChange={(event) => update('max_tool_calls', Number(event.target.value))} /></label><label>Duration (seconds)<input type="number" min="1" max="86400" value={form.max_duration_seconds} onChange={(event) => update('max_duration_seconds', Number(event.target.value))} /></label><label>Approval timeout<input type="number" min="1" max="86400" value={form.approval_timeout_seconds} onChange={(event) => update('approval_timeout_seconds', Number(event.target.value))} /></label><div className="is-wide hiveory-automation-picker"><span>Workspace folders</span>{folders.length ? folders.map((folder) => <label key={folder.id} className="hiveory-checkbox"><input type="checkbox" checked={form.folder_grant_ids.includes(folder.id)} onChange={() => toggleList('folder_grant_ids', folder.id)} /><span>{folder.display_name}</span></label>) : <small>This Agent has no granted folders.</small>}</div><div className="is-wide hiveory-automation-picker"><span>Plugin tools</span>{tools.length ? tools.map((tool) => <label key={tool.id} className="hiveory-checkbox"><input type="checkbox" checked={form.plugin_tool_names.includes(tool.id)} onChange={() => toggleList('plugin_tool_names', tool.id)} /><span>{tool.label}</span></label>) : <small>{connections.length ? 'Test a plugin connection and grant it to this Agent before an automation can use its tools.' : 'Connect and test a plugin before an automation can use its tools.'}</small>}</div></div><label className="hiveory-checkbox"><input type="checkbox" checked={form.enabled} onChange={(event) => update('enabled', event.target.checked)} /><span>Enable schedule immediately</span></label><div className="hiveory-modal-actions"><button className="is-secondary" onClick={onCancel}>Cancel</button><button disabled={busy || !form.name.trim() || !form.agent_id || !form.prompt_template.trim() || !form.schedule.expression.trim() || !form.schedule.timezone.trim()} onClick={submit}><CheckCircle2 size={15} />{busy ? 'Saving…' : 'Save automation'}</button></div></section></div>
+  return <div className="hiveory-modal-backdrop" role="presentation"><section className="hiveory-modal hiveory-routine-modal" role="dialog" aria-modal="true" aria-labelledby="hiveory-routine-form-title"><div className="hiveory-modal-heading"><div><p className="hiveory-eyebrow">Durable schedule</p><h2 id="hiveory-routine-form-title">{initial ? 'Edit automation' : 'Create automation'}</h2></div><button className="hiveory-icon-button" onClick={onCancel} aria-label="Close automation form"><X size={17} /></button></div><div className="hiveory-form-grid"><label>Name<input value={form.name} onChange={(event) => update('name', event.target.value)} autoFocus maxLength={120} /></label><label>Agent<select value={form.agent_id} onChange={(event) => update('agent_id', event.target.value)}>{agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}</select></label><label className="is-wide">Description<input value={form.description} onChange={(event) => update('description', event.target.value)} maxLength={240} /></label><label className="is-wide">Prompt template<textarea value={form.prompt_template} onChange={(event) => update('prompt_template', event.target.value)} rows={4} maxLength={64 * 1024} /></label><label>Cron expression<input value={form.schedule.expression} onChange={(event) => update('schedule', { ...form.schedule, expression: event.target.value })} placeholder="0 9 * * 1-5" /><small>minute hour day month weekday</small></label><label>Timezone<input value={form.schedule.timezone} onChange={(event) => update('schedule', { ...form.schedule, timezone: event.target.value })} placeholder="Asia/Kolkata" /></label><label>Catch-up<select value={form.catch_up} onChange={(event) => update('catch_up', event.target.value as RoutineCreateRequest['catch_up'])}><option value="skip">Skip missed</option><option value="run_latest">Run latest</option><option value="run_all_bounded">Run all, bounded</option></select></label><label>Concurrency<select value={form.concurrency} onChange={(event) => update('concurrency', event.target.value as RoutineCreateRequest['concurrency'])}><option value="skip">Skip if active</option><option value="queue_one">Queue one</option><option value="parallel_bounded">Parallel, max 4</option></select></label><label>Delivery<select value={form.delivery} onChange={(event) => update('delivery', event.target.value as RoutineCreateRequest['delivery'])}><option value="in_app">In-app only</option><option value="in_app_and_native">In-app + native</option></select></label><label>Max tool calls<input type="number" min="1" max="200" value={form.max_tool_calls} onChange={(event) => update('max_tool_calls', Number(event.target.value))} /></label><label>Duration (seconds)<input type="number" min="1" max="86400" value={form.max_duration_seconds} onChange={(event) => update('max_duration_seconds', Number(event.target.value))} /></label><label>Approval timeout<input type="number" min="1" max="86400" value={form.approval_timeout_seconds} onChange={(event) => update('approval_timeout_seconds', Number(event.target.value))} /></label><div className="is-wide hiveory-automation-picker"><span>Workspace folders</span>{folders.length ? folders.map((folder) => <label key={folder.id} className="hiveory-checkbox"><input type="checkbox" checked={form.folder_grant_ids.includes(folder.id)} onChange={() => toggleList('folder_grant_ids', folder.id)} /><span>{folder.display_name}</span></label>) : <small>This Agent has no granted folders.</small>}</div><div className="is-wide hiveory-automation-picker"><span>Plugin tools</span>{tools.length ? tools.map((tool) => <label key={tool.id} className="hiveory-checkbox"><input type="checkbox" checked={form.plugin_tool_names.includes(tool.id)} onChange={() => toggleList('plugin_tool_names', tool.id)} /><span><HiveoryBrandIcon provider={tool.provider} size={14} />{tool.label}</span></label>) : <small>{connections.length ? 'Test a plugin connection and grant it to this Agent before an automation can use its tools.' : 'Connect and test a plugin before an automation can use its tools.'}</small>}</div></div><label className="hiveory-checkbox"><input type="checkbox" checked={form.enabled} onChange={(event) => update('enabled', event.target.checked)} /><span>Enable schedule immediately</span></label><div className="hiveory-modal-actions"><button className="is-secondary" onClick={onCancel}>Cancel</button><button disabled={busy || !form.name.trim() || !form.agent_id || !form.prompt_template.trim() || !form.schedule.expression.trim() || !form.schedule.timezone.trim()} onClick={submit}><CheckCircle2 size={15} />{busy ? 'Saving…' : 'Save automation'}</button></div></section></div>
 }
 
 export default HiveoryRoutines

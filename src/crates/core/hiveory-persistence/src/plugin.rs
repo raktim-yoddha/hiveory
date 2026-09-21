@@ -1,7 +1,8 @@
 use hiveory_protocol::{
     AgentPluginGrant, AgentPluginGrantRequest, PluginAdapterKind, PluginCatalogEntry,
-    PluginConnectionCreateRequest, PluginConnectionKind, PluginConnectionSummary,
-    PluginConnectionUpdateRequest, PluginInstallRequest, PluginInvocationSummary, PluginManifest,
+    PluginCatalogOrigin, PluginConnectionCreateRequest, PluginConnectionKind,
+    PluginConnectionSummary, PluginConnectionUpdateRequest, PluginInstallRequest,
+    PluginInvocationSummary, PluginManifest,
 };
 use sqlx::{sqlite::SqliteRow, Row};
 use thiserror::Error;
@@ -58,23 +59,38 @@ impl HiveoryPluginStore {
     }
 
     pub async fn delete_manifest(&self, plugin_id: &str) -> Result<(), HiveoryPluginStoreError> {
+        let mut transaction = self.persistence.pool().begin().await?;
         sqlx::query("DELETE FROM hiveory_plugin_invocations WHERE plugin_id=?")
             .bind(plugin_id)
-            .execute(self.persistence.pool())
+            .execute(&mut *transaction)
             .await?;
         sqlx::query("DELETE FROM hiveory_agent_plugin_grants WHERE plugin_id=?")
             .bind(plugin_id)
-            .execute(self.persistence.pool())
+            .execute(&mut *transaction)
             .await?;
         sqlx::query("DELETE FROM hiveory_plugin_connections WHERE plugin_id=?")
             .bind(plugin_id)
-            .execute(self.persistence.pool())
+            .execute(&mut *transaction)
             .await?;
         sqlx::query("DELETE FROM hiveory_plugin_manifests WHERE id=?")
             .bind(plugin_id)
-            .execute(self.persistence.pool())
+            .execute(&mut *transaction)
             .await?;
+        transaction.commit().await?;
         Ok(())
+    }
+
+    pub async fn secret_refs(
+        &self,
+        plugin_id: &str,
+    ) -> Result<Vec<String>, HiveoryPluginStoreError> {
+        Ok(sqlx::query("SELECT secret_ref FROM hiveory_plugin_connections WHERE plugin_id=? AND secret_ref IS NOT NULL")
+            .bind(plugin_id)
+            .fetch_all(self.persistence.pool())
+            .await?
+            .into_iter()
+            .filter_map(|row| row.get::<Option<String>, _>(0))
+            .collect())
     }
 
     pub async fn catalog(&self) -> Result<Vec<PluginCatalogEntry>, HiveoryPluginStoreError> {
@@ -89,6 +105,7 @@ impl HiveoryPluginStore {
                     enabled: row.get::<i64, _>(2) != 0,
                     connection_count: row.get::<i64, _>(3).max(0) as u32,
                     assigned_agent_count: row.get::<i64, _>(4).max(0) as u32,
+                    origin: PluginCatalogOrigin::User,
                 })
             })
             .collect()

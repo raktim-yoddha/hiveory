@@ -81,10 +81,11 @@ export type RoutineExecutionsQuery = { routine_id: string; limit: number | null 
 
 export type PluginAdapterKind = 'json_http_get' | 'json_http_post'
 export type PluginConnectionKind = 'none' | 'api_key_header'
+export type PluginCatalogOrigin = 'builtin' | 'user'
 export type PluginPermission = { capability: string; explanation: string }
 export type PluginToolDefinition = { name: string; description: string; adapter: PluginAdapterKind; input_schema_json: string; output_schema_json: string; risk: AgentToolRisk }
 export type PluginManifest = { id: string; publisher: string; version: string; name: string; description: string; adapter: PluginAdapterKind; tools: PluginToolDefinition[]; permissions: PluginPermission[]; allowed_hosts: string[]; connection_kind: PluginConnectionKind; supports_dry_run: boolean; content_hash: string }
-export type PluginCatalogEntry = { manifest: PluginManifest; installed: boolean; enabled: boolean; connection_count: number; assigned_agent_count: number }
+export type PluginCatalogEntry = { manifest: PluginManifest; installed: boolean; enabled: boolean; connection_count: number; assigned_agent_count: number; origin: PluginCatalogOrigin }
 export type PluginConnectionSummary = { id: string; plugin_id: string; name: string; origin: string; kind: PluginConnectionKind; api_key_header: string | null; secret_configured: boolean; validated_at_unix_ms: number | null; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type PluginInstallRequest = { plugin_id: string; enabled: boolean }
 export type PluginConnectionCreateRequest = { plugin_id: string; name: string; origin: string; kind: PluginConnectionKind; api_key_header: string | null; secret_value: string | null }
@@ -274,8 +275,6 @@ export const GROK_ADAPTER_ID = 'grok'
 export const CODE_ADAPTER_IDS = [CODEX_ADAPTER_ID, CLAUDE_CODE_ADAPTER_ID, ANTIGRAVITY_ADAPTER_ID, OPENCODE_ADAPTER_ID, CURSOR_ADAPTER_ID, GROK_ADAPTER_ID] as const
 export type CodeRunSummary = { id: string; workspace_id: string; title: string; objective: string; model: string | null; coordinator_id: string; adapter_id: string; state: CodeRunState; review_policy: CodeReviewPolicy; concurrency_limit: number; host_concurrency_cap: number; task_count: number; completed_tasks: number; active_dispatches: number; created_at_unix_ms: number; updated_at_unix_ms: number; error: string | null }
 export type CodeTask = { id: string; run_id: string; client_id: string; title: string; specification: string; state: CodeTaskState; position: number; active_dispatch_id: string | null; latest_checkpoint_id: string | null; base_checkpoint_id: string | null; attempt: number; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
-export type TaskBoardStatus = 'todo' | 'in_progress' | 'in_review' | 'done'
-export type TaskBoardPreferences = { statuses: Record<string, TaskBoardStatus>; pinned: string[] }
 export type CodeTaskDependency = { run_id: string; task_id: string; depends_on_task_id: string }
 export type CodeDispatch = { id: string; run_id: string; task_id: string; attempt: number; state: CodeDispatchState; adapter_id: string; lease_generation: number; session_id: string | null; pid: number | null; worktree_id: string | null; checkpoint_id: string | null; last_heartbeat_at_unix_ms: number | null; terminal_id: string | null; cancel_requested_at_unix_ms: number | null; started_at_unix_ms: number; updated_at_unix_ms: number; error: string | null; result_summary: string | null }
 export type CodeManagedWorktree = { id: string; run_id: string; task_id: string; dispatch_id: string; path: string; branch: string; base_checkpoint_id: string | null; state: CodeManagedWorktreeState; dirty: boolean; locked: boolean; error: string | null; created_at_unix_ms: number; updated_at_unix_ms: number }
@@ -1012,6 +1011,10 @@ export const hiveoryClient = {
     if (!hiveoryIsTauri) throw new Error('Custom skills can only be created from the local desktop application.')
     return tauriQuery<AgentSkillSummary>('hiveory_command_create_agent_skill', { request: { source } })
   },
+  async deleteAgentSkill(skillId: string): Promise<void> {
+    if (hiveoryIsTauri) { await invoke('hiveory_command_delete_agent_skill', { request: { skill_id: skillId } }); return }
+    throw new Error('Skills can only be deleted from the local desktop application.')
+  },
   async toggleAgentSkill(request: AgentSkillToggleRequest): Promise<AgentDetail> {
     if (hiveoryIsTauri) return tauriQuery<AgentDetail>('hiveory_command_toggle_agent_skill', { request })
     const skill = previewAgentSkills.find((item) => item.id === request.skill_id); if (skill) skill.enabled = request.enabled; return previewAgentDetail()
@@ -1113,6 +1116,10 @@ export const hiveoryClient = {
   async registerPluginManifest(manifest: PluginManifest): Promise<PluginCatalogEntry> {
     if (!hiveoryIsTauri) throw new Error('Custom plugins can only be created from the local desktop application.')
     return tauriQuery<PluginCatalogEntry>('hiveory_command_register_plugin_manifest', { manifest })
+  },
+  async deletePlugin(pluginId: string): Promise<void> {
+    if (hiveoryIsTauri) { await invoke('hiveory_command_delete_plugin', { request: { plugin_id: pluginId } }); return }
+    throw new Error('Plugins can only be deleted from the local desktop application.')
   },
   async pluginConnections(pluginId?: string): Promise<PluginConnectionSummary[]> { return hiveoryIsTauri ? tauriQuery<PluginConnectionSummary[]>('hiveory_query_plugin_connections', { pluginId: pluginId ?? null }) : [] },
   async installPlugin(request: PluginInstallRequest): Promise<void> {
@@ -1899,14 +1906,6 @@ export const hiveoryClient = {
   async removeTaskSource(workspaceId: string, sourceId: string): Promise<boolean> {
     if (hiveoryIsTauri) return invoke<boolean>('hiveory_command_remove_task_source', { request: { workspace_id: workspaceId, source_id: sourceId } })
     throw new Error('Task-source connections are available in the Hiveory desktop application.')
-  },
-  async taskBoardPreferences(): Promise<TaskBoardPreferences> {
-    if (hiveoryIsTauri) return tauriQuery<TaskBoardPreferences>('hiveory_query_task_board_preferences')
-    throw new Error('The task board is available only in the local desktop application.')
-  },
-  async updateTaskBoardPreferences(preferences: TaskBoardPreferences): Promise<TaskBoardPreferences> {
-    if (hiveoryIsTauri) return tauriQuery<TaskBoardPreferences>('hiveory_command_update_task_board_preferences', { request: { preferences } })
-    throw new Error('The task board is available only in the local desktop application.')
   },
   async codeMailbox(query: CodeMailboxQuery): Promise<CodeMailboxDelivery[]> {
     if (hiveoryIsTauri) return tauriQuery<CodeMailboxDelivery[]>('hiveory_query_code_mailbox', { query })

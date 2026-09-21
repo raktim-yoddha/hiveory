@@ -51,6 +51,8 @@ import {
   OPENCODE_ADAPTER_ID,
 } from '../../../../shared/api/hiveory-client'
 import { CliBrandIcon } from '../../code/workspace/components/CliIcons'
+import { HiveoryBrandIcon } from '../../../../shared/ui/HiveoryBrandIcon'
+import { useHiveoryDialogs } from '../../../../shared/ui/HiveoryDesign'
 import { ChatMarkdown } from '../components/ChatMarkdown'
 import { openCodeModelParts } from '../model/chat-model-labels'
 import type { GlobalDestination } from '../../../global/navigation/HiveoryGlobalSurface'
@@ -280,6 +282,7 @@ function fromChatProfileSnapshot(snapshot: ChatProfileSnapshot): ChatProfile {
 }
 
 export function HiveoryChat({ embedded = false, globalDestination = null, sharedRailWidth, onSharedRailWidthChange, onActivateCanvas }: { embedded?: boolean; globalDestination?: GlobalDestination | null; sharedRailWidth?: number; onSharedRailWidthChange?: (width: number) => void; onActivateCanvas?: () => void }) {
+  const { confirm, prompt } = useHiveoryDialogs()
   const DEFAULT_RAIL_WIDTH = 228
   const MIN_RAIL_WIDTH = 180
   const MAX_RAIL_WIDTH = 480
@@ -816,7 +819,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   }
 
   const createFolder = async () => {
-    const name = window.prompt('Folder name')?.trim()
+    const name = (await prompt({ title: 'Create folder', label: 'Folder name', submitLabel: 'Create folder' }))?.trim()
     if (!name) return
     try {
       await hiveoryClient.createChatFolder(name)
@@ -827,7 +830,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   }
 
   const renameFolder = async (folder: ChatFolderSummary) => {
-    const name = window.prompt('Rename folder', folder.name)?.trim()
+    const name = (await prompt({ title: 'Rename folder', label: 'Folder name', initialValue: folder.name, submitLabel: 'Rename folder' }))?.trim()
     if (!name || name === folder.name) return
     try {
       await hiveoryClient.updateChatFolder({ folder_id: folder.id, name, position: null })
@@ -838,7 +841,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   }
 
   const deleteFolder = async (folder: ChatFolderSummary) => {
-    if (!window.confirm(`Delete “${folder.name}”? Chats will remain outside folders.`)) return
+    if (!await confirm({ title: `Delete “${folder.name}”?`, description: 'Chats will remain outside folders.', confirmLabel: 'Delete folder', intent: 'danger' })) return
     try {
       await hiveoryClient.deleteChatFolder(folder.id)
       if (folderFilter === folder.id) setFolderFilter(null)
@@ -871,7 +874,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
   }
 
   const deleteConversation = async (item: ChatConversationSummary) => {
-    if (!window.confirm(`Delete “${item.title}”? This cannot be undone.`)) return
+    if (!await confirm({ title: `Delete “${item.title}”?`, description: 'This cannot be undone.', confirmLabel: 'Delete chat', intent: 'danger' })) return
     setBusyAction('delete')
     try {
       await hiveoryClient.deleteChat(item.id)
@@ -1393,7 +1396,7 @@ export function HiveoryChat({ embedded = false, globalDestination = null, shared
           {availablePlugins.filter((plugin) => plugin.enabled && validatedPluginIds.has(plugin.manifest.id)).flatMap((plugin) => plugin.manifest.tools.map((tool) => ({ plugin, tool }))).map(({ plugin, tool }) => (
             <label className="chat-inspector-check" key={`${plugin.manifest.id}:${tool.name}`}>
               <input type="checkbox" checked={chatProfile.pluginToolNames.includes(chatPluginToolId(plugin.manifest.id, tool.name)) || chatProfile.pluginToolNames.includes(tool.name)} onChange={(event) => { const id = chatPluginToolId(plugin.manifest.id, tool.name); updateChatProfile({ pluginToolNames: event.target.checked ? [...new Set([...chatProfile.pluginToolNames.filter((name) => name !== tool.name), id])] : chatProfile.pluginToolNames.filter((name) => name !== id && name !== tool.name) }) }} />
-              <span><strong>{tool.name}</strong><small>{plugin.manifest.name}</small></span>
+              <span><strong>{tool.name}</strong><small><HiveoryBrandIcon provider={plugin.manifest.id} size={12} />{plugin.manifest.name}</small></span>
             </label>
           ))}
         </section>

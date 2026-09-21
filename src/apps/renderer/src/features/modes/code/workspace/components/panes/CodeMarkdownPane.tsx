@@ -72,6 +72,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { hiveoryClient, type CodeDocument } from '../../../../../../shared/api/hiveory-client'
+import { useHiveoryDialogs } from '../../../../../../shared/ui/HiveoryDesign'
+import { useCodeWorkspaceActive } from '../../state/code-workspace-activity'
 
 interface CodeMarkdownPaneProps {
   workspaceId: string
@@ -288,6 +290,8 @@ function normalizeLink(value: string): string {
 }
 
 export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId, relativePath, onOpenMarkdown, onRenameMarkdown }) => {
+  const { confirm } = useHiveoryDialogs()
+  const active = useCodeWorkspaceActive()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const linkPanelRef = useRef<HTMLFormElement>(null)
   const imagePanelRef = useRef<HTMLFormElement>(null)
@@ -560,8 +564,8 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     }
   }, [documentDirectory, onOpenMarkdown, workspaceId])
 
-  const createNewDraft = useCallback(() => {
-    if (dirty && !window.confirm('Discard the unsaved changes and create a new Markdown document?')) return
+  const createNewDraft = useCallback(async () => {
+    if (dirty && !await confirm({ title: 'Discard unsaved changes?', description: 'Your unsaved Markdown changes will be lost when you create a new document.', confirmLabel: 'Discard changes', intent: 'danger' })) return
     const draft: CodeDocument = {
       workspace_id: workspaceId,
       relative_path: 'Untitled.md',
@@ -584,19 +588,19 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     setError(null)
     setStatusMessage('New unsaved document')
     syncSourceIntoEditor('')
-  }, [dirty, syncSourceIntoEditor, workspaceId])
+  }, [confirm, dirty, syncSourceIntoEditor, workspaceId])
 
-  const openMarkdownDocument = useCallback((path: string) => {
+  const openMarkdownDocument = useCallback(async (path: string) => {
     if (path === relativePath && !draftMode) return
-    if (dirty && !window.confirm('Discard the unsaved changes and open another Markdown document?')) return
+    if (dirty && !await confirm({ title: 'Discard unsaved changes?', description: 'Your unsaved Markdown changes will be lost when you open another document.', confirmLabel: 'Discard changes', intent: 'danger' })) return
     setMarkdownFileMenuOpen(false)
     setMarkdownFileQuery('')
     onOpenMarkdown?.(path)
-  }, [dirty, draftMode, onOpenMarkdown, relativePath])
+  }, [confirm, dirty, draftMode, onOpenMarkdown, relativePath])
 
   const reloadDocument = useCallback(async () => {
     if (draftMode) {
-      createNewDraft()
+      await createNewDraft()
       return
     }
     try {
@@ -715,6 +719,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
   }, [relativePath])
 
   useEffect(() => {
+    if (!active) return
     const handleSaveShortcut = (event: globalThis.KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 's') return
       event.preventDefault()
@@ -722,7 +727,7 @@ export const CodeMarkdownPane: React.FC<CodeMarkdownPaneProps> = ({ workspaceId,
     }
     window.addEventListener('keydown', handleSaveShortcut)
     return () => window.removeEventListener('keydown', handleSaveShortcut)
-  }, [saveDocument])
+  }, [active, saveDocument])
 
   const setSourceValue = (value: string) => {
     sourceRef.current = value

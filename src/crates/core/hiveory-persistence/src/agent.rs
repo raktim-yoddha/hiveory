@@ -329,6 +329,38 @@ impl HiveoryAgentStore {
             .fetch_all(self.persistence.pool()).await?.into_iter().map(skill_from_row).collect())
     }
 
+    pub async fn delete_application_skill(
+        &self,
+        skill_id: &str,
+    ) -> Result<(), HiveoryAgentStoreError> {
+        let mut transaction = self.persistence.pool().begin().await?;
+        let origin = sqlx::query("SELECT origin FROM hiveory_skill_catalog WHERE id=?")
+            .bind(skill_id)
+            .fetch_optional(&mut *transaction)
+            .await?
+            .map(|row| row.get::<String, _>(0))
+            .ok_or(HiveoryAgentStoreError::NotFound)?;
+        if skill_origin_from_value(&origin) != Some(AgentSkillOrigin::ApplicationData) {
+            return Err(HiveoryAgentStoreError::InvalidInput(
+                "Only Hiveory-managed skills can be deleted.".to_owned(),
+            ));
+        }
+        sqlx::query("DELETE FROM hiveory_agent_skills WHERE skill_id=?")
+            .bind(skill_id)
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM hiveory_skill_conflicts WHERE selected_skill_id=?")
+            .bind(skill_id)
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM hiveory_skill_catalog WHERE id=?")
+            .bind(skill_id)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await?;
+        Ok(())
+    }
+
     pub async fn skills_for_agent(
         &self,
         agent_id: &str,

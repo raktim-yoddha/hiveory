@@ -2475,6 +2475,14 @@ pub enum AgentSkillOrigin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
+pub enum PluginCatalogOrigin {
+    Builtin,
+    User,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
 pub enum AgentArtifactKind {
     Text,
     Json,
@@ -2568,6 +2576,12 @@ pub struct AgentSkillSummary {
     pub enabled: bool,
     pub valid: bool,
     pub validation_message: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct AgentSkillIdRequest {
+    pub skill_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3326,6 +3340,13 @@ pub struct PluginCatalogEntry {
     pub enabled: bool,
     pub connection_count: u32,
     pub assigned_agent_count: u32,
+    pub origin: PluginCatalogOrigin,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginIdRequest {
+    pub plugin_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -3727,6 +3748,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     AgentApprovalDecision::export_all(&config)?;
     AgentMemoryClass::export_all(&config)?;
     AgentSkillOrigin::export_all(&config)?;
+    PluginCatalogOrigin::export_all(&config)?;
     AgentArtifactKind::export_all(&config)?;
     AgentEventKind::export_all(&config)?;
     AgentRuntimeLimits::export_all(&config)?;
@@ -3734,6 +3756,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     AgentFolderGrant::export_all(&config)?;
     AgentToolDefinition::export_all(&config)?;
     AgentSkillSummary::export_all(&config)?;
+    AgentSkillIdRequest::export_all(&config)?;
     AgentSkillConflict::export_all(&config)?;
     AgentMemorySummary::export_all(&config)?;
     AgentArtifactSummary::export_all(&config)?;
@@ -3792,6 +3815,7 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     PluginToolDefinition::export_all(&config)?;
     PluginManifest::export_all(&config)?;
     PluginCatalogEntry::export_all(&config)?;
+    PluginIdRequest::export_all(&config)?;
     PluginConnectionSummary::export_all(&config)?;
     PluginInstallRequest::export_all(&config)?;
     PluginConnectionCreateRequest::export_all(&config)?;

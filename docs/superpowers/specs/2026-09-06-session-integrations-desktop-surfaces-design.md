@@ -67,13 +67,11 @@ Creating a template immediately opens the automation form with the template fiel
 
 The existing local scheduler remains the source of truth. Search and filters operate on the returned routine summaries. Run now waits for the scheduler response and refreshes execution history. Failed starts display the scheduler error. Plugin tools are selectable only when their connection is validated and the selected Hiveory Agent has a matching grant.
 
-## Tasks and Kanban
+## Tasks
 
 The Tasks page follows the fourth reference image with provider controls, Issues, PRs, and Projects tabs, project-source selection, query, filters, add, and refresh. Hosted data is loaded through locally installed and authenticated provider CLIs. No Hiveory server is required.
 
 The page distinguishes provider tasks from local code-run tasks. Provider tabs show real provider results and clearly report missing CLI, missing authentication, no selected project, offline, or rate-limit states. Local code-run tasks remain available through a Local tab.
-
-The Kanban button opens the existing full-screen board. It uses the same normalized task records as the list page. Local column overrides and pins remain in Hiveory's local settings. Dragging a provider item updates only local board organization unless a provider-specific status mutation is explicitly selected and confirmed. Opening a card routes to its provider URL or local Hiveory workspace.
 
 ## State and data flow
 
@@ -86,7 +84,7 @@ Menus and modals close on Escape, restore focus to the triggering control, and d
 - Renderer typecheck and production bundle build.
 - Component tests for plugin switch states, ellipsis menu actions, skill assignments, automation template behavior, search/filter behavior, and task empty/recovery states.
 - Rust tests for session profile creation, secret exclusion, per-pane expiry, adapter handshake states, and cleanup.
-- Integration tests for plugin connection testing, agent grants, CLI session permissions, scheduler manual runs, and local board persistence.
+- Integration tests for plugin connection testing, agent grants, CLI session permissions, and scheduler manual runs.
 - Adapter smoke tests for every supported installed CLI, with an explicit unsupported result where the installed version lacks the required session hook.
 - Desktop checks at 1024x768 and 1440x900 for list scrolling, menu placement, modal scrolling, keyboard navigation, and absence of horizontal overflow.
 - Full production build of the portable executable, NSIS installer, and MSI.

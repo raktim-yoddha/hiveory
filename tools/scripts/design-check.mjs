@@ -21,7 +21,7 @@ const runtimeColorFiles = new Set([
   'src/apps/renderer/src/features/modes/code/workspace/components/CliIcons.tsx',
   'src/apps/renderer/src/features/modes/code/workspace/components/CodePaneHeader.tsx',
   'src/apps/renderer/src/features/modes/code/workspace/components/CodeWorkspaceRail.tsx',
-  'src/apps/renderer/src/features/modes/code/workspace/components/HiveoryWorkspaceBoard.tsx',
+  'src/apps/renderer/src/shared/ui/HiveoryBrandIcon.tsx',
   'src/apps/renderer/src/features/modes/code/workspace/components/panes/CodeTerminalPane.tsx',
   'src/apps/renderer/src/shared/api/hiveory-client.ts',
 ])

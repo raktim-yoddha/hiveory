@@ -54,8 +54,8 @@ use hiveory_protocol::{
     AgentMemoryMutationRequest, AgentMemoryQuery, AgentMemorySummary, AgentPluginGrant,
     AgentPluginGrantRequest, AgentRunControlRequest, AgentRunDetail, AgentRunStartRequest,
     AgentRunSummary, AgentRunsQuery, AgentSkillCatalog, AgentSkillConflictResolutionRequest,
-    AgentSkillSummary, AgentSkillToggleRequest, AgentToolDefinition, AgentToolRisk,
-    AgentUpdateRequest, ApiError, ApplicationMode, BackupSummary, BootstrapSnapshot,
+    AgentSkillIdRequest, AgentSkillSummary, AgentSkillToggleRequest, AgentToolDefinition,
+    AgentToolRisk, AgentUpdateRequest, ApiError, ApplicationMode, BackupSummary, BootstrapSnapshot,
     BuildInformation, ChatAttachmentBytesRequest, ChatAttachmentImportRequest,
     ChatAttachmentSummary, ChatBranchRequest, ChatConversationDetail,
     ChatConversationFolderRequest, ChatCreateRequest, ChatDeleteRequest,
@@ -103,12 +103,12 @@ use hiveory_protocol::{
     OpenCodePaneMarkdownRequest, OpenCodePaneMarkdownResult, OpenCodePanePreviewRequest,
     OpenCodePanePreviewResult, PluginCatalogEntry, PluginConnectionCreateRequest,
     PluginConnectionIdRequest, PluginConnectionSummary, PluginConnectionUpdateRequest,
-    PluginDryRunRequest, PluginInstallRequest, PluginInvocationSummary, PluginManifest,
-    ProviderDiagnosticRequest, ResponseEnvelope, RetryClass, RoutineCreateRequest, RoutineDetail,
-    RoutineExecution, RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery, RoutineSummary,
-    RoutineUpdateRequest, SetActiveModeCommand, SharedEventEnvelope, SharedEventKind,
-    TaskSourceConnectRequest, TaskSourceIdRequest, TaskSourceQuery, TaskSourceSnapshot,
-    UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
+    PluginDryRunRequest, PluginIdRequest, PluginInstallRequest, PluginInvocationSummary,
+    PluginManifest, ProviderDiagnosticRequest, ResponseEnvelope, RetryClass, RoutineCreateRequest,
+    RoutineDetail, RoutineExecution, RoutineExecutionsQuery, RoutineIdRequest, RoutineQuery,
+    RoutineSummary, RoutineUpdateRequest, SetActiveModeCommand, SharedEventEnvelope,
+    SharedEventKind, TaskSourceConnectRequest, TaskSourceIdRequest, TaskSourceQuery,
+    TaskSourceSnapshot, UpdateSnapshot, HIVEORY_PROTOCOL_VERSION,
 };
 use hiveory_routine_scheduler::{HiveoryRoutineScheduler, HiveoryRoutineSchedulerError};
 use hiveory_secret_store::{HiveoryKeyringSecretStore, HiveorySecretStoreHandle};
@@ -257,7 +257,6 @@ struct CodeTerminalHistorySettingRequest {
 }
 
 const CODE_WORKSPACE_CONTEXT_SETTING: &str = "code_workspace_context.v1";
-const TASK_BOARD_PREFERENCES_SETTING: &str = "task_board_preferences.v1";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CodeWorkspaceContext {
@@ -278,36 +277,6 @@ impl Default for CodeWorkspaceContext {
 struct CodeWorkspaceContextUpdate {
     workspace_id: Option<String>,
     section: String,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct TaskBoardPreferences {
-    statuses: HashMap<String, String>,
-    pinned: Vec<String>,
-}
-
-fn sanitize_task_board_preferences(mut preferences: TaskBoardPreferences) -> TaskBoardPreferences {
-    preferences.statuses.retain(|task_id, status| {
-        task_id.len() <= 128
-            && matches!(
-                status.as_str(),
-                "todo" | "in_progress" | "in_review" | "done"
-            )
-    });
-    if preferences.statuses.len() > 10_000 {
-        preferences.statuses = preferences.statuses.into_iter().take(10_000).collect();
-    }
-    let mut seen = HashSet::new();
-    preferences
-        .pinned
-        .retain(|task_id| task_id.len() <= 128 && seen.insert(task_id.clone()));
-    preferences.pinned.truncate(1_000);
-    preferences
-}
-
-#[derive(Debug, Clone, Deserialize)]
-struct TaskBoardPreferencesUpdate {
-    preferences: TaskBoardPreferences,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -5311,6 +5280,18 @@ async fn hiveory_command_create_agent_skill(
 }
 
 #[tauri::command]
+async fn hiveory_command_delete_agent_skill(
+    request: AgentSkillIdRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .agent_runtime
+        .delete_application_skill(&request)
+        .await
+        .map_err(agent_runtime_error)
+}
+
+#[tauri::command]
 async fn hiveory_command_toggle_agent_skill(
     request: AgentSkillToggleRequest,
     foundation: State<'_, HiveoryFoundation>,
@@ -5716,6 +5697,18 @@ async fn hiveory_command_register_plugin_manifest(
 }
 
 #[tauri::command]
+async fn hiveory_command_delete_plugin(
+    request: PluginIdRequest,
+    foundation: State<'_, HiveoryFoundation>,
+) -> Result<(), ApiError> {
+    foundation
+        .plugin_runtime
+        .delete_user_plugin(&request)
+        .await
+        .map_err(plugin_runtime_error)
+}
+
+#[tauri::command]
 async fn hiveory_query_plugin_connections(
     plugin_id: Option<String>,
     foundation: State<'_, HiveoryFoundation>,
@@ -5863,37 +5856,6 @@ async fn hiveory_command_set_code_workspace_context(
             .set_code_workspace_context(command.payload)
             .await?,
     ))
-}
-
-#[tauri::command]
-async fn hiveory_query_task_board_preferences(
-    foundation: State<'_, HiveoryFoundation>,
-) -> Result<TaskBoardPreferences, ApiError> {
-    let stored = foundation
-        .persistence
-        .get_setting(TASK_BOARD_PREFERENCES_SETTING)
-        .await
-        .map_err(database_error)?;
-    Ok(stored
-        .and_then(|value| serde_json::from_str::<TaskBoardPreferences>(&value).ok())
-        .map(sanitize_task_board_preferences)
-        .unwrap_or_default())
-}
-
-#[tauri::command]
-async fn hiveory_command_update_task_board_preferences(
-    request: TaskBoardPreferencesUpdate,
-    foundation: State<'_, HiveoryFoundation>,
-) -> Result<TaskBoardPreferences, ApiError> {
-    let preferences = sanitize_task_board_preferences(request.preferences);
-    let value =
-        serde_json::to_string(&preferences).map_err(|error| validation_error(error.to_string()))?;
-    foundation
-        .persistence
-        .set_setting(TASK_BOARD_PREFERENCES_SETTING, &value)
-        .await
-        .map_err(database_error)?;
-    Ok(preferences)
 }
 
 #[tauri::command]
@@ -12703,6 +12665,7 @@ pub fn run() {
             hiveory_query_agent_skills,
             hiveory_command_import_agent_skill,
             hiveory_command_create_agent_skill,
+            hiveory_command_delete_agent_skill,
             hiveory_command_toggle_agent_skill,
             hiveory_command_resolve_agent_skill_conflict,
             hiveory_query_agent_memory,
@@ -12731,6 +12694,7 @@ pub fn run() {
             hiveory_query_plugin_catalog,
             hiveory_command_import_plugin_manifest,
             hiveory_command_register_plugin_manifest,
+            hiveory_command_delete_plugin,
             hiveory_query_plugin_connections,
             hiveory_command_install_plugin,
             hiveory_command_create_plugin_connection,
@@ -12743,7 +12707,6 @@ pub fn run() {
             hiveory_query_plugin_invocations,
             hiveory_query_code_snapshot,
             hiveory_query_code_workspace_context,
-            hiveory_query_task_board_preferences,
             hiveory_query_code_workspace,
             hiveory_query_code_runs,
             hiveory_query_code_run,
@@ -12762,7 +12725,6 @@ pub fn run() {
             hiveory_command_set_code_workspace_parent,
             hiveory_command_open_code_workspace_in,
             hiveory_command_set_code_workspace_context,
-            hiveory_command_update_task_board_preferences,
             hiveory_command_remove_code_workspace,
             hiveory_command_remove_code_project,
             hiveory_command_trust_code_workspace,

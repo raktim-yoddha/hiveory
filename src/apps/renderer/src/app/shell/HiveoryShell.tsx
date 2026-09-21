@@ -42,7 +42,7 @@ import { BROWSER_VIEWPORT_PRESETS, browserViewportLabel } from '../../features/g
 import { isHiveoryDev } from '../edition'
 import { useBrowserSurfaceBlocker } from '../../features/global/browser/hooks/use-browser-surface-blocker'
 import { HiveoryGlobalSurface, type GlobalDestination } from '../../features/global/navigation/HiveoryGlobalSurface'
-import { HiveoryButton, HiveoryPageHeader } from '../../shared/ui/HiveoryDesign'
+import { HiveoryButton, HiveoryPageHeader, useHiveoryDialogs } from '../../shared/ui/HiveoryDesign'
 
 const HiveoryChat = lazy(async () => ({ default: (await import('../../features/modes/chat/views/HiveoryChat')).HiveoryChat }))
 const HiveoryCodeWorkspace = lazy(async () => ({ default: (await import('../../features/modes/code/workspace/views/HiveoryCodeWorkspace')).HiveoryCodeWorkspace }))
@@ -704,9 +704,11 @@ export function HiveoryShell() {
           onDoubleClick={handleToggleMaximize}
         >
           <div className="hiveory-brand">
-            <img className="hiveory-brand-logo" src="/hiveory-logo.png" alt="" draggable={false} />
-            <span className="hiveory-brand-name">Hiveory</span>
-            {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
+            <div className="hiveory-brand-identity">
+              <img className="hiveory-brand-logo" src="/hiveory-logo.png" alt="" draggable={false} />
+              <span className="hiveory-brand-name">Hiveory</span>
+              {isHiveoryDev && <span className="hiveory-dev-tag" title="Hiveory Dev build">DEV</span>}
+            </div>
             <button
               type="button"
               className="hiveory-icon-button hiveory-sidebar-toggle"
@@ -852,15 +854,25 @@ export function HiveoryShell() {
           } as React.CSSProperties}
         >
           <div className="hiveory-workbench-mode-slot" aria-hidden={canvasPageOpen || undefined}>
-            <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading workspace…</div>}>
-              {activeMode === 'agent' ? (
-                <HiveoryAgent embedded onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
-              ) : activeMode === 'chat' ? (
-                <HiveoryChat embedded globalDestination={globalDestination} sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
-              ) : (
-                <HiveoryCodeWorkspace embedded globalDestination={globalDestination} sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
-              )}
+            <Suspense fallback={activeMode === 'code' ? <div className="hiveory-screen-loading" role="status">Loading workspace…</div> : null}>
+              <HiveoryCodeWorkspace
+                active={activeMode === 'code'}
+                embedded
+                globalDestination={globalDestination}
+                sharedRailWidth={leftRailWidth}
+                onSharedRailWidthChange={setLeftRailWidth}
+                onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }}
+              />
             </Suspense>
+            {activeMode !== 'code' && (
+              <Suspense fallback={<div className="hiveory-screen-loading" role="status">Loading workspace…</div>}>
+                {activeMode === 'agent' ? (
+                  <HiveoryAgent embedded onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
+                ) : (
+                  <HiveoryChat embedded globalDestination={globalDestination} sharedRailWidth={leftRailWidth} onSharedRailWidthChange={setLeftRailWidth} onActivateCanvas={() => { setScreen('workspace'); setGlobalDestination(null) }} />
+                )}
+              </Suspense>
+            )}
           </div>
           {screen === 'settings' ? (
             <div className="hiveory-workbench-canvas-page"><HiveorySettings
@@ -1197,7 +1209,7 @@ function HiveoryHelp({ onOpenSettings }: { onOpenSettings: () => void }) {
       <p className="hiveory-description">Hiveory keeps projects, terminals, automation schedules, and configuration on this device. Use this guide to find the core controls.</p>
       <div className="hiveory-help-grid">
         <section><h2>Code workspace</h2><p>Open a project, then add a Browser, Terminal, or CLI pane from the plus button. Browser panes start at <code>google.com</code>. Terminals remain open until you close their pane.</p></section>
-        <section><h2>Tasks and board</h2><p>Connect GitHub, Jira, or Linear from Tasks to see live work for the selected workspace. The Workspace board in the Code sidebar footer also includes those tasks; lane placement is stored locally.</p></section>
+        <section><h2>Tasks</h2><p>Connect GitHub, Jira, or Linear from Tasks to see live work for the selected workspace.</p></section>
         <section><h2>Automations</h2><p>Automations run through Hiveory’s local scheduler. Templates are editable before or after use, and their history stays in the app.</p></section>
         <section><h2>Keyboard</h2><p><kbd>Ctrl K</kbd> opens the command palette, <kbd>Ctrl 1</kbd> to <kbd>Ctrl 3</kbd> changes mode, and <kbd>Ctrl ,</kbd> opens settings.</p></section>
       </div>
@@ -1225,6 +1237,7 @@ function HiveorySettings({
   onBackToApp: () => void
   onOpenWorkbench: () => void
 }) {
+  const { confirm, prompt } = useHiveoryDialogs()
   const [version, setVersion] = useState('0.1.0')
   const [busy, setBusy] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
@@ -1285,7 +1298,7 @@ function HiveorySettings({
 
   const restoreBackup = () =>
     action('restore', async () => {
-      if (!window.confirm('Restore will restart the application and replace its local database and artifacts. Continue?')) {
+      if (!await confirm({ title: 'Restore backup?', description: 'Restoring restarts Hiveory and replaces its local database and artifacts.', confirmLabel: 'Restore backup', intent: 'danger' })) {
         return 'Restore cancelled.'
       }
       const source = await hiveoryClient.chooseBackupSource()
@@ -1328,8 +1341,8 @@ function HiveorySettings({
       return 'Browser settings saved.'
     })
 
-  const createBrowserProfile = () => {
-    const name = window.prompt('Name for the new browser profile')?.trim()
+  const createBrowserProfile = async () => {
+    const name = (await prompt({ title: 'Create browser profile', label: 'Profile name', submitLabel: 'Create profile' }))?.trim()
     if (!name) return
     void action('browser-profile', async () => {
       const next = await hiveoryClient.browserCreateProfile({ name })
@@ -1338,8 +1351,8 @@ function HiveorySettings({
     })
   }
 
-  const deleteBrowserProfile = (profileId: string, profileName: string) => {
-    if (!window.confirm(`Remove the ${profileName} profile and its local browser data?`)) return
+  const deleteBrowserProfile = async (profileId: string, profileName: string) => {
+    if (!await confirm({ title: `Remove ${profileName}?`, description: 'This permanently removes the profile and its local browser data.', confirmLabel: 'Remove profile', intent: 'danger' })) return
     void action('browser-profile-delete', async () => {
       const next = await hiveoryClient.browserDeleteProfile({ profile_id: profileId })
       setBrowserConfiguration(next)

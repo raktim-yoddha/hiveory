@@ -12,6 +12,8 @@ import {
   type CodeWorkspaceUpdateRequest,
 } from '../../../../../shared/api/hiveory-client'
 import { useCodeWorkspaceController } from '../state/use-code-workspace-controller'
+import { useBrowserSurfaceBlocker } from '../../../../global/browser/hooks/use-browser-surface-blocker'
+import { CodeWorkspaceActivityContext } from '../state/code-workspace-activity'
 import { CodeWorkspaceRail } from '../components/CodeWorkspaceRail'
 import { CodePaneCanvas } from '../components/CodePaneCanvas'
 import { CodeDestructiveActionDialog, CodeParentWorkspaceDialog, CodeProjectSettingsDialog, CodeWorkspaceCreateDialog, CodeWorkspaceRenameDialog } from '../components/CodeWorkspaceDialogs'
@@ -20,7 +22,6 @@ import '../styles/workspace.css'
 
 const CodeSourcePanel = lazy(async () => ({ default: (await import('../components/CodeSourcePanel')).CodeSourcePanel }))
 const CodeCoordinationPanel = lazy(async () => ({ default: (await import('../components/CodeCoordinationPanel')).CodeCoordinationPanel }))
-const HiveoryWorkspaceBoard = lazy(async () => ({ default: (await import('../components/HiveoryWorkspaceBoard')).HiveoryWorkspaceBoard }))
 
 const sectionFallback = <div className="hiveory-screen-loading" role="status">Loading…</div>
 
@@ -39,6 +40,7 @@ interface HiveoryCodeWorkspaceProps {
   initialSection?: 'dashboard' | 'routines' | 'plugins' | 'skills' | 'workspace'
   children?: ReactNode
   embedded?: boolean
+  active?: boolean
   globalDestination?: 'dashboard' | 'automations' | 'plugins' | 'tasks' | null
   sharedRailWidth?: number
   onSharedRailWidthChange?: (width: number) => void
@@ -57,6 +59,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   initialWorkspaceId,
   initialSection = 'workspace',
   embedded = false,
+  active = true,
   globalDestination = null,
   sharedRailWidth,
   onSharedRailWidthChange,
@@ -84,8 +87,9 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed)
   const [sourcePanelOpen, setSourcePanelOpen] = useState(false)
   const [coordinationPanelOpen, setCoordinationPanelOpen] = useState(false)
-  const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const contextHydratedRef = useRef(false)
+  const previousActiveRef = useRef(active)
+  useBrowserSurfaceBlocker(!active, 'inactive-code-mode')
 
   const controller = useCodeWorkspaceController(activeWorkspaceId)
   const { clearWorkspace, loadWorkspace, applyPreset, requestClosePane, toggleMaximize, focusPane, setError, state } = controller
@@ -131,6 +135,11 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
   useEffect(() => {
     void refreshWorkspaces()
   }, [refreshWorkspaces])
+  useEffect(() => {
+    const wasActive = previousActiveRef.current
+    previousActiveRef.current = active
+    if (active && !wasActive) void refreshWorkspaces()
+  }, [active, refreshWorkspaces])
 
   useEffect(() => {
     if (!contextHydrated) return
@@ -341,6 +350,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
 
   // Keyboard shortcut listener
   useEffect(() => {
+    if (!active) return
     const onTidy = () => void applyPreset('tidy')
     const onApplyPreset = (event: Event) => {
       const preset = (event as CustomEvent<{ preset?: CodePanePreset }>).detail?.preset
@@ -417,10 +427,11 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
       window.removeEventListener('hiveory-apply-code-layout-preset', onApplyPreset)
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [applyPreset, focusPane, requestClosePane, setError, state.focusedPaneId, toggleMaximize])
+  }, [active, applyPreset, focusPane, requestClosePane, setError, state.focusedPaneId, toggleMaximize])
 
   return (
-    <div className={`code-workspace-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}${embedded ? ' is-shell-embedded' : ''}`}>
+    <CodeWorkspaceActivityContext.Provider value={active}>
+    <div className={`code-workspace-root ${sidebarCollapsed ? 'is-sidebar-collapsed' : ''}${embedded ? ' is-shell-embedded' : ''}${!active ? ' is-mode-inactive' : ''}`}>
       <CodeWorkspaceRail
         controller={controller}
         projects={projects}
@@ -441,7 +452,6 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         coordinationPanelOpen={coordinationPanelOpen}
         onToggleSourcePanel={handleToggleSourcePanel}
         onToggleCoordinationPanel={handleToggleCoordinationPanel}
-        onOpenWorkspaceBoard={() => setWorkspaceBoardOpen(true)}
         sharedRailWidth={sharedRailWidth}
         onSharedRailWidthChange={onSharedRailWidthChange}
         onActivateCanvas={onActivateCanvas}
@@ -505,16 +515,7 @@ export const HiveoryCodeWorkspace: React.FC<HiveoryCodeWorkspaceProps> = ({
         onConfirm={() => void handleConfirmDestructiveAction()}
       />
 
-      {workspaceBoardOpen && (
-        <Suspense fallback={sectionFallback}>
-          <HiveoryWorkspaceBoard
-            onOpenWorkspace={(workspaceId) => { handleSelectWorkspace(workspaceId); setWorkspaceBoardOpen(false) }}
-            onStartLocalWork={() => { setWorkspaceBoardOpen(false); if (activeWorkspaceId) setActiveSection('workspace'); else void handleAddProject() }}
-            onClose={() => setWorkspaceBoardOpen(false)}
-          />
-        </Suspense>
-      )}
-
     </div>
+    </CodeWorkspaceActivityContext.Provider>
   )
 }

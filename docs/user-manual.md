@@ -177,38 +177,10 @@ Tasks collect items for the selected local workspace. GitHub uses the authentica
 | External row | Opens the original provider task; it does not edit the provider. |
 | Empty state | Explains whether a source needs connection, authentication, or a changed search. |
 
-## Workspace board (Kanban)
-
-The Workspace board is Hiveory's local Kanban view. It combines local Hiveory code-run tasks with items from connected task sources for the active workspace. It has Todo, In progress, In review, and Done lanes.
-
-Moving a provider item between board lanes changes Hiveory's local board preference only. It does not update GitHub, Jira, or Linear.
-
-### Use the board
-
-1. Open **Workspace board** from the lower-left workspace tools area.
-2. Select Refresh to load current local code-run tasks and connected provider tasks.
-3. Use Search tasks to narrow cards by task identifier, title, or context.
-4. Drag a card to a lane. Confirm its new position remains after Refresh.
-5. Select a card to open its workspace or provider URL. Double-clicking a card does the same.
-6. Select the pin icon to add a card to **Pinned**.
-7. Select the Pinned line to expand its cards. Select it again to collapse back to one line.
-8. Move a test card back to its original lane and remove its pin when finished.
-
-### Board test checklist
-
-| Check | Expected result |
-| --- | --- |
-| Refresh | Current local and connected-source tasks load. |
-| Lanes | Todo, In progress, In review, and Done display counts and cards. |
-| Drag | Card status persists locally after refresh. |
-| Pin | Pinned strip stays compact until expanded. |
-| Open card | Local tasks open their workspace; provider tasks open their source URL. |
-| Empty board | Explains that a local code run or GitHub, Jira, or Linear source is needed. |
-
 ## Troubleshooting and evidence to collect
 
 If a global surface does not open from the right sidebar, record the active mode, workspace name, the exact button pressed, and a screenshot before restarting Hiveory. The expected behavior is that Dashboard, Automations, and Plugins replace only the center pane while the mode's left rail remains available.
 
 For a failed connection, record the provider name and visible error message, but never copy tokens, API keys, raw request headers, or browser cookies into a bug report.
 
-For a failed automation, open its detail panel and record the execution state, scheduled time, and visible error. For a failed task source, record the source status and whether the workspace's `gh` CLI is authenticated. For a board persistence issue, record the card title, starting lane, destination lane, and result after Refresh.
+For a failed automation, open its detail panel and record the execution state, scheduled time, and visible error. For a failed task source, record the source status and whether the workspace's `gh` CLI is authenticated.

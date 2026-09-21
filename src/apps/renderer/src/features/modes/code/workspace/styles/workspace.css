@@ -347,49 +347,6 @@
 .code-rail-pane-summary { width: 100%; display: flex; align-items: center; gap: 6px; border: 1px solid var(--hiveory-color-border-strong); border-radius: 7px; background: #1b1b1b; color: #d2d2d2; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .code-rail-pane-summary-icons { display: flex; align-items: center; gap: 3px; }.code-rail-pane-summary-icons > span { display: grid; place-items: center; width: 15px; height: 15px; border-radius: 4px; background: #292929; }.code-rail-pane-summary > svg { margin-left: auto; }
 
-.hiveory-workspace-board {
-  position: fixed;
-  z-index: 40;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: rgba(12, 12, 12, 0.98);
-  color: #f6f6f6;
-}
-
-.hiveory-workspace-board-header { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 0 16px; border-bottom: 1px solid #2c2c2c; }
-.hiveory-workspace-board-header h1 { margin: 0; font-size: 18px; }
-.hiveory-workspace-board-header input { width: min(400px, 42vw); border: 1px solid #3a3a3a; border-radius: 8px; background: #1a1a1a; color: #f6f6f6; padding: 9px 12px; }
-.hiveory-workspace-board-actions { margin-left: auto; display: flex; gap: 6px; }
-.hiveory-workspace-board-actions button, .hiveory-workspace-board-lane header button, .hiveory-workspace-board-card button { border: 0; background: transparent; color: inherit; cursor: pointer; }
-.hiveory-workspace-board-actions .hiveory-workspace-board-start, .hiveory-workspace-board-onboarding button { border: 1px solid #505050; border-radius: 6px; padding: 6px 10px; color: #f1f2f3; background: #313131; cursor: pointer; font-size: 12px; }
-.hiveory-workspace-board-actions .hiveory-workspace-board-start:hover, .hiveory-workspace-board-onboarding button:hover { border-color: #7d7d7d; background: #3e3e3e; }
-.hiveory-workspace-board-pinned { margin: 14px 16px; border: 1px dashed #3a3a3a; border-radius: 8px; color: #cccccc; }
-.hiveory-workspace-board-pinned > button { display: flex; width: 100%; align-items: center; gap: 9px; border: 0; padding: 10px 14px; color: inherit; background: transparent; cursor: pointer; text-align: left; }
-.hiveory-workspace-board-pinned > button span { color: #8e8e8e; margin-right: auto; }
-.hiveory-workspace-board-pinned.is-expanded > button svg:last-child { transform: rotate(90deg); }
-.hiveory-workspace-board-pinned-items { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px dashed #3a3a3a; padding: 9px 12px; }
-.hiveory-workspace-board-pinned-items > button { display: grid; min-width: 150px; border: 1px solid #404040; border-radius: 6px; padding: 6px 9px; color: #e9e9e9; background: transparent; cursor: pointer; text-align: left; }
-.hiveory-workspace-board-pinned-items > button:hover { border-color: #6d6d6d; background: transparent; }
-.hiveory-workspace-board-pinned-items small { color: #989898; font-size: 10px; }
-.hiveory-workspace-board-pinned-items > span { color: #8e8e8e; font-size: 12px; }
-.hiveory-workspace-board-onboarding { display: grid; gap: 6px; margin: 0 16px 14px; border: 1px solid #3a3a3a; border-radius: 8px; padding: 12px 14px; color: #d1d1d1; background: #181818; }
-.hiveory-workspace-board-onboarding strong { color: #f1f2f3; font-size: 13px; }.hiveory-workspace-board-onboarding span { color: #a3a3a3; font-size: 12px; }.hiveory-workspace-board-onboarding button { justify-self: start; margin-top: 3px; }
-.hiveory-workspace-board-lanes { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; padding: 0 16px 16px; min-height: 0; flex: 1; overflow: auto; }
-.hiveory-workspace-board-lane { min-height: 360px; border: 1px solid color-mix(in srgb, var(--board-status-color) 65%, var(--hiveory-color-border-strong)); border-radius: 9px; background: #181818; overflow: hidden; }
-.hiveory-workspace-board-lane > header { display: flex; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid #2e2e2e; }
-.hiveory-board-status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--board-status-color); }
-.hiveory-workspace-board-lane > header > span:not(.hiveory-board-status-dot) { color: #969696; font-size: 12px; }
-.hiveory-workspace-board-lane > header button { margin-left: auto; }
-.hiveory-workspace-board-cards { padding: 8px; display: grid; gap: 8px; }
-.hiveory-workspace-board-card { border: 1px solid var(--hiveory-color-border-strong); border-radius: 7px; background: transparent; padding: 10px; display: grid; gap: 8px; }
-.hiveory-workspace-board-card:hover { border-color: #6d6d6d; background: transparent; }
-.hiveory-workspace-board-card > button { display: flex; align-items: center; gap: 8px; font-weight: 650; text-align: left; }
-.hiveory-workspace-board-card > small { color: #9c9c9c; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hiveory-workspace-board-card > div { display: flex; align-items: center; gap: 6px; color: #9c9c9c; font-size: 12px; }
-.hiveory-workspace-board-card > div span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
-.hiveory-workspace-board-empty { min-height: 92px; border: 1px dashed #3a3a3a; border-radius: 7px; display: grid; place-items: center; color: #8e8e8e; font-size: 13px; }
-
 .hiveory-tasks-page { height: 100%; padding: 20px; overflow: auto; background: #121212; color: #f7f7f7; }
 .hiveory-screen-loading { height: 100%; display: grid; place-items: center; color: #b2b2b2; background: #121212; }
 .hiveory-tasks-header { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
@@ -8127,7 +8084,6 @@
 .hiveory-task-source-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }.hiveory-task-source-chip { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-height: 58px; border: 1px solid #323232; border-radius: 8px; padding: 8px; background: #181818; }.hiveory-task-source-chip > span { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #3e3e3e; border-radius: 6px; color: #e2e2e4; background: #2a2a2a; font-size: 11px; font-weight: 700; }.hiveory-task-source-chip > div { display: grid; min-width: 0; gap: 3px; }.hiveory-task-source-chip strong { color: #efeff0; font-size: 12px; }.hiveory-task-source-chip small { overflow: hidden; color: #9b9b9b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.hiveory-task-source-chip button { display: grid; width: 27px; height: 27px; place-items: center; border: 1px solid #484848; border-radius: 6px; color: #e0e0e0; background: #2b2b2b; cursor: pointer; }.hiveory-task-source-chip button:hover { background: #3d3d3d; }.hiveory-task-source-chip .hiveory-task-source-remove { border-color: transparent; color: #9c9c9c; background: transparent; }
 .hiveory-task-sources .hiveory-tasks-provider-tabs { margin: 2px 0 0; }.hiveory-task-sources .hiveory-tasks-toolbar { margin: 0; }.hiveory-task-sources .hiveory-tasks-table { flex: 1; min-height: 260px; margin-top: 0; background: #121212; }.hiveory-task-sources .hiveory-task-row { text-decoration: none; }.hiveory-task-sources .hiveory-task-row > svg { color: #888888; }.hiveory-task-open-workspace { align-self: flex-start; border: 1px solid #4a4a4a; border-radius: 7px; padding: 7px 10px; color: #e6e6e8; background: #272727; cursor: pointer; }.hiveory-task-source-modal { width: min(510px, calc(100vw - 28px)); }.hiveory-task-source-modal > label { display: grid; gap: 5px; margin-top: 10px; color: #b5b5b5; font-size: 12px; }.hiveory-task-source-modal input { border: 1px solid #3e3e3e; border-radius: 6px; padding: 8px 9px; color: #f1f1f2; background: #121212; }.hiveory-task-source-modal > p { color: #a7a7a7; font-size: 12px; line-height: 1.5; }
 @media (max-width: 760px) { .hiveory-task-sources { padding: 15px; }.hiveory-task-source-strip { grid-template-columns: 1fr; }.hiveory-task-sources .hiveory-tasks-columns, .hiveory-task-sources .hiveory-task-row { grid-template-columns: 82px minmax(160px, 1fr) 100px; }.hiveory-task-sources .hiveory-tasks-columns > :nth-child(3), .hiveory-task-sources .hiveory-tasks-columns > :nth-child(5), .hiveory-task-sources .hiveory-task-row > :nth-child(3), .hiveory-task-sources .hiveory-task-row > :nth-child(5) { display: none; } }
-.hiveory-workspace-board { background: #0d0d0d; }
 
 /* Global Agent surfaces use the complete content canvas. */
 .agent-mode-main.is-global-surface .agent-sub-sidebar,
