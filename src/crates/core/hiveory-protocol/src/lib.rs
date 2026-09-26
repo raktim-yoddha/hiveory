@@ -1316,6 +1316,63 @@ pub struct CodeTerminalSummary {
     pub updated_at_unix_ms: i64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeAgentPaneStatusState {
+    Starting,
+    Working,
+    Waiting,
+    Blocked,
+    Idle,
+    Completed,
+    Exited,
+    Failed,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CodeAgentPaneStatusSource {
+    Host,
+    CliReport,
+    AdapterHook,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeAgentPaneStatus {
+    pub session_id: String,
+    pub workspace_id: String,
+    pub terminal_id: Option<String>,
+    pub pane_id: Option<String>,
+    pub run_id: Option<String>,
+    pub task_id: Option<String>,
+    pub participant_address: Option<String>,
+    pub adapter_id: Option<String>,
+    pub state: CodeAgentPaneStatusState,
+    pub source: CodeAgentPaneStatusSource,
+    pub summary: Option<String>,
+    pub sequence: u64,
+    pub updated_at_unix_ms: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeAgentPaneStatusReportRequest {
+    pub state: CodeAgentPaneStatusState,
+    pub summary: Option<String>,
+    pub sequence: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CodeAgentPaneStatusQuery {
+    pub workspace_id: String,
+    pub after_sequence: Option<u64>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CodeCliSessionIntegration {
@@ -3631,6 +3688,11 @@ pub fn export_typescript_bindings(path: &Path) -> Result<(), Box<dyn std::error:
     CodeTerminalState::export_all(&config)?;
     CodeAgentLaunchMode::export_all(&config)?;
     CodeTerminalSummary::export_all(&config)?;
+    CodeAgentPaneStatusState::export_all(&config)?;
+    CodeAgentPaneStatusSource::export_all(&config)?;
+    CodeAgentPaneStatus::export_all(&config)?;
+    CodeAgentPaneStatusReportRequest::export_all(&config)?;
+    CodeAgentPaneStatusQuery::export_all(&config)?;
     CodeCliSessionIntegration::export_all(&config)?;
     CodeTerminalStartRequest::export_all(&config)?;
     CodeTerminalInputRequest::export_all(&config)?;

@@ -90,6 +90,9 @@ enum HostRequest {
     },
     List,
     Snapshot(CodeTerminalSnapshotQuery),
+    /// Current PTY bytes only; excludes persisted scrollback from an earlier
+    /// process owning the same durable terminal ID.
+    LiveSnapshot(CodeTerminalSnapshotQuery),
     Subscribe(CodeTerminalSubscribeRequest),
     Write(CodeTerminalInputRequest),
     Resize(CodeTerminalResizeRequest),
@@ -243,6 +246,22 @@ impl HiveoryTerminalHostClient {
         query: &CodeTerminalSnapshotQuery,
     ) -> Result<CodeTerminalSnapshot, HiveoryTerminalHostError> {
         match self.request(HostRequest::Snapshot(query.clone())).await? {
+            HostResponse::Snapshot(snapshot) => Ok(snapshot),
+            other => Err(unexpected_response(other)),
+        }
+    }
+
+    /// Reads only output from the currently running PTY. Host health checks
+    /// use this so a fatal marker in an earlier session's scrollback cannot
+    /// poison a relaunched terminal with the same durable ID.
+    pub async fn live_snapshot(
+        &self,
+        query: &CodeTerminalSnapshotQuery,
+    ) -> Result<CodeTerminalSnapshot, HiveoryTerminalHostError> {
+        match self
+            .request(HostRequest::LiveSnapshot(query.clone()))
+            .await?
+        {
             HostResponse::Snapshot(snapshot) => Ok(snapshot),
             other => Err(unexpected_response(other)),
         }
@@ -910,6 +929,15 @@ impl HostService {
         self.runtime.list().map_err(Into::into)
     }
 
+    fn live_snapshot(
+        &self,
+        query: CodeTerminalSnapshotQuery,
+    ) -> Result<CodeTerminalSnapshot, HiveoryTerminalHostError> {
+        self.runtime
+            .snapshot(&query.terminal_id)
+            .map_err(Into::into)
+    }
+
     async fn snapshot(
         &self,
         query: CodeTerminalSnapshotQuery,
@@ -1018,6 +1046,14 @@ impl HostService {
                 )
                 .await
                 .map_err(|error| HiveoryTerminalHostError::Operation(error.to_string()))?;
+            let _ = self
+                .persistence
+                .update_code_agent_pane_status_for_terminal(
+                    &request.terminal_id,
+                    hiveory_protocol::CodeAgentPaneStatusState::Exited,
+                    "Coding-agent terminal was stopped.",
+                )
+                .await;
         }
         Ok(stopped)
     }
@@ -1072,6 +1108,29 @@ async fn history_worker(
                 .map(|encrypted| (terminal_id, encrypted)),
             HistoryWork::Event(event) => {
                 let terminal_id = event.terminal_id.clone();
+                if event.kind == CodeTerminalEventKind::Exited {
+                    let terminal_state = hiveory_protocol::CodeTerminalState::Exited;
+                    let status_state = if event.exit_code.unwrap_or_default() == 0 {
+                        hiveory_protocol::CodeAgentPaneStatusState::Exited
+                    } else {
+                        hiveory_protocol::CodeAgentPaneStatusState::Failed
+                    };
+                    let status_summary = match event.exit_code {
+                        Some(0) => "Coding-agent terminal exited.".to_owned(),
+                        Some(code) => format!("Coding-agent terminal exited with code {code}."),
+                        None => "Coding-agent terminal ended unexpectedly.".to_owned(),
+                    };
+                    let _ = persistence
+                        .finish_code_terminal(&terminal_id, terminal_state, event.exit_code)
+                        .await;
+                    let _ = persistence
+                        .update_code_agent_pane_status_for_terminal(
+                            &terminal_id,
+                            status_state,
+                            status_summary,
+                        )
+                        .await;
+                }
                 if !history_enabled
                     .read()
                     .await
@@ -1096,25 +1155,14 @@ async fn history_worker(
                     serde_json::to_vec(&event).unwrap_or_default()
                 };
                 if let Ok(encrypted) = cipher.encrypt(&terminal_id, &payload) {
-                    if persistence
+                    let _ = persistence
                         .append_code_terminal_history(
                             &terminal_id,
                             direction,
                             event.sequence,
                             &encrypted,
                         )
-                        .await
-                        .is_ok()
-                        && event.kind == CodeTerminalEventKind::Exited
-                    {
-                        let _ = persistence
-                            .finish_code_terminal(
-                                &terminal_id,
-                                hiveory_protocol::CodeTerminalState::Exited,
-                                event.exit_code,
-                            )
-                            .await;
-                    }
+                        .await;
                 }
                 continue;
             }
@@ -1261,6 +1309,10 @@ async fn handle_connection(
             Err(error) => write_error(&mut writer, &error).await?,
         },
         HostRequest::Snapshot(query) => match service.snapshot(query).await {
+            Ok(snapshot) => write_ok(&mut writer, HostResponse::Snapshot(snapshot)).await?,
+            Err(error) => write_error(&mut writer, &error).await?,
+        },
+        HostRequest::LiveSnapshot(query) => match service.live_snapshot(query) {
             Ok(snapshot) => write_ok(&mut writer, HostResponse::Snapshot(snapshot)).await?,
             Err(error) => write_error(&mut writer, &error).await?,
         },

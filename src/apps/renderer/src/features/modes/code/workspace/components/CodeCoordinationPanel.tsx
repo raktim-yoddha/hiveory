@@ -25,6 +25,7 @@ import {
   type CodeDispatch,
   type CodeGateState,
   type CodeMailboxDelivery,
+  type CodeAgentPaneStatus,
   type CodeQuestion,
   type CodeRunDetail,
   type CodeRunSummary,
@@ -50,6 +51,11 @@ function taskStateLabel(task: CodeTask): string {
   return task.state.replaceAll('_', ' ')
 }
 
+function paneStatusSourceLabel(source: CodeAgentPaneStatus['source']): string {
+  if (source === 'adapter_hook') return 'OpenCode hook'
+  return source === 'cli_report' ? 'reported' : 'host observed'
+}
+
 export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ workspace, onClose }) => {
   const [runs, setRuns] = useState<CodeRunSummary[]>([])
   const [adapters, setAdapters] = useState<CodeAdapterSummary[]>([])
@@ -57,6 +63,7 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
   const [detail, setDetail] = useState<CodeRunDetail | null>(null)
   const [mailbox, setMailbox] = useState<CodeMailboxDelivery[]>([])
   const [gates, setGates] = useState<CodeDecisionGate[]>([])
+  const [paneStatuses, setPaneStatuses] = useState<CodeAgentPaneStatus[]>([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -77,10 +84,12 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
     setLoading(true)
     setError(null)
     try {
-      const [nextRuns, snapshot] = await Promise.all([
+      const [nextRuns, snapshot, nextPaneStatuses] = await Promise.all([
         hiveoryClient.codeRuns(workspace.id),
         hiveoryClient.codeSnapshot(),
+        hiveoryClient.codeAgentPaneStatuses(workspace.id),
       ])
+      setPaneStatuses(nextPaneStatuses)
       setRuns(nextRuns)
       setAdapters(snapshot.adapters)
       setSelectedAdapterId((current) => snapshot.adapters.some((adapter) => adapter.id === current) ? current : snapshot.adapters.find((adapter) => adapter.detected)?.id ?? snapshot.adapters[0]?.id ?? current)
@@ -124,6 +133,15 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
     setDetail(null)
     void loadRuns()
   }, [loadRuns])
+
+  useEffect(() => {
+    const refreshPaneStatuses = () => {
+      void hiveoryClient.codeAgentPaneStatuses(workspace.id).then(setPaneStatuses).catch(() => undefined)
+    }
+    refreshPaneStatuses()
+    const interval = window.setInterval(refreshPaneStatuses, 3_000)
+    return () => window.clearInterval(interval)
+  }, [workspace.id])
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -311,6 +329,11 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
 
         <HiveoryButton type="button" intent="secondary" className="code-coordination-create-trigger" onClick={() => setCreateOpen(true)}><Plus size={13} aria-hidden="true" />New run</HiveoryButton>
 
+        <section className="code-coordination-detail" aria-label="Coding-agent pane statuses">
+          <div className="code-coordination-block-heading"><Activity size={13} aria-hidden="true" /><span>Agent panes</span><small>{paneStatuses.length} tracked</small></div>
+          <div className="code-coordination-worker-list">{paneStatuses.length === 0 ? <p>No Hiveory coding-agent panes are tracked in this workspace.</p> : paneStatuses.slice(0, 8).map((status) => <div className="code-coordination-worker-row" key={status.session_id}><span className={`code-coordination-task-dot ${status.state}`} /><div><strong>{status.task_id ? detail?.tasks.find((task) => task.id === status.task_id)?.title ?? 'Assigned agent pane' : 'Coding-agent pane'}</strong><small>{status.adapter_id ?? 'coding agent'} · {paneStatusSourceLabel(status.source)} · {new Date(status.updated_at_unix_ms).toLocaleTimeString()}</small>{status.summary && <small>{status.summary}</small>}</div><span className={`code-coordination-worker-state ${status.state}`}>{status.state.replaceAll('_', ' ')}</span></div>)}</div>
+        </section>
+
         {detail && <section className="code-coordination-detail" aria-labelledby="code-coordination-detail-title">
           <div className="code-coordination-detail-header"><div><span className="code-coordination-eyebrow">Selected run</span><h2 id="code-coordination-detail-title">{detail.summary.title}</h2><p>{detail.summary.objective}</p></div><span className={`code-coordination-run-badge ${detail.summary.state}`}>{runStateLabel(detail.summary.state)}</span></div>
           <div className="code-coordination-actions">
@@ -323,8 +346,7 @@ export const CodeCoordinationPanel: React.FC<CodeCoordinationPanelProps> = ({ wo
           {detail.proposal && <div className="code-coordination-proposal"><div><strong>Structured task proposal</strong><span>{detail.proposal.tasks.length} tasks · review before accepting</span></div><button type="button" onClick={() => void acceptDag()} disabled={busy !== null}><Check size={12} aria-hidden="true" />Accept</button></div>}
 
           <div className="code-coordination-block-heading"><Bot size={13} aria-hidden="true" /><span>Workers</span><small>{activeDispatches} active</small></div>
-          <div className="code-coordination-worker-list">{detail.dispatches.length === 0 ? <p>No worker dispatches yet. Start the run after adding tasks.</p> : detail.dispatches.slice(0, 8).map((dispatch) => <WorkerRow key={dispatch.id} dispatch={dispatch} task={detail.tasks.find((task) => task.id === dispatch.task_id)} busy={busy !== null} onCancel={() => void runAction(`cancel-${dispatch.id}`, () => hiveoryClient.cancelCodeDispatch({ run_id: detail.summary.id, task_id: dispatch.task_id, dispatch_id: dispatch.id, lease_generation: dispatch.lease_generation }))} onResume={() => void runAction(`resume-${dispatch.id}`, () => hiveoryClient.resumeCodeDispatch({ run_id: detail.summary.id, task_id: dispatch.task_id, dispatch_id: dispatch.id, lease_generation: dispatch.lease_generation }))} />)}</div>
-
+          <div className="code-coordination-worker-list">{detail.dispatches.length === 0 ? <p>No managed worker dispatches yet.</p> : detail.dispatches.slice(0, 8).map((dispatch) => <WorkerRow key={dispatch.id} dispatch={dispatch} task={detail.tasks.find((task) => task.id === dispatch.task_id)} busy={busy !== null} onCancel={() => void runAction(`cancel-${dispatch.id}`, () => hiveoryClient.cancelCodeDispatch({ run_id: detail.summary.id, task_id: dispatch.task_id, dispatch_id: dispatch.id, lease_generation: dispatch.lease_generation }))} onResume={() => void runAction(`resume-${dispatch.id}`, () => hiveoryClient.resumeCodeDispatch({ run_id: detail.summary.id, task_id: dispatch.task_id, dispatch_id: dispatch.id, lease_generation: dispatch.lease_generation }))} />)}</div>
           <div className="code-coordination-block-heading"><Activity size={13} aria-hidden="true" /><span>Task readiness</span><small>{detail.tasks.length} tasks</small></div>
           <div className="code-coordination-task-list">{detail.tasks.length === 0 ? <p>Add a manual task or accept the proposed DAG.</p> : detail.tasks.map((task) => <div key={task.id}><span className={`code-coordination-task-dot ${task.state}`} /><div><strong>{task.title}</strong><small>{task.client_id} · {taskStateLabel(task)}</small></div><span>{task.attempt ? `attempt ${task.attempt}` : 'not started'}</span></div>)}</div>
 

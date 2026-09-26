@@ -86,6 +86,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
 
   const terminalSummary = node.resource_id ? state.terminals.get(node.resource_id) : undefined
   const previewSummary = node.resource_id ? state.previews.get(node.resource_id) : undefined
+  const agentStatus = node.kind === 'coding_agent' ? state.agentPaneStatuses.get(node.pane_id) : undefined
   const handleVoiceStateChange = useCallback((nextState: CodeTerminalVoiceState | null) => {
     setVoiceState(nextState)
   }, [])
@@ -235,6 +236,7 @@ export const CodePaneLeaf: React.FC<CodePaneLeafProps> = ({
           isFocused={isFocused}
           isMaximized={isMaximized}
           terminalState={terminalSummary?.state}
+          agentStatus={agentStatus}
           terminalHistoryEnabled={historyEnabled}
           terminalHistoryBusy={historyBusy}
           voiceState={hasTerminalVoice ? voiceState : null}

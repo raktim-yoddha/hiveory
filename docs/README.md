@@ -6,6 +6,7 @@ This directory separates current product documentation from historical engineeri
 
 | Area | Document | Maintained with |
 | --- | --- | --- |
+| Feature status | [Feature reference](features/README.md) | user-visible behavior, implemented status, or a documented proposal |
 | System boundaries | [Foundation architecture](architecture/hiveory-foundation.md) | application modes, service ownership, or trust boundaries |
 | Public/private editions | [Private Dev boundary](architecture/private-feature-boundary.md) | Dev-only sibling checkout, production isolation, private prototypes, and boundary audit |
 | Renderer UI | [Design system](design-system/README.md) | tokens, densities, shared primitives, accessibility, and private Dev exceptions |
@@ -30,17 +31,17 @@ These files explain why the current system exists. They are retained as point-in
 - [Design specifications](superpowers/specs/README.md) preserve dated design proposals.
 - [Release checklists](builds/README.md) preserve evidence and manual gates from specific milestones.
 - [Verification evidence](verification/README.md) preserves results captured at a particular commit or phase.
-- [`tauri-agent-super-app-prd.md`](../tauri-agent-super-app-prd.md) is the original planning brief and is superseded by the current README and architecture documents for implemented behavior.
 
 Historical records can contain old paths, commands, scope statements, or deferred work. Use the current documentation above before making implementation decisions.
 
 ## Maintenance rules
 
-1. Update the root README for user-visible capability or setup changes.
-2. Update the owning architecture document in the same change as a boundary, persistence, security, or lifecycle change.
-3. Add an ADR when responsibility, authority, or a lasting technical constraint changes.
-4. Keep historical records intact except for broken links, factual annotations, or corrections that do not rewrite the original decision.
-5. After documentation moves or public/private changes, run `pnpm verify`,
+1. Consult [the feature reference](features/README.md) for feature questions. Update the affected implemented feature page when behavior changes; keep planned proposals clearly uncommitted and promote shipped work in the same change.
+2. Update the root README for user-visible capability or setup changes.
+3. Update the owning architecture document in the same change as a boundary, persistence, security, or lifecycle change.
+4. Add an ADR when responsibility, authority, or a lasting technical constraint changes.
+5. Keep historical records intact except for broken links, factual annotations, or corrections that do not rewrite the original decision.
+6. After documentation moves or public/private changes, run `pnpm verify`,
    `pnpm audit:identity`, and `pnpm audit:references`; also run
    `pnpm audit:private-boundary` when the edition boundary is affected.
-6. Never describe a planned or simulated flow as implemented. State provider, credential, operating-system, and local-runtime requirements explicitly.
+7. Never describe a planned or simulated flow as implemented. State provider, credential, operating-system, and local-runtime requirements explicitly.

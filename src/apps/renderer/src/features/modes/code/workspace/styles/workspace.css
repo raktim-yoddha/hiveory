@@ -612,7 +612,37 @@
   border-radius: 50%;
   background-color: var(--code-green);
   display: inline-block;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--code-green) 40%, transparent);
+}
+
+/* Coding-agent dots reflect authenticated lifecycle state, not generic PTY availability. */
+.code-live-dot.is-agent-status.is-idle,
+.code-live-dot.is-agent-status.is-unknown {
+  background-color: var(--code-text-dim);
+  box-shadow: none;
+}
+
+.code-live-dot.is-agent-status.is-starting,
+.code-live-dot.is-agent-status.is-waiting {
+  background-color: var(--code-amber);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--code-amber) 40%, transparent);
+}
+
+.code-live-dot.is-agent-status.is-working {
+  background-color: var(--code-green);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--code-green) 40%, transparent);
+}
+
+.code-live-dot.is-agent-status.is-blocked,
+.code-live-dot.is-agent-status.is-failed,
+.code-live-dot.is-agent-status.is-exited {
+  background-color: var(--code-red);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--code-red) 40%, transparent);
+}
+
+.code-live-dot.is-agent-status.is-completed {
+  background-color: var(--code-green);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--code-green) 40%, transparent);
 }
 
 /* ==========================================================================
@@ -1002,6 +1032,23 @@
   color: #f4f4f4;
   font-size: 12px;
 }
+
+.code-pane-agent-status {
+  flex: 0 0 auto;
+  color: var(--code-text-dim);
+  font-size: var(--hiveory-font-metadata-size);
+  font-weight: 600;
+  line-height: var(--hiveory-font-metadata-line);
+  text-transform: capitalize;
+}
+
+.code-pane-agent-status.is-starting,
+.code-pane-agent-status.is-waiting { color: var(--code-amber); }
+.code-pane-agent-status.is-working,
+.code-pane-agent-status.is-completed { color: var(--code-green); }
+.code-pane-agent-status.is-blocked,
+.code-pane-agent-status.is-failed,
+.code-pane-agent-status.is-exited { color: var(--code-red); }
 
 .code-pane-header-actions {
   display: flex;

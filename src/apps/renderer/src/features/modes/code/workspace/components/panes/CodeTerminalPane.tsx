@@ -11,6 +11,7 @@ import {
 import { readClipboardText, writeClipboardText } from '../../../../../../shared/clipboard'
 import { useSpeechDictation } from '../../../../../../shared/speech-dictation'
 import { getTerminalShortcutAction } from '../../../../../../shared/terminal-shortcuts'
+import { useCodeWorkspaceActive } from '../../state/code-workspace-activity'
 
 export type CodeTerminalVoiceState = {
   supported: boolean
@@ -64,6 +65,8 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const reflowRef = useRef<(() => void) | null>(null)
+  const workspaceActive = useCodeWorkspaceActive()
   const summaryRef = useRef(summary)
   summaryRef.current = summary
   const [isInterrupted, setIsInterrupted] = useState(
@@ -208,15 +211,42 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
       return false
     })
 
+    let renderFrame: number | null = null
+    let rendererRepairPending = false
+    const refresh = () => {
+      if (disposed || !termRef.current) return
+      try {
+        if (rendererRepairPending) {
+          // xterm's canvas texture atlas can retain stale glyph rows after a
+          // scroll/reflow in a split WebView. Rebuild it once per frame before
+          // painting the visible rows; this never changes the PTY geometry.
+          termRef.current.clearTextureAtlas()
+          rendererRepairPending = false
+        }
+        termRef.current.refresh(0, Math.max(0, termRef.current.rows - 1))
+      } catch {
+        // xterm can be disposed while a queued browser frame is running.
+      }
+    }
+    const scheduleRefresh = (repairRenderer = false) => {
+      rendererRepairPending ||= repairRenderer
+      if (renderFrame !== null) return
+      renderFrame = window.requestAnimationFrame(() => {
+        renderFrame = null
+        refresh()
+      })
+    }
     const fit = () => {
       if (disposed || !fitAddonRef.current || !termRef.current) return
+      const bounds = container.getBoundingClientRect()
+      if (bounds.width < 4 || bounds.height < 4) return
       try {
         fitAddonRef.current.fit()
+        scheduleRefresh()
       } catch {
         // xterm can be measured before the pane has entered the layout tree.
       }
     }
-    window.requestAnimationFrame(fit)
 
     const writeSnapshot = (outputBase64: string) => {
       if (!outputBase64 || disposed) return
@@ -322,11 +352,20 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         })
     })
 
+    let lastDimensions: string | null = null
+    let lastBounds: string | null = null
     const resize = () => {
-      fit()
-      if (!sessionActive || !termRef.current || disposed) return
+      if (disposed || !termRef.current) return
       const bounds = container.getBoundingClientRect()
       if (bounds.width < 4 || bounds.height < 4) return
+      const boundsKey = `${Math.round(bounds.width)}x${Math.round(bounds.height)}`
+      if (boundsKey === lastBounds) {
+        scheduleRefresh()
+        return
+      }
+      lastBounds = boundsKey
+      fit()
+      if (!sessionActive || !termRef.current) return
       const cols = Math.max(1, Math.min(500, termRef.current.cols))
       const rows = Math.max(1, Math.min(500, termRef.current.rows))
       const dimensions = `${cols}x${rows}`
@@ -347,24 +386,40 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
         }
       })
     }
-    let lastDimensions: string | null = null
+    const reflow = () => {
+      lastBounds = null
+      resize()
+      scheduleRefresh()
+    }
+    reflowRef.current = reflow
     let resizeTimer: number | null = null
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
       if (resizeTimer !== null) window.clearTimeout(resizeTimer)
       resizeTimer = window.setTimeout(resize, 120)
     })
+    const scrollListener = term.onScroll(() => scheduleRefresh(true))
+    const reflowWhenVisible = () => {
+      if (!document.hidden) reflow()
+    }
     resizeObserver?.observe(container)
-    window.requestAnimationFrame(resize)
+    window.addEventListener('focus', reflowWhenVisible)
+    document.addEventListener('visibilitychange', reflowWhenVisible)
+    window.requestAnimationFrame(reflow)
 
     return () => {
       disposed = true
       snapshotReady = false
       dataListener.dispose()
+      scrollListener.dispose()
       unsubscribe()
       if (resizeTimer !== null) window.clearTimeout(resizeTimer)
+      if (renderFrame !== null) window.cancelAnimationFrame(renderFrame)
       if (ignoreBrowserPasteTimer !== null) window.clearTimeout(ignoreBrowserPasteTimer)
       resizeObserver?.disconnect()
+      window.removeEventListener('focus', reflowWhenVisible)
+      document.removeEventListener('visibilitychange', reflowWhenVisible)
       container.removeEventListener('paste', handlePaste, true)
+      if (reflowRef.current === reflow) reflowRef.current = null
       term.dispose()
       termRef.current = null
       fitAddonRef.current = null
@@ -372,6 +427,12 @@ export const CodeTerminalPane: React.FC<CodeTerminalPaneProps> = ({
   // A status event is informational. Recreating xterm on it clears the live
   // buffer during a rapid resize or process transition.
   }, [terminalId])
+
+  useEffect(() => {
+    if (!workspaceActive) return
+    const frame = window.requestAnimationFrame(() => reflowRef.current?.())
+    return () => window.cancelAnimationFrame(frame)
+  }, [workspaceActive])
 
   return (
     <div className="code-terminal-pane">

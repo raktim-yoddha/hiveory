@@ -2,6 +2,7 @@ import type {
   CodePaneLayout,
   CodeTerminalSummary,
   CodePreviewSummary,
+  CodeAgentPaneStatus,
 } from '../../../../../shared/api/hiveory-client'
 
 export interface CodeWorkspaceState {
@@ -14,6 +15,7 @@ export interface CodeWorkspaceState {
   maximizedPaneId: string | null
   terminals: Map<string, CodeTerminalSummary>
   previews: Map<string, CodePreviewSummary>
+  agentPaneStatuses: Map<string, CodeAgentPaneStatus>
   isMutating: boolean
   error: string | null
   confirmClosePane: {
@@ -34,6 +36,7 @@ export type CodeWorkspaceAction =
   | { type: 'SET_TERMINAL'; terminal: CodeTerminalSummary }
   | { type: 'REMOVE_TERMINAL'; terminalId: string }
   | { type: 'SET_PREVIEW'; preview: CodePreviewSummary }
+  | { type: 'SET_AGENT_PANE_STATUSES'; statuses: CodeAgentPaneStatus[] }
   | { type: 'SET_CONFIRM_CLOSE'; confirm: CodeWorkspaceState['confirmClosePane'] }
   | { type: 'SET_MUTATING'; isMutating: boolean }
   | { type: 'SET_ERROR'; error: string | null }
@@ -47,6 +50,7 @@ export const initialCodeWorkspaceState: CodeWorkspaceState = {
   maximizedPaneId: null,
   terminals: new Map(),
   previews: new Map(),
+  agentPaneStatuses: new Map(),
   isMutating: false,
   error: null,
   confirmClosePane: null,
@@ -77,6 +81,7 @@ export function codeWorkspaceReducer(
         maximizedPaneId: null,
         terminals: new Map(),
         previews: new Map(),
+        agentPaneStatuses: new Map(),
         isMutating: false,
         error: null,
         confirmClosePane: null,
@@ -97,6 +102,7 @@ export function codeWorkspaceReducer(
         maximizedPaneId: action.layout.maximized_pane_id ?? null,
         terminals: termMap,
         previews: prevMap,
+        agentPaneStatuses: state.agentPaneStatuses,
         error: null,
       }
     }
@@ -145,6 +151,16 @@ export function codeWorkspaceReducer(
       return {
         ...state,
         previews: prevMap,
+      }
+    }
+    case 'SET_AGENT_PANE_STATUSES': {
+      return {
+        ...state,
+        agentPaneStatuses: new Map(
+          action.statuses
+            .filter((status) => status.pane_id)
+            .map((status) => [status.pane_id!, status]),
+        ),
       }
     }
     case 'SET_CONFIRM_CLOSE': {

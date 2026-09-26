@@ -256,6 +256,9 @@ export type CodeManagedWorktreeState = 'provisioning' | 'ready' | 'cleanup_pendi
 export type CodeOrchestrationMessageKind = 'status' | 'heartbeat' | 'question' | 'answer' | 'escalation' | 'progress' | 'completion'
 export type CodeOrchestrationEventOrigin = 'host' | 'worker'
 export type CodeParticipantKind = 'coordinator' | 'worker' | 'user' | 'system'
+export type CodeAgentPaneStatusState = 'starting' | 'working' | 'waiting' | 'blocked' | 'idle' | 'completed' | 'exited' | 'failed' | 'unknown'
+export type CodeAgentPaneStatusSource = 'host' | 'cli_report' | 'adapter_hook'
+export type CodeAgentPaneStatus = { session_id: string; workspace_id: string; terminal_id: string | null; pane_id: string | null; run_id: string | null; task_id: string | null; participant_address: string | null; adapter_id: string | null; state: CodeAgentPaneStatusState; source: CodeAgentPaneStatusSource; summary: string | null; sequence: number; updated_at_unix_ms: number }
 export type CodeParticipant = { id: string; run_id: string; address: string; kind: CodeParticipantKind; display_name: string; active: boolean; created_at_unix_ms: number; updated_at_unix_ms: number }
 export type CodeMailboxDelivery = { id: string; run_id: string; sender_address: string; recipient_address: string; kind: CodeOrchestrationMessageKind; payload: string; thread_id: string | null; sequence: number; acknowledged: boolean; created_at_unix_ms: number; acknowledged_at_unix_ms: number | null }
 export type CodeMailboxSendRequest = { run_id: string; sender_address: string; recipient_address: string; kind: CodeOrchestrationMessageKind; payload: string; thread_id: string | null; client_request_id?: string | null }
@@ -1890,6 +1893,10 @@ export const hiveoryClient = {
   async codeRuns(workspaceId?: string): Promise<CodeRunSummary[]> {
     if (hiveoryIsTauri) return tauriQuery<CodeRunSummary[]>('hiveory_query_code_runs', { workspaceId: workspaceId ?? null })
     return [...previewCodeRuns.values()].filter((detail) => !workspaceId || detail.summary.workspace_id === workspaceId).map((detail) => structuredClone(detail.summary)).sort((a, b) => b.updated_at_unix_ms - a.updated_at_unix_ms)
+  },
+  async codeAgentPaneStatuses(workspaceId: string): Promise<CodeAgentPaneStatus[]> {
+    if (hiveoryIsTauri) return tauriQuery<CodeAgentPaneStatus[]>('hiveory_query_code_agent_pane_statuses', { workspaceId })
+    return []
   },
   async codeRun(runId: string): Promise<CodeRunDetail> {
     if (hiveoryIsTauri) return tauriQuery<CodeRunDetail>('hiveory_query_code_run', { runId })

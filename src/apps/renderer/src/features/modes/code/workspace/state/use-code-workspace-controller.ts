@@ -12,6 +12,7 @@ import {
   type CodeTerminalKind,
   type CodeTerminalSummary,
   type CodePreviewSummary,
+  type CodeAgentPaneStatus,
   type BrowserRuntimeState,
   type CodeWorkspaceDetail,
 } from '../../../../../shared/api/hiveory-client'
@@ -114,6 +115,16 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     dispatch({ type: 'SET_PREVIEW', preview })
   }, [])
 
+  const commitAgentPaneStatuses = useCallback((statuses: CodeAgentPaneStatus[]) => {
+    const agentPaneStatuses = new Map(
+      statuses
+        .filter((status) => status.pane_id)
+        .map((status) => [status.pane_id!, status]),
+    )
+    stateRef.current = { ...stateRef.current, agentPaneStatuses }
+    dispatch({ type: 'SET_AGENT_PANE_STATUSES', statuses })
+  }, [])
+
   const updatePreviewState = useCallback((browserState: BrowserRuntimeState) => {
     const currentPreview = stateRef.current.previews.get(browserState.browser_id)
     if (!currentPreview) return
@@ -137,7 +148,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
     return run
   }, [])
 
-  const commitWorkspaceSnapshot = useCallback((snapshot: CodeWorkspaceDetail) => {
+  const commitWorkspaceSnapshot = useCallback((snapshot: CodeWorkspaceDetail, paneStatuses: CodeAgentPaneStatus[] = []) => {
     const current = stateRef.current
     if (
       snapshot.summary.id !== current.workspaceId
@@ -155,6 +166,11 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       maximizedPaneId: snapshot.layout.maximized_pane_id ?? null,
       terminals: new Map(snapshot.terminals.map((terminal) => [terminal.id, terminal])),
       previews: new Map(snapshot.previews.map((preview) => [preview.id, preview])),
+      agentPaneStatuses: new Map(
+        paneStatuses
+          .filter((status) => status.pane_id)
+          .map((status) => [status.pane_id!, status]),
+      ),
     }
     dispatch({
       type: 'SET_WORKSPACE',
@@ -163,6 +179,7 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       terminals: snapshot.terminals,
       previews: snapshot.previews,
     })
+    dispatch({ type: 'SET_AGENT_PANE_STATUSES', statuses: paneStatuses })
     return true
   }, [])
 
@@ -174,9 +191,12 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       dispatch({ type: 'SET_WORKSPACE_LOADING', workspaceId })
     }
     try {
-      const snapshot = await hiveoryClient.codeWorkspace(workspaceId)
+      const [snapshot, paneStatuses] = await Promise.all([
+        hiveoryClient.codeWorkspace(workspaceId),
+        hiveoryClient.codeAgentPaneStatuses(workspaceId),
+      ])
       if (requestId !== loadRequestRef.current) return
-      commitWorkspaceSnapshot(snapshot)
+      commitWorkspaceSnapshot(snapshot, paneStatuses)
     } catch (err: unknown) {
       if (requestId !== loadRequestRef.current) return
       dispatch({ type: 'SET_ERROR', error: `Failed to load workspace: ${formatError(err)}` })
@@ -188,9 +208,12 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
   // terminal surfaces remain mounted while the original action retries.
   const refreshWorkspace = useCallback(async (workspaceId: string) => {
     const requestId = ++loadRequestRef.current
-    const snapshot = await hiveoryClient.codeWorkspace(workspaceId)
+    const [snapshot, paneStatuses] = await Promise.all([
+      hiveoryClient.codeWorkspace(workspaceId),
+      hiveoryClient.codeAgentPaneStatuses(workspaceId),
+    ])
     if (requestId !== loadRequestRef.current || stateRef.current.workspaceId !== workspaceId) return false
-    return commitWorkspaceSnapshot(snapshot)
+    return commitWorkspaceSnapshot(snapshot, paneStatuses)
   }, [commitWorkspaceSnapshot])
 
   useEffect(() => {
@@ -198,6 +221,21 @@ export function useCodeWorkspaceController(initialWorkspaceId?: string | null): 
       void loadWorkspace(initialWorkspaceId)
     }
   }, [initialWorkspaceId, loadWorkspace, state.workspaceId])
+
+  useEffect(() => {
+    const workspaceId = state.workspaceId
+    if (!workspaceId) return undefined
+    const refresh = () => {
+      void hiveoryClient.codeAgentPaneStatuses(workspaceId)
+        .then((statuses) => {
+          if (stateRef.current.workspaceId === workspaceId) commitAgentPaneStatuses(statuses)
+        })
+        .catch(() => undefined)
+    }
+    refresh()
+    const interval = window.setInterval(refresh, 500)
+    return () => window.clearInterval(interval)
+  }, [commitAgentPaneStatuses, state.workspaceId])
 
   useEffect(() => {
     const handleLayoutUpdated = (event: Event) => {

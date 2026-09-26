@@ -12,7 +12,7 @@ The Rust host is the only database client. It enables foreign keys and WAL mode,
 | --- | --- |
 | Shared | settings, provider accounts, jobs, checkpoints, audit entries, notifications, command receipts, release metadata |
 | Chat | folders, conversations, branches, messages, typed parts, turns, events, attachments, drafts, model budgets |
-| Code workspace | projects, workspaces, pane layouts, documents, terminals, encrypted terminal history, previews, hosted-source cache, task sources |
+| Code workspace | projects, workspaces, pane layouts, documents, terminals, encrypted terminal history, coding-agent pane status snapshots and event cursors, previews, hosted-source cache, task sources |
 | Code orchestration | runs, tasks, dependencies, dispatches, worktrees, checkpoints, reviews, questions, activity, participants, mailbox deliveries, worker resources, completion reports, decision gates, path claims |
 | Agent | agents, versions, folder grants, tools, skills, conflicts, conversations, runs, messages, tool calls, approvals, events, continuations, memory, retrievals, artifacts |
 | Integrations | plugin manifests, connections, agent grants, invocations, automations, and automation executions |
@@ -28,4 +28,4 @@ Migration `0016_hiveory_namespace.sql` moves legacy table names to the current `
 
 ## Migration and recovery policy
 
-Migrations never rewrite an already shipped migration file. A schema change adds the next numbered migration and a regression test. Startup applies pending migrations before opening normal application services. Backup uses a consistent SQLite snapshot, and restore retains pre-restore files until the staged replacement succeeds.
+Migrations never rewrite an already shipped migration file. A schema change adds the next numbered migration and a regression test. Startup applies pending migrations before opening normal application services. It may repair checksums from known pre-release migration contents only when it verifies the corresponding completed schema; unknown checksum mismatches remain errors. Backup uses a consistent SQLite snapshot, and restore retains pre-restore files until the staged replacement succeeds.

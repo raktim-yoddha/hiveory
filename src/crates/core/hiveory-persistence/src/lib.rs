@@ -20,6 +20,7 @@ pub mod gates;
 pub mod mailbox;
 pub mod orchestration;
 pub mod pane_prompts;
+pub mod pane_status;
 pub mod plugin;
 pub mod routine;
 pub mod source;
@@ -29,11 +30,11 @@ pub use source::TaskSourceSaveRequest;
 pub const HIVEORY_DEFAULT_PROVIDER_ACCOUNT_ID: &str = "hiveory-openai";
 static HIVEORY_MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
-const HIVEORY_MIGRATION_RECEIPT_RANGE: std::ops::RangeInclusive<i64> = 7..=24;
+const HIVEORY_MIGRATION_RECEIPT_RANGE: std::ops::RangeInclusive<i64> = 7..=28;
 const LEGACY_HIVEORY_MIGRATION_RECEIPTS: &[(i64, &str)] = &[
-    // Migration 7 changed only the default agent avatar color so the
-    // graphite palette is used for new records. Existing databases may still
-    // carry the checksum from the pre-neutralized migration.
+    // Pre-release builds shipped these migration contents. Their completed
+    // schema receipts are safe to reconcile only after the full schema check.
+    (7, "eafd8148601007f4507a05b13bd4f4b04471616710903bb442d6d2dbfbef7fe716d4dab5220ea976dc54b16bb4c36e4b"),
     (7, "8c09933d6f3e8c2b1fd271473d1b90a2a21f6e9a8ee882e57c8aa953a7915c991a6942fe5dc986fc4f1b5ba7c7e21220"),
     (16, "78e736c0ddfbb69e3f46168f3c394eb6fd33fc8080e6578f169c61187c94a22435ddd0dd2a523050be0828cadf5b307d"),
     (17, "4bacc140916075eb1a72bbb2ed75b74819199822f4c0c06e7bf993aca2fae89052389704b2569fbd68a28528f895e293"),
@@ -44,6 +45,10 @@ const LEGACY_HIVEORY_MIGRATION_RECEIPTS: &[(i64, &str)] = &[
     (22, "461259b1da6d2c13b11b80953954d7c84e71dbebf4ea5027b1f3b32b8e454a69cb5b822b955b46f8bc79d76372b3168a"),
     (23, "c285f997d84bf59aee40597a98f322af45a88e49bd304cf185e6bd141116e99f7db86c3a1db22f0b5e9746236d971a74"),
     (24, "01a53e25aa42a7fda152c50716aa64be692df208c3f63bd4566f68321950e22cb3f11b5d6daac189a94e72fef27b02f4"),
+    (25, "f4c827dfea34bcd20d5f65427f68748ee8d3735053e11fb4f2c9ebbf4963676000d3c75ad3c9dab391d1975deb272817"),
+    (26, "676a982c9f4f9a3aad076faa15694b3f2c436f55426b76f2c1462d63f84d1379a04c3263beb6bebe160b6ed074b98c3a"),
+    (27, "c9d5e8dc4d600d529d97c0d2b605d09a90ba7d239d98c1283cc163ae88981723d8107042663851d1d64aa1ce85f08c8c"),
+    (28, "b72758eaabf9fa85a073ded6b85cd0bfed77e268881455fd1f7109a167b72d00e81aa689ea6deb694a40c0c6c1d6b937"),
 ];
 
 #[derive(Clone)]
@@ -352,23 +357,27 @@ fn hiveory_migration_checksum(version: i64) -> Option<Vec<u8>> {
         22 => include_bytes!("../migrations/0022_code_layout_presets.sql"),
         23 => include_bytes!("../migrations/0023_code_launch_presets.sql"),
         24 => include_bytes!("../migrations/0024_chat_profiles.sql"),
+        25 => include_bytes!("../migrations/0025_code_pane_prompts.sql"),
+        26 => include_bytes!("../migrations/0026_code_terminal_effort.sql"),
+        27 => include_bytes!("../migrations/0027_dashboard_chat_turns.sql"),
+        28 => include_bytes!("../migrations/0028_remove_task_board_preferences.sql"),
         _ => return None,
     };
     Some(Sha384::digest(migration).to_vec())
 }
 
-fn legacy_hiveory_migration_checksum(version: i64) -> Option<Vec<u8>> {
-    let (_, encoded) = LEGACY_HIVEORY_MIGRATION_RECEIPTS
+fn decode_migration_checksum(encoded: &str) -> Vec<u8> {
+    (0..encoded.len())
+        .step_by(2)
+        .map(|offset| u8::from_str_radix(&encoded[offset..offset + 2], 16).expect("valid checksum"))
+        .collect()
+}
+
+fn legacy_hiveory_migration_checksums(version: i64) -> impl Iterator<Item = Vec<u8>> + 'static {
+    LEGACY_HIVEORY_MIGRATION_RECEIPTS
         .iter()
-        .find(|(legacy_version, _)| *legacy_version == version)?;
-    Some(
-        (0..encoded.len())
-            .step_by(2)
-            .map(|offset| {
-                u8::from_str_radix(&encoded[offset..offset + 2], 16).expect("valid checksum")
-            })
-            .collect(),
-    )
+        .filter(move |(legacy_version, _)| *legacy_version == version)
+        .map(|(_, encoded)| decode_migration_checksum(encoded))
 }
 
 /// Repairs receipts from pre-release builds that had the completed schema but
@@ -397,13 +406,10 @@ async fn reconcile_hiveory_migration_receipts(pool: &SqlitePool) -> Result<(), s
         .filter_map(|receipt| {
             let version: i64 = receipt.get(0);
             let checksum: Vec<u8> = receipt.get(1);
-            let legacy_checksum = legacy_hiveory_migration_checksum(version)?;
-            if checksum == legacy_checksum {
-                hiveory_migration_checksum(version)
-                    .map(|current_checksum| (version, legacy_checksum, current_checksum))
-            } else {
-                None
-            }
+            let legacy_checksum = legacy_hiveory_migration_checksums(version)
+                .find(|legacy_checksum| checksum == *legacy_checksum)?;
+            hiveory_migration_checksum(version)
+                .map(|current_checksum| (version, legacy_checksum, current_checksum))
         })
         .collect::<Vec<_>>();
     if repairs.is_empty() {
@@ -427,7 +433,11 @@ async fn reconcile_hiveory_migration_receipts(pool: &SqlitePool) -> Result<(), s
             AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_chat_conversations') WHERE name='folder_id')
             AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_terminals') WHERE name='root_path')
             AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_terminals') WHERE name='agent_launch_mode')
-            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_chat_turns') WHERE name='profile_json')",
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_chat_turns') WHERE name='profile_json')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='hiveory_code_pane_prompts')
+            AND EXISTS(SELECT 1 FROM pragma_table_info('hiveory_code_terminals') WHERE name='reasoning_effort')
+            AND EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_chat_turns_state_updated')
+            AND NOT EXISTS(SELECT 1 FROM hiveory_settings WHERE key='task_board_preferences.v1')",
     )
     .fetch_one(pool)
     .await?
@@ -466,7 +476,13 @@ mod tests {
             .expect("create database");
         for (version, _) in LEGACY_HIVEORY_MIGRATION_RECEIPTS {
             sqlx::query("UPDATE _sqlx_migrations SET checksum=? WHERE version=?")
-                .bind(legacy_hiveory_migration_checksum(*version).expect("legacy checksum"))
+                .bind(decode_migration_checksum(
+                    LEGACY_HIVEORY_MIGRATION_RECEIPTS
+                        .iter()
+                        .find(|(legacy_version, _)| legacy_version == version)
+                        .expect("legacy checksum")
+                        .1,
+                ))
                 .bind(version)
                 .execute(persistence.pool())
                 .await

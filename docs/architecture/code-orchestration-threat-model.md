@@ -18,6 +18,7 @@ This document narrows the general [threat model](../security/threat-model.md) to
 - Duplicate worker events are rejected or replayed idempotently without creating a second effect.
 - Mailbox request IDs make sends idempotent; recipient sequences preserve FIFO delivery; acknowledgement requires the exact run, delivery, and recipient.
 - Gate resolution requires an open gate and the configured actor.
+- Pane-status reports are accepted only through the session-token-authenticated local bridge, may update only the caller's durable pane binding, and require a monotonic per-pane sequence. Host-observed launch, prompt-delivery, stop, and exit facts update the binding by terminal ID. The host does not infer agent progress from terminal output; restart or stale active-status ambiguity is represented as `unknown`.
 - Worker output, mailbox payloads, terminal history, provider results, and persisted events are bounded and redacted where necessary.
 - Dependency fan-in is non-interactive and blocks on conflicts. Cleanup remains within the application-managed root and requires exact intent.
 

@@ -42,7 +42,8 @@ The renderer does not invent pane topology. It only dispatches user intent and r
 4. Output is appended to a 1 MiB ring buffer and broadcast to live subscribers.
 5. A pane subscribes and loads a snapshot. Events received during that race are held until the snapshot is painted.
 6. A sequence gap triggers a full snapshot reload, which repairs a lagged or remounted pane without restarting the process.
-7. Input is encoded as UTF-8 base64 in the renderer and decoded only at the runtime boundary.
+7. The renderer repairs and redraws an existing xterm surface on scroll, Code-mode return, and window visibility/focus restoration. It refits only when pane geometry changes, so scrollback never changes PTY dimensions.
+8. Input is encoded as UTF-8 base64 in the renderer and decoded only at the runtime boundary.
 
 Browser panes use host-owned child webviews and start at `https://www.google.com`. Their geometry follows the pane canvas, and their lifecycle is serialized independently from terminal and renderer mounts.
 

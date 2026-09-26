@@ -2,7 +2,10 @@
 
 ## Contract map
 
-- Read `docs/README.md` before repository-wide or cross-layer changes.
+- Read `docs/README.md` before repository-wide or cross-layer changes. Consult
+  `docs/features/` for feature status; update the affected implemented feature
+  page when behavior changes. Keep planned proposals prioritized and promote
+  shipped items into implemented docs in the same change.
 - User-visible capability or setup changes belong in `README.md`.
 - Boundaries, ownership, lifecycle, and public/private editions belong in
   `docs/architecture/`.

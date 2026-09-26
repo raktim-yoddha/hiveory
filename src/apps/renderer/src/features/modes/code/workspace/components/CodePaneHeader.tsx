@@ -20,6 +20,7 @@ import {
   type CodePaneNode,
   type CodePanePlacement,
   type CodeTerminalState,
+  type CodeAgentPaneStatus,
 } from '../../../../../shared/api/hiveory-client'
 import { CodePaneMenu } from './CodePaneMenu'
 import { CodeSplitPanePicker } from './CodeSplitPanePicker'
@@ -33,6 +34,7 @@ interface CodePaneHeaderProps {
   isFocused: boolean
   isMaximized: boolean
   terminalState?: CodeTerminalState
+  agentStatus?: CodeAgentPaneStatus
   terminalHistoryEnabled?: boolean
   terminalHistoryBusy?: boolean
   voiceState?: CodeTerminalVoiceState | null
@@ -79,6 +81,7 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   isFocused,
   isMaximized,
   terminalState,
+  agentStatus,
   onFocus,
   onRename,
   onSplitAndLaunch,
@@ -154,6 +157,13 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
   }
 
   const showPaneActions = node.kind !== 'empty'
+  const agentStatusState = agentStatus?.state ?? 'unknown'
+  const agentStatusLabel = agentStatus
+    ? `${agentStatus.state.replaceAll('_', ' ')}${agentStatus.summary ? `: ${agentStatus.summary}` : ''}`
+    : 'unknown: no current Hiveory agent status'
+  const liveDotClass = node.kind === 'coding_agent'
+    ? `code-live-dot is-agent-status is-${agentStatusState}`
+    : `code-live-dot${terminalState === 'failed' || terminalState === 'exited' || terminalState === 'interrupted' ? ' is-offline' : ''}`
 
   const getPaneIcon = () => {
     switch (node.kind) {
@@ -204,7 +214,12 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
             title={isEditing ? 'Drag to move pane' : 'Hold and drag to move pane'}
             aria-label="Drag pane"
           >
-            <span className="code-live-dot" />
+            <span
+              className={liveDotClass}
+              role="img"
+              aria-label={node.kind === 'coding_agent' ? `Agent status: ${agentStatusLabel}` : 'Pane is live'}
+              title={node.kind === 'coding_agent' ? `Agent status: ${agentStatusLabel}` : undefined}
+            />
             <span className="code-pane-header-icon">{getPaneIcon()}</span>
 
             {!isEditing && (
@@ -217,6 +232,11 @@ export const CodePaneHeader: React.FC<CodePaneHeaderProps> = ({
                 title="Double-click or press F2 to rename"
               >
                 {node.title || defaultTitle()}
+              </span>
+            )}
+            {node.kind === 'coding_agent' && (
+              <span className={`code-pane-agent-status is-${agentStatusState}`} aria-hidden="true">
+                {agentStatusState.replaceAll('_', ' ')}
               </span>
             )}
           </span>
