@@ -1,0 +1,131 @@
+/* Shared styles for form primitives (Toggle, CounterControl, TextField). */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fieldLabel {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.inputRow {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-lg);
+  padding: 0 var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  box-shadow: inset 0 var(--hairline) var(--space-1) rgb(0 0 0 / 0.35);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  user-select: text;
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.input:hover {
+  border-color: var(--color-border-strong);
+}
+
+.input:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+}
+
+.toggle {
+  position: relative;
+  flex: none;
+  width: calc(var(--control-xs) * 1.8);
+  height: var(--control-xs);
+  padding: 0;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-active);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  width: calc(var(--control-xs) - var(--space-2) - var(--border-width) * 2);
+  height: calc(var(--control-xs) - var(--space-2) - var(--border-width) * 2);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.toggle[aria-checked='true'] {
+  border-color: var(--color-bronze);
+  background: var(--gradient-metal);
+}
+
+.toggle[aria-checked='true']::after {
+  transform: translateX(calc(var(--control-xs) * 0.8));
+  background: var(--color-accent-contrast);
+}
+
+.toggle:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.counter {
+  display: inline-flex;
+  align-items: center;
+  height: var(--control-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+}
+
+.counterButton {
+  display: grid;
+  place-items: center;
+  width: var(--control-sm);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.counterButton:not(:disabled):hover {
+  color: var(--color-text);
+}
+
+.counterButton:disabled {
+  cursor: default;
+  color: var(--color-text-faint);
+}
+
+.counterButton svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.counterValue {
+  min-width: var(--control-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}

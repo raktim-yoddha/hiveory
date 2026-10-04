@@ -1,0 +1,26 @@
+.details {
+  width: 100%;
+  max-width: 60ch;
+  text-align: left;
+}
+
+.summary {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.pre {
+  max-height: calc(var(--space-11) * 3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-4);
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}

@@ -1,0 +1,24 @@
+.sm,
+.md,
+.lg {
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+
+.sm {
+  width: var(--logo-md);
+  height: var(--logo-md);
+}
+
+.md {
+  width: var(--logo-brand);
+  height: var(--logo-brand);
+}
+
+.lg {
+  width: calc(var(--space-11) * 1.5);
+  height: calc(var(--space-11) * 1.5);
+  margin-bottom: var(--space-2);
+  filter: drop-shadow(0 var(--space-4) var(--space-8) rgb(0 0 0 / 0.55));
+}

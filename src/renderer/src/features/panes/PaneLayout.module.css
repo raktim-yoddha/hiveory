@@ -1,0 +1,145 @@
+.layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slot {
+  position: absolute;
+  display: flex;
+  transition:
+    left var(--duration-base) var(--ease-out),
+    top var(--duration-base) var(--ease-out),
+    width var(--duration-base) var(--ease-out),
+    height var(--duration-base) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+  animation: pane-in var(--duration-base) var(--ease-out);
+}
+
+/* Follow the pointer exactly while resizing or dragging. */
+.interacting .slot {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.interacting {
+  cursor: grabbing;
+}
+
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.dragging {
+  opacity: 0.45;
+}
+
+.maximized {
+  z-index: 2;
+}
+
+.concealed {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The gutter is the divider: invisible until hovered, so surfaces keep their air. */
+.divider {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.divider::after {
+  content: '';
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.dividerColumn {
+  cursor: col-resize;
+}
+
+.dividerColumn::after {
+  width: var(--space-1);
+  height: var(--space-10);
+}
+
+.dividerRow {
+  cursor: row-resize;
+}
+
+.dividerRow::after {
+  width: var(--space-10);
+  height: var(--space-1);
+}
+
+.divider:hover::after,
+.divider:focus-visible::after,
+.dividerActive::after {
+  background: var(--color-border-strong);
+}
+
+.divider:focus-visible {
+  outline: none;
+}
+
+.preview {
+  position: absolute;
+  z-index: var(--z-dropzone);
+  display: grid;
+  place-items: center;
+  border: var(--border-width) dashed var(--color-drop-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-drop);
+  pointer-events: none;
+  transition:
+    left var(--duration-fast) var(--ease-out),
+    top var(--duration-fast) var(--ease-out),
+    width var(--duration-fast) var(--ease-out),
+    height var(--duration-fast) var(--ease-out);
+}
+
+.preview[data-kind='swap'] {
+  border-style: solid;
+}
+
+.previewLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  box-shadow: var(--shadow-drag);
+}
+
+.previewLabel svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.dragHint {
+  position: absolute;
+  bottom: var(--space-6);
+  left: 50%;
+  z-index: var(--z-drag);
+  padding: var(--space-2) var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  transform: translateX(-50%);
+  pointer-events: none;
+}

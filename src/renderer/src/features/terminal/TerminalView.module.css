@@ -1,0 +1,25 @@
+.host {
+  position: absolute;
+  inset: var(--space-3) var(--space-2) var(--space-2) var(--space-5);
+  user-select: text;
+}
+
+.host :global(.xterm-viewport) {
+  background-color: transparent !important;
+}
+
+/* xterm's own scrollbar: a slim warm slider that only shows on hover. */
+.host :global(.xterm .scrollbar.vertical) {
+  width: var(--space-3) !important;
+}
+
+.host :global(.xterm .scrollbar .slider) {
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong) !important;
+  opacity: 0;
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.host:hover :global(.xterm .scrollbar .slider) {
+  opacity: 0.8;
+}

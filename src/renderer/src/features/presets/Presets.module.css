@@ -1,0 +1,82 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.picker > * {
+  align-self: stretch;
+}
+
+.picker > button {
+  align-self: flex-start;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option,
+.manageRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  min-height: calc(var(--control-lg) + var(--space-3));
+  padding: 0 var(--space-4) 0 var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  text-align: left;
+}
+
+.option:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.optionName {
+  flex: 1;
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-5);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.summaryItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.summaryItem svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.muted {
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+}

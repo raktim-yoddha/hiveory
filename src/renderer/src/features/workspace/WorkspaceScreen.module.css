@@ -1,0 +1,19 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+}
+
+.emptySurface {
+  height: 100%;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-surface), var(--color-surface);
+  box-shadow: var(--shadow-surface);
+}

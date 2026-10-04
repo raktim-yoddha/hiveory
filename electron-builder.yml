@@ -1,0 +1,39 @@
+# Installers for every platform, all branded from resources/icon.png
+# (electron-builder derives .ico / .icns from the 512×512 PNG).
+appId: com.hiveory.app
+productName: Hiveory
+copyright: Copyright © 2026 Raktim Yoddha
+icon: resources/icon.png
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  # Native PTY binaries (and the bundled conpty.dll) must live outside the asar.
+  - node_modules/@lydell/**
+  # Window icon is read from disk at runtime.
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: resources/icon.png
+  uninstallerIcon: resources/icon.png
+  shortcutName: Hiveory
+mac:
+  target: [dmg]
+  category: public.app-category.developer-tools
+dmg:
+  artifactName: ${productName}-${version}.${ext}
+linux:
+  target: [AppImage, deb]
+  category: Development
+  maintainer: Raktim Yoddha
+  artifactName: ${productName}-${version}.${ext}

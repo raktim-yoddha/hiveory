@@ -1,0 +1,51 @@
+.dot {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: var(--radius-pill);
+  background: var(--color-idle);
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.working {
+  background: var(--color-working);
+  box-shadow: var(--glow-working);
+}
+
+.working::after,
+.waiting-for-you::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-1) * -1);
+  border-radius: inherit;
+  background: inherit;
+  opacity: 0.35;
+  animation: pulse 1.6s var(--ease-out) infinite;
+}
+
+.waiting-for-you {
+  background: var(--color-waiting);
+  box-shadow: var(--glow-waiting);
+}
+
+.stopped {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--border-width) var(--color-text-faint);
+}
+
+.stopped::after {
+  display: none;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}

@@ -1,0 +1,180 @@
+/*
+ * Hiveory design tokens (design.md). Every color, size, radius and timing in
+ * the UI comes from here — components never use literal values.
+ *
+ * Palette: warm graphite surfaces with a bronze undertone, champagne-silver
+ * text and metallic highlights. Saturated color is reserved for status.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces: background → sidebar/page → pane/card → raised → interactive */
+  --color-bg: #080706;
+  --color-surface: #110f0d;
+  --color-surface-top: #161310;
+  --color-surface-raised: #1b1814;
+  --color-surface-hover: #221e19;
+  --color-surface-active: #2b2620;
+  --color-surface-inset: #0c0b09;
+  --color-overlay: rgb(5 4 3 / 0.66);
+  --color-glass: rgb(27 24 20 / 0.82);
+
+  --color-border-subtle: #1d1a16;
+  --color-border: #2a2520;
+  --color-border-strong: #3e3730;
+  /* Top-edge sheen that makes surfaces read as machined rather than flat. */
+  --color-sheen: rgb(255 236 210 / 0.05);
+  --color-sheen-strong: rgb(255 236 210 / 0.09);
+
+  --color-text: #efe9e0;
+  --color-text-secondary: #b8afa3;
+  --color-text-muted: #807669;
+  --color-text-faint: #514a42;
+
+  /* Champagne-silver accent: primary actions, focus, selection. */
+  --color-accent: #d9cbb4;
+  --color-accent-hover: #ece0cb;
+  --color-accent-contrast: #17120c;
+  --color-bronze: #b08d62;
+  --color-bronze-soft: rgb(176 141 98 / 0.14);
+  --color-focus: #b39b78;
+  --gradient-metal: linear-gradient(180deg, #f1e9dc 0%, #d4c6ae 55%, #bba98c 100%);
+  --gradient-metal-hover: linear-gradient(180deg, #f8f1e6 0%, #e0d3bd 55%, #c9b799 100%);
+  --gradient-surface: linear-gradient(180deg, var(--color-surface-top) 0%, var(--color-surface) 120px);
+  --gradient-bronze-line: linear-gradient(90deg, transparent, rgb(176 141 98 / 0.55), transparent);
+  --gradient-app: radial-gradient(1200px 520px at 50% -180px, rgb(176 141 98 / 0.1), transparent 70%);
+
+  /* Status */
+  --color-idle: #776d61;
+  --color-working: #6fcf8e;
+  --color-waiting: #e8b04f;
+  --color-success: #6fcf8e;
+  --color-warning: #e8b04f;
+  --color-danger: #e6806c;
+  --color-working-soft: rgb(111 207 142 / 0.12);
+  --color-waiting-soft: rgb(232 176 79 / 0.13);
+  --color-waiting-edge: rgb(232 176 79 / 0.42);
+  --color-danger-soft: rgb(230 128 108 / 0.12);
+  --glow-working: 0 0 8px rgb(111 207 142 / 0.55);
+  --glow-waiting: 0 0 8px rgb(232 176 79 / 0.6);
+
+  /* Drop preview */
+  --color-drop: rgb(217 203 180 / 0.07);
+  --color-drop-border: rgb(217 203 180 / 0.5);
+
+  /* Terminal (read by the xterm theme) */
+  --term-bg: #110f0d;
+  --term-fg: #e6dfd4;
+  --term-cursor: #e2d3b9;
+  --term-selection: rgb(217 203 180 / 0.24);
+  --term-black: #1d1a16;
+  --term-red: #e6806c;
+  --term-green: #8fcf8a;
+  --term-yellow: #e8b04f;
+  --term-blue: #8fa8e8;
+  --term-magenta: #c99ae0;
+  --term-cyan: #72c6c0;
+  --term-white: #d6cfc4;
+  --term-bright-black: #5e564d;
+  --term-bright-red: #f2a493;
+  --term-bright-green: #b3e3ab;
+  --term-bright-yellow: #f3cd85;
+  --term-bright-blue: #b5c6f2;
+  --term-bright-magenta: #dfbfee;
+  --term-bright-cyan: #a2dfda;
+  --term-bright-white: #f7f2ea;
+
+  /* Typography */
+  --font-ui: 'Inter Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', Consolas, monospace;
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --tracking-caps: 0.08em;
+  --tracking-tight: -0.011em;
+
+  /* Spacing scale */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+  --space-11: 48px;
+
+  /* Radius: small → controls, medium → cards, large → panes/dialogs */
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* Sizes */
+  --hairline: 1px;
+  --control-xs: 20px;
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --icon-xs: 12px;
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --logo-sm: 14px;
+  --logo-md: 17px;
+  --logo-lg: 22px;
+  --logo-brand: 22px;
+  --titlebar-height: 44px;
+  --titlebar-controls-width: 140px;
+  --sidebar-width: 248px;
+  --pane-header-height: 36px;
+  --pane-min-width: 240px;
+  --pane-min-height: 140px;
+  --dialog-width: 520px;
+  --menu-min-width: 200px;
+  --menu-max-height: 70vh;
+  --kanban-column-min: 240px;
+  --border-width: 1px;
+  --focus-ring-width: 2px;
+  --status-dot: 7px;
+  --nudge: 4px;
+  --nudge-sm: 2px;
+
+  /* Layout rhythm: the visible air between surfaces (design.md "Surfaces Need Air") */
+  --gutter: 10px;
+  --page-padding: 10px;
+
+  /* Elevation: restrained, warm-tinted */
+  --shadow-surface: inset 0 var(--hairline) 0 var(--color-sheen), 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-raised: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-popover: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 14px 36px rgb(0 0 0 / 0.6),
+    0 0 0 var(--hairline) var(--color-border);
+  --shadow-dialog: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 28px 70px rgb(0 0 0 / 0.72),
+    0 0 0 var(--hairline) var(--color-border);
+  --shadow-drag: 0 12px 32px rgb(0 0 0 / 0.6);
+  --shadow-button: inset 0 var(--hairline) 0 rgb(255 255 255 / 0.55), 0 1px 2px rgb(0 0 0 / 0.5);
+  --blur-glass: blur(18px) saturate(1.2);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.32, 1.25, 0.5, 1);
+  --duration-fast: 110ms;
+  --duration-base: 170ms;
+  --duration-slow: 240ms;
+
+  --z-dropzone: 20;
+  --z-drag: 30;
+  --z-menu: 50;
+  --z-dialog: 60;
+  --z-toast: 70;
+}

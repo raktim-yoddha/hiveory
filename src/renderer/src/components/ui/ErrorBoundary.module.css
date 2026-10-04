@@ -1,0 +1,30 @@
+.root,
+.compact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  height: 100%;
+  padding: var(--space-9);
+  text-align: center;
+}
+
+.compact {
+  padding: var(--space-6);
+}
+
+.icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--color-warning);
+}
+
+.title {
+  font-weight: var(--weight-semibold);
+}
+
+.text {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
