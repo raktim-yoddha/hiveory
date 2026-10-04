@@ -23,6 +23,8 @@ export interface AppSettings {
   browserDefaultProfile: string
   /** User-defined viewport sizes, listed after the built-in presets. */
   browserViewports: Viewport[]
+  /** Give agents computer_* tools: the desktop's mouse, keyboard, windows and screen (Windows). Off by default. */
+  computerUse: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -35,7 +37,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   browserAgentCursor: true,
   browserHomeUrl: '',
   browserDefaultProfile: 'default',
-  browserViewports: []
+  browserViewports: [],
+  computerUse: false
 }
 
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [

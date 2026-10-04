@@ -35,7 +35,9 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 └───────────────────────────────────────────────────────────────┘
 ```
 
-⌖ pick element (copies it), ✎ annotate (note for agents), ▭ viewport sizes,
+⌖ pick element (copies it), ✎ annotate (note for agents), ▭ device mode (toolbar
+above the page: device · width × height · DPR · zoom · rotate · close, with
+drag handles on the emulated screen),
 </> developer tools; ⋯ holds profiles, cookies and Browser settings. Narrow
 panels fold ⌖ ✎ </> into ⋯.
 

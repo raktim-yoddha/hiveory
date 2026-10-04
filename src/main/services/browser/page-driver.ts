@@ -1,7 +1,8 @@
 import type { WebContents } from 'electron'
-import type { PickedElement, Viewport } from '@shared/domain'
+import { isMobileViewport, type PickedElement, type Viewport } from '@shared/domain'
 import { parseKeys } from './keys'
 import { pageCall } from './page-script'
+import { diffLines, diffWorthIt } from './snapshot-diff'
 import { normalizeUrl } from './urls'
 
 /** Isolated world id for Hiveory's page script (any id above 999 is free for embedders). */
@@ -37,10 +38,15 @@ interface Point {
  */
 export class PageDriver {
   /** Animated cursor moves; 0 when the cursor is off, so actions run at full speed. */
-  cursorMs = 140
+  cursorMs = 110
   private emulated: Viewport | null = null
+  private lastSnapshot: { url: string; lines: string[] } | null = null
 
-  constructor(private readonly wc: WebContents) {}
+  constructor(
+    private readonly wc: WebContents,
+    /** Whether the page is on screen (frames flow by themselves). */
+    private readonly visible: () => boolean = () => false
+  ) {}
 
   private async cdp<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!this.wc.debugger.isAttached()) this.wc.debugger.attach('1.3')
@@ -85,9 +91,9 @@ export class PageDriver {
     await this.settle(true)
   }
 
-  /** Waits for a started navigation to finish, then for the DOM to stop changing. */
+  /** Waits for a started navigation to finish, then for the DOM to stop changing (short idle, hard cap). */
   async settle(expectNavigation = false): Promise<void> {
-    await sleep(expectNavigation ? 120 : 40)
+    await sleep(expectNavigation ? 80 : 10)
     if (this.wc.isLoading()) {
       await new Promise<void>((resolve) => {
         const done = (): void => {
@@ -99,7 +105,7 @@ export class PageDriver {
         this.wc.once('did-stop-loading', done)
       })
     }
-    await this.call('quiet(100, 900)').catch(() => undefined)
+    await this.call('quiet(40, 600)').catch(() => undefined)
   }
 
   async waitFor(condition: { text?: string; selector?: string; url?: string; gone?: boolean }, timeoutMs: number): Promise<string> {
@@ -127,17 +133,38 @@ export class PageDriver {
 
   // ---------- observation ----------
 
-  async snapshot(full = false): Promise<string> {
+  /**
+   * The page as compact text. `diff` returns only the lines that changed since
+   * this page's last viewport snapshot when that is clearly shorter.
+   */
+  async snapshot(full = false, mode: 'full' | 'diff' = 'full'): Promise<string> {
     const s = await this.call<{ text: string; truncated: boolean; scrollY: number; scrollMax: number; viewport: string }>(
       `snapshot(${full}, ${MAX_SNAPSHOT})`
     )
+    const url = this.wc.getURL()
+    const header = `Page: ${this.wc.getTitle() || '(untitled)'} — ${url}`
+    if (!full) {
+      const lines = s.text ? s.text.split('\n') : []
+      const previous = this.lastSnapshot
+      this.lastSnapshot = { url, lines }
+      if (mode === 'diff' && previous?.url === url) {
+        const diff = diffLines(previous.lines, lines)
+        if (!diff.added.length && !diff.removed.length) return `${header}\n(no visible change since your last snapshot)`
+        if (diffWorthIt(diff, lines.length)) {
+          return `${header}\n(changes since your last snapshot — unchanged lines omitted; refs stay valid)\n${[
+            ...diff.removed.map((l) => `− ${l.trim()}`),
+            ...diff.added.map((l) => `+ ${l.trim()}`)
+          ].join('\n')}`
+        }
+      }
+    }
     const where = full
       ? 'whole page'
       : s.scrollMax > 0
         ? `viewport ${s.viewport}, scrolled ${Math.round((s.scrollY / s.scrollMax) * 100)}% — use browser_scroll or full_page for more`
         : `viewport ${s.viewport}, whole page visible`
     const tail = s.truncated ? '\n… (cut to fit; scroll, or act on what you see)' : ''
-    return `Page: ${this.wc.getTitle() || '(untitled)'} — ${this.wc.getURL()}\n(${where})\n${s.text || '(no visible content)'}${tail}`
+    return `${header}\n(${where})\n${s.text || '(no visible content)'}${tail}`
   }
 
   async screenshot(options: { fullPage?: boolean; target?: string } = {}): Promise<Screenshot> {
@@ -201,10 +228,27 @@ export class PageDriver {
     return p
   }
 
+  /** Starts the cursor glide and acts almost at once: the animation finishes alongside the input, not before it. */
   private async moveCursor(x: number, y: number, label?: string): Promise<void> {
     if (!this.cursorMs) return
     await this.call(`cursorTo(${x}, ${y}, ${JSON.stringify(label ?? '')}, ${this.cursorMs})`).catch(() => undefined)
-    await sleep(this.cursorMs)
+    await sleep(Math.min(this.cursorMs, 25))
+  }
+
+  /**
+   * Mouse moves and wheel turns are frame-aligned in Chromium: on a page no
+   * one is looking at they wait for a frame that does not come (~1 s). A
+   * press flushes them at once; for moves without a press, one stay-hidden
+   * capture produces the frame.
+   */
+  private async move(x: number, y: number, extra: Record<string, unknown> = {}): Promise<void> {
+    void this.mouse('mouseMoved', x, y, extra).catch(() => undefined)
+    await this.pump()
+  }
+
+  private async pump(): Promise<void> {
+    if (this.visible()) return
+    await this.wc.capturePage({ x: 0, y: 0, width: 1, height: 1 }, { stayHidden: true }).catch(() => undefined)
   }
 
   private mouse(type: string, x: number, y: number, extra: Record<string, unknown> = {}): Promise<unknown> {
@@ -216,7 +260,8 @@ export class PageDriver {
     await this.moveCursor(p.x, p.y, options.label)
     const button = options.button ?? 'left'
     const buttons = button === 'left' ? 1 : button === 'right' ? 2 : 4
-    await this.mouse('mouseMoved', p.x, p.y)
+    // Not awaited: the press right after flushes this frame-aligned move at once (see move()).
+    void this.mouse('mouseMoved', p.x, p.y).catch(() => undefined)
     for (let count = 1; count <= (options.double ? 2 : 1); count++) {
       await this.mouse('mousePressed', p.x, p.y, { button, buttons, clickCount: count })
       await this.mouse('mouseReleased', p.x, p.y, { button, buttons: 0, clickCount: count })
@@ -229,7 +274,7 @@ export class PageDriver {
   async hover(target: string, options: ActionOptions = {}): Promise<string> {
     const p = await this.target(target, { ...options, force: true })
     await this.moveCursor(p.x, p.y, options.label)
-    await this.mouse('mouseMoved', p.x, p.y)
+    await this.move(p.x, p.y)
     await this.settle()
     return `Hovering ${p.desc}.`
   }
@@ -245,7 +290,7 @@ export class PageDriver {
     this.wc.debugger.on('message', onMessage)
     try {
       await this.cdp('Input.setInterceptDrags', { enabled: true })
-      await this.mouse('mouseMoved', a.x, a.y)
+      void this.mouse('mouseMoved', a.x, a.y).catch(() => undefined)
       await this.mouse('mousePressed', a.x, a.y, { button: 'left', buttons: 1, clickCount: 1 })
       // Resolve the drop point after pressing: lists often re-layout once a drag starts.
       const b = await this.target(to, { force: true })
@@ -260,7 +305,7 @@ export class PageDriver {
           await this.cdp('Input.dispatchDragEvent', { type: entered ? 'dragOver' : 'dragEnter', x, y, data: intercepted })
           entered = true
         } else {
-          await this.mouse('mouseMoved', x, y, { button: 'left', buttons: 1 })
+          await this.move(x, y, { button: 'left', buttons: 1 })
         }
         await sleep(16)
       }
@@ -290,7 +335,8 @@ export class PageDriver {
       x = Math.round(view.w / 2)
       y = Math.round(view.h / 2)
     }
-    await this.mouse('mouseWheel', x, y, { deltaX: options.dx ?? 0, deltaY: options.dy ?? 0 })
+    void this.mouse('mouseWheel', x, y, { deltaX: options.dx ?? 0, deltaY: options.dy ?? 0 }).catch(() => undefined)
+    await this.pump()
     await this.call('quiet(80, 500)').catch(() => undefined)
     const after = await this.call<{ x: number; y: number }>('scroll()')
     return `Scrolled; now at x=${after.x}, y=${after.y}.`
@@ -347,11 +393,11 @@ export class PageDriver {
       await this.cdp('Emulation.setUserAgentOverride', { userAgent: this.wc.getUserAgent() })
       return
     }
-    const mobile = viewport.width < 768
+    const mobile = isMobileViewport(viewport)
     await this.cdp('Emulation.setDeviceMetricsOverride', {
       width: viewport.width,
       height: viewport.height,
-      deviceScaleFactor: 0,
+      deviceScaleFactor: viewport.scale ?? 0,
       mobile,
       scale
     })

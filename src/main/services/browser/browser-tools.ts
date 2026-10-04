@@ -15,7 +15,11 @@ const target = {
   description: 'Element: a snapshot ref like "@12" (preferred), "text=Sign in", or a CSS selector.'
 }
 const label = { type: 'string', description: 'Optional 2–6 word caption shown beside your cursor, e.g. "open pricing".' }
-const snapshot = { type: 'boolean', default: true, description: 'Return a fresh snapshot of the page afterwards (default true).' }
+const snapshot = {
+  type: 'boolean',
+  default: true,
+  description: 'Return the page afterwards (default true) — only the lines that changed when that is shorter; browser_snapshot gives the full page.'
+}
 const force = { type: 'boolean', default: false, description: 'Act even if another element covers the target.' }
 
 const tool = (name: string, description: string, properties: Record<string, unknown> = {}, required: string[] = []): ToolDefinition => ({
@@ -149,14 +153,29 @@ export class BrowserTools {
         url: { type: 'string', description: 'For new.' },
         profile: { type: 'string', description: 'For new: profile id (browser_profiles).' }
       }),
-      tool('browser_viewport', 'Emulate a device screen size (touch + mobile layout below 768px wide), or reset to the panel size.', {
+      tool('browser_viewport', "Device mode: emulate a phone, tablet or desktop (size, pixel ratio, touch, mobile layout), a custom width × height, rotate, or reset to the panel size. The user sees it in the browser's device toolbar.", {
         preset: { type: 'string', enum: viewports },
         width: { type: 'integer', minimum: 200, maximum: 4000 },
         height: { type: 'integer', minimum: 200, maximum: 4000 },
+        scale: { type: 'number', minimum: 0.5, maximum: 5, description: 'Device pixel ratio for a custom size.' },
+        mobile: { type: 'boolean', description: 'Custom size: touch + mobile layout (default: narrower than 768px).' },
+        rotate: { type: 'boolean', default: false, description: 'Swap width and height of the current or given size.' },
         reset: { type: 'boolean', default: false },
         page,
         snapshot: { ...snapshot, default: false }
       }),
+      tool(
+        'browser_crawl',
+        'Read a whole website in ONE call: opens up to max_pages same-site pages in parallel (no images/fonts, so it is fast) and returns each page as text. Use for "check the entire site", audits, collecting all info.',
+        {
+          url: { type: 'string', description: 'Start page; links on the same site are followed breadth-first.' },
+          max_pages: { type: 'integer', minimum: 1, maximum: 60, default: 15 },
+          concurrency: { type: 'integer', minimum: 1, maximum: 8, default: 5 },
+          max_chars_per_page: { type: 'integer', minimum: 500, maximum: 20000, default: 5000 },
+          profile: { type: 'string', description: 'Profile id (logins) to crawl with; default: the default profile.' }
+        },
+        ['url']
+      ),
       tool('browser_cookies', "Read, set or clear cookies in the page's profile (shared by every page using that profile).", {
         action: { type: 'string', enum: ['get', 'set', 'clear'], default: 'get' },
         url: { type: 'string', description: 'Limit get/clear to cookies sent to this URL. Default for get: the current page URL.' },
@@ -199,6 +218,8 @@ export class BrowserTools {
       if (error instanceof ToolError || error instanceof PageError) return { text: error.message, isError: true }
       if (error instanceof AppException) return { text: error.message, isError: true }
       return { text: `The browser could not do that: ${error instanceof Error ? error.message : String(error)}`, isError: true }
+    } finally {
+      this.browser.endActivity(agent.id)
     }
   }
 
@@ -263,6 +284,15 @@ export class BrowserTools {
         writeFileSync(file, shot.data)
         return { text: `Screenshot of page ${p.id} (${shot.width}×${shot.height}) saved to ${file}`, image: { data: shot.data.toString('base64'), mimeType: 'image/png' } }
       }
+      case 'browser_crawl': {
+        const pages = await browser.crawl(agent, str(args, 'url'), {
+          maxPages: int(args, 'max_pages', 15, 1, 60),
+          concurrency: int(args, 'concurrency', 5, 1, 8),
+          maxChars: int(args, 'max_chars_per_page', 5000, 500, 20000),
+          profileId: str(args, 'profile', false) || undefined
+        })
+        return { text: `Read ${pages.length} page(s):\n\n${pages.map((p, i) => `===== ${i + 1}. ${p.url}\n${p.text}`).join('\n\n')}` }
+      }
       case 'browser_pages':
         return { text: await this.pages(agent, args) }
       case 'browser_viewport': {
@@ -271,14 +301,20 @@ export class BrowserTools {
         if (args.reset !== true) {
           const preset = str(args, 'preset', false)
           if (preset) {
-            viewport = [...VIEWPORT_PRESETS, ...this.customViewports()].find((v) => v.name.toLowerCase() === preset.toLowerCase()) ?? null
-            if (!viewport) throw new ToolError(`No viewport "${preset}".`)
-          } else {
+            const found = [...VIEWPORT_PRESETS, ...this.customViewports()].find((v) => v.name.toLowerCase() === preset.toLowerCase())
+            if (!found) throw new ToolError(`No viewport "${preset}".`)
+            viewport = { name: found.name, width: found.width, height: found.height, scale: found.scale, mobile: found.mobile }
+          } else if (args.width !== undefined || args.height !== undefined) {
             const width = int(args, 'width', 0, 0, 4000)
             const height = int(args, 'height', 0, 0, 4000)
-            if (width < 200 || height < 200) throw new ToolError('Give a preset, width and height (200–4000), or reset: true.')
-            viewport = { name: `${width}×${height}`, width, height }
+            if (width < 200 || height < 200) throw new ToolError('Give a preset, width and height (200–4000), rotate, or reset: true.')
+            const scale = typeof args.scale === 'number' ? Math.min(5, Math.max(0.5, args.scale)) : undefined
+            viewport = { name: `${width}×${height}`, width, height, ...(scale ? { scale } : {}), ...(typeof args.mobile === 'boolean' ? { mobile: args.mobile } : {}) }
+          } else {
+            viewport = browser.pageView(p).viewport
+            if (!viewport) throw new ToolError('Give a preset or width and height first (rotate turns the current device).')
           }
+          if (args.rotate === true) viewport = { ...viewport, width: viewport.height, height: viewport.width }
         }
         await browser.setViewport(p.id, viewport)
         const message = viewport ? `Viewport set to ${viewport.name} (${viewport.width}×${viewport.height}).` : 'Viewport reset to the panel size.'
@@ -378,7 +414,7 @@ export class BrowserTools {
   private async withSnapshot(pageId: string, driver: PageDriver, message: string, args: Args, byDefault = true): Promise<ToolResult> {
     const wanted = typeof args.snapshot === 'boolean' ? args.snapshot : byDefault
     if (!wanted) return { text: `[page ${pageId}] ${message}` }
-    return { text: `[page ${pageId}] ${message}\n\n${await driver.snapshot()}` }
+    return { text: `[page ${pageId}] ${message}\n\n${await driver.snapshot(false, 'diff')}` }
   }
 
   private async pages(agent: AgentRef, args: Args): Promise<string> {

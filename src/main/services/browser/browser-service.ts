@@ -19,7 +19,7 @@ import type { StateStore } from '../persistence/state-store'
 import type { SettingsService } from '../settings/settings-service'
 import { parseCookieFile, type CookieInput } from './cookies'
 import { PageDriver } from './page-driver'
-import { fitScale } from './urls'
+import { fitScale, normalizeUrl } from './urls'
 
 export interface LogEntry {
   at: number
@@ -41,7 +41,19 @@ interface Page {
   size: { width: number; height: number }
   console: LogEntry[]
   network: LogEntry[]
+  /** An agent is acting on the page until this time (Infinity while a tool call runs). */
+  activeUntil: number
 }
+
+export interface CrawledPage {
+  url: string
+  text: string
+}
+
+/** Resource types a crawl skips: it reads text, it does not need pixels or sound. */
+const LEAN_BLOCK = new Set(['image', 'media', 'font', 'imageset', 'object'])
+/** How long the "is using this page" strip lingers after an agent's last action. */
+const ACTIVE_LINGER_MS = 2500
 
 export interface AgentRef {
   id: string
@@ -70,6 +82,12 @@ export class BrowserService {
   private readonly current = new Map<string, string>()
   private readonly configured = new WeakSet<Session>()
   private annotations: BrowserAnnotation[] = []
+  /** Pages each agent touched during its current tool call. */
+  private readonly touched = new Map<string, Set<Page>>()
+  /** Crawl pages: images, media and fonts are not loaded. */
+  private readonly lean = new Set<number>()
+  /** Crawls running per session; the request filter exists only while one runs, so normal browsing pays nothing. */
+  private readonly leanSessions = new Map<Session, number>()
   private window: BrowserWindow | null = null
   private counter = 0
   private emitTimer: ReturnType<typeof setTimeout> | null = null
@@ -95,6 +113,11 @@ export class BrowserService {
     })
   }
 
+  /**
+   * A page off screen is a hidden view at its last real size: layout, input
+   * and screenshots behave as when visible (PageDriver pumps a frame where
+   * Chromium waits for one).
+   */
   private place(page: Page): void {
     const size = page.driver.viewport ?? page.size
     page.view.setBounds(page.shown ?? { x: 0, y: 0, width: size.width, height: size.height })
@@ -126,8 +149,9 @@ export class BrowserService {
       page.shown = null
     }
     this.place(page)
+    // In device mode the panel sizes the box to the emulated screen, so its width gives the zoom.
     const viewport = page.driver.viewport
-    if (viewport) await page.driver.emulate(viewport, page.shown ? fitScale(viewport, page.shown) : 1).catch(() => undefined)
+    if (viewport) await page.driver.emulate(viewport, page.shown ? Math.min(1, page.shown.width / viewport.width) : 1).catch(() => undefined)
     return picture
   }
 
@@ -220,7 +244,8 @@ export class BrowserService {
       ownerAgentId: page.ownerAgentId,
       ownerName: page.ownerName,
       viewport: page.driver.viewport,
-      devToolsOpen: alive && wc.isDevToolsOpened()
+      devToolsOpen: alive && wc.isDevToolsOpened(),
+      agentActive: page.activeUntil > Date.now()
     }
   }
 
@@ -257,18 +282,20 @@ export class BrowserService {
       }
     })
     view.setBackgroundColor('#ffffff')
+    const id = `b${++this.counter}`
     const page: Page = {
-      id: `b${++this.counter}`,
+      id,
       scope: input.scope,
       profileId,
       ownerAgentId: input.owner?.id,
       ownerName: input.owner?.petName,
       view,
-      driver: new PageDriver(view.webContents),
+      driver: new PageDriver(view.webContents, () => Boolean(this.pages.get(id)?.shown)),
       shown: null,
       size: { ...DEFAULT_SIZE },
       console: [],
-      network: []
+      network: [],
+      activeUntil: 0
     }
     this.pages.set(page.id, page)
     this.wire(page)
@@ -441,21 +468,120 @@ export class BrowserService {
         return fail('NOT_FOUND', `No page "${pageId}" in your workspace. Pages: ${ids.join(', ') || 'none'}.`)
       }
       this.current.set(agent.id, page.id)
-      return this.withCursor(page)
+      return this.withCursor(this.touch(agent.id, page))
     }
     const current = this.current.get(agent.id)
-    if (current && this.pages.has(current)) return this.withCursor(this.get(current))
+    if (current && this.pages.has(current)) return this.withCursor(this.touch(agent.id, this.get(current)))
     const opened = this.open({ scope: agent.workspaceId, owner: agent })
-    return this.withCursor(this.get(opened.id))
+    return this.withCursor(this.touch(agent.id, this.get(opened.id)))
   }
 
   newAgentPage(agent: AgentRef, url?: string, profileId?: string): Page {
     const opened = this.open({ scope: agent.workspaceId, owner: agent, url, profileId })
-    return this.withCursor(this.get(opened.id))
+    return this.withCursor(this.touch(agent.id, this.get(opened.id)))
+  }
+
+  /** Marks a page as being driven by an agent's running tool call. */
+  private touch(agentId: string, page: Page): Page {
+    if (page.activeUntil !== Infinity) {
+      page.activeUntil = Infinity
+      this.changed()
+    }
+    const set = this.touched.get(agentId) ?? new Set<Page>()
+    set.add(page)
+    this.touched.set(agentId, set)
+    return page
+  }
+
+  /** The agent's tool call finished: its pages stop showing "is using" shortly after. */
+  endActivity(agentId: string): void {
+    const pages = this.touched.get(agentId)
+    if (!pages) return
+    this.touched.delete(agentId)
+    for (const page of pages) page.activeUntil = Date.now() + ACTIVE_LINGER_MS
+    this.changed()
+    setTimeout(() => this.changed(), ACTIVE_LINGER_MS + 50)
+  }
+
+  /**
+   * Reads a whole site in parallel: hidden lean pages (no images, media or
+   * fonts) walk same-origin links breadth-first. One call instead of one
+   * navigate + snapshot round trip per page.
+   */
+  async crawl(agent: AgentRef, start: string, options: { maxPages: number; concurrency: number; maxChars: number; profileId?: string }): Promise<CrawledPage[]> {
+    const startUrl = normalizeUrl(start)
+    const origin = new URL(startUrl).origin
+    const clean = (href: string): string | null => {
+      try {
+        const u = new URL(href)
+        if (u.origin !== origin || !/^https?:$/.test(u.protocol)) return null
+        if (/\.(pdf|zip|png|jpe?g|gif|svg|webp|mp4|mp3|dmg|exe|msi)$/i.test(u.pathname)) return null
+        u.hash = ''
+        return u.href
+      } catch {
+        return null
+      }
+    }
+    const queue = [clean(startUrl) ?? startUrl]
+    const seen = new Set(queue)
+    const results: CrawledPage[] = []
+    let inflight = 0
+    const workers = Array.from({ length: Math.min(options.concurrency, options.maxPages) }, () => {
+      const view = this.open({ scope: `crawl-${agent.id}`, profileId: options.profileId })
+      const page = this.get(view.id)
+      this.lean.add(page.view.webContents.id)
+      page.driver.cursorMs = 0
+      return page
+    })
+    const work = async (page: Page): Promise<void> => {
+      for (;;) {
+        if (results.length + inflight >= options.maxPages) return
+        const url = queue.shift()
+        if (!url) {
+          if (!inflight) return
+          await new Promise((r) => setTimeout(r, 40))
+          continue
+        }
+        inflight++
+        try {
+          await page.driver.navigate(url)
+          // Refs are useless once the crawl page closes; dropping them saves tokens.
+          const text = (await page.driver.snapshot(true)).replace(/ \[@\d+\]/g, '')
+          results.push({ url: page.view.webContents.getURL() || url, text: text.length > options.maxChars ? `${text.slice(0, options.maxChars)}\n… (page cut)` : text })
+          for (const href of await page.driver.call<string[]>('links()')) {
+            const next = clean(href)
+            if (next && !seen.has(next)) {
+              seen.add(next)
+              queue.push(next)
+            }
+          }
+        } catch (error) {
+          results.push({ url, text: `(could not read: ${error instanceof Error ? error.message : String(error)})` })
+        } finally {
+          inflight--
+        }
+      }
+    }
+    const ses = workers[0]!.view.webContents.session
+    const running = this.leanSessions.get(ses) ?? 0
+    if (!running) ses.webRequest.onBeforeRequest((d, callback) => callback({ cancel: this.lean.has(d.webContentsId ?? -1) && LEAN_BLOCK.has(d.resourceType) }))
+    this.leanSessions.set(ses, running + 1)
+    try {
+      await Promise.all(workers.map(work))
+    } finally {
+      const left = (this.leanSessions.get(ses) ?? 1) - 1
+      this.leanSessions.set(ses, left)
+      if (!left) ses.webRequest.onBeforeRequest(null)
+      for (const page of workers) {
+        this.lean.delete(page.view.webContents.id)
+        this.close(page.id)
+      }
+    }
+    return results
   }
 
   private withCursor(page: Page): Page {
-    page.driver.cursorMs = this.settings.get().browserAgentCursor ? 140 : 0
+    page.driver.cursorMs = this.settings.get().browserAgentCursor ? 110 : 0
     return page
   }
 

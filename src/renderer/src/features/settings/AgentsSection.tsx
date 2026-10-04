@@ -1,6 +1,6 @@
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Toggle } from '../../components/ui/Toggle'
-import { useClis, useSettings } from '../../stores/data'
+import { useApp, useClis, useSettings } from '../../stores/data'
 import { SettingRow, SettingsPage } from './SettingsScreen'
 import styles from './Settings.module.css'
 
@@ -11,15 +11,19 @@ const TOOLS: Array<[string, string]> = [
   ['list_agents', 'Every agent in the project with its CLI, workspace and live status'],
   ['read_agent', "What another agent's terminal currently shows"],
   ['send_message', 'Type a message into another agent and submit it'],
+  ['ask_agent', 'Send, wait and read the reply — delegation in one call'],
+  ['run_tools', 'Several tool calls in one round trip, in parallel'],
   ['wait_for_agent', 'Block until an agent finishes, then report its status'],
   ['open_agent / close_agent', 'Start or stop agents in new panes'],
   ['arrange_panes', 'Equal, focus or columns layout for the workspace'],
   ['run_in_terminal / read_terminal', "Run commands in the workspace's side-panel terminal"],
-  ['browser_*', 'Drive the built-in browser — see Settings › Browser']
+  ['browser_*', 'Drive the built-in browser — see Settings › Browser'],
+  ['computer_*', 'Mouse, keyboard, windows and screen of this computer (when Computer use is on)']
 ]
 
 export function AgentsSection() {
   const { settings, update } = useSettings()
+  const info = useApp((s) => s.info)
   // Select the stable array, filter outside: a fresh array from a selector re-renders forever.
   const allClis = useClis((s) => s.clis)
   const clis = allClis.filter((c) => c.available)
@@ -60,6 +64,26 @@ export function AgentsSection() {
           description="Applies to agents started after the change."
           control={
             <Toggle label="Give agents Hiveory tools" checked={settings.agentTools} onChange={(agentTools) => void update({ agentTools })} />
+          }
+        />
+      </div>
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Computer use</div>
+        <p className={styles.groupNote}>
+          Lets agents operate this computer like you do: read any app&apos;s buttons and fields, click, type, press shortcuts, switch windows
+          and take screenshots. Agents see apps as text with element refs first, so it is fast and needs no screenshots. Hiveory shows a
+          notice whenever an agent starts using it.
+        </p>
+        <SettingRow
+          title="Give agents computer use"
+          description={info?.platform === 'win32' ? 'Off by default. Takes effect on the next tool call.' : 'Available on Windows for now.'}
+          control={
+            <Toggle
+              label="Give agents computer use"
+              checked={settings.computerUse}
+              disabled={info !== null && info.platform !== 'win32'}
+              onChange={(computerUse) => void update({ computerUse })}
+            />
           }
         />
       </div>

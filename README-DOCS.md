@@ -25,6 +25,7 @@
 - `adr/0013-feedback-round-3.md`
 - `adr/0014-feedback-round-4.md`
 - `adr/0015-agent-browser.md`
+- `adr/0016-speed-device-mode-computer-use.md`
 
 ## Research
 

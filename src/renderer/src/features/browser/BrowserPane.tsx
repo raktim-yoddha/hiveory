@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -22,7 +22,7 @@ import {
   UserRoundPlus,
   X
 } from 'lucide-react'
-import { VIEWPORT_PRESETS, type PickedElement, type Viewport } from '@shared/domain'
+import type { PickedElement, Viewport } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { Modal } from '../../components/ui/Modal'
@@ -33,10 +33,14 @@ import { useBrowser } from '../../stores/browser'
 import { useSettings } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
+import { DeviceToolbar } from './DeviceToolbar'
 import { isOverlayOpen, useOverlayOpen } from './useOverlayOpen'
 import styles from './BrowserPane.module.css'
 
 type PickMode = 'pick' | 'annotate'
+
+/** Room around the emulated screen for its resize handles (px). */
+const HANDLE_SPACE = 24
 
 const describeElement = (url: string, el: PickedElement): string =>
   [`Element on ${url}: ${el.role}${el.name ? ` "${el.name}"` : ''} (ref ${el.ref})`, `selector: ${el.selector}`, el.text && `text: ${el.text}`, `html: ${el.html}`]
@@ -55,7 +59,15 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   const settings = useSettings((s) => s.settings)
   const openSettings = useNavigation((s) => s.openSettings)
   const overlay = useOverlayOpen()
-  const hostRef = useRef<HTMLDivElement>(null)
+  /** The box main lays the native page over: the whole stage, or the emulated screen in device mode. */
+  const boxRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const [stage, setStage] = useState({ width: 0, height: 0 })
+  const [deviceMode, setDeviceMode] = useState(false)
+  /** Size while a resize handle is dragged (applied to the page on every frame). */
+  const [dragSize, setDragSize] = useState<{ width: number; height: number } | null>(null)
+  /** The viewport just chosen here, shown until main's state catches up (the next change builds on it, not on a stale one). */
+  const [chosen, setChosen] = useState<{ viewport: Viewport | null } | null>(null)
   const [frozen, setFrozen] = useState<string | null>(null)
   const [draft, setDraft] = useState<string | null>(null)
   const [picking, setPicking] = useState<PickMode | null>(null)
@@ -71,7 +83,7 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
     let last = ''
     let frame = 0
     const tick = (): void => {
-      const el = hostRef.current
+      const el = boxRef.current
       if (el) {
         const r = el.getBoundingClientRect()
         const key = `${r.left},${r.top},${r.width},${r.height}`
@@ -94,6 +106,16 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   }, [active, pageId])
 
   useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setStage({ width: entry.contentRect.width, height: entry.contentRect.height })
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     if (!flash) return
     const timer = setTimeout(() => setFlash(null), 2400)
     return () => clearTimeout(timer)
@@ -103,7 +125,63 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   const profile = profiles.find((p) => p.id === page.profileId)
   const pageNotes = annotations.filter((a) => a.pageId === pageId)
   const secure = page.url.startsWith('https://')
-  const viewports: Viewport[] = [...VIEWPORT_PRESETS, ...settings.browserViewports]
+  // Device mode: on when toggled, or whenever a viewport is set (agents can set one too).
+  const current = chosen ? chosen.viewport : page.viewport
+  const device = deviceMode || Boolean(current)
+  const emulated: Viewport | null = current
+    ? dragSize
+      ? { ...current, name: 'Responsive', ...dragSize }
+      : current
+    : device
+      ? { name: 'Responsive', width: Math.max(200, Math.round(stage.width - HANDLE_SPACE)), height: Math.max(200, Math.round(stage.height - HANDLE_SPACE)) }
+      : null
+  const zoom = emulated ? Math.min(1, (stage.width - HANDLE_SPACE) / emulated.width, (stage.height - HANDLE_SPACE) / emulated.height) : 1
+  const setViewport = (viewport: Viewport | null): void => {
+    const mine = { viewport }
+    setChosen(mine)
+    void runAction('Set viewport', () => api('browser.viewport', { pageId, viewport })).finally(() =>
+      // Main has applied it; its broadcast follows within a few frames.
+      setTimeout(() => setChosen((c) => (c === mine ? null : c)), 400)
+    )
+  }
+  const toggleDevice = (): void => {
+    if (device) {
+      setDeviceMode(false)
+      if (current) setViewport(null)
+    } else {
+      setDeviceMode(true)
+      setViewport({ name: 'Responsive', width: Math.max(200, Math.round(stage.width - HANDLE_SPACE)), height: Math.max(200, Math.round(stage.height - HANDLE_SPACE)) })
+    }
+  }
+  /** Drag a resize handle: width, height or both follow the pointer at the current zoom. */
+  const startResize = (event: ReactPointerEvent, axis: 'x' | 'y' | 'xy'): void => {
+    if (!emulated) return
+    event.preventDefault()
+    const start = { x: event.clientX, y: event.clientY, width: emulated.width, height: emulated.height, zoom }
+    const base = emulated
+    let frame = 0
+    let latest = { width: base.width, height: base.height }
+    const clampSize = (n: number): number => Math.min(4000, Math.max(200, Math.round(n)))
+    const move = (e: PointerEvent): void => {
+      latest = {
+        width: axis === 'y' ? start.width : clampSize(start.width + ((e.clientX - start.x) * 2) / start.zoom),
+        height: axis === 'x' ? start.height : clampSize(start.height + (e.clientY - start.y) / start.zoom)
+      }
+      setDragSize(latest)
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => void api('browser.viewport', { pageId, viewport: { ...base, name: 'Responsive', ...latest } }).catch(() => undefined))
+    }
+    const up = (): void => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      cancelAnimationFrame(frame)
+      void api('browser.viewport', { pageId, viewport: { ...base, name: 'Responsive', ...latest } })
+        .catch(() => undefined)
+        .finally(() => setDragSize(null))
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
 
   const navigate = (url: string): void => void runAction('Open page', () => api('browser.navigate', { pageId, url }))
 
@@ -155,28 +233,6 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
       if (r) setFlash(`Cleared ${r.count} cookie(s)`)
     }
   }
-
-  const viewportItems: MenuEntry[] = [
-    { type: 'label', label: 'Viewport' },
-    {
-      type: 'item',
-      id: 'fit',
-      label: 'Responsive (panel size)',
-      checked: !page.viewport,
-      onSelect: () => void runAction('Set viewport', () => api('browser.viewport', { pageId, viewport: null }))
-    },
-    ...viewports.map(
-      (v): MenuEntry => ({
-        type: 'item',
-        id: `vp-${v.name}`,
-        label: `${v.name} — ${v.width} × ${v.height}`,
-        checked: page.viewport?.width === v.width && page.viewport?.height === v.height,
-        onSelect: () => void runAction('Set viewport', () => api('browser.viewport', { pageId, viewport: v }))
-      })
-    ),
-    { type: 'separator' },
-    { type: 'item', id: 'vp-edit', label: 'Custom sizes…', icon: <Settings2 />, onSelect: () => openSettings('browser') }
-  ]
 
   const moreItems: MenuEntry[] = [
     { type: 'item', id: 'pick', label: 'Pick element', icon: <Crosshair />, hint: 'Copy', onSelect: () => void startPick('pick') },
@@ -266,12 +322,7 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
             active={picking === 'annotate'}
             onClick={() => void startPick('annotate')}
           />
-          <Menu
-            label="Viewport"
-            align="end"
-            items={viewportItems}
-            trigger={(props) => <IconButton {...props} label="Viewport size" icon={<MonitorSmartphone />} active={Boolean(page.viewport)} />}
-          />
+          <IconButton label={device ? 'Close device toolbar' : 'Device toolbar (screen sizes)'} icon={<MonitorSmartphone />} active={device} onClick={toggleDevice} />
           <IconButton
             className={styles.wide}
             label="Developer tools"
@@ -283,8 +334,8 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
         </div>
       </div>
 
-      {page.ownerName && (
-        <div className={styles.strip}>
+      {page.ownerName && page.agentActive && (
+        <div className={cx(styles.strip, styles.live)}>
           <Bot aria-hidden />
           <span>
             <strong>{page.ownerName}</strong> is using this page
@@ -332,9 +383,35 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
         </div>
       )}
 
-      <div ref={hostRef} className={styles.host}>
-        {page.loading && <div className={styles.progress} aria-hidden />}
-        {frozen && !active && <img className={styles.frozen} src={frozen} alt="" />}
+      <div className={styles.host}>
+        {device && emulated && (
+          <DeviceToolbar
+            viewport={emulated}
+            custom={settings.browserViewports}
+            zoom={zoom}
+            onChange={setViewport}
+            onEditSizes={() => openSettings('browser')}
+            onClose={toggleDevice}
+          />
+        )}
+        <div ref={stageRef} className={cx(styles.stage, device && styles.deviceStage)}>
+          <div
+            className={styles.frame}
+            style={emulated ? { width: Math.max(1, Math.floor(emulated.width * zoom)), height: Math.max(1, Math.floor(emulated.height * zoom)) } : undefined}
+          >
+            <div ref={boxRef} className={styles.box}>
+              {page.loading && <div className={styles.progress} aria-hidden />}
+              {frozen && !active && <img className={styles.frozen} src={frozen} alt="" />}
+            </div>
+            {emulated && (
+              <>
+                <div className={cx(styles.handle, styles.handleX)} onPointerDown={(e) => startResize(e, 'x')} role="separator" aria-label="Resize width" />
+                <div className={cx(styles.handle, styles.handleY)} onPointerDown={(e) => startResize(e, 'y')} role="separator" aria-label="Resize height" />
+                <div className={cx(styles.handle, styles.handleXY)} onPointerDown={(e) => startResize(e, 'xy')} role="separator" aria-label="Resize width and height" />
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       <Modal

@@ -13,6 +13,8 @@ export interface McpEndpoint {
   token: string
   /** Browser use is on: the agent gets browser_* tools and is told to use them for websites. */
   browser?: boolean
+  /** Computer use is on: the agent gets computer_* tools for the desktop. */
+  computer?: boolean
 }
 
 export interface LaunchContext {

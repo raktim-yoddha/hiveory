@@ -35,7 +35,8 @@ const settingsSchema = z.object({
   browserAgentCursor: z.boolean().catch(DEFAULT_SETTINGS.browserAgentCursor),
   browserHomeUrl: z.string().max(2000).catch(DEFAULT_SETTINGS.browserHomeUrl),
   browserDefaultProfile: z.string().max(128).catch(DEFAULT_SETTINGS.browserDefaultProfile),
-  browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports)
+  browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
+  computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse)
 })
 
 const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })

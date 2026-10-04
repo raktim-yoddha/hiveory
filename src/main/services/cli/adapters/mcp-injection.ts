@@ -29,9 +29,21 @@ export const BROWSER_PROMPT =
   'browser_fill on refs; read a whole page with browser_snapshot full_page:true and visit its links to cover a whole site; ' +
   'run several steps in one call with browser_batch.'
 
+/** Desktop control: element refs first (fast, exact, no image tokens), pixels only when needed. */
+export const COMPUTER_PROMPT =
+  "You can also operate the user's computer with the hiveory computer_* tools (real mouse and keyboard). " +
+  'Read apps with computer_snapshot (UI elements with refs like [@c12]) and act on refs with computer_click / computer_type; ' +
+  'use computer_screenshot only for canvases or images; computer_windows lists and focuses windows; combine steps with computer_batch. ' +
+  'For web pages use the browser_* tools instead.'
+
+/** Speed: fewer model turns beat faster tools. */
+export const BATCH_PROMPT = 'Batch independent hiveory calls with run_tools; delegate to another agent with ask_agent (one call).'
+
 /** The system-prompt addition for an agent Hiveory launches (chat-only runs have no coordination tools). */
 export const agentPrompt = (mcp: McpEndpoint, coordination = true): string =>
-  [coordination ? AGENT_TOOLS_PROMPT : '', mcp.browser ? BROWSER_PROMPT : ''].filter(Boolean).join(' ')
+  [coordination ? AGENT_TOOLS_PROMPT : '', mcp.browser ? BROWSER_PROMPT : '', mcp.computer ? COMPUTER_PROMPT : '', coordination ? BATCH_PROMPT : '']
+    .filter(Boolean)
+    .join(' ')
 
 /** Claude Code flags that load Hiveory's MCP server from `configPath`, pre-approved, with the prompt. */
 export const claudeMcpArgs = (mcp: McpEndpoint, configPath: string, coordination = true): string[] => [

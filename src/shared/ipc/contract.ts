@@ -33,7 +33,9 @@ export const MAX_INSTANCES_PER_CLI = 8
 export const viewportSchema = z.object({
   name: z.string().trim().min(1).max(40),
   width: z.number().int().min(200).max(4000),
-  height: z.number().int().min(200).max(4000)
+  height: z.number().int().min(200).max(4000),
+  scale: z.number().min(0.5).max(5).optional(),
+  mobile: z.boolean().optional()
 })
 
 const pageId = z.string().regex(/^b\d{1,9}$/)
@@ -151,7 +153,8 @@ export const requestSchemas = {
       browserAgentCursor: z.boolean(),
       browserHomeUrl: z.string().trim().max(2000),
       browserDefaultProfile: profileId,
-      browserViewports: z.array(viewportSchema).max(32)
+      browserViewports: z.array(viewportSchema).max(32),
+      computerUse: z.boolean()
     })
     .partial(),
   'updates.status': none,

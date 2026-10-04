@@ -466,6 +466,7 @@ src/
 │       ├── shell/              ShellService — side-panel terminals
 │       ├── agent-tools/        MCP protocol + AgentTools (agents coordinating agents)
 │       ├── browser/            BrowserService (pages = WebContentsViews), PageDriver (CDP input), page script, BrowserTools (MCP)
+│       ├── computer/           ComputerService (warm native helper: SendInput, GDI, UI Automation), ComputerTools (MCP)
 │       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
 │       ├── extensions/         Skills & MCP inventory
 │       ├── settings/ updates/  App settings (themes…), electron-updater
@@ -497,6 +498,8 @@ Crash recovery, chat view in Work (`ChatSession.agentId`), side-panel tabs,
 resizable sidebars, Dark theme: ADR 0013. Durable sessions (resume on start-up,
 per-CLI resume), chat attachments, Permissions pill: ADR 0014. Built-in agent
 browser (pages in main, browser_* MCP tools, profiles, viewports): ADR 0015.
+Speed (diff snapshots, crawl, frame-aligned input), device mode, computer use,
+ask_agent / run_tools: ADR 0016.
 
 ### Agent tools data flow
 

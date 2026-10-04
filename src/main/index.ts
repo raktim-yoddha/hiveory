@@ -67,8 +67,11 @@ app.whenReady().then(async () => {
   container.settings.on('changed', (next, previous) => {
     if (next.theme !== previous.theme) for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme)
     if (next.autoCheckUpdates !== previous.autoCheckUpdates) container?.updates.setAutoCheck(next.autoCheckUpdates)
+    if (next.computerUse && !previous.computerUse) container?.computer.warm()
+    if (!next.computerUse && previous.computerUse) container?.computer.dispose()
   })
   container.updates.setAutoCheck(container.settings.get().autoCheckUpdates)
+  if (container.settings.get().computerUse) container.computer.warm()
   registerIpc(
     createHandlers(container),
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
@@ -92,6 +95,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   if (!container) return
   container.browser.closeAll()
+  container.computer.dispose()
   container.runtime.disposeAll()
   container.shells.disposeAll()
   container.chats.stopAll()

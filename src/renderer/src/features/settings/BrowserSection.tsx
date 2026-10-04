@@ -180,7 +180,10 @@ export function BrowserSection() {
 
       <div className={styles.group}>
         <div className={styles.groupTitle}>Viewport sizes</div>
-        <p className={styles.groupNote}>Built in: {VIEWPORT_PRESETS.map((v) => `${v.name} ${v.width}×${v.height}`).join(' · ')}.</p>
+        <p className={styles.groupNote}>
+          {VIEWPORT_PRESETS.length} devices are built in (iPhone, Pixel, Galaxy, iPad, Surface, Nest Hub, laptops up to 4K). Add your own sizes here;
+          they appear in the browser&apos;s device toolbar and for agents.
+        </p>
         {settings.browserViewports.length > 0 && (
           <ul className={styles.list}>
             {settings.browserViewports.map((v, i) => (

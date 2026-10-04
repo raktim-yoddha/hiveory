@@ -4,6 +4,8 @@ import { handleBody } from '../services/agent-tools/mcp-protocol'
 import { AgentService } from '../services/agents/agent-service'
 import { BrowserService } from '../services/browser/browser-service'
 import { BrowserTools } from '../services/browser/browser-tools'
+import { ComputerService } from '../services/computer/computer-service'
+import { ComputerTools } from '../services/computer/computer-tools'
 import { ExtensionsService } from '../services/extensions/extensions-service'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
@@ -37,13 +39,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const github = new GithubService(git)
   const registry = new CliRegistry(BUILT_IN_ADAPTERS, log)
 
+  const computer = new ComputerService(paths.runtimeDir, log)
   let hookServer: HookServer | null = null
   let settings: SettingsService | null = null
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
   const mcpFor = (id: string) => {
     const endpoint = hookServer?.endpoint
     if (!endpoint || !settings?.get().agentTools) return undefined
-    return { url: `${endpoint.baseUrl}/mcp/${id}`, token: endpoint.token, browser: settings.get().browserUse }
+    const s = settings.get()
+    return { url: `${endpoint.baseUrl}/mcp/${id}`, token: endpoint.token, browser: s.browserUse, computer: s.computerUse && computer.supported }
   }
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
@@ -62,6 +66,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const extensions = new ExtensionsService(log)
   const browser = new BrowserService(store, settings, emit, log)
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
+  const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
+  const extraTools = () => (settings?.get().computerUse && computer.supported ? [computerTools] : [])
   const toolDeps = {
     agents,
     runtime,
@@ -70,7 +76,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     registry,
     shells,
     chats,
-    browser: () => (settings?.get().browserUse ? browserTools : null)
+    browser: () => (settings?.get().browserUse ? browserTools : null),
+    extraTools
   }
   hookServer.setMcpHandler(async (instanceId, body) => {
     const refuse = (message: string) => ({ jsonrpc: '2.0', id: null, error: { code: -32001, message } })
@@ -79,9 +86,16 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     // A Chat-mode chat (not a Work agent) gets the browser only.
     const chat = chatStore.get(instanceId)
     if (!chat) return refuse('This agent is no longer registered in Hiveory.')
-    if (!settings.get().browserUse) return refuse('Browser use is turned off in Hiveory settings.')
     const caller = { id: chat.id, workspaceId: chat.projectId ?? `chat-${chat.id}`, petName: 'Chat' }
-    return handleBody(body, { list: () => browserTools.definitions(), call: (name, args) => browserTools.call(caller, name, args) })
+    const families = [...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []), ...extraTools()]
+    if (!families.length) return refuse('Browser and computer use are turned off in Hiveory settings.')
+    return handleBody(body, {
+      list: () => families.flatMap((f) => f.definitions()),
+      call: (name, args) => {
+        const family = families.find((f) => f.handles(name))
+        return family ? family.call(caller, name, args) : Promise.resolve({ text: `Unknown tool: ${name}`, isError: true })
+      }
+    })
   })
 
   return {
@@ -103,6 +117,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     extensions,
     chatStore,
     chats,
-    browser
+    browser,
+    computer
   }
 }

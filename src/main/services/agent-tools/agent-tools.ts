@@ -20,6 +20,15 @@ export interface AgentToolDeps {
   chats: ChatService
   /** The built-in browser's tools, when "Browser use" is on in Settings. */
   browser?: () => BrowserTools | null
+  /** Further tool families (computer use), each listed only while enabled. */
+  extraTools?: () => ToolFamily[]
+}
+
+/** A family of tools served beside the coordination tools (e.g. computer use). */
+export interface ToolFamily {
+  handles(name: string): boolean
+  definitions(): ToolDefinition[]
+  call(caller: { id: string; workspaceId: string; petName: string }, name: string, args: Record<string, unknown>): Promise<ToolResult>
 }
 
 const MAX_READ_LINES = 400
@@ -66,6 +75,12 @@ export class AgentTools implements ToolHost {
     return text.split('\n').slice(-lines).join('\n')
   }
 
+  /** The latest assistant message of a chat-view agent. */
+  private lastReply(agentId: string): string {
+    const last = [...this.deps.chats.get(agentId).messages].reverse().find((m) => m.role === 'assistant')
+    return last ? last.parts.map((p) => (p.kind === 'tool' ? `[tool ${p.name}]` : p.text)).join('\n') + (last.error ? `\n(error: ${last.error})` : '') : ''
+  }
+
   private describe(agent: CliInstance): string {
     const runtime = this.deps.agents.details(agent)
     const cli = this.deps.registry.displayName(agent.cliId)
@@ -75,7 +90,11 @@ export class AgentTools implements ToolHost {
   }
 
   list(): ToolDefinition[] {
-    return [...this.coordinationTools(), ...(this.deps.browser?.()?.definitions() ?? [])]
+    return [
+      ...this.coordinationTools(),
+      ...(this.deps.browser?.()?.definitions() ?? []),
+      ...(this.deps.extraTools?.() ?? []).flatMap((family) => family.definitions())
+    ]
   }
 
   private coordinationTools(): ToolDefinition[] {
@@ -108,6 +127,41 @@ export class AgentTools implements ToolHost {
             submit: { type: 'boolean', default: true, description: 'Press Enter after typing.' }
           },
           required: ['agent', 'message'],
+          additionalProperties: false
+        }
+      },
+      {
+        name: 'ask_agent',
+        description:
+          'Fastest way to delegate: send a message to another agent, wait until it finishes, and return its reply — one call instead of send_message + wait_for_agent + read_agent.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent: agentArg,
+            message: { type: 'string', minLength: 1, maxLength: 20000 },
+            timeout_seconds: { type: 'integer', minimum: 1, maximum: 900, default: 300 },
+            lines: { type: 'integer', minimum: 1, maximum: MAX_READ_LINES, default: 80, description: 'How much of its output to return.' }
+          },
+          required: ['agent', 'message'],
+          additionalProperties: false
+        }
+      },
+      {
+        name: 'run_tools',
+        description:
+          'Run several Hiveory tool calls in ONE call — in parallel by default (e.g. message three agents, read two, open a page). Each item is {"tool": name, "args": {...}}; results come back in order.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            calls: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 25,
+              items: { type: 'object', properties: { tool: { type: 'string' }, args: { type: 'object' } }, required: ['tool'] }
+            },
+            parallel: { type: 'boolean', default: true, description: 'false runs them one after another, stopping at the first error.' }
+          },
+          required: ['calls'],
           additionalProperties: false
         }
       },
@@ -179,6 +233,14 @@ export class AgentTools implements ToolHost {
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    if (name === 'run_tools') return this.runTools(args)
+    const extra = this.deps.extraTools?.()
+    if (extra?.some((tool) => tool.handles(name))) {
+      const caller = this.deps.agents.find(this.callerId)
+      if (!caller) return { text: 'This agent is no longer registered in Hiveory.', isError: true }
+      const host = extra.find((tool) => tool.handles(name))!
+      return host.call({ id: caller.id, workspaceId: caller.workspaceId, petName: caller.petName }, name, args)
+    }
     const browser = name.startsWith('browser_') ? this.deps.browser?.() : null
     if (browser) {
       const caller = this.deps.agents.find(this.callerId)
@@ -191,6 +253,51 @@ export class AgentTools implements ToolHost {
       if (error instanceof ToolError) return { text: error.message, isError: true }
       const message = error instanceof Error ? error.message : String(error)
       return { text: `Hiveory could not do that: ${message}`, isError: true }
+    }
+  }
+
+  /** Many tool calls in one round trip: the model's turn, not the tools, is what costs seconds. */
+  private async runTools(args: Record<string, unknown>): Promise<ToolResult> {
+    const calls = Array.isArray(args.calls) ? (args.calls as Array<{ tool?: unknown; args?: unknown }>) : []
+    if (!calls.length) return { text: 'calls must be a non-empty array of {"tool", "args"}.', isError: true }
+    const known = new Set(this.list().map((t) => t.name))
+    const one = async (c: { tool?: unknown; args?: unknown }): Promise<ToolResult> => {
+      const tool = typeof c.tool === 'string' ? c.tool : ''
+      if (tool === 'run_tools') return { text: 'run_tools cannot be nested.', isError: true }
+      if (!known.has(tool)) return { text: `Unknown tool "${tool}".`, isError: true }
+      return this.call(tool, typeof c.args === 'object' && c.args !== null ? (c.args as Record<string, unknown>) : {})
+    }
+    let results: ToolResult[]
+    if (args.parallel === false) {
+      results = []
+      for (const c of calls) {
+        const r = await one(c)
+        results.push(r)
+        if (r.isError) break
+      }
+    } else {
+      results = await Promise.all(calls.map(one))
+    }
+    const text = results
+      .map((r, i) => `### ${i + 1}. ${String(calls[i]?.tool)}${r.isError ? ' — failed' : ''}${r.image ? ' (image omitted; call the tool directly to see it)' : ''}\n${r.text}`)
+      .join('\n\n')
+    const skipped = calls.length - results.length
+    return { text: skipped ? `${text}\n\n(${skipped} call(s) not run after the failure)` : text, isError: results.some((r) => r.isError) }
+  }
+
+  /** Waits until an agent has stopped working, giving a just-messaged agent a moment to start. */
+  private async waitIdle(agent: CliInstance, timeoutMs: number, settleMs = 1500): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    const settleUntil = Date.now() + settleMs
+    let sawWork = false
+    for (;;) {
+      const details = this.deps.agents.details(agent)
+      const busy = details.running && (details.status === 'working' || (agent.chatUi === true && this.deps.chats.isRunning(agent.id)))
+      if (busy) sawWork = true
+      // Once it has been seen working, done means done; otherwise give it the settle window to start.
+      if (!busy && (sawWork || Date.now() >= settleUntil)) return true
+      if (Date.now() >= deadline) return false
+      await sleep(150)
     }
   }
 
@@ -231,16 +338,17 @@ export class AgentTools implements ToolHost {
       case 'wait_for_agent': {
         const agent = this.resolve(str(args, 'agent'))
         if (agent.id === this.callerId) throw new ToolError('You cannot wait for yourself.')
-        const deadline = Date.now() + int(args, 'timeout_seconds', 300, 1, 900) * 1000
-        // Give a just-messaged agent a moment to start working before judging it idle.
-        const settleUntil = Date.now() + 2500
-        for (;;) {
-          const details = agents.details(agent)
-          const busy = details.running && details.status === 'working'
-          if (!busy && Date.now() >= settleUntil) return `Done waiting. ${this.describe(agent)}`
-          if (Date.now() >= deadline) return `Timed out; still working. ${this.describe(agent)}`
-          await sleep(400)
-        }
+        const done = await this.waitIdle(agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000)
+        return `${done ? 'Done waiting.' : 'Timed out; still working.'} ${this.describe(agent)}`
+      }
+      case 'ask_agent': {
+        const agent = this.resolve(str(args, 'agent'))
+        if (agent.id === this.callerId) throw new ToolError('You cannot ask yourself.')
+        const sent = await this.dispatch('send_message', { agent: agent.petName, message: str(args, 'message'), submit: true })
+        const done = await this.waitIdle(agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000, 2500)
+        const lines = int(args, 'lines', 80, 1, MAX_READ_LINES)
+        const reply = agent.chatUi ? this.lastReply(agent.id) : runtime.screenText(agent.id, lines)
+        return `${sent} ${done ? 'It finished.' : 'Timed out while it was still working.'}\n--- ${agent.chatUi ? 'reply' : 'screen'} ---\n${reply || '(nothing yet)'}`
       }
       case 'open_agent': {
         const cliId = str(args, 'cli')
@@ -280,13 +388,14 @@ export class AgentTools implements ToolHost {
         const deadline = Date.now() + waitMs
         let last = before
         let stableSince = Date.now()
+        // Output that stops changing for half a second means the command is done (or waiting).
         while (Date.now() < deadline) {
-          await sleep(250)
+          await sleep(100)
           const now = shells.screenText(id, MAX_READ_LINES)
           if (now !== last) {
             last = now
             stableSince = Date.now()
-          } else if (now !== before && Date.now() - stableSince > 900) break
+          } else if (now !== before && Date.now() - stableSince > 500) break
         }
         return `$ ${str(args, 'command')}\n${shells.screenText(id, 60)}`
       }

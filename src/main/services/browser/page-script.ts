@@ -285,6 +285,12 @@ export const PAGE_SCRIPT = String.raw`(() => {
             // A container holding one line of text collapses onto a single line.
             lines[start].line = lines[start].line + ' ' + lines[start + 1].line.trim().replace(/^- text: /, '')
             lines.splice(start + 1, 1)
+          } else if (added === 1 && !name) {
+            // An unnamed wrapper around one element adds nothing: keep the element, drop the wrapper.
+            const child = lines[start + 1]
+            child.line = child.line.slice(2)
+            child.depth -= 1
+            lines.splice(start, 1)
           }
           continue
         }
@@ -639,6 +645,7 @@ export const PAGE_SCRIPT = String.raw`(() => {
     pick,
     cancelPick: () => (cancelPick ? (cancelPick(), true) : false),
     rect,
+    links: () => [...new Set([...D.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => /^https?:/.test(h)))],
     describe: (target) => describe(resolve(target)),
     hasText: (text) => norm(D.body ? D.body.innerText : '').toLowerCase().includes(norm(text).toLowerCase()),
     count: (selector) => deepQueryAll(selector).filter(visible).length,

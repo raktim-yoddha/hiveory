@@ -203,6 +203,12 @@ The side panel's Browser tab is a real browser (ADR 0015):
 - pages an agent opens appear as tabs in its workspace's side panel, named after the agent
 - profiles keep separate cookies and logins; viewports emulate phones, tablets and desktops
 - Settings › Browser: browser use, agent cursor, home page, default profile, profiles, custom viewport sizes
+- device mode: a toolbar above the page with 22 devices, editable width × height, pixel ratio, rotate and drag handles (ADR 0016); agents use the same
+- "is using this page" shows only while an agent is acting
+
+## Computer Use
+
+Off by default (Settings › Agents). When on, agents operate this computer through `computer_*` tools: app elements as text with refs, real mouse and keyboard, windows and screenshots (Windows for now; ADR 0016).
 
 ## Important Non-Features
 

@@ -207,3 +207,26 @@ describe('MCP HTTP endpoint', () => {
     expect(writes).toEqual([])
   })
 })
+
+describe('fast orchestration', () => {
+  it('run_tools runs several calls in one round trip and refuses nesting', async () => {
+    const { tools } = setup()
+    const r = await tools.call('run_tools', {
+      calls: [{ tool: 'list_agents' }, { tool: 'read_agent', args: { agent: 'Luna' } }, { tool: 'run_tools', args: {} }]
+    })
+    expect(r.text).toContain('### 1. list_agents')
+    expect(r.text).toContain('codex says hi')
+    expect(r.text).toContain('### 3. run_tools — failed')
+    expect(r.isError).toBe(true)
+  })
+
+  it('ask_agent sends, waits for the turn to end and returns the reply in one call', async () => {
+    const { tools, deps } = setup()
+    let n = 0
+    deps.agents.details = () => (n++ < 2 ? { status: 'working', running: true } : { status: 'idle', running: true })
+    const r = await tools.call('ask_agent', { agent: 'Ivy', message: 'summarise the diff' })
+    expect(deps.chats.send).toHaveBeenCalledWith('a4', 'summarise the diff')
+    expect(r.text).toContain('It finished.')
+    expect(r.text).toContain('hi from chat')
+  })
+})

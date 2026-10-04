@@ -104,7 +104,7 @@ describe('BrowserTools', () => {
       snapshot: async () => 'Page: Demo\n- button "Go" [@1]'
     }
     const page = { id: 'b1', driver, console: [], network: [] }
-    const service = { agentPage: () => page, newAgentPage: () => page } as unknown as BrowserService
+    const service = { agentPage: () => page, newAgentPage: () => page, endActivity: () => undefined } as unknown as BrowserService
     return { tools: new BrowserTools(service, '/tmp/shots', () => []), calls }
   }
   const agent = { id: 'a1', workspaceId: 'w1', petName: 'Milo' }
