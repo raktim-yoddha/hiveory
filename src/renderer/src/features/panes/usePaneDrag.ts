@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import type { LayoutOperation } from '@shared/domain'
-import { resolveDropTarget, type DropTarget } from '@shared/layout/drop'
+import { inArrangeBand, resolveDropTarget, type DropTarget } from '@shared/layout/drop'
 import type { Rect } from '@shared/layout/geometry'
 
 /** Pointer travel before a press on a pane header becomes a drag. */
@@ -10,6 +10,8 @@ export interface DragState {
   paneId: string
   swap: boolean
   target: DropTarget | null
+  /** Pointer is in the top band, so the arrange bar is shown. */
+  inArrangeBand: boolean
 }
 
 interface Options {
@@ -19,7 +21,9 @@ interface Options {
 }
 
 const toOperation = (paneId: string, target: DropTarget): LayoutOperation =>
-  target.kind === 'swap'
+  target.kind === 'arrange'
+    ? { type: 'arrange', mode: target.mode, focusPaneId: paneId }
+    : target.kind === 'swap'
     ? { type: 'swap', paneId, targetPaneId: target.targetPaneId }
     : target.kind === 'move'
       ? { type: 'move', paneId, targetPaneId: target.targetPaneId, side: target.side }
@@ -48,16 +52,12 @@ export const usePaneDrag = ({ containerRef, panes, onOperation }: Options) => {
   const resolve = useCallback(
     (paneId: string): DragState => {
       const box = containerRef.current?.getBoundingClientRect()
-      if (!box) return { paneId, swap: swapHeld.current, target: null }
-      const target = resolveDropTarget({
-        x: pointer.current.x - box.left,
-        y: pointer.current.y - box.top,
-        panes: live.current.panes,
-        container: { x: 0, y: 0, width: box.width, height: box.height },
-        draggedPaneId: paneId,
-        swap: swapHeld.current
-      })
-      return { paneId, swap: swapHeld.current, target }
+      if (!box) return { paneId, swap: swapHeld.current, target: null, inArrangeBand: false }
+      const container = { x: 0, y: 0, width: box.width, height: box.height }
+      const x = pointer.current.x - box.left
+      const y = pointer.current.y - box.top
+      const target = resolveDropTarget({ x, y, panes: live.current.panes, container, draggedPaneId: paneId, swap: swapHeld.current })
+      return { paneId, swap: swapHeld.current, target, inArrangeBand: !swapHeld.current && inArrangeBand(container, y, x) }
     },
     [containerRef]
   )

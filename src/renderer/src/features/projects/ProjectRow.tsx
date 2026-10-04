@@ -5,7 +5,7 @@ import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { cx } from '../../lib/cx'
 import { useWorkspaces } from '../../stores/data'
-import { useNavigation } from '../../stores/navigation'
+import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { CreateWorkspaceDialog } from '../workspace-create/CreateWorkspaceDialog'
 import { DeleteWorkspaceDialog } from '../workspace/DeleteWorkspaceDialog'
 import styles from './ProjectSidebar.module.css'
@@ -18,7 +18,7 @@ export function ProjectRow({ project }: { project: Project }) {
   const { openProject, openWorkspace } = useNavigation()
   const workspaces = useWorkspaces((s) => s.byProject[project.id] ?? EMPTY)
   const loadWorkspaces = useWorkspaces((s) => s.load)
-  const isCurrent = view.type !== 'home' && view.projectId === project.id
+  const isCurrent = selectedProjectId(view) === project.id
   // Follows the selection until the user toggles it explicitly.
   const [toggled, setToggled] = useState<boolean | null>(null)
   const expanded = toggled ?? isCurrent

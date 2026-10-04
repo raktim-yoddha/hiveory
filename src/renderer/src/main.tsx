@@ -6,7 +6,8 @@ import './styles/tokens.css'
 import './styles/base.css'
 import { AppShell } from './features/shell/AppShell'
 import { installEventBridge } from './stores/bridge'
-import { useApp, useClis } from './stores/data'
+import { refreshTerminalTheme } from './features/terminal/terminal-registry'
+import { useApp, useClis, useSettings } from './stores/data'
 import { reportError } from './stores/notices'
 
 // Last-resort guards: stray async failures become notices instead of silent breakage.
@@ -16,12 +17,18 @@ window.addEventListener('error', (event) => {
 })
 
 function App() {
+  const theme = useSettings((s) => s.settings.theme)
   useEffect(() => {
     const uninstall = installEventBridge()
     void useApp.getState().load()
     void useClis.getState().load()
+    void useSettings.getState().load()
     return uninstall
   }, [])
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    refreshTerminalTheme()
+  }, [theme])
   return <AppShell />
 }
 

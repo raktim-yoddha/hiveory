@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
 import type { Project } from '@shared/domain'
-import { fail } from '@shared/errors'
+import { AppException, fail } from '@shared/errors'
 import type { AgentService } from '../agents/agent-service'
 import type { Emit } from '../events'
 import { nowIso } from '../events'
-import type { GitService } from '../git/git-service'
+import { GitCommandError, type GitService } from '../git/git-service'
 import type { StateStore } from '../persistence/state-store'
 
 const samePath = (a: string, b: string): boolean =>
@@ -64,6 +64,36 @@ export class ProjectService {
     this.store.update((s) => {
       const p = s.projects.find((x) => x.id === projectId)
       if (p) p.lastOpenedAt = now
+    })
+    this.emit('state.changed', { topic: 'projects' })
+    return this.get(projectId)
+  }
+
+  /** Turns a plain folder into a Git repository so isolated workspaces become possible. */
+  async initRepository(projectId: string, commit: boolean): Promise<Project> {
+    const project = this.get(projectId)
+    const existing = await this.git.repositoryRoot(project.path)
+    try {
+      if (existing) {
+        if (commit && !(await this.git.hasCommits(existing))) await this.git.init(existing, true)
+      } else {
+        await this.git.init(project.path, commit)
+      }
+    } catch (error) {
+      if (error instanceof AppException) throw error
+      const detail = error instanceof GitCommandError ? error.stderr.trim() : String(error)
+      fail('GIT_FAILED', commit ? 'Git could not create the first commit.' : 'Git could not initialize this folder.', {
+        operation: 'Initialize Git',
+        hint: /tell me who you are|user\.email|user\.name/i.test(detail)
+          ? 'Set your Git name and email (git config --global user.name / user.email), then try again.'
+          : undefined,
+        detail
+      })
+    }
+    const repositoryRoot = await this.git.repositoryRoot(project.path)
+    this.store.update((s) => {
+      const p = s.projects.find((x) => x.id === projectId)
+      if (p) Object.assign(p, { repositoryRoot, updatedAt: nowIso() })
     })
     this.emit('state.changed', { topic: 'projects' })
     return this.get(projectId)

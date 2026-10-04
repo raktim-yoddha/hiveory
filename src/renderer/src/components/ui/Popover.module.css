@@ -1,0 +1,25 @@
+.panel {
+  position: fixed;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--menu-min-width) * 1.6);
+  max-height: var(--menu-max-height);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-glass);
+  backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-popover);
+  animation: pop-in var(--duration-fast) var(--ease-out);
+}
+
+.panel[data-width='lg'] {
+  width: calc(var(--menu-min-width) * 2.2);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--nudge-sm)) scale(0.985);
+  }
+}

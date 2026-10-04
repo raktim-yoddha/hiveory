@@ -157,11 +157,14 @@ The sidebar should feel like the BridgeMind reference: compact, dark, subtle, an
 
 ## Top-Level Navigation
 
-Exactly:
+Exactly two modes, labelled (ADR 0012):
 
 ```text
-Workspace | Chatspace
+Work | Chat
 ```
+
+The title bar also holds the side-panel toggle (terminal, browser soon) and the
+app Settings gear. Development builds show an inverted DEV chip after the name.
 
 Do not add Agent mode.
 

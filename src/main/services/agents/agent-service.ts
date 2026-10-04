@@ -143,6 +143,10 @@ export class AgentService {
     })
   }
 
+  find(instanceId: string): CliInstance | undefined {
+    return this.store.state.instances.find((i) => i.id === instanceId)
+  }
+
   private get(instanceId: string): CliInstance {
     const instance = this.store.state.instances.find((i) => i.id === instanceId)
     if (!instance) fail('NOT_FOUND', 'Agent not found.')

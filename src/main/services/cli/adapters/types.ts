@@ -7,12 +7,20 @@ export interface HookEndpoint {
   token: string
 }
 
+/** Per-agent endpoint of Hiveory's MCP server (agent tools), loopback HTTP with a bearer token. */
+export interface McpEndpoint {
+  url: string
+  token: string
+}
+
 export interface LaunchContext {
   instance: CliInstance
   cwd: string
   autoApprove: boolean
   /** Present when the hook server is running. */
   hook?: HookEndpoint
+  /** Present when agent tools are enabled and this adapter can load an MCP server. */
+  mcp?: McpEndpoint
   /** Per-instance directory for generated files (e.g. hook settings). */
   runtimeDir: string
 }
@@ -36,6 +44,8 @@ export interface CliAdapter {
   /** Executable names looked up on PATH, in priority order. */
   executables: string[]
   supportsAutoApprove: boolean
+  /** The adapter knows how to load Hiveory's MCP server into a session (see `LaunchContext.mcp`). */
+  injectMcp?: boolean
   buildLaunch(ctx: LaunchContext): LaunchSpec
   /** Translates a native hook callback into a status event. */
   mapHookEvent?(event: string, payload: unknown): StatusEvent | null

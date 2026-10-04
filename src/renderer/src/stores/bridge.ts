@@ -1,5 +1,6 @@
 import { subscribe } from '../lib/api'
-import { useAgents, useLayouts, usePresets, useProjects, useWorkspaces } from './data'
+import { useAgents, useLayouts, usePresets, useProjects, useSettings, useUpdates, useWorkspaces } from './data'
+import { useChat } from './chat'
 import { useNotices } from './notices'
 
 /** Events arriving within this window trigger one reload per cache key. */
@@ -27,6 +28,8 @@ export const installEventBridge = (): (() => void) => {
     subscribe('state.changed', ({ topic, projectId, workspaceId }) => {
       if (topic === 'projects') reload('projects', () => useProjects.getState().load())
       if (topic === 'presets') reload('presets', () => usePresets.getState().load())
+      if (topic === 'settings') reload('settings', () => useSettings.getState().load())
+      if (topic === 'chats') reload('chats', () => useChat.getState().loadList())
       if ((topic === 'workspaces' || topic === 'agents') && projectId) {
         reload(`ws:${projectId}`, () => useWorkspaces.getState().load(projectId))
       }
@@ -36,7 +39,9 @@ export const installEventBridge = (): (() => void) => {
       }
     }),
     subscribe('runtime.changed', ({ instanceId, runtime }) => useAgents.getState().setRuntime(instanceId, runtime)),
-    subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message }))
+    subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
+    subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
+    subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary))
   ]
   return () => {
     if (timer) clearTimeout(timer)

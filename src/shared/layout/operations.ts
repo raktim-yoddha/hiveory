@@ -1,4 +1,5 @@
 import type { LayoutNode, LayoutOperation, Side, SplitDirection } from '../domain/layout'
+import { arrange } from './presets'
 
 /** Smallest share a split child may take; the renderer additionally enforces pixel minimums. */
 export const MIN_RATIO = 0.08
@@ -151,6 +152,8 @@ export const applyOperation = (tree: LayoutNode | null, op: LayoutOperation): La
       return swapPanes(tree, op.paneId, op.targetPaneId)
     case 'resize':
       return resizeSplit(tree, op.path, op.ratios)
+    case 'arrange':
+      return arrange(tree, op.mode, op.focusPaneId)
   }
 }
 

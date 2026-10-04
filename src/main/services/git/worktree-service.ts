@@ -1,14 +1,15 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { AppException } from '@shared/errors'
-import { gitArgs, isDirtyWorktreeError, isUnmergedBranchError, parseWorktreeList, type WorktreeEntry } from './git-commands'
+import { gitArgs, isBranchInUseError, isDirtyWorktreeError, isUnmergedBranchError, parseWorktreeList, type WorktreeEntry } from './git-commands'
 import { GitCommandError, type GitService } from './git-service'
 
 export interface CreateWorktreeInput {
   repoRoot: string
   path: string
   branch: string
-  baseRef: string
+  /** New branch from this ref; omit to check out an existing `branch`. */
+  baseRef?: string
 }
 
 const gitFailure = (message: string, error: unknown, hint?: string): AppException =>
@@ -28,8 +29,20 @@ export class WorktreeService {
   async create(input: CreateWorktreeInput): Promise<void> {
     mkdirSync(dirname(input.path), { recursive: true })
     try {
-      await this.git.run(input.repoRoot, gitArgs.worktreeAdd(input.path, input.branch, input.baseRef))
+      await this.git.run(
+        input.repoRoot,
+        input.baseRef
+          ? gitArgs.worktreeAdd(input.path, input.branch, input.baseRef)
+          : gitArgs.worktreeAddExisting(input.path, input.branch)
+      )
     } catch (error) {
+      if (error instanceof GitCommandError && isBranchInUseError(error.stderr)) {
+        throw new AppException({
+          code: 'GIT_FAILED',
+          message: `Branch ${input.branch} is already checked out in another folder.`,
+          hint: 'Pick a different branch, or close the other checkout first.'
+        })
+      }
       throw gitFailure('Could not create the workspace folder.', error, 'Check the details below, then try again.')
     }
   }
@@ -63,6 +76,17 @@ export class WorktreeService {
       if (error instanceof GitCommandError && isUnmergedBranchError(error.stderr)) return false
       throw gitFailure(`Could not delete branch ${branch}.`, error)
     }
+  }
+
+  /** Rebuilds a workspace whose folder vanished: prune the stale entry, check the branch out again. */
+  async recreate(repoRoot: string, path: string, branch: string): Promise<void> {
+    await this.prune(repoRoot)
+    await this.create({ repoRoot, path, branch })
+  }
+
+  /** Re-links a moved/renamed worktree folder with its repository. */
+  async repairLink(repoRoot: string, path: string): Promise<void> {
+    await this.git.run(repoRoot, gitArgs.worktreeRepair(path)).catch(() => undefined)
   }
 
   async list(repoRoot: string): Promise<WorktreeEntry[]> {

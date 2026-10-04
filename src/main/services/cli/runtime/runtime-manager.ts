@@ -1,33 +1,19 @@
 import { EventEmitter } from 'node:events'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
-import * as pty from '@lydell/node-pty'
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../../app/logger'
-import type { HookEndpoint } from '../adapters/types'
+import { sanitizeEnv } from '../../pty/env'
+import { PtySession } from '../../pty/pty-session'
+import type { HookEndpoint, McpEndpoint } from '../adapters/types'
 import type { CliRegistry } from '../registry'
 import { HeuristicDetector } from '../status/heuristics'
 import { NOT_RUNNING, reduceStatus, sameDetails, type StatusEvent } from '../status/status-machine'
-import { sanitizeEnv } from './env'
-import { OutputBuffer } from './output-buffer'
-
-interface PendingSpawn {
-  file: string
-  args: string[]
-  cwd: string
-  env: Record<string, string>
-  timer: NodeJS.Timeout
-}
 
 interface Session {
   instance: CliInstance
-  process: pty.IPty | null
-  /** Prepared launch waiting for the terminal's real size (see `launch`). */
-  pending: PendingSpawn | null
-  size: { cols: number; rows: number } | null
-  buffer: OutputBuffer
-  outbox: { data: string; offset: number } | null
+  pty: PtySession
   detector: HeuristicDetector | null
   details: CliRuntimeDetails
 }
@@ -37,18 +23,22 @@ export interface RuntimeManagerEvents {
   changed: [instance: CliInstance, details: CliRuntimeDetails]
 }
 
-/** Longest wait for a terminal size before spawning anyway (pane not visible). */
-const SPAWN_FALLBACK_MS = 600
-/** Output is coalesced per instance for this long, so one TUI frame is one IPC message. */
-const FLUSH_MS = 4
-const DEFAULT_SIZE = { cols: 120, rows: 32 }
-
 const phaseOf = (d: CliRuntimeDetails): 'idle' | 'working' | 'waiting' =>
   d.status === 'waiting-for-you' ? 'waiting' : d.status
 
+/** Resolves .cmd/.bat shims through cmd.exe on Windows; everything else spawns directly. */
+export const resolveCommand = (executable: string, args: string[]): [string, string[]] => {
+  const ext = extname(executable).toLowerCase()
+  if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
+    return [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', executable, ...args]]
+  }
+  return [executable, args]
+}
+
 /**
  * Owns every CLI process (React never does — architecture.md). Generic over
- * providers: adapters supply launch arguments and status mapping.
+ * providers: adapters supply launch arguments and status mapping; PtySession
+ * supplies the terminal plumbing.
  */
 export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   private readonly sessions = new Map<string, Session>()
@@ -58,7 +48,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     private readonly registry: CliRegistry,
     private readonly log: Logger,
     private readonly runtimeRoot: string,
-    private readonly hookEndpoint: () => HookEndpoint | undefined
+    private readonly hookEndpoint: () => HookEndpoint | undefined,
+    private readonly mcpEndpoint: (instanceId: string) => McpEndpoint | undefined = () => undefined
   ) {
     super()
     this.ticker = setInterval(() => this.tick(), 1000)
@@ -72,7 +63,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
    */
   launch(instance: CliInstance, cwd: string): void {
     const existing = this.sessions.get(instance.id)
-    if (existing?.process || existing?.pending) return
+    if (existing?.pty.running) return
     const adapter = this.registry.adapter(instance.cliId)
     const executable = this.registry.executable(instance.cliId)
     if (!adapter || !executable) {
@@ -86,6 +77,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
       cwd,
       autoApprove: instance.autoApprove,
       hook,
+      mcp: adapter!.injectMcp ? this.mcpEndpoint(instance.id) : undefined,
       runtimeDir: join(this.runtimeRoot, instance.id)
     })
 
@@ -105,11 +97,10 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     }
     const env = sanitizeEnv(process.env, spec.env)
     env.HIVEORY_INSTANCE_ID = instance.id
-    const [file, args] = this.resolveCommand(executable!, spec.args)
-    if (existing) this.emitData(session, '\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
-    session.pending = { file, args, cwd, env, timer: setTimeout(() => this.spawnNow(session), SPAWN_FALLBACK_MS) }
+    const [file, args] = resolveCommand(executable!, spec.args)
+    if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
+    session.pty.start({ file, args, cwd, env })
     this.apply(session, { type: 'started' }, 'process')
-    if (session.size) this.spawnNow(session)
   }
 
   /** Records a launch failure that happened before a process existed. */
@@ -122,73 +113,51 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   stop(instanceId: string): void {
     const session = this.sessions.get(instanceId)
     if (!session) return
-    if (session.pending) {
-      clearTimeout(session.pending.timer)
-      session.pending = null
-    }
-    const child = session.process
-    session.process = null
-    if (child) {
-      // ConPTY teardown can take a moment; never block the IPC reply on it.
-      setImmediate(() => {
-        try {
-          child.kill()
-        } catch (error) {
-          this.log.warn(`Failed to kill ${instanceId}`, error)
-        }
-      })
-    }
+    session.pty.stop()
     if (session.details.running) this.apply(session, { type: 'exited', code: 0 }, 'process')
   }
 
   /** Stops the process and forgets the session (agent closed). */
   dispose(instanceId: string): void {
+    const session = this.sessions.get(instanceId)
     this.stop(instanceId)
+    session?.pty.removeAllListeners()
     this.sessions.delete(instanceId)
   }
 
   disposeAll(): void {
     clearInterval(this.ticker)
-    for (const session of this.sessions.values()) {
-      if (session.pending) clearTimeout(session.pending.timer)
-      try {
-        session.process?.kill()
-      } catch {
-        // Quitting: nothing left to report to.
-      }
-    }
+    for (const session of this.sessions.values()) session.pty.killNow()
     this.sessions.clear()
+  }
+
+  has(instanceId: string): boolean {
+    return this.sessions.has(instanceId)
   }
 
   write(instanceId: string, data: string): void {
     const session = this.sessions.get(instanceId)
-    if (!session) return
-    if (session.pending) this.spawnNow(session)
-    if (!session.process) return
-    session.process.write(data)
+    if (!session?.pty.running) return
+    session.pty.write(data)
     const event = session.detector?.onInput(data, Date.now())
     if (event) this.apply(session, event, 'heuristic')
   }
 
   resize(instanceId: string, cols: number, rows: number): void {
-    const session = this.sessions.get(instanceId)
-    if (!session) return
-    if (session.size?.cols === cols && session.size.rows === rows) return
-    session.size = { cols, rows }
-    if (session.pending) return this.spawnNow(session)
-    try {
-      session.process?.resize(cols, rows)
-    } catch (error) {
-      // Resizing a process that is exiting can throw; it is never fatal.
-      this.log.warn(`Resize failed for ${instanceId}`, error)
-    }
+    this.sessions.get(instanceId)?.pty.resize(cols, rows)
   }
 
   snapshot(instanceId: string): { data: string; end: number } {
-    const session = this.sessions.get(instanceId)
-    if (!session) return { data: '', end: 0 }
-    this.flush(session)
-    return session.buffer.snapshot()
+    return this.sessions.get(instanceId)?.pty.snapshot() ?? { data: '', end: 0 }
+  }
+
+  /** Rendered screen text of an agent (agent tools: read another agent). */
+  screenText(instanceId: string, lines: number): string {
+    return this.sessions.get(instanceId)?.pty.screenText(lines) ?? ''
+  }
+
+  bracketedPaste(instanceId: string): boolean {
+    return Boolean(this.sessions.get(instanceId)?.pty.bracketedPaste)
   }
 
   details(instanceId: string): CliRuntimeDetails {
@@ -198,7 +167,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   /** Native hook callback from the hook server. Unknown instances are ignored. */
   ingestHook(instanceId: string, event: string, payload: unknown): void {
     const session = this.sessions.get(instanceId)
-    if (!session?.process) return
+    if (!session?.pty.hasProcess) return
     const adapter = this.registry.adapter(session.instance.cliId)
     let mapped: StatusEvent | null = null
     try {
@@ -210,83 +179,25 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   }
 
   private createSession(instance: CliInstance): Session {
-    return {
-      instance,
-      process: null,
-      pending: null,
-      size: null,
-      buffer: new OutputBuffer(),
-      outbox: null,
-      detector: null,
-      details: NOT_RUNNING
-    }
-  }
-
-  private spawnNow(session: Session): void {
-    const pending = session.pending
-    if (!pending) return
-    clearTimeout(pending.timer)
-    session.pending = null
-    const { cols, rows } = session.size ?? DEFAULT_SIZE
-    try {
-      const child = pty.spawn(pending.file, pending.args, {
-        name: 'xterm-256color',
-        cols,
-        rows,
-        cwd: pending.cwd,
-        env: pending.env,
-        // Bundled modern ConPTY renders far more faithfully than the inbox Windows one.
-        ...(process.platform === 'win32' ? { useConptyDll: true } : {})
-      })
-      session.process = child
-      child.onData((data) => {
-        this.emitData(session, data)
-        const event = session.detector?.onOutput(data, Date.now())
-        if (event) this.apply(session, event, 'heuristic')
-      })
-      child.onExit(({ exitCode, signal }) => {
-        if (session.process !== child) return
-        session.process = null
-        this.flush(session)
-        this.apply(session, { type: 'exited', code: exitCode, signal }, 'process')
-      })
-    } catch (error) {
-      this.failSession(session, this.registry.displayName(session.instance.cliId), error)
-    }
+    const session: Session = { instance, pty: new PtySession(true), detector: null, details: NOT_RUNNING }
+    session.pty.on('data', (data, offset) => this.emit('data', session.instance.id, data, offset))
+    session.pty.on('raw', (data) => {
+      const event = session.detector?.onOutput(data, Date.now())
+      if (event) this.apply(session, event, 'heuristic')
+    })
+    session.pty.on('exit', (code, signal) => this.apply(session, { type: 'exited', code, signal }, 'process'))
+    session.pty.on('error', (error) => {
+      this.log.warn(`Spawn failed for ${session.instance.cliId}`, error)
+      this.apply(session, { type: 'failed', error: error.message }, 'process')
+    })
+    return session
   }
 
   private failSession(session: Session, name: string, error: unknown): never {
-    session.process = null
-    if (session.pending) clearTimeout(session.pending.timer)
-    session.pending = null
+    session.pty.stop()
     const message = error instanceof Error ? error.message : String(error)
     this.apply(session, { type: 'failed', error: message }, 'process')
     return fail('CLI_LAUNCH_FAILED', `Could not start ${name}.`, { detail: message })
-  }
-
-  private resolveCommand(executable: string, args: string[]): [string, string[]] {
-    const ext = extname(executable).toLowerCase()
-    if (process.platform === 'win32' && (ext === '.cmd' || ext === '.bat')) {
-      return [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', executable, ...args]]
-    }
-    return [executable, args]
-  }
-
-  private emitData(session: Session, data: string): void {
-    const offset = session.buffer.append(data)
-    if (session.outbox) {
-      session.outbox.data += data
-      return
-    }
-    session.outbox = { data, offset }
-    setTimeout(() => this.flush(session), FLUSH_MS)
-  }
-
-  private flush(session: Session): void {
-    const outbox = session.outbox
-    if (!outbox) return
-    session.outbox = null
-    this.emit('data', session.instance.id, outbox.data, outbox.offset)
   }
 
   private apply(session: Session, event: StatusEvent, source: 'hook' | 'heuristic' | 'process'): void {
@@ -300,7 +211,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   private tick(): void {
     const now = Date.now()
     for (const session of this.sessions.values()) {
-      if (!session.process) continue
+      if (!session.pty.hasProcess) continue
       const event = session.detector?.tick(now)
       if (event) this.apply(session, event, 'heuristic')
     }

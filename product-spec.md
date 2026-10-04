@@ -2,14 +2,16 @@
 
 ## Product Modes
 
-Exactly two:
+Exactly two (labelled Work and Chat in the UI, ADR 0012):
 
 ```text
-Workspace
-Chatspace
+Workspace (Work)
+Chatspace (Chat)
 ```
 
-Chatspace is intentionally empty/minimal in the initial release.
+Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
+then an effort level when that model supports one. The CLI locks after the
+first message. Chats keep running while the user is in Work.
 
 ## Project Lifecycle
 

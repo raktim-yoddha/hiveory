@@ -14,11 +14,15 @@ pnpm dev          # run the app with hot reload
 pnpm test         # unit tests
 pnpm typecheck
 pnpm lint
-pnpm build && pnpm smoke   # drive the built app end to end, saving screenshots
+pnpm build && pnpm e2e     # 50 end-to-end checks against the real app (screenshots saved)
 ```
 
-`SMOKE_AGENTS="Claude Code" pnpm smoke` also opens real agents and exercises
-pane docking and Space-swap.
+`E2E_CHAT=1 pnpm e2e` also sends one tiny real chat prompt through Codex.
+
+## Releases
+
+Say "release X.Y.Z" to an agent, or run `pnpm release X.Y.Z --check` then
+`pnpm release X.Y.Z` (rules: AGENTS.md §26, Semantic Versioning).
 
 ## Installers
 

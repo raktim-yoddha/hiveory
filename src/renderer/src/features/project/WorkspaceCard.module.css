@@ -87,7 +87,22 @@
 }
 
 .warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 var(--space-6) var(--space-6);
   color: var(--color-warning);
+  font-size: var(--text-xs);
+}
+
+.warning span {
+  flex: 1;
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
 }
 
 .actions {

@@ -66,12 +66,28 @@ const ensureListener = (): void => {
   })
 }
 
+// Clipboard goes through main (Electron's clipboard): no browser permission prompts, and
+// dictation tools that paste via Ctrl+V (e.g. Wispr Flow) land reliably.
 const copySelection = (term: Terminal): boolean => {
   const text = term.getSelection()
   if (!text) return false
-  void navigator.clipboard.writeText(text).catch(() => undefined)
+  void api('clipboard.writeText', { text }).catch(() => undefined)
   return true
 }
+
+/** Raw Ctrl+V (lets a CLI read an image from the clipboard itself). */
+const CTRL_V = String.fromCharCode(0x16)
+/** ESC + CR: the newline-in-prompt sequence agent CLIs understand. */
+const META_ENTER = String.fromCharCode(0x1b, 0x0d)
+
+const send = (instanceId: string, data: string): void =>
+  void api('terminal.write', { instanceId, data }).catch(() => undefined)
+
+/** Pastes clipboard text; with no text (e.g. an image), forwards Ctrl+V so the CLI can read the clipboard itself. */
+const pasteClipboard = (instanceId: string, term: Terminal): void =>
+  void api('clipboard.readText')
+    .then((text) => (text ? term.paste(text) : send(instanceId, CTRL_V)))
+    .catch(() => send(instanceId, CTRL_V))
 
 const create = (instanceId: string): Entry => {
   ensureListener()
@@ -93,27 +109,40 @@ const create = (instanceId: string): Entry => {
   // Unicode 11 widths match what modern CLIs assume, so columns line up.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
-  term.onData((data) => void api('terminal.write', { instanceId, data }).catch(() => undefined))
+  term.onData((data) => send(instanceId, data))
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown') return true
-    const mod = event.ctrlKey || event.metaKey
+    const key = event.key.toLowerCase()
+    const mod = (event.ctrlKey || event.metaKey) && !event.altKey
     // Ctrl+C copies when there is a selection, otherwise it reaches the CLI as an interrupt.
-    if (mod && event.key.toLowerCase() === 'c' && (event.shiftKey || term.hasSelection())) {
-      return !copySelection(term)
-    }
-    if (mod && event.key.toLowerCase() === 'v') {
+    if (mod && key === 'c' && (event.shiftKey || term.hasSelection())) {
       event.preventDefault()
-      void navigator.clipboard
-        .readText()
-        .then((text) => text && term.paste(text))
-        .catch(() => undefined)
+      copySelection(term)
       return false
     }
+    if (mod && key === 'v') {
+      event.preventDefault()
+      pasteClipboard(instanceId, term)
+      return false
+    }
+    // Shift+Enter inserts a newline in agent prompts (Claude Code, Codex…) instead of submitting.
+    if (key === 'enter' && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault()
+      send(instanceId, META_ENTER)
+      return false
+    }
+    // Everything else — including Alt+<key> (sent as ESC-prefixed) and Ctrl+<key> — goes to the CLI.
     return true
   })
   const element = document.createElement('div')
   element.style.width = '100%'
   element.style.height = '100%'
+  // Right-click: copy a selection, otherwise paste (terminal convention).
+  element.addEventListener('contextmenu', (event) => {
+    event.preventDefault()
+    if (!copySelection(term)) pasteClipboard(instanceId, term)
+    else term.clearSelection()
+  })
   const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '' }
   entries.set(instanceId, entry)
 
@@ -185,4 +214,10 @@ export const disposeTerminal = (instanceId: string): void => {
   entries.delete(instanceId)
   entry.term.dispose()
   entry.element.remove()
+}
+
+/** Applies the current theme tokens to every open terminal (after a theme switch). */
+export const refreshTerminalTheme = (): void => {
+  theme = readTheme()
+  for (const entry of entries.values()) entry.term.options.theme = theme
 }

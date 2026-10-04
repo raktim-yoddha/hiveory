@@ -461,7 +461,13 @@ src/
 │   ├── ipc/                    router (sender check + validation), handlers, trust
 │   └── services/
 │       ├── projects/ workspaces/ agents/ layout/ presets/ kanban/
-│       ├── git/                GitService, WorktreeService, pure command builders
+│       ├── git/                GitService, WorktreeService, GithubService (gh), command builders/parsers
+│       ├── pty/                PtySession (deferred spawn, scrollback, headless mirror), env, shim resolver
+│       ├── shell/              ShellService — side-panel terminals
+│       ├── agent-tools/        MCP protocol + AgentTools (agents coordinating agents)
+│       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
+│       ├── extensions/         Skills & MCP inventory
+│       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery
 │       └── cli/
 │           ├── adapters/       one file per CLI — the only provider-specific code
@@ -475,8 +481,8 @@ src/
     ├── lib/                    typed api client
     ├── stores/                 Zustand caches + event bridge + notices
     ├── components/             reusable primitives (ui/, cli/, brand/)
-    └── features/               shell, projects, project, kanban, workspace,
-                                workspace-create, presets, panes, agents, terminal
+    └── features/               shell, projects, project, kanban, workspace, workspace-create,
+                                presets, panes, agents, terminal, side-panel, settings (+guide), chat
 ```
 
 The adapter contract differs from the conceptual `CliAdapter` above: adapters
@@ -485,3 +491,22 @@ process lifecycle (`launch/stop/write/resize`) is generic in
 `CliRuntimeManager`. See ADR 0006.
 
 Status detection: ADR 0006. Data locations: ADR 0008. Fault isolation: ADR 0009.
+Agent tools (MCP), Chat, Git options, themes, side panel, updates: ADR 0012.
+
+### Agent tools data flow
+
+```text
+agent CLI ──MCP (HTTP, bearer)──▶ HookServer /mcp/<instanceId> ──▶ AgentTools(caller)
+                                                                     ├─ AgentService (open/close)
+                                                                     ├─ CliRuntimeManager (read screen, write input, status)
+                                                                     ├─ LayoutService (arrange)
+                                                                     └─ ShellService (terminal)
+```
+
+### Chat data flow
+
+```text
+Renderer composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ CLI headless
+        ▲                               │ stdout lines → parser → ChatAccumulator
+        └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
+```

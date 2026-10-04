@@ -3,6 +3,8 @@ import { join } from 'node:path'
 
 export interface AppPaths {
   stateFile: string
+  /** One JSON file per chat. */
+  chatsDir: string
   logDir: string
   /** Generated per-instance files such as hook settings. */
   runtimeDir: string
@@ -23,6 +25,7 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
         : join(env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), appName.toLowerCase().replace(/\s+/g, '-'))
   return {
     stateFile: join(userData, 'state.json'),
+    chatsDir: join(userData, 'chats'),
     logDir: join(userData, 'logs'),
     runtimeDir: join(dataRoot, 'Runtime'),
     worktreeRoot: join(dataRoot, 'Workspaces')

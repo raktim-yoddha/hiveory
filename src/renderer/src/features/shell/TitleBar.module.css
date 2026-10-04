@@ -40,7 +40,22 @@
 }
 
 .end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   justify-self: end;
+}
+
+/* Development builds: an inverted chip after the name. */
+.dev {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  line-height: var(--control-xs);
 }
 
 .noDrag {

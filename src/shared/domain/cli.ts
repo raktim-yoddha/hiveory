@@ -17,6 +17,8 @@ export interface CliRuntimeDetails {
 
 export type IconReference =
   | { kind: 'svg'; viewBox: string; path: string; color: string }
+  /** Official mark as a data URI (bundled, never fetched at runtime). */
+  | { kind: 'image'; src: string }
   | { kind: 'monogram'; text: string; color?: string }
 
 /** Normalized CLI metadata the UI consumes. Provider specifics stay in main-process adapters. */

@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2, MoreHorizontal, Play, RotateCcw, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, MoreHorizontal, Play, RotateCcw, X } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -22,8 +22,28 @@ interface AgentPaneProps extends PaneRenderProps {
  * One agent instance's pane: identity header + its own terminal. Status is
  * conveyed by the dot's color alone; the reason is in its accessible label.
  */
-export function AgentPane({ agent, onDragHandlePointerDown, highlighted, maximized, toggleMaximize }: AgentPaneProps) {
+export function AgentPane({
+  agent,
+  onDragHandlePointerDown,
+  highlighted,
+  maximized,
+  toggleMaximize,
+  rect,
+  minSize,
+  gutter,
+  moveTo
+}: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
+  const fits = { right: rect.width >= minSize.width * 2 + gutter, bottom: rect.height >= minSize.height * 2 + gutter }
+  const moves = moveTo
+    ? (['left', 'right', 'up', 'down'] as const).map((direction) => ({
+        type: 'item' as const,
+        id: `move-${direction}`,
+        label: `Move ${direction}`,
+        icon: { left: <ArrowLeft />, right: <ArrowRight />, up: <ArrowUp />, down: <ArrowDown /> }[direction],
+        onSelect: () => moveTo(direction)
+      }))
+    : []
 
   return (
     <PaneFrame
@@ -36,10 +56,16 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, maximiz
         <>
           <CliLogo cliId={agent.cliId} />
           <span className={styles.name}>{agent.petName}</span>
-          <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
+          <span data-pane-optional="status">
+            <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
+          </span>
           <span className={styles.spacer} />
-          <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} />
+          <span className={styles.actions}>
+          <span data-pane-optional="add">
+            <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} fits={fits} />
+          </span>
           <IconButton
+            data-pane-optional="maximize"
             label={maximized ? `Restore ${agent.petName}` : `Maximize ${agent.petName}`}
             icon={maximized ? <Minimize2 /> : <Maximize2 />}
             onClick={toggleMaximize}
@@ -55,12 +81,17 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, maximiz
                 icon: runtime.running ? <RotateCcw /> : <Play />,
                 onSelect: () => void agentActions.restart(agent.id)
               },
+              ...(maximized
+                ? []
+                : [{ type: 'item' as const, id: 'maximize', label: 'Maximize', icon: <Maximize2 />, onSelect: toggleMaximize }]),
+              ...(moves.length ? [{ type: 'separator' as const }, ...moves] : []),
               { type: 'separator' },
               { type: 'item', id: 'close', label: 'Close agent', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
             ]}
             trigger={(props) => <IconButton {...props} label={`${agent.petName} actions`} icon={<MoreHorizontal />} />}
           />
           <IconButton label={`Close ${agent.petName}`} icon={<X />} onClick={() => void agentActions.close(agent)} />
+          </span>
         </>
       }
     >

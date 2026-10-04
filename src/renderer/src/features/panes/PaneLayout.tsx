@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { LayoutNode, LayoutOperation } from '@shared/domain'
-import { computeGeometry, dragDivider, type Divider, type Rect } from '@shared/layout/geometry'
+import { computeGeometry, dragDivider, neighborOf, type Divider, type Rect } from '@shared/layout/geometry'
 import { resizeSplit } from '@shared/layout/operations'
 import { cx } from '../../lib/cx'
 import { PaneDropPreview } from './PaneDropPreview'
@@ -14,6 +14,13 @@ export interface PaneRenderProps {
   /** The pane fills the whole layout area; the others stay mounted but hidden. */
   maximized: boolean
   toggleMaximize: () => void
+  /** The pane's current rect within the layout (for placement decisions). */
+  rect: Rect
+  /** Smallest size a pane may take; used to decide whether a split still fits. */
+  minSize: { width: number; height: number }
+  gutter: number
+  /** Swaps this pane with its nearest neighbour in a direction (keyboard-accessible rearranging). */
+  moveTo: ((direction: 'left' | 'right' | 'up' | 'down') => void) | null
 }
 
 interface PaneLayoutProps {
@@ -58,16 +65,14 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
   }, [])
 
   const activeTree = resizing?.tree ?? tree
-  const geometry = useMemo(() => computeGeometry(activeTree, bounds, metrics.gutter), [activeTree, bounds, metrics.gutter])
+  const minSize = useMemo(() => ({ width: metrics.minWidth, height: metrics.minHeight }), [metrics.minWidth, metrics.minHeight])
+  const geometry = useMemo(
+    () => computeGeometry(activeTree, bounds, metrics.gutter, minSize),
+    [activeTree, bounds, metrics.gutter, minSize]
+  )
   const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation })
   // Falls back to the normal layout if the maximized pane was closed.
   const maximized = maximizedId && geometry.panes[maximizedId] ? maximizedId : null
-
-  const minRatioFor = (d: Divider): number => {
-    const total = d.direction === 'horizontal' ? d.splitRect.width : d.splitRect.height
-    const min = d.direction === 'horizontal' ? metrics.minWidth : metrics.minHeight
-    return Math.min(0.45, total > 0 ? min / total : 0.1)
-  }
 
   const startResize = (d: Divider, event: ReactPointerEvent<HTMLDivElement>): void => {
     event.preventDefault()
@@ -78,7 +83,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
     let latest: LayoutNode | null = tree
     const onMove = (e: PointerEvent): void => {
       const delta = (d.direction === 'horizontal' ? e.clientX : e.clientY) - origin
-      latest = resizeSplit(tree, d.path, dragDivider(d, delta, metrics.gutter, minRatioFor(d)))
+      latest = resizeSplit(tree, d.path, dragDivider(d, delta, metrics.gutter))
       setResizing({ key, tree: latest })
     }
     const onUp = (): void => {
@@ -99,7 +104,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
 
   const nudge = (d: Divider, direction: number): void => {
     const step = (d.direction === 'horizontal' ? d.splitRect.width : d.splitRect.height) * 0.02
-    onOperation({ type: 'resize', path: d.path, ratios: dragDivider(d, step * direction, metrics.gutter, minRatioFor(d)) })
+    onOperation({ type: 'resize', path: d.path, ratios: dragDivider(d, step * direction, metrics.gutter) })
   }
 
   return (
@@ -124,7 +129,16 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
               onDragHandlePointerDown: (event) => (maximized ? undefined : startDrag(paneId, event)),
               dragging: drag?.paneId === paneId,
               maximized: isMax,
-              toggleMaximize: () => setMaximizedId(isMax ? null : paneId)
+              toggleMaximize: () => setMaximizedId(isMax ? null : paneId),
+              rect: layoutRect,
+              minSize,
+              gutter: metrics.gutter,
+              moveTo: maximized
+                ? null
+                : (direction) => {
+                    const target = neighborOf(geometry.panes, paneId, direction)
+                    if (target) onOperation({ type: 'swap', paneId, targetPaneId: target })
+                  }
             })}
           </div>
         )
@@ -156,7 +170,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
           />
         )
       })}
-      {drag && <PaneDropPreview target={drag.target} swap={drag.swap} />}
+      {drag && <PaneDropPreview target={drag.target} swap={drag.swap} container={bounds} showArrangeBar={drag.inArrangeBand} />}
     </div>
   )
 }

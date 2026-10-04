@@ -1,16 +1,19 @@
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
-import { ICON_PATHS } from './icon-paths'
+import { officialIcon } from './icons'
+import { codexMcpArgs } from './mcp-injection'
 import { field, type CliAdapter } from './types'
 
 export const codexAdapter: CliAdapter = {
   id: 'codex',
   displayName: 'Codex',
-  icon: { kind: 'svg', viewBox: '0 0 24 24', path: ICON_PATHS.openai, color: '#E8E3DA' },
+  icon: officialIcon('codex', 'CX'),
   executables: ['codex'],
   supportsAutoApprove: true,
+  injectMcp: true,
 
-  buildLaunch({ instance, autoApprove, hook }) {
-    const args: string[] = []
+  buildLaunch({ instance, autoApprove, hook, mcp }) {
+    const args: string[] = mcp ? codexMcpArgs(mcp) : []
+    const env: Record<string, string> = mcp ? { HIVEORY_MCP_TOKEN: mcp.token } : {}
     if (hook) {
       // Codex runs `notify` with the event JSON appended as the final argument.
       const notify = [
@@ -22,7 +25,7 @@ export const codexAdapter: CliAdapter = {
       args.push('-c', `notify=${JSON.stringify(notify)}`)
     }
     if (autoApprove) args.push('--dangerously-bypass-approvals-and-sandbox')
-    return { args }
+    return { args, env }
   },
 
   mapHookEvent(_event, payload) {

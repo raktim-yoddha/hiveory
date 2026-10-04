@@ -1,7 +1,8 @@
 import type { IconReference, WaitingReason } from '@shared/domain'
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
-import { ICON_PATHS } from './icon-paths'
-import type { CliAdapter } from './types'
+import { officialIcon } from './icons'
+import { mcpServersJson, opencodeConfigJson } from './mcp-injection'
+import type { CliAdapter, McpEndpoint } from './types'
 
 /**
  * Declarative catalog of CLIs that need no native hooks. Each entry is a full
@@ -18,6 +19,8 @@ interface CliSpec {
   autoApproveArgs?: string[]
   autoApproveEnv?: Record<string, string>
   waitingPatterns?: Array<{ pattern: RegExp; reason: WaitingReason }>
+  /** How this CLI loads Hiveory's agent-tools MCP server, if it can. */
+  mcp?: (endpoint: McpEndpoint) => { args?: string[]; env?: Record<string, string> }
 }
 
 /** Prompts most agent CLIs use when they need a decision. */
@@ -27,8 +30,6 @@ const COMMON_PROMPTS: NonNullable<CliSpec['waitingPatterns']> = [
   { pattern: /(?:Allow|Approve|Run) (?:this )?(?:command|execution|tool|edit)\?/i, reason: 'permission' }
 ]
 
-const svg = (path: string, color: string): IconReference => ({ kind: 'svg', viewBox: '0 0 24 24', path, color })
-const mono = (text: string, color: string): IconReference => ({ kind: 'monogram', text, color })
 
 export const defineCli = (spec: CliSpec): CliAdapter => ({
   id: spec.id,
@@ -36,10 +37,14 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   icon: spec.icon,
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
-  buildLaunch: ({ autoApprove }) => ({
-    args: [...(spec.args ?? []), ...(autoApprove ? (spec.autoApproveArgs ?? []) : [])],
-    env: autoApprove ? spec.autoApproveEnv : undefined
-  }),
+  injectMcp: Boolean(spec.mcp),
+  buildLaunch: ({ autoApprove, mcp }) => {
+    const tools = mcp && spec.mcp ? spec.mcp(mcp) : {}
+    return {
+      args: [...(spec.args ?? []), ...(autoApprove ? (spec.autoApproveArgs ?? []) : []), ...(tools.args ?? [])],
+      env: { ...(autoApprove ? spec.autoApproveEnv : {}), ...tools.env }
+    }
+  },
   heuristics: () => ({
     waitingPatterns: [...(spec.waitingPatterns ?? []), ...COMMON_PROMPTS, ...GENERIC_WAITING_PATTERNS],
     workingOnSubmit: true,
@@ -47,17 +52,11 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   })
 })
 
-/** Light marks are rendered in warm silver so black brand logos stay visible on dark surfaces. */
-const SILVER = '#DCD6CC'
-
 export const CATALOG: CliAdapter[] = [
   defineCli({
     id: 'gemini',
     displayName: 'Gemini CLI',
-    icon: svg(
-      'M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81',
-      '#8E75B2'
-    ),
+    icon: officialIcon('gemini', 'GE'),
     executables: ['gemini'],
     autoApproveArgs: ['--yolo'],
     waitingPatterns: [{ pattern: /Allow execution|Apply this change\?|Waiting for user confirmation/i, reason: 'permission' }]
@@ -65,49 +64,52 @@ export const CATALOG: CliAdapter[] = [
   defineCli({
     id: 'opencode',
     displayName: 'OpenCode',
-    icon: svg('M22 24H2V0h20zM17 4.8H7v14.4h10z', SILVER),
+    icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
+    autoApproveArgs: ['--auto'],
+    mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
     waitingPatterns: [{ pattern: /Permission required/i, reason: 'permission' }]
   }),
   defineCli({
     id: 'copilot',
     displayName: 'GitHub Copilot CLI',
-    icon: svg(ICON_PATHS.githubcopilot, SILVER),
+    icon: officialIcon('copilot', 'CO'),
     executables: ['copilot'],
-    autoApproveArgs: ['--allow-all-tools']
+    autoApproveArgs: ['--allow-all-tools'],
+    mcp: (endpoint) => ({ args: ['--additional-mcp-config', JSON.stringify(mcpServersJson(endpoint, { tools: ['*'] }))] })
   }),
   defineCli({
     id: 'cursor',
     displayName: 'Cursor CLI',
-    icon: svg(ICON_PATHS.cursor, SILVER),
+    icon: officialIcon('cursor', 'CU'),
     executables: ['cursor-agent'],
     autoApproveArgs: ['--force']
   }),
   defineCli({
     id: 'qwen',
     displayName: 'Qwen Code',
-    icon: svg(ICON_PATHS.qwen, '#8B78F2'),
+    icon: officialIcon('qwen', 'QW'),
     executables: ['qwen'],
     autoApproveArgs: ['--yolo']
   }),
   defineCli({
     id: 'amp',
     displayName: 'Amp',
-    icon: mono('A', '#F25C3C'),
+    icon: officialIcon('amp', 'AM'),
     executables: ['amp'],
     autoApproveArgs: ['--dangerously-allow-all']
   }),
   defineCli({
     id: 'aider',
     displayName: 'Aider',
-    icon: mono('ai', '#4FBF73'),
+    icon: officialIcon('aider', 'AI'),
     executables: ['aider'],
     autoApproveArgs: ['--yes-always']
   }),
   defineCli({
     id: 'goose',
     displayName: 'Goose',
-    icon: mono('G', '#C9B28A'),
+    icon: officialIcon('goose', 'GO'),
     executables: ['goose'],
     args: ['session'],
     autoApproveEnv: { GOOSE_MODE: 'auto' }
@@ -115,21 +117,21 @@ export const CATALOG: CliAdapter[] = [
   defineCli({
     id: 'crush',
     displayName: 'Crush',
-    icon: mono('C', '#D86BC4'),
+    icon: officialIcon('crush', 'CR'),
     executables: ['crush'],
     autoApproveArgs: ['--yolo']
   }),
   defineCli({
     id: 'kimi',
     displayName: 'Kimi CLI',
-    icon: svg(ICON_PATHS.kimi, SILVER),
+    icon: officialIcon('kimi', 'KI'),
     executables: ['kimi'],
     autoApproveArgs: ['--yolo']
   }),
   defineCli({
     id: 'kiro',
     displayName: 'Kiro CLI',
-    icon: mono('K', '#9B7BF0'),
+    icon: officialIcon('kiro', 'KI'),
     executables: ['kiro-cli'],
     args: ['chat'],
     autoApproveArgs: ['--trust-all-tools']
@@ -137,61 +139,77 @@ export const CATALOG: CliAdapter[] = [
   defineCli({
     id: 'droid',
     displayName: 'Factory Droid',
-    icon: mono('D', '#E8915A'),
+    icon: officialIcon('droid', 'DR'),
     executables: ['droid']
   }),
   defineCli({
     id: 'auggie',
     displayName: 'Auggie',
-    icon: mono('Au', '#5FB7A8'),
+    icon: officialIcon('auggie', 'AU'),
     executables: ['auggie']
   }),
   defineCli({
     id: 'cline',
     displayName: 'Cline CLI',
-    icon: svg(ICON_PATHS.cline, SILVER),
+    icon: officialIcon('cline', 'CL'),
     executables: ['cline']
   }),
   defineCli({
     id: 'kilocode',
     displayName: 'Kilo Code CLI',
-    icon: mono('Ki', '#E8C547'),
-    executables: ['kilocode', 'kilo']
+    icon: officialIcon('kilocode', 'KI'),
+    executables: ['kilo', 'kilocode'],
+    autoApproveArgs: ['--auto'],
+    mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } })
   }),
   defineCli({
     id: 'vibe',
     displayName: 'Mistral Vibe',
-    icon: svg(ICON_PATHS.mistralai, '#FA7A2F'),
+    icon: officialIcon('vibe', 'VI'),
     executables: ['vibe']
   }),
   defineCli({
     id: 'grok',
     displayName: 'Grok CLI',
-    icon: mono('X', SILVER),
-    executables: ['grok']
+    icon: officialIcon('grok', 'GR'),
+    executables: ['grok'],
+    autoApproveArgs: ['--always-approve']
   }),
   defineCli({
     id: 'continue',
     displayName: 'Continue CLI',
-    icon: mono('cn', '#7AA2F7'),
+    icon: officialIcon('continue', 'CO'),
     executables: ['cn']
   }),
   defineCli({
     id: 'openhands',
     displayName: 'OpenHands',
-    icon: mono('OH', '#E2B36B'),
+    icon: officialIcon('openhands', 'OP'),
     executables: ['openhands']
   }),
   defineCli({
     id: 'plandex',
     displayName: 'Plandex',
-    icon: mono('P', '#6FC3DF'),
+    icon: officialIcon('plandex', 'PL'),
     executables: ['plandex']
   }),
   defineCli({
     id: 'letta',
     displayName: 'Letta Code',
-    icon: mono('L', '#B8A4F5'),
+    icon: officialIcon('letta', 'LE'),
     executables: ['letta']
+  }),
+  defineCli({
+    id: 'antigravity',
+    displayName: 'Antigravity CLI',
+    icon: officialIcon('antigravity', 'AG'),
+    executables: ['agy'],
+    autoApproveArgs: ['--dangerously-skip-permissions']
+  }),
+  defineCli({
+    id: 'junie',
+    displayName: 'Junie CLI',
+    icon: officialIcon('junie', 'JU'),
+    executables: ['junie']
   })
 ]

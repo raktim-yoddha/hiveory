@@ -83,3 +83,63 @@
   color: var(--color-text-muted);
   font-size: var(--text-xs);
 }
+
+/* Git options for isolated workspaces */
+.gitOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.gitToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.gitToggle svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  vertical-align: middle;
+}
+
+.gitRow {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.gitBranchField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.gitSetup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: var(--border-width) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.gitSetupIcon {
+  flex: none;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--color-bronze);
+}
+
+.gitSetupText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+}

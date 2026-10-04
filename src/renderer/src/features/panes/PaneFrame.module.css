@@ -1,4 +1,7 @@
 .frame {
+  /* Header controls adapt to the pane's own width, not the window's. */
+  container-type: inline-size;
+  container-name: pane;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -33,10 +36,12 @@
   flex: none;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
   height: var(--pane-header-height);
-  padding: 0 var(--space-3) 0 var(--space-5);
-  border-bottom: var(--border-width) solid var(--color-border-subtle);
-  background: linear-gradient(180deg, var(--color-surface-top), var(--color-surface));
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-pane-header-edge);
+  background: var(--color-pane-header);
+  box-shadow: inset 0 var(--hairline) 0 var(--color-sheen);
   cursor: grab;
 }
 
@@ -48,4 +53,18 @@
   position: relative;
   flex: 1;
   min-height: 0;
+}
+
+/* Narrow panes: drop optional controls first; close always stays (maximize remains via double-click). */
+@container pane (max-width: 340px) {
+  .header :global([data-pane-optional='maximize']) {
+    display: none;
+  }
+}
+
+@container pane (max-width: 260px) {
+  .header :global([data-pane-optional='add']),
+  .header :global([data-pane-optional='status']) {
+    display: none;
+  }
 }

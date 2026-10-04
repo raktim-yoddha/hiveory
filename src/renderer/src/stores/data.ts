@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type {
   AgentPreset,
+  AppSettings,
+  UpdateStatus,
   CliDescriptor,
   CliInstanceView,
   CliRuntimeDetails,
@@ -9,6 +11,7 @@ import type {
   Project,
   WorkspaceView
 } from '@shared/domain'
+import { DEFAULT_SETTINGS } from '@shared/domain'
 import type { AppInfo } from '@shared/ipc/contract'
 import { api } from '../lib/api'
 import { reportError } from './notices'
@@ -132,4 +135,34 @@ export const usePresets = create<PresetState>((set) => ({
   presets: [],
   loaded: false,
   load: () => load('Load presets', () => api('presets.list'), (presets) => set({ presets, loaded: true }))
+}))
+
+interface SettingsState {
+  settings: AppSettings
+  loaded: boolean
+  load(): Promise<void>
+  update(patch: Partial<AppSettings>): Promise<void>
+}
+
+export const useSettings = create<SettingsState>((set) => ({
+  settings: DEFAULT_SETTINGS,
+  loaded: false,
+  load: () => load('Load settings', () => api('settings.get'), (settings) => set({ settings, loaded: true })),
+  update: async (patch) => {
+    // Optimistic: themes switch instantly; main confirms (or the reload corrects it).
+    set((s) => ({ settings: { ...s.settings, ...patch } }))
+    await load('Save settings', () => api('settings.update', patch), (settings) => set({ settings }))
+  }
+}))
+
+interface UpdatesState {
+  status: UpdateStatus
+  load(): Promise<void>
+  set(status: UpdateStatus): void
+}
+
+export const useUpdates = create<UpdatesState>((set) => ({
+  status: { state: 'idle' },
+  load: () => load('Load update status', () => api('updates.status'), (status) => set({ status })),
+  set: (status) => set({ status })
 }))

@@ -143,3 +143,46 @@
   transform: translateX(-50%);
   pointer-events: none;
 }
+
+/* Top-edge arrange bar shown while dragging a pane near the top. */
+.arrangeOption {
+  position: absolute;
+  z-index: var(--z-drag);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-glass);
+  backdrop-filter: var(--blur-glass);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  pointer-events: none;
+  animation: arrange-in var(--duration-fast) var(--ease-out);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.arrangeOption svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.arrangeActive {
+  border-color: var(--color-bronze);
+  background: linear-gradient(180deg, var(--color-bronze-soft), var(--color-glass));
+  color: var(--color-text);
+  transform: translateY(var(--nudge-sm));
+}
+
+@keyframes arrange-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--nudge) * -1));
+  }
+}

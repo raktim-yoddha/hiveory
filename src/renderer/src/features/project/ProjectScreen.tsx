@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
-import { FolderGit2, Settings } from 'lucide-react'
-import { IconButton } from '../../components/ui/Button'
+import { FolderGit2 } from 'lucide-react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
+import { PathTrail } from '../../components/ui/PathTrail'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { useProjects } from '../../stores/data'
@@ -46,11 +46,8 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
       <header className={styles.header}>
         <div className={styles.titles}>
           <h1 className={styles.title}>{project.name}</h1>
-          <p className={styles.path} title={project.path}>
-            {project.path}
-          </p>
+          <PathTrail path={project.path} reveal={{ projectId }} />
         </div>
-        <IconButton label="Project settings" icon={<Settings />} size="md" onClick={() => openProject(projectId, 'settings')} />
       </header>
       <div className={styles.tabs}>
         <Tabs label="Project sections" options={TABS} value={tab} onChange={(next) => openProject(projectId, next)} />
@@ -58,7 +55,7 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
       <div className={styles.content} role="tabpanel" aria-label={REGION[tab]}>
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>
           {tab === 'tasks' && <KanbanBoard projectId={projectId} />}
-          {tab === 'pull-requests' && <PullRequestsTab />}
+          {tab === 'pull-requests' && <PullRequestsTab projectId={projectId} />}
           {tab === 'workspaces' && <WorkspacesTab projectId={projectId} />}
           {tab === 'settings' && <ProjectSettingsTab project={project} />}
         </ErrorBoundary>

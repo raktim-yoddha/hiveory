@@ -11,7 +11,7 @@ import { buildBoard } from './kanban/build-board'
 import { parseState } from './persistence/schema'
 import { BUILT_IN_ADAPTERS } from './cli/adapters'
 import { defineCli } from './cli/adapters/catalog'
-import { sanitizeEnv } from './cli/runtime/env'
+import { sanitizeEnv } from './pty/env'
 
 const instance = (id: string, projectId: string, workspaceId = 'w1'): CliInstance => ({
   id,
@@ -183,7 +183,7 @@ describe('CLI catalog', () => {
     expect(plain.supportsAutoApprove).toBe(false)
   })
 
-  it('codex uses the OpenAI mark', () => {
-    expect(BUILT_IN_ADAPTERS.find((a) => a.id === 'codex')?.icon.kind).toBe('svg')
+  it('every CLI ships an official mark (no monogram fallbacks)', () => {
+    for (const a of BUILT_IN_ADAPTERS) expect(a.icon.kind, a.id).toBe('image')
   })
 })

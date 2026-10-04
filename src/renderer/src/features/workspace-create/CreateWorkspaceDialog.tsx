@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Dices } from 'lucide-react'
 import type { WorkspaceAssociation, WorkspaceKind } from '@shared/domain'
 import { totalInstances } from '@shared/presets'
@@ -8,10 +8,13 @@ import { Modal } from '../../components/ui/Modal'
 import { Tabs } from '../../components/ui/Tabs'
 import { TextField, TextInput } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
-import { useProjects, useWorkspaces } from '../../stores/data'
+import { slugify } from '@shared/naming/names'
+import { useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { PresetPicker } from '../presets/PresetPicker'
+import { GitOptions, type GitChoice } from './GitOptions'
+import { IssuePicker } from './IssuePicker'
 import styles from './CreateWorkspaceDialog.module.css'
 
 interface CreateWorkspaceDialogProps {
@@ -32,7 +35,6 @@ const MAIN_NAME = 'Main'
  */
 export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDialogProps) {
   const openWorkspace = useNavigation((s) => s.openWorkspace)
-  const isRepo = useProjects((s) => Boolean(s.projects.find((p) => p.id === projectId)?.repositoryRoot))
   const hasMain = useWorkspaces((s) => (s.byProject[projectId] ?? []).some((w) => w.kind === 'main'))
   const loadWorkspaces = useWorkspaces((s) => s.load)
   /** null until the user picks; the default follows whether a main Workspace exists. */
@@ -47,6 +49,8 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   const [config, setConfig] = useState<AgentConfig>(EMPTY_CONFIG)
   const [tab, setTab] = useState<ConfigTab>('agents')
   const [busy, setBusy] = useState<'empty' | 'full' | null>(null)
+  const [git, setGit] = useState<GitChoice>({ useExistingBranch: false, ready: false })
+  const onGitChange = useCallback((choice: GitChoice) => setGit(choice), [])
 
   const suggest = (): void =>
     void runAction('Suggest workspace name', async () => {
@@ -71,7 +75,8 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
         name: name.trim(),
         association: associationRef.trim() ? { kind: associationKind, ref: associationRef.trim() } : undefined,
         cliSelections: withAgents ? config.cliSelections : [],
-        autoApprove: config.autoApprove
+        autoApprove: config.autoApprove,
+        ...(kind === 'isolated' ? { baseRef: git.baseRef, branch: git.branch, useExistingBranch: git.useExistingBranch } : {})
       })
     )
     setBusy(null)
@@ -82,7 +87,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   }
 
   const count = totalInstances(config.cliSelections)
-  const kindBlocked = (kind === 'main' && hasMain) || (kind === 'isolated' && !isRepo)
+  const kindBlocked = (kind === 'main' && hasMain) || (kind === 'isolated' && !git.ready)
   const canSubmit = name.trim().length > 0 && !busy && !kindBlocked
 
   return (
@@ -115,9 +120,9 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
             />
             <KindOption
               selected={kind === 'isolated'}
-              disabled={!isRepo}
+              disabled={false}
               title="New branch"
-              description={isRepo ? 'An isolated copy on its own branch, so agents never collide.' : 'Needs a Git repository with at least one commit.'}
+              description="An isolated copy on its own branch, so agents never collide."
               onSelect={() => setKind('isolated')}
             />
           </div>
@@ -131,6 +136,9 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
             kind === 'isolated' && <IconButton label="Suggest another name" icon={<Dices />} size="lg" onClick={suggest} />
           }
         />
+        {kind === 'isolated' && (
+          <GitOptions projectId={projectId} suggestedBranch={`hiveory/${slugify(name)}`} onChange={onGitChange} />
+        )}
         <div className={styles.association}>
           <span className={styles.label}>Issue / Pull request</span>
           <div className={styles.associationRow}>
@@ -151,6 +159,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
               maxLength={300}
               onChange={setAssociationRef}
             />
+            {associationKind === 'issue' && <IssuePicker projectId={projectId} onPick={setAssociationRef} />}
           </div>
         </div>
         <div className={styles.config}>

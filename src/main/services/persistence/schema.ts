@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { AgentPreset, CliInstance, LayoutNode, Project, Workspace } from '@shared/domain'
+import { DEFAULT_SETTINGS, type AgentPreset, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -9,6 +9,7 @@ export interface PersistedState {
   instances: CliInstance[]
   layouts: Record<string, LayoutNode | null>
   presets: AgentPreset[]
+  settings: AppSettings
 }
 
 export const emptyState = (): PersistedState => ({
@@ -17,7 +18,14 @@ export const emptyState = (): PersistedState => ({
   workspaces: [],
   instances: [],
   layouts: {},
-  presets: []
+  presets: [],
+  settings: { ...DEFAULT_SETTINGS }
+})
+
+const settingsSchema = z.object({
+  theme: z.enum(['bronze', 'silver']).catch(DEFAULT_SETTINGS.theme),
+  autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
+  agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools)
 })
 
 const str = z.string()
@@ -38,7 +46,9 @@ export const workspaceSchema: z.ZodType<Workspace> = z.object({
   name: str,
   kind: z.enum(['main', 'isolated']),
   path: str,
-  git: z.object({ worktreePath: str.optional(), branch: str.optional(), baseRef: str.optional() }).optional(),
+  git: z
+    .object({ worktreePath: str.optional(), branch: str.optional(), baseRef: str.optional(), createdBranch: z.boolean().optional() })
+    .optional(),
   association: z.object({ kind: z.enum(['issue', 'pull-request']), ref: str }).optional(),
   autoApprove: z.boolean(),
   createdAt: str,
@@ -60,12 +70,15 @@ export const instanceSchema: z.ZodType<CliInstance> = z.object({
 export const layoutSchema: z.ZodType<LayoutNode> = z.lazy(() =>
   z.union([
     z.object({ type: z.literal('pane'), paneId: str }),
-    z.object({
-      type: z.literal('split'),
-      direction: z.enum(['horizontal', 'vertical']),
-      children: z.array(layoutSchema).min(2),
-      ratios: z.array(z.number().positive())
-    })
+    z
+      .object({
+        type: z.literal('split'),
+        direction: z.enum(['horizontal', 'vertical']),
+        children: z.array(layoutSchema).min(2),
+        ratios: z.array(z.number().positive().finite())
+      })
+      // A split whose ratios don't match its children is corrupt; reject it so it gets rebuilt.
+      .refine((s) => s.ratios.length === s.children.length)
   ])
 )
 
@@ -105,7 +118,9 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       workspaces: list(input.workspaces, workspaceSchema),
       instances: list(input.instances, instanceSchema),
       layouts,
-      presets: list(input.presets, presetSchema)
+      presets: list(input.presets, presetSchema),
+      // Unknown or invalid settings fall back to defaults field by field.
+      settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {})
     },
     rejected
   }

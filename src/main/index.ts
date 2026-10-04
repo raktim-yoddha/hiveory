@@ -1,10 +1,11 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
+import electronUpdater from 'electron-updater'
 import { join } from 'node:path'
 import { IPC_PREFIX } from '@shared/ipc/contract'
 import { createContainer, type Container } from './app/container'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
-import { createMainWindow, rendererTargets } from './app/window'
+import { applyWindowTheme, createMainWindow, rendererTargets } from './app/window'
 import { createHandlers } from './ipc/handlers'
 import { registerIpc } from './ipc/router'
 import { isTrustedSenderUrl } from './ipc/trust'
@@ -36,7 +37,7 @@ const emit: Emit = (event, payload) => {
 }
 
 const openWindow = (): void => {
-  window = createMainWindow(targets, log)
+  window = createMainWindow(targets, log, container?.settings.get().theme)
   window.on('closed', () => (window = null))
 }
 
@@ -47,9 +48,13 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
-  container = createContainer(paths, log, emit)
+  // No application menu on Windows/Linux: its hidden Alt accelerators would swallow
+  // Alt-shortcuts (Alt+V, Alt+C…) that CLIs rely on. Copy/paste are handled by the terminal.
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+  container = createContainer(paths, log, emit, app.isPackaged ? electronUpdater.autoUpdater : null)
   const notice = container.store.load()
   container.workspaceRepo.adoptImplicitMainWorkspaces()
+  container.chatStore.load()
   try {
     await container.hookServer.start()
   } catch (error) {
@@ -57,6 +62,12 @@ app.whenReady().then(async () => {
     log.error('Hook server failed to start', error)
   }
   container.runtime.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
+  container.shells.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
+  container.settings.on('changed', (next, previous) => {
+    if (next.theme !== previous.theme) for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme)
+    if (next.autoCheckUpdates !== previous.autoCheckUpdates) container?.updates.setAutoCheck(next.autoCheckUpdates)
+  })
+  container.updates.setAutoCheck(container.settings.get().autoCheckUpdates)
   registerIpc(
     createHandlers(container),
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
@@ -78,6 +89,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   if (!container) return
   container.runtime.disposeAll()
+  container.shells.disposeAll()
+  container.chats.stopAll()
   container.hookServer.stop()
   container.store.flush()
 })

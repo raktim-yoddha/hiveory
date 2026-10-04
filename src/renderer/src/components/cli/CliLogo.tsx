@@ -21,7 +21,9 @@ export function CliLogo({ cliId, size = 'md', className }: CliLogoProps) {
   const name = cli?.displayName ?? cliId
   return (
     <span className={cx(styles.logo, styles[size], className)} role="img" aria-label={name} title={name}>
-      {icon.kind === 'svg' ? (
+      {icon.kind === 'image' ? (
+        <img src={icon.src} alt="" aria-hidden draggable={false} />
+      ) : icon.kind === 'svg' ? (
         <svg viewBox={icon.viewBox} aria-hidden fill={icon.color}>
           <path d={icon.path} />
         </svg>

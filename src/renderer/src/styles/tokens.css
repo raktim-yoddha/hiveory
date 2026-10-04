@@ -16,6 +16,8 @@
   --color-surface-hover: #221e19;
   --color-surface-active: #2b2620;
   --color-surface-inset: #0c0b09;
+  --color-pane-header: #1a1712;
+  --color-pane-header-edge: #2a251e;
   --color-overlay: rgb(5 4 3 / 0.66);
   --color-glass: rgb(27 24 20 / 0.82);
 
@@ -137,7 +139,8 @@
   --titlebar-height: 44px;
   --titlebar-controls-width: 140px;
   --sidebar-width: 248px;
-  --pane-header-height: 36px;
+  --side-panel-width: 420px;
+  --pane-header-height: 30px;
   --pane-min-width: 240px;
   --pane-min-height: 140px;
   --dialog-width: 520px;
@@ -172,9 +175,63 @@
   --duration-base: 170ms;
   --duration-slow: 240ms;
 
+  --z-pane-overlay: 10;
   --z-dropzone: 20;
   --z-drag: 30;
   --z-menu: 50;
   --z-dialog: 60;
   --z-toast: 70;
+}
+
+/*
+ * Silver theme: cool graphite with brushed-silver accents. Only colors change;
+ * spacing, type and motion are shared.
+ */
+:root[data-theme='silver'] {
+  --color-bg: #070809;
+  --color-surface: #0e0f11;
+  --color-surface-top: #131518;
+  --color-surface-raised: #17191c;
+  --color-surface-hover: #1e2024;
+  --color-surface-active: #26292e;
+  --color-surface-inset: #0a0b0d;
+  --color-pane-header: #16181c;
+  --color-pane-header-edge: #262a30;
+  --color-overlay: rgb(3 4 5 / 0.66);
+  --color-glass: rgb(23 25 28 / 0.82);
+
+  --color-border-subtle: #1a1c20;
+  --color-border: #272a30;
+  --color-border-strong: #3a3e46;
+  --color-sheen: rgb(225 232 242 / 0.05);
+  --color-sheen-strong: rgb(225 232 242 / 0.09);
+
+  --color-text: #eceef2;
+  --color-text-secondary: #b1b5bd;
+  --color-text-muted: #7a7f88;
+  --color-text-faint: #4b4f57;
+
+  --color-accent: #d7dbe2;
+  --color-accent-hover: #eef1f5;
+  --color-accent-contrast: #0c0d10;
+  --color-bronze: #9aa3b1;
+  --color-bronze-soft: rgb(170 180 196 / 0.13);
+  --color-focus: #9ea6b4;
+  --gradient-metal: linear-gradient(180deg, #f5f7fa 0%, #d3d8df 55%, #aeb5c0 100%);
+  --gradient-metal-hover: linear-gradient(180deg, #ffffff 0%, #e0e4ea 55%, #bcc3cd 100%);
+  --gradient-bronze-line: linear-gradient(90deg, transparent, rgb(200 208 220 / 0.6), transparent);
+  --gradient-app: radial-gradient(1200px 520px at 50% -180px, rgb(170 182 200 / 0.09), transparent 70%);
+  --color-idle: #6d727b;
+
+  --color-drop: rgb(215 219 226 / 0.07);
+  --color-drop-border: rgb(215 219 226 / 0.5);
+
+  --term-bg: #0e0f11;
+  --term-fg: #e1e4e9;
+  --term-cursor: #d7dbe2;
+  --term-selection: rgb(215 219 226 / 0.22);
+  --term-black: #1a1c20;
+  --term-bright-black: #5a5f68;
+  --term-white: #cfd3da;
+  --term-bright-white: #f7f8fa;
 }

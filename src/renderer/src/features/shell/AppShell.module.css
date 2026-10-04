@@ -18,6 +18,28 @@
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
 }
 
+.withPanel {
+  grid-template-columns: minmax(0, 1fr) var(--side-panel-width);
+}
+
+.withSidebar.withPanel {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--side-panel-width);
+}
+
+.panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Both modes stay mounted; the inactive one is hidden, not unmounted. */
+.mode {
+  height: 100%;
+}
+
+.mode[hidden] {
+  display: none;
+}
+
 .sidebar,
 .content {
   min-width: 0;

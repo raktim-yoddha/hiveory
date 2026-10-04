@@ -21,6 +21,11 @@
 - `adr/0009-fault-isolation.md`
 - `adr/0010-workspace-and-agent-lifecycle.md`
 - `adr/0011-ui-feedback-round-1.md`
+- `adr/0012-feedback-round-2.md`
+
+## Research
+
+- `docs/research-ade-landscape.md`
 
 ## Relationship
 

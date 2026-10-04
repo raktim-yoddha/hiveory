@@ -1,7 +1,9 @@
-import type { Side } from '../domain/layout'
+import type { ArrangeMode, Side } from '../domain/layout'
 import { containsPoint, sliceRect, type Rect } from './geometry'
+import { ARRANGE_MODES } from './presets'
 
 export type DropTarget =
+  | { kind: 'arrange'; mode: ArrangeMode; preview: Rect }
   | { kind: 'swap'; targetPaneId: string; preview: Rect }
   | { kind: 'move'; targetPaneId: string; side: Side; preview: Rect }
   | { kind: 'dock'; side: Side; preview: Rect }
@@ -18,6 +20,25 @@ export interface DropQuery {
   edgeThreshold?: number
 }
 
+/** Height of the band along the top edge that reveals the arrange bar. */
+export const ARRANGE_BAND = 64
+const OPTION = { width: 120, height: 44, gap: 8, top: 10 }
+
+/** Where each arrange option is drawn; shared by hit-testing and rendering. */
+export const arrangeBarRects = (container: Rect): Array<{ mode: ArrangeMode; label: string; rect: Rect }> => {
+  const total = ARRANGE_MODES.length * OPTION.width + (ARRANGE_MODES.length - 1) * OPTION.gap
+  const left = container.x + (container.width - total) / 2
+  return ARRANGE_MODES.map(({ mode, label }, i) => ({
+    mode,
+    label,
+    rect: { x: left + i * (OPTION.width + OPTION.gap), y: container.y + OPTION.top, width: OPTION.width, height: OPTION.height }
+  }))
+}
+
+/** True while the pointer is in the top band (the arrange bar should be visible). Never more than a quarter of the area. */
+export const inArrangeBand = (container: Rect, y: number, x: number): boolean =>
+  containsPoint(container, x, y) && y - container.y <= Math.min(ARRANGE_BAND, container.height / 4)
+
 const closest = (entries: Array<[Side, number]>): [Side, number] =>
   entries.reduce((best, d) => (d[1] < best[1] ? d : best))
 
@@ -27,6 +48,11 @@ export const resolveDropTarget = (q: DropQuery): DropTarget | null => {
   if (others.length === 0) return null
 
   const c = q.container
+  if (!q.swap && inArrangeBand(c, q.y, q.x)) {
+    // The top edge is reserved for whole-layout arrangements; the option under the pointer wins.
+    const option = arrangeBarRects(c).find((o) => q.x >= o.rect.x - OPTION.gap / 2 && q.x <= o.rect.x + o.rect.width + OPTION.gap / 2)
+    return option ? { kind: 'arrange', mode: option.mode, preview: c } : null
+  }
   if (!q.swap && containsPoint(c, q.x, q.y)) {
     const [side, distance] = closest([
       ['left', q.x - c.x],

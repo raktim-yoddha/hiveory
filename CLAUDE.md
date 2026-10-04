@@ -281,6 +281,31 @@ Before declaring work complete:
 [ ] Documentation is still consistent
 ```
 
+### 26. Releases & Semantic Versioning
+
+Hiveory follows [Semantic Versioning 2.0.0](https://semver.org): `MAJOR.MINOR.PATCH`.
+
+- **PATCH** — bug fixes only, no behavior change.
+- **MINOR** — new features, backwards compatible.
+- **MAJOR** — breaking changes (data format, removed behavior).
+- Prereleases: `1.4.0-beta.1`, `1.4.0-rc.1` (lower precedence than `1.4.0`).
+- Build metadata (`+…`) is never used for releases.
+
+When the user says **"release X.Y.Z"** (or "release vX.Y.Z"), the agent must:
+
+1. Run `pnpm release X.Y.Z --check`. This applies `scripts/semver.mjs`: valid SemVer, strictly greater
+   than `package.json`'s version, no skipped versions (exactly one patch, minor or major step, or a
+   prerelease of one), and not already tagged locally or on origin.
+2. If the check fails: do **not** release. Tell the user the exact reason the script printed and the
+   valid next versions (patch / minor / major).
+3. If the check passes: run `pnpm release X.Y.Z` directly (no extra confirmation needed — the user's
+   "release" instruction is the approval). It must be on `main` with a clean tree; it bumps
+   `package.json`, commits `chore(release): vX.Y.Z`, tags `vX.Y.Z`, pushes, builds the installer for
+   the current platform and publishes it to GitHub Releases (read by the in-app updater).
+4. Report the release URL, or the failing step verbatim if any step fails.
+
+Never edit the version by hand, never reuse a tag, and never skip the check.
+
 ## Documentation Graph
 
 ```text

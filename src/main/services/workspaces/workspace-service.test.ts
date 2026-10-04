@@ -33,6 +33,8 @@ const setup = (git: Partial<Record<keyof GitService, unknown>> = {}) => {
     hasCommits: vi.fn(async () => true),
     defaultBranch: vi.fn(async () => 'main'),
     localBranchExists: vi.fn(async () => false),
+    refExists: vi.fn(async () => true),
+    branchNameProblem: vi.fn(async () => null),
     currentBranch: vi.fn(async () => 'main'),
     ...git
   } as unknown as GitService
@@ -125,6 +127,37 @@ describe('workspace creation', () => {
     })
     await service.create(input)
     expect(worktrees.create).toHaveBeenCalledWith(expect.objectContaining({ branch: 'hiveory/amber-harbor-2' }))
+  })
+
+  it('uses a custom base branch and branch name', async () => {
+    const { service, worktrees } = setup()
+    const view = await service.create({ ...input, baseRef: 'develop', branch: 'feature/login' })
+    expect(worktrees.create).toHaveBeenCalledWith(expect.objectContaining({ branch: 'feature/login', baseRef: 'develop' }))
+    expect(view.git).toMatchObject({ branch: 'feature/login', baseRef: 'develop', createdBranch: true })
+  })
+
+  it('rejects a custom branch that already exists, or an unknown base', async () => {
+    const taken = setup({ localBranchExists: vi.fn(async () => true) })
+    expect(await code(taken.service.create({ ...input, branch: 'feature/login' }))).toBe('INVALID_INPUT')
+    const noBase = setup({ refExists: vi.fn(async () => false) })
+    expect(await code(noBase.service.create({ ...input, baseRef: 'nope' }))).toBe('INVALID_INPUT')
+    const badName = setup({ branchNameProblem: vi.fn(async () => 'That is not a valid Git branch name.') })
+    expect(await code(badName.service.create({ ...input, branch: 'x..y' }))).toBe('INVALID_INPUT')
+  })
+
+  it('checks out an existing branch and never deletes it', async () => {
+    const { service, worktrees } = setup({ localBranchExists: vi.fn(async () => true) })
+    const view = await service.create({ ...input, useExistingBranch: true, branch: 'release/1.2' })
+    expect(worktrees.create).toHaveBeenCalledWith(expect.objectContaining({ branch: 'release/1.2', baseRef: undefined }))
+    expect(view.git?.createdBranch).toBe(false)
+    await service.delete(view.id, false)
+    expect(worktrees.deleteBranchIfMerged).not.toHaveBeenCalled()
+  })
+
+  it('requires the existing branch to exist', async () => {
+    const { service } = setup()
+    expect(await code(service.create({ ...input, useExistingBranch: true, branch: 'ghost' }))).toBe('INVALID_INPUT')
+    expect(await code(service.create({ ...input, useExistingBranch: true }))).toBe('INVALID_INPUT')
   })
 
   it('explains why isolation is impossible', async () => {

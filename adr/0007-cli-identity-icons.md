@@ -5,11 +5,12 @@
 CLI logos are data owned by each adapter (`IconReference`) and sent to the UI
 through the registry; the UI never hardcodes providers.
 
-- Claude Code, Gemini CLI, OpenCode: SVG paths from Simple Icons (CC0 data;
-  marks remain their owners' trademarks, used only to identify the CLI).
-- Codex: no openly licensed mark is bundled, so it uses the documented neutral
-  fallback (monogram `>_`).
-- Unknown CLIs render a `?` monogram.
+- Superseded in part by ADR 0012: every CLI now ships its official mark, from
+  LobeHub Icons (MIT) or the publisher's GitHub organization avatar, generated
+  into `src/main/services/cli/adapters/icon-data.ts` by
+  `scripts/generate-cli-icons.mjs`. Marks remain their owners' trademarks and
+  are used only to identify each CLI.
+- Unknown CLIs render a neutral monogram.
 
 ## Consequences
 

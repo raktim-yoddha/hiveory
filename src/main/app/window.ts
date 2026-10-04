@@ -3,7 +3,14 @@ import { join } from 'node:path'
 import appIcon from '@resources/icon.png?asset'
 import type { Logger } from './logger'
 
-export const WINDOW_BACKGROUND = '#080706'
+import type { ThemeId } from '@shared/domain'
+
+/** Native title-bar overlay colors per theme (they cannot read CSS variables). */
+export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string }> = {
+  bronze: { background: '#080706', symbols: '#b8afa3' },
+  silver: { background: '#08090b', symbols: '#b6bac2' }
+}
+export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
 export const TITLE_BAR_HEIGHT = 44
 
 export interface WindowTargets {
@@ -13,8 +20,9 @@ export interface WindowTargets {
 }
 
 /** Creates the hardened main window (Electron security checklist). */
-export const createMainWindow = (targets: WindowTargets, log: Logger): BrowserWindow => {
+export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'bronze'): BrowserWindow => {
   const isMac = process.platform === 'darwin'
+  const chrome = THEME_CHROME[theme]
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -24,18 +32,20 @@ export const createMainWindow = (targets: WindowTargets, log: Logger): BrowserWi
     title: 'Hiveory',
     // Taskbar/window icon on Windows and Linux; macOS uses the bundle icon.
     icon: appIcon,
-    backgroundColor: WINDOW_BACKGROUND,
+    backgroundColor: chrome.background,
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 16, y: 15 } }
-      : { titleBarOverlay: { color: WINDOW_BACKGROUND, symbolColor: '#b8afa3', height: TITLE_BAR_HEIGHT } }),
+      : { titleBarOverlay: { color: chrome.background, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: targets.preload,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      spellcheck: false
+      spellcheck: false,
+      // Work and Chat keep streaming while the window is hidden or in the background.
+      backgroundThrottling: false
     }
   })
 
@@ -48,6 +58,15 @@ export const createMainWindow = (targets: WindowTargets, log: Logger): BrowserWi
     return { action: 'deny' }
   })
   window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+
+  // DevTools stay reachable in development without an application menu.
+  if (targets.devServerUrl) {
+    window.webContents.on('before-input-event', (_event, input) => {
+      if (input.type === 'keyDown' && input.control && input.shift && input.key.toLowerCase() === 'i') {
+        window.webContents.toggleDevTools()
+      }
+    })
+  }
 
   // A crashed renderer reloads instead of leaving a dead window; agents keep running in main.
   let lastCrash = 0
@@ -69,3 +88,16 @@ export const rendererTargets = (baseDir: string): WindowTargets => ({
   rendererFile: join(baseDir, '../renderer/index.html'),
   devServerUrl: process.env.ELECTRON_RENDERER_URL
 })
+
+/** Repaints native chrome to match the theme. */
+export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId): void => {
+  const chrome = THEME_CHROME[theme]
+  window.setBackgroundColor(chrome.background)
+  if (process.platform !== 'darwin') {
+    try {
+      window.setTitleBarOverlay({ color: chrome.background, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
+    } catch {
+      // Overlay unavailable on this platform/window.
+    }
+  }
+}

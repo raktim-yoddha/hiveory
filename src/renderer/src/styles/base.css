@@ -84,3 +84,14 @@ p {
     transition-duration: 1ms !important;
   }
 }
+
+/* Shared spinner for icons in progress states. */
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

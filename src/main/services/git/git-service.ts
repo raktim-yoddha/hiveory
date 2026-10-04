@@ -1,7 +1,9 @@
 import { execFile } from 'node:child_process'
 import { resolve } from 'node:path'
 import { AppException } from '@shared/errors'
-import { gitArgs, stripRemote } from './git-commands'
+import { branchNameProblem, gitArgs, parseStatus, stripRemote, type GitStatus } from './git-commands'
+
+const LINE_BREAK = /\r?\n/
 
 export class GitCommandError extends Error {
   constructor(
@@ -66,6 +68,36 @@ export class GitService {
 
   async localBranchExists(repoRoot: string, branch: string): Promise<boolean> {
     return (await this.tryRun(repoRoot, gitArgs.localBranchExists(branch))) !== undefined
+  }
+
+  async refExists(repoRoot: string, ref: string): Promise<boolean> {
+    if (ref.startsWith('-')) return false
+    return (await this.tryRun(repoRoot, gitArgs.verifyCommit(ref))) !== undefined
+  }
+
+  async localBranches(repoRoot: string): Promise<string[]> {
+    const out = await this.tryRun(repoRoot, gitArgs.localBranches())
+    return out ? out.split(LINE_BREAK).map((b) => b.trim()).filter(Boolean) : []
+  }
+
+  async status(path: string): Promise<GitStatus | null> {
+    const out = await this.tryRun(path, gitArgs.status())
+    return out === undefined ? null : parseStatus(out)
+  }
+
+  /** Null when `name` is a valid, unused-shape branch name; otherwise the reason. */
+  async branchNameProblem(repoRoot: string, name: string): Promise<string | null> {
+    const own = branchNameProblem(name)
+    if (own) return own
+    return (await this.tryRun(repoRoot, gitArgs.checkBranchName(name))) === undefined ? 'That is not a valid Git branch name.' : null
+  }
+
+  /** `git init`, optionally followed by a first commit of everything in the folder. */
+  async init(path: string, commit: boolean): Promise<void> {
+    await this.run(path, gitArgs.init())
+    if (!commit) return
+    await this.run(path, gitArgs.addAll())
+    await this.run(path, gitArgs.initialCommit())
   }
 
   /** origin's default branch, else local main/master, else the current branch. */

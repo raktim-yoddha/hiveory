@@ -129,3 +129,56 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
+
+.selectWrap {
+  position: relative;
+  display: flex;
+}
+
+.select {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-lg);
+  padding: 0 calc(var(--space-5) * 2 + var(--icon-xs)) 0 var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  appearance: none;
+}
+
+.select:hover {
+  border-color: var(--color-border-strong);
+}
+
+.select:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+}
+
+.select option {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.selectIcon {
+  position: absolute;
+  top: 50%;
+  right: var(--space-5);
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--color-text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.fieldHint {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.fieldError {
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+}

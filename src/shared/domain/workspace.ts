@@ -17,6 +17,8 @@ export interface Workspace {
     worktreePath?: string
     branch?: string
     baseRef?: string
+    /** False when the user checked out an existing branch (Hiveory then never deletes it). */
+    createdBranch?: boolean
   }
   association?: WorkspaceAssociation
   /** Default auto-approve setting applied to agents opened in this Workspace. */

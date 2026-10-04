@@ -37,3 +37,10 @@ linux:
   category: Development
   maintainer: Raktim Yoddha
   artifactName: ${productName}-${version}.${ext}
+publish:
+  # Installers + latest.yml go to GitHub Releases; electron-updater reads them back.
+  provider: github
+  owner: raktim-yoddha
+  repo: hiveory
+  # Published releases (not drafts) so the in-app updater sees them immediately.
+  releaseType: release
