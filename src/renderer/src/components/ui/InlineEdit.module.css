@@ -1,0 +1,16 @@
+.input {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-focus);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  font: inherit;
+  user-select: text;
+}
+
+.input:focus {
+  outline: none;
+}

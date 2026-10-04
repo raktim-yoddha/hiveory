@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpDown, Check, FolderPlus } from 'lucide-react'
+import { Check, FolderPlus, ListFilter } from 'lucide-react'
 import type { ProjectSort } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
@@ -60,7 +60,7 @@ export function ProjectSidebar() {
             icon: sort === value ? <Check /> : null,
             onSelect: () => chooseSort(value)
           }))}
-          trigger={(props) => <IconButton {...props} label="Sort projects" icon={<ArrowUpDown />} />}
+          trigger={(props) => <IconButton {...props} label="Sort projects" icon={<ListFilter />} />}
         />
         <IconButton label="Open project" icon={<FolderPlus />} onClick={addProject} />
       </div>

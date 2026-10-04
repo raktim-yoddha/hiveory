@@ -21,6 +21,14 @@ interface CliSpec {
   waitingPatterns?: Array<{ pattern: RegExp; reason: WaitingReason }>
   /** How this CLI loads Hiveory's agent-tools MCP server, if it can. */
   mcp?: (endpoint: McpEndpoint) => { args?: string[]; env?: Record<string, string> }
+  /** How an agent gets its own conversation back after a restart (ADR 0014). */
+  session?: {
+    /** Hiveory chooses the session id up front (exact, per agent)… */
+    start?: (id: string) => string[]
+    resume?: (id: string) => string[]
+    /** …or the CLI continues the folder's most recent session (used only for the folder's sole agent of that CLI). */
+    latest?: string[]
+  }
 }
 
 /** Prompts most agent CLIs use when they need a decision. */
@@ -38,10 +46,19 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
   injectMcp: Boolean(spec.mcp),
-  buildLaunch: ({ autoApprove, mcp }) => {
+  buildLaunch: ({ instance, autoApprove, mcp, resume, soleOfCli }) => {
     const tools = mcp && spec.mcp ? spec.mcp(mcp) : {}
+    const s = spec.session
+    const session =
+      s?.start && s.resume
+        ? resume
+          ? s.resume(instance.conversationId)
+          : s.start(instance.conversationId)
+        : resume && soleOfCli && s?.latest
+          ? s.latest
+          : []
     return {
-      args: [...(spec.args ?? []), ...(autoApprove ? (spec.autoApproveArgs ?? []) : []), ...(tools.args ?? [])],
+      args: [...(spec.args ?? []), ...session, ...(autoApprove ? (spec.autoApproveArgs ?? []) : []), ...(tools.args ?? [])],
       env: { ...(autoApprove ? spec.autoApproveEnv : {}), ...tools.env }
     }
   },
@@ -59,6 +76,7 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('gemini', 'GE'),
     executables: ['gemini'],
     autoApproveArgs: ['--yolo'],
+    session: { latest: ['--resume', 'latest'] },
     waitingPatterns: [{ pattern: /Allow execution|Apply this change\?|Waiting for user confirmation/i, reason: 'permission' }]
   }),
   defineCli({
@@ -67,6 +85,7 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
     autoApproveArgs: ['--auto'],
+    session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
     waitingPatterns: [{ pattern: /Permission required/i, reason: 'permission' }]
   }),
@@ -76,6 +95,7 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('copilot', 'CO'),
     executables: ['copilot'],
     autoApproveArgs: ['--allow-all-tools'],
+    session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ args: ['--additional-mcp-config', JSON.stringify(mcpServersJson(endpoint, { tools: ['*'] }))] })
   }),
   defineCli({
@@ -83,14 +103,16 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Cursor CLI',
     icon: officialIcon('cursor', 'CU'),
     executables: ['cursor-agent'],
-    autoApproveArgs: ['--force']
+    autoApproveArgs: ['--force'],
+    session: { latest: ['resume'] }
   }),
   defineCli({
     id: 'qwen',
     displayName: 'Qwen Code',
     icon: officialIcon('qwen', 'QW'),
     executables: ['qwen'],
-    autoApproveArgs: ['--yolo']
+    autoApproveArgs: ['--yolo'],
+    session: { latest: ['--continue'] }
   }),
   defineCli({
     id: 'amp',
@@ -104,7 +126,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Aider',
     icon: officialIcon('aider', 'AI'),
     executables: ['aider'],
-    autoApproveArgs: ['--yes-always']
+    autoApproveArgs: ['--yes-always'],
+    session: { latest: ['--restore-chat-history'] }
   }),
   defineCli({
     id: 'goose',
@@ -112,7 +135,8 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('goose', 'GO'),
     executables: ['goose'],
     args: ['session'],
-    autoApproveEnv: { GOOSE_MODE: 'auto' }
+    autoApproveEnv: { GOOSE_MODE: 'auto' },
+    session: { latest: ['--resume'] }
   }),
   defineCli({
     id: 'crush',
@@ -126,7 +150,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Kimi CLI',
     icon: officialIcon('kimi', 'KI'),
     executables: ['kimi'],
-    autoApproveArgs: ['--yolo']
+    autoApproveArgs: ['--yolo'],
+    session: { latest: ['--continue'] }
   }),
   defineCli({
     id: 'kiro',
@@ -160,6 +185,7 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('kilocode', 'KI'),
     executables: ['kilo', 'kilocode'],
     autoApproveArgs: ['--auto'],
+    session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } })
   }),
   defineCli({
@@ -173,7 +199,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Grok CLI',
     icon: officialIcon('grok', 'GR'),
     executables: ['grok'],
-    autoApproveArgs: ['--always-approve']
+    autoApproveArgs: ['--always-approve'],
+    session: { start: (id) => ['--session-id', id], resume: (id) => ['--resume', id] }
   }),
   defineCli({
     id: 'continue',
@@ -204,7 +231,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Antigravity CLI',
     icon: officialIcon('antigravity', 'AG'),
     executables: ['agy'],
-    autoApproveArgs: ['--dangerously-skip-permissions']
+    autoApproveArgs: ['--dangerously-skip-permissions'],
+    session: { latest: ['--continue'] }
   }),
   defineCli({
     id: 'junie',

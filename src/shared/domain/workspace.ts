@@ -23,6 +23,8 @@ export interface Workspace {
   association?: WorkspaceAssociation
   /** Default auto-approve setting applied to agents opened in this Workspace. */
   autoApprove: boolean
+  /** Agents opened here use the chat view when their CLI supports it (ADR 0013). */
+  chatUi?: boolean
   createdAt: string
   updatedAt: string
 }

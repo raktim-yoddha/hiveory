@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { ChatModel } from '@shared/domain/chat'
+import { dirname } from 'node:path'
+import type { ChatAttachment, ChatModel } from '@shared/domain/chat'
+import { claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
+import type { McpEndpoint } from '../cli/adapters/types'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
 
 export interface RunInput {
@@ -9,6 +12,18 @@ export interface RunInput {
   /** The CLI's own session id from an earlier turn. */
   sessionId?: string
   autoApprove: boolean
+  /** Files sent with this turn (by path). */
+  attachments?: ChatAttachment[]
+  /** Hiveory's MCP server (browser, and coordination for Work agents), when tools are on. */
+  mcp?: ChatMcp
+}
+
+export interface ChatMcp {
+  endpoint: McpEndpoint
+  /** Where a CLI that reads its MCP config from a file gets it written. */
+  configPath: string
+  /** Work agents also get the agent-coordination tools; plain chats only the browser. */
+  coordination: boolean
 }
 
 export interface RunSpec {
@@ -17,6 +32,9 @@ export interface RunSpec {
   stdin?: string
   /** Session id Hiveory chose up front (CLIs that accept one). */
   assignedSessionId?: string
+  env?: Record<string, string>
+  /** Written before the run (e.g. an MCP config holding the token, kept off the command line). */
+  files?: Array<{ path: string; content: string }>
 }
 
 /** Runs a CLI subcommand and returns stdout (used for model discovery). */
@@ -87,6 +105,15 @@ const flag = (name: string, value?: string): string[] => (value ? [name, value] 
 /** A prompt passed as an argument must never be mistaken for a flag. */
 export const promptArg = (prompt: string): string => (prompt.startsWith('-') ? ` ${prompt}` : prompt)
 
+/** Points the CLI at attached files; every agent CLI here can read a file by path. */
+export const withAttachmentNote = (prompt: string, attachments: ChatAttachment[] = []): string =>
+  attachments.length
+    ? `${prompt || 'Look at the attached files.'}\n\nAttached files (read them as part of this message):\n${attachments.map((a) => `- ${a.path} (${a.kind})`).join('\n')}`
+    : prompt
+
+/** Folders holding attachments, for CLIs that limit file access to granted directories. */
+const attachmentDirs = (attachments: ChatAttachment[] = []): string[] => [...new Set(attachments.map((a) => dirname(a.path)))]
+
 const claude: ChatProvider = {
   cliId: 'claude',
   parser: claudeParser,
@@ -97,9 +124,10 @@ const claude: ChatProvider = {
     { id: 'sonnet', label: 'Sonnet', efforts: CLAUDE_EFFORTS, description: 'Balanced' },
     { id: 'haiku', label: 'Haiku', description: 'Fastest' }
   ],
-  run: ({ prompt, model, effort, sessionId, autoApprove }) => {
+  run: ({ prompt, model, effort, sessionId, autoApprove, attachments, mcp }) => {
     const assigned = sessionId ? undefined : randomUUID()
     return {
+      ...(mcp ? { files: [{ path: mcp.configPath, content: JSON.stringify(mcpServersJson(mcp.endpoint)) }] } : {}),
       args: [
         '-p',
         '--output-format',
@@ -109,9 +137,11 @@ const claude: ChatProvider = {
         ...flag('--model', model),
         ...flag('--effort', effort),
         ...(sessionId ? ['--resume', sessionId] : ['--session-id', assigned as string]),
-        ...(autoApprove ? ['--dangerously-skip-permissions'] : [])
+        ...attachmentDirs(attachments).flatMap((dir) => ['--add-dir', dir]),
+        ...(autoApprove ? ['--dangerously-skip-permissions'] : []),
+        ...(mcp ? claudeMcpArgs(mcp.endpoint, mcp.configPath, mcp.coordination) : [])
       ],
-      stdin: prompt,
+      stdin: withAttachmentNote(prompt, attachments),
       assignedSessionId: assigned
     }
   }
@@ -122,15 +152,21 @@ const codex: ChatProvider = {
   parser: codexParser,
   resumable: true,
   models: async (run) => [DEFAULT_MODEL, ...parseCodexModels(await run(['debug', 'models']))],
-  run: ({ prompt, model, effort, sessionId, autoApprove }) => {
+  run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => {
+    // Images go in natively; other files are read by path.
+    const images = attachments.filter((a) => a.kind === 'image')
     const options = [
+      ...(mcp ? codexMcpArgs(mcp.endpoint, mcp.coordination) : []),
       ...flag('-m', model),
       ...(effort ? ['-c', `model_reasoning_effort="${effort}"`] : []),
-      ...(autoApprove ? ['--dangerously-bypass-approvals-and-sandbox'] : [])
+      ...(autoApprove ? ['--dangerously-bypass-approvals-and-sandbox'] : []),
+      ...images.map((a) => `--image=${a.path}`)
     ]
+    const others = attachments.filter((a) => a.kind !== 'image')
     return {
       args: ['exec', '--json', '--skip-git-repo-check', ...options, ...(sessionId ? ['resume', sessionId] : []), '-'],
-      stdin: prompt
+      ...(mcp ? { env: { HIVEORY_MCP_TOKEN: mcp.endpoint.token } } : {}),
+      stdin: withAttachmentNote(prompt || (images.length ? 'Look at the attached image.' : ''), others)
     }
   }
 }
@@ -140,7 +176,8 @@ const opencodeLike = (cliId: string): ChatProvider => ({
   parser: opencodeParser,
   resumable: true,
   models: async (run) => [DEFAULT_MODEL, ...parseOpencodeModels(await run(['models', '--verbose']))],
-  run: ({ prompt, model, effort, sessionId, autoApprove }) => ({
+  run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => ({
+    ...(mcp ? { env: { [cliId === 'kilocode' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: opencodeConfigJson(mcp.endpoint) } } : {}),
     args: [
       'run',
       '--format',
@@ -149,7 +186,9 @@ const opencodeLike = (cliId: string): ChatProvider => ({
       ...flag('--variant', effort),
       ...flag('-s', sessionId),
       ...(autoApprove ? ['--auto'] : []),
-      promptArg(prompt)
+      promptArg(prompt || 'Look at the attached files.'),
+      // Native attachments; last, because --file takes a list.
+      ...attachments.map((a) => `--file=${a.path}`)
     ]
   })
 })
@@ -159,8 +198,16 @@ const geminiLike = (cliId: string, models: ChatModel[]): ChatProvider => ({
   parser: geminiParser,
   resumable: false,
   models: async () => models,
-  run: ({ prompt, model, autoApprove }) => ({
-    args: ['-p', promptArg(prompt), '--output-format', 'stream-json', ...flag('-m', model), ...(autoApprove ? ['--yolo'] : [])]
+  run: ({ prompt, model, autoApprove, attachments }) => ({
+    args: [
+      '-p',
+      promptArg(withAttachmentNote(prompt, attachments)),
+      '--output-format',
+      'stream-json',
+      ...flag('-m', model),
+      ...attachmentDirs(attachments).flatMap((dir) => ['--include-directories', dir]),
+      ...(autoApprove ? ['--yolo'] : [])
+    ]
   })
 })
 
@@ -169,12 +216,12 @@ const grok: ChatProvider = {
   parser: claudeParser,
   resumable: true,
   models: async () => [DEFAULT_MODEL],
-  run: ({ prompt, model, sessionId, autoApprove }) => {
+  run: ({ prompt, model, sessionId, autoApprove, attachments }) => {
     const assigned = sessionId ? undefined : randomUUID()
     return {
       args: [
         '-p',
-        promptArg(prompt),
+        promptArg(withAttachmentNote(prompt, attachments)),
         '--output-format',
         'streaming-messages-json',
         '--include-partial-messages',
@@ -192,8 +239,8 @@ const kimi: ChatProvider = {
   parser: claudeParser,
   resumable: false,
   models: async () => [DEFAULT_MODEL],
-  run: ({ prompt, model, autoApprove }) => ({
-    args: ['-p', promptArg(prompt), '--output-format', 'stream-json', ...flag('-m', model), ...(autoApprove ? ['--yolo'] : [])]
+  run: ({ prompt, model, autoApprove, attachments }) => ({
+    args: ['-p', promptArg(withAttachmentNote(prompt, attachments)), '--output-format', 'stream-json', ...flag('-m', model), ...(autoApprove ? ['--yolo'] : [])]
   })
 }
 
@@ -202,8 +249,8 @@ const cursor: ChatProvider = {
   parser: claudeParser,
   resumable: true,
   models: async () => [DEFAULT_MODEL],
-  run: ({ prompt, model, sessionId, autoApprove }) => ({
-    args: ['-p', promptArg(prompt), '--output-format', 'stream-json', ...flag('--model', model), ...flag('--resume', sessionId), ...(autoApprove ? ['--force'] : [])]
+  run: ({ prompt, model, sessionId, autoApprove, attachments }) => ({
+    args: ['-p', promptArg(withAttachmentNote(prompt, attachments)), '--output-format', 'stream-json', ...flag('--model', model), ...flag('--resume', sessionId), ...(autoApprove ? ['--force'] : [])]
   })
 }
 
@@ -212,7 +259,16 @@ const copilot: ChatProvider = {
   parser: plainParser,
   resumable: false,
   models: async () => [DEFAULT_MODEL],
-  run: ({ prompt, model, autoApprove }) => ({ args: ['-p', promptArg(prompt), ...flag('--model', model), ...(autoApprove ? ['--allow-all-tools'] : [])] })
+  run: ({ prompt, model, autoApprove, attachments, mcp }) => ({
+    args: [
+      '-p',
+      promptArg(withAttachmentNote(prompt, attachments)),
+      ...flag('--model', model),
+      ...attachmentDirs(attachments).flatMap((dir) => ['--add-dir', dir]),
+      ...(autoApprove ? ['--allow-all-tools'] : []),
+      ...(mcp ? ['--additional-mcp-config', JSON.stringify(mcpServersJson(mcp.endpoint, { tools: ['*'] }))] : [])
+    ]
+  })
 }
 
 export const CHAT_PROVIDERS: Record<string, ChatProvider> = Object.fromEntries(

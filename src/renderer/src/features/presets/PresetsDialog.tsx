@@ -6,7 +6,7 @@ import { Button, IconButton } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
-import { usePresets } from '../../stores/data'
+import { usePresets, useSettings } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import { PresetSummary } from './PresetSummary'
 import styles from './Presets.module.css'
@@ -28,9 +28,16 @@ export function PresetsDialog({ initial, onClose }: PresetsDialogProps) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const startNew = (): void =>
-    setDraft({ name: '', cliSelections: initial?.cliSelections ?? [], autoApprove: initial?.autoApprove ?? false })
-  const startEdit = (preset: AgentPreset): void => setDraft({ ...preset })
+  const startNew = (): void => {
+    const { defaultAutoApprove, defaultChatUi } = useSettings.getState().settings
+    setDraft({
+      name: '',
+      cliSelections: initial?.cliSelections ?? [],
+      autoApprove: initial?.autoApprove ?? defaultAutoApprove,
+      chatUi: initial?.chatUi ?? defaultChatUi
+    })
+  }
+  const startEdit = (preset: AgentPreset): void => setDraft({ ...preset, chatUi: preset.chatUi ?? false })
 
   const save = async (): Promise<void> => {
     if (!draft) return

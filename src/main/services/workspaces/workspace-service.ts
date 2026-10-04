@@ -63,6 +63,7 @@ export class WorkspaceService {
       path: project.path,
       association: input.association,
       autoApprove: input.autoApprove,
+      chatUi: input.chatUi ?? false,
       createdAt: now,
       updatedAt: now
     }
@@ -140,6 +141,7 @@ export class WorkspaceService {
       git: { worktreePath, branch, baseRef, createdBranch: !input.useExistingBranch },
       association: input.association,
       autoApprove: input.autoApprove,
+      chatUi: input.chatUi ?? false,
       createdAt: now,
       updatedAt: now
     }
@@ -151,7 +153,13 @@ export class WorkspaceService {
 
   async delete(workspaceId: string, force: boolean): Promise<DeleteWorkspaceResult> {
     const workspace = this.repo.get(workspaceId)
-    if (workspace.kind === 'main') fail('FORBIDDEN', 'The main workspace cannot be deleted.')
+    if (workspace.kind === 'main') {
+      // Removing Main only forgets it in Hiveory; the project folder is never touched (ADR 0013).
+      this.agents.forgetWorkspace(workspaceId)
+      this.repo.delete(workspaceId)
+      this.emit('state.changed', { topic: 'workspaces', projectId: workspace.projectId, workspaceId })
+      return {}
+    }
     const project = this.repo.project(workspace.projectId)
     const repoRoot = project.repositoryRoot ?? (await this.git.repositoryRoot(project.path))
 

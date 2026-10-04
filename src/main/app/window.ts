@@ -1,12 +1,14 @@
-import { BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import appIcon from '@resources/icon.png?asset'
+import devIcon from '@resources/icon-dev.png?asset'
 import type { Logger } from './logger'
 
 import type { ThemeId } from '@shared/domain'
 
 /** Native title-bar overlay colors per theme (they cannot read CSS variables). */
 export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string }> = {
+  dark: { background: '#000000', symbols: '#a3a3a3' },
   bronze: { background: '#080706', symbols: '#b8afa3' },
   silver: { background: '#08090b', symbols: '#b6bac2' }
 }
@@ -20,7 +22,7 @@ export interface WindowTargets {
 }
 
 /** Creates the hardened main window (Electron security checklist). */
-export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'bronze'): BrowserWindow => {
+export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark'): BrowserWindow => {
   const isMac = process.platform === 'darwin'
   const chrome = THEME_CHROME[theme]
   const window = new BrowserWindow({
@@ -30,8 +32,8 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     minHeight: 600,
     show: false,
     title: 'Hiveory',
-    // Taskbar/window icon on Windows and Linux; macOS uses the bundle icon.
-    icon: appIcon,
+    // Taskbar/window icon on Windows and Linux; macOS uses the bundle icon. Dev builds carry a DEV mark.
+    icon: app.isPackaged ? appIcon : devIcon,
     backgroundColor: chrome.background,
     titleBarStyle: 'hidden',
     ...(isMac

@@ -16,9 +16,9 @@ why (not a repository / no commits yet) instead of initializing Git.
 
 After a restart or exit, agent instances remain configured with
 `running: false` and appear in the **Idle** column with "Not running" /
-"Session ended". Processes are never relaunched automatically (architecture.md
-"Persistence"); the pane offers Start / Resume. Claude sessions resume with
-`--resume <conversationId>` once a prompt was sent.
+"Session ended". ~~Processes are never relaunched automatically~~ — superseded
+by ADR 0014: every agent is relaunched on start-up and resumes its own
+conversation; Start / Resume remains only for dead ends.
 
 ## Presets
 

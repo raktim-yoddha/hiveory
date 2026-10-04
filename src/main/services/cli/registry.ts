@@ -1,4 +1,5 @@
 import type { CliDescriptor } from '@shared/domain'
+import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import type { CliAdapter } from './adapters'
 import { findExecutable, processDiscoveryEnv, type DiscoveryEnv } from './discovery'
 import type { Logger } from '../../app/logger'
@@ -34,6 +35,7 @@ export class CliRegistry {
         displayName: adapter.displayName,
         icon: adapter.icon,
         supportsAutoApprove: adapter.supportsAutoApprove,
+        supportsChat: (CHAT_CLI_IDS as readonly string[]).includes(adapter.id),
         available: Boolean(executable),
         executable
       }

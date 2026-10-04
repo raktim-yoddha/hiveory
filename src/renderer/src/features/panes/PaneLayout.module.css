@@ -175,7 +175,7 @@
 
 .arrangeActive {
   border-color: var(--color-bronze);
-  background: linear-gradient(180deg, var(--color-bronze-soft), var(--color-glass));
+  background: var(--fill-glass-accent);
   color: var(--color-text);
   transform: translateY(var(--nudge-sm));
 }

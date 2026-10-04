@@ -14,7 +14,8 @@ const TOOLS: Array<[string, string]> = [
   ['wait_for_agent', 'Block until an agent finishes, then report its status'],
   ['open_agent / close_agent', 'Start or stop agents in new panes'],
   ['arrange_panes', 'Equal, focus or columns layout for the workspace'],
-  ['run_in_terminal / read_terminal', "Run commands in the workspace's side-panel terminal"]
+  ['run_in_terminal / read_terminal', "Run commands in the workspace's side-panel terminal"],
+  ['browser_*', 'Drive the built-in browser — see Settings › Browser']
 ]
 
 export function AgentsSection() {
@@ -24,10 +25,36 @@ export function AgentsSection() {
   const clis = allClis.filter((c) => c.available)
   return (
     <SettingsPage
-      title="Agent tools"
-      description="Agents you open in Hiveory get a private, local MCP server so they can see and coordinate each other. It listens on this machine only, with a per-launch secret."
+      title="Agents"
+      description="Defaults for new workspaces and presets, and the tools agents get to coordinate each other."
     >
       <div className={styles.group}>
+        <div className={styles.groupTitle}>Defaults</div>
+        <SettingRow
+          title="Auto-approve permissions"
+          description="Start with auto-approve on when creating a workspace or preset. You can still turn it off each time."
+          control={
+            <Toggle
+              label="Auto-approve permissions by default"
+              checked={settings.defaultAutoApprove}
+              onChange={(defaultAutoApprove) => void update({ defaultAutoApprove })}
+            />
+          }
+        />
+        <SettingRow
+          title="Use chat UI"
+          description="Start with the chat view on, so agents open as a chat instead of a terminal. CLIs without a chat mode (such as Antigravity) keep their terminal."
+          control={
+            <Toggle label="Use chat UI by default" checked={settings.defaultChatUi} onChange={(defaultChatUi) => void update({ defaultChatUi })} />
+          }
+        />
+      </div>
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Agent tools</div>
+        <p className={styles.groupNote}>
+          Agents you open in Hiveory get a private, local MCP server so they can see and coordinate each other. It listens on
+          this machine only, with a per-launch secret.
+        </p>
         <SettingRow
           title="Give agents Hiveory tools"
           description="Applies to agents started after the change."

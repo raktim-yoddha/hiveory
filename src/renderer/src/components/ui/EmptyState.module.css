@@ -22,7 +22,7 @@
   margin-bottom: var(--space-2);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-raised));
+  background: var(--fill-icon);
   box-shadow: var(--shadow-raised);
   color: var(--color-accent);
 }

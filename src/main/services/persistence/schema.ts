@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { DEFAULT_SETTINGS, type AgentPreset, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
+import { viewportSchema } from '@shared/ipc/contract'
+import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -10,6 +11,7 @@ export interface PersistedState {
   layouts: Record<string, LayoutNode | null>
   presets: AgentPreset[]
   settings: AppSettings
+  browserProfiles: BrowserProfile[]
 }
 
 export const emptyState = (): PersistedState => ({
@@ -19,14 +21,24 @@ export const emptyState = (): PersistedState => ({
   instances: [],
   layouts: {},
   presets: [],
-  settings: { ...DEFAULT_SETTINGS }
+  settings: { ...DEFAULT_SETTINGS },
+  browserProfiles: []
 })
 
 const settingsSchema = z.object({
-  theme: z.enum(['bronze', 'silver']).catch(DEFAULT_SETTINGS.theme),
+  theme: z.enum(['dark', 'bronze', 'silver']).catch(DEFAULT_SETTINGS.theme),
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
-  agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools)
+  agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
+  defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),
+  defaultChatUi: z.boolean().catch(DEFAULT_SETTINGS.defaultChatUi),
+  browserUse: z.boolean().catch(DEFAULT_SETTINGS.browserUse),
+  browserAgentCursor: z.boolean().catch(DEFAULT_SETTINGS.browserAgentCursor),
+  browserHomeUrl: z.string().max(2000).catch(DEFAULT_SETTINGS.browserHomeUrl),
+  browserDefaultProfile: z.string().max(128).catch(DEFAULT_SETTINGS.browserDefaultProfile),
+  browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports)
 })
+
+const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })
 
 const str = z.string()
 
@@ -51,6 +63,7 @@ export const workspaceSchema: z.ZodType<Workspace> = z.object({
     .optional(),
   association: z.object({ kind: z.enum(['issue', 'pull-request']), ref: str }).optional(),
   autoApprove: z.boolean(),
+  chatUi: z.boolean().optional(),
   createdAt: str,
   updatedAt: str
 })
@@ -63,7 +76,9 @@ export const instanceSchema: z.ZodType<CliInstance> = z.object({
   petName: str,
   conversationId: str,
   hasConversation: z.boolean(),
+  providerSessionId: str.optional(),
   autoApprove: z.boolean(),
+  chatUi: z.boolean().optional(),
   createdAt: str
 })
 
@@ -86,7 +101,8 @@ export const presetSchema: z.ZodType<AgentPreset> = z.object({
   id: str,
   name: str,
   cliSelections: z.array(z.object({ cliId: str, count: z.number().int().positive() })),
-  autoApprove: z.boolean()
+  autoApprove: z.boolean(),
+  chatUi: z.boolean().optional()
 })
 
 /**
@@ -120,7 +136,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       layouts,
       presets: list(input.presets, presetSchema),
       // Unknown or invalid settings fall back to defaults field by field.
-      settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {})
+      settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {}),
+      browserProfiles: list(input.browserProfiles, browserProfileSchema)
     },
     rejected
   }

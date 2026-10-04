@@ -58,7 +58,7 @@
 }
 
 .chatActive {
-  background: linear-gradient(90deg, var(--color-bronze-soft), var(--color-surface-active) 70%);
+  background: var(--fill-selected);
 }
 
 .chatDot {
@@ -125,7 +125,7 @@
   flex: none;
   align-items: center;
   gap: var(--space-5);
-  padding: var(--space-6) var(--space-8);
+  padding: var(--space-5) var(--chat-gutter);
   border-bottom: var(--border-width) solid var(--color-border-subtle);
 }
 
@@ -137,6 +137,7 @@
 
 .headerText {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
 }
@@ -160,13 +161,33 @@
   overflow-y: auto;
 }
 
-.thread {
+.messages {
+  container: thread / inline-size;
   display: flex;
   flex-direction: column;
+}
+
+.thread {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   gap: var(--space-8);
-  max-width: calc(var(--dialog-width) * 1.5);
+  width: 100%;
+  max-width: var(--chat-max-width);
   margin: 0 auto;
-  padding: var(--space-9) var(--space-8);
+  padding: var(--space-8) var(--chat-gutter);
+}
+
+@container thread (max-width: 520px) {
+  .thread {
+    gap: var(--space-6);
+    padding: var(--space-6) var(--space-5);
+  }
+
+  .user,
+  .userTurn {
+    max-width: 100%;
+  }
 }
 
 .hint {
@@ -177,11 +198,11 @@
 
 .user {
   align-self: flex-end;
-  max-width: 80%;
+  max-width: 100%;
   padding: var(--space-5) var(--space-6);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
-  background: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  background: var(--fill-raised);
   box-shadow: var(--shadow-raised);
   white-space: pre-wrap;
   user-select: text;
@@ -326,16 +347,24 @@
   user-select: text;
 }
 
-/* Composer */
+/* Composer: measures itself so it adapts to any pane width. */
 .composerWrap {
   flex: none;
-  padding: 0 var(--space-8) var(--space-8);
+  container: composer / inline-size;
+  padding: 0 var(--chat-gutter) var(--space-7);
+}
+
+.composerWrapAgent {
+  padding: 0 var(--space-5) var(--space-5);
 }
 
 .composer {
-  max-width: calc(var(--dialog-width) * 1.5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: var(--chat-max-width);
   margin: 0 auto;
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-4) var(--space-4);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
@@ -347,10 +376,17 @@
   border-color: var(--color-border-strong);
 }
 
+.composerDrop {
+  border-style: dashed;
+  border-color: var(--color-drop-border);
+  background: var(--color-drop);
+}
+
 .input {
   width: 100%;
   min-height: var(--control-lg);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4) 0;
+  overflow-y: hidden;
   border: 0;
   background: transparent;
   color: var(--color-text);
@@ -365,56 +401,75 @@
 }
 
 .input::placeholder {
+  overflow: hidden;
   color: var(--color-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .controls {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-3);
+  min-width: 0;
 }
 
-.picker,
-.lockedCli {
+/* Pickers: separate pills, tall enough to hit comfortably. */
+.pill {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: var(--space-3);
-  max-width: calc(var(--menu-min-width) * 1.2);
-  height: var(--control-sm);
-  padding: 0 var(--space-4);
+  min-width: 0;
+  max-width: calc(var(--menu-min-width) * 1.1);
+  height: var(--control-lg);
+  padding: 0 var(--space-5);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-pill);
   background: var(--color-surface-inset);
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   white-space: nowrap;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
-.picker {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.picker:hover {
+button.pill:hover,
+.pill[aria-expanded='true'] {
   border-color: var(--color-border-strong);
   color: var(--color-text);
 }
 
-.picker svg,
-.lockedCli svg {
+.pill > svg {
   flex: none;
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
-.lockedCli {
+/* The model pill is the one that gives up width first. */
+.pillModel {
+  flex: 0 1 auto;
+}
+
+.pillText,
+.pillLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pillStatic {
   color: var(--color-text);
+  cursor: default;
 }
 
-.lockedCli svg:last-child {
-  color: var(--color-text-muted);
+.capitalize {
+  text-transform: capitalize;
+}
+
+.chevron {
+  color: var(--color-text-faint);
 }
 
 .flex {
@@ -423,9 +478,10 @@
 
 .send {
   display: grid;
+  flex: none;
   place-items: center;
-  width: var(--control-md);
-  height: var(--control-md);
+  width: var(--control-lg);
+  height: var(--control-lg);
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--gradient-metal);
@@ -439,8 +495,162 @@
 }
 
 .send svg {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+/* Narrow panes: pills keep their icon; labels go (the model name stays, truncated). */
+@container composer (max-width: 520px) {
+  .pill .pillLabel {
+    display: none;
+  }
+
+  .pill {
+    padding: 0 var(--space-4);
+  }
+}
+
+@container composer (max-width: 320px) {
+  .chevron {
+    display: none;
+  }
+}
+
+/* Attachments */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: calc(var(--menu-min-width) * 1.2);
+  height: calc(var(--control-lg) + var(--space-4));
+  padding: 0 var(--space-2) 0 var(--space-2);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.chipThumb,
+.chipIcon {
+  flex: none;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  border-radius: var(--radius-sm);
+}
+
+.chipThumb {
+  object-fit: cover;
+}
+
+.chipIcon {
+  display: grid;
+  place-items: center;
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+}
+
+.chipIcon svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.chipText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--leading-tight);
+}
+
+.chipName {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chipMeta {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chipRemove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.chipRemove:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.chipRemove svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.userTurn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+  align-self: flex-end;
+  max-width: 85%;
+}
+
+/* A fresh chat: the CLI's mark, centered, with a line of guidance. */
+.welcome {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-height: 100%;
+  padding: var(--space-9) var(--space-6);
+  text-align: center;
+}
+
+.welcomeLogo {
+  display: grid;
+  place-items: center;
+  width: calc(var(--logo-xl) + var(--space-9));
+  height: calc(var(--logo-xl) + var(--space-9));
+  margin-bottom: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--fill-raised);
+  box-shadow: var(--shadow-raised);
+}
+
+.welcomeTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.welcomeText {
+  max-width: calc(var(--dialog-width) * 0.8);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 /* Model picker */

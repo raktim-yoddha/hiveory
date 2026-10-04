@@ -1,11 +1,14 @@
 import type { ArrangeMode, CliInstance, Side } from '@shared/domain'
 import type { AgentService } from '../agents/agent-service'
+import type { BrowserTools } from '../browser/browser-tools'
+import type { ChatService } from '../chat/chat-service'
 import type { CliRegistry } from '../cli/registry'
 import type { CliRuntimeManager } from '../cli/runtime/runtime-manager'
 import type { LayoutService } from '../layout/layout-service'
 import type { ShellService } from '../shell/shell-service'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { ToolDefinition, ToolHost, ToolResult } from './mcp-protocol'
+import { int, str, ToolError } from './tool-args'
 
 export interface AgentToolDeps {
   agents: AgentService
@@ -14,27 +17,13 @@ export interface AgentToolDeps {
   workspaces: WorkspaceRepository
   registry: CliRegistry
   shells: ShellService
+  chats: ChatService
+  /** The built-in browser's tools, when "Browser use" is on in Settings. */
+  browser?: () => BrowserTools | null
 }
 
 const MAX_READ_LINES = 400
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-class ToolError extends Error {}
-
-const str = (args: Record<string, unknown>, key: string, required = true): string => {
-  const value = args[key]
-  if (typeof value === 'string' && value.trim()) return value.trim()
-  if (required) throw new ToolError(`Missing required argument "${key}".`)
-  return ''
-}
-
-const int = (args: Record<string, unknown>, key: string, fallback: number, min: number, max: number): number => {
-  const value = args[key]
-  if (value === undefined || value === null) return fallback
-  const n = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(n)) throw new ToolError(`"${key}" must be a number.`)
-  return Math.min(max, Math.max(min, Math.round(n)))
-}
 
 /**
  * Hiveory's agent tools, served over MCP to every agent it launches. One
@@ -68,8 +57,17 @@ export class AgentTools implements ToolHost {
     return match
   }
 
+  /** The last lines of a chat-view agent's conversation, as plain text. */
+  private transcript(agentId: string, lines: number): string {
+    const chat = this.deps.chats.get(agentId)
+    const text = chat.messages
+      .map((m) => `${m.role === 'user' ? 'User' : 'Agent'}: ${m.parts.map((p) => (p.kind === 'tool' ? `[tool ${p.name}]` : p.text)).join('\n')}${m.error ? `\n(error: ${m.error})` : ''}`)
+      .join('\n\n')
+    return text.split('\n').slice(-lines).join('\n')
+  }
+
   private describe(agent: CliInstance): string {
-    const runtime = this.deps.runtime.details(agent.id)
+    const runtime = this.deps.agents.details(agent)
     const cli = this.deps.registry.displayName(agent.cliId)
     const workspace = this.deps.workspaces.find(agent.workspaceId)?.name ?? 'unknown workspace'
     const status = !runtime.running ? 'not running' : runtime.status + (runtime.waitingReason ? ` (${runtime.waitingReason})` : '')
@@ -77,6 +75,10 @@ export class AgentTools implements ToolHost {
   }
 
   list(): ToolDefinition[] {
+    return [...this.coordinationTools(), ...(this.deps.browser?.()?.definitions() ?? [])]
+  }
+
+  private coordinationTools(): ToolDefinition[] {
     const clis = this.deps.registry.list().filter((c) => c.available).map((c) => c.id)
     const agentArg = { type: 'string', description: 'Exact agent name from list_agents, e.g. "Milo".' }
     return [
@@ -177,6 +179,12 @@ export class AgentTools implements ToolHost {
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+    const browser = name.startsWith('browser_') ? this.deps.browser?.() : null
+    if (browser) {
+      const caller = this.deps.agents.find(this.callerId)
+      if (!caller) return { text: 'This agent is no longer registered in Hiveory.', isError: true }
+      return browser.call({ id: caller.id, workspaceId: caller.workspaceId, petName: caller.petName }, name, args)
+    }
     try {
       return { text: await this.dispatch(name, args) }
     } catch (error) {
@@ -196,15 +204,22 @@ export class AgentTools implements ToolHost {
       }
       case 'read_agent': {
         const agent = this.resolve(str(args, 'agent'))
-        const text = runtime.screenText(agent.id, int(args, 'lines', 80, 1, MAX_READ_LINES))
+        const lines = int(args, 'lines', 80, 1, MAX_READ_LINES)
+        if (agent.chatUi) return `${this.describe(agent)}\n--- conversation ---\n${this.transcript(agent.id, lines) || '(no messages yet)'}`
+        const text = runtime.screenText(agent.id, lines)
         return `${this.describe(agent)}\n--- screen ---\n${text || '(nothing on screen yet)'}`
       }
       case 'send_message': {
         const agent = this.resolve(str(args, 'agent'))
         if (agent.id === this.callerId) throw new ToolError('You cannot send a message to yourself.')
-        if (!runtime.details(agent.id).running) throw new ToolError(`${agent.petName} is not running. Ask the user to start it first.`)
+        if (!agents.details(agent).running) throw new ToolError(`${agent.petName} is not running. Ask the user to start it first.`)
         const message = str(args, 'message')
         const submit = args.submit !== false
+        if (agent.chatUi) {
+          if (this.deps.chats.isRunning(agent.id)) throw new ToolError(`${agent.petName} is still replying. Use wait_for_agent first.`)
+          this.deps.chats.send(agent.id, message)
+          return `Sent to ${agent.petName} and submitted.`
+        }
         // Bracketed paste keeps multi-line text as one prompt in TUIs that support it.
         runtime.write(agent.id, runtime.bracketedPaste(agent.id) ? `\x1b[200~${message}\x1b[201~` : message.replace(/\r?\n/g, ' '))
         if (submit) {
@@ -220,7 +235,7 @@ export class AgentTools implements ToolHost {
         // Give a just-messaged agent a moment to start working before judging it idle.
         const settleUntil = Date.now() + 2500
         for (;;) {
-          const details = runtime.details(agent.id)
+          const details = agents.details(agent)
           const busy = details.running && details.status === 'working'
           if (!busy && Date.now() >= settleUntil) return `Done waiting. ${this.describe(agent)}`
           if (Date.now() >= deadline) return `Timed out; still working. ${this.describe(agent)}`

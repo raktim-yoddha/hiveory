@@ -9,7 +9,7 @@ import { Tabs } from '../../components/ui/Tabs'
 import { TextField, TextInput } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { slugify } from '@shared/naming/names'
-import { useWorkspaces } from '../../stores/data'
+import { useSettings, useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { PresetPicker } from '../presets/PresetPicker'
@@ -25,7 +25,6 @@ interface CreateWorkspaceDialogProps {
 
 type ConfigTab = 'agents' | 'presets'
 
-const EMPTY_CONFIG: AgentConfig = { cliSelections: [], autoApprove: false }
 const MAIN_NAME = 'Main'
 
 /**
@@ -46,7 +45,11 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   const name = typed ?? (kind === 'main' ? MAIN_NAME : suggested)
   const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>('issue')
   const [associationRef, setAssociationRef] = useState('')
-  const [config, setConfig] = useState<AgentConfig>(EMPTY_CONFIG)
+  // Toggles start from the defaults chosen in Settings → Agents.
+  const [config, setConfig] = useState<AgentConfig>(() => {
+    const { defaultAutoApprove, defaultChatUi } = useSettings.getState().settings
+    return { cliSelections: [], autoApprove: defaultAutoApprove, chatUi: defaultChatUi }
+  })
   const [tab, setTab] = useState<ConfigTab>('agents')
   const [busy, setBusy] = useState<'empty' | 'full' | null>(null)
   const [git, setGit] = useState<GitChoice>({ useExistingBranch: false, ready: false })
@@ -76,6 +79,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
         association: associationRef.trim() ? { kind: associationKind, ref: associationRef.trim() } : undefined,
         cliSelections: withAgents ? config.cliSelections : [],
         autoApprove: config.autoApprove,
+        chatUi: config.chatUi,
         ...(kind === 'isolated' ? { baseRef: git.baseRef, branch: git.branch, useExistingBranch: git.useExistingBranch } : {})
       })
     )
@@ -180,7 +184,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
               current={config}
               onApply={(preset) => {
                 // A preset replaces the configuration; it never merges (STARTER_PROMPT §10).
-                setConfig({ cliSelections: preset.cliSelections, autoApprove: preset.autoApprove })
+                setConfig({ cliSelections: preset.cliSelections, autoApprove: preset.autoApprove, chatUi: preset.chatUi ?? false })
                 setTab('agents')
               }}
             />

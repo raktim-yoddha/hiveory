@@ -11,6 +11,8 @@ export interface HookEndpoint {
 export interface McpEndpoint {
   url: string
   token: string
+  /** Browser use is on: the agent gets browser_* tools and is told to use them for websites. */
+  browser?: boolean
 }
 
 export interface LaunchContext {
@@ -23,6 +25,13 @@ export interface LaunchContext {
   mcp?: McpEndpoint
   /** Per-instance directory for generated files (e.g. hook settings). */
   runtimeDir: string
+  /** Continue this agent's earlier conversation instead of starting a new one. */
+  resume: boolean
+  /**
+   * This is the only agent of its CLI in the folder, so "continue the most
+   * recent session here" unambiguously means this agent's own session.
+   */
+  soleOfCli: boolean
 }
 
 export interface LaunchSpec {
@@ -49,6 +58,8 @@ export interface CliAdapter {
   buildLaunch(ctx: LaunchContext): LaunchSpec
   /** Translates a native hook callback into a status event. */
   mapHookEvent?(event: string, payload: unknown): StatusEvent | null
+  /** The CLI's session id carried by a hook callback, if any (stored for exact resume). */
+  sessionIdFromHook?(event: string, payload: unknown): string | undefined
   /** PTY heuristics; `hooksActive` says whether native hooks are reporting too. */
   heuristics(hooksActive: boolean): HeuristicConfig | null
 }

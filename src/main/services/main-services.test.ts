@@ -107,13 +107,30 @@ describe('hook launch configuration', () => {
 
   it('injects claude hooks via --settings and resumes known conversations', () => {
     const inst = instance('i1', 'p1')
-    const fresh = claudeAdapter.buildLaunch({ instance: inst, cwd: '/r', autoApprove: true, hook, runtimeDir: '/rt/i1' })
+    const fresh = claudeAdapter.buildLaunch({ instance: inst, cwd: '/r', autoApprove: true, hook, runtimeDir: '/rt/i1', resume: false, soleOfCli: true })
     expect(fresh.args).toContain('--session-id')
     expect(fresh.args).toContain('--dangerously-skip-permissions')
     expect(fresh.args).toContain('--settings')
     expect(JSON.parse(fresh.files?.[0]?.content ?? '{}').hooks.Stop).toBeDefined()
-    const resumed = claudeAdapter.buildLaunch({ instance: { ...inst, hasConversation: true }, cwd: '/r', autoApprove: false, runtimeDir: '/rt' })
+    const resumed = claudeAdapter.buildLaunch({ instance: { ...inst, hasConversation: true }, cwd: '/r', autoApprove: false, runtimeDir: '/rt', resume: true, soleOfCli: false })
     expect(resumed.args).toEqual(['--resume', 'c'])
+  })
+
+  it('resumes each agent’s own session: exact ids where possible, latest only when unambiguous', () => {
+    const inst = { ...instance('i1', 'p1'), hasConversation: true }
+    const base = { cwd: '/r', autoApprove: false, runtimeDir: '/rt', resume: true }
+    const codex = BUILT_IN_ADAPTERS.find((a) => a.id === 'codex')!
+    expect(codex.buildLaunch({ ...base, instance: { ...inst, providerSessionId: 't-9' }, soleOfCli: false }).args).toEqual(['resume', 't-9'])
+    expect(codex.buildLaunch({ ...base, instance: inst, soleOfCli: true }).args).toEqual(['resume', '--last'])
+    expect(codex.buildLaunch({ ...base, instance: inst, soleOfCli: false }).args).toEqual([])
+    expect(codex.sessionIdFromHook?.('notify', { type: 'agent-turn-complete', 'thread-id': 't-9' })).toBe('t-9')
+    const opencode = BUILT_IN_ADAPTERS.find((a) => a.id === 'opencode')!
+    expect(opencode.buildLaunch({ ...base, instance: inst, soleOfCli: true }).args).toContain('--continue')
+    expect(opencode.buildLaunch({ ...base, instance: inst, soleOfCli: false }).args).not.toContain('--continue')
+    expect(opencode.buildLaunch({ ...base, instance: inst, soleOfCli: true, resume: false }).args).not.toContain('--continue')
+    const grok = BUILT_IN_ADAPTERS.find((a) => a.id === 'grok')!
+    expect(grok.buildLaunch({ ...base, instance: inst, soleOfCli: false }).args).toEqual(['--resume', 'c'])
+    expect(grok.buildLaunch({ ...base, instance: inst, soleOfCli: false, resume: false }).args).toEqual(['--session-id', 'c'])
   })
 })
 
@@ -175,7 +192,7 @@ describe('CLI catalog', () => {
       id: 'x', displayName: 'X', icon: { kind: 'monogram', text: 'X' }, executables: ['x'],
       args: ['chat'], autoApproveArgs: ['--yolo']
     })
-    const ctx = { instance: instance('i', 'p'), cwd: '/', runtimeDir: '/' }
+    const ctx = { instance: instance('i', 'p'), cwd: '/', runtimeDir: '/', resume: false, soleOfCli: true }
     expect(cli.buildLaunch({ ...ctx, autoApprove: true }).args).toEqual(['chat', '--yolo'])
     expect(cli.buildLaunch({ ...ctx, autoApprove: false }).args).toEqual(['chat'])
     expect(cli.supportsAutoApprove).toBe(true)

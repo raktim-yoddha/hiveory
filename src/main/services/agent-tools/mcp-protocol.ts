@@ -13,6 +13,8 @@ export interface ToolDefinition {
 export interface ToolResult {
   text: string
   isError?: boolean
+  /** Sent as an MCP image content block after the text (e.g. browser screenshots). */
+  image?: { data: string; mimeType: string }
 }
 
 export interface ToolHost {
@@ -41,6 +43,10 @@ export const SERVER_INSTRUCTIONS = [
   'read_agent shows what an agent currently displays; send_message types a message into it;',
   'wait_for_agent blocks until it finishes; open_agent / close_agent / arrange_panes change the workspace;',
   'run_in_terminal runs a shell command in this workspace terminal and returns its output.',
+  "browser_* tools drive Hiveory's built-in browser (it works even when the user's browser panel is closed):",
+  'browser_navigate or browser_snapshot returns the page as compact text whose interactive elements carry refs like [@12];',
+  'pass a ref as `target` to browser_click / browser_fill / browser_drag; every action returns a fresh snapshot, so do not snapshot again;',
+  'use browser_batch to run several steps in one call — it is much faster than one tool call per step.',
   'Always refer to agents by the exact name list_agents returns.'
 ].join(' ')
 
@@ -79,7 +85,9 @@ export const handleMessage = async (message: unknown, host: ToolHost): Promise<J
         const args = typeof params?.arguments === 'object' && params.arguments !== null ? (params.arguments as Record<string, unknown>) : {}
         if (!host.list().some((t) => t.name === name)) return err(id, -32602, `Unknown tool: ${name}`)
         const result = await host.call(name, args)
-        return ok(id, { content: [{ type: 'text', text: result.text }], isError: Boolean(result.isError) })
+        const content: unknown[] = [{ type: 'text', text: result.text }]
+        if (result.image) content.push({ type: 'image', data: result.image.data, mimeType: result.image.mimeType })
+        return ok(id, { content, isError: Boolean(result.isError) })
       }
       default:
         if (method.startsWith('notifications/') || isNotification) return null

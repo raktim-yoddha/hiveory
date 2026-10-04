@@ -17,18 +17,20 @@ const agent = (id: string, petName: string, workspaceId = 'w1', cliId = 'claude'
 })
 
 const setup = (runtimeOverrides: Record<string, CliRuntimeDetails> = {}) => {
-  const agents = [agent('a1', 'Milo'), agent('a2', 'Luna', 'w1', 'codex'), agent('a3', 'Kai', 'w2')]
+  const agents = [agent('a1', 'Milo'), agent('a2', 'Luna', 'w1', 'codex'), agent('a3', 'Kai', 'w2'), { ...agent('a4', 'Ivy', 'w1', 'opencode'), chatUi: true }]
   const writes: Array<[string, string]> = []
+  const runtimeDetails = (id: string): CliRuntimeDetails => runtimeOverrides[id] ?? { status: 'idle', running: true }
   const deps = {
     agents: {
       find: (id: string) => agents.find((a) => a.id === id),
+      details: (a: CliInstance) => runtimeDetails(a.id),
       instancesInProject: () => agents,
       open: vi.fn((workspaceId: string, cliId: string) => ({ agent: { ...agent('a9', 'Nova', workspaceId, cliId), runtime: { status: 'idle', running: true } }, layout: null })),
       close: vi.fn(),
       paneIds: () => ['a1', 'a2']
     },
     runtime: {
-      details: (id: string) => runtimeOverrides[id] ?? { status: 'idle', running: true },
+      details: runtimeDetails,
       screenText: (id: string) => (id === 'a2' ? 'codex says hi' : ''),
       write: (id: string, data: string) => writes.push([id, data]),
       bracketedPaste: (id: string) => id === 'a2'
@@ -47,7 +49,17 @@ const setup = (runtimeOverrides: Record<string, CliRuntimeDetails> = {}) => {
       ],
       displayName: (id: string) => ({ claude: 'Claude Code', codex: 'Codex' })[id] ?? id
     },
-    shells: { open: vi.fn(() => ({ id: 'shell-w1', cwd: '/repo' })), has: () => false, write: vi.fn(), screenText: () => '' }
+    shells: { open: vi.fn(() => ({ id: 'shell-w1', cwd: '/repo' })), has: () => false, write: vi.fn(), screenText: () => '' },
+    chats: {
+      isRunning: () => false,
+      send: vi.fn(),
+      get: () => ({
+        messages: [
+          { role: 'user', parts: [{ kind: 'text', text: 'hello ivy' }] },
+          { role: 'assistant', parts: [{ kind: 'text', text: 'hi from chat' }] }
+        ]
+      })
+    }
   }
   return { tools: new AgentTools(deps as unknown as AgentToolDeps, 'a1'), deps, writes }
 }
@@ -56,7 +68,7 @@ describe('agent tools', () => {
   it('lists project agents with status and marks the caller', async () => {
     const { tools } = setup({ a2: { status: 'waiting-for-you', running: true, waitingReason: 'permission' } })
     const { text } = await tools.call('list_agents', {})
-    expect(text).toContain('Project "demo" has 3 agent(s)')
+    expect(text).toContain('Project "demo" has 4 agent(s)')
     expect(text).toContain('Milo — Claude Code · workspace "Main" · idle · this is you')
     expect(text).toContain('Luna — Codex · workspace "Main" · waiting-for-you (permission)')
   })
@@ -71,7 +83,7 @@ describe('agent tools', () => {
     const { tools } = setup()
     const result = await tools.call('read_agent', { agent: 'Lunaa' })
     expect(result.isError).toBe(true)
-    expect(result.text).toBe('No agent named "Lunaa". Agents in this project: Milo, Luna, Kai.')
+    expect(result.text).toBe('No agent named "Lunaa". Agents in this project: Milo, Luna, Kai, Ivy.')
   })
 
   it('reads another agent case-insensitively', async () => {
@@ -185,5 +197,13 @@ describe('MCP HTTP endpoint', () => {
     expect((await fetch(url, { headers: { Authorization: `Bearer ${token}` } })).status).toBe(405)
     const bad = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: '{oops' })
     expect(bad.status).toBe(400)
+  })
+
+  it('reads and messages chat-view agents through their chat, not a terminal', async () => {
+    const { tools, deps, writes } = setup()
+    expect((await tools.call('read_agent', { agent: 'Ivy' })).text).toContain('Agent: hi from chat')
+    expect((await tools.call('send_message', { agent: 'ivy', message: 'run the tests' })).text).toBe('Sent to Ivy and submitted.')
+    expect(deps.chats.send).toHaveBeenCalledWith('a4', 'run the tests')
+    expect(writes).toEqual([])
   })
 })

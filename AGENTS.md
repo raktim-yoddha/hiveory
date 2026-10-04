@@ -127,7 +127,7 @@ Never put the empty Workspace actions on the Project page.
 The main Workspace:
 
 - maps to the original project directory/main working tree
-- cannot be deleted
+- is never deleted from disk; the user may only *remove* it from Hiveory, which forgets the record and its agents and leaves the folder untouched (ADR 0013)
 
 Linked isolated Workspaces can use Git linked worktrees and local branches.
 
@@ -144,6 +144,7 @@ Presets remember only:
 - CLI types
 - instance counts
 - auto-approve permission setting
+- chat UI setting (ADR 0013)
 
 Never store pane layout in presets.
 

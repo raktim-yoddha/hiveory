@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
 import { officialIcon } from './icons'
 import type { StatusEvent } from '../status/status-machine'
-import { AGENT_TOOLS_PROMPT, MCP_TOOL_TIMEOUT_MS, mcpServersJson } from './mcp-injection'
+import { claudeMcpArgs, MCP_TOOL_TIMEOUT_MS, mcpServersJson } from './mcp-injection'
 import { curlHookCommand, field, type CliAdapter } from './types'
 
 const HOOK_EVENTS = [
@@ -57,8 +57,9 @@ export const claudeAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
-  buildLaunch({ instance, autoApprove, hook, mcp, runtimeDir }) {
-    const args = instance.hasConversation
+  buildLaunch({ instance, autoApprove, hook, mcp, runtimeDir, resume }) {
+    // Hiveory picks the session id up front, so every agent resumes exactly its own conversation.
+    const args = resume
       ? ['--resume', instance.conversationId]
       : ['--session-id', instance.conversationId]
     if (autoApprove) args.push('--dangerously-skip-permissions')
@@ -80,7 +81,7 @@ export const claudeAdapter: CliAdapter = {
       // Agent tools: Hiveory's MCP server, pre-approved so coordination never stalls on a prompt.
       const mcpPath = join(runtimeDir, 'hiveory-mcp.json')
       files.push({ path: mcpPath, content: JSON.stringify(mcpServersJson(mcp), null, 2) })
-      args.push('--mcp-config', mcpPath, '--allowedTools', 'mcp__hiveory', '--append-system-prompt', AGENT_TOOLS_PROMPT)
+      args.push(...claudeMcpArgs(mcp, mcpPath))
       env.MCP_TOOL_TIMEOUT = String(MCP_TOOL_TIMEOUT_MS)
     }
     // Launching Hiveory from inside a Claude Code session must not block nested agents.

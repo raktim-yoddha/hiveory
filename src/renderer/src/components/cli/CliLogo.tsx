@@ -5,7 +5,7 @@ import styles from './CliLogo.module.css'
 
 interface CliLogoProps {
   cliId: string
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg' | 'xl'
   className?: string
 }
 

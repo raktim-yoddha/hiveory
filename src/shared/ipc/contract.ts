@@ -2,6 +2,11 @@ import { z } from 'zod'
 import type {
   AgentPreset,
   AppSettings,
+  BrowserAnnotation,
+  BrowserPageView,
+  BrowserProfile,
+  BrowserState,
+  PickedElement,
   UpdateStatus,
   CliDescriptor,
   CliInstanceView,
@@ -11,7 +16,7 @@ import type {
   Project,
   WorkspaceView
 } from '../domain'
-import type { ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
+import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import type { ExtensionsInventory } from '../domain/extensions'
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
 
@@ -25,6 +30,29 @@ const side = z.enum(['left', 'right', 'top', 'bottom'])
 
 export const MAX_INSTANCES_PER_CLI = 8
 
+export const viewportSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  width: z.number().int().min(200).max(4000),
+  height: z.number().int().min(200).max(4000)
+})
+
+const pageId = z.string().regex(/^b\d{1,9}$/)
+const profileId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
+const bounds = z.object({
+  x: z.number().finite().min(-100000).max(100000),
+  y: z.number().finite().min(-100000).max(100000),
+  width: z.number().finite().min(0).max(20000),
+  height: z.number().finite().min(0).max(20000)
+})
+const pickedElementSchema = z.object({
+  ref: z.string().max(20),
+  role: z.string().max(80),
+  name: z.string().max(400),
+  selector: z.string().max(2000),
+  text: z.string().max(2000),
+  html: z.string().max(4000)
+})
+
 export const cliSelectionSchema = z.object({
   cliId: id,
   count: z.number().int().min(0).max(MAX_INSTANCES_PER_CLI)
@@ -34,7 +62,8 @@ export const presetInputSchema = z.object({
   id: id.optional(),
   name: z.string().trim().min(1).max(60),
   cliSelections: z.array(cliSelectionSchema).max(32),
-  autoApprove: z.boolean()
+  autoApprove: z.boolean(),
+  chatUi: z.boolean().optional()
 })
 
 export const layoutOperationSchema = z.discriminatedUnion('type', [
@@ -67,6 +96,7 @@ export const createWorkspaceSchema = z.object({
     .optional(),
   cliSelections: z.array(cliSelectionSchema).max(32),
   autoApprove: z.boolean(),
+  chatUi: z.boolean().optional(),
   /** Isolated only: base ref for a new branch (default: the repository's default branch). */
   baseRef: gitRef.optional(),
   /** Isolated only: new branch name, or the existing branch when `useExistingBranch`. */
@@ -112,9 +142,16 @@ export const requestSchemas = {
   'settings.get': none,
   'settings.update': z
     .object({
-      theme: z.enum(['bronze', 'silver']),
+      theme: z.enum(['dark', 'bronze', 'silver']),
       autoCheckUpdates: z.boolean(),
-      agentTools: z.boolean()
+      agentTools: z.boolean(),
+      defaultAutoApprove: z.boolean(),
+      defaultChatUi: z.boolean(),
+      browserUse: z.boolean(),
+      browserAgentCursor: z.boolean(),
+      browserHomeUrl: z.string().trim().max(2000),
+      browserDefaultProfile: profileId,
+      browserViewports: z.array(viewportSchema).max(32)
     })
     .partial(),
   'updates.status': none,
@@ -126,13 +163,37 @@ export const requestSchemas = {
   'clipboard.readText': none,
   'clipboard.writeText': z.object({ text: z.string().max(5_000_000) }),
   /** The right-sidebar shell for a Workspace (or a Project's folder). Returns its terminal id. */
-  'shell.open': z.object({ workspaceId: id.optional(), projectId: id.optional() }),
+  'shell.open': z.object({ workspaceId: id.optional(), projectId: id.optional(), tab: z.string().regex(/^[a-z0-9]{1,12}$/).optional() }),
   'shell.restart': z.object({ id }),
   'shell.close': z.object({ id }),
   'extensions.scan': z.object({ projectId: id.optional() }),
   /** Paths must come from the last scan; main re-validates. */
   'extensions.shareSkill': z.object({ path: z.string().min(1).max(1000) }),
   'extensions.revealSkill': z.object({ path: z.string().min(1).max(1000) }),
+  /** Built-in browser (ADR 0015). Pages live in main; the panel only shows them. */
+  'browser.state': none,
+  'browser.open': z.object({ scope: id, url: z.string().max(4000).optional(), profileId: profileId.optional() }),
+  'browser.close': z.object({ pageId }),
+  /** A URL (normalized in main), or back / forward / reload / stop. */
+  'browser.navigate': z.object({ pageId, url: z.string().max(4000) }),
+  /** Where the panel shows the page (null parks it); `freeze` returns a picture first, for menus drawn over it. */
+  'browser.show': z.object({ pageId, bounds: bounds.nullable(), freeze: z.boolean().optional() }),
+  'browser.viewport': z.object({ pageId, viewport: viewportSchema.nullable() }),
+  'browser.devtools': z.object({ pageId }),
+  'browser.openExternal': z.object({ pageId }),
+  'browser.pick': z.object({ pageId }),
+  'browser.cancelPick': z.object({ pageId }),
+  'browser.annotate': z.object({ pageId, element: pickedElementSchema, note: z.string().trim().min(1).max(4000) }),
+  'browser.deleteAnnotation': z.object({ id: z.string().uuid().optional() }),
+  'browser.switchProfile': z.object({ pageId, profileId }),
+  'browser.createProfile': z.object({ name: z.string().trim().min(1).max(40) }),
+  'browser.renameProfile': z.object({ profileId, name: z.string().trim().min(1).max(40) }),
+  'browser.deleteProfile': z.object({ profileId }),
+  'browser.clearData': z.object({ profileId }),
+  /** Main shows the file dialog; only the profile crosses the bridge. */
+  'browser.importCookies': z.object({ profileId }),
+  'browser.exportCookies': z.object({ profileId }),
+  'browser.clearCookies': z.object({ profileId }),
   'chat.clis': none,
   'chat.list': none,
   'chat.get': z.object({ chatId: id }),
@@ -148,7 +209,23 @@ export const requestSchemas = {
     title: z.string().max(200).optional()
   }),
   'chat.delete': z.object({ chatId: id }),
-  'chat.send': z.object({ chatId: id, text: z.string().min(1).max(100_000) }),
+  'chat.send': z.object({
+    chatId: id,
+    text: z.string().max(100_000),
+    attachments: z
+      .array(z.object({ name: z.string().min(1).max(260), path: z.string().min(1).max(1000), kind: z.enum(['image', 'video', 'text', 'file']), size: z.number().int().min(0) }))
+      .max(20)
+      .optional()
+  }),
+  /** Saves pasted data (screenshot, video, long text) as an attachment file. Base64, at most ~25 MB. */
+  'chat.attach': z.object({
+    chatId: id,
+    name: z.string().min(1).max(200),
+    mime: z.string().max(100),
+    data: z.string().max(36_000_000)
+  }),
+  /** Registers a file the user dropped or pasted from disk (by path; nothing is copied). */
+  'chat.attachPath': z.object({ chatId: id, path: z.string().min(1).max(1000) }),
   'chat.stop': z.object({ chatId: id }),
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
   'git.info': z.object({ projectId: id }),
@@ -224,6 +301,26 @@ export interface ResponseMap {
   'extensions.scan': ExtensionsInventory
   'extensions.shareSkill': { path: string }
   'extensions.revealSkill': void
+  'browser.state': BrowserState
+  'browser.open': BrowserPageView
+  'browser.close': void
+  'browser.navigate': void
+  'browser.show': string | null
+  'browser.viewport': void
+  'browser.devtools': void
+  'browser.openExternal': void
+  'browser.pick': PickedElement | null
+  'browser.cancelPick': void
+  'browser.annotate': BrowserAnnotation
+  'browser.deleteAnnotation': void
+  'browser.switchProfile': BrowserPageView
+  'browser.createProfile': BrowserProfile
+  'browser.renameProfile': void
+  'browser.deleteProfile': void
+  'browser.clearData': void
+  'browser.importCookies': { imported: number; failed: number } | null
+  'browser.exportCookies': { count: number; path: string } | null
+  'browser.clearCookies': { count: number }
   'chat.clis': string[]
   'chat.list': ChatSummary[]
   'chat.get': ChatSession & { running: boolean }
@@ -231,6 +328,8 @@ export interface ResponseMap {
   'chat.update': ChatSession
   'chat.delete': void
   'chat.send': void
+  'chat.attach': ChatAttachment
+  'chat.attachPath': ChatAttachment
   'chat.stop': void
   'chat.catalog': ChatCatalog
   'git.info': GitInfo
@@ -267,12 +366,13 @@ export interface EventMap {
   'updates.changed': UpdateStatus
   /** Snapshot of the assistant message being streamed (or just finished). */
   'chat.event': { chatId: string; message: ChatMessage; summary: ChatSummary }
+  'browser.changed': BrowserState
 }
 
 export type EventName = keyof EventMap
 
 export const CHANNELS = Object.keys(requestSchemas) as Channel[]
-export const EVENT_NAMES: EventName[] = ['terminal.data', 'runtime.changed', 'state.changed', 'app.notice', 'updates.changed', 'chat.event']
+export const EVENT_NAMES: EventName[] = ['terminal.data', 'runtime.changed', 'state.changed', 'app.notice', 'updates.changed', 'chat.event', 'browser.changed']
 
 /** Prefix keeping Hiveory IPC channels distinct from anything else on the bus. */
 export const IPC_PREFIX = 'hiveory:'

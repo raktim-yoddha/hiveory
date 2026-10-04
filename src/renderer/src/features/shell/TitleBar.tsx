@@ -14,8 +14,7 @@ const MODES: Array<{ value: AppMode; label: string }> = [
 /** Frameless title bar: brand, panel toggles, the two top-level modes and app settings (design.md). */
 export function TitleBar() {
   const info = useApp((s) => s.info)
-  const { mode, setMode, sidebarCollapsed, toggleSidebar, rightPanel, toggleRightPanel, view, openSettings, closeSettings } =
-    useNavigation()
+  const { mode, setMode, sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation()
   const inSettings = view.type === 'settings'
   return (
     <header className={styles.bar} data-platform={info?.platform}>
@@ -32,6 +31,7 @@ export function TitleBar() {
         <IconButton
           label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           icon={<PanelLeft />}
+          active={!sidebarCollapsed && !inSettings}
           onClick={toggleSidebar}
           className={styles.noDrag}
         />
@@ -39,10 +39,10 @@ export function TitleBar() {
       <Tabs label="Mode" variant="segmented" options={MODES} value={mode} onChange={setMode} className={styles.noDrag} />
       <div className={styles.end}>
         <IconButton
-          label={rightPanel ? 'Hide side panel' : 'Show side panel'}
+          label={panelOpen ? 'Hide side panel' : 'Show side panel'}
           icon={<PanelRight />}
-          active={Boolean(rightPanel)}
-          onClick={() => toggleRightPanel()}
+          active={panelOpen && !inSettings}
+          onClick={togglePanel}
           className={styles.noDrag}
         />
         <IconButton

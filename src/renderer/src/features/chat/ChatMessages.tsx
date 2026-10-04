@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { AlertCircle, Brain, CheckCircle2, ChevronRight, Loader2, Wrench, XCircle } from 'lucide-react'
 import type { ChatMessage, ChatPart, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
+import { useClis } from '../../stores/data'
+import { AttachmentChips } from './AttachmentChips'
 import { Markdown } from '../../components/ui/Markdown'
 import styles from './Chat.module.css'
 
@@ -9,6 +11,7 @@ import styles from './Chat.module.css'
 export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean } }) {
   const listRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
+  const cliName = useClis((s) => s.clis.find((c) => c.id === chat.cliId)?.displayName)
 
   useEffect(() => {
     const el = listRef.current
@@ -26,7 +29,21 @@ export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean 
       aria-live="polite"
     >
       <div className={styles.thread}>
-        {chat.messages.length === 0 && <p className={styles.hint}>Ask anything. Shift+Enter adds a new line.</p>}
+        {chat.messages.length === 0 && (
+          <div className={styles.welcome}>
+            {chat.cliId && (
+              <span className={styles.welcomeLogo}>
+                <CliLogo cliId={chat.cliId} size="xl" />
+              </span>
+            )}
+            <p className={styles.welcomeTitle}>{cliName ? `Chat with ${cliName}` : 'Start a chat'}</p>
+            <p className={styles.welcomeText}>
+              {cliName
+                ? 'Ask anything. Paste or drop images, files and long text. Enter sends, Shift+Enter adds a line.'
+                : 'Choose a CLI below, then ask anything.'}
+            </p>
+          </div>
+        )}
         {chat.messages.map((m) => (
           <Message key={m.id} message={m} cliId={chat.cliId} />
         ))}
@@ -38,7 +55,12 @@ export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean 
 function Message({ message, cliId }: { message: ChatMessage; cliId?: string }) {
   if (message.role === 'user') {
     const text = message.parts.map((p) => (p.kind === 'text' ? p.text : '')).join('\n')
-    return <div className={styles.user}>{text}</div>
+    return (
+      <div className={styles.userTurn}>
+        {message.attachments && <AttachmentChips items={message.attachments.map((a, i) => ({ ...a, key: `${i}:${a.path}` }))} />}
+        {text && <div className={styles.user}>{text}</div>}
+      </div>
+    )
   }
   return (
     <div className={styles.assistant}>

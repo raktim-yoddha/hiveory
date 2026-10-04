@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUp, Check, ChevronDown, Folder, Gauge, Lock, RefreshCw, Search, ShieldCheck, Square } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
+import { ArrowUp, Check, ChevronDown, Eye, FolderClosed, LockOpen, Paperclip, RefreshCw, Search, Square } from 'lucide-react'
 import type { ChatModel, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
@@ -8,22 +8,44 @@ import { Popover } from '../../components/ui/Popover'
 import { cx } from '../../lib/cx'
 import { useChat } from '../../stores/chat'
 import { useClis, useProjects } from '../../stores/data'
+import { AttachmentChips } from './AttachmentChips'
+import { EffortIcon } from './EffortIcon'
+import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
 import styles from './Chat.module.css'
 
 const MAX_VISIBLE_MODELS = 250
 
-/** Message box plus the CLI → model → effort pickers. Effort appears only when the chosen model supports it. */
-export function ChatComposer({ chat }: { chat: ChatSession & { running: boolean } }) {
-  const { send, stop, update, clis: chatClis, catalogs, loadCatalog } = useChat()
+interface ChatComposerProps {
+  chat: ChatSession & { running: boolean }
+  /**
+   * Work agent in chat view: the CLI and folder belong to the agent, so only
+   * model, effort and permissions are offered.
+   */
+  agent?: boolean
+}
+
+/**
+ * Message box with attachments (paste or drop images, video, files and long
+ * text) and the CLI → model → effort pickers. Effort appears only when the
+ * chosen model supports it. Shared by Chat mode and Work agents in chat view.
+ */
+export function ChatComposer({ chat, agent = false }: ChatComposerProps) {
+  const { send, stop, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
   const clis = useClis((s) => s.clis)
   const projects = useProjects((s) => s.projects)
   const [text, setText] = useState('')
+  const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const locked = chat.messages.length > 0
+  const fileRef = useRef<HTMLInputElement>(null)
+  const files = useAttachments(chat.id)
+  const locked = agent || chat.messages.length > 0
   const catalog = chat.cliId ? catalogs[chat.cliId] : undefined
   const models = catalog && catalog !== 'loading' ? catalog.models : []
   const model: ChatModel | undefined = models.find((m) => m.id === (chat.model ?? ''))
   const efforts = model?.efforts ?? []
+  const update = (patch: Parameters<typeof updateChat>[1]): Promise<void> => updateChat(chat.id, patch)
+  const cliName = clis.find((c) => c.id === chat.cliId)?.displayName
+  const canSend = Boolean(chat.cliId) && !chat.running && files.ready && (text.trim().length > 0 || files.attachments.length > 0)
 
   useEffect(() => {
     if (chat.cliId) void loadCatalog(chat.cliId)
@@ -31,47 +53,83 @@ export function ChatComposer({ chat }: { chat: ChatSession & { running: boolean 
 
   // Auto-pick the only available CLI so a new chat is one step shorter.
   useEffect(() => {
-    if (!chat.cliId && !locked && chatClis.length === 1) void update({ cliId: chatClis[0] })
-  }, [chat.cliId, locked, chatClis, update])
+    if (!chat.cliId && !locked && chatClis.length === 1) void updateChat(chat.id, { cliId: chatClis[0] })
+  }, [chat.cliId, chat.id, locked, chatClis, updateChat])
 
   useEffect(() => {
     const el = inputRef.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+    // Empty: one row. Measuring a wrapped placeholder (e.g. in a pane still being laid out) would freeze a tall box.
+    if (text) el.style.height = `${Math.min(el.scrollHeight, 240)}px`
+    el.style.overflowY = text && el.scrollHeight > 240 ? 'auto' : 'hidden'
   }, [text])
 
   const submit = async (): Promise<void> => {
+    if (!canSend) return
     const value = text.trim()
-    if (!value || chat.running || !chat.cliId) return
+    const attachments = files.attachments
     setText('')
-    const ok = await send(value)
+    files.clear()
+    const ok = await send(chat.id, value, attachments)
     if (!ok) setText(value)
   }
 
-  const cliItems = chatClis.map((id) => {
-    const cli = clis.find((c) => c.id === id)
-    return {
-      type: 'item' as const,
-      id,
-      label: cli?.displayName ?? id,
-      icon: <CliLogo cliId={id} size="sm" />,
-      checked: chat.cliId === id,
-      onSelect: () => void update({ cliId: id })
+  const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+    const pasted = [...event.clipboardData.files]
+    if (pasted.length > 0) {
+      event.preventDefault()
+      files.addFiles(pasted)
+      return
     }
-  })
+    const value = event.clipboardData.getData('text/plain')
+    if (value.length > LONG_TEXT_CHARS) {
+      // Long text travels as a file: it stays readable here and never hits command-line limits.
+      event.preventDefault()
+      files.addText(value)
+    }
+  }
+
+  const onDrop = (event: DragEvent): void => {
+    event.preventDefault()
+    setDragging(false)
+    if (event.dataTransfer.files.length) files.addFiles([...event.dataTransfer.files])
+  }
+
+  const cliItems = chatClis.map((id) => ({
+    type: 'item' as const,
+    id,
+    label: clis.find((c) => c.id === id)?.displayName ?? id,
+    icon: <CliLogo cliId={id} size="sm" />,
+    checked: chat.cliId === id,
+    onSelect: () => void update({ cliId: id })
+  }))
 
   return (
-    <div className={styles.composerWrap}>
-      <div className={styles.composer}>
+    <div className={cx(styles.composerWrap, agent && styles.composerWrapAgent)}>
+      <div
+        className={cx(styles.composer, dragging && styles.composerDrop)}
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <AttachmentChips
+          items={files.items.map((item) => ({ ...item, pending: !item.attachment }))}
+          onRemove={files.remove}
+        />
         <textarea
           ref={inputRef}
           className={styles.input}
           rows={1}
-          placeholder={chat.cliId ? 'Message — Enter to send, Shift+Enter for a new line' : 'Choose a CLI below to start'}
+          placeholder={chat.cliId ? `Ask ${cliName ?? 'the agent'} anything…` : 'Choose a CLI below to start'}
           value={text}
           disabled={!chat.cliId}
           onChange={(e) => setText(e.target.value)}
+          onPaste={onPaste}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
@@ -81,27 +139,43 @@ export function ChatComposer({ chat }: { chat: ChatSession & { running: boolean 
           aria-label="Message"
         />
         <div className={styles.controls}>
-          {locked && chat.cliId ? (
-            <span className={styles.lockedCli} title="The CLI is fixed for this chat">
-              <CliLogo cliId={chat.cliId} size="sm" />
-              {clis.find((c) => c.id === chat.cliId)?.displayName}
-              <Lock aria-label="Locked" />
-            </span>
-          ) : (
-            <Menu
-              label="Choose CLI"
-              items={cliItems}
-              empty="No chat-capable CLI is installed."
-              trigger={(props) => (
-                <button type="button" {...props} className={styles.picker}>
-                  {chat.cliId ? <CliLogo cliId={chat.cliId} size="sm" /> : null}
-                  {chat.cliId ? clis.find((c) => c.id === chat.cliId)?.displayName : 'Choose CLI'}
-                  <ChevronDown aria-hidden />
-                </button>
-              )}
-            />
-          )}
-
+          <IconButton
+            label="Attach files"
+            icon={<Paperclip />}
+            size="md"
+            disabled={!chat.cliId}
+            onClick={() => fileRef.current?.click()}
+          />
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              files.addFiles([...(e.target.files ?? [])])
+              e.target.value = ''
+            }}
+          />
+          {!agent &&
+            (locked && chat.cliId ? (
+              <span className={cx(styles.pill, styles.pillStatic)} title="The CLI is fixed once a chat has started">
+                <CliLogo cliId={chat.cliId} size="sm" />
+                <span className={styles.pillLabel}>{cliName}</span>
+              </span>
+            ) : (
+              <Menu
+                label="Choose CLI"
+                items={cliItems}
+                empty="No chat-capable CLI is installed."
+                trigger={(props) => (
+                  <button type="button" {...props} className={styles.pill}>
+                    {chat.cliId && <CliLogo cliId={chat.cliId} size="sm" />}
+                    <span className={styles.pillLabel}>{chat.cliId ? cliName : 'Choose CLI'}</span>
+                    <ChevronDown aria-hidden className={styles.chevron} />
+                  </button>
+                )}
+              />
+            ))}
           {chat.cliId && (
             <ModelPicker
               models={models}
@@ -109,29 +183,39 @@ export function ChatComposer({ chat }: { chat: ChatSession & { running: boolean 
               error={catalog && catalog !== 'loading' ? catalog.error : undefined}
               value={chat.model ?? ''}
               onRefresh={() => void loadCatalog(chat.cliId!, true)}
-              onChange={(next) =>
-                void update({ model: next.id, effort: next.efforts?.includes(chat.effort ?? '') ? chat.effort : '' })
-              }
+              onChange={(next) => void update({ model: next.id, effort: next.efforts?.includes(chat.effort ?? '') ? chat.effort : '' })}
             />
           )}
-
           {efforts.length > 0 && (
             <Menu
-              label="Effort"
+              label="Reasoning effort"
               items={[
-                { type: 'item', id: 'default', label: `Default${model?.defaultEffort ? ` (${model.defaultEffort})` : ''}`, checked: !chat.effort, onSelect: () => void update({ effort: '' }) },
-                ...efforts.map((e) => ({ type: 'item' as const, id: e, label: e, checked: chat.effort === e, onSelect: () => void update({ effort: e }) }))
+                {
+                  type: 'item',
+                  id: 'default',
+                  label: `Default${model?.defaultEffort ? ` (${model.defaultEffort})` : ''}`,
+                  icon: <EffortIcon level={model?.defaultEffort} levels={efforts} />,
+                  checked: !chat.effort,
+                  onSelect: () => void update({ effort: '' })
+                },
+                ...efforts.map((e) => ({
+                  type: 'item' as const,
+                  id: e,
+                  label: e[0]!.toUpperCase() + e.slice(1),
+                  icon: <EffortIcon level={e} levels={efforts} />,
+                  checked: chat.effort === e,
+                  onSelect: () => void update({ effort: e })
+                }))
               ]}
               trigger={(props) => (
-                <button type="button" {...props} className={styles.picker}>
-                  <Gauge aria-hidden />
-                  {chat.effort ?? 'Effort'}
-                  <ChevronDown aria-hidden />
+                <button type="button" {...props} className={styles.pill} title="Reasoning effort">
+                  <EffortIcon level={chat.effort ?? model?.defaultEffort} levels={efforts} />
+                  <span className={cx(styles.pillLabel, styles.capitalize)}>{chat.effort ?? model?.defaultEffort ?? 'Effort'}</span>
+                  <ChevronDown aria-hidden className={styles.chevron} />
                 </button>
               )}
             />
           )}
-
           {!locked && (
             <Menu
               label="Folder"
@@ -140,28 +224,56 @@ export function ChatComposer({ chat }: { chat: ChatSession & { running: boolean 
                 ...projects.map((p) => ({ type: 'item' as const, id: p.id, label: p.name, checked: chat.projectId === p.id, onSelect: () => void update({ projectId: p.id }) }))
               ]}
               trigger={(props) => (
-                <button type="button" {...props} className={styles.picker} title={chat.cwd}>
-                  <Folder aria-hidden />
-                  {projects.find((p) => p.id === chat.projectId)?.name ?? 'Home folder'}
-                  <ChevronDown aria-hidden />
+                <button type="button" {...props} className={styles.pill} title={chat.cwd}>
+                  <FolderClosed aria-hidden />
+                  <span className={styles.pillLabel}>{projects.find((p) => p.id === chat.projectId)?.name ?? 'Home folder'}</span>
+                  <ChevronDown aria-hidden className={styles.chevron} />
                 </button>
               )}
             />
           )}
-
           <span className={styles.flex} />
-          <IconButton
-            label={chat.autoApprove ? 'Auto-approve is on' : 'Auto-approve is off'}
-            icon={<ShieldCheck />}
-            active={chat.autoApprove}
-            onClick={() => void update({ autoApprove: !chat.autoApprove })}
+          <Menu
+            label="Permissions"
+            align="end"
+            items={[
+              {
+                type: 'item',
+                id: 'read-only',
+                label: 'Read-only',
+                hint: 'Reads and answers',
+                icon: <Eye />,
+                checked: !chat.autoApprove,
+                onSelect: () => void update({ autoApprove: false })
+              },
+              {
+                type: 'item',
+                id: 'full',
+                label: 'Full access',
+                hint: 'Edits files, runs commands',
+                icon: <LockOpen />,
+                checked: chat.autoApprove,
+                onSelect: () => void update({ autoApprove: true })
+              }
+            ]}
+            trigger={(props) => (
+              <button
+                type="button"
+                {...props}
+                className={styles.pill}
+                title={chat.autoApprove ? 'Full access: the agent may edit files and run commands' : 'Read-only: the agent can read and answer, not change anything'}
+              >
+                {chat.autoApprove ? <LockOpen aria-hidden /> : <Eye aria-hidden />}
+                <span className={styles.pillLabel}>{chat.autoApprove ? 'Full access' : 'Read-only'}</span>
+              </button>
+            )}
           />
           {chat.running ? (
-            <button type="button" className={styles.send} onClick={() => void stop()} aria-label="Stop">
+            <button type="button" className={styles.send} onClick={() => void stop(chat.id)} aria-label="Stop">
               <Square aria-hidden />
             </button>
           ) : (
-            <button type="button" className={styles.send} onClick={() => void submit()} disabled={!text.trim() || !chat.cliId} aria-label="Send">
+            <button type="button" className={styles.send} onClick={() => void submit()} disabled={!canSend} aria-label="Send">
               <ArrowUp aria-hidden />
             </button>
           )}
@@ -202,9 +314,9 @@ function ModelPicker({ models, loading, error, value, onChange, onRefresh }: Mod
       placement="above"
       width="lg"
       trigger={(props) => (
-        <button type="button" {...props} className={styles.picker} title={current?.id || 'Default model'}>
-          {loading ? 'Loading models…' : (current?.label ?? 'Default')}
-          <ChevronDown aria-hidden />
+        <button type="button" {...props} className={cx(styles.pill, styles.pillModel)} title={current?.id || 'Default model'}>
+          <span className={styles.pillText}>{loading ? 'Loading models…' : (current?.label ?? 'Default model')}</span>
+          <ChevronDown aria-hidden className={styles.chevron} />
         </button>
       )}
     >

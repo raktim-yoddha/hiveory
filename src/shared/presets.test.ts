@@ -30,7 +30,8 @@ describe('preset serialization', () => {
       id: 'p1',
       name: 'Pair',
       cliSelections: [{ cliId: 'claude', count: 2 }],
-      autoApprove: true
+      autoApprove: true,
+      chatUi: false
     })
   })
 

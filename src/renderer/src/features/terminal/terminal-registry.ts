@@ -30,6 +30,10 @@ const readTheme = (): ITheme => {
   return theme
 }
 
+/** Smallest grid worth sending to a CLI; anything smaller is a transient layout state. */
+const MIN_COLS = 12
+const MIN_ROWS = 4
+
 const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
 
 interface Entry {
@@ -177,7 +181,8 @@ export const fitTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)
   if (!entry?.opened || !entry.element.isConnected) return
   const proposed = entry.fit.proposeDimensions()
-  if (!proposed || !Number.isFinite(proposed.cols) || proposed.cols < 2 || proposed.rows < 2) return
+  // A hidden, collapsing or minimizing host can report a sliver; never squeeze a TUI into it.
+  if (!proposed || !Number.isFinite(proposed.cols) || !Number.isFinite(proposed.rows) || proposed.cols < MIN_COLS || proposed.rows < MIN_ROWS) return
   const key = `${proposed.cols}x${proposed.rows}`
   if (key === entry.lastSize) return
   entry.lastSize = key

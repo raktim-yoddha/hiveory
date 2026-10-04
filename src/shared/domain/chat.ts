@@ -23,10 +23,20 @@ export type ChatPart =
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; id: string; name: string; detail?: string; output?: string; status: 'running' | 'done' | 'error' }
 
+/** A file sent with a message: pasted images/video, dropped files, or long pasted text saved to a file. */
+export interface ChatAttachment {
+  name: string
+  /** Absolute path the CLI reads. Main only accepts paths it registered itself. */
+  path: string
+  kind: 'image' | 'video' | 'text' | 'file'
+  size: number
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   parts: ChatPart[]
+  attachments?: ChatAttachment[]
   createdAt: string
   /** Assistant turn still streaming. */
   streaming?: boolean
@@ -43,6 +53,8 @@ export interface ChatSession {
   model?: string
   effort?: string
   autoApprove: boolean
+  /** Set when this chat backs a Work agent shown in chat view; such chats stay out of the Chat list. */
+  agentId?: string
   /** The CLI's own session/thread id, used to resume the conversation. */
   providerSessionId?: string
   messages: ChatMessage[]
@@ -57,6 +69,8 @@ export interface ChatSummary {
   projectId?: string
   updatedAt: string
   running: boolean
+  /** Backs a Work agent in chat view (never listed in Chat mode). */
+  agentId?: string
 }
 
 /** CLIs that can drive a chat (headless mode with parseable output). Antigravity is excluded on purpose. */

@@ -41,7 +41,7 @@ export function IssuePicker({ projectId, onPick }: { projectId: string; onPick: 
           {...props}
           onClick={() => {
             load()
-            props.onClick()
+            props.onClick?.()
           }}
           label="Pick a GitHub issue"
           icon={<CircleDot />}

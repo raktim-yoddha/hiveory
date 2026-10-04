@@ -47,7 +47,7 @@ export const createHandlers = (c: Container): Handlers => {
   'agents.restart': ({ instanceId }) => c.agents.restart(instanceId),
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)
-    c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove)
+    c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove, preset.chatUi ?? false)
   },
 
   // Terminal ids belong either to an agent (runtime) or a sidebar shell.
@@ -85,9 +85,11 @@ export const createHandlers = (c: Container): Handlers => {
   'clipboard.readText': () => clipboard.readText(),
   'clipboard.writeText': ({ text }) => clipboard.writeText(text),
 
-  'shell.open': ({ workspaceId, projectId }) => {
-    if (workspaceId) return c.shells.open(workspaceId, c.workspaceRepo.get(workspaceId).path)
-    if (projectId) return c.shells.open(projectId, c.workspaceRepo.project(projectId).path)
+  'shell.open': ({ workspaceId, projectId, tab }) => {
+    // Each side-panel tab is its own shell; no tab = the workspace's default shell (also used by agent tools).
+    const suffix = tab ? `-${tab}` : ''
+    if (workspaceId) return c.shells.open(workspaceId + suffix, c.workspaceRepo.get(workspaceId).path)
+    if (projectId) return c.shells.open(projectId + suffix, c.workspaceRepo.project(projectId).path)
     return fail('INVALID_INPUT', 'Choose a project or workspace first.')
   },
   'shell.restart': ({ id }) => c.shells.restart(id),
@@ -101,13 +103,58 @@ export const createHandlers = (c: Container): Handlers => {
     if (error) fail('NOT_FOUND', 'Could not open the folder.', { detail: error })
   },
 
+  'browser.state': () => c.browser.state(),
+  'browser.open': ({ scope, url, profileId }) => c.browser.open({ scope, url, profileId }),
+  'browser.close': ({ pageId }) => c.browser.close(pageId),
+  'browser.navigate': ({ pageId, url }) => c.browser.navigate(pageId, url),
+  'browser.show': ({ pageId, bounds, freeze }) => c.browser.show(pageId, bounds, freeze ?? false),
+  'browser.viewport': ({ pageId, viewport }) => c.browser.setViewport(pageId, viewport),
+  'browser.devtools': ({ pageId }) => c.browser.toggleDevTools(pageId),
+  'browser.openExternal': async ({ pageId }) => {
+    const url = c.browser.state().pages.find((p) => p.id === pageId)?.url ?? ''
+    if (!/^https?:\/\//i.test(url)) fail('INVALID_INPUT', 'Only web pages can open in your browser.')
+    await shell.openExternal(url)
+  },
+  'browser.pick': ({ pageId }) => c.browser.pick(pageId),
+  'browser.cancelPick': async ({ pageId }) => {
+    await c.browser.cancelPick(pageId)
+  },
+  'browser.annotate': ({ pageId, element, note }) => c.browser.annotate(pageId, element, note),
+  'browser.deleteAnnotation': ({ id }) => c.browser.deleteAnnotations(id),
+  'browser.switchProfile': ({ pageId, profileId }) => c.browser.switchProfile(pageId, profileId),
+  'browser.createProfile': ({ name }) => c.browser.createProfile(name),
+  'browser.renameProfile': ({ profileId, name }) => c.browser.renameProfile(profileId, name),
+  'browser.deleteProfile': ({ profileId }) => c.browser.deleteProfile(profileId),
+  'browser.clearData': ({ profileId }) => c.browser.clearData(profileId),
+  'browser.importCookies': async ({ profileId }, event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const options = {
+      title: 'Import cookies',
+      properties: ['openFile' as const],
+      filters: [{ name: 'Cookie export (JSON or cookies.txt)', extensions: ['json', 'txt'] }]
+    }
+    const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+    const file = result.filePaths[0]
+    return result.canceled || !file ? null : c.browser.importCookies(profileId, file)
+  },
+  'browser.exportCookies': async ({ profileId }, event) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const options = { title: 'Export cookies', defaultPath: `cookies-${profileId}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] }
+    const result = window ? await dialog.showSaveDialog(window, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return null
+    return { count: await c.browser.exportCookies(profileId, result.filePath), path: result.filePath }
+  },
+  'browser.clearCookies': async ({ profileId }) => ({ count: await c.browser.clearCookies(profileId) }),
+
   'chat.clis': () => c.chats.clis(),
   'chat.list': () => c.chats.list(),
   'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
   'chat.create': ({ projectId }) => c.chats.create(projectId),
   'chat.update': ({ chatId, ...patch }) => c.chats.update(chatId, patch),
   'chat.delete': ({ chatId }) => c.chats.delete(chatId),
-  'chat.send': ({ chatId, text }) => c.chats.send(chatId, text),
+  'chat.send': ({ chatId, text, attachments }) => c.chats.send(chatId, text, attachments ?? []),
+  'chat.attach': ({ chatId, name, mime, data }) => c.chats.attach(chatId, name, mime, data),
+  'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
   'chat.stop': ({ chatId }) => c.chats.stop(chatId),
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
 

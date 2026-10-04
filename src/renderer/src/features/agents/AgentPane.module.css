@@ -57,3 +57,11 @@
   color: var(--color-danger);
   font-size: var(--text-xs);
 }
+
+/* Chat view inside a pane: messages scroll, the composer stays at the bottom. */
+.chatView {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}

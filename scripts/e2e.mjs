@@ -1,8 +1,9 @@
-/* global document, window */
+/* global document, window, getComputedStyle */
 // End-to-end battle test: drives the built Electron app with throwaway profiles and repositories.
 // Usage: pnpm build && node scripts/e2e.mjs [screenshotDir]   (E2E_CHAT=1 also runs real chat prompts)
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron } from 'playwright-core'
@@ -28,6 +29,12 @@ const makeRepo = (name) => {
   return dir
 }
 const repo = makeRepo('demo-app')
+// An image with one word in it, for the real attachment round trip.
+const IMAGE = join(sandbox, 'code.png')
+execFileSync('python', ['-c', `from PIL import Image, ImageDraw, ImageFont
+im = Image.new('RGB', (420, 140), 'white')
+ImageDraw.Draw(im).text((30, 30), 'AMBER', fill='black', font=ImageFont.truetype('arial.ttf', 72))
+im.save(r'${IMAGE}')`])
 const plain = join(sandbox, 'plain-folder')
 mkdirSync(plain)
 writeFileSync(join(plain, 'notes.txt'), 'hello')
@@ -135,6 +142,7 @@ console.log('A. Shell & settings')
 await test('home renders with DEV badge and Work/Chat modes', async () => {
   await page.waitForSelector('text=Welcome to Hiveory')
   expect(await page.getByText('DEV', { exact: true }).isVisible(), 'DEV badge missing')
+  expect((await value('settings.get')).theme === 'dark', 'Dark is not the default theme')
   expect(await page.getByRole('tab', { name: 'Work' }).isVisible(), 'Work tab missing')
   expect(await page.getByRole('tab', { name: 'Chat' }).isVisible(), 'Chat tab missing')
   await shot('a1-home')
@@ -142,7 +150,7 @@ await test('home renders with DEV badge and Work/Chat modes', async () => {
 
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  for (const section of ['Appearance', 'Agent tools', 'Skills & MCP', 'Updates', 'Guide', 'About']) {
+  for (const section of ['Appearance', 'Agents', 'Skills & MCP', 'Updates', 'Guide', 'About']) {
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: section }).click()
     await page.waitForTimeout(150)
     expect(!(await page.getByText('failed to display').isVisible()), `${section} crashed`)
@@ -156,6 +164,29 @@ await test('settings: silver theme applies instantly and persists', async () => 
   expect((await value('settings.get')).theme === 'silver', 'theme not saved')
   await shot('a2-settings-silver')
   await page.getByRole('radio', { name: /Bronze/ }).click()
+})
+
+await test('settings: Dark is the default theme and perfectly flat', async () => {
+  await page.getByRole('radio', { name: /Dark/ }).click()
+  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'dark theme attribute')
+  const fills = await page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement)
+    return ['--fill-raised', '--fill-selected', '--fill-active', '--gradient-app', '--gradient-surface', '--color-sheen'].map((t) => css.getPropertyValue(t).trim())
+  })
+  expect(fills.every((f) => !/gradient\(/.test(f) || /^linear-gradient\((#[0-9a-f]+), \1\)$/i.test(f)), `dark theme has gradients: ${fills.join(' | ')}`)
+  const bg = await page.evaluate(() => getComputedStyle(document.body.firstElementChild).backgroundImage)
+  expect(bg === 'none', `app background is not flat: ${bg}`)
+  await shot('a2b-settings-dark')
+})
+
+await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Agents' }).click()
+  await page.getByRole('switch', { name: 'Use chat UI by default' }).click()
+  await page.getByRole('switch', { name: 'Auto-approve permissions by default' }).click()
+  await waitFor(async () => {
+    const s = await value('settings.get')
+    return s.defaultChatUi && s.defaultAutoApprove
+  }, 'defaults saved')
 })
 
 await test('settings: guide search filters and chapters open', async () => {
@@ -198,10 +229,21 @@ await test('project page has no gear; path trail copies the full path', async ()
   expect(clip === repo, `clipboard has "${clip}"`)
 })
 
+await test('project tab bar "New workspace" opens create with the Settings defaults', async () => {
+  expect((await page.getByRole('banner').getByRole('button', { name: 'New workspace' }).count()) === 0, 'New workspace still in the app title bar')
+  await page.getByRole('region', { name: 'demo-app' }).getByRole('button', { name: 'New workspace', exact: true }).click()
+  await page.waitForSelector('dialog[open]')
+  expect((await page.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'true', 'chat UI default not applied')
+  expect((await page.getByRole('switch', { name: 'Auto-approve permissions' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
+  await page.keyboard.press('Escape')
+  await value('settings.update', { defaultChatUi: false, defaultAutoApprove: false })
+})
+
 await test('sidebar "+" opens create; main workspace via Project folder', async () => {
   await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
   await page.waitForSelector('dialog[open]')
   expect((await page.getByRole('radio', { name: /Project folder/ }).getAttribute('aria-checked')) === 'true', 'main should be default')
+  expect((await page.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'false', 'chat UI default should be off again')
   await page.getByRole('button', { name: 'Create empty' }).click()
   mainWs = await workspaceWhere(projectId, (w) => w.kind === 'main')
   expect(mainWs && mainWs.path === repo, 'main workspace wrong')
@@ -429,20 +471,79 @@ await test('a small window keeps every pane inside the layout', async () => {
 })
 
 // ======================= D. Terminal & clipboard =======================
-console.log('D. Side panel terminal & clipboard')
-await test('side panel terminal runs commands; browser is marked Soon', async () => {
+console.log('D. Side panel, sidebars, terminal & clipboard')
+// eslint-disable-next-line no-control-regex -- strips terminal escape sequences
+const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
+const sidePanel = () => page.locator('aside[aria-label="Side panel"]')
+await test('side panel starts empty; "+" adds terminals and browsers as tabs', async () => {
   await page.getByRole('button', { name: 'Show side panel' }).click()
-  await page.waitForSelector('text=Soon')
-  expect(await page.getByRole('tab', { name: /Browser/ }).isDisabled(), 'browser should be disabled')
-  const id = `shell-${mainWs.id}`
-  await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.length > 0, 'shell prompt')
-  await value('terminal.write', { instanceId: id, data: 'echo e2e-shell-ok\r' })
-  await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.includes('e2e-shell-ok'), 'shell output')
+  await sidePanel().getByText('Nothing open').waitFor()
+  const add = async (kind) => {
+    await sidePanel().getByRole('button', { name: 'Add terminal or browser' }).first().click()
+    await page.getByRole('menuitem', { name: new RegExp(kind) }).click()
+  }
+  await add('Terminal')
+  await add('Browser')
+  await add('Terminal')
+  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 3, 'three tabs')
+  const tabs = await sidePanel().getByRole('tab').allInnerTexts()
+  expect(JSON.stringify(tabs) === JSON.stringify(['Terminal', 'New tab', 'Terminal 2']), `tabs: ${tabs}`)
+  await sidePanel().getByRole('tab', { name: 'New tab' }).click()
+  expect(await sidePanel().getByLabel('Address').isVisible(), 'browser address bar missing')
+  for (const tab of ['t1', 't2']) {
+    const id = `shell-${mainWs.id}-${tab}`
+    await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.length > 0, `shell prompt ${tab}`)
+    await value('terminal.write', { instanceId: id, data: `echo e2e-${tab}-ok\r` })
+    await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.includes(`e2e-${tab}-ok`), `shell output ${tab}`)
+  }
+  // Compact prompt: the folder name, not the full app-data path.
+  const prompt = (await value('terminal.snapshot', { instanceId: `shell-${mainWs.id}-t1` })).data
+  expect(!/Hiveory[^\r\n]*Workspaces/.test(prompt) && /demo-app>/.test(prompt.replace(ANSI, '')), 'prompt is not compact')
+  await sidePanel().getByRole('tab', { name: 'Terminal', exact: true }).click()
   await shot('d1-terminal')
 })
 
+await test('closing a terminal tab ends its shell; the panel maximizes over the main area', async () => {
+  await sidePanel().getByRole('button', { name: 'Close Terminal 2' }).click()
+  await sidePanel().getByRole('button', { name: 'Close New tab' }).click()
+  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 1, 'tabs closed')
+  expect((await value('browser.state')).pages.length === 0, 'closing the browser tab left its page open')
+  const before = await sidePanel().boundingBox()
+  const paneBefore = await panes().first().boundingBox()
+  await page.getByRole('button', { name: 'Maximize side panel' }).click()
+  await page.waitForTimeout(250)
+  const after = await sidePanel().boundingBox()
+  const sidebar = await page.getByRole('navigation', { name: 'Projects' }).boundingBox()
+  expect(after.width > before.width * 1.8, 'panel did not maximize')
+  expect(after.x > sidebar.x + sidebar.width - 1, 'maximized panel covers the left sidebar')
+  const paneAfter = await panes().first().boundingBox()
+  expect(Math.abs(paneAfter.width - paneBefore.width) < 1, 'agent panes reflowed under the maximized panel')
+  await shot('d2-panel-maximized')
+  await page.getByRole('button', { name: 'Restore side panel' }).click()
+})
+
+await test('both sidebars resize by dragging their edge', async () => {
+  const drag = async (name, dx) => {
+    const box = await page.getByRole('separator', { name }).boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2, { steps: 6 })
+    await page.mouse.up()
+  }
+  const left = async () => (await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width
+  const right = async () => (await sidePanel().boundingBox()).width
+  const [l0, r0] = [await left(), await right()]
+  await drag('Resize sidebar', 80)
+  await drag('Resize side panel', -100)
+  expect((await left()) > l0 + 60, 'left sidebar did not grow')
+  expect((await right()) > r0 + 80, 'side panel did not grow')
+  expect(await page.getByRole('button', { name: 'Hide sidebar' }).evaluate((el) => el.className.includes('active')), 'sidebar toggle not highlighted')
+  await page.getByRole('separator', { name: 'Resize sidebar' }).dblclick()
+  await page.getByRole('separator', { name: 'Resize side panel' }).dblclick()
+})
+
 await test('Ctrl+V pastes from the system clipboard (dictation tools use this path)', async () => {
-  const id = `shell-${mainWs.id}`
+  const id = `shell-${mainWs.id}-t1`
   await app.evaluate(({ clipboard }) => clipboard.writeText('echo pasted-ok'))
   await page.locator('aside[aria-label="Side panel"] .xterm').click()
   await page.keyboard.press('Control+V')
@@ -575,6 +676,133 @@ await test('turning agent tools off is enforced immediately', async () => {
   expect((await rpc('tools/list', {})).result, 'tools not restored')
 })
 
+// ======================= E2. Built-in browser =======================
+console.log('E2. Built-in browser (agent browser use)')
+const FIXTURE = `<!doctype html><title>Fixture</title>
+<h1>Browser fixture</h1>
+<label>Email <input id="email"></label>
+<select id="size"><option value="s">Small</option><option value="l">Large</option></select>
+<button id="go" onclick="out.textContent = 'Hello ' + email.value + ' ' + size.value; console.log('clicked-ok')">Greet</button>
+<p id="out"></p>
+<div id="src" draggable="true" style="width:90px;height:40px;background:#ddd">Drag me</div>
+<div id="dst" style="width:180px;height:60px;border:1px solid #888">Drop here</div>
+<a href="/two">Next page</a>
+<script>
+  dst.ondragover = (e) => e.preventDefault()
+  dst.ondrop = (e) => { e.preventDefault(); dst.textContent = 'Dropped!' }
+  document.cookie = 'seen=1; path=/'
+</script>`
+const fixtureServer = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/html' })
+  res.end(req.url === '/two' ? '<!doctype html><title>Two</title><p>Second page</p>' : FIXTURE)
+})
+await new Promise((r) => fixtureServer.listen(0, '127.0.0.1', r))
+const fixtureHost = `localhost:${fixtureServer.address().port}`
+const text = (r) => r.content.map((c) => c.text ?? '').join('\n')
+
+await test('browser tools are on by default and listed in Settings › Browser', async () => {
+  const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
+  for (const n of ['browser_navigate', 'browser_snapshot', 'browser_click', 'browser_drag', 'browser_batch', 'browser_cookies', 'browser_viewport', 'browser_annotations', 'browser_console']) {
+    expect(names.includes(n), `missing tool ${n}`)
+  }
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('button', { name: 'Browser', exact: true }).click()
+  await page.getByText('Give agents the browser').waitFor()
+  await page.getByText(/Mobile S 320×568/).waitFor()
+  await shot('e2-browser-settings')
+  await page.getByRole('button', { name: 'Back' }).click()
+})
+
+const fixtureRefs = {}
+await test('an agent browses with the side panel closed: snapshot refs, batch fill/select/click', async () => {
+  if (await page.getByRole('button', { name: 'Hide side panel' }).count()) await page.getByRole('button', { name: 'Hide side panel' }).click()
+  const started = Date.now()
+  const nav = await tool('browser_navigate', { url: fixtureHost })
+  const snap = text(nav)
+  expect(!nav.isError, snap.slice(0, 300))
+  expect(snap.includes('heading "Browser fixture"'), `no heading in snapshot:\n${snap.slice(0, 600)}`)
+  fixtureRefs.email = /textbox "Email" \[@(\d+)\]/.exec(snap)?.[1]
+  expect(fixtureRefs.email, `no Email ref:\n${snap.slice(0, 600)}`)
+  const batch = await tool('browser_batch', {
+    steps: [
+      { action: 'fill', target: `@${fixtureRefs.email}`, text: 'ada' },
+      { action: 'select', target: '#size', values: ['Large'] },
+      { action: 'click', target: 'text=Greet', label: 'greet' }
+    ]
+  })
+  expect(!batch.isError && text(batch).includes('Hello ada l'), `batch result:\n${text(batch).slice(0, 800)}`)
+  console.log(`      (navigate + 3-step batch: ${Date.now() - started} ms)`)
+})
+
+await test('drag-and-drop, console, network, cookies and screenshots work for agents', async () => {
+  const drag = await tool('browser_drag', { from: '#src', to: '#dst', label: 'move card' })
+  expect(text(drag).includes('Dropped!'), `drag:\n${text(drag).slice(0, 500)}`)
+  expect(text(await tool('browser_console')).includes('clicked-ok'), 'console message missing')
+  expect(/GET 200 \w+ http:\/\/localhost/.test(text(await tool('browser_network'))), 'network log missing')
+  expect(text(await tool('browser_cookies')).includes('"seen"'), 'cookie missing')
+  const shotResult = await tool('browser_screenshot')
+  expect(shotResult.content[1]?.type === 'image' && shotResult.content[1].data.length > 1000, 'no screenshot image')
+  const ev = await tool('browser_evaluate', { script: 'document.querySelectorAll("div").length' })
+  expect(text(ev).trim() === '2', `evaluate: ${text(ev)}`)
+  const next = await tool('browser_click', { target: 'text=Next page' })
+  expect(text(next).includes('Second page'), 'link navigation missing from snapshot')
+  await tool('browser_navigate', { url: 'back' })
+})
+
+await test('the agent page shows in the side panel under its name; viewport emulation', async () => {
+  const agents = await value('agents.list', { workspaceId: mainWs.id })
+  await page.getByRole('button', { name: 'Show side panel' }).click()
+  await sidePanel().getByRole('tab', { name: new RegExp(`${agents[0].petName} · Fixture`) }).click()
+  await sidePanel().getByText('is using this page').waitFor()
+  const vp = await tool('browser_viewport', { preset: 'Mobile M' })
+  expect(!vp.isError, text(vp))
+  expect(text(await tool('browser_evaluate', { script: 'screen.width + "x" + screen.height + " " + navigator.maxTouchPoints' })).includes('375x667 5'), 'viewport not emulated')
+  await waitFor(async () => (await value('browser.state')).pages.some((p) => p.viewport?.width === 375), 'viewport in state')
+  await shot('e3-browser-panel')
+  await tool('browser_viewport', { reset: true })
+  // Menus open over the native page: it steps aside and leaves a picture behind.
+  await sidePanel().getByRole('button', { name: 'Viewport size' }).click()
+  await page.getByRole('menuitemradio', { name: /Tablet/ }).waitFor()
+  await shot('e4-browser-viewport-menu')
+  await page.keyboard.press('Escape')
+})
+
+await test('pick element copies it for an agent; annotate pins a note agents can read', async () => {
+  const view = app.windows().find((w) => w.url().includes(fixtureHost.split(':')[1]))
+  expect(view, 'browser page target not found')
+  await sidePanel().getByRole('button', { name: 'More browser actions' }).click()
+  await page.getByRole('menuitem', { name: 'Pick element' }).click()
+  await sidePanel().getByText('Click an element to copy it').waitFor()
+  await page.waitForTimeout(300)
+  await view.click('#go')
+  await sidePanel().getByText(/Copied button "Greet"/).waitFor()
+  const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
+  expect(copied.includes('selector: #go') && copied.includes('<button'), `clipboard: ${copied.slice(0, 200)}`)
+  await sidePanel().getByRole('button', { name: 'More browser actions' }).click()
+  await page.getByRole('menuitem', { name: 'Annotate element' }).click()
+  await sidePanel().getByText('Click the element to annotate').waitFor()
+  await page.waitForTimeout(300)
+  await view.click('#email')
+  await sidePanel().getByLabel('Note for agents').fill('Validate this email')
+  await sidePanel().getByRole('button', { name: 'Save' }).click()
+  await sidePanel().getByText(/Note saved/).waitFor()
+  const notes = text(await tool('browser_annotations'))
+  expect(notes.includes('Validate this email') && notes.includes('#email'), notes)
+  await shot('e5-browser-annotated')
+})
+
+await test('annotations reach agents; turning browser use off hides the tools', async () => {
+  const pageId = (await value('browser.state')).pages[0].id
+  await value('browser.annotate', { pageId, element: { ref: '@1', role: 'button', name: 'Greet', selector: '#go', text: 'Greet', html: '<button id="go">Greet</button>' }, note: 'Make it blue' })
+  const notes = text(await tool('browser_annotations', { clear: true }))
+  expect(notes.includes('Make it blue') && notes.includes('#go'), notes)
+  expect(text(await tool('browser_annotations')).includes('not annotated'), 'clear did not remove notes')
+  await value('settings.update', { browserUse: false })
+  expect(!(await rpc('tools/list', {})).result.tools.some((t) => t.name.startsWith('browser_')), 'browser tools still listed')
+  await value('settings.update', { browserUse: true })
+  await page.getByRole('button', { name: 'Hide side panel' }).click()
+})
+
 // ======================= F. Kanban =======================
 console.log('F. Kanban')
 await test('kanban shows agents by real status, colour only', async () => {
@@ -610,6 +838,7 @@ await test('chat: CLI picker lists detected chat CLIs and excludes Antigravity',
   await page.getByRole('button', { name: /Choose CLI/ }).click()
   expect((await page.getByRole('menuitemradio', { name: /Antigravity/ }).count()) === 0, 'antigravity in menu')
   await page.getByRole('menuitemradio', { name: 'Codex' }).click()
+  await shot('g0-chat-toolbar')
 })
 
 await test('chat: model picker searches; effort appears only when the model supports it', async () => {
@@ -620,7 +849,7 @@ await test('chat: model picker searches; effort appears only when the model supp
   expect(withEffort, 'no codex model with efforts')
   await page.getByLabel('Search models').fill(withEffort.label)
   await page.getByRole('option', { name: new RegExp(withEffort.label) }).first().click()
-  await page.waitForSelector('button:has-text("Effort")')
+  await page.waitForSelector('button[title="Reasoning effort"]')
   await shot('g1-chat-pickers')
   // Switch to OpenCode in a fresh chat: hundreds of models, effort only for models with variants.
   await page.getByRole('button', { name: 'New chat' }).first().click()
@@ -632,7 +861,7 @@ await test('chat: model picker searches; effort appears only when the model supp
   await page.getByRole('option', { name: /Big Pickle|big-pickle/i }).first().click()
   const oc = await value('chat.catalog', { cliId: 'opencode' })
   const chosen = oc.models.find((m) => /big-pickle/.test(m.id))
-  const effortVisible = await page.locator('button:has-text("Effort")').isVisible()
+  const effortVisible = await page.locator('button[title="Reasoning effort"]').isVisible()
   expect(effortVisible === Boolean(chosen?.efforts?.length), 'effort visibility does not match model capability')
 })
 
@@ -648,13 +877,122 @@ if (process.env.E2E_CHAT) {
     await page.waitForTimeout(1500)
     await page.getByRole('tab', { name: 'Chat' }).click()
     await page.waitForSelector('text=pong', { timeout: 120000 })
-    expect(await page.getByLabel('Locked').isVisible(), 'CLI not locked after first message')
+    expect(await page.getByTitle('The CLI is fixed once a chat has started').isVisible(), 'CLI not locked after first message')
     expect((await page.getByRole('button', { name: /Choose CLI/ }).count()) === 0, 'CLI dropdown still present')
     const r = await invoke('chat.update', { chatId: (await value('chat.list'))[0].id, cliId: 'opencode' })
     expect(!r.ok, 'locked CLI could be changed over IPC')
     await shot('g2-chat-reply')
   })
 }
+
+let chatWs
+await test('Work: "Use chat UI" opens agents as a chat; Antigravity-style CLIs keep a terminal', async () => {
+  await page.getByRole('tab', { name: 'Work' }).click()
+  chatWs = await value('workspaces.create', {
+    projectId, kind: 'isolated', name: 'Chatty', cliSelections: [{ cliId: 'codex', count: 1 }, { cliId: 'claude', count: 1 }], autoApprove: false, chatUi: true
+  })
+  const agents = await value('agents.list', { workspaceId: chatWs.id })
+  expect(agents.length === 2 && agents.every((a) => a.chatUi && a.runtime.running), 'chat agents not created ready')
+  expect((await value('chat.list')).every((c) => !agents.some((a) => a.id === c.id)), 'agent chats leaked into the Chat list')
+  await openSidebarWorkspace('demo-app', 'Chatty')
+  await waitFor(async () => (await panes().locator('textarea[aria-label="Message"]').count()) === 2, 'chat composers in panes')
+  expect((await panes().locator('.xterm').count()) === 0, 'a chat agent rendered a terminal')
+  expect((await panes().getByRole('button', { name: /Choose CLI/ }).count()) === 0, 'agent composer offers a CLI picker')
+  expect((await panes().getByTitle('The CLI is fixed once a chat has started').count()) === 0, 'agent composer repeats the CLI')
+  expect(await panes().first().getByText(/^Chat with /).isVisible(), 'welcome with the CLI logo missing')
+  expect(await panes().first().getByRole('button', { name: /Read-only|Full access/ }).isVisible(), 'permissions picker missing')
+  const r = await invoke('chat.update', { chatId: agents[0].id, cliId: 'opencode' })
+  expect(!r.ok, "an agent's CLI could be changed")
+  await shot('g3-work-chat-ui')
+})
+
+if (process.env.E2E_CHAT) {
+  await test('Work chat agent: real Codex reply; the Kanban shows it working then idle', async () => {
+    const agents = await value('agents.list', { workspaceId: chatWs.id })
+    const codex = agents.find((a) => a.cliId === 'codex')
+    const pane = page.locator(`section[aria-label="${codex.petName} agent"]`)
+    await pane.getByLabel('Message').fill('Reply with exactly: pong')
+    await pane.getByLabel('Message').press('Enter')
+    await waitFor(async () => (await value('agents.list', { workspaceId: chatWs.id })).find((a) => a.id === codex.id).runtime.status === 'working', 'working status', 20000)
+    await pane.getByText('pong', { exact: true }).waitFor({ timeout: 120000 })
+    await waitFor(async () => (await value('agents.list', { workspaceId: chatWs.id })).find((a) => a.id === codex.id).runtime.status === 'idle', 'idle again', 30000)
+    await shot('g4-work-chat-reply')
+  })
+}
+
+await test('chat UI adapts to a narrow pane: labels collapse, nothing overflows', async () => {
+  const pane = panes().first()
+  await pane.getByRole('button', { name: /^Maximize / }).click().catch(() => undefined)
+  await page.setViewportSize({ width: 1000, height: 800 })
+  await page.waitForTimeout(300)
+  const composer = pane.locator('textarea[aria-label="Message"]').locator('xpath=ancestor::div[contains(@class, "composer")][1]')
+  const box = await composer.boundingBox()
+  const paneBox = await pane.boundingBox()
+  expect(box.x >= paneBox.x && box.x + box.width <= paneBox.x + paneBox.width + 1, 'composer overflows its pane')
+  const send = await pane.getByRole('button', { name: 'Send' }).boundingBox()
+  expect(send.x + send.width <= paneBox.x + paneBox.width, 'send button pushed out of the pane')
+  await shot('g5-chat-narrow')
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await pane.getByRole('button', { name: /^Restore / }).click().catch(() => undefined)
+})
+
+await test('attachments: dropped files and long pasted text become chips and are sent with the message', async () => {
+  const agents = await value('agents.list', { workspaceId: chatWs.id })
+  const codex = agents.find((a) => a.cliId === 'codex')
+  const pane = page.locator(`section[aria-label="${codex.petName} agent"]`)
+  await pane.locator('input[type="file"]').setInputFiles(join(repo, 'README.md'))
+  await pane.getByText('README.md').waitFor()
+  await pane.getByLabel('Message').focus()
+  await app.evaluate(({ clipboard }) => clipboard.writeText('x'.repeat(6000)))
+  await page.keyboard.press('Control+V')
+  await pane.getByText(/pasted-text-\d+\.txt/).waitFor()
+  expect((await pane.getByLabel('Message').inputValue()) === '', 'long text landed in the textarea')
+  await shot('g6-attachments')
+  // Paths that main never registered are refused.
+  const r = await invoke('chat.send', { chatId: codex.id, text: 'hi', attachments: [{ name: 'x', path: 'C:/Windows/win.ini', kind: 'file', size: 1 }] })
+  expect(!r.ok, 'an unregistered attachment path was accepted')
+})
+
+if (process.env.E2E_CHAT) {
+  await test('attachments reach the CLI: Codex reads a pasted image', async () => {
+    const agents = await value('agents.list', { workspaceId: chatWs.id })
+    const codex = agents.find((a) => a.cliId === 'codex')
+    const pane = page.locator(`section[aria-label="${codex.petName} agent"]`)
+    while (await pane.getByRole('button', { name: /^Remove / }).count()) await pane.getByRole('button', { name: /^Remove / }).first().click()
+    await pane.locator('input[type="file"]').setInputFiles(IMAGE)
+    await pane.getByText('code.png').waitFor()
+    await waitFor(async () => !(await pane.getByText('Attaching…').count()), 'attachment ready')
+    await pane.getByLabel('Message').fill('What word is written in the attached image? Reply with just that word.')
+    await pane.getByLabel('Message').press('Enter')
+    await pane.getByText(/AMBER/i).last().waitFor({ timeout: 120000 })
+    await shot('g7-image-reply')
+  })
+}
+
+await test('chats can be renamed from the Chat sidebar', async () => {
+  await page.getByRole('tab', { name: 'Chat' }).click()
+  const first = page.getByRole('navigation', { name: 'Chats' }).getByRole('listitem').first().getByRole('button').first()
+  await first.dblclick()
+  await page.getByLabel('Chat name').fill('Renamed chat')
+  await page.keyboard.press('Enter')
+  await waitFor(async () => (await value('chat.list')).some((c) => c.title === 'Renamed chat'), 'title saved')
+  await page.getByRole('navigation', { name: 'Chats' }).getByRole('button', { name: /Renamed chat demo-app/ }).click({ button: 'right' })
+  expect(await page.getByRole('menuitem', { name: 'Rename' }).isVisible(), 'rename missing from the context menu')
+  await page.keyboard.press('Escape')
+  await page.getByRole('tab', { name: 'Work' }).click()
+})
+
+await test('right-click menus: workspace actions without a ⋯ button', async () => {
+  const row = page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /^Chatty( [0-9]+)?$/ })
+  await row.click({ button: 'right' })
+  expect(await page.getByRole('menuitem', { name: 'Delete workspace' }).isVisible(), 'workspace context menu missing')
+  await page.keyboard.press('Escape')
+  expect((await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /actions$/ }).count()) === 0, '⋯ buttons still in the sidebar')
+  await page.getByRole('button', { name: 'demo-app', exact: true }).click({ button: 'right' })
+  expect(await page.getByRole('menuitem', { name: 'Remove project…' }).isVisible(), 'project context menu missing')
+  await page.keyboard.press('Escape')
+  await value('workspaces.delete', { workspaceId: chatWs.id, force: true })
+})
 
 // ======================= H. Robustness =======================
 console.log('H. Robustness & persistence')
@@ -671,30 +1009,39 @@ await test('invalid IPC payloads are rejected, never crash', async () => {
   }
 })
 
-await test('everything survives a restart; agents wait to be started', async () => {
+await test('everything survives a restart; agents come back on their own', async () => {
   await value('settings.update', { theme: 'silver' })
   await relaunch()
   expect((await page.evaluate(() => document.documentElement.dataset.theme)) === 'silver', 'theme lost')
   expect((await value('projects.list')).length === 2, 'projects lost')
   expect((await value('workspaces.list', { projectId })).some((w) => w.kind === 'main'), 'main workspace lost')
-  const agents = await value('agents.list', { workspaceId: mainWs.id })
-  expect(agents.length >= 3 && agents.every((a) => !a.runtime.running), 'agents auto-relaunched or lost')
+  expect((await value('agents.list', { workspaceId: mainWs.id })).length >= 3, 'agents lost')
+  // Durable sessions: every agent resumes by itself — nobody presses Start.
+  await waitFor(async () => (await value('agents.list', { workspaceId: mainWs.id })).every((a) => a.runtime.running), 'agents to resume', 20000)
   expect((await value('layout.get', { workspaceId: mainWs.id })) !== null, 'layout lost')
   expect((await value('chat.list')).length >= 2, 'chats lost')
   await openSidebarWorkspace('demo-app', 'Main')
-  await page.waitForSelector('text=Start agent')
+  await page.waitForTimeout(800)
+  expect((await page.getByText('Start agent').count()) === 0 && (await page.getByText('Resume session').count()) === 0, 'a Start/Resume overlay is showing')
   await value('settings.update', { theme: 'bronze' })
-})
-
-await test('Start brings a stopped agent back to life', async () => {
-  await page.getByRole('button', { name: 'Start agent' }).first().click()
-  await waitFor(async () => (await value('agents.list', { workspaceId: mainWs.id })).some((a) => a.runtime.running), 'agent to start')
 })
 
 await test('closing every agent returns to the empty workspace', async () => {
   for (const a of await value('agents.list', { workspaceId: mainWs.id })) await value('agents.close', { instanceId: a.id })
   await page.waitForSelector('text=Empty workspace')
   expect((await value('layout.get', { workspaceId: mainWs.id })) === null, 'layout not cleared')
+})
+
+await test('Main can be removed from the sidebar; its folder is untouched', async () => {
+  await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /^Main( [0-9]+)?$/ }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Remove workspace' }).click()
+  await page.getByRole('button', { name: 'Remove workspace' }).click()
+  await waitFor(async () => !(await value('workspaces.list', { projectId })).some((w) => w.kind === 'main'), 'main removed')
+  expect(existsSync(join(repo, 'README.md')), 'project folder was touched')
+  await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
+  await page.waitForSelector('dialog[open]')
+  expect((await page.getByRole('radio', { name: /Project folder/ }).getAttribute('aria-checked')) === 'true', 'main cannot be created again')
+  await page.keyboard.press('Escape')
 })
 
 await test('a corrupted state file is recovered with a notice', async () => {
@@ -706,6 +1053,7 @@ await test('a corrupted state file is recovered with a notice', async () => {
 })
 
 await close()
+fixtureServer.close()
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`)
 for (const f of failed) console.log(`  FAILED: ${f.name} — ${f.error}`)

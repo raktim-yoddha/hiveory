@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { ArrowLeft, BookOpen, Blocks, Bot, Download, Info, Palette } from 'lucide-react'
+import { ArrowLeft, BookOpen, Blocks, Bot, Download, Globe, Info, Palette } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { cx } from '../../lib/cx'
@@ -7,6 +7,7 @@ import { useNavigation, type SettingsSection } from '../../stores/navigation'
 import { AboutSection } from './AboutSection'
 import { AgentsSection } from './AgentsSection'
 import { AppearanceSection } from './AppearanceSection'
+import { BrowserSection } from './BrowserSection'
 import { ExtensionsSection } from './ExtensionsSection'
 import { GuideSection } from './guide/GuideSection'
 import { UpdatesSection } from './UpdatesSection'
@@ -14,7 +15,8 @@ import styles from './Settings.module.css'
 
 const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
   { id: 'appearance', label: 'Appearance', icon: <Palette /> },
-  { id: 'agents', label: 'Agent tools', icon: <Bot /> },
+  { id: 'agents', label: 'Agents', icon: <Bot /> },
+  { id: 'browser', label: 'Browser', icon: <Globe /> },
   { id: 'extensions', label: 'Skills & MCP', icon: <Blocks /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
   { id: 'guide', label: 'Guide', icon: <BookOpen /> },
@@ -53,6 +55,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
         <ErrorBoundary region={current.label} resetKey={current.id}>
           {current.id === 'appearance' && <AppearanceSection />}
           {current.id === 'agents' && <AgentsSection />}
+          {current.id === 'browser' && <BrowserSection />}
           {current.id === 'extensions' && <ExtensionsSection />}
           {current.id === 'updates' && <UpdatesSection />}
           {current.id === 'guide' && <GuideSection />}

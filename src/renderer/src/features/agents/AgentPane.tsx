@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, MoreHorizontal, Play, RotateCcw, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, MoreHorizontal, Play, RotateCcw, Square, X } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -10,6 +10,7 @@ import { PaneFrame } from '../panes/PaneFrame'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { TerminalView } from '../terminal/TerminalView'
 import { AddAgentMenu } from './AddAgentMenu'
+import { AgentChatView } from './AgentChatView'
 import { agentActions } from './agent-actions'
 import styles from './AgentPane.module.css'
 
@@ -74,13 +75,22 @@ export function AgentPane({
             label={`${agent.petName} actions`}
             align="end"
             items={[
-              {
-                type: 'item',
-                id: 'restart',
-                label: runtime.running ? 'Restart' : 'Start',
-                icon: runtime.running ? <RotateCcw /> : <Play />,
-                onSelect: () => void agentActions.restart(agent.id)
-              },
+              agent.chatUi
+                ? {
+                    type: 'item',
+                    id: 'restart',
+                    label: 'Stop reply',
+                    icon: <Square />,
+                    disabled: runtime.status !== 'working',
+                    onSelect: () => void agentActions.restart(agent.id)
+                  }
+                : {
+                    type: 'item',
+                    id: 'restart',
+                    label: runtime.running ? 'Restart' : 'Start',
+                    icon: runtime.running ? <RotateCcw /> : <Play />,
+                    onSelect: () => void agentActions.restart(agent.id)
+                  },
               ...(maximized
                 ? []
                 : [{ type: 'item' as const, id: 'maximize', label: 'Maximize', icon: <Maximize2 />, onSelect: toggleMaximize }]),
@@ -95,10 +105,10 @@ export function AgentPane({
         </>
       }
     >
-      <ErrorBoundary region="Terminal" compact resetKey={agent.id}>
-        <TerminalView instanceId={agent.id} />
+      <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
+        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} />}
       </ErrorBoundary>
-      {!runtime.running && (
+      {!runtime.running && !agent.chatUi && (
         <div className={styles.stopped}>
           <p className={styles.stoppedTitle}>{runtime.error ? 'Agent stopped' : runtime.activity ?? 'Not running'}</p>
           {runtime.error && <p className={styles.stoppedError}>{runtime.error}</p>}

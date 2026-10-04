@@ -65,7 +65,7 @@
 
 .kind[aria-checked='true'] {
   border-color: var(--color-bronze);
-  background: linear-gradient(180deg, var(--color-bronze-soft), var(--color-surface-raised));
+  background: var(--fill-accent-soft);
   box-shadow: var(--shadow-raised);
 }
 

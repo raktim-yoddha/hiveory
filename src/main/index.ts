@@ -39,6 +39,7 @@ const emit: Emit = (event, payload) => {
 const openWindow = (): void => {
   window = createMainWindow(targets, log, container?.settings.get().theme)
   window.on('closed', () => (window = null))
+  container?.browser.setWindow(window)
 }
 
 app.on('second-instance', () => {
@@ -74,6 +75,8 @@ app.whenReady().then(async () => {
     log
   )
   openWindow()
+  // Durable sessions: every agent comes back on its own, resuming its conversation.
+  container.agents.resumeAll()
   if (notice) {
     window?.webContents.once('did-finish-load', () => emit('app.notice', { level: 'warning', message: notice }))
   }
@@ -88,6 +91,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   if (!container) return
+  container.browser.closeAll()
   container.runtime.disposeAll()
   container.shells.disposeAll()
   container.chats.stopAll()

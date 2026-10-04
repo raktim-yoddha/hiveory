@@ -7,6 +7,8 @@ export interface HiveoryApi {
     ...payload: undefined extends RequestOf<C> ? [RequestOf<C>?] : [RequestOf<C>]
   ): Promise<Result<ResponseOf<C>>>
   on<E extends EventName>(event: E, listener: (payload: EventMap[E]) => void): () => void
+  /** Path of a dropped/pasted file from disk; '' for in-memory data (e.g. a screenshot). */
+  pathForFile(file: File): string
 }
 
 declare global {

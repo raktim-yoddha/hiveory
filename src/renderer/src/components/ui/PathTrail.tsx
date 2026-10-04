@@ -1,12 +1,17 @@
 import { useState } from 'react'
-import { Check, ChevronRight, Copy, FolderOpen, House } from 'lucide-react'
+import { Check, ChevronRight, Copy, FolderOpen, HardDrive, House, Layers } from 'lucide-react'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { pathSegments } from '../../lib/path-segments'
-import { IconButton } from './Button'
+import { pathSegments, type PathRoot } from '../../lib/path-segments'
 import styles from './PathTrail.module.css'
 
 const MAX_VISIBLE = 4
+
+const ROOT: Record<NonNullable<PathRoot> | 'none', { icon: typeof House; label: string }> = {
+  home: { icon: House, label: 'Home folder' },
+  workspaces: { icon: Layers, label: 'Hiveory workspace folder' },
+  none: { icon: HardDrive, label: 'Drive' }
+}
 
 interface PathTrailProps {
   path: string
@@ -15,13 +20,18 @@ interface PathTrailProps {
 }
 
 /**
- * A folder path as a quiet breadcrumb: "⌂ › Downloads › ade-starter-docs".
- * Middle segments collapse when deep; the full path is one click to copy.
+ * A folder path as one compact, machined control: a root chip (home, drive or
+ * a Hiveory-managed workspace), the meaningful folders, then copy / open.
+ * Long paths collapse their middle; in a narrow container only the last folder
+ * stays, so it reads well even in the side panel. The full path is in the tooltip.
  */
 export function PathTrail({ path, reveal }: PathTrailProps) {
   const [copied, setCopied] = useState(false)
-  const { home, parts } = pathSegments(path)
+  const { root, parts } = pathSegments(path)
   const visible = parts.length > MAX_VISIBLE ? [parts[0] as string, '…', ...parts.slice(-2)] : parts
+  const Root = ROOT[root ?? 'none']
+  // A drive letter is implied by the chip (and spelled out in the tooltip).
+  const crumbs = !root && /^[A-Za-z]:$/.test(visible[0] ?? '') ? visible.slice(1) : visible
 
   const copy = (): void => {
     void api('clipboard.writeText', { text: path }).then(() => {
@@ -32,26 +42,43 @@ export function PathTrail({ path, reveal }: PathTrailProps) {
 
   return (
     <div className={styles.trail}>
-      <button type="button" className={styles.crumbs} onClick={copy} title={`${path}\nClick to copy`}>
-        {home && <House className={styles.home} aria-label="Home folder" />}
-        {visible.map((part, i) => (
-          <span key={`${part}-${i}`} className={styles.segment}>
-            {(home || i > 0) && <ChevronRight className={styles.sep} aria-hidden />}
-            <span className={cx(styles.part, i === visible.length - 1 && styles.last)}>{part}</span>
+      <div className={styles.pill}>
+        <button type="button" className={styles.crumbs} onClick={copy} title={`${path}\nClick to copy`}>
+          <span className={styles.root} aria-label={Root.label}>
+            {copied ? <Check aria-hidden /> : <Root.icon aria-hidden />}
           </span>
-        ))}
-        <span className={styles.copy} aria-hidden>
-          {copied ? <Check /> : <Copy />}
-        </span>
-        <span className="sr-only">{copied ? 'Path copied' : 'Copy path'}</span>
-      </button>
-      {reveal && (
-        <IconButton
-          label="Open folder"
-          icon={<FolderOpen />}
-          onClick={() => void api('system.revealPath', reveal).catch(() => undefined)}
-        />
-      )}
+          {crumbs.map((part, i) => {
+            const last = i === crumbs.length - 1
+            return (
+              <span key={`${part}-${i}`} className={cx(styles.segment, !last && styles.middle)}>
+                {last && i > 0 && (
+                  <span className={styles.collapsed} aria-hidden>
+                    …
+                  </span>
+                )}
+                {i > 0 && <ChevronRight className={styles.sep} aria-hidden />}
+                <span className={cx(styles.part, last && styles.last)}>{part}</span>
+              </span>
+            )
+          })}
+          <span className="sr-only">{copied ? 'Path copied' : 'Copy path'}</span>
+        </button>
+        <span className={styles.divider} aria-hidden />
+        <button type="button" className={styles.action} onClick={copy} aria-label="Copy path" title="Copy path">
+          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
+        </button>
+        {reveal && (
+          <button
+            type="button"
+            className={styles.action}
+            aria-label="Open folder"
+            title="Open folder"
+            onClick={() => void api('system.revealPath', reveal).catch(() => undefined)}
+          >
+            <FolderOpen aria-hidden />
+          </button>
+        )}
+      </div>
     </div>
   )
 }

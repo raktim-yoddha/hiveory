@@ -14,9 +14,7 @@
   overflow: hidden;
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
-  background:
-    radial-gradient(600px 220px at 85% -40px, var(--color-bronze-soft), transparent 70%),
-    linear-gradient(180deg, var(--color-surface-raised), var(--color-surface-inset));
+  background: var(--fill-hero);
   box-shadow: var(--shadow-raised);
 }
 
@@ -86,7 +84,7 @@
   padding: var(--space-7);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  background: var(--fill-raised);
   box-shadow: var(--shadow-raised);
   text-align: left;
   transition:

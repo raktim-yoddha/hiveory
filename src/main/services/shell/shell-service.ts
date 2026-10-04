@@ -8,20 +8,29 @@ export interface ShellServiceEvents {
   data: [id: string, data: string, offset: number]
 }
 
+/**
+ * Side-panel terminals are narrow, and workspace folders live deep in app data;
+ * a prompt showing only the folder name keeps commands on one line (the full
+ * path is in the panel header). Single quotes only: the line passes through a
+ * Windows command line unchanged.
+ */
+const COMPACT_POWERSHELL = ['-NoLogo', '-NoExit', '-Command', "function prompt { 'PS ' + (Split-Path -Leaf $PWD) + '> ' }"]
+
 /** The user's interactive shell for this platform. */
 export const defaultShell = (env: NodeJS.ProcessEnv = process.env): { file: string; args: string[] } => {
   if (process.platform === 'win32') {
     // Prefer PowerShell 7, then Windows PowerShell; both ship a usable interactive prompt.
     const pwsh = (env.ProgramFiles ?? 'C:\\Program Files') + '\\PowerShell\\7\\pwsh.exe'
-    if (existsSync(pwsh)) return { file: pwsh, args: ['-NoLogo'] }
-    return { file: 'powershell.exe', args: ['-NoLogo'] }
+    if (existsSync(pwsh)) return { file: pwsh, args: COMPACT_POWERSHELL }
+    return { file: 'powershell.exe', args: COMPACT_POWERSHELL }
   }
   return { file: env.SHELL || '/bin/bash', args: ['-l'] }
 }
 
 /**
- * Plain shell terminals for the right sidebar, one per Workspace (or project
- * folder). Not agents: they never appear on the Kanban or count as instances.
+ * Plain shell terminals for the right sidebar: any number per Workspace (or
+ * project folder), one per side-panel tab. Not agents: they never appear on
+ * the Kanban or count as instances.
  */
 export class ShellService extends EventEmitter<ShellServiceEvents> {
   private readonly shells = new Map<string, { pty: PtySession; cwd: string }>()

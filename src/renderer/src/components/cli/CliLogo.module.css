@@ -27,6 +27,11 @@
   height: var(--logo-lg);
 }
 
+.xl {
+  width: var(--logo-xl);
+  height: var(--logo-xl);
+}
+
 .monogram {
   display: grid;
   place-items: center;

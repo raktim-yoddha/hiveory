@@ -85,9 +85,11 @@ Conceptually:
 --color-danger
 ```
 
-Implemented palette: warm graphite surfaces with a bronze undertone,
-champagne-silver text and metallic accents; saturated color only for status
-(ADR 0011, `src/renderer/src/styles/tokens.css`).
+Implemented palettes (`src/renderer/src/styles/tokens.css`): **Dark** (default) —
+pure black and neutral grey, perfectly flat, no gradients or sheen; **Bronze** —
+warm graphite with champagne-silver text and metallic accents; **Silver** — cool
+graphite with brushed-silver accents. Saturated color only for status. Component
+fills are `--fill-*` tokens so a theme can flatten them (ADR 0011, 0012, 0013).
 
 Do not scatter literal colors across components.
 
@@ -163,7 +165,7 @@ Exactly two modes, labelled (ADR 0012):
 Work | Chat
 ```
 
-The title bar also holds the side-panel toggle (terminal, browser soon) and the
+The title bar also holds the side-panel toggle (terminals and the built-in browser) and the
 app Settings gear. Development builds show an inverted DEV chip after the name.
 
 Do not add Agent mode.

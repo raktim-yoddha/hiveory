@@ -11,14 +11,17 @@ interface DeleteWorkspaceDialogProps {
 }
 
 /**
- * Deletes an isolated Workspace. Uncommitted changes require a second,
- * explicit confirmation; unmerged branches are always kept.
+ * Deletes an isolated Workspace, or removes the main one. Removing Main only
+ * forgets it — the project folder is never touched. For isolated Workspaces,
+ * uncommitted changes need a second, explicit confirmation and unmerged
+ * branches are always kept.
  */
 export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDialogProps) {
   const [force, setForce] = useState(false)
   const [busy, setBusy] = useState(false)
   const view = useNavigation((s) => s.view)
   const openProject = useNavigation((s) => s.openProject)
+  const isMain = workspace.kind === 'main'
 
   const confirm = async (): Promise<void> => {
     setBusy(true)
@@ -34,10 +37,29 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
       onClose()
     } catch (error) {
       if (error instanceof HiveoryError && error.error.code === 'WORKTREE_DIRTY') setForce(true)
-      else reportError(error, 'Delete workspace')
+      else reportError(error, isMain ? 'Remove workspace' : 'Delete workspace')
     } finally {
       setBusy(false)
     }
+  }
+
+  if (isMain) {
+    return (
+      <ConfirmDialog
+        open
+        danger
+        busy={busy}
+        title={`Remove ${workspace.name}?`}
+        confirmLabel="Remove workspace"
+        onConfirm={() => void confirm()}
+        onClose={onClose}
+      >
+        <p>
+          Its agents will stop and close. The project folder and its files are not touched — you can create the main
+          workspace again at any time.
+        </p>
+      </ConfirmDialog>
+    )
   }
 
   return (

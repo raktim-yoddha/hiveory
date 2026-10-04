@@ -9,6 +9,7 @@
   display: grid;
   flex: 1;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--gutter);
   min-height: 0;
   padding: 0 var(--page-padding) var(--page-padding);
@@ -26,9 +27,49 @@
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--side-panel-width);
 }
 
+.sidebar,
+.content,
 .panel {
+  position: relative;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
+}
+
+/* Explicit columns: a maximized panel overlaps the main column instead of pushing it around. */
+.sidebar {
+  grid-column: 1;
+}
+
+.content {
+  grid-column: 1;
+}
+
+.withSidebar .content {
+  grid-column: 2;
+}
+
+.panel {
+  grid-column: -2;
+}
+
+/* Maximized: the panel spans the main column too, on top of it. The main area keeps its size underneath. */
+.panelMaximized {
+  z-index: var(--z-panel);
+  grid-column: 1 / -1;
+}
+
+.withSidebar .panelMaximized {
+  grid-column: 2 / -1;
+}
+
+/* Handles sit in the gutter next to their sidebar. */
+.sidebarHandle {
+  right: calc(var(--gutter) * -1);
+}
+
+.panelHandle {
+  left: calc(var(--gutter) * -1);
 }
 
 /* Both modes stay mounted; the inactive one is hidden, not unmounted. */
@@ -38,12 +79,6 @@
 
 .mode[hidden] {
   display: none;
-}
-
-.sidebar,
-.content {
-  min-width: 0;
-  min-height: 0;
 }
 
 /* Generic page surface for simple screens. */

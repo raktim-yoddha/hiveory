@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { CHANNELS, EVENT_NAMES, IPC_PREFIX, type Channel, type EventName } from '@shared/ipc/contract'
 import type { HiveoryApi } from './api'
 
@@ -19,6 +19,14 @@ const api: HiveoryApi = {
     const wrapped = (_e: IpcRendererEvent, payload: unknown): void => listener(payload)
     ipcRenderer.on(IPC_PREFIX + event, wrapped)
     return () => ipcRenderer.removeListener(IPC_PREFIX + event, wrapped)
+  },
+  // The on-disk path of a file the user dropped or pasted (no file contents cross the bridge).
+  pathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
   }
 } as HiveoryApi
 

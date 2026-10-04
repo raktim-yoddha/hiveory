@@ -5,6 +5,7 @@ import '@fontsource-variable/jetbrains-mono'
 import './styles/tokens.css'
 import './styles/base.css'
 import { AppShell } from './features/shell/AppShell'
+import { useBrowser } from './stores/browser'
 import { installEventBridge } from './stores/bridge'
 import { refreshTerminalTheme } from './features/terminal/terminal-registry'
 import { useApp, useClis, useSettings } from './stores/data'
@@ -23,6 +24,7 @@ function App() {
     void useApp.getState().load()
     void useClis.getState().load()
     void useSettings.getState().load()
+    void useBrowser.getState().load()
     return uninstall
   }, [])
   useEffect(() => {

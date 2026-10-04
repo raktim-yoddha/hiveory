@@ -1,7 +1,9 @@
+import type { CSSProperties } from 'react'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
+import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
 import { cx } from '../../lib/cx'
-import { useNavigation } from '../../stores/navigation'
+import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
 import { ProjectScreen } from '../project/ProjectScreen'
@@ -16,26 +18,40 @@ import styles from './AppShell.module.css'
 /**
  * Top-level layout. Work and Chat both stay mounted — switching modes only
  * hides one — so neither ever "sleeps". Each region has its own error boundary.
+ * Both sidebars are resizable; a maximized side panel overlays the main area
+ * (which keeps its size, so agent terminals never reflow).
  */
 export function AppShell() {
-  const { mode, view, sidebarCollapsed, rightPanel } = useNavigation()
+  const { mode, view, sidebarCollapsed, sidebarWidth, setSidebarWidth, panelOpen, panelWidth, setPanelWidth, panelMaximized } =
+    useNavigation()
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
-  const showPanel = Boolean(rightPanel) && !inSettings
+  const showPanel = panelOpen && !inSettings
   const workView = view.type === 'settings' ? view.returnTo : view
   const viewKey = workView.type === 'home' ? 'home' : workView.type === 'project' ? `p:${workView.projectId}` : `w:${workView.workspaceId}`
+  const widths = { '--sidebar-width': `${sidebarWidth}px`, '--side-panel-width': `${panelWidth}px` } as CSSProperties
 
   return (
     <div className={styles.app}>
       <ErrorBoundary region="Title bar" compact>
         <TitleBar />
       </ErrorBoundary>
-      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel)}>
+      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel)} style={widths}>
         {showSidebar && (
           <aside className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
               {mode === 'chatspace' ? <ChatSidebar /> : <ProjectSidebar />}
             </ErrorBoundary>
+            <ResizeHandle
+              label="Resize sidebar"
+              className={styles.sidebarHandle}
+              value={sidebarWidth}
+              min={SIDEBAR_WIDTH.min}
+              max={SIDEBAR_WIDTH.max}
+              initial={SIDEBAR_WIDTH.initial}
+              direction={1}
+              onChange={setSidebarWidth}
+            />
           </aside>
         )}
         <main className={styles.content}>
@@ -66,9 +82,23 @@ export function AppShell() {
             </ErrorBoundary>
           </div>
         </main>
-        {showPanel && rightPanel && (
-          <div className={styles.panel}>
-            <SidePanel panel={rightPanel} />
+        {showPanel && (
+          <div className={cx(styles.panel, panelMaximized && styles.panelMaximized)}>
+            {!panelMaximized && (
+              <ResizeHandle
+                label="Resize side panel"
+                className={styles.panelHandle}
+                value={panelWidth}
+                min={PANEL_WIDTH.min}
+                max={PANEL_WIDTH.max}
+                initial={PANEL_WIDTH.initial}
+                direction={-1}
+                onChange={setPanelWidth}
+              />
+            )}
+            <ErrorBoundary region="Side panel" compact>
+              <SidePanel />
+            </ErrorBoundary>
           </div>
         )}
       </div>

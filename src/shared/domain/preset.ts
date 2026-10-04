@@ -6,4 +6,6 @@ export interface AgentPreset {
   name: string
   cliSelections: CliSelection[]
   autoApprove: boolean
+  /** Agents use the chat view instead of a terminal (ADR 0013). */
+  chatUi?: boolean
 }

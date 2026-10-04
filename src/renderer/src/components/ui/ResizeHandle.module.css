@@ -1,0 +1,31 @@
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: var(--z-pane-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--gutter);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.handle::after {
+  content: '';
+  width: var(--space-1);
+  height: var(--space-10);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.handle:hover::after,
+.handle:focus-visible::after,
+.active::after {
+  background: var(--color-border-strong);
+}
+
+.handle:focus-visible {
+  outline: none;
+}

@@ -363,9 +363,9 @@ On restart:
 3. restore Presets
 4. reconcile Git state
 5. reconcile stale runtime instances
-6. let the user/Workspace policy determine whether CLI processes are relaunched
+6. relaunch every terminal agent, each resuming its own conversation (ADR 0014)
 
-Do not assume automatic process resurrection unless explicitly implemented and documented.
+Automatic resurrection is implemented and documented in ADR 0014 (durable sessions).
 
 ## Future Integration Boundary
 
@@ -465,6 +465,7 @@ src/
 │       ├── pty/                PtySession (deferred spawn, scrollback, headless mirror), env, shim resolver
 │       ├── shell/              ShellService — side-panel terminals
 │       ├── agent-tools/        MCP protocol + AgentTools (agents coordinating agents)
+│       ├── browser/            BrowserService (pages = WebContentsViews), PageDriver (CDP input), page script, BrowserTools (MCP)
 │       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
 │       ├── extensions/         Skills & MCP inventory
 │       ├── settings/ updates/  App settings (themes…), electron-updater
@@ -492,6 +493,10 @@ process lifecycle (`launch/stop/write/resize`) is generic in
 
 Status detection: ADR 0006. Data locations: ADR 0008. Fault isolation: ADR 0009.
 Agent tools (MCP), Chat, Git options, themes, side panel, updates: ADR 0012.
+Crash recovery, chat view in Work (`ChatSession.agentId`), side-panel tabs,
+resizable sidebars, Dark theme: ADR 0013. Durable sessions (resume on start-up,
+per-CLI resume), chat attachments, Permissions pill: ADR 0014. Built-in agent
+browser (pages in main, browser_* MCP tools, profiles, viewports): ADR 0015.
 
 ### Agent tools data flow
 
@@ -500,7 +505,21 @@ agent CLI ──MCP (HTTP, bearer)──▶ HookServer /mcp/<instanceId> ──�
                                                                      ├─ AgentService (open/close)
                                                                      ├─ CliRuntimeManager (read screen, write input, status)
                                                                      ├─ LayoutService (arrange)
-                                                                     └─ ShellService (terminal)
+                                                                     ├─ ShellService (terminal)
+                                                                     └─ BrowserTools ─▶ BrowserService ─▶ PageDriver
+```
+
+### Browser data flow
+
+```text
+agent ──browser_* (MCP)──▶ BrowserTools ─▶ BrowserService (pages: WebContentsView, always alive)
+                                               │           ▲
+                                               ▼           │ browser.show(bounds | null)
+                                         PageDriver        │
+                                               │      Side panel BrowserPane (main lays the
+                                               ▼       native view over its box)
+                              webContents.debugger (Input, Emulation, screenshots)
+                              isolated-world script (snapshot, refs @N, cursor, picker)
 ```
 
 ### Chat data flow

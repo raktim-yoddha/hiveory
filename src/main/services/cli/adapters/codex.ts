@@ -11,7 +11,7 @@ export const codexAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
-  buildLaunch({ instance, autoApprove, hook, mcp }) {
+  buildLaunch({ instance, autoApprove, hook, mcp, resume, soleOfCli }) {
     const args: string[] = mcp ? codexMcpArgs(mcp) : []
     const env: Record<string, string> = mcp ? { HIVEORY_MCP_TOKEN: mcp.token } : {}
     if (hook) {
@@ -25,12 +25,18 @@ export const codexAdapter: CliAdapter = {
       args.push('-c', `notify=${JSON.stringify(notify)}`)
     }
     if (autoApprove) args.push('--dangerously-bypass-approvals-and-sandbox')
+    // Resume: the exact thread id reported by notify; otherwise the folder's latest session when unambiguous.
+    const thread = instance.providerSessionId
+    if (resume && thread) return { args: ['resume', ...args, thread], env }
+    if (resume && soleOfCli) return { args: ['resume', '--last', ...args], env }
     return { args, env }
   },
 
   mapHookEvent(_event, payload) {
     return field(payload, 'type') === 'agent-turn-complete' ? { type: 'turn-complete' } : null
   },
+
+  sessionIdFromHook: (_event, payload) => field(payload, 'thread-id'),
 
   heuristics() {
     // notify only reports turn completion; working/waiting come from the PTY.

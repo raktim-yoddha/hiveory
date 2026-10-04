@@ -1,5 +1,6 @@
 import { subscribe } from '../lib/api'
 import { useAgents, useLayouts, usePresets, useProjects, useSettings, useUpdates, useWorkspaces } from './data'
+import { useBrowser } from './browser'
 import { useChat } from './chat'
 import { useNotices } from './notices'
 
@@ -41,7 +42,8 @@ export const installEventBridge = (): (() => void) => {
     subscribe('runtime.changed', ({ instanceId, runtime }) => useAgents.getState().setRuntime(instanceId, runtime)),
     subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
     subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
-    subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary))
+    subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary)),
+    subscribe('browser.changed', (state) => useBrowser.getState().set(state))
   ]
   return () => {
     if (timer) clearTimeout(timer)

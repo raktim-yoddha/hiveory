@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
-import { FolderGit2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { FolderGit2, Plus } from 'lucide-react'
+import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { PathTrail } from '../../components/ui/PathTrail'
@@ -8,6 +9,7 @@ import { api } from '../../lib/api'
 import { useProjects } from '../../stores/data'
 import { useNavigation, type ProjectTab } from '../../stores/navigation'
 import { KanbanBoard } from '../kanban/KanbanBoard'
+import { CreateWorkspaceDialog } from '../workspace-create/CreateWorkspaceDialog'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
 import { PullRequestsTab } from './PullRequestsTab'
 import { WorkspacesTab } from './WorkspacesTab'
@@ -34,6 +36,7 @@ const REGION: Record<ProjectTab, string> = {
 export function ProjectScreen({ projectId, tab }: { projectId: string; tab: ProjectTab }) {
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
   const openProject = useNavigation((s) => s.openProject)
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     void api('projects.touch', { projectId }).catch(() => undefined)
@@ -51,6 +54,9 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
       </header>
       <div className={styles.tabs}>
         <Tabs label="Project sections" options={TABS} value={tab} onChange={(next) => openProject(projectId, next)} />
+        <Button size="sm" variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+          New workspace
+        </Button>
       </div>
       <div className={styles.content} role="tabpanel" aria-label={REGION[tab]}>
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>
@@ -60,6 +66,7 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
           {tab === 'settings' && <ProjectSettingsTab project={project} />}
         </ErrorBoundary>
       </div>
+      {creating && <CreateWorkspaceDialog projectId={projectId} onClose={() => setCreating(false)} />}
     </section>
   )
 }

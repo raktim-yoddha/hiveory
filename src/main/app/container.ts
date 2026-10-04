@@ -1,6 +1,9 @@
+import { join } from 'node:path'
 import { AgentTools } from '../services/agent-tools/agent-tools'
 import { handleBody } from '../services/agent-tools/mcp-protocol'
 import { AgentService } from '../services/agents/agent-service'
+import { BrowserService } from '../services/browser/browser-service'
+import { BrowserTools } from '../services/browser/browser-tools'
 import { ExtensionsService } from '../services/extensions/extensions-service'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
@@ -36,23 +39,20 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
 
   let hookServer: HookServer | null = null
   let settings: SettingsService | null = null
-  const runtime = new CliRuntimeManager(
-    registry,
-    log,
-    paths.runtimeDir,
-    () => hookServer?.endpoint,
-    // Agent tools ride on the same loopback server and token as status hooks.
-    (instanceId) => {
-      const endpoint = hookServer?.endpoint
-      if (!endpoint || !settings?.get().agentTools) return undefined
-      return { url: `${endpoint.baseUrl}/mcp/${instanceId}`, token: endpoint.token }
-    }
-  )
+  // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
+  const mcpFor = (id: string) => {
+    const endpoint = hookServer?.endpoint
+    if (!endpoint || !settings?.get().agentTools) return undefined
+    return { url: `${endpoint.baseUrl}/mcp/${id}`, token: endpoint.token, browser: settings.get().browserUse }
+  }
+  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
 
   const workspaceRepo = new WorkspaceRepository(store)
   const layouts = new LayoutService(store, emit)
-  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, emit)
+  const chatStore = new ChatStore(paths.chatsDir, log)
+  const chats = new ChatService(chatStore, registry, workspaceRepo, log, emit, join(paths.chatsDir, 'attachments'), mcpFor, join(paths.runtimeDir, 'chat'))
+  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, emit, chats)
   const projects = new ProjectService(store, git, agents, emit)
   const workspaces = new WorkspaceService(workspaceRepo, git, worktrees, agents, paths.worktreeRoot, emit)
   const presets = new PresetService(store, emit)
@@ -60,14 +60,28 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const updates = new UpdateService(updater, log, emit)
   const shells = new ShellService()
   const extensions = new ExtensionsService(log)
-  const chatStore = new ChatStore(paths.chatsDir, log)
-  const chats = new ChatService(chatStore, registry, workspaceRepo, log, emit)
-  const toolDeps = { agents, runtime, layouts, workspaces: workspaceRepo, registry, shells }
+  const browser = new BrowserService(store, settings, emit, log)
+  const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
+  const toolDeps = {
+    agents,
+    runtime,
+    layouts,
+    workspaces: workspaceRepo,
+    registry,
+    shells,
+    chats,
+    browser: () => (settings?.get().browserUse ? browserTools : null)
+  }
   hookServer.setMcpHandler(async (instanceId, body) => {
-    if (!settings?.get().agentTools || !agents.find(instanceId)) {
-      return { jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Agent tools are turned off in Hiveory settings.' } }
-    }
-    return handleBody(body, new AgentTools(toolDeps, instanceId))
+    const refuse = (message: string) => ({ jsonrpc: '2.0', id: null, error: { code: -32001, message } })
+    if (!settings?.get().agentTools) return refuse('Agent tools are turned off in Hiveory settings.')
+    if (agents.find(instanceId)) return handleBody(body, new AgentTools(toolDeps, instanceId))
+    // A Chat-mode chat (not a Work agent) gets the browser only.
+    const chat = chatStore.get(instanceId)
+    if (!chat) return refuse('This agent is no longer registered in Hiveory.')
+    if (!settings.get().browserUse) return refuse('Browser use is turned off in Hiveory settings.')
+    const caller = { id: chat.id, workspaceId: chat.projectId ?? `chat-${chat.id}`, petName: 'Chat' }
+    return handleBody(body, { list: () => browserTools.definitions(), call: (name, args) => browserTools.call(caller, name, args) })
   })
 
   return {
@@ -88,6 +102,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     shells,
     extensions,
     chatStore,
-    chats
+    chats,
+    browser
   }
 }

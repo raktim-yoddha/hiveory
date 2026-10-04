@@ -171,10 +171,16 @@ describe('workspace creation', () => {
 })
 
 describe('workspace deletion', () => {
-  it('never deletes the main workspace', async () => {
-    const { service } = setup()
+  it('removes the main workspace from Hiveory without any Git or folder work', async () => {
+    const { service, worktrees, agents, repo } = setup()
     await service.create({ ...input, kind: 'main', name: 'Main' })
-    expect(await code(service.delete(mainWorkspaceId(project.id), false))).toBe('FORBIDDEN')
+    expect(await service.delete(mainWorkspaceId(project.id), false)).toEqual({})
+    expect(worktrees.remove).not.toHaveBeenCalled()
+    expect(worktrees.prune).not.toHaveBeenCalled()
+    expect(agents.forgetWorkspace).toHaveBeenCalledWith(mainWorkspaceId(project.id))
+    expect(repo.find(mainWorkspaceId(project.id))).toBeUndefined()
+    // It can be created again afterwards.
+    await service.create({ ...input, kind: 'main', name: 'Main' })
   })
 
   it('stops agents before removing the worktree and keeps unmerged branches', async () => {

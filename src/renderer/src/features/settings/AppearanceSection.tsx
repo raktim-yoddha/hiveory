@@ -6,6 +6,7 @@ import styles from './Settings.module.css'
 
 /** Literal swatches: each card previews its own theme regardless of the active one. */
 const PREVIEW: Record<ThemeId, { bg: string; panel: string; pane: string; accent: string }> = {
+  dark: { bg: '#000000', panel: '#0d0d0d', pane: '#151515', accent: '#e0e0e0' },
   bronze: { bg: '#080706', panel: '#14110e', pane: '#1b1814', accent: 'linear-gradient(180deg, #f1e9dc, #bba98c)' },
   silver: { bg: '#070809', panel: '#121418', pane: '#191b1f', accent: 'linear-gradient(180deg, #f5f7fa, #aeb5c0)' }
 }

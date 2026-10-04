@@ -57,7 +57,7 @@
 }
 
 .secondary {
-  background: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  background: var(--fill-raised);
   border-color: var(--color-border);
   color: var(--color-text);
   box-shadow: var(--shadow-raised);

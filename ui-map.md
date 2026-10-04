@@ -23,6 +23,22 @@
 
 Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010).
 
+### Side panel browser tab (ADR 0015)
+
+```text
+┌ [Terminal] [Milo · GitHub ×] [New tab ×] [+] ─────────── ⤢ × ┐
+│ ← → ⟳ ( github.com/acme/app       [Work] [375×667] )  ⌖ ✎ ▭ </> ⋯ │
+│ Milo is using this page                                       │
+│ ┌───────────────────────────────────────────────────────────┐ │
+│ │                  native page view                         │ │
+│ └───────────────────────────────────────────────────────────┘ │
+└───────────────────────────────────────────────────────────────┘
+```
+
+⌖ pick element (copies it), ✎ annotate (note for agents), ▭ viewport sizes,
+</> developer tools; ⋯ holds profiles, cookies and Browser settings. Narrow
+panels fold ⌖ ✎ </> into ⋯.
+
 ## Project
 
 ```text

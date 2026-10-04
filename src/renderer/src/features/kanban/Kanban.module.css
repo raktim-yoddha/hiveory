@@ -78,7 +78,7 @@
   padding: var(--space-6);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  background: var(--fill-raised);
   box-shadow: var(--shadow-raised);
   text-align: left;
   animation: card-in var(--duration-slow) var(--ease-out);

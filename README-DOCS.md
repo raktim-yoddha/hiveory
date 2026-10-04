@@ -22,6 +22,9 @@
 - `adr/0010-workspace-and-agent-lifecycle.md`
 - `adr/0011-ui-feedback-round-1.md`
 - `adr/0012-feedback-round-2.md`
+- `adr/0013-feedback-round-3.md`
+- `adr/0014-feedback-round-4.md`
+- `adr/0015-agent-browser.md`
 
 ## Research
 

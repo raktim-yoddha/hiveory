@@ -20,7 +20,8 @@ export const serializePreset = (preset: AgentPreset): AgentPreset => ({
   id: preset.id,
   name: preset.name.trim(),
   cliSelections: normalizeSelections(preset.cliSelections),
-  autoApprove: preset.autoApprove
+  autoApprove: preset.autoApprove,
+  chatUi: preset.chatUi ?? false
 })
 
 export const totalInstances = (selections: CliSelection[]): number =>

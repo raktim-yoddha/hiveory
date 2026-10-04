@@ -82,12 +82,12 @@ describe('MCP injection per CLI', () => {
     expect(injecting.sort()).toEqual(['claude', 'codex', 'copilot', 'kilocode', 'opencode'])
     for (const id of injecting) {
       const adapter = BUILT_IN_ADAPTERS.find((a) => a.id === id)!
-      const without = JSON.stringify(adapter.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt' }))
-      const withMcp = JSON.stringify(adapter.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt', mcp }))
+      const without = JSON.stringify(adapter.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt', resume: false, soleOfCli: true }))
+      const withMcp = JSON.stringify(adapter.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt', resume: false, soleOfCli: true, mcp }))
       expect(without, id).not.toContain('/mcp/i1')
       expect(withMcp.includes('/mcp/i1') || withMcp.includes('hiveory-mcp.json'), id).toBe(true)
     }
-    const claude = BUILT_IN_ADAPTERS.find((a) => a.id === 'claude')!.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt', mcp })
+    const claude = BUILT_IN_ADAPTERS.find((a) => a.id === 'claude')!.buildLaunch({ instance, cwd: '/', autoApprove: false, runtimeDir: '/rt', mcp, resume: false, soleOfCli: true })
     expect(claude.args).toEqual(expect.arrayContaining(['--mcp-config', '--allowedTools', 'mcp__hiveory']))
   })
 })
@@ -131,7 +131,11 @@ describe('settings persistence', () => {
       ...DEFAULT_SETTINGS,
       theme: 'silver'
     })
-    expect(parseState({ settings: { theme: 'neon' } }).state.settings.theme).toBe('bronze')
+    expect(parseState({ settings: { theme: 'neon' } }).state.settings.theme).toBe('dark')
+    expect(parseState({ settings: { defaultChatUi: true, defaultAutoApprove: 'no' } }).state.settings).toMatchObject({
+      defaultChatUi: true,
+      defaultAutoApprove: false
+    })
   })
 
   it('rejects corrupt layouts so they are rebuilt', () => {

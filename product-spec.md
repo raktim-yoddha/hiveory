@@ -181,7 +181,7 @@ Main Workspace:
 
 - is created by the user ("Create workspace" → "Project folder"), at most one per Project (ADR 0011)
 - maps to the original project folder
-- cannot be deleted
+- is never deleted from disk; it can be removed from Hiveory (agents close, folder untouched) and created again (ADR 0013)
 - can run CLI instances
 - participates in the same Kanban as isolated Workspaces
 
@@ -193,6 +193,16 @@ Isolated Workspace:
 - uses a local branch
 - can run multiple CLI instances
 - can be deleted according to workspace lifecycle rules
+
+## Built-in Browser
+
+The side panel's Browser tab is a real browser (ADR 0015):
+
+- toolbar: back, forward, reload, address bar (bare hosts and searches work), pick element, annotate element, viewport sizes, developer tools, and a menu with profiles, cookie import/export/clear and Browser settings
+- agents drive it through `browser_*` MCP tools with a visible cursor; it is on by default and works while the panel is closed
+- pages an agent opens appear as tabs in its workspace's side panel, named after the agent
+- profiles keep separate cookies and logins; viewports emulate phones, tablets and desktops
+- Settings › Browser: browser use, agent cursor, home page, default profile, profiles, custom viewport sizes
 
 ## Important Non-Features
 

@@ -73,7 +73,7 @@
 }
 
 .navActive {
-  background: linear-gradient(90deg, var(--color-bronze-soft), var(--color-surface-active) 70%);
+  background: var(--fill-selected);
   color: var(--color-text);
 }
 
@@ -126,6 +126,14 @@
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
+}
+
+.groupNote {
+  margin: 0;
+  padding: 0 var(--space-7) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .row {
@@ -315,7 +323,7 @@
   width: var(--space-11);
   height: var(--space-11);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-raised));
+  background: var(--fill-icon);
   box-shadow: var(--shadow-raised);
   color: var(--color-accent);
 }
@@ -354,4 +362,29 @@
   width: 45%;
   height: var(--space-4);
   border-radius: var(--radius-pill);
+}
+
+/* A one-line add form under a list (new profile, custom viewport). */
+.inlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-7) var(--space-5);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.groupNote + .inlineForm {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.inlineForm > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.inlineForm > .numberInput {
+  flex: none;
+  width: calc(var(--space-11) * 2);
 }

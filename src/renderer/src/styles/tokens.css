@@ -45,6 +45,15 @@
   --gradient-surface: linear-gradient(180deg, var(--color-surface-top) 0%, var(--color-surface) 120px);
   --gradient-bronze-line: linear-gradient(90deg, transparent, rgb(176 141 98 / 0.55), transparent);
   --gradient-app: radial-gradient(1200px 520px at 50% -180px, rgb(176 141 98 / 0.1), transparent 70%);
+  /* Component fills (the Dark theme flattens every one of them to a single color). */
+  --fill-raised: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
+  --fill-icon: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-raised));
+  --fill-active: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-hover));
+  --fill-selected: linear-gradient(90deg, var(--color-bronze-soft), var(--color-surface-active) 70%);
+  --fill-accent-soft: linear-gradient(180deg, var(--color-bronze-soft), var(--color-surface-raised));
+  --fill-glass-accent: linear-gradient(180deg, var(--color-bronze-soft), var(--color-glass));
+  --fill-hero: radial-gradient(600px 220px at 85% -40px, var(--color-bronze-soft), transparent 70%),
+    linear-gradient(180deg, var(--color-surface-raised), var(--color-surface-inset));
 
   /* Status */
   --color-idle: #776d61;
@@ -135,16 +144,23 @@
   --logo-sm: 14px;
   --logo-md: 17px;
   --logo-lg: 22px;
+  --logo-xl: 40px;
   --logo-brand: 22px;
   --titlebar-height: 44px;
   --titlebar-controls-width: 140px;
+  /* Defaults; the shell overrides both with the user's resized widths. */
   --sidebar-width: 248px;
   --side-panel-width: 420px;
   --pane-header-height: 30px;
   --pane-min-width: 240px;
   --pane-min-height: 140px;
   --dialog-width: 520px;
+  /* Chat: a wide reading column with slim side gutters. */
+  --chat-max-width: 1200px;
+  --chat-gutter: 16px;
   --menu-min-width: 200px;
+  /* Longest side-panel tab title before it truncates. */
+  --panel-tab-max-width: 180px;
   --menu-max-height: 70vh;
   --kanban-column-min: 240px;
   --border-width: 1px;
@@ -178,6 +194,7 @@
   --z-pane-overlay: 10;
   --z-dropzone: 20;
   --z-drag: 30;
+  --z-panel: 40;
   --z-menu: 50;
   --z-dialog: 60;
   --z-toast: 70;
@@ -234,4 +251,70 @@
   --term-bright-black: #5a5f68;
   --term-white: #cfd3da;
   --term-bright-white: #f7f8fa;
+}
+
+/*
+ * Dark theme: pure black and neutral silver-grey. Perfectly flat — no hue, no
+ * gradients, no sheen — so every surface of a kind is exactly one color.
+ */
+:root[data-theme='dark'] {
+  --color-bg: #000000;
+  --color-surface: #0d0d0d;
+  --color-surface-top: #0d0d0d;
+  --color-surface-raised: #151515;
+  --color-surface-hover: #1c1c1c;
+  --color-surface-active: #262626;
+  --color-surface-inset: #080808;
+  --color-pane-header: #141414;
+  --color-pane-header-edge: #232323;
+  --color-overlay: rgb(0 0 0 / 0.7);
+  --color-glass: rgb(21 21 21 / 0.92);
+
+  --color-border-subtle: #1a1a1a;
+  --color-border: #262626;
+  --color-border-strong: #3a3a3a;
+  --color-sheen: transparent;
+  --color-sheen-strong: transparent;
+
+  --color-text: #ededed;
+  --color-text-secondary: #b0b0b0;
+  --color-text-muted: #7c7c7c;
+  --color-text-faint: #4a4a4a;
+
+  --color-accent: #d4d4d4;
+  --color-accent-hover: #ececec;
+  --color-accent-contrast: #0a0a0a;
+  --color-bronze: #a3a3a3;
+  --color-bronze-soft: rgb(255 255 255 / 0.07);
+  --color-focus: #a3a3a3;
+  --color-idle: #6e6e6e;
+
+  --gradient-metal: linear-gradient(#e0e0e0, #e0e0e0);
+  --gradient-metal-hover: linear-gradient(#f0f0f0, #f0f0f0);
+  --gradient-surface: none;
+  --gradient-bronze-line: linear-gradient(#bdbdbd, #bdbdbd);
+  --gradient-app: none;
+  --fill-raised: var(--color-surface-raised);
+  --fill-icon: var(--color-surface-active);
+  --fill-active: var(--color-surface-active);
+  --fill-selected: var(--color-surface-active);
+  --fill-accent-soft: var(--color-surface-raised);
+  --fill-glass-accent: var(--color-glass);
+  --fill-hero: var(--color-surface-raised);
+
+  --shadow-surface: none;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-button: 0 1px 2px rgb(0 0 0 / 0.5);
+
+  --color-drop: rgb(255 255 255 / 0.06);
+  --color-drop-border: rgb(255 255 255 / 0.4);
+
+  --term-bg: #0d0d0d;
+  --term-fg: #e4e4e4;
+  --term-cursor: #d4d4d4;
+  --term-selection: rgb(255 255 255 / 0.2);
+  --term-black: #1a1a1a;
+  --term-bright-black: #5c5c5c;
+  --term-white: #d0d0d0;
+  --term-bright-white: #f5f5f5;
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '@shared/domain/chat'
+import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '@shared/domain/chat'
 import type { RequestOf } from '@shared/ipc/contract'
 import { api } from '../lib/api'
 import { reportError, runAction } from './notices'
@@ -15,11 +15,14 @@ interface ChatState {
   loadList(): Promise<void>
   loadClis(): Promise<void>
   open(chatId: string): Promise<void>
+  /** Loads a chat without making it the active Chat-mode chat (Work agents in chat view). */
+  load(chatId: string): Promise<void>
   create(projectId?: string): Promise<void>
-  update(patch: Omit<RequestOf<'chat.update'>, 'chatId'>): Promise<void>
-  send(text: string): Promise<boolean>
-  stop(): Promise<void>
+  update(chatId: string, patch: Omit<RequestOf<'chat.update'>, 'chatId'>): Promise<void>
+  send(chatId: string, text: string, attachments?: ChatAttachment[]): Promise<boolean>
+  stop(chatId: string): Promise<void>
   remove(chatId: string): Promise<void>
+  rename(chatId: string, title: string): Promise<void>
   loadCatalog(cliId: string, refresh?: boolean): Promise<void>
   applyEvent(chatId: string, message: ChatMessage, summary: ChatSummary): void
 }
@@ -53,6 +56,10 @@ export const useChat = create<ChatState>((set, get) => ({
 
   open: async (chatId) => {
     set({ activeId: chatId })
+    await get().load(chatId)
+  },
+
+  load: async (chatId) => {
     const chat = await runAction('Open chat', () => api('chat.get', { chatId }))
     if (chat) set((s) => ({ chats: { ...s.chats, [chatId]: chat } }))
   },
@@ -64,28 +71,23 @@ export const useChat = create<ChatState>((set, get) => ({
     void get().loadList()
   },
 
-  update: async (patch) => {
-    const id = get().activeId
-    if (!id) return
+  update: async (id, patch) => {
     const chat = await runAction('Update chat', () => api('chat.update', { chatId: id, ...patch }))
     if (chat) set((s) => ({ chats: { ...s.chats, [id]: { ...chat, running: s.chats[id]?.running ?? false } } }))
   },
 
-  send: async (text) => {
-    const id = get().activeId
-    if (!id) return false
+  send: async (id, text, attachments = []) => {
     const ok = await runAction('Send message', async () => {
-      await api('chat.send', { chatId: id, text })
+      await api('chat.send', { chatId: id, text, attachments })
       return true
     })
     // The user message and streaming reply arrive via events; refresh to include the user turn immediately.
-    if (ok) await get().open(id)
+    if (ok) await get().load(id)
     return Boolean(ok)
   },
 
-  stop: async () => {
-    const id = get().activeId
-    if (id) await runAction('Stop', () => api('chat.stop', { chatId: id }))
+  stop: async (id) => {
+    await runAction('Stop', () => api('chat.stop', { chatId: id }))
   },
 
   remove: async (chatId) => {
@@ -95,6 +97,11 @@ export const useChat = create<ChatState>((set, get) => ({
       delete chats[chatId]
       return { chats, activeId: s.activeId === chatId ? null : s.activeId }
     })
+    void get().loadList()
+  },
+
+  rename: async (chatId, title) => {
+    await get().update(chatId, { title })
     void get().loadList()
   },
 
@@ -114,9 +121,12 @@ export const useChat = create<ChatState>((set, get) => ({
   applyEvent: (chatId, message, summary) =>
     set((s) => {
       const chat = s.chats[chatId]
-      const summaries = s.summaries.some((x) => x.id === chatId)
-        ? s.summaries.map((x) => (x.id === chatId ? summary : x))
-        : [summary, ...s.summaries]
+      // Chats behind Work agents never appear in the Chat list.
+      const summaries = summary.agentId
+        ? s.summaries
+        : s.summaries.some((x) => x.id === chatId)
+          ? s.summaries.map((x) => (x.id === chatId ? summary : x))
+          : [summary, ...s.summaries]
       if (!chat) return { summaries }
       const index = chat.messages.findIndex((m) => m.id === message.id)
       const messages = index >= 0 ? chat.messages.map((m, i) => (i === index ? message : m)) : [...chat.messages, message]

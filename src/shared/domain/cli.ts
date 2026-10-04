@@ -27,6 +27,8 @@ export interface CliDescriptor {
   displayName: string
   icon: IconReference
   supportsAutoApprove: boolean
+  /** Has a headless mode Hiveory can show as a chat (Chat mode, and Work agents in chat view). */
+  supportsChat: boolean
   available: boolean
   /** Resolved executable path when available. */
   executable?: string
@@ -42,7 +44,11 @@ export interface CliInstance {
   conversationId: string
   /** True once the conversation has received a prompt, so it can be resumed. */
   hasConversation: boolean
+  /** The CLI's own session id when it reports one (e.g. Codex's thread id), for exact resume. */
+  providerSessionId?: string
   autoApprove: boolean
+  /** Shown as a chat view (headless runs) instead of a terminal. Only for chat-capable CLIs. */
+  chatUi?: boolean
   createdAt: string
 }
 

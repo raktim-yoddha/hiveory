@@ -21,6 +21,13 @@ interface Session {
 export interface RuntimeManagerEvents {
   data: [instanceId: string, data: string, offset: number]
   changed: [instance: CliInstance, details: CliRuntimeDetails]
+  /** The CLI reported its own session id (stored so the agent resumes exactly that session). */
+  session: [instance: CliInstance, sessionId: string]
+}
+
+export interface LaunchOptions {
+  /** The only agent of its CLI in the folder (see `LaunchContext.soleOfCli`). */
+  soleOfCli?: boolean
 }
 
 const phaseOf = (d: CliRuntimeDetails): 'idle' | 'working' | 'waiting' =>
@@ -61,7 +68,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
    * renderer reports the pane's real terminal size, so a TUI never draws its
    * first frame at the wrong width (the cause of misaligned output).
    */
-  launch(instance: CliInstance, cwd: string): void {
+  launch(instance: CliInstance, cwd: string, options: LaunchOptions = {}): void {
     const existing = this.sessions.get(instance.id)
     if (existing?.pty.running) return
     const adapter = this.registry.adapter(instance.cliId)
@@ -78,7 +85,9 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
       autoApprove: instance.autoApprove,
       hook,
       mcp: adapter!.injectMcp ? this.mcpEndpoint(instance.id) : undefined,
-      runtimeDir: join(this.runtimeRoot, instance.id)
+      runtimeDir: join(this.runtimeRoot, instance.id),
+      resume: instance.hasConversation,
+      soleOfCli: options.soleOfCli ?? false
     })
 
     const session = existing ?? this.createSession(instance)
@@ -176,6 +185,12 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
       this.log.warn(`Hook mapping failed for ${session.instance.cliId}/${event}`, error)
     }
     if (mapped) this.apply(session, mapped, 'hook')
+    try {
+      const sessionId = adapter?.sessionIdFromHook?.(event, payload)
+      if (sessionId && sessionId !== session.instance.providerSessionId) this.emit('session', session.instance, sessionId)
+    } catch (error) {
+      this.log.warn(`Session id extraction failed for ${session.instance.cliId}`, error)
+    }
   }
 
   private createSession(instance: CliInstance): Session {
