@@ -1,0 +1,28 @@
+/* Overlapping logo chips; each sits on a ring of the surface colour so the overlap reads cleanly. */
+.stack {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.item {
+  display: inline-grid;
+  place-items: center;
+  width: calc(var(--logo-sm) + var(--space-3));
+  height: calc(var(--logo-sm) + var(--space-3));
+  border-radius: var(--radius-sm);
+  background: var(--color-logo-tile);
+  box-shadow: 0 0 0 var(--space-1) var(--color-surface-solid);
+}
+
+.item + .item {
+  margin-left: calc(var(--space-3) * -1);
+}
+
+.more {
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}

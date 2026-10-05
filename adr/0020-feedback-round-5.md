@@ -62,8 +62,11 @@ side-by-side columns of at most four in the same half, fullest first (3 + 2, 4 +
 ## Skills folders come from the CLI registry
 Adapters declare `skills` (own folder at home and in a project, whether they read the shared
 `.agents/skills`, other folders they also load). `skillRoots()` builds the Skills page's folders
-from that, so every CLI with skills support has its folder (rule 15), not four hardcoded ones. Chips
-show the shared folder, folders an installed CLI reads, and any folder already holding the skill.
+from that, so every CLI with skills support has its folder (rule 15), not four hardcoded ones.
+A row never grows with the number of CLIs: it shows a stacked logo group of who loads the skill
+(`CliStack`, first three then "+N") and one folders button. That opens a filterable checklist
+(`SkillFolderList`) of the shared folder, folders an installed CLI reads, and any folder already
+holding the skill — each with its path and readers. New skill uses the same checklist.
 
 ## Background running
 "Keep agents running in the background" (Settings › Agents, on by default): closing the window

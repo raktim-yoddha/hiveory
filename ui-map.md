@@ -110,8 +110,11 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Cop
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Skills rows: name, description, folder toggles (Shared, then one per installed CLI with its
-own skills folder — from the CLI registry), CLI logos that load it, open folder. MCP: "In Hiveory · every agent"
+Skills rows: name and description; on the right a stacked logo group of the installed CLIs that
+load it (first three, then "+N"), one folders button ("Shared (.agents) ▾" or "2 folders ▾") and
+open folder. The folders button opens a checklist of every skills folder from the CLI registry —
+label, path and the CLIs that read it, filterable — so a row never grows with the number of CLIs.
+New skill uses the same checklist. MCP: "In Hiveory · every agent"
 (toggle, reconnect, edit, remove) and "In your CLIs" ("Every agent").
 
 ### Settings › Appearance

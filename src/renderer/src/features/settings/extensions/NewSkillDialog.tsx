@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { Check, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type { SkillRoot } from '@shared/domain'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { Select } from '../../../components/ui/Select'
 import { TextAreaField, TextField } from '../../../components/ui/TextField'
 import { api } from '../../../lib/api'
-import { cx } from '../../../lib/cx'
 import { runAction } from '../../../stores/notices'
 import form from '../../../components/ui/form.module.css'
 import styles from './Extensions.module.css'
+import { SkillFolderList } from './SkillFolderList'
 
 interface Props {
   open: boolean
@@ -99,23 +99,11 @@ export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: P
         <TextAreaField label="Instructions (SKILL.md)" mono value={body} onChange={setBody} />
         <div className={form.field}>
           <span className={styles.fieldTitle}>Folders</span>
-          <span className={styles.folders} role="group" aria-label="Skills folders">
-            {roots.map((root) => {
-              const on = targets.includes(root.id)
-              return (
-                <button
-                  key={root.id}
-                  type="button"
-                  aria-pressed={on}
-                  className={cx(styles.folder, on && styles.folderOn)}
-                  onClick={() => setTargets((t) => (on ? t.filter((id) => id !== root.id) : [...t, root.id]))}
-                >
-                  {on ? <Check aria-hidden /> : <Plus aria-hidden />}
-                  {root.label}
-                </button>
-              )
-            })}
-          </span>
+          <SkillFolderList
+            roots={roots}
+            isOn={(root) => targets.includes(root.id)}
+            onToggle={(root) => setTargets((t) => (t.includes(root.id) ? t.filter((id) => id !== root.id) : [...t, root.id]))}
+          />
           <span className={styles.hint}>Shared (.agents) reaches every CLI that follows the Agent Skills standard; the others are each CLI's own folder (installed CLIs only).</span>
         </div>
       </div>

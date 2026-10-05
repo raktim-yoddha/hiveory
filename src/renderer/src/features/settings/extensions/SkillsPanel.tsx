@@ -1,8 +1,9 @@
 import { useMemo, useState, type CSSProperties } from 'react'
-import { Check, FolderInput, FolderOpen, Plus } from 'lucide-react'
+import { ChevronDown, FolderInput, FolderOpen, FolderTree, Plus } from 'lucide-react'
 import type { ExtensionsInventory, SkillInfo, SkillRoot } from '@shared/domain'
-import { CliLogo } from '../../../components/cli/CliLogo'
+import { CliStack } from '../../../components/cli/CliStack'
 import { Button, IconButton } from '../../../components/ui/Button'
+import { Popover } from '../../../components/ui/Popover'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { TextInput } from '../../../components/ui/TextField'
 import { api } from '../../../lib/api'
@@ -10,6 +11,7 @@ import { cx } from '../../../lib/cx'
 import { useClis } from '../../../stores/data'
 import { runAction } from '../../../stores/notices'
 import { NewSkillDialog } from './NewSkillDialog'
+import { SkillFolderList } from './SkillFolderList'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
 
@@ -43,7 +45,6 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
   const allRoots = useMemo(() => inventory?.roots ?? [], [inventory])
   const roots = useMemo(() => allRoots.filter((r) => r.id === 'agents' || r.visibleTo.some((id) => installed.has(id))), [allRoots, installed])
   const rootsFor = (group: SkillGroup): SkillRoot[] => [...roots, ...allRoots.filter((r) => !roots.includes(r) && group.copies.some((c) => c.rootId === r.id))]
-  const clisName = (ids: string[]): string => ids.map((id) => clis.find((c) => c.id === id)?.displayName ?? id).join(', ')
 
   const groups = useMemo(() => {
     const map = new Map<string, SkillGroup>()
@@ -91,7 +92,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
 
       <div className={settings.group}>
         <p className={cx(settings.groupNote, styles.noteTop)}>
-          A skill is a folder with SKILL.md. Light a folder to copy the skill there — every CLI that reads that folder loads it.
+          A skill is a folder with SKILL.md. Put it in more folders to reach more CLIs — every CLI that reads a folder loads what is in it.
         </p>
         {inventory && groups.length === 0 && (
           <p className={settings.empty}>
@@ -111,30 +112,32 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
                   <span className={styles.description} title={group.description}>
                     {group.description ?? 'No description'}
                   </span>
-                  <span className={styles.folders} role="group" aria-label={`Folders with ${group.name}`}>
-                    <span className={styles.folderLabel}>In</span>
-                    {rootsFor(group).map((root) => {
-                      const on = group.copies.some((c) => c.rootId === root.id)
-                      return (
-                        <button
-                          key={root.id}
-                          type="button"
-                          aria-pressed={on}
-                          className={cx(styles.folder, on && styles.folderOn)}
-                          title={`~/${root.dir} — read by ${clisName(root.visibleTo)}`}
-                          onClick={() => toggleFolder(group, root)}
-                        >
-                          {on ? <Check aria-hidden /> : <Plus aria-hidden />}
-                          {root.label}
-                        </button>
-                      )
-                    })}
-                  </span>
                 </div>
-                <span className={styles.loads} title="Installed CLIs that load it">
-                  {loads.map((cliId) => (
-                    <CliLogo key={cliId} cliId={cliId} size="sm" />
-                  ))}
+                <span className={styles.rowSide}>
+                  {/* Who loads it now, then where it lives: one compact control however many CLIs there are. */}
+                  <CliStack cliIds={loads} />
+                  <Popover
+                    label={`Folders with ${group.name}`}
+                    align="end"
+                    width="lg"
+                    trigger={(props) => (
+                      <button type="button" {...props} className={styles.foldersButton} title="Choose which skills folders hold it">
+                        <FolderTree aria-hidden />
+                        {group.copies.length === 1 ? (rootsFor(group).find((r) => r.id === group.copies[0]!.rootId)?.label ?? '1 folder') : `${group.copies.length} folders`}
+                        <ChevronDown aria-hidden />
+                      </button>
+                    )}
+                  >
+                    {() => (
+                      <div className={styles.foldersPanel}>
+                        <div className={styles.foldersHead}>
+                          <span>Where {group.name} lives</span>
+                          <span>Each folder reaches the CLIs shown. Removing a copy moves it to the trash.</span>
+                        </div>
+                        <SkillFolderList roots={rootsFor(group)} isOn={(root) => group.copies.some((c) => c.rootId === root.id)} onToggle={(root) => toggleFolder(group, root)} />
+                      </div>
+                    )}
+                  </Popover>
                 </span>
                 <IconButton
                   label={`Open ${group.name} folder`}
