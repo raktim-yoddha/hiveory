@@ -42,8 +42,9 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Open a project',
         body: (
           <p>
-            Click <b>Open project</b> (or the folder icon in the sidebar) and pick any local folder. Opening a project creates nothing —
-            no workspace, branch or agent — until you ask for it.
+            Click <b>Add project</b> (or the folder icon in the sidebar): pick a local folder, create a new repository, clone one, or
+            restore a project you removed earlier with its workspaces and agents. Adding a project creates nothing — no workspace,
+            branch or agent — until you ask for it.
           </p>
         )
       },
