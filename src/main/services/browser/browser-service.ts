@@ -552,6 +552,8 @@ export class BrowserService {
         inflight++
         try {
           await page.driver.navigate(url)
+          // A worker that never left about:blank is broken (frozen renderer): treated like one that stopped answering.
+          if (/^about:blank/.test(page.view.webContents.getURL())) throw new PageError('The page stopped answering (it never loaded).')
           // Refs are useless once the crawl page closes; dropping them saves tokens.
           const text = (await page.driver.snapshot(true)).replace(/ \[@\d+\]/g, '')
           results.push({ url: page.view.webContents.getURL() || url, text: text.length > options.maxChars ? `${text.slice(0, options.maxChars)}\n… (page cut)` : text })

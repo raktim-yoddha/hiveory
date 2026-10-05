@@ -1,6 +1,7 @@
 import type { AppSettings } from '../domain/settings'
 import { PET_NAMES } from '../naming/names'
 import type { QueenReport } from './report'
+import type { QueenPeek, QueenUpdate } from './updates'
 import { formatWait } from './report'
 
 export type PersonaId = 'ada' | 'sunny' | 'frankie' | 'custom'
@@ -105,6 +106,10 @@ export type QueenOutcome =
   | { kind: 'panel'; what: 'side panel' | 'side panel closed' | 'browser' | 'explorer' }
   | { kind: 'noted'; text: string }
   | { kind: 'forgot'; count: number }
+  | { kind: 'interrupted'; names: string[] }
+  | { kind: 'theme'; name: string }
+  | { kind: 'talkback'; on: boolean }
+  | { kind: 'workspace'; name: string }
 
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
@@ -136,6 +141,14 @@ export function receipt(o: QueenOutcome): string {
       return `Noted: ${o.text}`
     case 'forgot':
       return `Forgot ${o.count} ${plural(o.count, 'note')}`
+    case 'interrupted':
+      return `Stopped ${list(o.names)}`
+    case 'theme':
+      return `Theme: ${o.name}`
+    case 'talkback':
+      return o.on ? 'Talkback on' : 'Talkback off'
+    case 'workspace':
+      return `Created workspace ${o.name}`
   }
 }
 
@@ -165,6 +178,14 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return "I'll remember that"
     case 'forgot':
       return `${o.count} ${plural(o.count, 'note is', 'notes are')} gone`
+    case 'interrupted':
+      return `${list(o.names)} ${plural(o.names.length, 'has', 'have')} stopped`
+    case 'theme':
+      return `the ${o.name} theme is on`
+    case 'talkback':
+      return o.on ? "I'll answer out loud" : "I'll stay quiet"
+    case 'workspace':
+      return `${o.name} is ready`
   }
 }
 
@@ -290,4 +311,79 @@ export function recallLine(notes: string[], prefs: QueenPrefs): string {
 export function nothingToForgetLine(prefs: QueenPrefs): string {
   const p = effective(prefs)
   return { ada: `I have no note about that${address(p)}.`, sunny: "I don't have a note like that!", frankie: 'No note matches that.' }[p.persona]
+}
+
+const WAIT_WORDS: Record<string, string> = {
+  permission: 'needs your permission',
+  input: 'is waiting for your input',
+  confirmation: 'wants you to confirm something',
+  other: 'is waiting for you'
+}
+
+/** An agent's live update, in her voice. The excerpt is shown (and labelled) separately. */
+export function updateLine(u: QueenUpdate, prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  const where = `in ${u.workspaceName}`
+  if (u.kind === 'stopped') {
+    return { ada: `${u.petName} has stopped with an error ${where}${address(p)}.`, sunny: `Uh-oh, ${u.petName} stopped with an error ${where}.`, frankie: `${u.petName} crashed ${where}. Check it.` }[p.persona]
+  }
+  if (u.kind === 'waiting') {
+    const wants = WAIT_WORDS[u.reason ?? 'other'] ?? WAIT_WORDS.other
+    return finish(
+      [
+        { ada: `${u.petName} ${wants} ${where}${address(p)}.`, sunny: `${u.petName} ${wants} ${where}!`, frankie: `${u.petName} ${wants} ${where}.` }[p.persona],
+        p.persona === 'frankie' ? (p.intensity === 'hard' ? 'Nothing moves until you answer.' : 'Answer it and it keeps going.') : ''
+      ],
+      p
+    )
+  }
+  const took = u.workedSeconds && u.workedSeconds >= 60 ? ` after ${Math.round(u.workedSeconds / 60)} min` : ''
+  return finish(
+    [
+      { ada: `${u.petName} has finished ${where}${took}${address(p)}.`, sunny: `${u.petName} just wrapped up ${where}${took}!`, frankie: `${u.petName} finished ${where}${took}.` }[p.persona],
+      p.persona === 'frankie' ? 'Review it, then give it the next task.' : ''
+    ],
+    p
+  )
+}
+
+/** "What is Bruno doing?" — from its live status; the screen excerpt is shown separately. */
+export function detailLine(d: QueenPeek, prefs: QueenPrefs, cliName: string): string {
+  const p = effective(prefs)
+  if (!d.running) return `${d.petName} (${cliName}) is not running.`
+  const state =
+    d.status === 'working'
+      ? `is working${d.activity ? `: ${d.activity}` : ''}`
+      : d.status === 'waiting-for-you'
+        ? (WAIT_WORDS[d.waitingReason ?? 'other'] ?? WAIT_WORDS.other)
+        : 'is idle'
+  const line = `${d.petName} (${cliName}) ${state}`
+  return { ada: `${line}${address(p)}.`, sunny: `${line}${d.status === 'idle' ? ' and ready for more!' : '.'}`, frankie: `${line}.${d.status === 'idle' ? ' Give it work.' : ''}` }[p.persona]
+}
+
+export function nobodyWaitingLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  return { ada: `No agent is waiting for you${address(p)}.`, sunny: 'Nobody needs you right now!', frankie: 'Nobody is blocked on you.' }[p.persona]
+}
+
+/** Things to try, from the rules (no model needed for any of them). */
+export const HELP_EXAMPLES = [
+  'codex run the tests',
+  'Bruno, fix the failing build',
+  'tell everyone to commit',
+  'open two claude in feature-x',
+  'status of everything',
+  'what is Luna doing?',
+  'take me to whoever needs me',
+  'stop Bruno',
+  'close idle agents',
+  'remember that I review with Claude',
+  'jade theme',
+  'mute'
+]
+
+export function helpLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  const lead = { ada: `At your service${address(p)}. For example:`, sunny: 'Here are a few things I can do!', frankie: 'Say what you need. For example:' }[p.persona]
+  return `${lead} ${HELP_EXAMPLES.map((e) => `“${e}”`).join(', ')}.`
 }

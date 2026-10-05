@@ -267,6 +267,16 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   (Claude plan), run headless with no tools; no key, slower (5–20 s).
 - The shortcut can also work while another app is focused (opt-in): a tap brings Hiveory
   forward, a hold talks from anywhere.
+- Talkback: she answers out loud by default (Kokoro, or the system voice without it), with
+  short sound cues; "mute" and the ⋯ menu turn it off.
+- Talk to agents by name: "codex run the tests", "Bruno, …", "everyone: …", "tell all
+  claude to …", "open codex and send: …" (exact words, no model needed).
+- "stop Bruno" interrupts without closing; "status of everything", "codex status", "what is
+  Bruno doing", "take me to whoever needs me", "close idle agents", "jade theme", "create a
+  workspace called …", "help", "again".
+- Live updates: she tells you (and says) when an agent finishes, needs you or crashes,
+  whether or not she started the work.
+- Her reply card hovers above the panes; it never moves them.
 
 ## Important Non-Features
 

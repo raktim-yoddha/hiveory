@@ -63,6 +63,8 @@ export interface CliAdapter {
   /** A plain shell, not an agent: no Kanban card, no chat, listed first when adding panes. */
   kind?: 'shell'
   supportsAutoApprove: boolean
+  /** Keys that stop the current task without quitting. Default: Esc for agents, Ctrl+C for shells. */
+  interruptKeys?: string
   /** The adapter knows how to load Hiveory's MCP server into a session (see `LaunchContext.mcp`). */
   injectMcp?: boolean
   buildLaunch(ctx: LaunchContext): LaunchSpec

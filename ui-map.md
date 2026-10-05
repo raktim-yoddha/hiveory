@@ -36,6 +36,8 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
+The reply card hovers over the panes (it never pushes them); only the bar takes room.
+
 Floating: the same bar is a draggable pill (drag by the mark; click the mark to shrink).
 It steps aside from the browser page. The mic button is hold-to-talk; until a speech pack
 is installed it opens Settings › Queen Bee › Voice. ⋯ holds Personality and Configure….
@@ -44,7 +46,8 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 - Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,
   how she talks to you, and "Things she's learned" (edit, remove, add notes).
 - Providers: ordered accounts; "Add provider" includes the Codex and Claude Code CLIs.
-- Voice: guide, speech packs, "Her voice" picker with Preview, speed.
+- Voice: guide, speech packs, Talkback (answer out loud, updates from agents, sound cues),
+  "Her voice" picker with Preview, speed.
 - Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
   placement.
 

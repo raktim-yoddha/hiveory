@@ -15,6 +15,7 @@ import { useNavigation } from '../../stores/navigation'
 import { cancelQueen, runQueen } from './queen-run'
 import { useQueen, type QueenCard } from './useQueen'
 import { useQueenShortcut } from './useQueenShortcut'
+import { useQueenUpdates } from './useQueenUpdates'
 import { queenVoice, useVoice } from './voice'
 import styles from './Queen.module.css'
 
@@ -23,6 +24,7 @@ const GAP = 8
 /** Queen Bee docked under the main area (the screens above lift to make room). */
 export function QueenDock() {
   useQueenShortcut()
+  useQueenUpdates()
   return (
     <div className={styles.dock}>
       <QueenCardView />
@@ -34,6 +36,7 @@ export function QueenDock() {
 /** Queen Bee floating over the window: drag by the hive mark, click it to shrink or expand. */
 export function QueenFloating() {
   useQueenShortcut()
+  useQueenUpdates()
   const { position, compact, setPosition, setCompact } = useQueen()
   const panelOpen = useNavigation((s) => s.panelOpen)
   const panelMaximized = useNavigation((s) => s.panelMaximized)
@@ -112,6 +115,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
   const { placement, setPlacement, compact, busy, card, show, focusTick, setSettingsTab } = useQueen()
   const persona = useSettings((s) => s.settings.queenPersona)
   const customName = useSettings((s) => s.settings.queenCustomName)
+  const talkback = useSettings((s) => s.settings.queenTalkback)
   const info = personaInfo({ queenPersona: persona, queenCustomName: customName, queenCustomPersona: '' })
   const shortcut = useSettings((s) => s.settings.queenShortcut)
   const platform = usePlatform()
@@ -229,6 +233,15 @@ function QueenBar({ grip }: { grip?: Grip }) {
               { type: 'separator' },
               {
                 type: 'item',
+                id: 'talkback',
+                label: 'Talk back',
+                hint: talkback === 'never' ? 'Off' : talkback === 'always' ? 'Always' : 'After I speak',
+                checked: talkback !== 'never',
+                keepOpen: true,
+                onSelect: () => void update({ queenTalkback: talkback === 'never' ? 'always' : 'never' })
+              },
+              {
+                type: 'item',
                 id: 'configure',
                 label: 'Configure…',
                 onSelect: () => {
@@ -245,13 +258,38 @@ function QueenBar({ grip }: { grip?: Grip }) {
   )
 }
 
+/** A reply hovers over the work, so it leaves on its own; Undo gets longer. Questions and yes/no stay. */
+const REPLY_MS = 10_000
+const UNDO_MS = 20_000
+
 function QueenCardView() {
   const card = useQueen((s) => s.card)
   const show = useQueen((s) => s.show)
   const busy = useQueen((s) => s.busy)
+  // While the pointer or focus is on the card it stays.
+  const [held, setHeld] = useState(false)
+
+  useEffect(() => {
+    if (!card || card.kind !== 'reply' || held) return
+    const timer = window.setTimeout(() => {
+      if (useQueen.getState().card === card) show(null)
+    }, card.undo ? UNDO_MS : REPLY_MS)
+    return () => window.clearTimeout(timer)
+  }, [card, held, show])
+
   if (!card) return null
   return (
-    <section className={styles.card} aria-label="Queen Bee says" aria-live="polite">
+    <section
+      className={styles.card}
+      aria-label="Queen Bee says"
+      aria-live="polite"
+      onPointerEnter={() => setHeld(true)}
+      onPointerLeave={() => setHeld(false)}
+      onFocus={() => setHeld(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setHeld(false)
+      }}
+    >
       <IconButton className={styles.dismiss} label="Dismiss" icon={<X />} onClick={() => show(null)} />
       {card.heard && <p className={styles.heard}>“{card.heard}”</p>}
       <CardBody card={card} busy={busy} />
@@ -296,6 +334,12 @@ function CardBody({ card, busy }: { card: QueenCard; busy: boolean }) {
   return (
     <>
       <p className={styles.text}>{card.text}</p>
+      {card.quote && (
+        <figure className={styles.quote}>
+          <figcaption>On its screen</figcaption>
+          <blockquote>{card.quote}</blockquote>
+        </figure>
+      )}
       {rows.length > 0 && (
         <ul className={styles.rows}>
           {rows.map((a) => (

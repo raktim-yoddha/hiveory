@@ -115,7 +115,9 @@ const settingsSchema = z.object({
   queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength),
   queenShortcut: z.string().refine((s) => parseShortcut(s) !== null).catch(DEFAULT_SETTINGS.queenShortcut),
   queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']).catch(DEFAULT_SETTINGS.queenSpeechLanguage),
-  queenSpeak: z.enum(['after-voice', 'always', 'never']).catch(DEFAULT_SETTINGS.queenSpeak),
+  queenTalkback: z.enum(['always', 'after-voice', 'never']).catch(DEFAULT_SETTINGS.queenTalkback),
+  queenSounds: z.boolean().catch(DEFAULT_SETTINGS.queenSounds),
+  queenUpdates: z.enum(['all', 'waiting', 'off']).catch(DEFAULT_SETTINGS.queenUpdates),
   queenVoiceSpeed: z.number().min(0.8).max(1.4).catch(DEFAULT_SETTINGS.queenVoiceSpeed)
 })
 

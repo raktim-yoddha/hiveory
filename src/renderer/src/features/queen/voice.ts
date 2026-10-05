@@ -50,21 +50,75 @@ const sttReady = (): boolean => {
 const ttsReady = (): boolean => useVoice.getState().packs.some((p) => p.id === 'kokoro' && p.state === 'ready')
 
 export function stopSpeaking(): void {
-  if (!playing) return
-  try {
-    playing.source.stop()
-  } catch {
-    // Already finished.
+  window.speechSynthesis?.cancel()
+  if (playing) {
+    try {
+      playing.source.stop()
+    } catch {
+      // Already finished.
+    }
+    void playing.ctx.close()
+    playing = null
   }
-  void playing.ctx.close()
-  playing = null
   if (useVoice.getState().phase === 'speaking') setPhase('idle')
 }
 
-/** Says a reply out loud with the persona's voice (when the speak pack is installed). */
-export async function speak(text: string): Promise<void> {
-  if (!text.trim() || !ttsReady()) return
+/** Her lines say your name the way you spelled it out for her (Settings › Personality). */
+const pronounced = (text: string): string => {
+  const { queenCallMe, queenCallMeSay } = useSettings.getState().settings
+  return queenCallMe && queenCallMeSay ? text.split(queenCallMe).join(queenCallMeSay) : text
+}
+
+/** Without Kokoro she still talks: the operating system's own voice, which runs locally. */
+function speakWithSystemVoice(text: string): void {
+  const synth = window.speechSynthesis
+  if (!synth) return
+  const line = new SpeechSynthesisUtterance(text)
+  const voices = synth.getVoices().filter((v) => v.lang.toLowerCase().startsWith('en'))
+  const voice = voices.find((v) => v.localService && v.default) ?? voices.find((v) => v.localService) ?? voices[0]
+  if (voice) line.voice = voice
+  line.rate = useSettings.getState().settings.queenVoiceSpeed
+  line.onend = line.onerror = () => {
+    if (useVoice.getState().phase === 'speaking') setPhase('idle')
+  }
+  setPhase('speaking')
+  synth.speak(line)
+}
+
+/**
+ * Short sound cues, generated (no audio files): listening starts and stops, an
+ * answer arrived while talkback is off, an agent has an update.
+ */
+export function cue(kind: 'listen' | 'stop' | 'done' | 'update'): void {
+  if (!useSettings.getState().settings.queenSounds) return
+  try {
+    const ctx = new AudioContext()
+    const notes = { listen: [660, 880], stop: [880, 660], done: [784, 1047], update: [523, 659, 784] }[kind]
+    notes.forEach((hz, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      const at = ctx.currentTime + i * 0.09
+      osc.type = 'sine'
+      osc.frequency.value = hz
+      gain.gain.setValueAtTime(0.0001, at)
+      gain.gain.exponentialRampToValueAtTime(0.12, at + 0.015)
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16)
+      osc.connect(gain).connect(ctx.destination)
+      osc.start(at)
+      osc.stop(at + 0.18)
+    })
+    window.setTimeout(() => void ctx.close(), 900)
+  } catch {
+    // No audio device: cues are optional.
+  }
+}
+
+/** Says a line out loud: Kokoro with her chosen voice when installed, otherwise the system voice. */
+export async function speak(raw: string): Promise<void> {
+  const text = pronounced(raw.trim())
+  if (!text) return
   stopSpeaking()
+  if (!ttsReady()) return speakWithSystemVoice(text.slice(0, 600))
   try {
     const { samples, sampleRate } = await api('voice.speak', { text: text.slice(0, 600) })
     if (useVoice.getState().phase === 'listening') return
@@ -125,6 +179,7 @@ export const queenVoice = {
       node.connect(ctx.destination)
       capture = clip
       setPhase('listening')
+      cue('listen')
     } catch (error) {
       setPhase('idle')
       notify(`The microphone didn’t start: ${error instanceof Error ? error.message : String(error)}`)
@@ -148,6 +203,7 @@ export const queenVoice = {
       samples.set(chunk, offset)
       offset += chunk.length
     }
+    cue('stop')
     setPhase('transcribing')
     try {
       const { text } = await api('voice.transcribe', { samples, language: useSettings.getState().settings.queenSpeechLanguage })

@@ -1,4 +1,4 @@
-import type { CliStatus } from '../domain'
+import type { CliStatus, ThemeId } from '../domain'
 
 /** Settings sections Queen Bee can open (mirrors the renderer's Settings navigation). */
 export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'queen', 'updates', 'guide', 'about'] as const
@@ -24,7 +24,22 @@ export type QueenAction =
   | { type: 'set-mode'; mode: 'workspace' | 'chatspace' }
   | { type: 'side-panel'; open: boolean }
   | { type: 'open-panel-tab'; kind: 'browser' | 'explorer' }
-  | { type: 'report'; focus: 'all' | CliStatus }
+  /** Status of agents: the current project (or every project from Home), every project with `everywhere`, one CLI with `cliId`. */
+  | { type: 'report'; focus: 'all' | CliStatus; everywhere?: boolean; cliId?: string }
+  /** One agent up close: status, what it is doing, the last words on its screen. */
+  | { type: 'agent-detail'; agentId: string }
+  /** Stops what an agent is doing without closing it (Esc for agent CLIs, Ctrl+C for shells). */
+  | { type: 'interrupt-agent'; agentId: string }
+  /** Starts one agent of a CLI and, once it is ready, sends it a message. */
+  | { type: 'open-and-message'; cliId: string; workspaceId: string; projectId: string; text: string }
+  /** Jumps to the agent that has waited on you the longest. */
+  | { type: 'focus-waiting' }
+  | { type: 'set-theme'; theme: ThemeId }
+  /** Talkback on or off. */
+  | { type: 'speak'; on: boolean }
+  | { type: 'create-workspace'; name: string; projectId: string }
+  /** What she can do. */
+  | { type: 'help' }
   /** Things she's learned: saves a note the user asked her to remember (shown as "Noted: …"). */
   | { type: 'remember'; text: string }
   /** Removes every note that contains the text. */
@@ -44,7 +59,7 @@ export interface QueenContext {
   /** Agents of the current project (every workspace that has been loaded). */
   agents: Array<{ id: string; petName: string; cliId: string; workspaceId: string; status?: CliStatus }>
   /** Installed agent CLIs and terminals. */
-  clis: Array<{ id: string; displayName: string }>
+  clis: Array<{ id: string; displayName: string; kind?: 'agent' | 'shell' }>
   presets: Array<{ id: string; name: string }>
   /** A custom personality's name, so "Zara, open Codex" parses like "Queen, open Codex". */
   queenName?: string
@@ -58,7 +73,8 @@ export interface QueenQuestion {
 
 export type QueenParse =
   | { kind: 'actions'; actions: QueenAction[]; /** Needs a yes before it runs (closing agents). */ confirm?: string }
-  | { kind: 'ask'; question: QueenQuestion }
+  /** `soft`: the rules did not understand a name; a model, when set up, gets to try before this is asked. */
+  | { kind: 'ask'; question: QueenQuestion; soft?: boolean }
   /** Not a command the rules understand; a model brain (phase 2) takes these. */
   | { kind: 'unknown' }
 

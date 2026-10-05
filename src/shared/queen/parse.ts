@@ -1,4 +1,7 @@
+import { THEMES, type ThemeId } from '../domain/settings'
 import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
+import { parseAddress, parseMessage, parseOpenAndSend } from './address'
+import { CLOSE_VERBS, cliAliases, clauses, fold, GO_VERBS, hasWord, norm, NUMBER_WORDS, OPEN_VERBS, RESTART_VERBS, STOP_VERBS } from './words'
 
 /**
  * Tier 0 of Queen Bee: a rule parser for the commands people actually say. It
@@ -7,72 +10,6 @@ import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenCont
  * "unknown" for the model tier.
  */
 
-const NUMBER_WORDS: Record<string, number> = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12, couple: 2, pair: 2, few: 3, single: 1, another: 1,
-  // Hinglish, as speech recognition writes it.
-  ek: 1, do: 2, teen: 3, tin: 3, char: 4, chaar: 4, paanch: 5, panch: 5, chhe: 6, che: 6, saat: 7, aath: 8, aat: 8
-}
-
-/**
- * Hinglish (romanised Hindi, as typed or as Whisper writes it) folded into the
- * same canonical words. Hindi puts the verb last ("do codex kholo"); parseClause
- * moves a trailing verb to the front.
- */
-const HINGLISH: Array<[RegExp, string]> = [
-  [/\b(kya chal raha hai|kya ho raha hai|status batao|kya bacha hai|kitna bacha hai|update do)\b/g, 'status'],
-  [/\b(kaun wait kar raha hai|kaun ruka hai|kisko meri zarurat hai|kaun atka hai)\b/g, 'who is waiting'],
-  [/\b(restart karo|restart kar do|dobara chalao|phir se chalao)\b/g, 'restart'],
-  [/\b(khol do|khol de|kholo|kolo|khol|chalu karo|chalu kar do|chalao|start karo|shuru karo)\b/g, 'open'],
-  [/\b(band karo|band kar do|band kardo|bandh karo|bund karo|hata do|hatao|band)\b/g, 'close'],
-  [/\b(dikhao|dikha do|dikhau|dekhao|par jao|pe jao|jao)\b/g, 'show'],
-  [/\baur\b/g, 'and'],
-  [/\b(ko|zara|jaldi|bhai|yaar|na)\b/g, ' ']
-]
-
-/** Multi-word phrasings folded into one canonical verb before parsing. */
-const PHRASES: Array<[RegExp, string]> = [
-  ...HINGLISH,
-  [/\b(take me to|bring me to|navigate to|head to|jump to|switch to|move to|go back to|go to)\b/g, 'go'],
-  [/\b(spin up|fire up|boot up|bring up|start up|kick off)\b/g, 'open'],
-  [/\b(shut down|close down|get rid of)\b/g, 'close'],
-  [/\b(show me|let me see)\b/g, 'show'],
-  [/\bside ?bar on the right\b|\bright (side ?bar|side ?panel|panel)\b/g, 'side panel'],
-  [/\bfile (tree|explorer)\b/g, 'explorer'],
-  [/\b(\d+)\s*x\b|\bx\s*(\d+)\b/g, '$1$2']
-]
-
-/** Words that carry no meaning for a command. */
-const FILLER = /^(hey |hi |ok |okay )?(queen bee|queen|ada|sunny|frankie)\b|\b(please|pls|plz|can you|could you|would you|will you|kindly|hey|hi|ok|okay|for me|right now|now|quickly|just|the|new|some|my|i want|i need|id like|lets)\b/g
-
-const CLOSE_VERBS = /^(close|kill|stop|remove|end|quit|terminate|dismiss)\b/
-const RESTART_VERBS = /^(restart|reboot|rerun|reload)\b/
-const OPEN_VERBS = /^(open|start|launch|spawn|add|create|run|give|get)\b/
-const GO_VERBS = /^(go|show|open|focus|find|view|display|visit)\b/
-
-const norm = (text: string): string =>
-  text
-    .toLowerCase()
-    .replace(/['’`]/g, '')
-    .replace(/[^a-z0-9 ]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-/** Splits "open two claude and a codex, then go to chat" into clauses. */
-const clauses = (text: string): string[] =>
-  text
-    .split(/\s*(?:[,;]|\band then\b|\bthen\b|\band\b|\balso\b|\bplus\b)\s*/)
-    .map((c) => c.trim())
-    .filter(Boolean)
-
-const hasWord = (text: string, word: string): boolean => new RegExp(`(^| )${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(text)
-
-/** Every way a user may name a CLI: "Claude Code" → claude code, claude, claudecode. */
-const cliAliases = (cli: QueenContext['clis'][number]): string[] => {
-  const name = norm(cli.displayName)
-  const short = name.replace(/ (code )?cli$| code$/, '')
-  return [...new Set([norm(cli.id), name, short, short.replace(/ /g, '')])].filter(Boolean)
-}
 
 /** The CLIs named in a clause, in order, each with the count written before it. */
 const findClis = (clause: string, ctx: QueenContext): Array<{ cliId: string; count: number; name: string }> => {
@@ -129,6 +66,7 @@ const targetWorkspace = (clause: string, ctx: QueenContext): { id: string } | { 
     return {
       ask: {
         kind: 'ask',
+        ...(match ? {} : { soft: true }),
         question: {
           text: match ? `Which workspace do you mean?` : `There's no workspace called "${name}".`,
           choices: options.slice(0, 4).map((w) => ({ label: w.name, command: `${clause.slice(0, m.index).trim()} in ${w.name}` }))
@@ -150,7 +88,13 @@ const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
   [/\b(about|version)\b/, 'about']
 ]
 
-const VERB_WORDS = /^(open|close|show|go|restart)$/
+const VERB_WORDS = /^(open|close|show|go|restart|stop)$/
+
+const STATUS_WORDS =
+  /\b(status|report|summary|summarize|progress|overview|update me|catch me up|whats (left|done|happening|going on|up|pending)|what is (left|done|happening|pending)|who(s| is) (waiting|working|idle|stuck|free|busy)|anyone (waiting|stuck)|any agents? (waiting|stuck|working|idle)|how are (agents|things|we doing)|what are (agents|they|all agents) doing|stuck)\b/
+/** Questions about one agent: "what is Bruno doing", "is Bruno done", "how's Bruno". */
+const DETAIL_WORDS = /\b(doing|up to|working on|done|finished|stuck|status|how is|hows|saying|said|say|output|screen|progress|busy|free)\b/
+const EVERYWHERE = /\b(everything|everywhere|all projects|every project|across projects|overall|whole app)\b/
 
 const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string | null): { result: QueenParse; verb: string | null } => {
   // Verb-last word order (Hindi, "settings show"): bring the verb to the front.
@@ -158,9 +102,22 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
   const clause = words.length > 1 && VERB_WORDS.test(words.at(-1)!) && !VERB_WORDS.test(words[0]!) ? [words.at(-1)!, ...words.slice(0, -1)].join(' ') : sentence
   const done = (actions: QueenAction[], verb: string | null = null): { result: QueenParse; verb: string | null } => ({ result: { kind: 'actions', actions }, verb })
   const ask = (text: string, choices?: Array<{ label: string; command: string }>) => ({ result: { kind: 'ask', question: { text, choices } } as QueenParse, verb: null })
+  /** A question because a name wasn't understood: a model may understand it. */
+  const soft = (text: string, choices?: Array<{ label: string; command: string }>) => ({ result: { kind: 'ask', question: { text, choices }, soft: true } as QueenParse, verb: null })
 
-  // Reports: anything asking how things stand.
-  if (/\b(status|report|summary|summarize|progress|overview|update me|catch me up|whats (left|done|happening|going on|up|pending)|what is (left|done|happening|pending)|who(s| is) (waiting|working|idle|stuck|free|busy)|anyone (waiting|stuck)|any agents? (waiting|stuck|working|idle)|how are (agents|things|we doing)|what are agents doing|stuck)\b/.test(clause)) {
+  // "take me to whoever needs me", "next": the agent that has waited longest.
+  if (/^(go|focus|open)\b.*\b(waiting|needs me|need me|blocked)\b/.test(clause) || /^(next|next one|next agent|next waiting( agent)?)$/.test(clause)) {
+    return done([{ type: 'focus-waiting' }])
+  }
+
+  // One agent up close: "what is Bruno doing", "is Bruno done", "Bruno status".
+  const named = findAgents(clause, ctx)
+  if (named.length === 1 && DETAIL_WORDS.test(clause) && !/^(close|restart|stop|open|go)\b/.test(clause)) return done([{ type: 'agent-detail', agentId: named[0]!.id }])
+
+  // Reports: anything asking how things stand — here, everywhere, or for one CLI ("how is codex doing").
+  const askedCli = findClis(clause, ctx)
+  const aboutCli = askedCli.length === 1 && DETAIL_WORDS.test(clause) && !/^(close|restart|stop|open|go|show)\b/.test(clause)
+  if (STATUS_WORDS.test(clause) || aboutCli || (EVERYWHERE.test(clause) && /\b(status|doing|happening|going on)\b/.test(clause))) {
     const focus = /\b(waiting|stuck|blocked|need me|needs me)\b/.test(clause)
       ? 'waiting-for-you'
       : /\b(working|busy)\b/.test(clause)
@@ -168,7 +125,13 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
         : /\b(idle|free)\b/.test(clause)
           ? 'idle'
           : 'all'
-    return done([{ type: 'report', focus }])
+    const cli = askedCli
+    // A CLI with exactly one agent here: that agent up close.
+    if (cli.length === 1) {
+      const ofCli = ctx.agents.filter((a) => a.cliId === cli[0]!.cliId && (!ctx.workspaceId || a.workspaceId === ctx.workspaceId))
+      if (ofCli.length === 1 && focus === 'all') return done([{ type: 'agent-detail', agentId: ofCli[0]!.id }])
+    }
+    return done([{ type: 'report', focus, ...(EVERYWHERE.test(clause) ? { everywhere: true } : {}), ...(cli.length === 1 ? { cliId: cli[0]!.cliId } : {}) }])
   }
 
   // Mode.
@@ -192,7 +155,7 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
     const name = clause.replace(/\b(load|apply|use|run|open|start|preset|presets)\b/g, '').replace(/\b(in|on) .+$/, '').trim()
     const match = matchName(name, ctx.presets)
     if (!match || 'many' in match) {
-      return ask(match ? 'Which preset?' : name ? `There's no preset called "${name}".` : 'Which preset?', (match && 'many' in match ? match.many : ctx.presets).slice(0, 4).map((p) => ({ label: p.name, command: `load preset ${p.name}` })))
+      return (match ? ask : soft)(match ? 'Which preset?' : name ? `There's no preset called "${name}".` : 'Which preset?', (match && 'many' in match ? match.many : ctx.presets).slice(0, 4).map((p) => ({ label: p.name, command: `load preset ${p.name}` })))
     }
     const ws = targetWorkspace(clause, ctx)
     if (!ws) return ask('Open a workspace first, then load the preset.')
@@ -200,26 +163,55 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
     return done([{ type: 'apply-preset', presetId: match.one.id, workspaceId: ws.id, projectId: ctx.projectId! }])
   }
 
-  const verb = CLOSE_VERBS.test(clause) ? 'close' : RESTART_VERBS.test(clause) ? 'restart' : OPEN_VERBS.test(clause) ? 'open' : GO_VERBS.test(clause) ? 'go' : previousVerb
-  const agents = findAgents(clause, ctx)
+  const verb = STOP_VERBS.test(clause)
+    ? 'stop'
+    : CLOSE_VERBS.test(clause)
+      ? 'close'
+      : RESTART_VERBS.test(clause)
+        ? 'restart'
+        : OPEN_VERBS.test(clause)
+          ? 'open'
+          : GO_VERBS.test(clause)
+            ? 'go'
+            : previousVerb
+  const agents = named
+
+  // "close idle agents", "close all codex", "close every finished agent".
+  const many = (): QueenContext['agents'] => {
+    const ofCli = findClis(clause, ctx)
+    const status = /\b(idle|finished|done|free)\b/.test(clause) ? 'idle' : /\b(working|busy)\b/.test(clause) ? 'working' : /\b(waiting|stuck|blocked)\b/.test(clause) ? 'waiting-for-you' : null
+    if (!/\b(all|every|everyone|everything|idle|finished|done|free)\b/.test(clause) && !ofCli.length) return []
+    // Plain shells are only included when named ("close powershell"): they are not agents.
+    const shell = (cliId: string) => ctx.clis.find((c) => c.id === cliId)?.kind === 'shell'
+    return ctx.agents.filter(
+      (a) =>
+        a.workspaceId === ctx.workspaceId &&
+        (ofCli.length ? ofCli.some((c) => c.cliId === a.cliId) : !shell(a.cliId)) &&
+        (!status || a.status === status)
+    )
+  }
+
+  if (verb === 'stop') {
+    const targets = agents.length ? agents : many()
+    if (!targets.length) {
+      const busy = ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId && a.status === 'working')
+      return soft(busy.length ? 'Which agent should I stop?' : 'No agent is working here.', busy.slice(0, 4).map((a) => ({ label: a.petName, command: `stop ${a.petName}` })))
+    }
+    return done(targets.map((a) => ({ type: 'interrupt-agent', agentId: a.id })), 'stop')
+  }
 
   if (verb === 'close') {
-    const everyone = /\b(all|every|everyone|everything)\b/.test(clause)
-    const ofCli = findClis(clause, ctx)
-    const targets = agents.length
-      ? agents
-      : everyone
-        ? ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId && (!ofCli.length || ofCli.some((c) => c.cliId === a.cliId)))
-        : []
+    const everyone = /\b(all|every|everyone|everything|idle|finished|free)\b/.test(clause)
+    const targets = agents.length ? agents : everyone || findClis(clause, ctx).length > 0 ? many() : []
     if (!targets.length) {
       const here = ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId)
-      return ask(here.length ? 'Which agent should I close?' : 'There are no agents open here.', here.slice(0, 4).map((a) => ({ label: a.petName, command: `close ${a.petName}` })))
+      return soft(here.length ? 'Which agent should I close?' : 'There are no agents open here.', here.slice(0, 4).map((a) => ({ label: a.petName, command: `close ${a.petName}` })))
     }
     return done([{ type: 'close-agents', agentIds: targets.map((a) => a.id) }], 'close')
   }
 
   if (verb === 'restart') {
-    if (agents.length !== 1) return ask('Which agent should I restart?', ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId).slice(0, 4).map((a) => ({ label: a.petName, command: `restart ${a.petName}` })))
+    if (agents.length !== 1) return (agents.length ? ask : soft)('Which agent should I restart?', ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId).slice(0, 4).map((a) => ({ label: a.petName, command: `restart ${a.petName}` })))
     return done([{ type: 'restart-agent', agentId: agents[0]!.id }], 'restart')
   }
 
@@ -252,25 +244,11 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
       if (project && 'many' in project) return ask('Which project?', project.many.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name} project` })))
     }
     if (verb === 'open' && /\b(agents?|cli|terminal)\b/.test(clause)) {
-      return ask('Which agent should I open?', ctx.clis.slice(0, 4).map((c) => ({ label: c.displayName, command: `open ${c.displayName}` })))
+      return soft('Which agent should I open?', ctx.clis.slice(0, 4).map((c) => ({ label: c.displayName, command: `open ${c.displayName}` })))
     }
   }
 
   return { result: { kind: 'unknown' }, verb: null }
-}
-
-/** "tell Bruno to run the tests": the message keeps the user's exact words and casing. */
-const MESSAGE = /^\s*(?:(?:hey|ok|okay)\s+)?(?:queen(?:\s+bee)?[\s,]+)?(?:please\s+)?(?:tell|ask|message|instruct|have|get)\s+([\p{L}\p{N}_-]+)[\s,:]+(?:to\s+)?([\s\S]+?)\s*$/iu
-
-function parseMessage(input: string, ctx: QueenContext): QueenParse | null {
-  const m = MESSAGE.exec(input)
-  if (!m) return null
-  const named = ctx.agents.filter((a) => a.petName.toLowerCase() === m[1]!.toLowerCase())
-  if (!named.length) return null
-  if (named.length > 1) return { kind: 'ask', question: { text: `There's more than one ${named[0]!.petName}.` } }
-  const text = m[2]!.replace(/^["“']|["”']$/g, '').trim()
-  if (!text) return null
-  return { kind: 'actions', actions: [{ type: 'message-agent', agentId: named[0]!.id, text }] }
 }
 
 const LEAD = String.raw`^\s*(?:(?:hey|hi|ok|okay)\s+)?(?:queen(?:\s+bee)?[\s,]+)?(?:please\s+)?`
@@ -291,22 +269,51 @@ function parseMemory(input: string): QueenParse | null {
   return { kind: 'actions', actions: [{ type: 'remember', text }] }
 }
 
+const HELP = /^(help|what can you do|what do you do|what can i say|commands|show commands|list commands|how do i use you|how to use you|kya kar sakti ho|kya kya kar sakti ho|madad)$/
+const MUTE = /^(mute|be quiet|quiet|shut up|stop talking|silence|no voice|voice off|talkback off|sound off|chup|chup raho)$/
+const UNMUTE = /^(unmute|speak|talk|talk to me|speak up|voice on|talkback on|sound on|bolo|bol ke batao)$/
+const THEME_WORDS = new Set(['go', 'use', 'set', 'change', 'apply', 'switch', 'to', 'theme', 'mode', 'color', 'colors', 'colour', 'colours', 'a', 'on', 'turn'])
+const NEW_WORKSPACE =/^\s*(?:please\s+)?(?:create|new|make|add|start|open)\s+(?:a\s+)?(?:new\s+)?workspace\s+(?:called\s+|named\s+|for\s+)?["“']?([^"”']+?)["”']?\s*$/i
+
+/** One-liners: help, talkback, theme, a new workspace. */
+function parseQuick(input: string, ctx: QueenContext): QueenParse | null {
+  const text = fold(input)
+  // Filler-free and as said: "what can you do" must keep its "can you".
+  const plain = norm(input).replace(/^(hey |hi |ok |okay )?(queen bee |queen )?(please )?/, '').replace(/ please$/, '')
+  const is = (re: RegExp) => re.test(text) || re.test(plain)
+  if (is(HELP)) return { kind: 'actions', actions: [{ type: 'help' }] }
+  if (is(MUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: false }] }
+  if (is(UNMUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: true }] }
+  // "jade theme", "switch to the rose theme", "dark mode" — the whole sentence, nothing else in it.
+  const words = text.split(' ').filter((w) => !THEME_WORDS.has(w))
+  const theme = /\b(theme|mode|colou?rs?)\b/.test(text) && words.length === 1 ? THEMES.find((t) => t.id === words[0]) : undefined
+  if (theme) return { kind: 'actions', actions: [{ type: 'set-theme', theme: theme.id as ThemeId }] }
+  const ws = NEW_WORKSPACE.exec(input)
+  if (ws) {
+    if (!ctx.projectId) return { kind: 'ask', question: { text: 'Open a project first, then I can add a workspace to it.' } }
+    return { kind: 'actions', actions: [{ type: 'create-workspace', name: ws[1]!.trim().slice(0, 60), projectId: ctx.projectId }] }
+  }
+  return null
+}
+
 export function parseCommand(raw: string, ctx: QueenContext): QueenParse {
   // A custom personality answers to her own name, like "queen".
   const name = ctx.queenName?.trim()
   const input = name ? raw.replace(new RegExp(`^\\s*(?:(?:hey|hi|ok|okay)\\s+)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[\\s,]*`, 'iu'), '') : raw
-  const memory = parseMemory(input)
-  if (memory) return memory
-  const message = parseMessage(input, ctx)
-  if (message) return message
-  let text = norm(input)
-  for (const [re, to] of PHRASES) text = text.replace(re, to)
-  text = text.replace(FILLER, ' ').replace(/\s+/g, ' ').trim()
+  // Most specific first: notes, one-liners, then anything addressed to an agent by name.
+  const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
+  if (direct) return direct
+  const text = fold(input)
   if (!text) return { kind: 'unknown' }
 
   const actions: QueenAction[] = []
   let verb: string | null = null
-  for (const clause of clauses(text)) {
+  // Hindi puts one verb at the very end of a list: "codex aur claude kholo" opens both.
+  const parts = clauses(text)
+  const tail = parts.at(-1)?.split(' ').at(-1) ?? ''
+  const shared = parts.length > 1 && VERB_WORDS.test(tail) ? tail : null
+  const ordered = shared ? parts.map((p, i) => (i < parts.length - 1 && !VERB_WORDS.test(p.split(' ')[0]!) ? `${shared} ${p}` : p)) : parts
+  for (const clause of ordered) {
     const { result, verb: next } = parseClause(clause, ctx, verb)
     // One clause the rules can't place sends the whole command to the model: never half-run a request.
     if (result.kind !== 'actions') return result

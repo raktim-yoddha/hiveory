@@ -71,8 +71,12 @@ export interface AppSettings {
   queenShortcut: string
   /** The language Queen Bee listens in (picks the speech pack). */
   queenSpeechLanguage: 'en' | 'es' | 'pt' | 'de' | 'fr' | 'hi'
-  /** When she answers out loud. */
-  queenSpeak: 'after-voice' | 'always' | 'never'
+  /** Talkback: when she answers out loud (Kokoro when installed, otherwise the system voice). */
+  queenTalkback: 'always' | 'after-voice' | 'never'
+  /** Short sound cues: listening, done, an agent update. */
+  queenSounds: boolean
+  /** Live updates from agents: finished and waiting, only waiting, or none. */
+  queenUpdates: 'all' | 'waiting' | 'off'
   /** Speaking speed (0.8–1.4). */
   queenVoiceSpeed: number
 }
@@ -112,7 +116,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenLength: 'normal',
   queenShortcut: 'Meta+Alt',
   queenSpeechLanguage: 'en',
-  queenSpeak: 'after-voice',
+  queenTalkback: 'always',
+  queenSounds: true,
+  queenUpdates: 'all',
   queenVoiceSpeed: 1.05
 }
 

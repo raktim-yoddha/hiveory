@@ -24,6 +24,7 @@ import { KOKORO_VOICES, type VoicePackState } from '../queen/voice'
 import { parseShortcut, type HotkeySignal, type HotkeyStatus } from '../queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '../queen/actions'
 import { customNameProblem } from '../queen/personas'
+import type { QueenPeek, QueenUpdate } from '../queen/updates'
 
 /** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
 export interface WallpaperImage {
@@ -50,7 +51,7 @@ const queenContextSchema = z.object({
   agents: z
     .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
     .max(500),
-  clis: z.array(z.object({ id: shortText, displayName: shortText })).max(200),
+  clis: z.array(z.object({ id: shortText, displayName: shortText, kind: z.enum(['agent', 'shell']).optional() })).max(200),
   presets: z.array(z.object({ id: shortText, name: shortText })).max(200)
 })
 
@@ -218,6 +219,10 @@ export const requestSchemas = {
   /** macOS asks for the microphone once; Windows reports its privacy setting. */
   'voice.micAccess': none,
   'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
+  /** Stops what an agent is doing without closing it (Queen Bee's "stop Bruno"). */
+  'agents.interrupt': z.object({ instanceId: id }),
+  /** One agent up close: status, activity and the last words on its screen. */
+  'queen.peek': z.object({ instanceId: id }),
   /** The system-wide shortcut's native hook (opt-in): running, off, or why not. */
   'queen.hotkeyStatus': none,
   /** macOS: asks for Accessibility access, then starts the hook if allowed. */
@@ -259,7 +264,9 @@ export const requestSchemas = {
       queenLength: z.enum(['short', 'normal']),
       queenShortcut: z.string().max(60).refine((s) => parseShortcut(s) !== null, 'Use two or three keys, at least one of them a modifier.'),
       queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']),
-      queenSpeak: z.enum(['after-voice', 'always', 'never']),
+      queenTalkback: z.enum(['always', 'after-voice', 'never']),
+      queenSounds: z.boolean(),
+      queenUpdates: z.enum(['all', 'waiting', 'off']),
       queenVoiceSpeed: z.number().min(0.8).max(1.4)
     })
     .partial(),
@@ -471,6 +478,8 @@ export interface ResponseMap {
   'voice.micAccess': boolean
   'queen.plan': BrainResult
   'queen.hotkeyStatus': HotkeyStatus
+  'agents.interrupt': void
+  'queen.peek': QueenPeek
   'queen.hotkeyAccess': HotkeyStatus
   'settings.get': AppSettings
   'settings.update': AppSettings
@@ -579,6 +588,8 @@ export interface EventMap {
   'voice.changed': VoicePackState[]
   /** Queen Bee's shortcut was used while another app was focused. */
   'queen.hotkey': { signal: HotkeySignal }
+  /** An agent finished, needs you, or stopped (Queen Bee's live updates). */
+  'queen.update': QueenUpdate
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
   'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string }
   'app.notice': { level: 'info' | 'warning' | 'error'; message: string }
@@ -602,7 +613,8 @@ const EVENTS: Record<EventName, true> = {
   'browser.changed': true,
   'files.changed': true,
   'voice.changed': true,
-  'queen.hotkey': true
+  'queen.hotkey': true,
+  'queen.update': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

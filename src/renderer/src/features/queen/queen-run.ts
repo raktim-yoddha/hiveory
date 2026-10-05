@@ -1,11 +1,14 @@
-import type { CliStatus, KanbanCard } from '@shared/domain'
+import { THEMES, type CliStatus, type KanbanCard } from '@shared/domain'
 import type { QueenAction, QueenContext } from '@shared/queen/actions'
 import type { BrainResult } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
 import {
   cancelledLine,
+  detailLine,
   doneLine,
   failedLine,
+  helpLine,
+  nobodyWaitingLine,
   nothingToForgetLine,
   personaInfo,
   prefsFromSettings,
@@ -25,7 +28,7 @@ import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from
 import { agentActions } from '../agents/agent-actions'
 import { openBrowserTab } from '../side-panel/panel-actions'
 import { useQueen } from './useQueen'
-import { speak } from './voice'
+import { cue, speak } from './voice'
 
 /**
  * Queen Bee's executor (ADR 0019): parse → resolve against live state → run →
@@ -35,6 +38,32 @@ import { speak } from './voice'
  */
 
 const prefs = (): QueenPrefs => prefsFromSettings(useSettings.getState().settings)
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Waits until a just-opened agent can take a message: running, idle for 2 s and
+ * something on its screen. A question first (trust this folder?) stops the wait:
+ * typing into it would answer it.
+ */
+async function waitUntilReady(instanceId: string, timeoutMs = 60_000): Promise<'ready' | 'waiting' | 'stopped' | 'timeout'> {
+  const started = Date.now()
+  let idleSince: number | null = null
+  for (;;) {
+    const r = useAgents.getState().runtime[instanceId]
+    const now = Date.now()
+    if (r?.status === 'waiting-for-you') return 'waiting'
+    if (r && !r.running && now - started > 5000) return 'stopped'
+    if (r?.running && r.status === 'idle') {
+      idleSince ??= now
+      if (now - idleSince >= 2000 && now - started >= 3000) {
+        const peek = await api('queen.peek', { instanceId }).catch(() => null)
+        if (peek?.excerpt) return 'ready'
+      }
+    } else idleSince = null
+    if (now - started > timeoutMs) return 'timeout'
+    await sleep(250)
+  }
+}
 
 /** Her notes (Settings › Queen Bee › Personality), saved through settings. */
 const notes = (): string[] => useSettings.getState().settings.queenMemory
@@ -90,7 +119,7 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       projects: projectList.map((p) => ({ id: p.id, name: p.name })),
       workspaces: (workspaces ?? []).map((w) => ({ id: w.id, name: w.name, kind: w.kind })),
       agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
-      clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName })),
+      clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName, kind: c.kind })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name })),
       ...(useSettings.getState().settings.queenPersona === 'custom' ? { queenName: personaInfo(useSettings.getState().settings).name } : {})
     }
@@ -99,9 +128,9 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
 
 const cliName = (cliId: string): string => useClis.getState().clis.find((c) => c.id === cliId)?.displayName ?? cliId
 
-/** Status report over the current project, or every project from the home page. Numbers only from live state. */
-async function report(focus: 'all' | CliStatus, projectId: string | undefined) {
-  const projectIds = projectId ? [projectId] : useProjects.getState().projects.map((p) => p.id)
+/** Status report over the current project, or every project (from Home, or when asked). Numbers only from live state. */
+async function report(focus: 'all' | CliStatus, projectId: string | undefined, options: { everywhere?: boolean; cliId?: string } = {}) {
+  const projectIds = projectId && !options.everywhere ? [projectId] : useProjects.getState().projects.map((p) => p.id)
   const { since } = useAgents.getState()
   const now = Date.now()
   const perProject = await Promise.all(projectIds.map(async (id) => (await projectAgents(id)).map((card) => ({ card, projectId: id }))))
@@ -114,9 +143,13 @@ async function report(focus: 'all' | CliStatus, projectId: string | undefined) {
     workspaceName: c.workspaceName,
     status: c.runtime.status,
     waitingMinutes: c.runtime.status === 'waiting-for-you' && since[c.instanceId] ? (now - since[c.instanceId]!) / 60_000 : undefined,
-    activity: c.runtime.activity
+    activity: c.runtime.activity,
+    cliId: c.cliId
   }))
-  return buildReport(agents, focus)
+  return buildReport(
+    agents.filter((a) => !options.cliId || a.cliId === options.cliId),
+    focus
+  )
 }
 
 /** Runs actions in order. Stops at the first failure; what already ran stays (and is reported). */
@@ -127,6 +160,8 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   const undos: Array<() => Promise<void> | void> = []
   let reportText: string | null = null
   let reportData: Awaited<ReturnType<typeof report>> | undefined
+  /** The agent's own last words, shown labelled under the reply. */
+  let quote: string | undefined
   const nav = useNavigation.getState
   const workspaceName = (id: string) => ctx.workspaces.find((w) => w.id === id)?.name ?? 'this workspace'
   const agent = (id: string) => {
@@ -184,7 +219,92 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         case 'message-agent': {
           const a = agent(action.agentId)
           await api('agents.sendMessage', { instanceId: a.instanceId, message: action.text })
-          outcomes.push({ kind: 'messaged', name: a.petName })
+          // "tell everyone …" is one step with every name, not one step per agent.
+          const last = outcomes.at(-1)
+          if (last?.kind === 'messaged') last.name = `${last.name}, ${a.petName}`
+          else outcomes.push({ kind: 'messaged', name: a.petName })
+          break
+        }
+        case 'open-and-message': {
+          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that workspace no longer exists.')
+          if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
+            remember()
+            nav().openWorkspace(action.projectId, action.workspaceId)
+          }
+          const created = await agentActions.open(action.workspaceId, action.cliId)
+          if (!created) throw new QueenError(`${cliName(action.cliId)} did not start.`)
+          outcomes.push({ kind: 'opened', count: 1, cliName: cliName(action.cliId), workspace: workspaceName(action.workspaceId) })
+          useQueen.getState().show({ kind: 'reply', text: `Starting ${created.petName}; I'll send your message when it's ready.`, receipts: outcomes.map(receipt) })
+          const ready = await waitUntilReady(created.id)
+          if (ready !== 'ready') {
+            throw new QueenError(
+              ready === 'waiting'
+                ? `${created.petName} is asking something first. Answer it, then tell me again.`
+                : ready === 'stopped'
+                  ? `${created.petName} stopped before it was ready.`
+                  : `${created.petName} took too long to start; the message was not sent.`
+            )
+          }
+          await api('agents.sendMessage', { instanceId: created.id, message: action.text })
+          outcomes.push({ kind: 'messaged', name: created.petName })
+          break
+        }
+        case 'interrupt-agent': {
+          const a = agent(action.agentId)
+          await api('agents.interrupt', { instanceId: a.instanceId })
+          const last = outcomes.at(-1)
+          if (last?.kind === 'interrupted') last.names.push(a.petName)
+          else outcomes.push({ kind: 'interrupted', names: [a.petName] })
+          break
+        }
+        case 'agent-detail': {
+          const a = agent(action.agentId)
+          const peek = await api('queen.peek', { instanceId: a.instanceId })
+          reportText = detailLine(peek, p, cliName(a.cliId))
+          quote = peek.excerpt
+          reportData = buildReport([{ id: a.instanceId, projectId: ctx.projectId, workspaceId: a.workspaceId, petName: a.petName, cliName: cliName(a.cliId), workspaceName: a.workspaceName, status: peek.status }], 'all')
+          break
+        }
+        case 'focus-waiting': {
+          const waiting = (await report('waiting-for-you', ctx.projectId)).waiting[0] ?? (await report('waiting-for-you', undefined, { everywhere: true })).waiting[0]
+          if (!waiting?.projectId || !waiting.workspaceId) {
+            reportText = nobodyWaitingLine(p)
+            break
+          }
+          remember()
+          nav().openWorkspace(waiting.projectId, waiting.workspaceId, waiting.id)
+          outcomes.push({ kind: 'focused', name: waiting.petName })
+          break
+        }
+        case 'set-theme': {
+          const before = useSettings.getState().settings.theme
+          await useSettings.getState().update({ theme: action.theme })
+          undos.push(() => useSettings.getState().update({ theme: before }))
+          outcomes.push({ kind: 'theme', name: THEMES.find((t) => t.id === action.theme)?.name ?? action.theme })
+          break
+        }
+        case 'speak': {
+          await useSettings.getState().update({ queenTalkback: action.on ? 'always' : 'never' })
+          outcomes.push({ kind: 'talkback', on: action.on })
+          break
+        }
+        case 'create-workspace': {
+          const settings = useSettings.getState().settings
+          const created = await api('workspaces.create', {
+            projectId: action.projectId,
+            kind: 'isolated',
+            name: action.name,
+            cliSelections: [],
+            autoApprove: settings.defaultAutoApprove,
+            chatUi: settings.defaultChatUi
+          })
+          remember()
+          nav().openWorkspace(action.projectId, created.id)
+          outcomes.push({ kind: 'workspace', name: created.name })
+          break
+        }
+        case 'help': {
+          reportText = helpLine(p)
           break
         }
         case 'apply-preset': {
@@ -243,7 +363,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'report': {
-          reportData = await report(action.focus, ctx.projectId)
+          reportData = await report(action.focus, ctx.projectId, { everywhere: action.everywhere, cliId: action.cliId })
           reportText = reportLine(reportData, p)
           break
         }
@@ -288,6 +408,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     text,
     receipts: outcomes.map(receipt),
     report: reportData,
+    ...(quote ? { quote } : {}),
     undo: undos.length
       ? async () => {
           for (const undo of undos.reverse()) await undo()
@@ -313,10 +434,16 @@ const cardText = (): string => {
   return !card ? '' : card.kind === 'ask' ? card.question.text : card.text
 }
 
+/** The last command, for "again". */
+let lastCommand = ''
+const AGAIN = /^\s*(again|repeat|repeat that|do it again|same again|one more time|phir se|dobara)\s*[.!]?\s*$/i
+
 /** Handles one command typed or spoken to Queen Bee. */
-export async function runQueen(input: string, options: { spoken?: boolean } = {}): Promise<void> {
+export async function runQueen(said: string, options: { spoken?: boolean } = {}): Promise<void> {
   const queen = useQueen.getState()
+  const input = AGAIN.test(said) && lastCommand ? lastCommand : said
   if (!input.trim() || queen.busy) return
+  if (!AGAIN.test(input)) lastCommand = input
   queen.setBusy(true)
   try {
     const { ctx, cards } = await buildContext()
@@ -324,13 +451,18 @@ export async function runQueen(input: string, options: { spoken?: boolean } = {}
     const p = prefs()
     // Tier 1: only what the rules could not place goes to the model (when one is set up).
     if (parsed.kind === 'unknown') parsed = await askBrain(input, ctx)
+    // The rules didn't know a name: a model may. Its plan wins; otherwise the rules' question stands.
+    else if (parsed.kind === 'ask' && parsed.soft) {
+      const planned = await askBrain(input, ctx).catch(() => ({ kind: 'unknown' }) as const)
+      if (planned.kind === 'actions') parsed = planned
+    }
     if (parsed.kind === 'unknown') queen.show({ kind: 'reply', text: unknownLine(p), receipts: [] })
     else if (parsed.kind === 'reply') queen.show({ kind: 'reply', text: parsed.text, receipts: [] })
     else if (parsed.kind === 'ask') queen.show({ kind: 'ask', question: parsed.question })
     else if (parsed.confirm) {
-      const closes = parsed.actions.some((a) => a.type === 'close-agents')
-      const sends = parsed.actions.some((a) => a.type === 'message-agent')
-      queen.show({ kind: 'confirm', text: parsed.confirm, label: closes && sends ? 'Confirm' : closes ? 'Close' : 'Send', run: () => execute(parsed.actions, ctx, cards) })
+      const types = new Set(parsed.actions.map((a) => a.type))
+      const label = types.size === 1 && types.has('close-agents') ? 'Close' : types.size === 1 && types.has('message-agent') ? 'Send' : 'Confirm'
+      queen.show({ kind: 'confirm', text: parsed.confirm, label, run: () => execute(parsed.actions, ctx, cards) })
     }
     else await execute(parsed.actions, ctx, cards)
   } catch (error) {
@@ -338,8 +470,10 @@ export async function runQueen(input: string, options: { spoken?: boolean } = {}
   } finally {
     useQueen.getState().setBusy(false)
     if (options.spoken) useQueen.setState((s) => (s.card ? { card: { ...s.card, heard: input } } : {}))
-    const when = useSettings.getState().settings.queenSpeak
+    // Talkback: she answers out loud (or, when she stays quiet, a short "done" cue).
+    const when = useSettings.getState().settings.queenTalkback
     if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(cardText())
+    else cue('done')
   }
 }
 

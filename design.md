@@ -166,10 +166,14 @@ cards) and nowhere it would repeat what is already on screen — chat replies ca
 One bar and one reply card, no history (ADR 0019).
 - **The bar:** the mark, the input, a dock/float toggle and ⋯. It's flat and outlined
   only while focused.
-- **Docked:** it shares the main area's surface.
+- **Docked:** the bar shares the main area's surface. The card hovers above the panes on
+  a solid raised surface with the popover shadow; it never pushes them. Replies fade
+  out after 10 s (20 s with Undo) unless hovered; questions stay.
 - **Floating:** it uses a solid raised surface and the popover shadow, so terminal text never shows through.
 - **Receipts:** small, secondary text with an accent check.
 - **Report rows:** status dot, name, CLI and workspace, wait time.
+- **An agent's own words:** an inset block captioned "On its screen", mono text, so it is
+  never mistaken for Queen Bee's.
 
 ## Dropdowns
 

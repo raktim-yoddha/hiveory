@@ -1,10 +1,21 @@
 /* Queen Bee (ADR 0019): one bar, one reply card. Flat, no outline at rest. */
 
+/* Docked: only the bar takes room. Her card hovers above the panes, so it never shifts them. */
 .dock {
+  position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: var(--space-3);
+}
+
+.dock .card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-3));
+  left: 0;
+  z-index: var(--z-panel);
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
 }
 
 .floating {
@@ -203,9 +214,43 @@
   animation: card-in var(--duration-slow) var(--ease-liquid);
 }
 
+/* Floating: the card hovers above the bar (below it near the top), so the bar never jumps. */
 .floating .card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-3));
+  left: 0;
   background: var(--color-surface-raised-solid);
   box-shadow: var(--shadow-popover);
+}
+
+.flip .card {
+  top: calc(100% + var(--space-3));
+  bottom: auto;
+}
+
+/* An agent's own last words, labelled: never mistaken for Queen Bee's. */
+.quote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.quote figcaption {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.quote blockquote {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }
 
 @keyframes card-in {

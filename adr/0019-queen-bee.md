@@ -65,7 +65,10 @@ only.
 - Input, mic (hold to talk), dock/float toggle, and ⋯ (personality, mute voice, Configure,
   which opens Settings › Queen Bee).
 - One reply card above the bar: the answer, action receipts and Undo. There is no
-  scrolling history. Esc dismisses. Her shortcut (default Win+Alt, ⌘⌥ on macOS) taps
+  scrolling history. The card hovers over the panes (docked or floating); only the bar
+  takes room, so a reply never moves the work. Because it covers part of the work, a reply
+  leaves by itself after 10 s (20 s with Undo) and stays while the pointer or focus is on
+  it; a question or a yes/no stays until answered. Esc dismisses. Her shortcut (default Win+Alt, ⌘⌥ on macOS) taps
   to focus her and holds to talk.
 
 ### Voice (phase 3)
@@ -280,6 +283,68 @@ and the request. Never files, code or terminal output.
 - The answer is validated by `planFromToolArgs` exactly like an API model's.
 - The Claude preset's dialog says that Anthropic's terms limit using a subscription through
   other apps, and suggests an API key when unsure.
+
+## Round D notes (as built)
+**Talkback.**
+- One setting, "Answer out loud": always (default), only after you spoke, or never. The
+  ⋯ menu toggles it, and so do "mute" and "talk to me".
+- She speaks with Kokoro when it is installed, otherwise with the operating system's own
+  voice (local SAPI or macOS voices), so talkback works with no download.
+- Short sound cues are generated (no audio files): listening starts and stops, a reply
+  while talkback is off, an agent update. They can be turned off.
+
+**Talking to agents by name** (rules, no model; the message is the user's exact words).
+- "codex run the tests", "Codex: …", "@claude …", "claude code …", "Bruno, …",
+  "powershell npm test", "tell/ask <name> …".
+- "everyone: …", "tell everyone to …", "tell all claude to …" go to every agent in the
+  workspace. Plain shells are never included in "everyone".
+- A CLI with several agents here asks which one, offering "All N". A CLI with none here
+  uses the only one elsewhere in the project, or offers "Open <CLI> and send": one agent
+  opens and gets the message once it is running, idle and has drawn its screen. If it
+  asks something first (trust this folder?), she stops and says so rather than answer
+  it.
+- A sentence that starts with a name but is only her own command words ("codex aur
+  claude kholo", "codex stop") stays a command; a status question ("codex status") is a
+  status question.
+
+**More commands.**
+- "stop/interrupt <agent>" (Hinglish "ruko", "roko") stops the current work without
+  closing: Esc for agent TUIs, Ctrl+C for shells, a cancelled reply in chat view. The keys
+  live in the CLI adapter (`interruptKeys`). Closing stays "close …" and asks first.
+- "status of everything" covers every project. "codex status" and "how is codex doing"
+  cover one CLI. "what is Bruno doing" and "is Luna done" show one agent: status,
+  activity and the last words on its screen, labelled as its own.
+- "take me to whoever needs me" or "next" opens the agent that has waited longest.
+- "close idle agents", "close all codex"; "jade theme"; "create a workspace called …";
+  "help"; "again" repeats the last command.
+
+**Live updates.**
+- `QueenWatcher` in main sees every real status change. It reports when an agent
+  finishes a turn of at least 4 s, needs you (with the reason), or stops with an error,
+  whether or not she started the work. The first status seen for an agent and plain
+  shells stay quiet.
+- The card shows the update with a jump-to row and the agent's own last words. Those
+  are its chat reply, or the last meaningful screen lines with the TUI frame removed;
+  they are never rephrased. She says the update when talkback is on.
+- Updates arriving within 0.7 s are told together. Updates never replace a question or
+  a yes/no on screen; they wait behind it. Setting: finished and waiting, only waiting,
+  or off.
+
+**Models: fast and exact with any provider.**
+- The prompt is about a third of its old length. Against a real OpenAI-compatible
+  provider, answers dropped from 6–11 s to 1.3–3 s.
+- `repair()` runs before validation. It maps exact (case-insensitive) names to ids,
+  fixes common action-type spellings and number strings, and fills only fields that
+  follow from the request: the current workspace or project, an agent's own workspace,
+  and the first Settings section, exactly as the rules do. Anything still wrong runs
+  nothing.
+- A model's message needs a yes unless its text is the user's own words.
+- Providers that refuse a feature get a plainer request, remembered per model: no
+  reasoning hint, then "any tool call" instead of a forced one, then a plain JSON answer.
+  Thinking blocks around a JSON answer are ignored.
+- When the rules did not understand a name ("a couple of the openai agent"), a configured
+  model tries first; its plan wins, otherwise the rules' question stands.
+- The time budget for API models is 12 s.
 
 ## Consequences
 - Most commands work with no key and no network.

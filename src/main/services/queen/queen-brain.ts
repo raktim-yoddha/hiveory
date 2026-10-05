@@ -21,7 +21,7 @@ import type { StoredBrainAccount } from '../persistence/schema'
 import { EffortRejected, planWithCli, runProcess, type RunProcess } from './cli-brain'
 
 /** A model gets this long to plan; past it, Queen Bee moves to the next account or says so. */
-export const BRAIN_BUDGET_MS = 8000
+export const BRAIN_BUDGET_MS = 12_000
 const LIST_BUDGET_MS = 10_000
 /** A CLI starts a whole agent runtime first: it gets longer. */
 export const CLI_BUDGET_MS = 30_000
@@ -71,8 +71,10 @@ const apiKind = (kind: BrainKind | undefined): BrainKind => ((API_KINDS as reado
  * Keys are sealed at rest, never returned to the renderer and never echoed.
  */
 export class QueenBrain {
-  /** Models that rejected the "think less" hint: asked again without it. */
+  /** CLI models that rejected the low-effort hint: asked again without it. */
   private readonly noHint = new Set<string>()
+  /** Per model: what it turned out to accept (the hint, a forced tool call, any tool call, or plain JSON). */
+  private readonly modes = new Map<string, WireMode>()
 
   constructor(
     private readonly store: StateStore,
@@ -227,10 +229,10 @@ export class QueenBrain {
   private async planWith(account: StoredBrainAccount, utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[]): Promise<BrainResult> {
     const system = systemPrompt(persona)
     const user = stateMessage(ctx, utterance, notes)
-    if (isCliKind(account.kind)) return planFromToolArgs(await this.callCli(account, system, user), ctx)
+    if (isCliKind(account.kind)) return planFromToolArgs(await this.callCli(account, system, user), ctx, utterance)
     const key = account.key ? this.box.open(account.key) : ''
     if (account.key && !key) fail('INVALID_INPUT', `The key of ${accountName(account)} can't be read on this account. Enter it again.`)
-    return planFromToolArgs(await this.call(account, key, system, user), ctx)
+    return planFromToolArgs(await this.call(account, key, system, user), ctx, utterance)
   }
 
   /** A subscription brain: the user's own CLI, once, locked down (see cli-brain.ts). */
@@ -249,23 +251,30 @@ export class QueenBrain {
     }
   }
 
+  /**
+   * One request, stepping down when the provider refuses a feature: first the
+   * "think less" hint, then (OpenAI-compatible only) a forced tool call becomes
+   * "any tool call", then a plain JSON answer. What worked is remembered per model.
+   */
   private async call(a: StoredBrainAccount, key: string, system: string, user: string): Promise<unknown> {
-    const hintKey = `${a.baseUrl}:${a.model}`
-    const withHint = !this.noHint.has(hintKey)
-    try {
-      return await this.request(a, key, system, user, withHint)
-    } catch (error) {
-      // Not every model accepts "reasoning effort" / "thinking" knobs: retry once without, and remember.
-      if (withHint && error instanceof HintRejected) {
-        this.noHint.add(hintKey)
-        return this.request(a, key, system, user, false)
+    const modeKey = `${a.baseUrl}:${a.model}`
+    let mode: WireMode = this.modes.get(modeKey) ?? { hint: true, tools: 'forced' }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const result = await this.request(a, key, system, user, mode)
+        this.modes.set(modeKey, mode)
+        return result
+      } catch (error) {
+        if (!(error instanceof Refused)) throw error
+        const next = attempt < 3 ? downgrade(mode, error.feature, a.kind) : null
+        if (!next) throw error.failure
+        mode = next
       }
-      throw error
     }
   }
 
-  private async request(a: StoredBrainAccount, key: string, system: string, user: string, hint: boolean): Promise<unknown> {
-    const { url, headers, body } = build(a.kind, a, key, system, user, hint)
+  private async request(a: StoredBrainAccount, key: string, system: string, user: string, mode: WireMode): Promise<unknown> {
+    const { url, headers, body } = build(a.kind, a, key, system, user, mode)
     let res: Response
     try {
       res = await this.http(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(BRAIN_BUDGET_MS) })
@@ -277,8 +286,12 @@ export class QueenBrain {
     const text = await res.text()
     if (!res.ok) {
       const detail = scrub(text, key)
-      if (hint && res.status === 400 && /reason|think|effort|budget/i.test(detail)) throw new HintRejected()
-      fail('INVALID_INPUT', `${accountName(a)}: ${httpMessage(res.status)}`, { detail: detail.slice(0, 300) })
+      const failure = new AppException({ code: 'INVALID_INPUT', message: `${accountName(a)}: ${httpMessage(res.status)}`, detail: detail.slice(0, 300) })
+      if (res.status === 400 || res.status === 422) {
+        if (mode.hint && /reason|think|effort|budget/i.test(detail)) throw new Refused('hint', failure)
+        if (/tool|function/i.test(detail)) throw new Refused('tools', failure)
+      }
+      throw failure
     }
     let data: unknown
     try {
@@ -290,7 +303,30 @@ export class QueenBrain {
   }
 }
 
-class HintRejected extends Error {}
+/** How a request is shaped for one model. */
+interface WireMode {
+  hint: boolean
+  tools: 'forced' | 'required' | 'json'
+}
+
+/** The provider refused a feature of the request; `failure` is shown if no plainer request works either. */
+class Refused extends Error {
+  constructor(
+    readonly feature: 'hint' | 'tools',
+    readonly failure: AppException
+  ) {
+    super(feature)
+  }
+}
+
+/** The next, plainer way to ask; null when there is none left. */
+const downgrade = (mode: WireMode, feature: 'hint' | 'tools', kind: BrainKind): WireMode | null => {
+  if (feature === 'hint' && mode.hint) return { ...mode, hint: false }
+  if (kind !== 'openai') return null
+  if (mode.tools === 'forced') return { ...mode, tools: 'required' }
+  if (mode.tools === 'required') return { ...mode, tools: 'json' }
+  return null
+}
 
 const httpMessage = (status: number): string =>
   status === 401 || status === 403
@@ -307,7 +343,8 @@ const httpMessage = (status: number): string =>
 const scrub = (text: string, key: string): string => (key ? text.split(key).join('••••') : text)
 
 /** The wire format of each provider kind, with one forced `plan` call. */
-function build(kind: BrainKind, b: { baseUrl: string; model: string }, key: string, system: string, user: string, hint: boolean) {
+function build(kind: BrainKind, b: { baseUrl: string; model: string }, key: string, system: string, user: string, mode: WireMode) {
+  const hint = mode.hint
   if (kind === 'anthropic') {
     return {
       url: `${b.baseUrl}/messages`,
@@ -342,15 +379,22 @@ function build(kind: BrainKind, b: { baseUrl: string; model: string }, key: stri
     body: {
       model: b.model,
       messages: [
-        { role: 'system', content: system },
+        { role: 'system', content: mode.tools === 'json' ? `${system}\n${JSON_ANSWER}` : system },
         { role: 'user', content: user }
       ],
-      tools: [{ type: 'function', function: { name: PLAN_TOOL.name, description: PLAN_TOOL.description, parameters: PLAN_TOOL.parameters } }],
-      tool_choice: { type: 'function', function: { name: PLAN_TOOL.name } },
+      ...(mode.tools === 'json'
+        ? {}
+        : {
+            tools: [{ type: 'function', function: { name: PLAN_TOOL.name, description: PLAN_TOOL.description, parameters: PLAN_TOOL.parameters } }],
+            tool_choice: mode.tools === 'forced' ? { type: 'function', function: { name: PLAN_TOOL.name } } : 'required'
+          }),
       ...(hint ? { reasoning_effort: b.baseUrl.includes('api.openai.com') ? 'minimal' : 'low' } : {})
     }
   }
 }
+
+/** For models without tool calling: the same plan, as the whole answer. */
+const JSON_ANSWER = `Answer with only one JSON object and no other text: the plan arguments, matching this schema: ${JSON.stringify(PLAN_TOOL.parameters)}`
 
 /** The `plan` arguments from each provider's answer shape. */
 function extract(kind: BrainKind, data: unknown): unknown {
@@ -363,10 +407,18 @@ function extract(kind: BrainKind, data: unknown): unknown {
   const message = d.choices?.[0]?.message ?? {}
   const call = message.tool_calls?.[0]?.function?.arguments
   // Some local servers answer in plain JSON content instead of a tool call.
-  const raw = typeof call === 'string' ? call : typeof message.content === 'string' ? message.content.replace(/^```(?:json)?|```$/g, '').trim() : ''
+  const raw = typeof call === 'string' ? call : typeof message.content === 'string' ? jsonIn(message.content) : ''
   try {
     return raw ? JSON.parse(raw) : {}
   } catch {
     return {}
   }
+}
+
+/** The JSON object in a text answer: thinking blocks and code fences around it are dropped. */
+export const jsonIn = (text: string): string => {
+  const body = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+  const start = body.indexOf('{')
+  const end = body.lastIndexOf('}')
+  return start >= 0 && end > start ? body.slice(start, end + 1) : ''
 }

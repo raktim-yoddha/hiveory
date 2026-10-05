@@ -31,6 +31,8 @@ import { PresetService } from '../services/presets/preset-service'
 import { SettingsService } from '../services/settings/settings-service'
 import { QueenBrain } from '../services/queen/queen-brain'
 import { GlobalHotkey, loadHook } from '../services/queen/global-hotkey'
+import { QueenWatcher } from '../services/queen/queen-watcher'
+import { lastWords } from '@shared/queen/updates'
 import { VoiceService } from '../services/voice/voice-service'
 import { ShellService } from '../services/shell/shell-service'
 import { UpdateService, type Updater } from '../services/updates/update-service'
@@ -87,7 +89,23 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const layouts = new LayoutService(store, emit)
   const chatStore = new ChatStore(paths.chatsDir, log)
   const chats = new ChatService(chatStore, registry, workspaceRepo, log, emit, join(paths.chatsDir, 'attachments'), mcpFor, join(paths.runtimeDir, 'chat'))
-  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, emit, chats)
+  // Queen Bee's live updates watch every status change on its way to the renderer.
+  const watcher = new QueenWatcher({
+    agent: (id) => agents.find(id),
+    isShell: (cliId) => registry.adapter(cliId)?.kind === 'shell',
+    cliName: (cliId) => registry.displayName(cliId),
+    workspaceName: (id) => workspaceRepo.find(id)?.name,
+    excerpt: (agent) => lastWords(agent.chatUi ? chats.lastReply(agent.id) : runtime.screenText(agent.id, 60)),
+    emit: (update) => emit('queen.update', update)
+  })
+  const agentEmit: Emit = (event, payload) => {
+    emit(event, payload)
+    if (event === 'runtime.changed') {
+      const { instanceId, runtime: details } = payload as { instanceId: string; runtime: Parameters<QueenWatcher['onRuntime']>[1] }
+      watcher.onRuntime(instanceId, details)
+    }
+  }
+  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats)
   const projects = new ProjectService(store, git, agents, emit)
   const workspaces = new WorkspaceService(workspaceRepo, git, worktrees, agents, paths.worktreeRoot, emit)
   const presets = new PresetService(store, emit)

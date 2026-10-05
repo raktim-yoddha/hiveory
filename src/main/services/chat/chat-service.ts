@@ -367,6 +367,12 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return this.runs.has(chatId)
   }
 
+  /** The latest assistant message as text (tool calls as "[tool name]"), or '' when there is none. */
+  lastReply(chatId: string): string {
+    const last = [...this.get(chatId).messages].reverse().find((m) => m.role === 'assistant')
+    return last ? last.parts.map((p) => (p.kind === 'tool' ? `[tool ${p.name}]` : p.text)).join('\n') + (last.error ? `\n(error: ${last.error})` : '') : ''
+  }
+
   private finish(chat: ChatSession, reply: ChatMessage, acc: ChatAccumulator, error?: string): void {
     if (acc.sessionId && !chat.providerSessionId) chat.providerSessionId = acc.sessionId
     reply.streaming = false

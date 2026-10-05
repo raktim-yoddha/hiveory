@@ -473,7 +473,7 @@ src/
 │   ├── ipc/contract.ts         every IPC channel + zod schema + event types
 │   ├── layout/                 split/dock/move/swap/resize, geometry, drop resolution
 │   ├── naming/names.ts         the one pet-name / workspace-name service
-│   ├── queen/                  Queen Bee: action union, rule parser (incl. notes), computed reports, persona phrasing (incl. custom), shortcut, voice packs
+│   ├── queen/                  Queen Bee: action union, rule parser (words, address, parse), model repair, computed reports, updates, persona phrasing, shortcut, voice packs
 │   ├── presets.ts              preset normalization/serialization
 │   └── errors.ts               normalized AppError / Result
 ├── main/                       Electron main: all privileged work
@@ -494,7 +494,7 @@ src/
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
-│       ├── queen/              QueenBrain (provider accounts: 3 API wire formats + Codex/Claude Code CLIs, fallback, sealed keys), cli-brain (locked-down headless CLI runs), GlobalHotkey (opt-in uiohook)
+│       ├── queen/              QueenBrain (provider accounts: 3 API wire formats + Codex/Claude Code CLIs, fallback, sealed keys), cli-brain (locked-down headless CLI runs), GlobalHotkey (opt-in uiohook), QueenWatcher (live updates from real status changes)
 │       ├── voice/              VoiceService (pinned, verified, resumable pack downloads) + VoiceEngine (sherpa-onnx STT/TTS)
 │       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery

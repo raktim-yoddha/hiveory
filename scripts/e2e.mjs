@@ -116,7 +116,9 @@ const test = async (name, fn) => {
     const cause = error?.cause ? ` (cause: ${error.cause.code ?? ''} ${error.cause.message ?? error.cause})` : ''
     const message = `${String(error?.message ?? error).split('\n')[0]}${cause} after ${Date.now() - started} ms`
     results.push({ name, ok: false, error: message })
-    console.log(`  ✗ ${name}\n      ${message}`)
+    // Playwright puts the reason (what intercepted a click, which elements matched) on later lines.
+    const detail = String(error?.message ?? '').split('\n').slice(1, 8).filter((l) => l.trim()).map((l) => `        ${l.trim()}`).join('\n')
+    console.log(`  ✗ ${name}\n      ${message}${detail ? `\n${detail}` : ''}`)
     await shot(`FAIL-${name.replace(/[^a-z0-9]+/gi, '-')}`)
   }
 }
@@ -1024,6 +1026,70 @@ await test('agents get an MCP server and Hiveory instructions', async () => {
   const names = list.result.tools.map((t) => t.name)
   for (const n of ['list_agents', 'read_agent', 'send_message', 'wait_for_agent', 'open_agent', 'close_agent', 'arrange_panes', 'run_in_terminal']) {
     expect(names.includes(n), `missing tool ${n}`)
+  }
+})
+
+await test('Queen Bee: messages by CLI name, stops work, reports everything, tells (out loud) when an agent finishes; her card never moves the panes', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  const card = page.locator('section[aria-label="Queen Bee says"]')
+  const say = async (text) => {
+    await queen.fill(text)
+    await queen.press('Enter')
+  }
+  const screen = async (id) => (await value('terminal.snapshot', { instanceId: id })).data
+  // Talkback is captured, not played.
+  await page.evaluate(() => {
+    window.__spoken = []
+    window.speechSynthesis.speak = (line) => window.__spoken.push(line.text)
+  })
+  const spoken = () => page.evaluate(() => window.__spoken)
+  await value('settings.update', { queenTalkback: 'always', queenUpdates: 'all' })
+  await page.getByRole('button', { name: 'demo-app', exact: true }).click()
+  await say('go to main')
+  await panes().first().waitFor()
+  const startPanes = await panes().count()
+  const { agent: shell } = await value('agents.open', { workspaceId: mainWs.id, cliId: 'powershell' })
+  try {
+    await waitFor(async () => (await screen(shell.id)).length > 0, 'shell prompt')
+    await waitFor(async () => (await panes().count()) >= 2, 'shell pane shown')
+
+    // "powershell <command>": typed into that CLI as said. Her card hovers; the panes stay put.
+    const before = await panes().first().boundingBox()
+    await say('powershell echo queen-direct-ok')
+    await waitFor(async () => (await screen(shell.id)).includes('queen-direct-ok'), 'CLI-name message reached the terminal')
+    await card.getByText(/has your message/).waitFor()
+    const after = await panes().first().boundingBox()
+    // Sub-pixel layout settling is fine; a card pushing the panes would move them by its own height.
+    expect(Math.abs(before.y - after.y) < 2 && Math.abs(before.height - after.height) < 2, `panes moved: ${JSON.stringify(before)} → ${JSON.stringify(after)}`)
+    await waitFor(async () => (await spoken()).some((t) => /has your message/.test(t)), 'talkback spoke the reply')
+    await shot('h10-queen-card-hovers')
+
+    // "stop <agent>" interrupts the running command without closing the agent.
+    await say(`${shell.petName} ping -t 127.0.0.1`)
+    await waitFor(async () => /Reply from|Pinging/.test(await screen(shell.id)), 'ping running')
+    await say(`stop ${shell.petName}`)
+    await waitFor(async () => /statistics|Control-C|\^C/i.test(await screen(shell.id)), 'ping interrupted')
+    expect((await value('agents.list', { workspaceId: mainWs.id })).some((a) => a.id === shell.id), 'stop closed the agent')
+
+    await say('status of everything')
+    await waitFor(async () => /waiting for you|working|idle/i.test(await card.innerText()), 'status of everything')
+
+    // A Claude agent's own hooks report a finished turn: she tells it, and says it.
+    const claude = (await value('agents.list', { workspaceId: mainWs.id })).find((a) => a.cliId === 'claude')
+    const token = mcp.headers.Authorization.replace(/^Bearer /, '')
+    const hook = (event) =>
+      fetch(`${new URL(mcp.url).origin}/hooks/${claude.id}/${event}`, { method: 'POST', headers: { 'X-Hiveory-Token': token, 'Content-Type': 'application/json' }, body: '{}' })
+    await hook('UserPromptSubmit')
+    await page.waitForTimeout(4500)
+    await hook('Stop')
+    await card.getByText(new RegExp(`${claude.petName} has finished in`)).waitFor()
+    await waitFor(async () => (await spoken()).some((t) => t.includes(`${claude.petName} has finished`)), 'update spoken')
+    await shot('h11-queen-update')
+  } finally {
+    await value('agents.close', { instanceId: shell.id }).catch(() => undefined)
+    // The next tests count panes: wait until the shell's pane has left the screen.
+    await waitFor(async () => (await panes().count()) === startPanes, 'shell pane removed')
+    await value('settings.update', { queenUpdates: 'all', queenTalkback: 'always' })
   }
 })
 

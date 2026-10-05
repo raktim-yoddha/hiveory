@@ -76,12 +76,6 @@ export class AgentTools implements ToolHost {
     return text.split('\n').slice(-lines).join('\n')
   }
 
-  /** The latest assistant message of a chat-view agent. */
-  private lastReply(agentId: string): string {
-    const last = [...this.deps.chats.get(agentId).messages].reverse().find((m) => m.role === 'assistant')
-    return last ? last.parts.map((p) => (p.kind === 'tool' ? `[tool ${p.name}]` : p.text)).join('\n') + (last.error ? `\n(error: ${last.error})` : '') : ''
-  }
-
   private describe(agent: CliInstance): string {
     const runtime = this.deps.agents.details(agent)
     const cli = this.deps.registry.displayName(agent.cliId)
@@ -336,7 +330,7 @@ export class AgentTools implements ToolHost {
         const sent = await this.dispatch('send_message', { agent: agent.petName, message: str(args, 'message'), submit: true })
         const done = await this.waitIdle(agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000, 2500)
         const lines = int(args, 'lines', 80, 1, MAX_READ_LINES)
-        const reply = agent.chatUi ? this.lastReply(agent.id) : runtime.screenText(agent.id, lines)
+        const reply = agent.chatUi ? this.deps.chats.lastReply(agent.id) : runtime.screenText(agent.id, lines)
         return `${sent} ${done ? 'It finished.' : 'Timed out while it was still working.'}\n--- ${agent.chatUi ? 'reply' : 'screen'} ---\n${reply || '(nothing yet)'}`
       }
       case 'open_agent': {

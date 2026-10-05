@@ -4,6 +4,7 @@ import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/sh
 import { KOKORO_VOICES, packSize, PERSONA_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
 import { Button } from '../../components/ui/Button'
 import { RangeField } from '../../components/ui/RangeField'
+import { Toggle } from '../../components/ui/Toggle'
 import { Select } from '../../components/ui/Select'
 import { api } from '../../lib/api'
 import { usePlatform } from '../../lib/platform'
@@ -78,27 +79,49 @@ export function QueenVoiceSettings() {
       </div>
 
       <div className={styles.group}>
-        <div className={styles.groupTitle}>Speaking back</div>
+        <div className={styles.groupTitle}>Talkback</div>
         <SettingRow
           title="Answer out loud"
-          description="Needs Kokoro."
+          description="Works right away with your system’s voice; Kokoro sounds more natural."
           control={
             <Select
               label="Answer out loud"
               hideLabel
-              value={settings.queenSpeak}
+              value={settings.queenTalkback}
               options={[
-                { value: 'after-voice', label: 'When I spoke to her' },
                 { value: 'always', label: 'Always' },
+                { value: 'after-voice', label: 'When I spoke to her' },
                 { value: 'never', label: 'Never' }
               ]}
-              onChange={(v) => void update({ queenSpeak: v as typeof settings.queenSpeak })}
+              onChange={(v) => void update({ queenTalkback: v as typeof settings.queenTalkback })}
             />
           }
         />
         <SettingRow
+          title="Updates from agents"
+          description="She tells you when an agent finishes or needs you, whether or not she started the work."
+          control={
+            <Select
+              label="Updates from agents"
+              hideLabel
+              value={settings.queenUpdates}
+              options={[
+                { value: 'all', label: 'Finished and waiting' },
+                { value: 'waiting', label: 'Only when waiting for me' },
+                { value: 'off', label: 'Off' }
+              ]}
+              onChange={(v) => void update({ queenUpdates: v as typeof settings.queenUpdates })}
+            />
+          }
+        />
+        <SettingRow
+          title="Sound cues"
+          description="A short tone when she starts and stops listening, and for agent updates."
+          control={<Toggle label="Sound cues" checked={settings.queenSounds} onChange={(on) => void update({ queenSounds: on })} />}
+        />
+        <SettingRow
           title="Her voice"
-          description={`Speaking as ${voiceFor(settings).name}.`}
+          description={state('kokoro').state === 'ready' ? `Speaking as ${voiceFor(settings).name}.` : 'Kokoro voices need the Kokoro pack; until then she uses your system’s voice.'}
           control={
             <span className={styles.inlineControls}>
               <Select
@@ -115,7 +138,6 @@ export function QueenVoiceSettings() {
                 size="sm"
                 variant="ghost"
                 icon={<Volume2 />}
-                disabled={state('kokoro').state !== 'ready'}
                 onClick={() => void speak(settings.queenCallMe ? `Hi ${settings.queenCallMe}, this is how I sound.` : 'Hi, this is how I sound.')}
               >
                 Preview

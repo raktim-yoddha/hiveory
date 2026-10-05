@@ -155,6 +155,19 @@ export class AgentService {
     return layout
   }
 
+  /**
+   * Stops what an agent is doing without closing it. Chat view cancels the reply;
+   * terminals get the adapter's interrupt keys (Esc for agent TUIs, where Ctrl+C
+   * would start quitting; Ctrl+C for shells).
+   */
+  interrupt(instanceId: string): void {
+    const instance = this.get(instanceId)
+    if (!this.details(instance).running) fail('INVALID_INPUT', `${instance.petName} is not running.`)
+    if (instance.chatUi) return this.chats.stop(instanceId)
+    const adapter = this.registry.adapter(instance.cliId)
+    this.runtime.write(instanceId, adapter?.interruptKeys ?? (adapter?.kind === 'shell' ? '\x03' : '\x1b'))
+  }
+
   restart(instanceId: string): void {
     const instance = this.get(instanceId)
     // Chat view: stop a streaming reply (and make sure the agent's chat exists).

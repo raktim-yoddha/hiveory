@@ -9,6 +9,7 @@ import type { Handlers } from './router'
 import { deliverMessage } from '../services/agent-tools/deliver'
 import { voiceFor } from '@shared/queen/voice'
 import { personaInfo } from '@shared/queen/personas'
+import { lastWords } from '@shared/queen/updates'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 export const createHandlers = (c: Container): Handlers => {
@@ -89,9 +90,7 @@ export const createHandlers = (c: Container): Handlers => {
   'voice.transcribe': ({ samples, language }) => c.voice.transcribe(samples, language),
   'voice.speak': ({ text }) => {
     const s = c.settings.get()
-    // Her name is said the way the user spelled it out for her.
-    const said = s.queenCallMe && s.queenCallMeSay ? text.split(s.queenCallMe).join(s.queenCallMeSay) : text
-    return c.voice.speak(said, voiceFor(s).sid, s.queenVoiceSpeed)
+    return c.voice.speak(text, voiceFor(s).sid, s.queenVoiceSpeed)
   },
   'voice.micAccess': async () => {
     if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone')
@@ -101,6 +100,20 @@ export const createHandlers = (c: Container): Handlers => {
   'queen.plan': ({ utterance, context }) => {
     const s = c.settings.get()
     return c.queenBrain.plan(utterance, context, personaInfo(s), s.queenMemory)
+  },
+  'agents.interrupt': ({ instanceId }) => c.agents.interrupt(instanceId),
+  'queen.peek': ({ instanceId }) => {
+    const agent = c.agents.find(instanceId) ?? fail('NOT_FOUND', 'That agent is no longer open.')
+    const details = c.agents.details(agent)
+    const excerpt = lastWords(agent.chatUi ? c.chats.lastReply(agent.id) : c.runtime.screenText(agent.id, 60))
+    return {
+      petName: agent.petName,
+      status: details.status,
+      running: details.running,
+      ...(details.waitingReason ? { waitingReason: details.waitingReason } : {}),
+      ...(details.activity ? { activity: details.activity } : {}),
+      ...(excerpt ? { excerpt } : {})
+    }
   },
   'queen.hotkeyStatus': () => c.hotkey.current(),
   'queen.hotkeyAccess': () => {

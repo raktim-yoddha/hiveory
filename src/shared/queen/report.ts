@@ -10,6 +10,7 @@ export interface QueenAgentStatus {
   projectId?: string
   workspaceId?: string
   status: CliStatus
+  cliId?: string
   /** How long it has been waiting for you, when known. */
   waitingMinutes?: number
   activity?: string

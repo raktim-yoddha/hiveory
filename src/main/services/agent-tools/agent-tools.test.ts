@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
+import { ChatService } from '../chat/chat-service'
 import { HookServer } from '../cli/hooks/hook-server'
 import { AgentTools, type AgentToolDeps } from './agent-tools'
 import { handleBody, handleMessage, SUPPORTED_PROTOCOLS, type ToolHost } from './mcp-protocol'
@@ -53,6 +54,10 @@ const setup = (runtimeOverrides: Record<string, CliRuntimeDetails> = {}) => {
     chats: {
       isRunning: () => false,
       send: vi.fn(),
+      // The real extraction, over this stub's messages.
+      lastReply(this: Pick<ChatService, 'get'>, id: string) {
+        return ChatService.prototype.lastReply.call(this as ChatService, id)
+      },
       get: () => ({
         messages: [
           { role: 'user', parts: [{ kind: 'text', text: 'hello ivy' }] },
