@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ModelTracker } from './model-tracker'
 import { isWithin, SessionHistoryService } from './session-history'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined } as never
@@ -51,5 +52,33 @@ describe('agent session history', () => {
   it('matches folders and their subfolders only', () => {
     expect(isWithin(join(project, 'src'), project)).toBe(true)
     expect(isWithin(`${project}-copy`, project)).toBe(false)
+  })
+})
+
+describe('live model tracking', () => {
+  it("reads each running agent's current model from its own session, following /model", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hv-models-'))
+    const cwd = join(home, 'app')
+    const folder = join(home, '.claude', 'projects', cwd.replace(/[^A-Za-z0-9]/g, '-'))
+    mkdirSync(folder, { recursive: true })
+    const file = join(folder, 'conv-1.jsonl')
+    const reply = (model: string) => ({ type: 'assistant', message: { role: 'assistant', model, content: [{ type: 'text', text: 'ok' }] } })
+    writeFileSync(file, lines(reply('claude-sonnet-5-5')))
+    const models: Record<string, string> = {}
+    const instance = { id: 'a1', cliId: 'claude', workspaceId: 'w1', conversationId: 'conv-1' }
+    const tracker = new ModelTracker(
+      { state: { instances: [instance] } } as never,
+      { find: () => ({ path: cwd }) } as never,
+      { details: () => ({ status: 'idle', running: true }), setModel: (id: string, m: string) => (models[id] = m) } as never,
+      home
+    )
+    await tracker.tick()
+    expect(models.a1).toBe('claude-sonnet-5-5')
+    writeFileSync(file, lines(reply('claude-sonnet-5-5'), reply('claude-opus-5-5')))
+    // A new modification time is what makes it read again.
+    const { utimesSync } = await import('node:fs')
+    utimesSync(file, new Date(), new Date(Date.now() + 2000))
+    await tracker.tick()
+    expect(models.a1).toBe('claude-opus-5-5')
   })
 })

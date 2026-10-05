@@ -25,15 +25,22 @@ export function AgentCard({ projectId, card }: { projectId: string; card: Kanban
         data-status={status}
         title={detail}
         onClick={() => openWorkspace(projectId, card.workspaceId, card.instanceId)}
-        aria-label={`${card.petName}, ${cliName}, ${card.workspaceName}${detail ? `, ${detail}` : ''}`}
+        aria-label={`${card.petName}, ${cliName}, ${card.workspaceName}${runtime.model ? `, ${runtime.model}` : ''}${detail ? `, ${detail}` : ''}`}
       >
         <span className={styles.cardTop}>
           <CliLogo cliId={card.cliId} size="lg" />
           <span className={styles.petName}>{card.petName}</span>
         </span>
-        <span className={styles.workspace}>
-          <GitBranch aria-hidden />
-          {card.workspaceName}
+        <span className={styles.cardBottom}>
+          <span className={styles.workspace}>
+            <GitBranch aria-hidden />
+            {card.workspaceName}
+          </span>
+          {runtime.running && runtime.model && (
+            <span className={styles.model} title={`Model: ${runtime.model}`}>
+              {runtime.model}
+            </span>
+          )}
         </span>
       </button>
     </li>

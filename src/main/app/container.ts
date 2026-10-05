@@ -16,6 +16,7 @@ import { ComputerService } from '../services/computer/computer-service'
 import { ComputerTools } from '../services/computer/computer-tools'
 import { ExtensionsService } from '../services/extensions/extensions-service'
 import { SessionHistoryService } from '../services/sessions/session-history'
+import { ModelTracker } from '../services/sessions/model-tracker'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
@@ -134,6 +135,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   )
   const shells = new ShellService()
   const sessions = new SessionHistoryService(log)
+  const models = new ModelTracker(store, workspaceRepo, runtime)
+  models.start()
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
   const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
   const files = new FileService((path) => shell.trashItem(path), (scope, changed) => emit('files.changed', { scope, paths: changed }))

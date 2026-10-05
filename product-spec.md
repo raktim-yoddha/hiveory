@@ -109,6 +109,9 @@ The Project Tasks view is:
 
 Every card represents a real CLI instance.
 
+Each running card also shows the model the agent is using right now (live: it follows
+`/model`), read from the agent's own session file (Claude Code, Codex; ADR 0020).
+
 Cards move automatically based on runtime state.
 
 ## Waiting for You

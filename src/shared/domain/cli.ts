@@ -13,6 +13,8 @@ export interface CliRuntimeDetails {
   error?: string
   /** Whether a process is currently attached to the instance. */
   running: boolean
+  /** The model it is using right now, when its CLI records one (live: follows /model). */
+  model?: string
 }
 
 export type IconReference =

@@ -16,6 +16,8 @@ interface Session {
   pty: PtySession
   detector: HeuristicDetector | null
   details: CliRuntimeDetails
+  /** Last model seen in its session (ModelTracker); carried across status changes. */
+  model?: string
 }
 
 export interface RuntimeManagerEvents {
@@ -169,6 +171,15 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     return Boolean(this.sessions.get(instanceId)?.pty.bracketedPaste)
   }
 
+  /** The model an agent is using now (from ModelTracker). Changes show on its Kanban card. */
+  setModel(instanceId: string, model: string): void {
+    const session = this.sessions.get(instanceId)
+    if (!session || session.model === model) return
+    session.model = model
+    session.details = { ...session.details, model }
+    this.emit('changed', session.instance, session.details)
+  }
+
   details(instanceId: string): CliRuntimeDetails {
     return this.sessions.get(instanceId)?.details ?? NOT_RUNNING
   }
@@ -216,7 +227,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   }
 
   private apply(session: Session, event: StatusEvent, source: 'hook' | 'heuristic' | 'process'): void {
-    const next = reduceStatus(session.details, event)
+    const reduced = reduceStatus(session.details, event)
+    const next = session.model ? { ...reduced, model: session.model } : reduced
     if (source !== 'heuristic') session.detector?.sync(phaseOf(next))
     if (sameDetails(session.details, next)) return
     session.details = next
