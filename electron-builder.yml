@@ -16,6 +16,8 @@ asarUnpack:
   - node_modules/@lydell/**
   # Queen Bee's speech engine (native addon + onnxruntime libraries).
   - node_modules/sherpa-onnx-*/**
+  # Queen Bee's opt-in system-wide shortcut (native keyboard hook).
+  - node_modules/uiohook-napi/**
   # Window icon is read from disk at runtime.
   - resources/**
 win:

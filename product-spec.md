@@ -241,11 +241,17 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   live state. The current project, or every project from Home.
 - She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of
   a command is unclear, and offers Undo for opens and navigation.
-- Personalities Ada, Sunny and Frankie change wording only. Settings › Queen Bee holds:
-  - personality and what she calls you;
+- Personalities Ada, Sunny, Frankie and a custom one change wording only. Settings › Queen Bee holds:
+  - personality, what she calls you and how to say it aloud;
   - reply length;
-  - one extra per personality: Ada's honorific, Sunny's energy, Frankie's nudge time;
-  - placement.
+  - per personality: Ada's honorific, Sunny's energy, Frankie's goal, intensity and nudge time;
+  - a custom personality: her name (never an agent name), a style text and three sliders
+    (formal↔casual, calm↔energetic, gentle↔direct);
+  - her voice (any English Kokoro voice) and speed;
+  - placement, and the system-wide shortcut (opt-in).
+- Things she's learned: "remember that …" saves a note (shown as "Noted: …", undoable),
+  "what do you know about me?" reads them back, "forget …" removes them. Notes are local,
+  editable in Settings, and reach a model provider only as facts.
 - "Tell <agent> to …" types your exact words into that agent and submits them.
 - Voice (Settings › Queen Bee › Voice): local speech packs downloaded on request and
   verified.
@@ -257,7 +263,10 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   Anthropic or Gemini (AI Studio key), or a local server. It handles only what the rules
   don't understand, can only choose Queen Bee's actions, and asks before closing or
   messaging agents. A Test button checks the key, the model and tool calling.
-- Later phases add the system-wide hotkey, learned memory and a custom personality.
+- Subscription providers: the user's own Codex CLI (ChatGPT plan) or Claude Code CLI
+  (Claude plan), run headless with no tools; no key, slower (5–20 s).
+- The shortcut can also work while another app is focused (opt-in): a tap brings Hiveory
+  forward, a hold talks from anywhere.
 
 ## Important Non-Features
 

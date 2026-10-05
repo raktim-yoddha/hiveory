@@ -73,7 +73,7 @@ export function QueenProviders() {
                 <span className={styles.listTitle}>
                   {accountName(a)}{' '}
                   <span className={styles.listMeta}>
-                    · {a.model || 'no model'} · {rank === 0 ? 'primary' : rank > 0 ? `fallback ${rank}` : 'off'}
+                    · {a.model || (presetOf(a.provider).cli ? 'CLI default' : 'no model')} · {rank === 0 ? 'primary' : rank > 0 ? `fallback ${rank}` : 'off'}
                     {!a.hasKey && presetOf(a.provider).keyRequired ? ' · key missing' : ''}
                   </span>
                 </span>
@@ -144,6 +144,7 @@ function AccountDialog({ account, onClose, onSaved }: { account: BrainAccountVie
   const [saving, setSaving] = useState(false)
   const preset = presetOf(provider)
   const keptKey = Boolean(account?.hasKey && account.provider === provider)
+  const cli = Boolean(preset.cli)
 
   const choose = (id: string): void => {
     const next = presetOf(id)
@@ -206,7 +207,7 @@ function AccountDialog({ account, onClose, onSaved }: { account: BrainAccountVie
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" loading={saving} disabled={!model.trim() || (preset.keyRequired && !key && !keptKey)} onClick={() => void save()}>
+          <Button variant="primary" loading={saving} disabled={(!model.trim() && !cli) || (preset.keyRequired && !key && !keptKey)} onClick={() => void save()}>
             Save and test
           </Button>
         </span>
@@ -217,18 +218,21 @@ function AccountDialog({ account, onClose, onSaved }: { account: BrainAccountVie
         <TextField label="Account name (optional)" value={label} onChange={setLabel} maxLength={40} placeholder="Work, Personal…" />
         {provider === 'custom' && <Select label="API format" value={kind} options={KINDS} onChange={(v) => setKind(v as BrainKind)} />}
         {EDITABLE_URL.has(provider) && <TextField label="Address" value={baseUrl} onChange={setBaseUrl} placeholder={preset.baseUrl || 'https://api.example.com/v1'} />}
-        <TextField
-          label={preset.keyRequired ? 'API key' : 'API key (optional)'}
-          type="password"
-          value={key}
-          onChange={setKey}
-          onBlur={() => key && void load()}
-          placeholder={keptKey ? '•••••• saved — leave empty to keep' : 'Paste key'}
-        />
+        {cli && <CliNote provider={provider} />}
+        {!cli && (
+          <TextField
+            label={preset.keyRequired ? 'API key' : 'API key (optional)'}
+            type="password"
+            value={key}
+            onChange={setKey}
+            onBlur={() => key && void load()}
+            placeholder={keptKey ? '•••••• saved — leave empty to keep' : 'Paste key'}
+          />
+        )}
         <div className={styles.modelField}>
-          <span className={formStyles.fieldLabel}>Model</span>
+          <span className={formStyles.fieldLabel}>{cli ? 'Model (empty uses the CLI default)' : 'Model'}</span>
           <div className={styles.inlineControls}>
-            <TextInput aria-label="Model" value={model} onChange={setModel} placeholder={preset.model || 'model-name'} />
+            <TextInput aria-label="Model" value={model} onChange={setModel} placeholder={preset.model || (cli ? 'CLI default' : 'model-name')} />
             <Button size="sm" variant="ghost" icon={<RefreshCw className={listing.busy ? 'spin' : undefined} />} onClick={() => void load()}>
               {models ? 'Reload models' : 'Load models'}
             </Button>
@@ -247,10 +251,30 @@ function AccountDialog({ account, onClose, onSaved }: { account: BrainAccountVie
             </div>
           )}
         </div>
-        <p className={styles.groupNote}>
-          <Lock aria-hidden className={styles.noteIcon} /> The key is encrypted on this computer and only ever sent to this provider.
-        </p>
+        {!cli && (
+          <p className={styles.groupNote}>
+            <Lock aria-hidden className={styles.noteIcon} /> The key is encrypted on this computer and only ever sent to this provider.
+          </p>
+        )}
       </div>
     </Modal>
+  )
+}
+
+/** What a subscription brain is, and what it can't do. */
+function CliNote({ provider }: { provider: string }) {
+  const claude = provider === 'claudecli'
+  return (
+    <div className={styles.groupNote}>
+      <p>
+        <Lock aria-hidden className={styles.noteIcon} /> Uses your own {claude ? 'Claude Code' : 'Codex'} CLI, signed in with your {claude ? 'Claude' : 'ChatGPT'} plan.
+        Hiveory never reads your login. Each request starts the CLI with no tools, no shell and no settings in an empty folder, so answers take 5–20 seconds.
+      </p>
+      {claude && (
+        <p>
+          Anthropic’s terms limit using a Claude subscription through other apps. If you’re unsure it’s allowed for you, use an Anthropic API key instead.
+        </p>
+      )}
+    </div>
   )
 }

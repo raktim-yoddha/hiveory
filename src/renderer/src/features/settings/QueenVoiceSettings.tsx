@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import { CheckCircle2, Download, Lock, Trash2, X } from 'lucide-react'
+import { CheckCircle2, Download, Lock, Trash2, Volume2, X } from 'lucide-react'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
-import { packSize, PERSONA_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, type VoicePack, type VoicePackState } from '@shared/queen/voice'
+import { KOKORO_VOICES, packSize, PERSONA_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
 import { Button } from '../../components/ui/Button'
 import { RangeField } from '../../components/ui/RangeField'
 import { Select } from '../../components/ui/Select'
@@ -9,7 +9,7 @@ import { api } from '../../lib/api'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { runAction } from '../../stores/notices'
-import { useVoice } from '../queen/voice'
+import { speak, useVoice } from '../queen/voice'
 import { SettingRow } from './SettingsScreen'
 import styles from './Settings.module.css'
 
@@ -81,7 +81,7 @@ export function QueenVoiceSettings() {
         <div className={styles.groupTitle}>Speaking back</div>
         <SettingRow
           title="Answer out loud"
-          description={`${PERSONA_VOICES[settings.queenPersona].name} voice for her current personality. Needs Kokoro.`}
+          description="Needs Kokoro."
           control={
             <Select
               label="Answer out loud"
@@ -96,7 +96,36 @@ export function QueenVoiceSettings() {
             />
           }
         />
-        <RangeField label="Speaking speed" value={settings.queenVoiceSpeed} min={0.8} max={1.4} step={0.05} format={(v) => `${v.toFixed(2)}×`} onCommit={(v) => void update({ queenVoiceSpeed: v })} />
+        <SettingRow
+          title="Her voice"
+          description={`Speaking as ${voiceFor(settings).name}.`}
+          control={
+            <span className={styles.inlineControls}>
+              <Select
+                label="Her voice"
+                hideLabel
+                value={String(settings.queenVoice)}
+                options={[
+                  { value: '-1', label: `Her personality’s own (${PERSONA_VOICES[settings.queenPersona].name})` },
+                  ...KOKORO_VOICES.map((v) => ({ value: String(v.sid), label: v.name }))
+                ]}
+                onChange={(v) => void update({ queenVoice: Number(v) })}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                icon={<Volume2 />}
+                disabled={state('kokoro').state !== 'ready'}
+                onClick={() => void speak(settings.queenCallMe ? `Hi ${settings.queenCallMe}, this is how I sound.` : 'Hi, this is how I sound.')}
+              >
+                Preview
+              </Button>
+            </span>
+          }
+        />
+        <div className={styles.fieldBlock}>
+          <RangeField label="Speaking speed" value={settings.queenVoiceSpeed} min={0.8} max={1.4} step={0.05} format={(v) => `${v.toFixed(2)}×`} onCommit={(v) => void update({ queenVoiceSpeed: v })} />
+        </div>
       </div>
     </>
   )

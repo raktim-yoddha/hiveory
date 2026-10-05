@@ -4,7 +4,7 @@ import type { SkillRoot } from '@shared/domain'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { Select } from '../../../components/ui/Select'
-import { TextField } from '../../../components/ui/TextField'
+import { TextAreaField, TextField } from '../../../components/ui/TextField'
 import { api } from '../../../lib/api'
 import { cx } from '../../../lib/cx'
 import { runAction } from '../../../stores/notices'
@@ -96,12 +96,7 @@ export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: P
           onChange={setDescription}
           placeholder="What it does and when an agent should use it"
         />
-        <div className={form.field}>
-          <label className={form.fieldLabel} htmlFor="skill-body">
-            Instructions (SKILL.md)
-          </label>
-          <textarea id="skill-body" className={cx(form.input, styles.textarea)} value={body} onChange={(e) => setBody(e.target.value)} spellCheck={false} />
-        </div>
+        <TextAreaField label="Instructions (SKILL.md)" mono value={body} onChange={setBody} />
         <div className={form.field}>
           <span className={styles.fieldTitle}>Folders</span>
           <span className={styles.folders} role="group" aria-label="Skills folders">

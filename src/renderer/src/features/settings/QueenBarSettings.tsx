@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { DEFAULT_SHORTCUT, formatShortcut, isModifierCode, MODIFIERS, parseShortcut, SHORTCUT_PRESETS, shortcutLabel, shortcutProblem, type Modifier } from '@shared/queen/shortcut'
+import { DEFAULT_SHORTCUT, formatShortcut, isModifierCode, MODIFIERS, parseShortcut, SHORTCUT_PRESETS, shortcutLabel, shortcutProblem, type HotkeyStatus, type Modifier } from '@shared/queen/shortcut'
 import { Button } from '../../components/ui/Button'
 import { Select } from '../../components/ui/Select'
+import { Toggle } from '../../components/ui/Toggle'
+import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
@@ -26,13 +28,19 @@ export function QueenBarSettings() {
   const held = useRef(new Set<string>())
   const pressed = useRef(new Set<string>())
   const current = parseShortcut(settings.queenShortcut) ?? parseShortcut(DEFAULT_SHORTCUT)!
+  const [hook, setHook] = useState<HotkeyStatus | null>(null)
+  const refreshHook = (): Promise<void> => api('queen.hotkeyStatus').then(setHook, () => undefined)
+
+  useEffect(() => {
+    void api('queen.hotkeyStatus').then(setHook, () => undefined)
+  }, [])
 
   const choose = (text: string): void => {
     const parsed = parseShortcut(text)
     const issue = parsed ? shortcutProblem(parsed, platform) : 'Use two or three keys, at least one of them a modifier.'
     if (issue) return setProblem(issue)
     setProblem(null)
-    void update({ queenShortcut: formatShortcut(parsed!) })
+    void update({ queenShortcut: formatShortcut(parsed!) }).then(refreshHook)
   }
 
   /** A finished recording: save it, or explain why not and keep recording. */
@@ -88,7 +96,7 @@ export function QueenBarSettings() {
         <div className={styles.groupTitle}>Shortcut</div>
         <SettingRow
           title="Call Queen Bee"
-          description="Tap to type to her. Hold to talk (once a speech pack is installed). Works while Hiveory is the active window."
+          description="Tap to type to her. Hold to talk (once a speech pack is installed)."
           control={
             <div className={styles.inlineControls}>
               <kbd className={cx(styles.keycap, recording && styles.keycapLive)} aria-live="polite">
@@ -113,6 +121,23 @@ export function QueenBarSettings() {
             {problem}
           </p>
         )}
+        <SettingRow
+          title="Also in other apps"
+          description={
+            <>
+              Tap to bring Hiveory forward, hold to talk without leaving your editor. It needs a system keyboard hook: it watches only for these keys and never records
+              anything else.{platform === 'darwin' ? ' macOS asks you to allow Hiveory under Accessibility.' : ''}
+              <HookState status={hook} onAllow={() => void api('queen.hotkeyAccess').then(setHook, () => undefined)} />
+            </>
+          }
+          control={
+            <Toggle
+              label="Also in other apps"
+              checked={settings.queenGlobalShortcut}
+              onChange={(on) => void update({ queenGlobalShortcut: on }).then(refreshHook)}
+            />
+          }
+        />
       </div>
 
       <div className={styles.group}>
@@ -135,5 +160,25 @@ export function QueenBarSettings() {
         />
       </div>
     </>
+  )
+}
+
+/** Why the system-wide shortcut isn't running, with the fix when there is one. */
+function HookState({ status, onAllow }: { status: HotkeyStatus | null; onAllow: () => void }) {
+  if (!status || status.state === 'off' || status.state === 'on') return null
+  if (status.state === 'needs-permission') {
+    return (
+      <span className={styles.inlineControls}>
+        <span className={styles.testFail}>Hiveory isn’t allowed to see keys in other apps yet.</span>
+        <Button size="sm" onClick={onAllow}>
+          Allow in System Settings
+        </Button>
+      </span>
+    )
+  }
+  return (
+    <span className={styles.testFail} role="status">
+      {status.state === 'unsupported' ? status.reason : status.error}
+    </span>
   )
 }

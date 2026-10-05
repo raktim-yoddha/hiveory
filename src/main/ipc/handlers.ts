@@ -7,7 +7,8 @@ import { findExecutable, processDiscoveryEnv } from '../services/cli/discovery'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
 import { deliverMessage } from '../services/agent-tools/deliver'
-import { PERSONA_VOICES } from '@shared/queen/voice'
+import { voiceFor } from '@shared/queen/voice'
+import { personaInfo } from '@shared/queen/personas'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 export const createHandlers = (c: Container): Handlers => {
@@ -88,14 +89,24 @@ export const createHandlers = (c: Container): Handlers => {
   'voice.transcribe': ({ samples, language }) => c.voice.transcribe(samples, language),
   'voice.speak': ({ text }) => {
     const s = c.settings.get()
-    return c.voice.speak(text, PERSONA_VOICES[s.queenPersona].sid, s.queenVoiceSpeed)
+    // Her name is said the way the user spelled it out for her.
+    const said = s.queenCallMe && s.queenCallMeSay ? text.split(s.queenCallMe).join(s.queenCallMeSay) : text
+    return c.voice.speak(said, voiceFor(s).sid, s.queenVoiceSpeed)
   },
   'voice.micAccess': async () => {
     if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone')
     if (process.platform === 'win32') return systemPreferences.getMediaAccessStatus('microphone') !== 'denied'
     return true
   },
-  'queen.plan': ({ utterance, context }) => c.queenBrain.plan(utterance, context, c.settings.get().queenPersona),
+  'queen.plan': ({ utterance, context }) => {
+    const s = c.settings.get()
+    return c.queenBrain.plan(utterance, context, personaInfo(s), s.queenMemory)
+  },
+  'queen.hotkeyStatus': () => c.hotkey.current(),
+  'queen.hotkeyAccess': () => {
+    const s = c.settings.get()
+    return c.hotkey.requestAccess(s.queenGlobalShortcut, s.queenShortcut)
+  },
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)
     c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove, preset.chatUi ?? false)

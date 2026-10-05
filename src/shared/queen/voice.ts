@@ -97,12 +97,32 @@ export const SPEECH_LANGUAGES = [
 
 export type SpeechLanguage = (typeof SPEECH_LANGUAGES)[number]['id']
 
-/** Kokoro speaker ids: a formal British voice for Ada, a bright one for Sunny, a direct one for Frankie. */
-export const PERSONA_VOICES: Record<'ada' | 'sunny' | 'frankie', { sid: number; name: string }> = {
-  ada: { sid: 21, name: 'Emma (British)' },
-  sunny: { sid: 2, name: 'Bella (American)' },
-  frankie: { sid: 9, name: 'Sarah (American)' }
+/**
+ * Kokoro v1.0's English speakers, by speaker id (the model's alphabetical order:
+ * American women, American men, British women, British men). Replies are English,
+ * so only these are offered.
+ */
+const VOICE_NAMES: Array<[string, string]> = [
+  ['Alloy', 'American'], ['Aoede', 'American'], ['Bella', 'American'], ['Heart', 'American'], ['Jessica', 'American'], ['Kore', 'American'],
+  ['Nicole', 'American'], ['Nova', 'American'], ['River', 'American'], ['Sarah', 'American'], ['Sky', 'American'],
+  ['Adam', 'American, male'], ['Echo', 'American, male'], ['Eric', 'American, male'], ['Fenrir', 'American, male'], ['Liam', 'American, male'],
+  ['Michael', 'American, male'], ['Onyx', 'American, male'], ['Puck', 'American, male'], ['Santa', 'American, male'],
+  ['Alice', 'British'], ['Emma', 'British'], ['Isabella', 'British'], ['Lily', 'British'],
+  ['Daniel', 'British, male'], ['Fable', 'British, male'], ['George', 'British, male'], ['Lewis', 'British, male']
+]
+export const KOKORO_VOICES: Array<{ sid: number; name: string }> = VOICE_NAMES.map(([name, accent], sid) => ({ sid, name: `${name} (${accent})` }))
+
+/** Each personality's own voice: formal British for Ada, bright for Sunny, direct for Frankie, warm for a custom one. */
+export const PERSONA_VOICES: Record<'ada' | 'sunny' | 'frankie' | 'custom', { sid: number; name: string }> = {
+  ada: KOKORO_VOICES[21]!,
+  sunny: KOKORO_VOICES[2]!,
+  frankie: KOKORO_VOICES[9]!,
+  custom: KOKORO_VOICES[3]!
 }
+
+/** The voice she speaks with: the one picked in Settings, or her personality's own. */
+export const voiceFor = (s: { queenPersona: keyof typeof PERSONA_VOICES; queenVoice: number }): { sid: number; name: string } =>
+  KOKORO_VOICES[s.queenVoice] ?? PERSONA_VOICES[s.queenPersona]
 
 export type VoicePackState =
   | { id: VoicePackId; state: 'missing' }

@@ -6,6 +6,10 @@ import {
   cancelledLine,
   doneLine,
   failedLine,
+  nothingToForgetLine,
+  personaInfo,
+  prefsFromSettings,
+  recallLine,
   receipt,
   reportLine,
   undoneLine,
@@ -13,6 +17,7 @@ import {
   type QueenOutcome,
   type QueenPrefs
 } from '@shared/queen/personas'
+import { MAX_NOTES } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
 import { api, HiveoryError } from '../../lib/api'
 import { useAgents, useClis, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
@@ -29,10 +34,11 @@ import { speak } from './voice'
  * of touching the wrong agent.
  */
 
-const prefs = (): QueenPrefs => {
-  const s = useSettings.getState().settings
-  return { persona: s.queenPersona, callMe: s.queenCallMe, honorific: s.queenHonorific, hype: s.queenHype, nudgeMinutes: s.queenNudgeMinutes, length: s.queenLength }
-}
+const prefs = (): QueenPrefs => prefsFromSettings(useSettings.getState().settings)
+
+/** Her notes (Settings › Queen Bee › Personality), saved through settings. */
+const notes = (): string[] => useSettings.getState().settings.queenMemory
+const saveNotes = (next: string[]): Promise<void> => useSettings.getState().update({ queenMemory: next })
 
 class QueenError extends Error {}
 
@@ -85,7 +91,8 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       workspaces: (workspaces ?? []).map((w) => ({ id: w.id, name: w.name, kind: w.kind })),
       agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName })),
-      presets: presetList.map((p) => ({ id: p.id, name: p.name }))
+      presets: presetList.map((p) => ({ id: p.id, name: p.name })),
+      ...(useSettings.getState().settings.queenPersona === 'custom' ? { queenName: personaInfo(useSettings.getState().settings).name } : {})
     }
   }
 }
@@ -238,6 +245,33 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         case 'report': {
           reportData = await report(action.focus, ctx.projectId)
           reportText = reportLine(reportData, p)
+          break
+        }
+        case 'remember': {
+          const before = notes()
+          if (!before.some((n) => n.toLowerCase() === action.text.toLowerCase())) {
+            if (before.length >= MAX_NOTES) throw new QueenError(`I keep at most ${MAX_NOTES} notes. Remove some in Settings › Queen Bee.`)
+            await saveNotes([...before, action.text])
+            undos.push(() => saveNotes(notes().filter((n) => n !== action.text)))
+          }
+          outcomes.push({ kind: 'noted', text: action.text })
+          break
+        }
+        case 'forget': {
+          const before = notes()
+          const wanted = action.text.toLowerCase()
+          const kept = before.filter((n) => !n.toLowerCase().includes(wanted))
+          if (kept.length === before.length) {
+            reportText = nothingToForgetLine(p)
+            break
+          }
+          await saveNotes(kept)
+          undos.push(() => saveNotes(before))
+          outcomes.push({ kind: 'forgot', count: before.length - kept.length })
+          break
+        }
+        case 'recall': {
+          reportText = recallLine(notes(), p)
           break
         }
       }

@@ -41,6 +41,12 @@ It steps aside from the browser page. The mic button is hold-to-talk; until a sp
 is installed it opens Settings › Queen Bee › Voice. ⋯ holds Personality and Configure….
 
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
+- Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,
+  how she talks to you, and "Things she's learned" (edit, remove, add notes).
+- Providers: ordered accounts; "Add provider" includes the Codex and Claude Code CLIs.
+- Voice: guide, speech packs, "Her voice" picker with Preview, speed.
+- Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
+  placement.
 
 ### Side panel browser tab (ADR 0015)
 

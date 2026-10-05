@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import type { QueenContext } from '@shared/queen/actions'
 import {
+  API_KINDS,
   isAllowedBrainUrl,
+  isCliKind,
   PLAN_TOOL,
   planFromToolArgs,
   presetOf,
@@ -12,15 +14,17 @@ import {
   type BrainKind,
   type BrainResult
 } from '@shared/queen/brain'
-import { PERSONAS, type PersonaId } from '@shared/queen/personas'
 import { AppException, fail } from '@shared/errors'
 import type { SecretBox } from '../connections/secret-box'
 import type { StateStore } from '../persistence/state-store'
 import type { StoredBrainAccount } from '../persistence/schema'
+import { EffortRejected, planWithCli, runProcess, type RunProcess } from './cli-brain'
 
 /** A model gets this long to plan; past it, Queen Bee moves to the next account or says so. */
 export const BRAIN_BUDGET_MS = 8000
 const LIST_BUDGET_MS = 10_000
+/** A CLI starts a whole agent runtime first: it gets longer. */
+export const CLI_BUDGET_MS = 30_000
 const MAX_ACCOUNTS = 20
 
 type Fetch = typeof fetch
@@ -40,6 +44,25 @@ export interface AccountInput {
 
 const newId = (): string => `q${randomBytes(6).toString('hex')}`
 
+/** Who she is, for the prompt: name, tagline and (custom only) the user's style text. */
+export interface PromptPersona {
+  name: string
+  tagline: string
+  text?: string
+}
+
+/** The installed agent CLIs that subscription brains run through (from the CLI registry). */
+export interface CliHost {
+  executable(cliId: string): string | undefined
+  /** The CLI's model list (the chat model catalog). */
+  models(cliId: string): Promise<string[]>
+}
+
+const NO_CLIS: CliHost = { executable: () => undefined, models: async () => [] }
+
+/** A custom provider speaks one of the API formats; CLIs come only from their own presets. */
+const apiKind = (kind: BrainKind | undefined): BrainKind => ((API_KINDS as readonly string[]).includes(kind ?? '') ? kind! : 'openai')
+
 /**
  * Queen Bee's model tier (ADR 0019). Holds any number of provider accounts —
  * several per provider — tried in order: the first enabled one plans, the next
@@ -54,7 +77,9 @@ export class QueenBrain {
   constructor(
     private readonly store: StateStore,
     private readonly box: SecretBox,
-    private readonly http: Fetch = fetch
+    private readonly http: Fetch = fetch,
+    private readonly clis: CliHost = NO_CLIS,
+    private readonly runCli: RunProcess = runProcess
   ) {}
 
   private all(): StoredBrainAccount[] {
@@ -70,6 +95,7 @@ export class QueenBrain {
   }
 
   private usable(a: StoredBrainAccount): boolean {
+    if (isCliKind(a.kind)) return a.enabled && Boolean(this.cliPath(a))
     return a.enabled && Boolean(a.model && a.baseUrl) && (Boolean(a.key) || !presetOf(a.provider).keyRequired)
   }
 
@@ -82,14 +108,19 @@ export class QueenBrain {
     const existing = input.id ? this.all().find((a) => a.id === input.id) : undefined
     if (input.id && !existing) fail('NOT_FOUND', 'That account no longer exists.')
     if (!existing && this.all().length >= MAX_ACCOUNTS) fail('INVALID_INPUT', `Up to ${MAX_ACCOUNTS} accounts.`)
-    const kind: BrainKind = preset.id === 'custom' ? (input.kind ?? 'openai') : preset.kind
-    const baseUrl = (input.baseUrl.trim() || preset.baseUrl).replace(/\/+$/, '')
-    if (!isAllowedBrainUrl(baseUrl)) fail('INVALID_INPUT', 'Use an https address (plain http only for this computer).')
+    const kind: BrainKind = preset.id === 'custom' ? apiKind(input.kind) : preset.kind
+    const cli = isCliKind(kind)
+    const baseUrl = cli ? '' : (input.baseUrl.trim() || preset.baseUrl).replace(/\/+$/, '')
+    if (!cli && !isAllowedBrainUrl(baseUrl)) fail('INVALID_INPUT', 'Use an https address (plain http only for this computer).')
+    if (cli && !this.clis.executable(preset.cli!)) fail('INVALID_INPUT', `${preset.name.replace(/ \(.*\)$/, '')} isn't installed. Install it and sign in first.`)
+    // The model name becomes a CLI argument: plain names only, never anything that reads as a flag.
+    if (cli && input.model.trim() && !/^\w[\w.:/-]{0,99}$/.test(input.model.trim())) fail('INVALID_INPUT', 'That is not a model name.')
     const label = input.label.trim().slice(0, 40)
     const clash = this.all().find((a) => a.id !== existing?.id && a.provider === input.provider && a.label.toLowerCase() === label.toLowerCase())
     if (clash) fail('INVALID_INPUT', `${accountName(clash)} already exists. Give this account another name (for example Work or Personal).`)
-    const key =
-      input.apiKey === undefined ? (existing && existing.provider === input.provider ? existing.key : '') : input.apiKey ? this.box.seal(input.apiKey.trim()) : ''
+    const key = cli
+      ? ''
+      : input.apiKey === undefined ? (existing && existing.provider === input.provider ? existing.key : '') : input.apiKey ? this.box.seal(input.apiKey.trim()) : ''
     const next: StoredBrainAccount = {
       id: existing?.id ?? newId(),
       provider: preset.id,
@@ -131,7 +162,7 @@ export class QueenBrain {
     const account = this.all().find((a) => a.id === id) ?? fail('NOT_FOUND', 'That account no longer exists.')
     const started = Date.now()
     const ctx: QueenContext = { mode: 'workspace', projects: [], workspaces: [], agents: [], clis: [], presets: [] }
-    const result = await this.planWith(account, 'open the settings', ctx, 'ada')
+    const result = await this.planWith(account, 'open the settings', ctx, { name: 'Ada', tagline: 'Strict, formal and precise' }, [])
     const ms = Date.now() - started
     if (result.kind === 'actions' && result.actions[0]?.type === 'navigate') return { ms, detail: 'Tool calling works.' }
     return fail('INVALID_INPUT', 'The model answered but did not call the tool correctly. Try a different model.')
@@ -143,7 +174,8 @@ export class QueenBrain {
    */
   async listModels(input: { id?: string; provider: string; kind?: BrainKind; baseUrl: string; apiKey?: string }): Promise<string[]> {
     const preset = presetOf(input.provider)
-    const kind = preset.id === 'custom' ? (input.kind ?? 'openai') : preset.kind
+    if (preset.cli) return (await this.clis.models(preset.cli)).filter(Boolean)
+    const kind = preset.id === 'custom' ? apiKind(input.kind) : preset.kind
     const baseUrl = (input.baseUrl.trim() || preset.baseUrl).replace(/\/+$/, '')
     if (!isAllowedBrainUrl(baseUrl)) fail('INVALID_INPUT', 'Use an https address (plain http only for this computer).')
     const saved = input.id ? this.all().find((a) => a.id === input.id) : undefined
@@ -172,13 +204,13 @@ export class QueenBrain {
   }
 
   /** Plans with the first enabled account; any failure hands the request to the next. */
-  async plan(utterance: string, ctx: QueenContext, persona: PersonaId): Promise<BrainResult> {
+  async plan(utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[] = []): Promise<BrainResult> {
     const accounts = this.all().filter((a) => this.usable(a))
     if (!accounts.length) fail('NOT_FOUND', 'Queen Bee has no model yet. Add one in Settings › Queen Bee › Providers.')
     let last: unknown
     for (const account of accounts) {
       try {
-        return await this.planWith(account, utterance, ctx, persona)
+        return await this.planWith(account, utterance, ctx, persona, notes)
       } catch (error) {
         last = error
       }
@@ -187,11 +219,34 @@ export class QueenBrain {
     return fail('INVALID_INPUT', accounts.length > 1 ? `All ${accounts.length} accounts failed. Last: ${message}` : message)
   }
 
-  private async planWith(account: StoredBrainAccount, utterance: string, ctx: QueenContext, persona: PersonaId): Promise<BrainResult> {
+  private cliPath(a: StoredBrainAccount): string | undefined {
+    const cli = presetOf(a.provider).cli
+    return cli ? this.clis.executable(cli) : undefined
+  }
+
+  private async planWith(account: StoredBrainAccount, utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[]): Promise<BrainResult> {
+    const system = systemPrompt(persona)
+    const user = stateMessage(ctx, utterance, notes)
+    if (isCliKind(account.kind)) return planFromToolArgs(await this.callCli(account, system, user), ctx)
     const key = account.key ? this.box.open(account.key) : ''
     if (account.key && !key) fail('INVALID_INPUT', `The key of ${accountName(account)} can't be read on this account. Enter it again.`)
-    const args = await this.call(account, key, systemPrompt(PERSONAS[persona]), stateMessage(ctx, utterance))
-    return planFromToolArgs(args, ctx)
+    return planFromToolArgs(await this.call(account, key, system, user), ctx)
+  }
+
+  /** A subscription brain: the user's own CLI, once, locked down (see cli-brain.ts). */
+  private async callCli(a: StoredBrainAccount, system: string, user: string): Promise<unknown> {
+    const executable = this.cliPath(a)
+    if (!executable) return fail('INVALID_INPUT', `${accountName(a)}: the CLI is no longer installed.`)
+    const hintKey = `${a.provider}:${a.model}`
+    const input = { kind: a.kind as 'codex' | 'claude-code', executable, model: a.model, system, user, timeoutMs: CLI_BUDGET_MS }
+    const withHint = !this.noHint.has(hintKey)
+    try {
+      return await planWithCli({ ...input, hint: withHint }, this.runCli)
+    } catch (error) {
+      if (!(error instanceof EffortRejected)) throw error
+      this.noHint.add(hintKey)
+      return planWithCli({ ...input, hint: false }, this.runCli)
+    }
   }
 
   private async call(a: StoredBrainAccount, key: string, system: string, user: string): Promise<unknown> {

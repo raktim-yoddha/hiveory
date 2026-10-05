@@ -13,7 +13,7 @@ import type { CliRegistry } from '../cli/registry'
 import type { Emit } from '../events'
 import { nowIso } from '../events'
 import { sanitizeEnv } from '../pty/env'
-import { resolveSpawnTarget } from '../pty/spawn-target'
+import { killTree, resolveSpawnTarget } from '../pty/spawn-target'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { ChatAccumulator } from './accumulator'
 import type { ChatStore } from './chat-store'
@@ -381,19 +381,5 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
 
   private summary(chat: ChatSession): ChatSummary {
     return { id: chat.id, title: chat.title, cliId: chat.cliId, projectId: chat.projectId, updatedAt: chat.updatedAt, running: this.runs.has(chat.id), agentId: chat.agentId }
-  }
-}
-
-/** Ends a process and its children (CLIs spawn helpers; Windows needs taskkill /T). */
-const killTree = (child: ChildProcess): void => {
-  if (!child.pid || child.exitCode !== null) return
-  if (process.platform === 'win32') {
-    execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => undefined)
-  } else {
-    try {
-      child.kill('SIGTERM')
-    } catch {
-      // Already gone.
-    }
   }
 }

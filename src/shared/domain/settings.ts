@@ -34,7 +34,29 @@ export interface AppSettings {
   /** Darkens the wallpaper so text stays readable (0–0.8). */
   wallpaperDim: number
   /** Queen Bee's personality (ADR 0019). */
-  queenPersona: 'ada' | 'sunny' | 'frankie'
+  queenPersona: 'ada' | 'sunny' | 'frankie' | 'custom'
+  /** Custom personality: her name (never an agent pet name). */
+  queenCustomName: string
+  /** Custom personality: how she should come across, in the user's words (≤ 500 chars; style only). */
+  queenCustomPersona: string
+  /** Custom personality sliders, 0–100. formal (100) ← → casual (0). */
+  queenCustomFormal: number
+  /** energetic (100) ← → calm (0). */
+  queenCustomEnergy: number
+  /** direct (100) ← → gentle (0). */
+  queenCustomDirect: number
+  /** How she should say your name aloud ('' = as written). */
+  queenCallMeSay: string
+  /** Frankie: the goal and deadline she keeps you honest about ('' = none). */
+  queenGoal: string
+  /** Frankie: how hard she pushes. */
+  queenIntensity: 'steady' | 'hard'
+  /** Things she's learned: notes the user asked her to remember. Local only. */
+  queenMemory: string[]
+  /** Her shortcut also works while another app is focused (native keyboard hook; opt-in). */
+  queenGlobalShortcut: boolean
+  /** Kokoro speaker id, or -1 for the personality's own voice. */
+  queenVoice: number
   /** What Queen Bee calls you ('' = nothing). */
   queenCallMe: string
   /** Ada: how she addresses you. */
@@ -72,6 +94,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wallpaperBlur: 0,
   wallpaperDim: 0.25,
   queenPersona: 'ada',
+  queenCustomName: 'Zara',
+  queenCustomPersona: '',
+  queenCustomFormal: 50,
+  queenCustomEnergy: 50,
+  queenCustomDirect: 50,
+  queenCallMeSay: '',
+  queenGoal: '',
+  queenIntensity: 'steady',
+  queenMemory: [],
+  queenGlobalShortcut: false,
+  queenVoice: -1,
   queenCallMe: '',
   queenHonorific: 'none',
   queenHype: 'lively',

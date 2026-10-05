@@ -905,6 +905,63 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
   }
 })
 
+await test('Queen Bee notes, custom personality, system-wide shortcut and subscription CLI providers', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  const card = page.locator('section[aria-label="Queen Bee says"]')
+  const say = async (text) => {
+    await queen.fill(text)
+    await queen.press('Enter')
+  }
+  try {
+    // Things she's learned: noted visibly, read back, forgotten.
+    await say('remember that staging runs on port 4000')
+    await card.getByText('Noted: staging runs on port 4000').waitFor()
+    await waitFor(async () => (await value('settings.get')).queenMemory.includes('staging runs on port 4000'), 'note saved')
+    await say('what do you know about me?')
+    await waitFor(async () => (await card.innerText()).includes('staging runs on port 4000'), 'note read back')
+    await say('forget staging')
+    await waitFor(async () => (await value('settings.get')).queenMemory.length === 0, 'note forgotten')
+
+    // A custom personality: her own name, refused when it is an agent's name, and she answers to it.
+    await say('configure the queen')
+    await page.getByRole('heading', { name: 'Queen Bee' }).waitFor()
+    await page.getByRole('tab', { name: 'Personality' }).click()
+    await page.getByRole('radio', { name: /Your own name, style and voice/ }).click()
+    await waitFor(async () => (await value('settings.get')).queenPersona === 'custom', 'custom personality chosen')
+    const nameField = page.getByLabel('Her name')
+    await nameField.fill('Bruno')
+    await page.getByRole('alert').filter({ hasText: 'agent name' }).waitFor()
+    await nameField.fill('Nia')
+    await nameField.blur()
+    await waitFor(async () => (await value('settings.get')).queenCustomName === 'Nia', 'custom name saved')
+    await page.getByText('Things she’s learned').waitFor()
+    await shot('h8-queen-custom-personality')
+    await say('Nia, remember that I like tabs')
+    await card.getByText('Noted: I like tabs').waitFor()
+    expect((await page.locator('[class*="persona"]').allInnerTexts()).some((t) => t.trim() === 'Nia'), 'bar does not show her custom name')
+
+    // System-wide shortcut: opt-in, starts the native hook, stops it again.
+    await page.getByRole('tab', { name: 'Bar & shortcut' }).click()
+    await page.getByRole('switch', { name: 'Also in other apps' }).click()
+    await waitFor(async () => (await value('queen.hotkeyStatus')).state === 'on', 'system-wide hook running')
+    await page.getByRole('switch', { name: 'Also in other apps' }).click()
+    await waitFor(async () => (await value('queen.hotkeyStatus')).state === 'off', 'system-wide hook stopped')
+
+    // Subscription brains: the CLI preset asks for no key and explains what runs.
+    await page.getByRole('tab', { name: 'Providers' }).click()
+    await page.getByRole('button', { name: 'Add provider' }).click()
+    const dialog = page.locator('dialog[open]')
+    await choose(dialog, 'Provider', 'Codex CLI (ChatGPT plan)')
+    await dialog.getByText('Hiveory never reads your login').waitFor()
+    expect((await dialog.getByLabel(/API key/).count()) === 0, 'a CLI provider must not ask for a key')
+    await shot('h9-queen-cli-provider')
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+  } finally {
+    await value('settings.update', { queenPersona: 'ada', queenCustomName: 'Zara', queenMemory: [], queenGlobalShortcut: false })
+    await page.getByRole('button', { name: 'Back' }).click().catch(() => undefined)
+  }
+})
+
 await test('Queen Bee voice inside Electron: speak → 16 kHz → transcribe (needs HIVEORY_VOICE_MODELS)', async () => {
   const models = process.env.HIVEORY_VOICE_MODELS
   if (!models || !existsSync(join(models, 'kokoro'))) return console.log('      (skipped: set HIVEORY_VOICE_MODELS to run it)')

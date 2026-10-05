@@ -1,3 +1,4 @@
+import { execFile, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import { findExecutable, processDiscoveryEnv } from '../cli/discovery'
@@ -47,4 +48,18 @@ export const resolveSpawnTarget = (
     throw new Error(`Cannot safely pass this text to ${executable} through cmd.exe.`)
   }
   return { file: process.env.ComSpec ?? 'cmd.exe', args: ['/d', '/s', '/c', executable, ...args] }
+}
+
+/** Ends a process and its children (CLIs spawn helpers; Windows needs taskkill /T). */
+export const killTree = (child: ChildProcess): void => {
+  if (!child.pid || child.exitCode !== null) return
+  if (process.platform === 'win32') {
+    execFile('taskkill', ['/pid', String(child.pid), '/t', '/f'], { windowsHide: true }, () => undefined)
+  } else {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Already gone.
+    }
+  }
 }

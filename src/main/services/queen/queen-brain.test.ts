@@ -1,13 +1,17 @@
 import { mkdtempSync } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { QueenContext } from '@shared/queen/actions'
-import { isAllowedBrainUrl, planFromToolArgs, stateMessage, systemPrompt } from '@shared/queen/brain'
+import { isAllowedBrainUrl, planFromToolArgs, stateMessage, strictSchema, systemPrompt } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
 import { SecretBox, type Sealer } from '../connections/secret-box'
 import { StateStore } from '../persistence/state-store'
+import type { ProcessResult, RunProcess } from './cli-brain'
 import { QueenBrain } from './queen-brain'
+
+const ADA = { name: 'Ada', tagline: 'Strict, formal and precise' }
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const sealer: Sealer = {
@@ -105,7 +109,7 @@ describe('Queen Bee brain service', () => {
     expect(view).toMatchObject({ provider: 'openai', kind: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini', hasKey: true, encrypted: true })
     expect(JSON.stringify(view)).not.toContain('sk-secret-123')
     expect(JSON.stringify(store.state.queenBrains)).not.toContain('sk-secret-123')
-    expect(await brain.plan('who needs me', ctx, 'ada')).toEqual({ kind: 'actions', actions: [{ type: 'report', focus: 'waiting-for-you' }] })
+    expect(await brain.plan('who needs me', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'report', focus: 'waiting-for-you' }] })
     const [call] = calls
     expect(call!.url).toBe('https://api.openai.com/v1/chat/completions')
     expect((call!.init.headers as Record<string, string>).Authorization).toBe('Bearer sk-secret-123')
@@ -123,7 +127,7 @@ describe('Queen Bee brain service', () => {
     const accounts = brain.save({ provider: 'custom', label: 'Backup', kind: 'openai', baseUrl: 'https://backup.example/v1', model: 'b', apiKey: 'k2' })
     expect(accounts.map((a) => a.label)).toEqual(['Primary', 'Backup'])
     expect(() => brain.save({ provider: 'custom', label: 'backup', baseUrl: 'https://x.example/v1', model: 'c' })).toThrow(/already exists/)
-    expect(await brain.plan('home', ctx, 'ada')).toMatchObject({ actions: [{ type: 'navigate', to: 'home' }] })
+    expect(await brain.plan('home', ctx, ADA)).toMatchObject({ actions: [{ type: 'navigate', to: 'home' }] })
     expect(calls.map((c) => new URL(c.url).host)).toEqual(['primary.example', 'backup.example'])
     // Reordering makes the backup primary.
     expect(brain.move(accounts[1]!.id, 0).map((a) => a.label)).toEqual(['Backup', 'Primary'])
@@ -146,22 +150,22 @@ describe('Queen Bee brain service', () => {
         : json(200, { choices: [{ message: { tool_calls: [{ function: { arguments: '{"actions":[{"type":"set-mode","mode":"chatspace"}]}' } }] } }] })
     )
     brain.save({ provider: 'groq', label: '', baseUrl: '', model: 'llama', apiKey: 'k' })
-    expect(await brain.plan('chat', ctx, 'ada')).toMatchObject({ actions: [{ type: 'set-mode' }] })
+    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'set-mode' }] })
     expect(calls.map((c) => 'reasoning_effort' in c.body)).toEqual([true, false])
-    await brain.plan('chat', ctx, 'ada')
+    await brain.plan('chat', ctx, ADA)
     expect(calls.at(-1)!.body.reasoning_effort).toBeUndefined()
   })
 
   it('speaks Anthropic and Gemini; Gemini keeps the key out of the URL', async () => {
     const a = setup(() => json(200, { content: [{ type: 'tool_use', input: { actions: [{ type: 'navigate', to: 'home' }] } }] }))
     a.brain.save({ provider: 'anthropic', label: '', baseUrl: '', model: 'claude-haiku-4-5', apiKey: 'ak' })
-    expect(await a.brain.plan('home', ctx, 'sunny')).toMatchObject({ actions: [{ type: 'navigate', to: 'home' }] })
+    expect(await a.brain.plan('home', ctx, ADA)).toMatchObject({ actions: [{ type: 'navigate', to: 'home' }] })
     expect(a.calls[0]!.body.tool_choice).toEqual({ type: 'tool', name: 'plan' })
     expect((a.calls[0]!.init.headers as Record<string, string>)['x-api-key']).toBe('ak')
 
     const g = setup(() => json(200, { candidates: [{ content: { parts: [{ functionCall: { name: 'plan', args: { actions: [{ type: 'side-panel', open: true }] } } }] } }] }))
     g.brain.save({ provider: 'gemini', label: '', baseUrl: '', model: 'gemini-flash-latest', apiKey: 'gk-123' })
-    expect(await g.brain.plan('panel', ctx, 'frankie')).toMatchObject({ actions: [{ type: 'side-panel', open: true }] })
+    expect(await g.brain.plan('panel', ctx, ADA)).toMatchObject({ actions: [{ type: 'side-panel', open: true }] })
     expect(g.calls[0]!.url).not.toContain('gk-123')
     expect((g.calls[0]!.init.headers as Record<string, string>)['x-goog-api-key']).toBe('gk-123')
   })
@@ -169,7 +173,7 @@ describe('Queen Bee brain service', () => {
   it('explains failures without leaking the key, and refuses unsafe addresses', async () => {
     const { brain } = setup(() => json(401, { error: { message: 'bad key sk-leak-999' } }))
     brain.save({ provider: 'openai', label: '', baseUrl: '', model: 'm', apiKey: 'sk-leak-999' })
-    const error = (await brain.plan('x', ctx, 'ada').catch((e: unknown) => e)) as { message: string }
+    const error = (await brain.plan('x', ctx, ADA).catch((e: unknown) => e)) as { message: string }
     expect(error.message).toBe('OpenAI: the provider rejected the API key.')
     expect(JSON.stringify(error)).not.toContain('sk-leak-999')
     expect(() => brain.save({ provider: 'custom', label: 'lan', baseUrl: 'http://10.0.0.2/v1', model: 'm' })).toThrow(/https/)
@@ -177,6 +181,101 @@ describe('Queen Bee brain service', () => {
 
   it('without a model, planning says so (the renderer then falls back to the rules)', async () => {
     const { brain } = setup(() => json(200, {}))
-    await expect(brain.plan('x', ctx, 'ada')).rejects.toMatchObject({ error: { code: 'NOT_FOUND' } })
+    await expect(brain.plan('x', ctx, ADA)).rejects.toMatchObject({ error: { code: 'NOT_FOUND' } })
+  })
+})
+
+describe('Queen Bee subscription brains (the user own CLIs)', () => {
+  const run = (answer: (file: string, args: string[], input: string) => ProcessResult | Promise<ProcessResult>) => {
+    const calls: Array<{ file: string; args: string[]; input: string; cwd: string }> = []
+    const fn: RunProcess = async (file, args, input, { cwd }) => {
+      calls.push({ file, args, input, cwd })
+      return answer(file, args, input)
+    }
+    return { fn, calls }
+  }
+  const setup = (runner: RunProcess, installed = true) => {
+    const dir = mkdtempSync(join(tmpdir(), 'hv-cli-brain-'))
+    const store = new StateStore(join(dir, 'state.json'), log)
+    const clis = { executable: (id: string) => (installed ? `/bin/${id}` : undefined), models: async () => ['', 'gpt-x', 'haiku'] }
+    return new QueenBrain(store, new SecretBox(sealer), fetch, clis, runner)
+  }
+  const ok = (stdout: string): ProcessResult => ({ code: 0, stdout, stderr: '', timedOut: false })
+
+  it('Codex: locked down (no shell, read-only, no user config), strict schema, answer read from its output file', async () => {
+    const { fn, calls } = run(async (_f, args) => {
+      const out = args[args.indexOf('--output-last-message') + 1]!
+      const schema = JSON.parse(await readFile(args[args.indexOf('--output-schema') + 1]!, 'utf8'))
+      expect(schema.additionalProperties).toBe(false)
+      await writeFile(out, JSON.stringify({ actions: [{ type: 'navigate', to: 'home', section: null }], question: null, reply: null }))
+      return ok('')
+    })
+    const brain = setup(fn)
+    brain.save({ provider: 'codexcli', label: '', baseUrl: 'https://ignored', model: '', apiKey: 'ignored' })
+    expect(brain.accounts()[0]).toMatchObject({ kind: 'codex', baseUrl: '', hasKey: false })
+    expect(await brain.plan('home', ctx, ADA, ['I review with Claude'])).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'home' }] })
+    const { file, args, input } = calls[0]!
+    expect(file).toBe('/bin/codex')
+    for (const flag of ['--ephemeral', '--ignore-user-config', '--ignore-rules', 'shell_tool', 'read-only']) expect(args).toContain(flag)
+    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox')
+    expect(input).toContain('NOTES\n- I review with Claude')
+  })
+
+  it('Codex: a model that refuses the low-effort hint is asked again without it', async () => {
+    let n = 0
+    const { fn, calls } = run(async (_f, args) => {
+      if (n++ === 0) return { code: 1, stdout: '', stderr: '"message": "Unsupported value: \'low\' is not supported for reasoning.effort"', timedOut: false }
+      await writeFile(args[args.indexOf('--output-last-message') + 1]!, JSON.stringify({ actions: [{ type: 'set-mode', mode: 'chatspace' }] }))
+      return ok('')
+    })
+    const brain = setup(fn)
+    brain.save({ provider: 'codexcli', label: '', baseUrl: '', model: '' })
+    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'set-mode' }] })
+    expect(calls[0]!.args.join(' ')).toContain('model_reasoning_effort')
+    expect(calls[1]!.args.join(' ')).not.toContain('model_reasoning_effort')
+  })
+
+  it('Claude Code: no tools, no MCP, no settings, no saved session; reads structured_output; shows its own error', async () => {
+    const { fn, calls } = run(() => ok(JSON.stringify({ is_error: false, structured_output: { actions: [{ type: 'report', focus: 'all' }] } })))
+    const brain = setup(fn)
+    brain.save({ provider: 'claudecli', label: 'Me', baseUrl: '', model: 'haiku' })
+    expect(await brain.plan('status', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'report', focus: 'all' }] })
+    const args = calls[0]!.args
+    expect(args[args.indexOf('--tools') + 1]).toBe('')
+    expect(args[args.indexOf('--setting-sources') + 1]).toBe('')
+    for (const flag of ['--strict-mcp-config', '--no-session-persistence', '--disable-slash-commands']) expect(args).toContain(flag)
+
+    const failing = setup(run(() => ({ code: 1, stdout: JSON.stringify({ is_error: true, result: 'Failed to authenticate' }), stderr: '', timedOut: false })).fn)
+    failing.save({ provider: 'claudecli', label: '', baseUrl: '', model: '' })
+    await expect(failing.plan('x', ctx, ADA)).rejects.toThrow(/Claude Code CLI: Failed to authenticate/)
+  })
+
+  it('refuses a CLI that is not installed, odd model names, and lists models from the CLI', async () => {
+    expect(() => setup(run(() => ok('')).fn, false).save({ provider: 'codexcli', label: '', baseUrl: '', model: '' })).toThrow(/isn't installed/)
+    const brain = setup(run(() => ok('')).fn)
+    expect(() => brain.save({ provider: 'claudecli', label: '', baseUrl: '', model: '--dangerously-skip-permissions x' })).toThrow(/model name/)
+    // No spaces, but still a flag: refused, or the CLI would read it as one.
+    expect(() => brain.save({ provider: 'codexcli', label: '', baseUrl: '', model: '--dangerously-bypass-approvals-and-sandbox' })).toThrow(/model name/)
+    expect(brain.save({ provider: 'codexcli', label: '', baseUrl: '', model: 'gpt-5.1-codex' })[0]!.model).toBe('gpt-5.1-codex')
+    expect(await brain.listModels({ provider: 'codexcli', baseUrl: '' })).toEqual(['gpt-x', 'haiku'])
+  })
+
+  it('a timed-out CLI hands the request to the next account', async () => {
+    const { fn } = run(() => ({ code: null, stdout: '', stderr: '', timedOut: true }))
+    const brain = setup(fn)
+    brain.save({ provider: 'claudecli', label: '', baseUrl: '', model: '' })
+    await expect(brain.plan('x', ctx, ADA)).rejects.toThrow(/took longer/)
+  })
+})
+
+describe('Queen Bee strict plan schema', () => {
+  it('requires every key, allows nothing extra and makes optional values nullable', () => {
+    const s = strictSchema() as { required: string[]; properties: Record<string, { type: unknown; items?: { required: string[]; properties: Record<string, { type: unknown; enum?: unknown[] }> } }> }
+    expect(s.required).toEqual(['actions', 'question', 'reply'])
+    expect(s.properties.question!.type).toEqual(['string', 'null'])
+    const item = s.properties.actions!.items!
+    expect(item.required).toContain('cliId')
+    expect(item.properties.type!.type).toBe('string')
+    expect(item.properties.focus!.enum).toContain(null)
   })
 })

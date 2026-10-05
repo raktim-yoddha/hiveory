@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { PET_NAMES } from '../naming/names'
 import type { QueenContext } from './actions'
 import { parseCommand } from './parse'
-import { doneLine, PERSONA_NAMES, reportLine, type QueenPrefs } from './personas'
+import { stateMessage, systemPrompt } from './brain'
+import { customNameProblem, doneLine, PERSONA_NAMES, personaCore, recallLine, reportLine, type QueenPrefs } from './personas'
 import { buildReport } from './report'
 
 const ctx: QueenContext = {
@@ -132,5 +133,62 @@ describe('Queen Bee personas', () => {
     for (const name of PERSONA_NAMES) {
       expect(PET_NAMES).not.toContain(name)
     }
+  })
+})
+
+describe('Queen Bee memory commands', () => {
+  it('notes facts in the user’s own words, forgets and recalls them', () => {
+    expect(actions('Remember that I review PRs with Claude')).toEqual([{ type: 'remember', text: 'I review PRs with Claude' }])
+    expect(actions('queen, note down: staging is on port 4000')).toEqual([{ type: 'remember', text: 'staging is on port 4000' }])
+    expect(actions('yaad rakho main subah kaam karta hoon')).toEqual([{ type: 'remember', text: 'main subah kaam karta hoon' }])
+    expect(actions('forget about staging.')).toEqual([{ type: 'forget', text: 'staging' }])
+    expect(actions('what do you know about me?')).toEqual([{ type: 'recall' }])
+    // "remember to …" is a reminder, not a fact: not a note.
+    expect(parseCommand('remember to run the tests', ctx).kind).not.toBe('actions')
+    expect(parseCommand(`remember that ${'x'.repeat(300)}`, ctx).kind).toBe('ask')
+  })
+
+  it('a custom personality answers to her own name', () => {
+    const named = { ...ctx, queenName: 'Zara' }
+    expect(parseCommand('Zara, open two codex', named)).toMatchObject({ actions: [{ type: 'open-agents', cliId: 'codex', count: 2 }] })
+    expect(parseCommand('hey zara remember that I like tabs', named)).toMatchObject({ actions: [{ type: 'remember', text: 'I like tabs' }] })
+  })
+})
+
+describe('Queen Bee custom personality', () => {
+  const base: QueenPrefs = { persona: 'custom', callMe: '', honorific: 'none', hype: 'lively', nudgeMinutes: 10, length: 'normal' }
+  const opened = [{ kind: 'opened' as const, count: 2, cliName: 'Codex', workspace: 'feature-x' }]
+
+  it('borrows the phrasing of the slider pushed furthest', () => {
+    expect(personaCore({ ...base, custom: { formal: 90, energy: 40, direct: 20 } })).toBe('ada')
+    expect(personaCore({ ...base, custom: { formal: 20, energy: 40, direct: 80 } })).toBe('frankie')
+    expect(personaCore({ ...base, custom: { formal: 20, energy: 30, direct: 10 } })).toBe('sunny')
+    expect(doneLine(opened, { ...base, custom: { formal: 10, energy: 90, direct: 10 } })).toBe("Let's go! 2 Codex agents are starting in feature-x!")
+    expect(doneLine(opened, { ...base, custom: { formal: 20, energy: 10, direct: 30 } })).toBe('Done. 2 Codex agents are starting in feature-x.')
+  })
+
+  it('refuses names that would clash with agents or the built-in personalities', () => {
+    expect(customNameProblem('Zara')).toBeNull()
+    expect(customNameProblem('Bruno')).toMatch(/agent name/)
+    expect(customNameProblem('ada')).toMatch(/built-in/)
+    expect(customNameProblem('Queen')).toMatch(/Queen Bee/)
+    expect(customNameProblem('R2-D2')).toMatch(/letters/)
+  })
+
+  it('Frankie keeps the goal in view and pushes harder when asked', () => {
+    const r = buildReport([{ id: 'c', petName: 'Poppy', cliName: 'Codex', workspaceName: 'Main', status: 'idle' }], 'all')
+    const frankie: QueenPrefs = { ...base, persona: 'frankie', goal: 'Ship the beta by Friday', intensity: 'hard' }
+    expect(reportLine(r, frankie)).toBe('1 agent idle. Idle agents ship nothing. Give them work now. Goal: Ship the beta by Friday.')
+  })
+
+  it('reads notes back', () => {
+    expect(recallLine(['I like tabs.', 'staging is on 4000'], { ...base, persona: 'frankie' })).toBe('2 notes: I like tabs; staging is on 4000.')
+  })
+
+  it('the model prompt carries the user’s style text as tone only, and notes as facts', () => {
+    const system = systemPrompt({ name: 'Zara', tagline: 'Your own', text: 'Witty and warm.' })
+    expect(system).toContain("Zara's style, written by the user (tone only")
+    expect(system).toContain('Witty and warm.')
+    expect(stateMessage(ctx, 'hi', ['I like tabs'])).toContain('NOTES\n- I like tabs')
   })
 })

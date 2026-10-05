@@ -474,6 +474,12 @@
   transform: scale(1);
 }
 
+/* A full-width field (text area, single slider) inside a group, aligned with its rows. */
+.fieldBlock {
+  padding: var(--space-6) var(--space-7);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
 .sliders {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -651,7 +657,7 @@
 /* Queen Bee personalities: selection is a tinted fill, never an outline. */
 .personas {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-4);
 }
 
@@ -697,10 +703,23 @@
   font-style: italic;
 }
 
+@container (max-width: 880px) {
+  .personas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @container (max-width: 560px) {
   .personas {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* A text setting with its validation message under it. */
+.draftField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* Queen Bee › Model */

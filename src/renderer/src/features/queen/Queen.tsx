@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Check, Ellipsis, Loader2, Mic, PanelBottom, PictureInPicture2, Undo2, X } from 'lucide-react'
-import { PERSONAS, type PersonaId } from '@shared/queen/personas'
+import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
 import { SPEECH_LANGUAGES } from '@shared/queen/voice'
@@ -111,6 +111,8 @@ interface Grip {
 function QueenBar({ grip }: { grip?: Grip }) {
   const { placement, setPlacement, compact, busy, card, show, focusTick, setSettingsTab } = useQueen()
   const persona = useSettings((s) => s.settings.queenPersona)
+  const customName = useSettings((s) => s.settings.queenCustomName)
+  const info = personaInfo({ queenPersona: persona, queenCustomName: customName, queenCustomPersona: '' })
   const shortcut = useSettings((s) => s.settings.queenShortcut)
   const platform = usePlatform()
   const phase = useVoice((s) => s.phase)
@@ -154,12 +156,12 @@ function QueenBar({ grip }: { grip?: Grip }) {
       </button>
       {!compact && (
         <>
-          <span className={styles.persona}>{PERSONAS[persona].name}</span>
+          <span className={styles.persona}>{info.name}</span>
           <input
             ref={input}
             className={styles.input}
             value={text}
-            placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : PERSONAS[persona].placeholder}
+            placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : info.placeholder}
             aria-label="Tell Queen Bee"
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
@@ -218,7 +220,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
               ...(Object.keys(PERSONAS) as PersonaId[]).map((id) => ({
                 type: 'item' as const,
                 id,
-                label: PERSONAS[id].name,
+                label: id === 'custom' ? customName : PERSONAS[id].name,
                 hint: PERSONAS[id].tagline,
                 checked: persona === id,
                 keepOpen: true,

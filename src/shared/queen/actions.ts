@@ -25,6 +25,12 @@ export type QueenAction =
   | { type: 'side-panel'; open: boolean }
   | { type: 'open-panel-tab'; kind: 'browser' | 'explorer' }
   | { type: 'report'; focus: 'all' | CliStatus }
+  /** Things she's learned: saves a note the user asked her to remember (shown as "Noted: …"). */
+  | { type: 'remember'; text: string }
+  /** Removes every note that contains the text. */
+  | { type: 'forget'; text: string }
+  /** Reads her notes back. */
+  | { type: 'recall' }
 
 /** The plain snapshot of app state the parser reads. Built by the renderer from its stores. */
 export interface QueenContext {
@@ -40,6 +46,8 @@ export interface QueenContext {
   /** Installed agent CLIs and terminals. */
   clis: Array<{ id: string; displayName: string }>
   presets: Array<{ id: string; name: string }>
+  /** A custom personality's name, so "Zara, open Codex" parses like "Queen, open Codex". */
+  queenName?: string
 }
 
 /** A question back to the user: either free text or one of a few choices that re-run the command. */
@@ -53,6 +61,10 @@ export type QueenParse =
   | { kind: 'ask'; question: QueenQuestion }
   /** Not a command the rules understand; a model brain (phase 2) takes these. */
   | { kind: 'unknown' }
+
+/** Things she's learned: at most this many notes, each at most this long. */
+export const MAX_NOTES = 50
+export const MAX_NOTE_LENGTH = 200
 
 /** Upper bound on agents one command may open. */
 export const MAX_OPEN_PER_COMMAND = 8

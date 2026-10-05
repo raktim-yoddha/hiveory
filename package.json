@@ -65,6 +65,7 @@
     "@xterm/headless": "^6.0.0",
     "electron-updater": "^6.8.9",
     "sherpa-onnx-node": "1.13.8",
+    "uiohook-napi": "1.5.5",
     "zod": "^4.6.5"
   },
   "author": "Raktim Yoddha",

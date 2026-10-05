@@ -1,4 +1,4 @@
-import { MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
+import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
 
 /**
  * Tier 0 of Queen Bee: a rule parser for the commands people actually say. It
@@ -273,7 +273,30 @@ function parseMessage(input: string, ctx: QueenContext): QueenParse | null {
   return { kind: 'actions', actions: [{ type: 'message-agent', agentId: named[0]!.id, text }] }
 }
 
-export function parseCommand(input: string, ctx: QueenContext): QueenParse {
+const LEAD = String.raw`^\s*(?:(?:hey|hi|ok|okay)\s+)?(?:queen(?:\s+bee)?[\s,]+)?(?:please\s+)?`
+/** "remember that I review with Claude": the note keeps the user's exact words. "remember to …" is a reminder, not a fact: not handled here. */
+const REMEMBER = new RegExp(`${LEAD}(?:remember|note down|note|keep in mind|yaad rakho|yaad rakhna)(?:\\s+that)?[\\s,:]+(?!to\\b)([\\s\\S]+?)\\s*$`, 'iu')
+const FORGET = new RegExp(`${LEAD}(?:forget|unlearn|bhool jao|bhul jao)(?:\\s+that)?(?:\\s+about)?[\\s,:]+([\\s\\S]+?)\\s*$`, 'iu')
+const RECALL = /\b(what do you (know|remember) about me|what have you (learned|learnt|noted)|what did i ask you to remember|(show|list|read) (me )?(your|my) notes|your notes|things (you|youve) learned|kya yaad hai)\b/
+
+function parseMemory(input: string): QueenParse | null {
+  if (RECALL.test(norm(input))) return { kind: 'actions', actions: [{ type: 'recall' }] }
+  const forget = FORGET.exec(input)
+  if (forget) return { kind: 'actions', actions: [{ type: 'forget', text: forget[1]!.replace(/[.!]+$/, '').trim().slice(0, MAX_NOTE_LENGTH) }] }
+  const remember = REMEMBER.exec(input)
+  if (!remember) return null
+  const text = remember[1]!.replace(/^["“']|["”']$/g, '').trim()
+  if (!text) return null
+  if (text.length > MAX_NOTE_LENGTH) return { kind: 'ask', question: { text: `Notes are at most ${MAX_NOTE_LENGTH} characters. Say it shorter?` } }
+  return { kind: 'actions', actions: [{ type: 'remember', text }] }
+}
+
+export function parseCommand(raw: string, ctx: QueenContext): QueenParse {
+  // A custom personality answers to her own name, like "queen".
+  const name = ctx.queenName?.trim()
+  const input = name ? raw.replace(new RegExp(`^\\s*(?:(?:hey|hi|ok|okay)\\s+)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[\\s,]*`, 'iu'), '') : raw
+  const memory = parseMemory(input)
+  if (memory) return memory
   const message = parseMessage(input, ctx)
   if (message) return message
   let text = norm(input)

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { parseShortcut } from '@shared/queen/shortcut'
+import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
+import { customNameProblem } from '@shared/queen/personas'
+import { KOKORO_VOICES } from '@shared/queen/voice'
+import type { BrainKind } from '@shared/queen/brain'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -25,7 +29,7 @@ export interface StoredBrainAccount {
   id: string
   provider: string
   label: string
-  kind: 'openai' | 'anthropic' | 'gemini'
+  kind: BrainKind
   baseUrl: string
   model: string
   /** Sealed API key ('' = none). */
@@ -92,7 +96,18 @@ const settingsSchema = z.object({
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
   wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),
   wallpaperDim: z.number().min(0).max(0.8).catch(DEFAULT_SETTINGS.wallpaperDim),
-  queenPersona: z.enum(['ada', 'sunny', 'frankie']).catch(DEFAULT_SETTINGS.queenPersona),
+  queenPersona: z.enum(['ada', 'sunny', 'frankie', 'custom']).catch(DEFAULT_SETTINGS.queenPersona),
+  queenCustomName: z.string().refine((s) => customNameProblem(s) === null).catch(DEFAULT_SETTINGS.queenCustomName),
+  queenCustomPersona: z.string().max(500).catch(DEFAULT_SETTINGS.queenCustomPersona),
+  queenCustomFormal: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomFormal),
+  queenCustomEnergy: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomEnergy),
+  queenCustomDirect: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomDirect),
+  queenCallMeSay: z.string().max(60).catch(DEFAULT_SETTINGS.queenCallMeSay),
+  queenGoal: z.string().max(200).catch(DEFAULT_SETTINGS.queenGoal),
+  queenIntensity: z.enum(['steady', 'hard']).catch(DEFAULT_SETTINGS.queenIntensity),
+  queenMemory: z.array(z.string().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES).catch(DEFAULT_SETTINGS.queenMemory),
+  queenGlobalShortcut: z.boolean().catch(DEFAULT_SETTINGS.queenGlobalShortcut),
+  queenVoice: z.number().int().min(-1).max(KOKORO_VOICES.length - 1).catch(DEFAULT_SETTINGS.queenVoice),
   queenCallMe: z.string().max(40).catch(DEFAULT_SETTINGS.queenCallMe),
   queenHonorific: z.enum(['sir', 'maam', 'name', 'none']).catch(DEFAULT_SETTINGS.queenHonorific),
   queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),
@@ -186,7 +201,7 @@ const brainAccountSchema: z.ZodType<StoredBrainAccount> = z.object({
   id: z.string().regex(/^q[a-f0-9]{12}$/),
   provider: z.string().max(40),
   label: z.string().max(40),
-  kind: z.enum(['openai', 'anthropic', 'gemini']),
+  kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']),
   baseUrl: z.string().max(500),
   model: z.string().max(200),
   key: z.string().max(10_000),

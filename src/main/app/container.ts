@@ -1,4 +1,4 @@
-import { app, nativeImage, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, safeStorage, shell, systemPreferences } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
@@ -30,6 +30,7 @@ import { StateStore } from '../services/persistence/state-store'
 import { PresetService } from '../services/presets/preset-service'
 import { SettingsService } from '../services/settings/settings-service'
 import { QueenBrain } from '../services/queen/queen-brain'
+import { GlobalHotkey, loadHook } from '../services/queen/global-hotkey'
 import { VoiceService } from '../services/voice/voice-service'
 import { ShellService } from '../services/shell/shell-service'
 import { UpdateService, type Updater } from '../services/updates/update-service'
@@ -54,7 +55,11 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   let settings: SettingsService | null = null
   const secrets = new SecretBox(safeStorage)
   const connections = new ConnectionService(store, secrets, emit)
-  const queenBrain = new QueenBrain(store, secrets)
+  // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
+  const queenBrain = new QueenBrain(store, secrets, fetch, {
+    executable: (cliId) => registry.executable(cliId),
+    models: async (cliId) => (await chats.catalog(cliId)).models.map((m) => m.id)
+  })
   const voice = new VoiceService(paths.voiceDir, emit, log)
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
@@ -88,6 +93,26 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const presets = new PresetService(store, emit)
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)
+  const hotkey = new GlobalHotkey(
+    log,
+    (signal) => {
+      // A tap brings Hiveory forward; holding to talk works from wherever the user is.
+      if (signal === 'tap') {
+        const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed())
+        if (w?.isMinimized()) w.restore()
+        w?.show()
+        w?.focus()
+      }
+      emit('queen.hotkey', { signal })
+    },
+    () => BrowserWindow.getFocusedWindow() !== null,
+    {
+      platform: process.platform,
+      wayland: process.env.XDG_SESSION_TYPE === 'wayland',
+      trusted: (prompt) => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(prompt) : true),
+      load: () => loadHook()
+    }
+  )
   const shells = new ShellService()
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
   const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
@@ -157,6 +182,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     browser,
     computer,
     queenBrain,
-    voice
+    voice,
+    hotkey
   }
 }

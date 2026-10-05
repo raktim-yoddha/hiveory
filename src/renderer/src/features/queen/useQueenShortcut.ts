@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { DEFAULT_SHORTCUT, parseShortcut, ShortcutTracker } from '@shared/queen/shortcut'
+import { subscribe } from '../../lib/api'
 import { useSettings } from '../../stores/data'
 import { useQueen } from './useQueen'
 import { queenVoice } from './voice'
@@ -8,7 +9,7 @@ import { queenVoice } from './voice'
 export const shortcutRecording = { active: false }
 
 /**
- * Queen Bee's shortcut, while Hiveory is focused (ADR 0019): tap to focus her,
+ * Queen Bee's shortcut (ADR 0019): tap to focus her,
  * hold to talk (when voice is set up). Listens in the capture phase so terminals
  * and editors never swallow it; a combination with a regular key never reaches them.
  */
@@ -59,7 +60,17 @@ export function useQueenShortcut(): void {
     window.addEventListener('keydown', onDown, true)
     window.addEventListener('keyup', onUp, true)
     window.addEventListener('blur', onBlur)
+    // The same shortcut from another app (opt-in system-wide hook in main): main
+    // has already brought the window forward for a tap; a hold talks from anywhere.
+    const offGlobal = subscribe('queen.hotkey', ({ signal }) => {
+      if (signal === 'tap') useQueen.getState().focus()
+      else if (signal === 'hold-start') {
+        if (queenVoice.ready()) void queenVoice.start()
+      } else if (queenVoice.listening()) void queenVoice.stop()
+      else useQueen.getState().focus()
+    })
     return () => {
+      offGlobal()
       stopTimer()
       window.removeEventListener('keydown', onDown, true)
       window.removeEventListener('keyup', onUp, true)

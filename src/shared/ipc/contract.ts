@@ -20,8 +20,10 @@ import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
-import type { VoicePackState } from '../queen/voice'
-import { parseShortcut } from '../queen/shortcut'
+import { KOKORO_VOICES, type VoicePackState } from '../queen/voice'
+import { parseShortcut, type HotkeySignal, type HotkeyStatus } from '../queen/shortcut'
+import { MAX_NOTE_LENGTH, MAX_NOTES } from '../queen/actions'
+import { customNameProblem } from '../queen/personas'
 
 /** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
 export interface WallpaperImage {
@@ -188,7 +190,7 @@ export const requestSchemas = {
     id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
     provider: z.string().regex(/^[a-z]{1,40}$/),
     label: z.string().trim().max(40),
-    kind: z.enum(['openai', 'anthropic', 'gemini']).optional(),
+    kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']).optional(),
     baseUrl: z.string().trim().max(500),
     model: z.string().trim().max(200),
     apiKey: z.string().max(500).nullable().optional(),
@@ -201,7 +203,7 @@ export const requestSchemas = {
   'queen.listModels': z.object({
     id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
     provider: z.string().regex(/^[a-z]{1,40}$/),
-    kind: z.enum(['openai', 'anthropic', 'gemini']).optional(),
+    kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']).optional(),
     baseUrl: z.string().trim().max(500),
     apiKey: z.string().max(500).optional()
   }),
@@ -216,6 +218,10 @@ export const requestSchemas = {
   /** macOS asks for the microphone once; Windows reports its privacy setting. */
   'voice.micAccess': none,
   'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
+  /** The system-wide shortcut's native hook (opt-in): running, off, or why not. */
+  'queen.hotkeyStatus': none,
+  /** macOS: asks for Accessibility access, then starts the hook if allowed. */
+  'queen.hotkeyAccess': none,
   'settings.get': none,
   'settings.update': z
     .object({
@@ -234,7 +240,18 @@ export const requestSchemas = {
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),
       wallpaperDim: z.number().min(0).max(0.8),
-      queenPersona: z.enum(['ada', 'sunny', 'frankie']),
+      queenPersona: z.enum(['ada', 'sunny', 'frankie', 'custom']),
+      queenCustomName: z.string().trim().max(20).refine((s) => customNameProblem(s) === null, 'Pick another name.'),
+      queenCustomPersona: z.string().max(500),
+      queenCustomFormal: z.number().int().min(0).max(100),
+      queenCustomEnergy: z.number().int().min(0).max(100),
+      queenCustomDirect: z.number().int().min(0).max(100),
+      queenCallMeSay: z.string().trim().max(60),
+      queenGoal: z.string().trim().max(200),
+      queenIntensity: z.enum(['steady', 'hard']),
+      queenMemory: z.array(z.string().trim().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES),
+      queenGlobalShortcut: z.boolean(),
+      queenVoice: z.number().int().min(-1).max(KOKORO_VOICES.length - 1),
       queenCallMe: z.string().trim().max(40),
       queenHonorific: z.enum(['sir', 'maam', 'name', 'none']),
       queenHype: z.enum(['calm', 'lively', 'max']),
@@ -453,6 +470,8 @@ export interface ResponseMap {
   'voice.speak': { samples: Float32Array; sampleRate: number }
   'voice.micAccess': boolean
   'queen.plan': BrainResult
+  'queen.hotkeyStatus': HotkeyStatus
+  'queen.hotkeyAccess': HotkeyStatus
   'settings.get': AppSettings
   'settings.update': AppSettings
   'updates.status': UpdateStatus
@@ -558,6 +577,8 @@ export interface EventMap {
   /** Something changed in a watched folder (scope = workspace or project id). */
   'files.changed': { scope: string; paths: string[] }
   'voice.changed': VoicePackState[]
+  /** Queen Bee's shortcut was used while another app was focused. */
+  'queen.hotkey': { signal: HotkeySignal }
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
   'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string }
   'app.notice': { level: 'info' | 'warning' | 'error'; message: string }
@@ -580,7 +601,8 @@ const EVENTS: Record<EventName, true> = {
   'chat.event': true,
   'browser.changed': true,
   'files.changed': true,
-  'voice.changed': true
+  'voice.changed': true,
+  'queen.hotkey': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

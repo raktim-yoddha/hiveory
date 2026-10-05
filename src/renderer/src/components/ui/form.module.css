@@ -367,3 +367,15 @@
   outline: var(--focus-ring-width) solid var(--color-focus);
   outline-offset: var(--space-1);
 }
+
+.textarea {
+  min-height: calc(var(--space-11) * 3.5);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  resize: vertical;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

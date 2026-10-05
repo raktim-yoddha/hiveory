@@ -146,3 +146,15 @@ export class ShortcutTracker {
     return wasHolding ? 'hold-end' : null
   }
 }
+
+/** The system-wide shortcut (opt-in): whether the native keyboard hook runs. */
+export type HotkeyStatus =
+  | { state: 'off' }
+  | { state: 'on' }
+  /** macOS: Hiveory needs Accessibility access to see keys in other apps. */
+  | { state: 'needs-permission' }
+  | { state: 'unsupported'; reason: string }
+  | { state: 'error'; error: string }
+
+/** What the system-wide shortcut did while another app was focused. */
+export type HotkeySignal = 'tap' | 'hold-start' | 'hold-end'

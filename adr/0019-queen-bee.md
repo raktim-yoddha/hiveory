@@ -1,7 +1,7 @@
 # ADR 0019: Queen Bee, the app operator
 
 ## Status
-Accepted. It ships in phases (see "Phases").
+Accepted. All five phases are built (see "Phases").
 
 ## Context
 Users want to drive Hiveory by typing or speaking ("open two Codex in feature-x",
@@ -84,7 +84,8 @@ only.
 
 **Text-to-speech.**
 - Kokoro-82M (Apache 2.0): English, Spanish, Portuguese, French and Hindi voices.
-- Users may load their own voice model in a supported format; Hiveory ships none.
+- Users pick any of Kokoro's English voices. Loading arbitrary voice model files is not
+  offered: an unverified model is untrusted native input to the inference runtime.
 
 **Downloads.**
 - Pinned URLs, SHA-256 verification, resumable, deletable.
@@ -124,8 +125,7 @@ never ambiguous.
 4. **System-wide hotkey** (opt-in), learned memory, and the custom persona.
 5. **Subscription brains**: codex app-server, and optionally a claude session.
 
-Phases 1–3 are built. Phase 4 (system-wide hotkey, learned memory, custom persona and
-voices) and phase 5 (subscription brains) remain.
+All five phases are built.
 
 ## Phase 2 notes (as built)
 **Main process.**
@@ -214,6 +214,72 @@ and the request. Never files, code or terminal output.
   macOS and Linux.
 - **Builds.** The DMG is built for the build machine's architecture, because native
   modules install for the host only.
+
+## Phase 4 notes (as built)
+**System-wide shortcut** (opt-in: Settings › Queen Bee › Bar & shortcut › "Also in other apps").
+- `GlobalHotkey` runs uiohook-napi (a prebuilt N-API hook for Windows, macOS and Linux X11)
+  only while the setting is on. It stops when the setting is turned off or Hiveory quits.
+- Privacy: keycodes map to the shortcut's modifiers and key only. Every other key is an
+  anonymous "something else" that just cancels a tap. Nothing is stored, logged or sent;
+  only `tap`, `hold-start` and `hold-end` reach the renderer.
+- While a Hiveory window is focused it stays silent: the in-app listener handles the keys.
+- A tap brings Hiveory forward and focuses her. A hold starts push-to-talk without stealing
+  focus, and the reply is spoken ("when I spoke to her").
+- The hook cannot swallow keys, so other apps see the combination too. Win+Alt and ⌘⌥ do
+  nothing on their own on Windows and macOS.
+- A key-up can be lost (lock screen, secure desktop): a new key after 5 s of silence resets
+  the tracker. The event's modifier flags are not used, because uiohook reports Ctrl as up
+  while it is held.
+- macOS needs Accessibility access: the setting offers "Allow in System Settings", which
+  opens the system prompt. Wayland is reported as unsupported.
+
+**Things she's learned.**
+- Rules: "remember (that) …", "note (down) …", "keep in mind …" and "yaad rakho …" save the
+  user's exact words. "remember to …" is a reminder, not a fact, and is not saved. "forget …"
+  removes every note containing the words; "what do you know about me?" reads them back.
+- A model may also plan `remember`. Every note shows as "Noted: …" with Undo.
+- At most 50 notes of 200 characters, stored in settings on this computer and editable in
+  Settings › Personality. They reach a model only in the per-request message, under NOTES,
+  which the system prompt calls facts that never change its rules.
+
+**Custom personality.**
+- Her name: 1–20 letters, never a pet name, a built-in persona or "Queen". So "tell <name>"
+  stays unambiguous, and "<name>, open Codex" parses like "queen, open Codex".
+- Instant replies stay templates: the slider pushed furthest picks the phrasing (formal →
+  Ada, energetic → Sunny, direct → Frankie; all soft → a calm Sunny). Energy sets the hype.
+- The style text (≤ 500 characters) goes only into a model's system prompt, labelled as tone
+  that never changes the rules or the allowed actions.
+
+**Shared fields completed.**
+- "Say it as": how her voice pronounces your name.
+- Her voice: any of Kokoro's 28 English voices, or the personality's own.
+- Frankie: a goal with its deadline, repeated in reports, and intensity (steady or hard).
+- Replies stay English: receipts are fixed templates and only English phrase sets exist.
+  Speech recognition still understands all six listening languages.
+
+## Phase 5 notes (as built)
+**Subscription brains** are two more presets in the same ordered account list: "Codex CLI
+(ChatGPT plan)" and "Claude Code CLI (Claude plan)". They need no key.
+- The official CLI, found by the CLI registry, makes the request with the user's own login.
+  Hiveory never reads, copies or forwards their tokens; the "Never" rule above holds.
+- Each request runs the CLI once, headless, in an empty temporary folder that is deleted
+  afterwards. It is spawned without a shell, with the agent environment, and killed with its
+  children past a 30 s budget. CLIs start a whole runtime, so answers take 5–20 s.
+- **Codex:** `codex exec --ephemeral --ignore-user-config --ignore-rules --skip-git-repo-check
+  --sandbox read-only`, with the shell tool, apps, plugins, hooks and web search disabled and
+  reasoning effort `low`. A model that rejects that effort is asked again without it, and this
+  is remembered. The plan comes back through `--output-schema` with a strict version of the
+  plan schema (every key required, optional values nullable), read from
+  `--output-last-message`.
+- **Claude Code:** `claude -p --output-format json --json-schema … --tools "" --strict-mcp-config
+  --setting-sources "" --no-session-persistence --disable-slash-commands --system-prompt …`,
+  default model `haiku`. The plan is read from `structured_output`. The CLI's own error (for
+  example an expired login) is shown as is.
+- Model names become a CLI argument, so only plain names are accepted. Model lists come from
+  each CLI's chat catalog.
+- The answer is validated by `planFromToolArgs` exactly like an API model's.
+- The Claude preset's dialog says that Anthropic's terms limit using a subscription through
+  other apps, and suggests an API key when unsure.
 
 ## Consequences
 - Most commands work with no key and no network.

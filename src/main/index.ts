@@ -92,9 +92,14 @@ app.whenReady().then(async () => {
     if (next.autoCheckUpdates !== previous.autoCheckUpdates) container?.updates.setAutoCheck(next.autoCheckUpdates)
     if (next.computerUse && !previous.computerUse) container?.computer.warm()
     if (!next.computerUse && previous.computerUse) container?.computer.dispose()
+    if (next.queenGlobalShortcut !== previous.queenGlobalShortcut || next.queenShortcut !== previous.queenShortcut) {
+      container?.hotkey.apply(next.queenGlobalShortcut, next.queenShortcut)
+    }
   })
   container.updates.setAutoCheck(container.settings.get().autoCheckUpdates)
   if (container.settings.get().computerUse) container.computer.warm()
+  const startup = container.settings.get()
+  if (startup.queenGlobalShortcut) container.hotkey.apply(true, startup.queenShortcut)
   registerIpc(
     createHandlers(container),
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
@@ -119,6 +124,7 @@ app.on('before-quit', () => {
   if (!container) return
   container.browser.closeAll()
   container.computer.dispose()
+  container.hotkey.stop()
   void container.gateway.closeAll()
   container.files.closeAll()
   container.runtime.disposeAll()

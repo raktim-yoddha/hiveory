@@ -1,16 +1,40 @@
+import type { AppSettings } from '../domain/settings'
+import { PET_NAMES } from '../naming/names'
 import type { QueenReport } from './report'
 import { formatWait } from './report'
 
-export type PersonaId = 'ada' | 'sunny' | 'frankie'
+export type PersonaId = 'ada' | 'sunny' | 'frankie' | 'custom'
+/** The three fixed cores. A custom personality borrows the phrasing of the one its sliders lean to. */
+export type PersonaCore = Exclude<PersonaId, 'custom'>
 
 export const PERSONAS: Record<PersonaId, { name: string; tagline: string; placeholder: string }> = {
   ada: { name: 'Ada', tagline: 'Strict, formal and precise', placeholder: 'Your instructions' },
   sunny: { name: 'Sunny', tagline: 'Fun and full of energy', placeholder: 'What are we building?' },
-  frankie: { name: 'Frankie', tagline: 'Frank facts, then a push forward', placeholder: "What's the next move?" }
+  frankie: { name: 'Frankie', tagline: 'Frank facts, then a push forward', placeholder: "What's the next move?" },
+  custom: { name: 'Custom', tagline: 'Your own name, style and voice', placeholder: 'What do you need?' }
 }
 
 /** Reserved: never used as agent pet names, so "tell Ada…" is never ambiguous. */
-export const PERSONA_NAMES = Object.values(PERSONAS).map((p) => p.name)
+export const PERSONA_NAMES = [PERSONAS.ada.name, PERSONAS.sunny.name, PERSONAS.frankie.name]
+
+/** Why a custom name can't be used, or null. Agent pet names are refused so "tell Max…" stays unambiguous. */
+export function customNameProblem(name: string): string | null {
+  const n = name.trim()
+  if (!/^\p{L}[\p{L}' -]{0,19}$/u.test(n)) return 'Use 1–20 letters.'
+  const lower = n.toLowerCase()
+  if (['queen', 'queen bee', 'bee'].includes(lower)) return 'That name is taken by Queen Bee herself.'
+  if (PERSONA_NAMES.some((x) => x.toLowerCase() === lower)) return `${n} is one of the built-in personalities.`
+  if (PET_NAMES.some((x) => x.toLowerCase() === lower)) return `${n} is an agent name. Pick another so “tell ${n}…” stays clear.`
+  return null
+}
+
+/** Her name, tagline and placeholder, plus the user's own persona text (custom only). */
+export function personaInfo(s: Pick<AppSettings, 'queenPersona' | 'queenCustomName' | 'queenCustomPersona'>): { name: string; tagline: string; placeholder: string; text?: string } {
+  const base = PERSONAS[s.queenPersona]
+  if (s.queenPersona !== 'custom') return base
+  const text = s.queenCustomPersona.trim().slice(0, 500)
+  return { ...base, name: s.queenCustomName || 'Zara', ...(text ? { text } : {}) }
+}
 
 /** The user's Queen Bee preferences (Settings › Queen Bee). */
 export interface QueenPrefs {
@@ -25,6 +49,47 @@ export interface QueenPrefs {
   nudgeMinutes: number
   /** Short drops the second sentence of every reply. */
   length: 'short' | 'normal'
+  /** Frankie: the goal she keeps you honest about. */
+  goal?: string
+  /** Frankie: how hard she pushes. */
+  intensity?: 'steady' | 'hard'
+  /** Custom: slider positions, 0–100. */
+  custom?: { formal: number; energy: number; direct: number }
+}
+
+/** The preferences stored in settings, as the phrasing functions read them. */
+export const prefsFromSettings = (s: AppSettings): QueenPrefs => ({
+  persona: s.queenPersona,
+  callMe: s.queenCallMe,
+  honorific: s.queenHonorific,
+  hype: s.queenHype,
+  nudgeMinutes: s.queenNudgeMinutes,
+  length: s.queenLength,
+  goal: s.queenGoal,
+  intensity: s.queenIntensity,
+  custom: { formal: s.queenCustomFormal, energy: s.queenCustomEnergy, direct: s.queenCustomDirect }
+})
+
+/**
+ * Which core's phrasing a custom personality uses: the slider pushed furthest
+ * wins (formal → Ada, energetic → Sunny, direct → Frankie). All three on the soft
+ * side (casual, calm, gentle) reads as a calm Sunny. Her energy sets Sunny's hype.
+ */
+export function personaCore(p: QueenPrefs): PersonaCore {
+  if (p.persona !== 'custom') return p.persona
+  const { formal, energy, direct } = p.custom ?? { formal: 50, energy: 50, direct: 50 }
+  const top = Math.max(formal, energy, direct)
+  if (top <= 50) return 'sunny'
+  return direct === top ? 'frankie' : formal === top ? 'ada' : 'sunny'
+}
+
+type CorePrefs = QueenPrefs & { persona: PersonaCore }
+
+/** The fixed-core preferences the phrasing functions switch on. */
+const effective = (p: QueenPrefs): CorePrefs => {
+  if (p.persona !== 'custom') return p as CorePrefs
+  const energy = p.custom?.energy ?? 50
+  return { ...p, persona: personaCore(p), hype: energy < 34 ? 'calm' : energy < 67 ? 'lively' : 'max' }
 }
 
 /** What actually happened, from the executor. Receipts and persona lines are both built from these. */
@@ -38,6 +103,8 @@ export type QueenOutcome =
   | { kind: 'mode'; mode: 'Work' | 'Chat' }
   | { kind: 'preset'; name: string; workspace: string }
   | { kind: 'panel'; what: 'side panel' | 'side panel closed' | 'browser' | 'explorer' }
+  | { kind: 'noted'; text: string }
+  | { kind: 'forgot'; count: number }
 
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
@@ -65,6 +132,10 @@ export function receipt(o: QueenOutcome): string {
       return `Loaded ${o.name} in ${o.workspace}`
     case 'panel':
       return o.what === 'side panel' ? 'Opened the side panel' : o.what === 'side panel closed' ? 'Closed the side panel' : `Opened the ${o.what === 'browser' ? 'browser' : 'Explorer'}`
+    case 'noted':
+      return `Noted: ${o.text}`
+    case 'forgot':
+      return `Forgot ${o.count} ${plural(o.count, 'note')}`
   }
 }
 
@@ -90,6 +161,10 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return `${o.name} is loading in ${o.workspace}`
     case 'panel':
       return o.what === 'side panel closed' ? 'the side panel is closed' : `the ${o.what === 'side panel' ? 'side panel' : o.what === 'browser' ? 'browser' : 'Explorer'} is open`
+    case 'noted':
+      return "I'll remember that"
+    case 'forgot':
+      return `${o.count} ${plural(o.count, 'note is', 'notes are')} gone`
   }
 }
 
@@ -99,7 +174,8 @@ const address = (p: QueenPrefs): string =>
 const finish = (sentences: string[], p: QueenPrefs): string => (p.length === 'short' ? sentences.slice(0, 1) : sentences).filter(Boolean).join(' ')
 
 /** The persona's one-line reply after actions ran. */
-export function doneLine(outcomes: QueenOutcome[], p: QueenPrefs): string {
+export function doneLine(outcomes: QueenOutcome[], prefs: QueenPrefs): string {
+  const p = effective(prefs)
   const first = outcomes[0]
   if (!first) return ''
   const more = outcomes.length - 1
@@ -112,15 +188,29 @@ export function doneLine(outcomes: QueenOutcome[], p: QueenPrefs): string {
       return finish([lead, `${cap(summary(first, false))}${extra}${p.hype === 'max' ? '!' : '.'}`], p)
     }
     case 'frankie': {
+      const hard = p.intensity === 'hard'
       const push =
-        first.kind === 'opened' ? 'Give each one a single clear task.' : first.kind === 'closed' ? 'Fewer agents, sharper focus.' : first.kind === 'messaged' ? 'Now let it work.' : ''
+        first.kind === 'opened'
+          ? hard
+            ? 'One clear task each, right now. No vague prompts.'
+            : 'Give each one a single clear task.'
+          : first.kind === 'closed'
+            ? 'Fewer agents, sharper focus.'
+            : first.kind === 'messaged'
+              ? hard
+                ? 'Now let it work. Stop hovering.'
+                : 'Now let it work.'
+              : ''
       return finish([`${cap(summary(first, false))}${extra}.`, push], p)
     }
   }
 }
 
 /** The persona's reading of a computed report. Every number comes from the report. */
-export function reportLine(r: QueenReport, p: QueenPrefs): string {
+export function reportLine(r: QueenReport, prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  const goal = p.goal?.trim() ? `Goal: ${p.goal.trim().replace(/[.!]+$/, '')}.` : ''
+  const hard = p.intensity === 'hard'
   const top = r.waiting[0]
   const waitText = top?.waitingMinutes !== undefined ? ` for ${formatWait(top.waitingMinutes)}` : ''
   const name = p.callMe ? `${p.callMe}, ` : ''
@@ -144,16 +234,22 @@ export function reportLine(r: QueenReport, p: QueenPrefs): string {
       if (top) {
         return finish([
           `${name}${top.petName} has waited on you${waitText}.`,
-          overdue ? "That's the bottleneck, not the agents. Answer it and the hive moves again." : `Answer it, then check the other ${r.total - 1}.`
+          overdue
+            ? hard
+              ? "You're the bottleneck. Every minute it waits, nothing ships."
+              : "That's the bottleneck, not the agents. Answer it and the hive moves again."
+            : `Answer it, then check the other ${r.total - 1}.`,
+          goal
         ], p)
       }
-      if (r.counts.working) return finish([`${cap(counts)}.`, 'Nothing is blocked on you. Plan the next task while they work.'], p)
-      return finish([`${r.counts.idle} ${plural(r.counts.idle, 'agent')} idle.`, 'Idle agents ship nothing. Give them work.'], p)
+      if (r.counts.working) return finish([`${cap(counts)}.`, 'Nothing is blocked on you. Plan the next task while they work.', goal], p)
+      return finish([`${r.counts.idle} ${plural(r.counts.idle, 'agent')} idle.`, hard ? 'Idle agents ship nothing. Give them work now.' : 'Idle agents ship nothing. Give them work.', goal], p)
     }
   }
 }
 
-export function unknownLine(p: QueenPrefs): string {
+export function unknownLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
   return {
     ada: `That is outside what I can do yet${address(p)}. I open, close and find agents, switch pages and report status.`,
     sunny: "That one's beyond me for now! Try “open two Codex” or “what's left?”",
@@ -161,14 +257,37 @@ export function unknownLine(p: QueenPrefs): string {
   }[p.persona]
 }
 
-export function cancelledLine(p: QueenPrefs): string {
+export function cancelledLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
   return { ada: `Understood${address(p)}. Nothing was changed.`, sunny: 'No worries, nothing changed!', frankie: 'Cancelled. Nothing changed.' }[p.persona]
 }
 
-export function failedLine(error: string, p: QueenPrefs): string {
+export function failedLine(error: string, prefs: QueenPrefs): string {
+  const p = effective(prefs)
   return { ada: `That did not work${address(p)}: ${error}`, sunny: `Oops, that didn't work: ${error}`, frankie: `Failed: ${error}` }[p.persona]
 }
 
-export function undoneLine(p: QueenPrefs): string {
+export function undoneLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
   return { ada: `Reverted${address(p)}.`, sunny: 'Undone, like it never happened!', frankie: 'Undone.' }[p.persona]
+}
+
+/** Her notes, read back. */
+export function recallLine(notes: string[], prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  if (!notes.length) {
+    return {
+      ada: `I have no notes yet${address(p)}. Say “remember that …” and I will keep it.`,
+      sunny: 'Nothing yet! Say “remember that …” and I’ll hold on to it.',
+      frankie: 'No notes. Tell me “remember that …” if something matters.'
+    }[p.persona]
+  }
+  const lead = { ada: `I have ${notes.length} ${plural(notes.length, 'note')}${address(p)}:`, sunny: "Here's what I know!", frankie: `${notes.length} ${plural(notes.length, 'note')}:` }[p.persona]
+  return `${lead} ${notes.map((n) => n.replace(/[.!]+$/, '')).join('; ')}.`
+}
+
+/** Nothing matched a "forget …". */
+export function nothingToForgetLine(prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  return { ada: `I have no note about that${address(p)}.`, sunny: "I don't have a note like that!", frankie: 'No note matches that.' }[p.persona]
 }
