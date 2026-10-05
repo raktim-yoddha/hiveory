@@ -25,6 +25,8 @@ export interface AppSettings {
   browserViewports: Viewport[]
   /** Give agents computer_* tools: the desktop's mouse, keyboard, windows and screen (Windows). Off by default. */
   computerUse: boolean
+  /** Closing the window keeps Hiveory (and every agent) running in the tray; Quit stops them. */
+  keepRunningInBackground: boolean
   /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
   wallpaper: string
   /** How opaque every surface is over a wallpaper (0 = fully transparent, 1 = solid). */
@@ -93,6 +95,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   browserDefaultProfile: 'default',
   browserViewports: [],
   computerUse: false,
+  keepRunningInBackground: true,
   wallpaper: '',
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,

@@ -300,6 +300,14 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - "Go to main" means the current project's Main; from Home, or for a name several projects
   share, she asks which project's ("main of api" names it directly).
 
+## Running in the background (ADR 0020)
+
+- Closing the window keeps Hiveory in the system tray and every agent keeps working (Settings ›
+  Agents › "Keep agents running in the background", on by default). The tray reopens the window
+  and shows how many agents run; "Quit Hiveory" stops them.
+- After a real quit or a reboot every terminal agent comes back on start-up, resuming its own
+  conversation (ADR 0014); the CLIs keep their history on disk, listed in the Sessions tab.
+
 ## Important Non-Features
 
 Initial version does not include:

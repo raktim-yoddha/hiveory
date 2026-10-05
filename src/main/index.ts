@@ -8,6 +8,7 @@ import { createContainer, type Container } from './app/container'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
 import { adoptLoginShellPath } from './app/shell-path'
+import { BackgroundTray } from './app/tray'
 import { applyWindowTheme, createMainWindow, rendererTargets } from './app/window'
 import { createHandlers } from './ipc/handlers'
 import { registerIpc } from './ipc/router'
@@ -42,6 +43,13 @@ app.on('web-contents-created', (_event, contents) => {
 const targets = rendererTargets(import.meta.dirname)
 let window: BrowserWindow | null = null
 let container: Container | null = null
+/** Set once a real quit starts (tray, Cmd+Q, an update): closing the window then really closes it. */
+let quitting = false
+const tray = new BackgroundTray(
+  () => window,
+  () => (container ? container.store.state.instances.filter((i) => container!.agents.details(i).running).length : 0),
+  () => app.quit()
+)
 
 const emit: Emit = (event, payload) => {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -53,14 +61,16 @@ const openWindow = (): void => {
   const s = container?.settings.get()
   window = createMainWindow(targets, log, s?.theme, Boolean(s?.wallpaper))
   window.on('closed', () => (window = null))
+  // Closing keeps the agents running: the window hides into the tray (unless that setting is off).
+  window.on('close', (event) => {
+    if (quitting || !container?.settings.get().keepRunningInBackground) return
+    event.preventDefault()
+    tray.hide()
+  })
   container?.browser.setWindow(window)
 }
 
-app.on('second-instance', () => {
-  if (!window) return
-  if (window.isMinimized()) window.restore()
-  window.focus()
-})
+app.on('second-instance', () => tray.show())
 
 app.whenReady().then(async () => {
   // No application menu on Windows/Linux: its hidden Alt accelerators would swallow
@@ -113,6 +123,7 @@ app.whenReady().then(async () => {
   }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) openWindow()
+    else tray.show()
   })
 })
 
@@ -121,6 +132,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
+  tray.destroy()
   if (!container) return
   container.browser.closeAll()
   container.computer.dispose()

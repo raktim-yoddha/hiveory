@@ -250,6 +250,7 @@ export const requestSchemas = {
       browserDefaultProfile: profileId,
       browserViewports: z.array(viewportSchema).max(32),
       computerUse: z.boolean(),
+      keepRunningInBackground: z.boolean(),
       wallpaper: wallpaperSchema,
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),

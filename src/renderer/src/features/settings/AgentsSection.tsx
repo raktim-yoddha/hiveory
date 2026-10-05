@@ -54,6 +54,20 @@ export function AgentsSection() {
         />
       </div>
       <div className={styles.group}>
+        <div className={styles.groupTitle}>When you close the window</div>
+        <SettingRow
+          title="Keep agents running in the background"
+          description="Closing the window leaves Hiveory in the tray and every agent keeps working; open it again from the tray. Quit from the tray stops them (they resume their conversations next time)."
+          control={
+            <Toggle
+              label="Keep agents running in the background"
+              checked={settings.keepRunningInBackground}
+              onChange={(keepRunningInBackground) => void update({ keepRunningInBackground })}
+            />
+          }
+        />
+      </div>
+      <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>
         <p className={styles.groupNote}>
           Agents you open in Hiveory get a private, local MCP server so they can see and coordinate each other. It listens on
