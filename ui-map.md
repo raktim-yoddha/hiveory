@@ -73,6 +73,28 @@ drag handles on the emulated screen),
 </> developer tools; ⋯ holds profiles, cookies and Browser settings. Narrow
 panels fold ⌖ ✎ </> into ⋯.
 
+### Side panel areas and Sessions (ADR 0020)
+
+```text
+┌ [Explorer ×] [Sessions ×] [+] ─────────────────── ⤢ ┐
+│ Agent sessions                                    ⟳ │
+│ ( Workspace | Project | All )                       │
+│ ( Search sessions                                 ) │
+│ 207 sessions                          Last updated  │
+│ ▾ hiveory                                       12  │
+│   Light theme with theme switcher               ⋯   │
+│   Agent: I've changed the calendar embed…           │
+│   [logo] Claude Code · 2d ago · claude-sonnet-5-5   │
+└─────────────────────────────────────────────────────┘
+            ═══ divider (drag) ═══
+┌ [GitHub ×] [+] ─────────────────────────────────────┐
+│  bottom area: its own tabs                          │
+└─────────────────────────────────────────────────────┘
+```
+
+Drag a tab into the lower half to open the bottom area ("Show below" preview); the browser page
+steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Copy session ID.
+
 ### Settings › Skills, MCP & Plugins (ADR 0017)
 
 ```text

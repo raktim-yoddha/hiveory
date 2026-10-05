@@ -57,6 +57,8 @@ export const claudeAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
+  // A session from its history: Claude takes Hiveory's conversation id as its own session id.
+  adoptSession: (sessionId) => ({ conversationId: sessionId }),
   buildLaunch({ instance, autoApprove, hook, mcp, runtimeDir, resume }) {
     // Hiveory picks the session id up front, so every agent resumes exactly its own conversation.
     const args = resume

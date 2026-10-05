@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const OVERLAY = '[role="menu"], [role="listbox"], [role="dialog"], dialog[open]'
+const OVERLAY = '[role="menu"], [role="listbox"], [role="dialog"], dialog[open], [data-steps-aside]'
 
 export const isOverlayOpen = (): boolean => Boolean(document.querySelector(OVERLAY))
 
@@ -13,7 +13,7 @@ export function useOverlayOpen(): boolean {
   useEffect(() => {
     const check = (): void => setOpen(isOverlayOpen())
     const observer = new MutationObserver(check)
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'role'] })
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'role', 'data-steps-aside'] })
     check()
     return () => observer.disconnect()
   }, [])

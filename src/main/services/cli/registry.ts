@@ -36,6 +36,7 @@ export class CliRegistry {
         kind: adapter.kind ?? 'agent',
         icon: adapter.icon,
         supportsAutoApprove: adapter.supportsAutoApprove,
+        resumesById: Boolean(adapter.adoptSession),
         supportsChat: (CHAT_CLI_IDS as readonly string[]).includes(adapter.id),
         available: Boolean(executable),
         executable

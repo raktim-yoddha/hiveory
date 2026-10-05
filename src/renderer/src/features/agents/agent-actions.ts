@@ -11,8 +11,9 @@ import { disposeTerminal } from '../terminal/terminal-registry'
  * waiting for the follow-up state events.
  */
 export const agentActions = {
-  open: async (workspaceId: string, cliId: string, placement?: { targetPaneId: string; side: Side }) => {
-    const result = await runAction('Open agent', () => api('agents.open', { workspaceId, cliId, placement }))
+  /** Opens an agent; with `resumeSession` it continues that conversation from the CLI's history. */
+  open: async (workspaceId: string, cliId: string, placement?: { targetPaneId: string; side: Side }, resumeSession?: string) => {
+    const result = await runAction(resumeSession ? 'Resume session' : 'Open agent', () => api('agents.open', { workspaceId, cliId, placement, resumeSession }))
     if (!result) return
     useAgents.setState((s) => ({
       byWorkspace: {

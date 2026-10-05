@@ -68,7 +68,15 @@ export const createHandlers = (c: Container): Handlers => {
   'clis.list': (input) => c.registry.list(input?.refresh ?? false),
 
   'agents.list': ({ workspaceId }) => c.agents.list(workspaceId),
-  'agents.open': ({ workspaceId, cliId, placement }) => c.agents.open(workspaceId, cliId, placement),
+  'agents.open': ({ workspaceId, cliId, placement, resumeSession }) => c.agents.open(workspaceId, cliId, placement, resumeSession),
+  'sessions.list': ({ scope, workspaceId, projectId }) => {
+    if (scope === 'all') return c.sessions.list()
+    if (scope === 'workspace') return c.sessions.list(workspaceId ? [c.workspaceRepo.get(workspaceId).path] : [])
+    if (!projectId) return []
+    const project = c.workspaceRepo.project(projectId)
+    const main = c.workspaceRepo.main(project)
+    return c.sessions.list([project.path, ...(main ? [main.path] : []), ...c.workspaceRepo.isolated(projectId).map((w) => w.path)])
+  },
   'agents.close': ({ instanceId }) => c.agents.close(instanceId),
   'agents.restart': ({ instanceId }) => c.agents.restart(instanceId),
   'agents.sendMessage': ({ instanceId, message }) => {

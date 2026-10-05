@@ -1,13 +1,89 @@
+/* The panel holds one area, or two stacked with a gutter between them (each its own surface). */
 .panel {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-width: 0;
+}
+
+.areas {
+  position: relative;
+  display: grid;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--gutter);
+  min-height: 0;
+}
+
+.area {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
   border: var(--border-width) solid var(--color-border-subtle);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-surface);
+}
+
+/* The divider sits in the gutter between the two areas. */
+.splitHandle {
+  top: calc(var(--split) * (100% - var(--gutter)));
+}
+
+/* While a tab is dragged: covers the pages (not the top tab strip) and previews where it lands. */
+.dropLayer {
+  position: absolute;
+  inset: calc(var(--pane-header-height) + var(--space-2)) 0 0;
+  z-index: var(--z-pane-overlay);
+}
+
+.dropPreview {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc((1 - var(--split, 0.5)) * 100% + var(--space-3));
+  left: var(--space-3);
+  top: var(--space-3);
+  display: grid;
+  place-items: center;
+  border: var(--border-width) dashed var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--fill-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  pointer-events: none;
+  animation: drop-in var(--duration-fast) var(--ease-out);
+}
+
+.dropBottom {
+  top: calc(var(--split, 0.5) * 100% + var(--space-3));
+  bottom: var(--space-3);
+}
+
+@keyframes drop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A dragged tab, and the slot it would drop into. */
+.lifted {
+  opacity: 0.4;
+}
+
+.insertBefore {
+  box-shadow: inset var(--space-1) 0 0 var(--color-accent);
+}
+
+.insertEnd {
+  flex: none;
+  width: var(--space-1);
+  height: var(--control-sm);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
 }
 
 .header {

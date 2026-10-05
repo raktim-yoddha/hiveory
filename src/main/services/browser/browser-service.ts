@@ -65,6 +65,9 @@ const LOG_LIMIT = 300
 const DEFAULT_SIZE = { width: 1280, height: 800 }
 const ALLOWED_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write'])
 
+type Rect = { x: number; y: number; width: number; height: number }
+const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+
 const push = (list: LogEntry[], entry: LogEntry): void => {
   list.push(entry)
   if (list.length > LOG_LIMIT) list.splice(0, list.length - LOG_LIMIT)
@@ -136,13 +139,14 @@ export class BrowserService {
       }
     }
     if (bounds) {
+      const rounded = { x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.max(1, Math.round(bounds.width)), height: Math.max(1, Math.round(bounds.height)) }
+      // A page shown where another is parks that one; the side panel's top and bottom areas can each show one.
       for (const other of this.pages.values()) {
-        if (other !== page && other.shown) {
+        if (other !== page && other.shown && overlaps(other.shown, rounded)) {
           other.shown = null
           this.place(other)
         }
       }
-      const rounded = { x: Math.round(bounds.x), y: Math.round(bounds.y), width: Math.max(1, Math.round(bounds.width)), height: Math.max(1, Math.round(bounds.height)) }
       page.shown = rounded
       page.size = { width: rounded.width, height: rounded.height }
     } else {

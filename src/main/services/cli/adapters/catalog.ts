@@ -28,6 +28,8 @@ interface CliSpec {
     resume?: (id: string) => string[]
     /** …or the CLI continues the folder's most recent session (used only for the folder's sole agent of that CLI). */
     latest?: string[]
+    /** Resumes one session by the id in its history (the Sessions tab), when the CLI takes one. */
+    byId?: (id: string) => string[]
   }
 }
 
@@ -46,6 +48,11 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
   injectMcp: Boolean(spec.mcp),
+  ...(spec.session?.start && spec.session.resume
+    ? { adoptSession: (id: string) => ({ conversationId: id }) }
+    : spec.session?.byId
+      ? { adoptSession: (id: string) => ({ providerSessionId: id }) }
+      : {}),
   buildLaunch: ({ instance, autoApprove, mcp, resume, soleOfCli }) => {
     const tools = mcp && spec.mcp ? spec.mcp(mcp) : {}
     const s = spec.session
@@ -54,9 +61,11 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
         ? resume
           ? s.resume(instance.conversationId)
           : s.start(instance.conversationId)
-        : resume && soleOfCli && s?.latest
-          ? s.latest
-          : []
+        : resume && instance.providerSessionId && s?.byId
+          ? s.byId(instance.providerSessionId)
+          : resume && soleOfCli && s?.latest
+            ? s.latest
+            : []
     return {
       args: [...(spec.args ?? []), ...session, ...(autoApprove ? (spec.autoApproveArgs ?? []) : []), ...(tools.args ?? [])],
       env: { ...(autoApprove ? spec.autoApproveEnv : {}), ...tools.env }
@@ -76,7 +85,7 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('gemini', 'GE'),
     executables: ['gemini'],
     autoApproveArgs: ['--yolo'],
-    session: { latest: ['--resume', 'latest'] },
+    session: { latest: ['--resume', 'latest'], byId: (id) => ['--resume', id] },
     waitingPatterns: [{ pattern: /Allow execution|Apply this change\?|Waiting for user confirmation/i, reason: 'permission' }]
   }),
   defineCli({

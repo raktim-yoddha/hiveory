@@ -29,3 +29,19 @@
 .handle:focus-visible {
   outline: none;
 }
+
+/* Between a top and a bottom area: a full-width strip in the gutter, dragged up and down. */
+.horizontal {
+  top: auto;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: var(--gutter);
+  cursor: row-resize;
+}
+
+.horizontal::after {
+  width: var(--space-10);
+  height: var(--space-1);
+}

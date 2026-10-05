@@ -1,6 +1,8 @@
 import { z } from 'zod'
+import { SESSION_ID } from '../domain/sessions'
 import type {
   AgentPreset,
+  AgentSession,
   AppSettings,
   BrowserAnnotation,
   BrowserPageView,
@@ -48,6 +50,7 @@ const queenContextSchema = z.object({
   workspaceId: shortText.optional(),
   projects: z.array(z.object({ id: shortText, name: shortText })).max(500),
   workspaces: z.array(z.object({ id: shortText, name: shortText, kind: z.enum(['main', 'isolated']) })).max(500),
+  otherWorkspaces: z.array(z.object({ id: shortText, name: shortText, kind: z.enum(['main', 'isolated']), projectId: shortText })).max(1000).optional(),
   agents: z
     .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
     .max(500),
@@ -165,8 +168,12 @@ export const requestSchemas = {
   'agents.open': z.object({
     workspaceId: id,
     cliId: id,
-    placement: z.object({ targetPaneId: id, side }).optional()
+    placement: z.object({ targetPaneId: id, side }).optional(),
+    /** Continue this conversation from the CLI's history (Sessions tab) instead of starting a new one. */
+    resumeSession: z.string().regex(SESSION_ID).optional()
   }),
+  /** The agent CLIs' own conversation history on this computer, for a workspace, a project or everything. */
+  'sessions.list': z.object({ scope: z.enum(['workspace', 'project', 'all']), workspaceId: id.optional(), projectId: id.optional() }),
   'agents.close': z.object({ instanceId: id }),
   'agents.restart': z.object({ instanceId: id }),
   'agents.applyPreset': z.object({ workspaceId: id, presetId: id }),
@@ -463,6 +470,7 @@ export interface ResponseMap {
   'presets.save': AgentPreset
   'presets.delete': void
   'kanban.board': KanbanBoard
+  'sessions.list': AgentSession[]
   'agents.sendMessage': string
   'queen.accounts': BrainAccountView[]
   'queen.saveAccount': BrainAccountView[]

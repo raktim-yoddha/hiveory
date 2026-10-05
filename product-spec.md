@@ -230,6 +230,16 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - The side panel holds browsers and one Explorer per folder: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
+## Side panel areas and Sessions (ADR 0020)
+
+- Tabs drag to reorder. Dragging a tab into the panel's lower half splits the panel into a top
+  and a bottom area, each with its own tabs and "+"; a divider sets their heights. Keyboard:
+  Ctrl+Shift+← → reorders, Ctrl+Shift+↓ ↑ moves a tab between the areas.
+- **Sessions** tab: every Claude Code, Codex and Gemini CLI conversation on this computer, read
+  from the CLIs' own history (so it survives restarts and reboots). Workspace · Project · All,
+  search, grouped by folder, newest first; title, last words, CLI, time and model. A session
+  that ran in one of the project's workspaces resumes there as a new agent pane.
+
 ## Queen Bee (ADR 0019)
 
 - A bar docked under the main area (Work, Chat and Settings), or on auto-hide: a fixed-size

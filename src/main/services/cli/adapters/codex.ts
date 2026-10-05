@@ -11,6 +11,8 @@ export const codexAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
+  // A session from its history resumes like one reported through notify.
+  adoptSession: (sessionId) => ({ providerSessionId: sessionId }),
   buildLaunch({ instance, autoApprove, hook, mcp, resume, soleOfCli }) {
     const args: string[] = mcp ? codexMcpArgs(mcp) : []
     const env: Record<string, string> = mcp ? { HIVEORY_MCP_TOKEN: mcp.token } : {}

@@ -104,10 +104,16 @@ export class AgentService {
     return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id)]
   }
 
-  open(workspaceId: string, cliId: string, placement?: Placement): { agent: CliInstanceView; layout: LayoutNode | null } {
+  open(workspaceId: string, cliId: string, placement?: Placement, resumeSession?: string): { agent: CliInstanceView; layout: LayoutNode | null } {
     const workspace = this.workspaces.get(workspaceId)
-    if (!this.registry.adapter(cliId)) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
+    const adapter = this.registry.adapter(cliId)
+    if (!adapter) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
     const [instance] = this.build(workspace, [{ cliId, count: 1 }])
+    // From the Sessions tab: the new agent continues that conversation (the adapter says where its id goes).
+    if (resumeSession) {
+      if (!adapter!.adoptSession) fail('INVALID_INPUT', `${adapter!.displayName} can't resume a session by id.`)
+      Object.assign(instance!, adapter!.adoptSession!(resumeSession), { hasConversation: true, chatUi: false })
+    }
     const tree = this.layouts.get(workspaceId, this.paneIds(workspaceId))
     const next =
       placement && listPanes(tree).includes(placement.targetPaneId)

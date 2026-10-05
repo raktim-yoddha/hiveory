@@ -31,6 +31,8 @@ export interface CliDescriptor {
   supportsAutoApprove: boolean
   /** Has a headless mode Hiveory can show as a chat (Chat mode, and Work agents in chat view). */
   supportsChat: boolean
+  /** Can continue a conversation from its own history by session id (the Sessions tab's Resume). */
+  resumesById: boolean
   available: boolean
   /** Resolved executable path when available. */
   executable?: string

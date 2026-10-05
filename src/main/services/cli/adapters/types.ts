@@ -72,6 +72,11 @@ export interface CliAdapter {
   mapHookEvent?(event: string, payload: unknown): StatusEvent | null
   /** The CLI's session id carried by a hook callback, if any (stored for exact resume). */
   sessionIdFromHook?(event: string, payload: unknown): string | undefined
+  /**
+   * Resuming a conversation from the CLI's history (Sessions tab): where the session id
+   * goes on a new agent so `buildLaunch` resumes it. Absent: the CLI can't resume by id.
+   */
+  adoptSession?(sessionId: string): Pick<CliInstance, 'conversationId'> | Pick<CliInstance, 'providerSessionId'>
   /** PTY heuristics; `hooksActive` says whether native hooks are reporting too. */
   heuristics(hooksActive: boolean): HeuristicConfig | null
 }

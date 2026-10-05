@@ -492,6 +492,7 @@ src/
 │       ├── extensions/         Skills (copy/create/import/trash) & MCP inventory (full configs kept in main)
 │       ├── connections/        ConnectionService (plugins + Hiveory MCP servers, sealed secrets), McpGateway (MCP client → ToolFamily)
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
+│       ├── sessions/           SessionHistoryService — the CLIs' own session history (Claude, Codex, Gemini readers), read-only, cached by mtime
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
 │       ├── queen/              QueenBrain (provider accounts: 3 API wire formats + Codex/Claude Code CLIs, fallback, sealed keys), cli-brain (locked-down headless CLI runs), GlobalHotkey (opt-in uiohook), QueenWatcher (live updates from real status changes)
