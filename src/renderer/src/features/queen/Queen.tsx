@@ -157,6 +157,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
       </button>
       {!compact && (
         <>
+          <span className={styles.persona}>{PERSONAS[persona].name}</span>
           <input
             ref={input}
             className={styles.input}
@@ -245,8 +246,8 @@ function CardBody({ card, busy }: { card: QueenCard; busy: boolean }) {
       <>
         <p className={styles.text}>{card.text}</p>
         <div className={styles.choices}>
-          <Button size="sm" variant="danger" disabled={busy} onClick={() => void card.run()}>
-            Close
+          <Button size="sm" variant={card.label === 'Send' ? 'primary' : 'danger'} disabled={busy} onClick={() => void card.run()}>
+            {card.label}
           </Button>
           <Button size="sm" variant="ghost" onClick={cancelQueen}>
             Cancel

@@ -790,6 +790,55 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
   }
 })
 
+await test('Queen Bee model: rules miss → model plans over a forced tool call → yes → a real agent gets the message', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  const card = page.locator('section[aria-label="Queen Bee says"]')
+  const seen = []
+  // A stand-in for any OpenAI-compatible provider: it checks what Queen Bee sends and plans one action.
+  const fake = createServer((req, res) => {
+    let raw = ''
+    req.on('data', (c) => (raw += c))
+    req.on('end', () => {
+      const body = JSON.parse(raw)
+      const state = body.messages[1].content
+      seen.push({ auth: req.headers.authorization, toolChoice: body.tool_choice?.function?.name, state })
+      const shell = /(\S+) (\S+) \(cli powershell/.exec(state)
+      const plan = state.endsWith('open the settings')
+        ? { actions: [{ type: 'navigate', to: 'settings', section: 'queen' }] }
+        : { actions: [{ type: 'message-agent', agentId: shell?.[1] ?? 'missing', text: 'echo queen-brain-ok' }] }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: 'plan', arguments: JSON.stringify(plan) } }] } }] }))
+    })
+  })
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r))
+  const shells = async () => (await value('agents.list', { workspaceId: mainWs.id })).filter((a) => a.cliId === 'powershell')
+  try {
+    const view = await value('queen.configureBrain', { provider: 'custom', baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'fake-model', apiKey: 'e2e-key' })
+    expect(view.hasKey && !JSON.stringify(view).includes('e2e-key'), 'key echoed back to the renderer')
+    expect((await value('queen.testBrain')).detail === 'Tool calling works.', 'model test failed')
+
+    await queen.fill('open powershell')
+    await queen.press('Enter')
+    await waitFor(async () => (await shells()).length === 1, 'shell for the model test')
+    const [shell] = await shells()
+    await waitFor(async () => (await value('terminal.snapshot', { instanceId: shell.id })).data.length > 0, 'shell prompt')
+
+    await queen.fill('could you get the shell to print something')
+    await queen.press('Enter')
+    await card.getByText('Send to').waitFor()
+    expect(seen.at(-1).auth === 'Bearer e2e-key' && seen.at(-1).toolChoice === 'plan', 'request not authorised or tool not forced')
+    expect(seen.at(-1).state.includes(`${shell.id} ${shell.petName} (cli powershell`), 'state did not list the shell')
+    await shot('h4-queen-model-confirm')
+    await card.getByRole('button', { name: 'Send', exact: true }).click()
+    await waitFor(async () => (await value('terminal.snapshot', { instanceId: shell.id })).data.includes('queen-brain-ok'), 'message reached the terminal')
+    await card.getByText(/has your message/).waitFor()
+  } finally {
+    for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
+    await value('queen.configureBrain', { provider: null, baseUrl: '', model: '' })
+    fake.close()
+  }
+})
+
 // ======================= E. Agent tools (MCP) =======================
 console.log('E. Agent tools over MCP')
 let mcp

@@ -16,6 +16,16 @@ export interface PersistedState {
   connections: StoredConnection[]
   /** Files open as panes in workspace layouts (ADR 0018). */
   editors: StoredEditor[]
+  /** Queen Bee's model (ADR 0019); the key is sealed by SecretBox. */
+  queenBrain: StoredBrain | null
+}
+
+export interface StoredBrain {
+  provider: string
+  baseUrl: string
+  model: string
+  /** Sealed API key ('' = none). */
+  key: string
 }
 
 export interface StoredEditor {
@@ -55,7 +65,8 @@ export const emptyState = (): PersistedState => ({
   settings: { ...DEFAULT_SETTINGS },
   browserProfiles: [],
   connections: [],
-  editors: []
+  editors: [],
+  queenBrain: null
 })
 
 const settingsSchema = z.object({
@@ -159,6 +170,8 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   importedFrom: str.optional()
 })
 
+const brainSchema: z.ZodType<StoredBrain> = z.object({ provider: z.string().max(40), baseUrl: z.string().max(500), model: z.string().max(200), key: z.string().max(10_000) })
+
 const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
 
 export const presetSchema: z.ZodType<AgentPreset> = z.object({
@@ -203,7 +216,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {}),
       browserProfiles: list(input.browserProfiles, browserProfileSchema),
       connections: list(input.connections, connectionSchema),
-      editors: list(input.editors, editorSchema)
+      editors: list(input.editors, editorSchema),
+      queenBrain: brainSchema.safeParse(input.queenBrain).data ?? null
     },
     rejected
   }

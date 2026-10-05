@@ -489,6 +489,7 @@ src/
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
+│       ├── queen/              QueenBrain — Queen Bee's optional model (3 wire formats, forced plan tool, sealed key)
 │       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery
 │       └── cli/

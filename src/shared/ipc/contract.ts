@@ -19,6 +19,7 @@ import type {
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
+import type { BrainResult, BrainView } from '../queen/brain'
 
 /** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
 export interface WallpaperImage {
@@ -32,6 +33,22 @@ import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/
  * The complete renderer ↔ main contract. Main validates every payload against
  * these schemas; the preload only forwards channels listed here.
  */
+
+
+/** What Queen Bee sends a model: names and ids only, bounded. */
+const shortText = z.string().max(200)
+const queenContextSchema = z.object({
+  mode: z.enum(['workspace', 'chatspace']),
+  projectId: shortText.optional(),
+  workspaceId: shortText.optional(),
+  projects: z.array(z.object({ id: shortText, name: shortText })).max(500),
+  workspaces: z.array(z.object({ id: shortText, name: shortText, kind: z.enum(['main', 'isolated']) })).max(500),
+  agents: z
+    .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
+    .max(500),
+  clis: z.array(z.object({ id: shortText, displayName: shortText })).max(200),
+  presets: z.array(z.object({ id: shortText, name: shortText })).max(200)
+})
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
 const side = z.enum(['left', 'right', 'top', 'bottom'])
@@ -161,6 +178,18 @@ export const requestSchemas = {
   'presets.save': presetInputSchema,
   'presets.delete': z.object({ presetId: id }),
   'kanban.board': z.object({ projectId: id }),
+  /** Types a message into an agent and submits it (Queen Bee's "tell Bruno to …"). */
+  'agents.sendMessage': z.object({ instanceId: id, message: z.string().trim().min(1).max(20_000) }),
+  /** Queen Bee's model (ADR 0019). The key is write-only: never read back. */
+  'queen.brain': none,
+  'queen.configureBrain': z.object({
+    provider: z.string().regex(/^[a-z]{1,40}$/).nullable(),
+    baseUrl: z.string().trim().max(500),
+    model: z.string().trim().max(200),
+    apiKey: z.string().max(500).nullable().optional()
+  }),
+  'queen.testBrain': none,
+  'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
   'settings.get': none,
   'settings.update': z
     .object({
@@ -373,6 +402,11 @@ export interface ResponseMap {
   'presets.save': AgentPreset
   'presets.delete': void
   'kanban.board': KanbanBoard
+  'agents.sendMessage': string
+  'queen.brain': BrainView
+  'queen.configureBrain': BrainView
+  'queen.testBrain': { ms: number; detail: string }
+  'queen.plan': BrainResult
   'settings.get': AppSettings
   'settings.update': AppSettings
   'updates.status': UpdateStatus

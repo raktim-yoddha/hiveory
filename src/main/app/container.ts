@@ -29,6 +29,7 @@ import { LayoutService } from '../services/layout/layout-service'
 import { StateStore } from '../services/persistence/state-store'
 import { PresetService } from '../services/presets/preset-service'
 import { SettingsService } from '../services/settings/settings-service'
+import { QueenBrain } from '../services/queen/queen-brain'
 import { ShellService } from '../services/shell/shell-service'
 import { UpdateService, type Updater } from '../services/updates/update-service'
 import { ProjectService } from '../services/projects/project-service'
@@ -50,7 +51,9 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const computer = new ComputerService(paths.runtimeDir, log)
   let hookServer: HookServer | null = null
   let settings: SettingsService | null = null
-  const connections = new ConnectionService(store, new SecretBox(safeStorage), emit)
+  const secrets = new SecretBox(safeStorage)
+  const connections = new ConnectionService(store, secrets, emit)
+  const queenBrain = new QueenBrain(store, secrets)
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
@@ -150,6 +153,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     chatStore,
     chats,
     browser,
-    computer
+    computer,
+    queenBrain
   }
 }

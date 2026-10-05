@@ -8,6 +8,7 @@ import type { LayoutService } from '../layout/layout-service'
 import type { ShellService } from '../shell/shell-service'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { ToolDefinition, ToolHost, ToolResult } from './mcp-protocol'
+import { deliverMessage } from './deliver'
 import { int, str, ToolError } from './tool-args'
 
 export interface AgentToolDeps {
@@ -320,20 +321,8 @@ export class AgentTools implements ToolHost {
         const agent = this.resolve(str(args, 'agent'))
         if (agent.id === this.callerId) throw new ToolError('You cannot send a message to yourself.')
         if (!agents.details(agent).running) throw new ToolError(`${agent.petName} is not running. Ask the user to start it first.`)
-        const message = str(args, 'message')
-        const submit = args.submit !== false
-        if (agent.chatUi) {
-          if (this.deps.chats.isRunning(agent.id)) throw new ToolError(`${agent.petName} is still replying. Use wait_for_agent first.`)
-          this.deps.chats.send(agent.id, message)
-          return `Sent to ${agent.petName} and submitted.`
-        }
-        // Bracketed paste keeps multi-line text as one prompt in TUIs that support it.
-        runtime.write(agent.id, runtime.bracketedPaste(agent.id) ? `\x1b[200~${message}\x1b[201~` : message.replace(/\r?\n/g, ' '))
-        if (submit) {
-          await sleep(80)
-          runtime.write(agent.id, '\r')
-        }
-        return `Sent to ${agent.petName}${submit ? ' and submitted' : ' (not submitted)'}.`
+        if (this.deps.chats.isRunning(agent.id) && agent.chatUi) throw new ToolError(`${agent.petName} is still replying. Use wait_for_agent first.`)
+        return deliverMessage(this.deps, agent, str(args, 'message'), args.submit !== false)
       }
       case 'wait_for_agent': {
         const agent = this.resolve(str(args, 'agent'))

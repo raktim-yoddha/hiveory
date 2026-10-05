@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { doneLine, PERSONAS, type PersonaId, type QueenPrefs } from '@shared/queen/personas'
 import { Select } from '../../components/ui/Select'
 import { TextInput } from '../../components/ui/TextField'
-import { cx } from '../../lib/cx'
 import { useSettings } from '../../stores/data'
 import { useQueen } from '../queen/useQueen'
+import { QueenModelSettings } from './QueenModelSettings'
 import { SettingRow, SettingsPage } from './SettingsScreen'
 import styles from './Settings.module.css'
 
@@ -39,7 +39,7 @@ export function QueenSection() {
               type="button"
               role="radio"
               aria-checked={settings.queenPersona === id}
-              className={cx(styles.persona)}
+              className={styles.persona}
               onClick={() => void update({ queenPersona: id })}
             >
               <span className={styles.personaName}>{PERSONAS[id].name}</span>
@@ -143,6 +143,8 @@ export function QueenSection() {
           />
         )}
       </div>
+
+      <QueenModelSettings />
 
       <div className={styles.group}>
         <div className={styles.groupTitle}>Placement</div>

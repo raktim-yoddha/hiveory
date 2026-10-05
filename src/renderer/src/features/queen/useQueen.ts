@@ -5,7 +5,7 @@ import type { QueenReport } from '@shared/queen/report'
 /** The one card above Queen Bee's bar: her reply, a yes/no, or a question. */
 export type QueenCard =
   | { kind: 'reply'; text: string; receipts: string[]; undo?: () => Promise<void>; report?: QueenReport }
-  | { kind: 'confirm'; text: string; run: () => Promise<void> }
+  | { kind: 'confirm'; text: string; /** The yes button: Close, Send or Confirm. */ label: string; run: () => Promise<void> }
   | { kind: 'ask'; question: QueenQuestion }
 
 export interface QueenPoint {

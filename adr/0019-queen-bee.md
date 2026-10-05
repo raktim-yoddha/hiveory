@@ -124,6 +124,31 @@ never ambiguous.
 4. **System-wide hotkey** (opt-in), learned memory, and the custom persona.
 5. **Subscription brains**: codex app-server, and optionally a claude session.
 
+## Phase 2 notes (as built)
+**Main process.**
+- `QueenBrain` speaks three wire formats: OpenAI-compatible (OpenAI, OpenRouter, Groq,
+  Cerebras, xAI, Ollama, LM Studio, custom), Anthropic and Gemini AI Studio.
+- Every request forces one `plan` tool call with a flat schema that every provider accepts.
+- Reasoning is set as low as the provider allows: `reasoning_effort` minimal/low, or a
+  thinking budget of 0. A model that rejects that setting is asked once more without it,
+  and remembered.
+- The time budget is 8 s.
+- The key is sealed by SecretBox and write-only over IPC. Gemini's key goes in a header,
+  never the URL. Error bodies are scrubbed of the key.
+- Addresses must be https; plain http is allowed only for localhost.
+
+**Validation** (`planFromToolArgs`).
+- Strict and all-or-nothing: every id must be one the model was shown, or nothing runs.
+- Anything a model plans that closes or messages an agent needs a yes.
+
+**Messages.**
+- `message-agent` reuses the agent-tools delivery path (`deliverMessage`).
+- From the rules ("tell Bruno to …") the user's exact words are sent without a
+  confirmation. A model's wording always needs a yes.
+
+**What the model sees.** Project, workspace, agent and CLI names and ids, agent statuses
+and the request. Never files, code or terminal output.
+
 ## Consequences
 - Most commands work with no key and no network.
 - A report can only be wrong where it summarises agent output, and that is labelled.

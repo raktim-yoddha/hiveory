@@ -235,7 +235,23 @@ const parseClause = (clause: string, ctx: QueenContext, previousVerb: string | n
   return { result: { kind: 'unknown' }, verb: null }
 }
 
+/** "tell Bruno to run the tests": the message keeps the user's exact words and casing. */
+const MESSAGE = /^\s*(?:(?:hey|ok|okay)\s+)?(?:queen(?:\s+bee)?[\s,]+)?(?:please\s+)?(?:tell|ask|message|instruct|have|get)\s+([\p{L}\p{N}_-]+)[\s,:]+(?:to\s+)?([\s\S]+?)\s*$/iu
+
+function parseMessage(input: string, ctx: QueenContext): QueenParse | null {
+  const m = MESSAGE.exec(input)
+  if (!m) return null
+  const named = ctx.agents.filter((a) => a.petName.toLowerCase() === m[1]!.toLowerCase())
+  if (!named.length) return null
+  if (named.length > 1) return { kind: 'ask', question: { text: `There's more than one ${named[0]!.petName}.` } }
+  const text = m[2]!.replace(/^["“']|["”']$/g, '').trim()
+  if (!text) return null
+  return { kind: 'actions', actions: [{ type: 'message-agent', agentId: named[0]!.id, text }] }
+}
+
 export function parseCommand(input: string, ctx: QueenContext): QueenParse {
+  const message = parseMessage(input, ctx)
+  if (message) return message
   let text = norm(input)
   for (const [re, to] of PHRASES) text = text.replace(re, to)
   text = text.replace(FILLER, ' ').replace(/\s+/g, ' ').trim()

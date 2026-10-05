@@ -244,8 +244,13 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   - reply length;
   - one extra per personality: Ada's honorific, Sunny's energy, Frankie's nudge time;
   - placement.
-- Later phases add a model for free-form requests, voice, the system-wide hotkey,
-  learned memory and a custom personality.
+- "Tell <agent> to …" types your exact words into that agent and submits them.
+- Optional model (Settings › Queen Bee › Model): any OpenAI-compatible provider,
+  Anthropic or Gemini (AI Studio key), or a local server. It handles only what the rules
+  don't understand, can only choose Queen Bee's actions, and asks before closing or
+  messaging agents. A Test button checks the key, the model and tool calling.
+- Later phases add voice, the system-wide hotkey, learned memory and a custom
+  personality.
 
 ## Important Non-Features
 

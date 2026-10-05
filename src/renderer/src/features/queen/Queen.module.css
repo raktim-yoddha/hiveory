@@ -34,11 +34,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  height: calc(var(--control-lg) + var(--space-4));
-  padding: 0 var(--space-3) 0 var(--space-2);
+  height: calc(var(--control-lg) + var(--space-5));
+  padding: 0 var(--space-3) 0 var(--space-3);
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  /* One step above the panes, so she never blends into them. */
+  background: var(--color-surface-raised);
   transition: border-color var(--duration-base) var(--ease-out);
 }
 
@@ -56,18 +57,33 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: var(--control-lg);
-  height: var(--control-lg);
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
   border: 0;
   border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-accent);
-  transition: background var(--duration-fast) var(--ease-out);
+  /* Her identity: a solid chip in the theme's accent (silver, champagne, jade, rose…). */
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    transform var(--duration-base) var(--ease-liquid);
 }
 
 .mark:hover {
-  background: var(--color-surface-hover);
+  background: var(--color-accent-hover);
+}
+
+.mark:active {
+  transform: scale(0.94);
+}
+
+.persona {
+  flex: none;
+  padding-left: var(--space-2);
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .mark svg {
@@ -98,13 +114,16 @@
 }
 
 .input::placeholder {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted);
 }
 
 .hint {
   flex: none;
-  padding: 0 var(--space-2);
-  color: var(--color-text-faint);
+  margin-right: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-active);
+  color: var(--color-text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   white-space: nowrap;
@@ -127,7 +146,7 @@
   overflow-y: auto;
   padding: var(--space-5) var(--space-11) var(--space-5) var(--space-6);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-surface-raised);
   animation: card-in var(--duration-slow) var(--ease-liquid);
 }
 

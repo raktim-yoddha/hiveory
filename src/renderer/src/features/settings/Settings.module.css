@@ -702,3 +702,43 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Queen Bee › Model */
+.inlineControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.inlineIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.inlineIcon svg,
+.testOk svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.testOk,
+.testFail {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.testOk {
+  color: var(--color-text-secondary);
+}
+
+.testOk svg {
+  color: var(--color-accent);
+}
+
+.testFail {
+  color: var(--color-danger);
+}

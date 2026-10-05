@@ -1,5 +1,6 @@
 import type { CliStatus, KanbanCard } from '@shared/domain'
 import type { QueenAction, QueenContext } from '@shared/queen/actions'
+import type { BrainResult } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
 import {
   cancelledLine,
@@ -13,7 +14,7 @@ import {
   type QueenPrefs
 } from '@shared/queen/personas'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
-import { api } from '../../lib/api'
+import { api, HiveoryError } from '../../lib/api'
 import { useAgents, useClis, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
@@ -81,7 +82,7 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       workspaceId,
       projects: projectList.map((p) => ({ id: p.id, name: p.name })),
       workspaces: (workspaces ?? []).map((w) => ({ id: w.id, name: w.name, kind: w.kind })),
-      agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId })),
+      agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name }))
     }
@@ -172,6 +173,12 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           outcomes.push({ kind: 'focused', name: a.petName })
           break
         }
+        case 'message-agent': {
+          const a = agent(action.agentId)
+          await api('agents.sendMessage', { instanceId: a.instanceId, message: action.text })
+          outcomes.push({ kind: 'messaged', name: a.petName })
+          break
+        }
         case 'apply-preset': {
           const preset = ctx.presets.find((x) => x.id === action.presetId)
           if (!preset) throw new QueenError('that preset no longer exists.')
@@ -255,6 +262,16 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   })
 }
 
+/** The model tier. No model configured reads as "unknown"; any other failure is shown as it is. */
+async function askBrain(input: string, ctx: QueenContext): Promise<BrainResult> {
+  try {
+    return await api('queen.plan', { utterance: input, context: ctx })
+  } catch (error) {
+    if (error instanceof HiveoryError && error.error.code === 'NOT_FOUND') return { kind: 'unknown' }
+    throw error
+  }
+}
+
 /** Handles one command typed (or, later, spoken) to Queen Bee. */
 export async function runQueen(input: string): Promise<void> {
   const queen = useQueen.getState()
@@ -262,11 +279,18 @@ export async function runQueen(input: string): Promise<void> {
   queen.setBusy(true)
   try {
     const { ctx, cards } = await buildContext()
-    const parsed = parseCommand(input, ctx)
+    let parsed: BrainResult = parseCommand(input, ctx)
     const p = prefs()
+    // Tier 1: only what the rules could not place goes to the model (when one is set up).
+    if (parsed.kind === 'unknown') parsed = await askBrain(input, ctx)
     if (parsed.kind === 'unknown') queen.show({ kind: 'reply', text: unknownLine(p), receipts: [] })
+    else if (parsed.kind === 'reply') queen.show({ kind: 'reply', text: parsed.text, receipts: [] })
     else if (parsed.kind === 'ask') queen.show({ kind: 'ask', question: parsed.question })
-    else if (parsed.confirm) queen.show({ kind: 'confirm', text: parsed.confirm, run: () => execute(parsed.actions, ctx, cards) })
+    else if (parsed.confirm) {
+      const closes = parsed.actions.some((a) => a.type === 'close-agents')
+      const sends = parsed.actions.some((a) => a.type === 'message-agent')
+      queen.show({ kind: 'confirm', text: parsed.confirm, label: closes && sends ? 'Confirm' : closes ? 'Close' : 'Send', run: () => execute(parsed.actions, ctx, cards) })
+    }
     else await execute(parsed.actions, ctx, cards)
   } catch (error) {
     queen.show({ kind: 'reply', text: failedLine(error instanceof Error ? error.message : String(error), prefs()), receipts: [] })

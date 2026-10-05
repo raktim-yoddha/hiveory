@@ -6,6 +6,7 @@ import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
 import { findExecutable, processDiscoveryEnv } from '../services/cli/discovery'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
+import { deliverMessage } from '../services/agent-tools/deliver'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 export const createHandlers = (c: Container): Handlers => {
@@ -67,6 +68,16 @@ export const createHandlers = (c: Container): Handlers => {
   'agents.open': ({ workspaceId, cliId, placement }) => c.agents.open(workspaceId, cliId, placement),
   'agents.close': ({ instanceId }) => c.agents.close(instanceId),
   'agents.restart': ({ instanceId }) => c.agents.restart(instanceId),
+  'agents.sendMessage': ({ instanceId, message }) => {
+    const agent = c.agents.find(instanceId) ?? fail('NOT_FOUND', 'That agent is no longer open.')
+    return deliverMessage({ agents: c.agents, runtime: c.runtime, chats: c.chats }, agent, message).catch((error: unknown) =>
+      fail('INVALID_INPUT', error instanceof Error ? error.message : String(error))
+    )
+  },
+  'queen.brain': () => c.queenBrain.view(),
+  'queen.configureBrain': (input) => c.queenBrain.configure(input),
+  'queen.testBrain': () => c.queenBrain.test(),
+  'queen.plan': ({ utterance, context }) => c.queenBrain.plan(utterance, context, c.settings.get().queenPersona),
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)
     c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove, preset.chatUi ?? false)

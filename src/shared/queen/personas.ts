@@ -33,6 +33,7 @@ export type QueenOutcome =
   | { kind: 'closed'; names: string[] }
   | { kind: 'restarted'; name: string }
   | { kind: 'focused'; name: string }
+  | { kind: 'messaged'; name: string }
   | { kind: 'navigated'; place: string }
   | { kind: 'mode'; mode: 'Work' | 'Chat' }
   | { kind: 'preset'; name: string; workspace: string }
@@ -54,6 +55,8 @@ export function receipt(o: QueenOutcome): string {
       return `Restarted ${o.name}`
     case 'focused':
       return `Showing ${o.name}`
+    case 'messaged':
+      return `Sent to ${o.name}`
     case 'navigated':
       return `Opened ${o.place}`
     case 'mode':
@@ -77,6 +80,8 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return `${o.name} is restarting`
     case 'focused':
       return `here is ${o.name}`
+    case 'messaged':
+      return `${o.name} has your message`
     case 'navigated':
       return `${o.place} is open`
     case 'mode':
@@ -107,7 +112,8 @@ export function doneLine(outcomes: QueenOutcome[], p: QueenPrefs): string {
       return finish([lead, `${cap(summary(first, false))}${extra}${p.hype === 'max' ? '!' : '.'}`], p)
     }
     case 'frankie': {
-      const push = first.kind === 'opened' ? 'Give each one a single clear task.' : first.kind === 'closed' ? 'Fewer agents, sharper focus.' : ''
+      const push =
+        first.kind === 'opened' ? 'Give each one a single clear task.' : first.kind === 'closed' ? 'Fewer agents, sharper focus.' : first.kind === 'messaged' ? 'Now let it work.' : ''
       return finish([`${cap(summary(first, false))}${extra}.`, push], p)
     }
   }

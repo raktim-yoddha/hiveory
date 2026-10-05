@@ -14,6 +14,8 @@ export type QueenAction =
   | { type: 'close-agents'; agentIds: string[] }
   | { type: 'restart-agent'; agentId: string }
   | { type: 'focus-agent'; agentId: string; workspaceId: string; projectId: string }
+  /** Types an instruction into an agent (terminal or chat) and submits it. */
+  | { type: 'message-agent'; agentId: string; text: string }
   | { type: 'apply-preset'; presetId: string; workspaceId: string; projectId: string }
   | { type: 'navigate'; to: 'home' }
   | { type: 'navigate'; to: 'settings'; section: QueenSettingsSection }
@@ -34,7 +36,7 @@ export interface QueenContext {
   /** Workspaces of the current project. */
   workspaces: Array<{ id: string; name: string; kind: 'main' | 'isolated' }>
   /** Agents of the current project (every workspace that has been loaded). */
-  agents: Array<{ id: string; petName: string; cliId: string; workspaceId: string }>
+  agents: Array<{ id: string; petName: string; cliId: string; workspaceId: string; status?: CliStatus }>
   /** Installed agent CLIs and terminals. */
   clis: Array<{ id: string; displayName: string }>
   presets: Array<{ id: string; name: string }>
