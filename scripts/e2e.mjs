@@ -346,6 +346,8 @@ await test('project tab bar "New workspace" opens create with the Settings defau
 })
 
 await test('sidebar "+" opens create; main workspace via Project folder', async () => {
+  // The dialog reads the defaults when it opens; the previous test's settings change reaches the window by event.
+  await page.waitForTimeout(600)
   await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
   await page.waitForSelector('dialog[open]')
   expect((await page.getByRole('radio', { name: /Project folder/ }).getAttribute('aria-checked')) === 'true', 'main should be default')
