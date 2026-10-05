@@ -164,12 +164,16 @@ cards) and nowhere it would repeat what is already on screen — chat replies ca
 ## Queen Bee
 
 One bar and one reply card, no history (ADR 0019).
-- **The bar:** the mark, the input, a dock/float toggle and ⋯. It's flat and outlined
-  only while focused.
+- **The bar:** the waveform mark, the input, the shortcut chip, a dock/auto-hide toggle and
+  ⋯. It's flat and outlined only while focused. No mic button: the shortcut is how you talk.
 - **Docked:** the bar shares the main area's surface. The card hovers above the panes on
   a solid raised surface with the popover shadow; it never pushes them. Replies fade
   out after 10 s (20 s with Undo) unless hovered; questions stay.
-- **Floating:** it uses a solid raised surface and the popover shadow, so terminal text never shows through.
+- **Auto-hide:** a fixed width (`--queen-bar-width`), centred over the bottom of the main area,
+  on a solid raised surface with the popover shadow, so terminal text never shows through. It
+  slides up from below the edge (transform and opacity only).
+- **Waveform mark:** five bars in her accent chip, scaled by the live loudness (≈20 updates a
+  second from a timer, only while audio flows); a gentle breathing while she transcribes.
 - **Receipts:** small, secondary text with an accent check.
 - **Report rows:** status dot, name, CLI and workspace, wait time.
 - **An agent's own words:** an inset block captioned "On its screen", mono text, so it is

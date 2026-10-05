@@ -18,27 +18,59 @@
   box-shadow: var(--shadow-popover);
 }
 
-.floating {
-  position: fixed;
+/*
+ * Auto-hide: a fixed-size bar (the docked one follows the main area's width)
+ * centred over the bottom of the main area. It rests below the edge and rises
+ * when shown — like a floating taskbar. Only transform and opacity animate.
+ */
+.autoHide {
+  position: absolute;
+  bottom: var(--space-4);
+  left: 50%;
   z-index: var(--z-panel);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  width: min(calc(var(--menu-min-width) * 2.8), calc(100vw - var(--space-8)));
-  transition: width var(--duration-base) var(--ease-liquid);
+  width: min(var(--queen-bar-width), calc(100% - var(--space-8)));
+  transform: translate(-50%, calc(100% + var(--space-4) + var(--page-padding)));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--duration-slow) var(--ease-liquid),
+    opacity var(--duration-base) var(--ease-out);
 }
 
-/* Near the top of the window the card opens below the bar. */
-.flip {
-  flex-direction: column-reverse;
+.shown {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.compact {
-  width: auto;
+/* The hot edge: pointing at the bottom of the window (below the main area) brings her up. */
+.edge {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--page-padding) * -1);
+  left: 0;
+  height: var(--page-padding);
 }
 
-.dragging {
-  transition: none;
+.autoHide .bar {
+  /* Solid: it floats over terminal text, which glass would let through. */
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+.autoHide .card {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-3));
+  left: 0;
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .autoHide {
+    transition: opacity var(--duration-fast) linear;
+  }
 }
 
 .bar {
@@ -52,12 +84,6 @@
   /* One step above the panes, so she never blends into them. */
   background: var(--color-surface-raised);
   transition: border-color var(--duration-base) var(--ease-out);
-}
-
-.floating .bar {
-  /* Solid: it floats over terminal text, which glass would let through. */
-  background: var(--color-surface-raised-solid);
-  box-shadow: var(--shadow-popover);
 }
 
 .bar:focus-within {
@@ -97,20 +123,6 @@
   font-weight: var(--weight-semibold);
 }
 
-.mark svg {
-  width: var(--icon-md);
-  height: var(--icon-md);
-}
-
-.grip {
-  cursor: grab;
-  touch-action: none;
-}
-
-.grip:active {
-  cursor: grabbing;
-}
-
 .input {
   flex: 1;
   min-width: 0;
@@ -130,6 +142,7 @@
 
 .hint {
   flex: none;
+  border: 0;
   margin-right: var(--space-2);
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
@@ -140,53 +153,7 @@
   white-space: nowrap;
 }
 
-.mic {
-  position: relative;
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: var(--control-md);
-  height: var(--control-md);
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-secondary);
-  touch-action: none;
-  transition:
-    background var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
-}
-
-.mic:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.mic svg {
-  position: relative;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
 /* Listening: an accent chip whose fill rises with the voice level. */
-.micOn,
-.micOn:hover {
-  background: var(--fill-accent-soft);
-  color: var(--color-accent);
-}
-
-.micOn::before {
-  content: '';
-  position: absolute;
-  inset: auto 0 0;
-  height: calc(var(--level, 0) * 100%);
-  border-radius: inherit;
-  background: var(--color-accent);
-  opacity: 0.25;
-  transition: height 80ms linear;
-}
-
 .heard {
   color: var(--color-text-muted);
   font-size: var(--text-xs);
@@ -212,21 +179,6 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
   animation: card-in var(--duration-slow) var(--ease-liquid);
-}
-
-/* Floating: the card hovers above the bar (below it near the top), so the bar never jumps. */
-.floating .card {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--space-3));
-  left: 0;
-  background: var(--color-surface-raised-solid);
-  box-shadow: var(--shadow-popover);
-}
-
-.flip .card {
-  top: calc(100% + var(--space-3));
-  bottom: auto;
 }
 
 /* An agent's own last words, labelled: never mistaken for Queen Bee's. */
@@ -360,5 +312,50 @@
 @media (max-width: 720px) {
   .hint {
     display: none;
+  }
+}
+
+/* Her mark: a waveform in her accent chip. Bars scale from the centre with the voice's loudness. */
+.wave {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--icon-md);
+}
+
+.wave > span {
+  width: var(--space-1);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: currentColor;
+  transform: scaleY(var(--h, 0.4));
+  transition: transform 90ms linear;
+}
+
+.thinking > span {
+  animation: breathe 1.1s var(--ease-out) infinite alternate;
+}
+
+.thinking > span:nth-child(2n) {
+  animation-delay: 0.25s;
+}
+
+.thinking > span:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+@keyframes breathe {
+  to {
+    transform: scaleY(calc(var(--h, 0.4) * 1.6));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave > span {
+    transition: none;
+  }
+
+  .thinking > span {
+    animation: none;
   }
 }

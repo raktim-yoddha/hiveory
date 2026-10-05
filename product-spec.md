@@ -230,7 +230,9 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 ## Queen Bee (ADR 0019)
 
-- A bar docked under the main area (Work, Chat and Settings) or floating anywhere.
+- A bar docked under the main area (Work, Chat and Settings), or on auto-hide: a fixed-size
+  bar that rises from the bottom edge when pointed at, when her shortcut is used, while either
+  of you speaks, and while she has something to say.
 - Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
   her and holds to talk.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),
@@ -277,6 +279,11 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - Live updates: she tells you (and says) when an agent finishes, needs you or crashes,
   whether or not she started the work.
 - Her reply card hovers above the panes; it never moves them.
+- Her mark is a waveform that moves with your voice while you hold her shortcut and with hers
+  while she answers. There is no mic button: the shortcut is how you talk.
+- Small talk works with no model: greetings, thanks, "how are you", "who are you".
+- "Go to main" means the current project's Main; from Home, or for a name several projects
+  share, she asks which project's ("main of api" names it directly).
 
 ## Important Non-Features
 

@@ -9,7 +9,7 @@ type Phase = 'idle' | 'listening' | 'transcribing' | 'speaking'
 interface VoiceState {
   packs: VoicePackState[]
   phase: Phase
-  /** Microphone level 0–1 while listening (drives the bar's meter). */
+  /** Loudness 0–1 of your voice while listening, or hers while speaking: drives the bar's waveform. */
   level: number
   load(): Promise<void>
   setPacks(packs: VoicePackState[]): void
@@ -29,12 +29,38 @@ export const useVoice = create<VoiceState>((set) => ({
   setPacks: (packs) => set({ packs })
 }))
 
-const setPhase = (phase: Phase, level = 0): void => useVoice.setState({ phase, level })
+const setPhase = (phase: Phase, level = 0): void => {
+  if (phase === 'idle' || phase === 'transcribing') stopMeter()
+  useVoice.setState({ phase, level })
+}
+
+let meterTimer: number | null = null
+function stopMeter(): void {
+  if (meterTimer !== null) window.clearInterval(meterTimer)
+  meterTimer = null
+}
+
+/** Feeds the bar's waveform about 20 times a second (a timer, not a per-frame loop), only while audio flows. */
+function startMeter(read: () => number): void {
+  stopMeter()
+  meterTimer = window.setInterval(() => useVoice.setState({ level: Math.max(0, Math.min(1, read())) }), 50)
+}
+
+/** RMS loudness of whatever passes through an analyser, scaled so speech fills most of the range. */
+function loudness(analyser: AnalyserNode, gain: number): () => number {
+  const samples = new Float32Array(analyser.fftSize)
+  return () => {
+    analyser.getFloatTimeDomainData(samples)
+    let sum = 0
+    for (const v of samples) sum += v * v
+    return Math.sqrt(sum / samples.length) * gain
+  }
+}
 
 /** Live microphone capture for one push-to-talk clip. */
 let capture: { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; chunks: Float32Array[]; length: number } | null = null
 /** Reply audio being made and played, sentence by sentence. */
-let playing: { ctx: AudioContext | null; sources: AudioBufferSourceNode[]; at: number; done: boolean; stopped: boolean } | null = null
+let playing: { ctx: AudioContext | null; out: AnalyserNode | null; sources: AudioBufferSourceNode[]; at: number; done: boolean; stopped: boolean } | null = null
 
 const MIN_SAMPLES = CLIP_SAMPLE_RATE * 0.3
 
@@ -84,7 +110,16 @@ function speakWithSystemVoice(text: string): void {
   line.onend = line.onerror = () => {
     if (useVoice.getState().phase === 'speaking') setPhase('idle')
   }
+  // The system voice can't be measured: each word it reaches makes the waveform jump, then settle.
+  let pulse = 1
+  line.onboundary = () => {
+    pulse = 1
+  }
   setPhase('speaking')
+  startMeter(() => {
+    pulse *= 0.72
+    return 0.2 + pulse * 0.7 + Math.random() * 0.1
+  })
   synth.speak(line)
 }
 
@@ -146,7 +181,7 @@ export async function speak(raw: string, options: { sid?: number; whole?: boolea
   if (!text) return
   stopSpeaking()
   if (!ttsReady()) return speakWithSystemVoice(text)
-  const run: NonNullable<typeof playing> = { ctx: null, sources: [], at: 0, done: false, stopped: false }
+  const run: NonNullable<typeof playing> = { ctx: null, out: null, sources: [], at: 0, done: false, stopped: false }
   playing = run
   setPhase('speaking')
   const finished = (): void => {
@@ -156,12 +191,18 @@ export async function speak(raw: string, options: { sid?: number; whole?: boolea
     for (const sentence of sentencesOf(text)) {
       const { samples, sampleRate } = await api('voice.speak', { text: sentence.slice(0, 600), ...(options.sid !== undefined ? { sid: options.sid } : {}) })
       if (run.stopped || useVoice.getState().phase === 'listening') return
-      run.ctx ??= new AudioContext({ sampleRate })
+      if (!run.ctx) {
+        run.ctx = new AudioContext({ sampleRate })
+        run.out = run.ctx.createAnalyser()
+        run.out.fftSize = 512
+        run.out.connect(run.ctx.destination)
+        startMeter(loudness(run.out, 5))
+      }
       const buffer = run.ctx.createBuffer(1, samples.length, sampleRate)
       buffer.copyToChannel(new Float32Array(samples), 0)
       const source = run.ctx.createBufferSource()
       source.buffer = buffer
-      source.connect(run.ctx.destination)
+      source.connect(run.out!)
       const start = Math.max(run.ctx.currentTime + 0.02, run.at)
       source.start(start)
       run.at = start + buffer.duration
@@ -200,14 +241,14 @@ export const queenVoice = {
       const ctx = new AudioContext({ sampleRate: CLIP_SAMPLE_RATE })
       const source = ctx.createMediaStreamSource(stream)
       const node = ctx.createScriptProcessor(4096, 1, 1)
+      const meter = ctx.createAnalyser()
+      meter.fftSize = 512
+      source.connect(meter)
       const clip = { ctx, stream, node, chunks: [] as Float32Array[], length: 0 }
       node.onaudioprocess = (e) => {
         const data = e.inputBuffer.getChannelData(0)
         clip.chunks.push(new Float32Array(data))
         clip.length += data.length
-        let sum = 0
-        for (let i = 0; i < data.length; i += 16) sum += data[i]! * data[i]!
-        useVoice.setState({ level: Math.min(1, Math.sqrt(sum / (data.length / 16)) * 6) })
         if (clip.length >= CLIP_SAMPLE_RATE * MAX_CLIP_SECONDS) void queenVoice.stop()
       }
       // The node outputs silence; connecting it is what makes it run.
@@ -215,6 +256,7 @@ export const queenVoice = {
       node.connect(ctx.destination)
       capture = clip
       setPhase('listening')
+      startMeter(loudness(meter, 6))
       cue('listen')
     } catch (error) {
       setPhase('idle')

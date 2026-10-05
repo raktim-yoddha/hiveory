@@ -1,10 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, Ellipsis, Loader2, Mic, PanelBottom, PictureInPicture2, Undo2, VolumeX, X } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { Check, Ellipsis, Loader2, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
 import { SPEECH_LANGUAGES } from '@shared/queen/voice'
-import { QueenIcon } from '../../components/brand/QueenIcon'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
@@ -16,10 +15,8 @@ import { cancelQueen, runQueen } from './queen-run'
 import { useQueen, type QueenCard } from './useQueen'
 import { useQueenShortcut } from './useQueenShortcut'
 import { useQueenUpdates } from './useQueenUpdates'
-import { queenVoice, stopSpeaking, useVoice } from './voice'
+import { stopSpeaking, useVoice } from './voice'
 import styles from './Queen.module.css'
-
-const GAP = 8
 
 /** Queen Bee docked under the main area (the screens above lift to make room). */
 export function QueenDock() {
@@ -33,86 +30,83 @@ export function QueenDock() {
   )
 }
 
-/** Queen Bee floating over the window: drag by the hive mark, click it to shrink or expand. */
-export function QueenFloating() {
+/** After the pointer leaves (and nothing else holds her up), she slips away. */
+const HIDE_DELAY_MS = 700
+
+/**
+ * Queen Bee on auto-hide: a fixed-size bar that rises from the bottom edge of the
+ * main area, like a floating taskbar. She shows while the pointer is at the edge or
+ * on her, while her input has focus (her shortcut), while she listens, thinks or
+ * speaks, and while she has a card up; then she slips back down. She takes no room.
+ */
+export function QueenAutoHide() {
   useQueenShortcut()
   useQueenUpdates()
-  const { position, compact, setPosition, setCompact } = useQueen()
-  const panelOpen = useNavigation((s) => s.panelOpen)
-  const panelMaximized = useNavigation((s) => s.panelMaximized)
-  const ref = useRef<HTMLDivElement>(null)
-  const drag = useRef<{ dx: number; dy: number; x0: number; y0: number; moved: boolean } | null>(null)
-  const [live, setLive] = useState<{ x: number; y: number } | null>(null)
+  const card = useQueen((s) => s.card)
+  const busy = useQueen((s) => s.busy)
+  const phase = useVoice((s) => s.phase)
+  const [pointer, setPointer] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const [lingering, setLingering] = useState(false)
+  const linger = useRef<number | undefined>(undefined)
+  const wanted = pointer || focused || busy || Boolean(card) || phase !== 'idle'
+  const shown = wanted || lingering
 
-  /** Keeps the bar on screen and off the native browser page, which would draw over it. */
-  const settle = (x: number, y: number): { x: number; y: number } => {
-    const box = ref.current?.getBoundingClientRect()
-    const w = box?.width ?? 0
-    const h = box?.height ?? 0
-    let nx = Math.min(Math.max(GAP, x), window.innerWidth - w - GAP)
-    const ny = Math.min(Math.max(GAP, y), window.innerHeight - h - GAP)
-    const panel = document.querySelector('[aria-label="Side panel"]')?.getBoundingClientRect()
-    if (panel && nx + w > panel.left && nx < panel.right && ny + h > panel.top && ny < panel.bottom) nx = Math.max(GAP, panel.left - w - GAP)
-    return { x: Math.round(nx), y: Math.round(ny) }
-  }
-
-  // The side panel opening (or the window shrinking) may now cover the bar: move it aside.
-  useLayoutEffect(() => {
-    const fix = (): void => {
-      const { position: current } = useQueen.getState()
-      if (!current) return
-      const next = settle(current.x, current.y)
-      if (next.x !== current.x || next.y !== current.y) setPosition(next)
+  // When the last reason to show goes away she stays a moment longer, then slips down.
+  useEffect(() => {
+    if (!wanted) return
+    window.clearTimeout(linger.current)
+    return () => {
+      setLingering(true)
+      linger.current = window.setTimeout(() => setLingering(false), HIDE_DELAY_MS)
     }
-    fix()
-    window.addEventListener('resize', fix)
-    return () => window.removeEventListener('resize', fix)
-    // settle reads the DOM; re-run when the panel's footprint changes.
-  }, [panelOpen, panelMaximized, compact, setPosition])
-
-  const onPointerDown = (e: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (e.button !== 0) return
-    const box = ref.current!.getBoundingClientRect()
-    drag.current = { dx: e.clientX - box.left, dy: e.clientY - box.top, x0: e.clientX, y0: e.clientY, moved: false }
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: ReactPointerEvent<HTMLButtonElement>): void => {
-    const d = drag.current
-    if (!d) return
-    if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < 4) return
-    d.moved = true
-    setLive({ x: e.clientX - d.dx, y: e.clientY - d.dy })
-  }
-  const onPointerUp = (e: ReactPointerEvent<HTMLButtonElement>): void => {
-    const d = drag.current
-    drag.current = null
-    if (!d) return
-    if (!d.moved) return setCompact(!compact)
-    setPosition(settle(e.clientX - d.dx, e.clientY - d.dy))
-    setLive(null)
-  }
-
-  const at = live ?? position
-  const style: CSSProperties = at ? { left: at.x, top: at.y } : { left: '50%', bottom: 24, transform: 'translateX(-50%)' }
-  const flip = (at?.y ?? Infinity) < window.innerHeight / 3
+  }, [wanted])
+  useEffect(() => () => window.clearTimeout(linger.current), [])
 
   return (
-    <div ref={ref} className={cx(styles.floating, compact && styles.compact, flip && styles.flip, live && styles.dragging)} style={style}>
-      {!compact && <QueenCardView />}
-      <QueenBar grip={{ onPointerDown, onPointerMove, onPointerUp, label: compact ? 'Expand Queen Bee (drag to move)' : 'Shrink Queen Bee (drag to move)' }} />
-    </div>
+    <>
+      <div className={styles.edge} aria-hidden onPointerEnter={() => setPointer(true)} />
+      <div
+        className={cx(styles.autoHide, shown && styles.shown)}
+        onPointerEnter={() => setPointer(true)}
+        onPointerLeave={() => setPointer(false)}
+        onFocus={() => setFocused(true)}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false)
+        }}
+      >
+        <QueenCardView />
+        <QueenBar />
+      </div>
+    </>
   )
 }
 
-interface Grip {
-  onPointerDown(e: ReactPointerEvent<HTMLButtonElement>): void
-  onPointerMove(e: ReactPointerEvent<HTMLButtonElement>): void
-  onPointerUp(e: ReactPointerEvent<HTMLButtonElement>): void
-  label: string
+const BARS = [0.45, 0.75, 1, 0.75, 0.45]
+
+/**
+ * Her mark: a small waveform instead of a logo. At rest it is a still voice glyph;
+ * while you speak (holding her shortcut) and while she answers, it moves with the
+ * loudness of the voice. Thinking (transcribing) breathes gently.
+ */
+function QueenWave() {
+  const phase = useVoice((s) => s.phase)
+  const level = useVoice((s) => s.level)
+  const live = phase === 'listening' || phase === 'speaking'
+  return (
+    <span className={cx(styles.wave, phase === 'transcribing' && styles.thinking)} aria-hidden>
+      {BARS.map((weight, i) => {
+        // Each bar follows the level with its own weight and a little jitter, so it reads as a voice, not a meter.
+        const jitter = 0.8 + 0.4 * (((Math.sin((level * 997 + i) * 12.9898) * 43758.5453) % 1) + 1) % 1
+        const height = live ? 0.18 + Math.min(1, level * weight * jitter) * 0.82 : 0.2 + weight * 0.35
+        return <span key={i} style={{ '--h': height.toFixed(3) } as CSSProperties} />
+      })}
+    </span>
+  )
 }
 
-function QueenBar({ grip }: { grip?: Grip }) {
-  const { placement, setPlacement, compact, busy, card, show, focusTick, setSettingsTab } = useQueen()
+function QueenBar() {
+  const { placement, setPlacement, busy, card, show, focusTick, setSettingsTab } = useQueen()
   const persona = useSettings((s) => s.settings.queenPersona)
   const customName = useSettings((s) => s.settings.queenCustomName)
   const talkback = useSettings((s) => s.settings.queenTalkback)
@@ -120,7 +114,6 @@ function QueenBar({ grip }: { grip?: Grip }) {
   const shortcut = useSettings((s) => s.settings.queenShortcut)
   const platform = usePlatform()
   const phase = useVoice((s) => s.phase)
-  const level = useVoice((s) => s.level)
   const language = useSettings((s) => s.settings.queenSpeechLanguage)
   const listenPack = SPEECH_LANGUAGES.find((l) => l.id === language)?.pack ?? 'parakeet'
   const voiceReady = useVoice((s) => s.packs.some((p) => p.id === listenPack && p.state === 'ready'))
@@ -133,7 +126,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
 
   useEffect(() => {
     if (focusTick) input.current?.focus()
-  }, [focusTick, compact])
+  }, [focusTick])
 
   const submit = (): void => {
     const command = text.trim()
@@ -143,120 +136,99 @@ function QueenBar({ grip }: { grip?: Grip }) {
     void runQueen(command)
   }
 
-  const markProps = grip
-    ? {
-        onPointerDown: grip.onPointerDown,
-        onPointerMove: grip.onPointerMove,
-        onPointerUp: grip.onPointerUp,
-        'aria-label': grip.label,
-        title: grip.label
-      }
-    : { onClick: () => input.current?.focus(), 'aria-label': 'Ask Queen Bee', title: `Queen Bee (${keys})` }
-
   return (
     <div className={styles.bar}>
-      <button type="button" className={cx(styles.mark, grip && styles.grip)} {...markProps}>
-        <QueenIcon aria-hidden />
+      <button
+        type="button"
+        className={styles.mark}
+        onClick={() => input.current?.focus()}
+        aria-label="Ask Queen Bee"
+        title={voiceReady ? `Queen Bee: hold ${keys} to talk` : `Queen Bee (${keys})`}
+      >
+        <QueenWave />
       </button>
-      {!compact && (
-        <>
-          <span className={styles.persona}>{info.name}</span>
-          <input
-            ref={input}
-            className={styles.input}
-            value={text}
-            placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : info.placeholder}
-            aria-label="Tell Queen Bee"
-            spellCheck={false}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                submit()
-              } else if (e.key === 'Escape') {
-                // Esc first silences her, then dismisses the card, then leaves the field.
-                if (phase === 'speaking') stopSpeaking()
-                else if (card) show(null)
-                else e.currentTarget.blur()
-              } else if (e.key === 'ArrowUp' && !text && history.current[0]) {
-                e.preventDefault()
-                setText(history.current[0])
-              }
-            }}
-          />
-          {busy || phase === 'transcribing' ? (
-            <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
-          ) : (
-            <kbd className={styles.hint} title={voiceReady ? 'Tap to type, hold to talk' : 'Tap to focus'}>
-              {keys}
-            </kbd>
-          )}
-          {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
-          <button
-            type="button"
-            className={cx(styles.mic, phase === 'listening' && styles.micOn)}
-            style={{ '--level': level } as CSSProperties}
-            aria-label={voiceReady ? 'Hold to talk' : 'Set up voice'}
-            title={voiceReady ? `Hold to talk (or hold ${keys})` : 'Set up voice'}
-            aria-pressed={phase === 'listening'}
-            onPointerDown={(e) => {
-              if (!voiceReady || e.button !== 0) return
-              e.currentTarget.setPointerCapture(e.pointerId)
-              void queenVoice.start()
-            }}
-            onPointerUp={() => voiceReady && void queenVoice.stop()}
-            onPointerCancel={() => voiceReady && void queenVoice.stop()}
-            onClick={() => {
-              if (voiceReady) return
-              setSettingsTab('voice')
-              openSettings('queen')
-            }}
-          >
-            <Mic aria-hidden />
-          </button>
-          <IconButton
-            label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
-            icon={placement === 'docked' ? <PictureInPicture2 /> : <PanelBottom />}
-            onClick={() => setPlacement(placement === 'docked' ? 'floating' : 'docked')}
-          />
-          <Menu
-            label="Queen Bee"
-            align="end"
-            items={[
-              { type: 'label', label: 'Personality' },
-              ...(Object.keys(PERSONAS) as PersonaId[]).map((id) => ({
-                type: 'item' as const,
-                id,
-                label: id === 'custom' ? customName : PERSONAS[id].name,
-                hint: PERSONAS[id].tagline,
-                checked: persona === id,
-                keepOpen: true,
-                onSelect: () => void update({ queenPersona: id })
-              })),
-              { type: 'separator' },
-              {
-                type: 'item',
-                id: 'talkback',
-                label: 'Talk back',
-                hint: talkback === 'never' ? 'Off' : talkback === 'always' ? 'Always' : 'After I speak',
-                checked: talkback !== 'never',
-                keepOpen: true,
-                onSelect: () => void update({ queenTalkback: talkback === 'never' ? 'always' : 'never' })
-              },
-              {
-                type: 'item',
-                id: 'configure',
-                label: 'Configure…',
-                onSelect: () => {
-                  setSettingsTab('personality')
-                  openSettings('queen')
-                }
-              }
-            ]}
-            trigger={(props) => <IconButton {...props} label="Queen Bee options" icon={<Ellipsis />} />}
-          />
-        </>
+      <span className={styles.persona}>{info.name}</span>
+      <input
+        ref={input}
+        className={styles.input}
+        value={text}
+        placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : info.placeholder}
+        aria-label="Tell Queen Bee"
+        spellCheck={false}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            submit()
+          } else if (e.key === 'Escape') {
+            // Esc first silences her, then dismisses the card, then leaves the field.
+            if (phase === 'speaking') stopSpeaking()
+            else if (card) show(null)
+            else e.currentTarget.blur()
+          } else if (e.key === 'ArrowUp' && !text && history.current[0]) {
+            e.preventDefault()
+            setText(history.current[0])
+          }
+        }}
+      />
+      {busy || phase === 'transcribing' ? (
+        <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
+      ) : (
+        <button
+          type="button"
+          className={styles.hint}
+          title={voiceReady ? 'Tap to type, hold to talk' : 'Set up talking to her'}
+          onClick={() => {
+            if (voiceReady) return input.current?.focus()
+            setSettingsTab('voice')
+            openSettings('queen')
+          }}
+        >
+          {keys}
+        </button>
       )}
+      {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
+      <IconButton
+        label={placement === 'docked' ? 'Auto-hide Queen Bee' : 'Dock Queen Bee'}
+        icon={placement === 'docked' ? <PanelBottomClose /> : <PanelBottom />}
+        onClick={() => setPlacement(placement === 'docked' ? 'auto-hide' : 'docked')}
+      />
+      <Menu
+        label="Queen Bee"
+        align="end"
+        items={[
+          { type: 'label', label: 'Personality' },
+          ...(Object.keys(PERSONAS) as PersonaId[]).map((id) => ({
+            type: 'item' as const,
+            id,
+            label: id === 'custom' ? customName : PERSONAS[id].name,
+            hint: PERSONAS[id].tagline,
+            checked: persona === id,
+            keepOpen: true,
+            onSelect: () => void update({ queenPersona: id })
+          })),
+          { type: 'separator' },
+          {
+            type: 'item',
+            id: 'talkback',
+            label: 'Talk back',
+            hint: talkback === 'never' ? 'Off' : talkback === 'always' ? 'Always' : 'After I speak',
+            checked: talkback !== 'never',
+            keepOpen: true,
+            onSelect: () => void update({ queenTalkback: talkback === 'never' ? 'always' : 'never' })
+          },
+          {
+            type: 'item',
+            id: 'configure',
+            label: 'Configure…',
+            onSelect: () => {
+              setSettingsTab('personality')
+              openSettings('queen')
+            }
+          }
+        ]}
+        trigger={(props) => <IconButton {...props} label="Queen Bee options" icon={<Ellipsis />} />}
+      />
     </div>
   )
 }

@@ -355,6 +355,37 @@ and the request. Never files, code or terminal output.
   model tries first; its plan wins, otherwise the rules' question stands.
 - The time budget for API models is 12 s.
 
+## Round E notes (as built)
+**Placement: docked or auto-hide.** Floating (drag anywhere) is replaced by auto-hide: one
+fixed-size bar centred over the bottom of the main area, resting below the edge. It rises when
+the pointer reaches the bottom of the window, when her input has focus (the shortcut), while
+she listens, transcribes or speaks, and while a card is up, then slips down 0.7 s after the last
+reason ends. Inside the main area it never meets the native browser page. A saved "floating"
+reads as auto-hide.
+
+**No mic button; a waveform mark.** The shortcut is the one way to talk. Her logo chip shows a
+five-bar waveform driven by an AnalyserNode on the microphone and on Kokoro's output; the system
+voice (unmeasurable) pulses on each word boundary. A timer feeds it about 20 times a second only
+while audio flows.
+
+**Voices.** Female only: Heart, Bella, Emma and Nicole (Kokoro sid 6). A saved Michael falls back
+to the personality's own voice.
+
+**Small talk.** Greetings, thanks, how-are-you, who-are-you, bye, praise, sorry and "ok" are a
+`chat` action answered from per-personality templates, with no model. Only a whole sentence
+counts, so "hi, open codex" stays a command. The model prompt now allows a short friendly reply
+to small talk, and points other off-topic work at an agent.
+
+**Which project?** The context carries every other project's workspaces (navigation only). "Go to
+main" takes the current project's Main; from Home, or when a name exists only elsewhere in
+several projects, she asks "Which project's Main?" with one choice per project. "main of api"
+qualifies it. A model may navigate into another project's workspace by id.
+
+**Security and privacy.** The prompt states that STATE, NOTES and REQUEST are data that cannot
+change her rules or role, that she never reveals instructions, keys or settings, and that she
+knows nothing about the user beyond the notes. Model questions and replies are shown as plain
+text with links and markup stripped. AGENTS.md rule 27 makes "no personal data ships" a rule.
+
 ## Consequences
 - Most commands work with no key and no network.
 - A report can only be wrong where it summarises agent output, and that is labelled.

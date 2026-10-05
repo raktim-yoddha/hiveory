@@ -32,15 +32,19 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 │              │ ┌───────────────────────────────────────────────┐ │
 │              │ │ Reply card: answer, report rows, receipts, Undo│ │
 │              │ └───────────────────────────────────────────────┘ │
-│              │ [♛ Ada  Your instructions…  Win + Alt  🎙 ⧉ ⋯]   │
+│              │ [∿ Ada  Your instructions…  Win + Alt  ▁ ⋯]      │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
 The reply card hovers over the panes (it never pushes them); only the bar takes room.
 
-Floating: the same bar is a draggable pill (drag by the mark; click the mark to shrink).
-It steps aside from the browser page. The mic button is hold-to-talk; until a speech pack
-is installed it opens Settings › Queen Bee › Voice. ⋯ holds Personality and Configure….
+∿ is her waveform mark (still at rest, moving while you or she speaks). The shortcut chip
+opens Settings › Queen Bee › Voice until a speech pack is installed. ▁ switches docked ↔
+auto-hide. ⋯ holds Personality, Talk back and Configure….
+
+Auto-hide: the same bar at a fixed width, centred over the bottom of the main area. It rests
+below the edge and rises when the pointer reaches the bottom of the window, on her shortcut,
+while either of you speaks and while her card is up.
 
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
 - Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,

@@ -22,17 +22,11 @@ export type QueenCard = (
 
 export type QueenSettingsTab = 'personality' | 'providers' | 'voice' | 'bar'
 
-export interface QueenPoint {
-  x: number
-  y: number
-}
+/** Docked under the main area, or hidden until the bottom edge is pointed at (or she has something to say). */
+export type QueenPlacement = 'docked' | 'auto-hide'
 
 interface QueenState {
-  placement: 'docked' | 'floating'
-  /** Floating: top-left corner in window pixels (null = default spot). */
-  position: QueenPoint | null
-  /** Floating: shrunk to the hive mark. */
-  compact: boolean
+  placement: QueenPlacement
   card: QueenCard | null
   busy: boolean
   /** Bumped to move focus into the input (shortcut, menu). */
@@ -40,9 +34,7 @@ interface QueenState {
   /** Which tab Settings › Queen Bee opens on. */
   settingsTab: QueenSettingsTab
   setSettingsTab(tab: QueenSettingsTab): void
-  setPlacement(placement: QueenState['placement']): void
-  setPosition(position: QueenPoint | null): void
-  setCompact(compact: boolean): void
+  setPlacement(placement: QueenPlacement): void
   show(card: QueenCard | null): void
   setBusy(busy: boolean): void
   focus(): void
@@ -50,49 +42,32 @@ interface QueenState {
 
 const KEY = 'hiveory.queen'
 
-/** Placement is a per-viewer convenience: storage may be missing, defaults always work. */
-const read = (): Pick<QueenState, 'placement' | 'position' | 'compact'> => {
+/** Placement is a per-viewer convenience: storage may be missing, defaults always work. An old "floating" is auto-hide now. */
+const readPlacement = (): QueenPlacement => {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Record<string, unknown>>
-    const position = raw.position as QueenPoint | undefined
-    return {
-      placement: raw.placement === 'floating' ? 'floating' : 'docked',
-      position: position && Number.isFinite(position.x) && Number.isFinite(position.y) ? position : null,
-      compact: raw.compact === true
-    }
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { placement?: unknown }
+    return raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'auto-hide' : 'docked'
   } catch {
-    return { placement: 'docked', position: null, compact: false }
+    return 'docked'
   }
 }
 
-const save = (s: Pick<QueenState, 'placement' | 'position' | 'compact'>): void => {
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ placement: s.placement, position: s.position, compact: s.compact }))
-  } catch {
-    // Placement still applies for this session.
-  }
-}
-
-export const useQueen = create<QueenState>((set, get) => ({
-  ...read(),
+export const useQueen = create<QueenState>((set) => ({
+  placement: readPlacement(),
   card: null,
   busy: false,
   focusTick: 0,
   settingsTab: 'personality',
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setPlacement: (placement) => {
-    set({ placement, compact: false })
-    save(get())
-  },
-  setPosition: (position) => {
-    set({ position })
-    save(get())
-  },
-  setCompact: (compact) => {
-    set({ compact })
-    save(get())
+    set({ placement })
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ placement }))
+    } catch {
+      // Placement still applies for this session.
+    }
   },
   show: (card) => set({ card }),
   setBusy: (busy) => set({ busy }),
-  focus: () => set((s) => ({ compact: false, focusTick: s.focusTick + 1 }))
+  focus: () => set((s) => ({ focusTick: s.focusTick + 1 }))
 }))

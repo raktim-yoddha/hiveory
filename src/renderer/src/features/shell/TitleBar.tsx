@@ -18,7 +18,7 @@ export function TitleBar() {
   const info = useApp((s) => s.info)
   const { mode, setMode, sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, panelWidth, panelMaximized, view, openSettings, closeSettings } = useNavigation()
   const inSettings = view.type === 'settings'
-  const shift = usePanelToggleShift(panelOpen && !inSettings, panelWidth, panelMaximized)
+  const [toggleRef, shiftX] = usePanelToggleShift(panelOpen && !inSettings, panelWidth, panelMaximized)
   return (
     <header className={styles.bar} data-platform={info?.platform}>
       <div className={styles.start}>
@@ -42,7 +42,7 @@ export function TitleBar() {
       <Tabs label="Mode" variant="segmented" options={MODES} value={mode} onChange={setMode} className={styles.noDrag} />
       <div className={styles.end}>
         {/* Open, the toggle slides over to the panel's left edge, so it reads as part of the panel (like the left one). */}
-        <span ref={shift.ref} className={cx(styles.panelToggle, styles.noDrag)} style={{ transform: shift.x ? `translateX(${shift.x}px)` : undefined }}>
+        <span ref={toggleRef} className={cx(styles.panelToggle, styles.noDrag)} style={{ transform: shiftX ? `translateX(${shiftX}px)` : undefined }}>
           <IconButton label={panelOpen ? 'Hide side panel' : 'Show side panel'} icon={<PanelRight />} active={panelOpen && !inSettings} onClick={togglePanel} />
         </span>
         <IconButton
@@ -77,5 +77,5 @@ function usePanelToggleShift(docked: boolean, panelWidth: number, maximized: boo
     window.addEventListener('resize', place)
     return () => window.removeEventListener('resize', place)
   }, [docked, panelWidth, maximized])
-  return { ref, x }
+  return [ref, x] as const
 }
