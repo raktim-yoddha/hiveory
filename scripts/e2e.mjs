@@ -893,7 +893,9 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
     await waitFor(async () => (await page.locator('[role="status"]').allInnerTexts()).some((t) => t.includes('Tool calling works')), 'test result shown')
 
     await page.getByRole('tab', { name: 'Voice' }).click()
-    for (const name of ['Parakeet', 'Whisper Turbo', 'Kokoro']) await page.getByText(name, { exact: true }).first().waitFor()
+    await waitFor(async () => (await page.getByRole('button', { name: 'Download' }).count()) === 3, 'three speech packs offered')
+    const voiceText = await page.locator('main').innerText()
+    expect(['Parakeet', 'Whisper Turbo', 'Kokoro'].every((n) => voiceText.includes(n)), 'a speech pack is missing')
     await shot('h6-queen-voice')
   } finally {
     for (const a of await value('queen.accounts')) await value('queen.removeAccount', { id: a.id })

@@ -50,8 +50,8 @@ export const VOICE_PACKS: VoicePack[] = [
     id: 'whisper',
     kind: 'listen',
     name: 'Whisper Turbo',
-    description: 'Understands Hindi and Hinglish (and 90+ other languages) and hands Queen Bee the English meaning. Slower than Parakeet.',
-    languages: 'Hindi, Hinglish and 90+ more',
+    description: 'For Hindi and Hinglish: writes what you say in English letters (“do codex kholo”), which Queen Bee understands. Slower than Parakeet.',
+    languages: 'Also hears 90+ other languages',
     license: 'MIT',
     files: [
       { path: 'turbo-encoder.int8.onnx', url: `${WHISPER}/turbo-encoder.int8.onnx`, sha256: 'b02dcdf54f348741e93fe732b67d933c8dcb6735655f710640143081db38878b', size: 674716297 },
