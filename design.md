@@ -210,9 +210,8 @@ Work | Chat
 ```
 
 The title bar also holds the side-panel toggle (terminals and the built-in browser) and the
-app Settings gear. While the side panel is open its toggle slides to the panel's left edge, so
-it reads as part of the panel the way the left toggle sits over the sidebar; the panel itself has
-no close button (the toggle, or dragging it narrow, hides it). Development builds show an inverted DEV chip after the name.
+app Settings gear. The side panel itself has no close button (the toggle, or dragging it narrow,
+hides it). Development builds show an inverted DEV chip after the name.
 
 Do not add Agent mode.
 

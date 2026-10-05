@@ -40,8 +40,8 @@ One dialog for every way in: the sidebar's button, the empty sidebar link and Ho
   divider (`panelSplit`, 0.2–0.8, remembered). Ctrl+Shift+arrows do the same from the keyboard.
 - While a tab is dragged the browser page steps aside (`[data-steps-aside]`), so the preview shows.
   `BrowserService.show` parks only pages it would overlap, so each area can show a page.
-- The panel has no close button: the title-bar toggle (which slides to the panel's left edge while
-  it is open) or a narrow drag hides it.
+- The panel has no close button: the title-bar toggle or a narrow drag hides it. (A toggle that
+  slid over to the panel's edge was tried and removed: it felt glitchy.)
 - **Sessions** tab: `SessionHistoryService` reads Claude Code (`~/.claude/projects`), Codex
   (`~/.codex/sessions`, titles from `session_index.jsonl`) and Gemini CLI (`~/.gemini/tmp`) history,
   read-only, head and tail only, cached by mtime. Workspace · Project · All, search, grouped by
