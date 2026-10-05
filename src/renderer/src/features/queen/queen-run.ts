@@ -2,6 +2,7 @@ import { THEMES, type CliStatus, type KanbanCard } from '@shared/domain'
 import type { QueenAction, QueenContext } from '@shared/queen/actions'
 import type { BrainResult } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
+import { smallTalkLine } from '@shared/queen/chat'
 import {
   cancelledLine,
   detailLine,
@@ -109,6 +110,10 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
     await useWorkspaces.getState().load(projectId)
     workspaces = useWorkspaces.getState().byProject[projectId]
   }
+  // Every other project's workspaces too, so "go to main" can ask which project's Main.
+  const others = projectList.filter((p) => p.id !== projectId)
+  await Promise.all(others.filter((p) => !useWorkspaces.getState().byProject[p.id]).map((p) => useWorkspaces.getState().load(p.id).catch(() => undefined)))
+  const otherWorkspaces = others.flatMap((p) => (useWorkspaces.getState().byProject[p.id] ?? []).map((w) => ({ id: w.id, name: w.name, kind: w.kind, projectId: p.id })))
   const cards = projectId ? await projectAgents(projectId) : []
   return {
     cards,
@@ -118,6 +123,7 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       workspaceId,
       projects: projectList.map((p) => ({ id: p.id, name: p.name })),
       workspaces: (workspaces ?? []).map((w) => ({ id: w.id, name: w.name, kind: w.kind })),
+      otherWorkspaces,
       agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName, kind: c.kind })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name })),
@@ -163,7 +169,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   /** The agent's own last words, shown labelled under the reply. */
   let quote: string | undefined
   const nav = useNavigation.getState
-  const workspaceName = (id: string) => ctx.workspaces.find((w) => w.id === id)?.name ?? 'this workspace'
+  const workspaceName = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? [])].find((w) => w.id === id)?.name ?? 'this workspace'
   const agent = (id: string) => {
     const card = cards.find((c) => c.instanceId === id)
     if (!card) throw new QueenError('that agent is no longer open.')
@@ -334,7 +340,8 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
             outcomes.push({ kind: 'navigated', place: project.name })
           } else {
             nav().openWorkspace(action.projectId, action.workspaceId)
-            outcomes.push({ kind: 'navigated', place: workspaceName(action.workspaceId) })
+            const project = action.projectId !== ctx.projectId ? ctx.projects.find((x) => x.id === action.projectId)?.name : undefined
+            outcomes.push({ kind: 'navigated', place: project ? `${project} · ${workspaceName(action.workspaceId)}` : workspaceName(action.workspaceId) })
           }
           break
         }
@@ -392,6 +399,10 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'recall': {
           reportText = recallLine(notes(), p)
+          break
+        }
+        case 'chat': {
+          reportText = smallTalkLine(action.topic, p, personaInfo(useSettings.getState().settings).name)
           break
         }
       }

@@ -1,6 +1,7 @@
 import { THEMES, type ThemeId } from '../domain/settings'
 import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
 import { parseAddress, parseMessage, parseOpenAndSend } from './address'
+import { parseSmallTalk } from './chat'
 import { CLOSE_VERBS, cliAliases, clauses, fold, GO_VERBS, hasWord, norm, NUMBER_WORDS, OPEN_VERBS, RESTART_VERBS, STOP_VERBS } from './words'
 
 /**
@@ -75,6 +76,66 @@ const targetWorkspace = (clause: string, ctx: QueenContext): { id: string } | { 
     }
   }
   return ctx.workspaceId ? { id: ctx.workspaceId } : null
+}
+
+type Workspace = QueenContext['workspaces'][number] & { projectId: string }
+
+/** "main" means the Main workspace; any other name matches exactly, then by a unique prefix or substring. */
+const pickWorkspace = (name: string, list: Workspace[]): Match<Workspace> => {
+  if (norm(name) === 'main') {
+    const mains = list.filter((w) => w.kind === 'main')
+    if (mains.length === 1) return { one: mains[0]! }
+    if (mains.length > 1) return { many: mains }
+  }
+  return matchName(name, list)
+}
+
+/** "main of api", "feature-x in billing": a workspace qualified by its project. */
+const QUALIFIED = /^(.+?) (?:of|in|from|on|for) (.+)$/
+
+/**
+ * Where "go to <name>" leads. The current project's workspace wins (she expects you
+ * mean the project you're in), then a project by that name, then a workspace in
+ * another project. A name several projects share ("main" from Home) is a question:
+ * which project's?
+ */
+function findPlace(target: string, ctx: QueenContext, projectOnly: boolean): { navigate: QueenAction } | { ask: QueenParse } | null {
+  const here: Workspace[] = ctx.projectId ? ctx.workspaces.map((w) => ({ ...w, projectId: ctx.projectId! })) : []
+  const others: Workspace[] = ctx.otherWorkspaces ?? []
+  const projectName = (id: string) => ctx.projects.find((p) => p.id === id)?.name ?? 'another project'
+  const go = (w: Workspace) => ({ navigate: { type: 'navigate', to: 'workspace', projectId: w.projectId, workspaceId: w.id } as QueenAction })
+  const choose = (list: Workspace[], text: string) => ({
+    ask: {
+      kind: 'ask',
+      question: { text, choices: list.slice(0, 4).map((w) => ({ label: `${projectName(w.projectId)} · ${w.name}`, command: `go to ${w.name} of ${projectName(w.projectId)}` })) }
+    } as QueenParse
+  })
+
+  const qualified = projectOnly ? null : QUALIFIED.exec(target)
+  if (qualified) {
+    const project = matchName(qualified[2]!, ctx.projects)
+    if (project && 'one' in project) {
+      const match = pickWorkspace(qualified[1]!, [...here, ...others].filter((w) => w.projectId === project.one.id))
+      if (match && 'one' in match) return go(match.one)
+      if (match && 'many' in match) return choose(match.many, 'Which workspace?')
+      return { ask: { kind: 'ask', soft: true, question: { text: `${project.one.name} has no workspace called "${qualified[1]}".` } } }
+    }
+  }
+  if (!projectOnly) {
+    const match = pickWorkspace(target, here)
+    if (match && 'one' in match) return go(match.one)
+    if (match && 'many' in match) return choose(match.many, 'Which workspace?')
+  }
+  const project = matchName(target, ctx.projects)
+  if (project && 'one' in project) return { navigate: { type: 'navigate', to: 'project', projectId: project.one.id } }
+  if (project && 'many' in project) {
+    return { ask: { kind: 'ask', question: { text: 'Which project?', choices: project.many.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name} project` })) } } }
+  }
+  if (projectOnly) return null
+  const elsewhere = pickWorkspace(target, others)
+  if (elsewhere && 'one' in elsewhere) return go(elsewhere.one)
+  if (elsewhere && 'many' in elsewhere) return choose(elsewhere.many, norm(target) === 'main' ? "Which project's Main?" : `Which project's ${target}?`)
+  return null
 }
 
 const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
@@ -234,14 +295,11 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
       if ('ask' in ws) return { result: ws.ask, verb: null }
       return done(clis.map((c) => ({ type: 'open-agents', cliId: c.cliId, count: c.count, workspaceId: ws.id, projectId: ctx.projectId! })), 'open')
     }
-    // A workspace or project by name.
+    // A workspace or project by name: "go to main", "main of api", "open the api project".
     const target = clause.replace(/^(go|show|open|focus|find|view|display|visit)\b/, '').replace(/\b(workspace|project)\b/g, '').trim()
     if (target) {
-      const ws = target === 'main' ? ctx.workspaces.find((w) => w.kind === 'main') : (() => { const m = matchName(target, ctx.workspaces); return m && 'one' in m ? m.one : undefined })()
-      if (ws && ctx.projectId && !/\bproject\b/.test(clause)) return done([{ type: 'navigate', to: 'workspace', projectId: ctx.projectId, workspaceId: ws.id }], verb)
-      const project = matchName(target, ctx.projects)
-      if (project && 'one' in project) return done([{ type: 'navigate', to: 'project', projectId: project.one.id }], verb)
-      if (project && 'many' in project) return ask('Which project?', project.many.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name} project` })))
+      const place = findPlace(target, ctx, /\bproject\b/.test(clause) && !QUALIFIED.test(target))
+      if (place) return 'navigate' in place ? done([place.navigate], verb) : { result: place.ask, verb: null }
     }
     if (verb === 'open' && /\b(agents?|cli|terminal)\b/.test(clause)) {
       return soft('Which agent should I open?', ctx.clis.slice(0, 4).map((c) => ({ label: c.displayName, command: `open ${c.displayName}` })))
@@ -300,6 +358,9 @@ export function parseCommand(raw: string, ctx: QueenContext): QueenParse {
   // A custom personality answers to her own name, like "queen".
   const name = ctx.queenName?.trim()
   const input = name ? raw.replace(new RegExp(`^\\s*(?:(?:hey|hi|ok|okay)\\s+)?${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b[\\s,]*`, 'iu'), '') : raw
+  // Small talk is answered, never sent to a model or mistaken for a command.
+  const talk = parseSmallTalk(input)
+  if (talk) return { kind: 'actions', actions: [{ type: 'chat', topic: talk }] }
   // Most specific first: notes, one-liners, then anything addressed to an agent by name.
   const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
   if (direct) return direct

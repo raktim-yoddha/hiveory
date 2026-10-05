@@ -84,10 +84,10 @@ export function personaCore(p: QueenPrefs): PersonaCore {
   return direct === top ? 'frankie' : formal === top ? 'ada' : 'sunny'
 }
 
-type CorePrefs = QueenPrefs & { persona: PersonaCore }
+export type CorePrefs = QueenPrefs & { persona: PersonaCore }
 
 /** The fixed-core preferences the phrasing functions switch on. */
-const effective = (p: QueenPrefs): CorePrefs => {
+export const effective = (p: QueenPrefs): CorePrefs => {
   if (p.persona !== 'custom') return p as CorePrefs
   const energy = p.custom?.energy ?? 50
   return { ...p, persona: personaCore(p), hype: energy < 34 ? 'calm' : energy < 67 ? 'lively' : 'max' }
@@ -189,10 +189,10 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
   }
 }
 
-const address = (p: QueenPrefs): string =>
+export const address = (p: QueenPrefs): string =>
   p.honorific === 'sir' ? ', sir' : p.honorific === 'maam' ? ", ma'am" : p.honorific === 'name' && p.callMe ? `, ${p.callMe}` : ''
 
-const finish = (sentences: string[], p: QueenPrefs): string => (p.length === 'short' ? sentences.slice(0, 1) : sentences).filter(Boolean).join(' ')
+export const finish = (sentences: string[], p: QueenPrefs): string => (p.length === 'short' ? sentences.slice(0, 1) : sentences).filter(Boolean).join(' ')
 
 /** The persona's one-line reply after actions ran. */
 export function doneLine(outcomes: QueenOutcome[], prefs: QueenPrefs): string {

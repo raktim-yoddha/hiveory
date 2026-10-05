@@ -1,4 +1,5 @@
 import type { CliStatus, ThemeId } from '../domain'
+import type { SmallTalk } from './chat'
 
 /** Settings sections Queen Bee can open (mirrors the renderer's Settings navigation). */
 export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'queen', 'updates', 'guide', 'about'] as const
@@ -46,6 +47,8 @@ export type QueenAction =
   | { type: 'forget'; text: string }
   /** Reads her notes back. */
   | { type: 'recall' }
+  /** Small talk ("hi", "thanks", "who are you"): she answers in her personality; nothing runs. */
+  | { type: 'chat'; topic: SmallTalk }
 
 /** The plain snapshot of app state the parser reads. Built by the renderer from its stores. */
 export interface QueenContext {
@@ -56,6 +59,8 @@ export interface QueenContext {
   projects: Array<{ id: string; name: string }>
   /** Workspaces of the current project. */
   workspaces: Array<{ id: string; name: string; kind: 'main' | 'isolated' }>
+  /** Workspaces of every other project, so "go to main" can ask which project's Main. Only navigation uses them. */
+  otherWorkspaces?: Array<{ id: string; name: string; kind: 'main' | 'isolated'; projectId: string }>
   /** Agents of the current project (every workspace that has been loaded). */
   agents: Array<{ id: string; petName: string; cliId: string; workspaceId: string; status?: CliStatus }>
   /** Installed agent CLIs and terminals. */

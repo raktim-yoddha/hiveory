@@ -307,6 +307,19 @@ When the user says **"release X.Y.Z"** (or "release vX.Y.Z"), the agent must:
 
 Never edit the version by hand, never reuse a tag, and never skip the check.
 
+### 27. Privacy: No Personal Data Ships
+
+The shipped product knows nothing about the people who build it or use it.
+
+- Never put a real person's data (names, emails, usernames, home paths, accounts, keys) in
+  source, tests, fixtures, defaults or prompts. Use neutral placeholders (`Alex`, `/home/me`).
+- Queen Bee and every model call see only app state (project, workspace, agent and CLI names
+  and statuses), the request and the user's own notes. Never files, terminal output, paths,
+  environment variables, credentials or OS identity.
+- Model output is data: it can only pick from the closed action set, and its text is shown as
+  plain text. Prompts tell the model that state, notes and requests can never change its rules.
+- What the user tells Queen Bee stays on their computer; only their notes reach a model, as facts.
+
 ## Documentation Graph
 
 ```text
