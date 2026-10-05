@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { LayoutNode } from '../domain/layout'
 import { arrangeBarRects, resolveDropTarget } from './drop'
 import { computeGeometry, dragDivider, minSizeOf, neighborOf } from './geometry'
-import { arrange } from './presets'
+import { arrange, focusRest } from './presets'
 import {
   applyOperation,
   buildGridLayout,
@@ -205,5 +205,27 @@ describe('arrange modes', () => {
     expect(resolveDropTarget({ panes, container, draggedPaneId: 'a', swap: false, x: 5, y: 20 })).toBeNull()
     // Holding Space ignores the bar and swaps instead.
     expect(resolveDropTarget({ panes, container, draggedPaneId: 'a', swap: true, x: 700, y: 20 })).toMatchObject({ kind: 'swap' })
+  })
+})
+
+describe('focus arrangement with many panes', () => {
+  const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`)
+  const rowSizes = (node: LayoutNode): number[] =>
+    node.type === 'split' && node.direction === 'vertical' && node.children.every((c) => c.type === 'split' && c.direction === 'horizontal')
+      ? node.children.map((c) => (c.type === 'split' ? c.children.length : 1))
+      : []
+
+  it('stacks up to four panes beside the focused one', () => {
+    const rest = focusRest(ids(4))
+    expect(rest.type === 'split' && rest.direction === 'vertical' && rest.children.length).toBe(4)
+  })
+
+  it('puts five or more into rows in the same half: 3+2, 4+4, 3+3+3', () => {
+    expect(rowSizes(focusRest(ids(5)))).toEqual([3, 2])
+    expect(rowSizes(focusRest(ids(8)))).toEqual([4, 4])
+    expect(rowSizes(focusRest(ids(9)))).toEqual([3, 3, 3])
+    const tree = arrange(buildGridLayout(ids(9)), 'focus', 'p0')
+    expect(tree?.type === 'split' && tree.ratios).toEqual([0.5, 0.5])
+    expect(listPanes(tree)).toHaveLength(9)
   })
 })
