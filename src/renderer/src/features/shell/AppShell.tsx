@@ -8,7 +8,7 @@ import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigati
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
 import { ProjectScreen } from '../project/ProjectScreen'
-import { QueenAutoHide, QueenDock } from '../queen/Queen'
+import { QueenDock, QueenFloating } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
@@ -54,7 +54,7 @@ export function AppShell() {
       <ErrorBoundary region="Title bar" compact>
         <TitleBar />
       </ErrorBoundary>
-      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel)} style={widths}>
+      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel, showPanel && panelMaximized && styles.covered)} style={widths}>
         {showSidebar && (
           <aside className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
@@ -105,7 +105,7 @@ export function AppShell() {
           </div>
           </div>
           <ErrorBoundary region="Queen Bee" compact>
-            {queenPlacement === 'docked' ? <QueenDock /> : <QueenAutoHide />}
+            {queenPlacement === 'docked' ? <QueenDock /> : <QueenFloating />}
           </ErrorBoundary>
         </main>
         {showPanel && (

@@ -30,55 +30,19 @@ export function QueenDock() {
   )
 }
 
-/** After the pointer leaves (and nothing else holds her up), she slips away. */
-const HIDE_DELAY_MS = 700
-
 /**
- * Queen Bee on auto-hide: a fixed-size bar that rises from the bottom edge of the
- * main area, like a floating taskbar. She shows while the pointer is at the edge or
- * on her, while her input has focus (her shortcut), while she listens, thinks or
- * speaks, and while she has a card up; then she slips back down. She takes no room.
+ * Queen Bee floating: a fixed-size bar that stays centred over the bottom of the
+ * main area, always visible, taking no room (the panes don't lift for it). Her
+ * card opens above it.
  */
-export function QueenAutoHide() {
+export function QueenFloating() {
   useQueenShortcut()
   useQueenUpdates()
-  const card = useQueen((s) => s.card)
-  const busy = useQueen((s) => s.busy)
-  const phase = useVoice((s) => s.phase)
-  const [pointer, setPointer] = useState(false)
-  const [focused, setFocused] = useState(false)
-  const [lingering, setLingering] = useState(false)
-  const linger = useRef<number | undefined>(undefined)
-  const wanted = pointer || focused || busy || Boolean(card) || phase !== 'idle'
-  const shown = wanted || lingering
-
-  // When the last reason to show goes away she stays a moment longer, then slips down.
-  useEffect(() => {
-    if (!wanted) return
-    window.clearTimeout(linger.current)
-    return () => {
-      setLingering(true)
-      linger.current = window.setTimeout(() => setLingering(false), HIDE_DELAY_MS)
-    }
-  }, [wanted])
-  useEffect(() => () => window.clearTimeout(linger.current), [])
-
   return (
-    <>
-      <div className={styles.edge} aria-hidden onPointerEnter={() => setPointer(true)} />
-      <div
-        className={cx(styles.autoHide, shown && styles.shown)}
-        onPointerEnter={() => setPointer(true)}
-        onPointerLeave={() => setPointer(false)}
-        onFocus={() => setFocused(true)}
-        onBlur={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false)
-        }}
-      >
-        <QueenCardView />
-        <QueenBar />
-      </div>
-    </>
+    <div className={styles.floating}>
+      <QueenCardView />
+      <QueenBar />
+    </div>
   )
 }
 
@@ -189,9 +153,9 @@ function QueenBar() {
       )}
       {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
       <IconButton
-        label={placement === 'docked' ? 'Auto-hide Queen Bee' : 'Dock Queen Bee'}
+        label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
         icon={placement === 'docked' ? <PanelBottomClose /> : <PanelBottom />}
-        onClick={() => setPlacement(placement === 'docked' ? 'auto-hide' : 'docked')}
+        onClick={() => setPlacement(placement === 'docked' ? 'floating' : 'docked')}
       />
       <Menu
         label="Queen Bee"

@@ -144,7 +144,7 @@ export function QueenBarSettings() {
         <div className={styles.groupTitle}>Placement</div>
         <SettingRow
           title="Where she sits"
-          description="Docked sits under the main area and lifts it up. Auto-hide keeps the space free: she rises from the bottom edge when you point there, use her shortcut, speak, or she has something to say."
+          description="Docked sits under the main area and lifts it up. Floating keeps a fixed-size bar over the bottom of the main area and takes no room."
           control={
             <Select
               label="Where she sits"
@@ -152,9 +152,9 @@ export function QueenBarSettings() {
               value={placement}
               options={[
                 { value: 'docked', label: 'Docked' },
-                { value: 'auto-hide', label: 'Auto-hide' }
+                { value: 'floating', label: 'Floating' }
               ]}
-              onChange={(v) => setPlacement(v as 'docked' | 'auto-hide')}
+              onChange={(v) => setPlacement(v as 'docked' | 'floating')}
             />
           }
         />

@@ -119,6 +119,15 @@
   grid-column: 2 / -1;
 }
 
+/*
+ * Under a maximized panel the main area is hidden, not just covered: surfaces are
+ * translucent over a wallpaper, so panes would show through. It keeps its size, and
+ * its terminals keep running.
+ */
+.covered .content {
+  visibility: hidden;
+}
+
 /* Handles sit in the gutter next to their sidebar. */
 .sidebarHandle {
   right: calc(var(--gutter) * -1);

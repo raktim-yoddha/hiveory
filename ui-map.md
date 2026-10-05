@@ -40,11 +40,10 @@ The reply card hovers over the panes (it never pushes them); only the bar takes 
 
 ∿ is her waveform mark (still at rest, moving while you or she speaks). The shortcut chip
 opens Settings › Queen Bee › Voice until a speech pack is installed. ▁ switches docked ↔
-auto-hide. ⋯ holds Personality, Talk back and Configure….
+floating. ⋯ holds Personality, Talk back and Configure….
 
-Auto-hide: the same bar at a fixed width, centred over the bottom of the main area. It rests
-below the edge and rises when the pointer reaches the bottom of the window, on her shortcut,
-while either of you speaks and while her card is up.
+Floating: the same bar at a fixed width, centred over the bottom of the main area, always
+there; the panes don't lift for it.
 
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
 - Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,

@@ -356,12 +356,10 @@ and the request. Never files, code or terminal output.
 - The time budget for API models is 12 s.
 
 ## Round E notes (as built)
-**Placement: docked or auto-hide.** Floating (drag anywhere) is replaced by auto-hide: one
-fixed-size bar centred over the bottom of the main area, resting below the edge. It rises when
-the pointer reaches the bottom of the window, when her input has focus (the shortcut), while
-she listens, transcribes or speaks, and while a card is up, then slips down 0.7 s after the last
-reason ends. Inside the main area it never meets the native browser page. A saved "floating"
-reads as auto-hide.
+**Placement: docked or floating.** Floating no longer drags anywhere: it is one fixed-size bar
+centred over the bottom of the main area, always visible, taking no room. Inside the main area
+it never meets the native browser page. (An auto-hide version that rose from the bottom edge was
+tried and dropped; a saved "auto-hide" reads as floating.)
 
 **No mic button; a waveform mark.** The shortcut is the one way to talk. Her logo chip shows a
 five-bar waveform driven by an AnalyserNode on the microphone and on Kokoro's output; the system

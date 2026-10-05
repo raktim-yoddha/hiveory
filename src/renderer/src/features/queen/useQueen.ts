@@ -22,8 +22,8 @@ export type QueenCard = (
 
 export type QueenSettingsTab = 'personality' | 'providers' | 'voice' | 'bar'
 
-/** Docked under the main area, or hidden until the bottom edge is pointed at (or she has something to say). */
-export type QueenPlacement = 'docked' | 'auto-hide'
+/** Docked under the main area (it lifts the screens), or floating over its bottom at a fixed size. */
+export type QueenPlacement = 'docked' | 'floating'
 
 interface QueenState {
   placement: QueenPlacement
@@ -42,11 +42,11 @@ interface QueenState {
 
 const KEY = 'hiveory.queen'
 
-/** Placement is a per-viewer convenience: storage may be missing, defaults always work. An old "floating" is auto-hide now. */
+/** Placement is a per-viewer convenience: storage may be missing, defaults always work. A saved "auto-hide" floats now. */
 const readPlacement = (): QueenPlacement => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { placement?: unknown }
-    return raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'auto-hide' : 'docked'
+    return raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'floating' : 'docked'
   } catch {
     return 'docked'
   }

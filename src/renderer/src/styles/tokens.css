@@ -189,7 +189,7 @@
   --chat-max-width: 1200px;
   --chat-gutter: 16px;
   --menu-min-width: 200px;
-  /* Queen Bee on auto-hide: a fixed-size bar, like a floating taskbar. */
+  /* Queen Bee floating: a fixed-size bar over the bottom of the main area. */
   --queen-bar-width: 600px;
   /* Longest side-panel tab title before it truncates. */
   --panel-tab-max-width: 180px;

@@ -42,6 +42,8 @@ One dialog for every way in: the sidebar's button, the empty sidebar link and Ho
   `BrowserService.show` parks only pages it would overlap, so each area can show a page.
 - The panel has no close button: the title-bar toggle or a narrow drag hides it. (A toggle that
   slid over to the panel's edge was tried and removed: it felt glitchy.)
+- A maximized panel hides the main area under it (`visibility: hidden`, same size, terminals keep
+  running): over a wallpaper every surface is translucent, so the panes would show through.
 - **Sessions** tab: `SessionHistoryService` reads Claude Code (`~/.claude/projects`), Codex
   (`~/.codex/sessions`, titles from `session_index.jsonl`) and Gemini CLI (`~/.gemini/tmp`) history,
   read-only, head and tail only, cached by mtime. Workspace · Project · All, search, grouped by

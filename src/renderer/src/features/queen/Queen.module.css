@@ -19,40 +19,34 @@
 }
 
 /*
- * Auto-hide: a fixed-size bar (the docked one follows the main area's width)
- * centred over the bottom of the main area. It rests below the edge and rises
- * when shown — like a floating taskbar. Only transform and opacity animate.
+ * Floating: a fixed-size bar (the docked one follows the main area's width),
+ * centred over the bottom of the main area and always there. It takes no room.
  */
-.autoHide {
+.floating {
   position: absolute;
   bottom: var(--space-4);
   left: 50%;
   z-index: var(--z-panel);
   width: min(var(--queen-bar-width), calc(100% - var(--space-8)));
-  transform: translate(-50%, calc(100% + var(--space-4) + var(--page-padding)));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--duration-slow) var(--ease-liquid),
-    opacity var(--duration-base) var(--ease-out);
+  transform: translateX(-50%);
 }
 
-.shown {
-  transform: translate(-50%, 0);
-  opacity: 1;
-  pointer-events: auto;
+.floating .bar {
+  /* Solid: it floats over terminal text, which glass would let through. */
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
 }
 
-/* The hot edge: pointing at the bottom of the window (below the main area) brings her up. */
-.edge {
+.floating .card {
   position: absolute;
   right: 0;
-  bottom: calc(var(--page-padding) * -1);
+  bottom: calc(100% + var(--space-3));
   left: 0;
-  height: var(--page-padding);
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
 }
 
-.autoHide .bar {
+.bar {
   /* Solid: it floats over terminal text, which glass would let through. */
   background: var(--color-surface-raised-solid);
   box-shadow: var(--shadow-popover);
