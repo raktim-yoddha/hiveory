@@ -153,7 +153,8 @@ Panes:
 - can be rearranged
 - can be swapped using Space-drag
 - Focus arrangement: the dragged pane takes half; the rest share the other half, stacked
-  up to four, in rows beyond that (5 → 3 + 2, 8 → 4 + 4, 9 → 3 + 3 + 3)
+  up to four in a column, in side-by-side columns of up to four beyond that (5 → 3 + 2,
+  8 → 4 + 4, 9 → 3 + 3 + 3)
 
 ## Pane Add
 

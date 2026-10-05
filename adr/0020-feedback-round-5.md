@@ -56,8 +56,8 @@ runtime carries it as `CliRuntimeDetails.model`. Cards show it as a small mono c
 `/model` within seconds.
 
 ## Focus arrangement
-Up to four other panes stack beside the focused one; five or more become rows of at most four in
-the same half, fullest first (3 + 2, 4 + 4, 3 + 3 + 3).
+Up to four other panes stack in one column beside the focused one; five or more become
+side-by-side columns of at most four in the same half, fullest first (3 + 2, 4 + 4, 3 + 3 + 3).
 
 ## Skills folders come from the CLI registry
 Adapters declare `skills` (own folder at home and in a project, whether they read the shared

@@ -210,8 +210,8 @@ describe('arrange modes', () => {
 
 describe('focus arrangement with many panes', () => {
   const ids = (n: number) => Array.from({ length: n }, (_, i) => `p${i}`)
-  const rowSizes = (node: LayoutNode): number[] =>
-    node.type === 'split' && node.direction === 'vertical' && node.children.every((c) => c.type === 'split' && c.direction === 'horizontal')
+  const columnSizes = (node: LayoutNode): number[] =>
+    node.type === 'split' && node.direction === 'horizontal' && node.children.every((c) => c.type === 'split' && c.direction === 'vertical')
       ? node.children.map((c) => (c.type === 'split' ? c.children.length : 1))
       : []
 
@@ -220,10 +220,10 @@ describe('focus arrangement with many panes', () => {
     expect(rest.type === 'split' && rest.direction === 'vertical' && rest.children.length).toBe(4)
   })
 
-  it('puts five or more into rows in the same half: 3+2, 4+4, 3+3+3', () => {
-    expect(rowSizes(focusRest(ids(5)))).toEqual([3, 2])
-    expect(rowSizes(focusRest(ids(8)))).toEqual([4, 4])
-    expect(rowSizes(focusRest(ids(9)))).toEqual([3, 3, 3])
+  it('puts five or more into columns of up to four in the same half: 3+2, 4+4, 3+3+3', () => {
+    expect(columnSizes(focusRest(ids(5)))).toEqual([3, 2])
+    expect(columnSizes(focusRest(ids(8)))).toEqual([4, 4])
+    expect(columnSizes(focusRest(ids(9)))).toEqual([3, 3, 3])
     const tree = arrange(buildGridLayout(ids(9)), 'focus', 'p0')
     expect(tree?.type === 'split' && tree.ratios).toEqual([0.5, 0.5])
     expect(listPanes(tree)).toHaveLength(9)
