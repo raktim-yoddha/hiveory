@@ -54,7 +54,7 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 ### Side panel browser tab (ADR 0015)
 
 ```text
-┌ [Terminal] [Milo · GitHub ×] [New tab ×] [+] ─────────── ⤢ × ┐
+┌ [Terminal] [Milo · GitHub ×] [New tab ×] [+] ───────────── ⤢ ┐
 │ ← → ⟳ ( github.com/acme/app       [Work] [375×667] )  ⌖ ✎ ▭ </> ⋯ │
 │ Milo is using this page                                       │
 │ ┌───────────────────────────────────────────────────────────┐ │
@@ -96,7 +96,7 @@ image; Transparency · Blur · Dim sliders when a wallpaper is set.
 ### Side panel Explorer (ADR 0018)
 
 ```text
-┌ [GitHub ×] [Explorer ×] [+] ───────────── ⤢ × ┐
+┌ [GitHub ×] [Explorer ×] [+] ─────────────── ⤢ ┐
 │ DEMO-APP                     ＋file ＋dir ⟳ ⇤ │
 │ ( Search files                              ) │
 │ ▾ src                                        │

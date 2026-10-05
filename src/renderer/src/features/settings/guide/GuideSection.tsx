@@ -36,7 +36,7 @@ export function GuideSection() {
     return (
       <div className={styles.reader}>
         <aside className={styles.toc}>
-          <Button variant="ghost" size="sm" icon={<ArrowLeft />} onClick={() => setOpen(null)}>
+          <Button variant="ghost" size="sm" icon={<ArrowLeft />} className={styles.back} onClick={() => setOpen(null)}>
             All chapters
           </Button>
           <span className={styles.tocLabel}>Chapter {String(index + 1).padStart(2, '0')}</span>

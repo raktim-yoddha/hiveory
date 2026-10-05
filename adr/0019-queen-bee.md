@@ -87,8 +87,9 @@ only.
 
 **Text-to-speech.**
 - Kokoro-82M (Apache 2.0): English, Spanish, Portuguese, French and Hindi voices.
-- Users pick one of four voices: Heart, Bella, Emma and Michael. These are the best-graded
-  and most distinct in Kokoro's own voice list; the rest are rough, so they aren't offered.
+- Users pick one of four voices: Heart, Bella, Emma and Nicole. These are the best-graded
+  and most distinct female voices in Kokoro's own list; she is a queen, so no male voice is
+  offered (a saved Michael falls back to her personality's own voice).
   Each has its own preview, which works once Kokoro is installed. Until then the cards offer
   the download and she uses the system voice. Loading arbitrary voice model files is not
   offered: an unverified model is untrusted native input to the inference runtime.
@@ -258,7 +259,7 @@ and the request. Never files, code or terminal output.
 
 **Shared fields completed.**
 - "Say it as": how her voice pronounces your name.
-- Her voice: any of Kokoro's 28 English voices, or the personality's own.
+- Her voice: one of four female Kokoro voices, or the personality's own.
 - Frankie: a goal with its deadline, repeated in reports, and intensity (steady or hard).
 - Replies stay English: receipts are fixed templates and only English phrase sets exist.
   Speech recognition still understands all six listening languages.

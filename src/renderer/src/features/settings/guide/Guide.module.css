@@ -156,6 +156,12 @@
   align-self: start;
 }
 
+.back {
+  /* A back link, aligned with the chapter list below it — not a centred, full-width button. */
+  align-self: flex-start;
+  margin-left: calc(var(--space-4) * -1);
+}
+
 .tocLabel {
   color: var(--color-text-muted);
   font-size: var(--text-2xs);

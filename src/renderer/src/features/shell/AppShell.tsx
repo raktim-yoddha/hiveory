@@ -110,7 +110,7 @@ export function AppShell() {
           )}
         </main>
         {showPanel && (
-          <div className={cx(styles.panel, panelMaximized && styles.panelMaximized)}>
+          <div className={cx(styles.panel, panelMaximized && styles.panelMaximized)} data-panel-column>
             {!panelMaximized && (
               <ResizeHandle
                 label="Resize side panel"

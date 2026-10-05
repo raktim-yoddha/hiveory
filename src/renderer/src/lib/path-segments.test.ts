@@ -3,13 +3,13 @@ import { pathSegments } from './path-segments'
 
 describe('path trail segments', () => {
   it('collapses home folders on every platform', () => {
-    expect(pathSegments('C:\\Users\\rakti\\Downloads\\ade-starter-docs')).toEqual({ root: 'home', parts: ['Downloads', 'ade-starter-docs'] })
+    expect(pathSegments('C:\\Users\\alex\\Downloads\\ade-starter-docs')).toEqual({ root: 'home', parts: ['Downloads', 'ade-starter-docs'] })
     expect(pathSegments('/home/me/code/app')).toEqual({ root: 'home', parts: ['code', 'app'] })
     expect(pathSegments('/Users/me/app')).toEqual({ root: 'home', parts: ['app'] })
   })
 
   it('shows Hiveory-managed workspaces as project › workspace', () => {
-    expect(pathSegments('C:\\Users\\rakti\\AppData\\Local\\Hiveory Dev\\Workspaces\\ade-starter-docs-d5bc53\\quiet-marsh')).toEqual({
+    expect(pathSegments('C:\\Users\\alex\\AppData\\Local\\Hiveory Dev\\Workspaces\\ade-starter-docs-d5bc53\\quiet-marsh')).toEqual({
       root: 'workspaces',
       parts: ['ade-starter-docs', 'quiet-marsh']
     })

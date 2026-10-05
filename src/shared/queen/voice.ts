@@ -63,7 +63,7 @@ export const VOICE_PACKS: VoicePack[] = [
     id: 'kokoro',
     kind: 'speak',
     name: 'Kokoro',
-    description: 'Her four natural voices — Heart, Bella, Emma and Michael (Kokoro 82M) — on your CPU.',
+    description: 'Her four natural voices — Heart, Bella, Emma and Nicole (Kokoro 82M) — on your CPU.',
     languages: 'English (US and UK voices)',
     license: 'Apache-2.0',
     files: [
@@ -99,8 +99,8 @@ export type SpeechLanguage = (typeof SPEECH_LANGUAGES)[number]['id']
 
 /**
  * Her voices: four of Kokoro v1.0's speakers (speaker id = the model's index), the
- * best-graded and most distinct in its own voice list. Few on purpose: each one
- * clearly different, none of the rough ones.
+ * best-graded and most distinct female voices in its own list. She is a queen, so
+ * never a male voice. Few on purpose: each one clearly different, none of the rough ones.
  */
 export interface QueenVoice {
   sid: number
@@ -111,7 +111,7 @@ export const QUEEN_VOICES: QueenVoice[] = [
   { sid: 3, name: 'Heart', description: 'Warm and natural · American' },
   { sid: 2, name: 'Bella', description: 'Bright and lively · American' },
   { sid: 21, name: 'Emma', description: 'Calm and precise · British' },
-  { sid: 16, name: 'Michael', description: 'Low and steady · American, male' }
+  { sid: 6, name: 'Nicole', description: 'Soft and close · American' }
 ]
 const voice = (sid: number): QueenVoice => QUEEN_VOICES.find((v) => v.sid === sid)!
 

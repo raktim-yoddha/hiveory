@@ -106,7 +106,7 @@ describe('Queen Bee rule parser', () => {
 })
 
 describe('Queen Bee personas', () => {
-  const prefs = (persona: QueenPrefs['persona']): QueenPrefs => ({ persona, callMe: 'Raktim', honorific: 'sir', hype: 'lively', nudgeMinutes: 10, length: 'normal' })
+  const prefs = (persona: QueenPrefs['persona']): QueenPrefs => ({ persona, callMe: 'Alex', honorific: 'sir', hype: 'lively', nudgeMinutes: 10, length: 'normal' })
 
   it('phrases the same facts in each voice', () => {
     const opened = [{ kind: 'opened' as const, count: 2, cliName: 'Codex', workspace: 'feature-x' }]
@@ -127,7 +127,7 @@ describe('Queen Bee personas', () => {
     )
     expect(r.waiting.map((a) => a.petName)).toEqual(['Luna', 'Bruno'])
     expect(reportLine(r, prefs('ada'))).toBe('2 waiting for you, 1 working, 0 idle, sir. Luna in feature-x has been waiting for 14 min.')
-    expect(reportLine(r, prefs('frankie'))).toBe("Raktim, Luna has waited on you for 14 min. That's the bottleneck, not the agents. Answer it and the hive moves again.")
+    expect(reportLine(r, prefs('frankie'))).toBe("Alex, Luna has waited on you for 14 min. That's the bottleneck, not the agents. Answer it and the hive moves again.")
   })
 
   it('persona names are never agent pet names', () => {
@@ -202,9 +202,11 @@ describe('Queen Bee speaking', () => {
   })
 
   it('offers four distinct voices; a voice from the old, longer list falls back to the personality’s own', () => {
-    expect(QUEEN_VOICES.map((v) => v.name)).toEqual(['Heart', 'Bella', 'Emma', 'Michael'])
+    expect(QUEEN_VOICES.map((v) => v.name)).toEqual(['Heart', 'Bella', 'Emma', 'Nicole'])
     expect(new Set(QUEEN_VOICES.map((v) => v.sid)).size).toBe(4)
     expect(voiceFor({ queenPersona: 'ada', queenVoice: 7 }).name).toBe('Emma')
-    expect(voiceFor({ queenPersona: 'sunny', queenVoice: 16 }).name).toBe('Michael')
+    expect(voiceFor({ queenPersona: 'sunny', queenVoice: 6 }).name).toBe('Nicole')
+    // A saved male voice from an earlier version falls back to her personality's own.
+    expect(voiceFor({ queenPersona: 'sunny', queenVoice: 16 }).name).toBe('Bella')
   })
 })

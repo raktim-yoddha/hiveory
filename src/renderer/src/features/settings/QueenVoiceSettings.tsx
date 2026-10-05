@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { CheckCircle2, Download, Lock, Trash2, Volume2, X } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Check, CheckCircle2, Download, Keyboard, ShieldCheck, Trash2, Volume2, X } from 'lucide-react'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
 import { packSize, PERSONA_VOICES, QUEEN_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -27,6 +28,7 @@ export function QueenVoiceSettings() {
   const keys = shortcutLabel(parseShortcut(settings.queenShortcut) ?? parseShortcut(DEFAULT_SHORTCUT)!, platform)
   const listenPack = SPEECH_LANGUAGES.find((l) => l.id === settings.queenSpeechLanguage)?.pack ?? 'parakeet'
   const state = (id: VoicePack['id']): VoicePackState => packs.find((p) => p.id === id) ?? { id, state: 'missing' }
+  const listenName = VOICE_PACKS.find((p) => p.id === listenPack)!.name
 
   // Opening the tab re-reads what's installed (packs can change on disk, e.g. removed by hand).
   useEffect(() => {
@@ -38,19 +40,22 @@ export function QueenVoiceSettings() {
       <div className={styles.group}>
         <div className={styles.groupTitle}>Get started</div>
         <ol className={styles.steps}>
-          <li>
-            <strong>Pick your language</strong> below and download its speech pack ({VOICE_PACKS.find((p) => p.id === listenPack)!.name}, {size(packSize(VOICE_PACKS.find((p) => p.id === listenPack)!))}).
-          </li>
-          <li>
-            <strong>Hold {keys}</strong> (or the mic in her bar) and say what you want.
-          </li>
-          <li>
-            <strong>Let go.</strong> She acts, and with Kokoro installed she answers out loud.
-          </li>
+          <GuideStep n={1} icon={<Download />} title="Get a speech pack" done={state(listenPack).state === 'ready'}>
+            Pick your language below, then download {listenName} ({size(packSize(VOICE_PACKS.find((p) => p.id === listenPack)!))}).
+          </GuideStep>
+          <GuideStep n={2} icon={<Keyboard />} title={`Hold ${keys}`}>
+            Say what you want while holding the keys. Her bar shows your voice as you speak.
+          </GuideStep>
+          <GuideStep n={3} icon={<Volume2 />} title="Let go" done={state('kokoro').state === 'ready'}>
+            She acts on it and answers out loud{state('kokoro').state === 'ready' ? '.' : ' — more naturally with Kokoro.'}
+          </GuideStep>
         </ol>
-        <p className={styles.groupNote}>
-          <Lock aria-hidden className={styles.noteIcon} /> Your voice never leaves this computer: recognition and speech run locally. Downloads come from fixed addresses and are
-          checked against known fingerprints before use.
+        <p className={styles.privacy}>
+          <ShieldCheck aria-hidden />
+          <span>
+            <strong>Private by design.</strong> Recognition and speech run on this computer; your voice is never uploaded. Packs come from fixed addresses and are checked against
+            known fingerprints before use.
+          </span>
         </p>
       </div>
 
@@ -125,6 +130,24 @@ export function QueenVoiceSettings() {
         </div>
       </div>
     </>
+  )
+}
+
+/** One numbered step of the voice guide; a finished step shows a check instead of its number. */
+function GuideStep({ n, icon, title, done, children }: { n: number; icon: ReactNode; title: string; done?: boolean; children: ReactNode }) {
+  return (
+    <li className={styles.step} data-done={done || undefined}>
+      <span className={styles.stepHead}>
+        <span className={styles.stepNumber} aria-label={done ? `Step ${n}, done` : `Step ${n}`}>
+          {done ? <Check aria-hidden /> : n}
+        </span>
+        <span className={styles.stepIcon} aria-hidden>
+          {icon}
+        </span>
+      </span>
+      <span className={styles.stepTitle}>{title}</span>
+      <span className={styles.stepText}>{children}</span>
+    </li>
   )
 }
 

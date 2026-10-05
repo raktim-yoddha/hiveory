@@ -31,7 +31,7 @@ export function SidePanel() {
   const scope = workspaceId ?? projectId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
   const activeId = useNavigation((s) => s.activePanelTab[scope])
-  const { addPanelTab, closePanelTab, selectPanelTab, togglePanel, panelMaximized, togglePanelMaximized } = useNavigation()
+  const { addPanelTab, closePanelTab, selectPanelTab, panelMaximized, togglePanelMaximized } = useNavigation()
   const pages = useBrowser((s) => s.pages)
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
 
@@ -123,7 +123,6 @@ export function SidePanel() {
             active={panelMaximized}
             onClick={togglePanelMaximized}
           />
-          <IconButton label="Close side panel" icon={<X />} onClick={togglePanel} />
         </div>
       </header>
       <div className={styles.body}>

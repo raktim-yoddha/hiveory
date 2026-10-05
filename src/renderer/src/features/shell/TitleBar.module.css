@@ -59,3 +59,14 @@
 .noDrag {
   -webkit-app-region: no-drag;
 }
+
+.panelToggle {
+  display: inline-flex;
+  transition: transform var(--duration-base) var(--ease-liquid);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panelToggle {
+    transition: none;
+  }
+}
