@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, join, relative, resolve, sep } from 'node:path'
 import { mainWorkspaceId, type Workspace, type WorkspaceView } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
 import type { GitStatus } from '../git/git-commands'
 import { AppException, fail } from '@shared/errors'
 import type { DeleteWorkspaceResult, RequestOf } from '@shared/ipc/contract'
+import type { FoundWorktrees } from '@shared/domain'
 import { generateWorkspaceName, slugify, uniqueName } from '@shared/naming/names'
 import type { AgentService } from '../agents/agent-service'
 import { nowIso, type Emit } from '../events'
@@ -14,6 +15,9 @@ import type { WorktreeService } from '../git/worktree-service'
 import type { WorkspaceRepository } from './workspace-repository'
 
 export const BRANCH_PREFIX = 'hiveory/'
+
+const key = (path: string): string => (process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path))
+const inside = (path: string, folder: string): boolean => key(path).startsWith(key(folder) + sep)
 
 /**
  * Workspace lifecycle. Creating an isolated Workspace automates every Git step
@@ -181,6 +185,77 @@ export class WorkspaceService {
     this.repo.delete(workspaceId)
     this.emit('state.changed', { topic: 'workspaces', projectId: project.id, workspaceId })
     return { keptBranch }
+  }
+
+  /**
+   * Brings back Hiveory workspaces that exist on disk but not in Hiveory — for
+   * example from before the project was removed and added again (its folder then
+   * got a new id). Only linked worktrees inside Hiveory's workspaces folder count;
+   * each becomes an isolated workspace again. Returns how many came back.
+   */
+  async adoptWorktrees(projectId: string): Promise<number> {
+    const project = this.repo.project(projectId)
+    const repoRoot = project.repositoryRoot ?? (await this.git.repositoryRoot(project.path))
+    if (!repoRoot) return 0
+    const known = new Set(this.repo.knownWorktrees().map(key))
+    const entries = await this.worktrees.list(repoRoot).catch(() => [])
+    let adopted = 0
+    for (const entry of entries.slice(1)) {
+      if (entry.bare || !inside(entry.path, this.worktreeRoot) || known.has(key(entry.path)) || !existsSync(entry.path)) continue
+      const now = nowIso()
+      this.repo.save({
+        id: randomUUID(),
+        projectId,
+        name: basename(entry.path),
+        kind: 'isolated',
+        path: join(entry.path, relative(repoRoot, project.path)),
+        git: { worktreePath: entry.path, branch: entry.branch, createdBranch: entry.branch?.startsWith(BRANCH_PREFIX) ?? false },
+        autoApprove: false,
+        chatUi: false,
+        createdAt: now,
+        updatedAt: now
+      })
+      adopted++
+    }
+    if (adopted) this.emit('state.changed', { topic: 'workspaces', projectId })
+    return adopted
+  }
+
+  /**
+   * Hiveory workspace folders on disk that no project knows: grouped by the
+   * repository they belong to (read from each worktree's .git file), for
+   * "Restore previous" in Add project.
+   */
+  foundWorktrees(): FoundWorktrees[] {
+    const known = new Set(this.repo.knownWorktrees().map(key))
+    const groups = new Map<string, FoundWorktrees>()
+    const list = (dir: string): string[] => {
+      try {
+        return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => join(dir, d.name))
+      } catch {
+        return []
+      }
+    }
+    for (const projectDir of list(this.worktreeRoot)) {
+      for (const folder of list(projectDir)) {
+        if (known.has(key(folder))) continue
+        let gitdir: string
+        try {
+          gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(join(folder, '.git'), 'utf8'))?.[1]?.trim() ?? ''
+        } catch {
+          continue
+        }
+        // <repo>/.git/worktrees/<name> → <repo>
+        const at = gitdir.replace(/\\/g, '/').lastIndexOf('/.git/worktrees/')
+        if (at < 0) continue
+        const repoRoot = resolve(gitdir.slice(0, at))
+        if (!existsSync(repoRoot)) continue
+        const group = groups.get(key(repoRoot)) ?? { repoRoot, name: basename(repoRoot), workspaces: [] }
+        group.workspaces.push(basename(folder))
+        groups.set(key(repoRoot), group)
+      }
+    }
+    return [...groups.values()]
   }
 
   /** Branch/repository facts for the create dialog. */

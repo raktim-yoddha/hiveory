@@ -23,7 +23,22 @@ export interface PersistedState {
   editors: StoredEditor[]
   /** Queen Bee's provider accounts in priority order (ADR 0019); keys sealed by SecretBox. */
   queenBrains: StoredBrainAccount[]
+  /** Projects removed from Hiveory, kept whole so adding the folder again restores them (ADR 0020). */
+  archive: ArchivedProject[]
 }
+
+/** A removed project with everything that was in it: its workspaces, agents (to resume), layouts and open files. */
+export interface ArchivedProject {
+  project: Project
+  workspaces: Workspace[]
+  instances: CliInstance[]
+  layouts: Record<string, LayoutNode>
+  editors: StoredEditor[]
+  removedAt: string
+}
+
+/** Removed projects kept for restoring; the oldest beyond this are forgotten. */
+export const MAX_ARCHIVED = 30
 
 export interface StoredBrainAccount {
   id: string
@@ -77,7 +92,8 @@ export const emptyState = (): PersistedState => ({
   browserProfiles: [],
   connections: [],
   editors: [],
-  queenBrains: []
+  queenBrains: [],
+  archive: []
 })
 
 const settingsSchema = z.object({
@@ -224,6 +240,15 @@ const brainAccounts = (input: Record<string, unknown>): StoredBrainAccount[] => 
 
 const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
 
+const archivedSchema: z.ZodType<ArchivedProject> = z.object({
+  project: projectSchema,
+  workspaces: z.array(workspaceSchema),
+  instances: z.array(instanceSchema),
+  layouts: z.record(z.string(), layoutSchema),
+  editors: z.array(editorSchema),
+  removedAt: str
+})
+
 export const presetSchema: z.ZodType<AgentPreset> = z.object({
   id: str,
   name: str,
@@ -267,7 +292,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       browserProfiles: list(input.browserProfiles, browserProfileSchema),
       connections: list(input.connections, connectionSchema),
       editors: list(input.editors, editorSchema),
-      queenBrains: brainAccounts(input)
+      queenBrains: brainAccounts(input),
+      archive: list(input.archive, archivedSchema)
     },
     rejected
   }

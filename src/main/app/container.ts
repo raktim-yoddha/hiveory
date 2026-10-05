@@ -17,6 +17,7 @@ import { ComputerTools } from '../services/computer/computer-tools'
 import { ExtensionsService } from '../services/extensions/extensions-service'
 import { SessionHistoryService } from '../services/sessions/session-history'
 import { ModelTracker } from '../services/sessions/model-tracker'
+import { RepositoryService } from '../services/projects/repository-service'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
@@ -135,6 +136,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   )
   const shells = new ShellService()
   const sessions = new SessionHistoryService(log)
+  const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)
   models.start()
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
@@ -179,6 +181,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   })
 
   return {
+    log,
+    emit,
     store,
     git,
     github,
@@ -196,6 +200,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     shells,
     extensions,
     sessions,
+    repositories,
     wallpapers,
     files,
     editors,

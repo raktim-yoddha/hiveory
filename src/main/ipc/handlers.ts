@@ -10,6 +10,10 @@ import { deliverMessage } from '../services/agent-tools/deliver'
 import { voiceFor } from '@shared/queen/voice'
 import { personaInfo } from '@shared/queen/personas'
 import { lastWords } from '@shared/queen/updates'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import type { PreviousProject, Project } from '@shared/domain'
+import { samePath } from '../services/projects/project-service'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 export const createHandlers = (c: Container): Handlers => {
@@ -33,6 +37,24 @@ export const createHandlers = (c: Container): Handlers => {
       ? { root: c.workspaceRepo.get(scope.workspaceId).path, key: scope.workspaceId }
       : { root: c.workspaceRepo.project(scope.projectId!).path, key: scope.projectId! }
 
+  /**
+   * Folders the user chose in a picker this session (plus the default parent):
+   * the renderer can only add projects from these, never name any folder itself.
+   */
+  const picked = new Set<string>()
+  const defaultParent = (): string => join(app.getPath('home'), 'Hiveory', 'projects')
+  const chosen = (path: string): string => {
+    if (![...picked, defaultParent()].some((p) => samePath(p, path))) fail('FORBIDDEN', 'Choose the folder with the picker first.')
+    return path
+  }
+  /** Opens (or restores) a project, then brings back any of its workspaces found on disk. */
+  const addProject = async (path: string, name?: string): Promise<Project> => {
+    const project = await c.projects.open(path, name)
+    const adopted = await c.workspaces.adoptWorktrees(project.id).catch(() => 0)
+    if (adopted) c.log.info(`Restored ${adopted} workspace folder(s) for ${project.name}`)
+    return project
+  }
+
   const pickPath = async (sender: Electron.WebContents, options: Electron.OpenDialogOptions): Promise<string | undefined> => {
     const window = BrowserWindow.fromWebContents(sender)
     const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
@@ -55,7 +77,51 @@ export const createHandlers = (c: Container): Handlers => {
       ? await dialog.showOpenDialog(window, { ...options, properties: [...options.properties] })
       : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
     const folder = result.filePaths[0]
-    return result.canceled || !folder ? null : c.projects.open(folder)
+    return result.canceled || !folder ? null : addProject(folder)
+  },
+  'projects.pickFolder': async ({ purpose }, event) => {
+    const folder = await pickPath(event.sender, {
+      title: purpose === 'project' ? 'Choose the project folder' : 'Choose where it goes',
+      properties: ['openDirectory', 'createDirectory']
+    })
+    if (folder) picked.add(folder)
+    return folder ?? null
+  },
+  'projects.addDefaults': async () => ({ parentDir: defaultParent(), github: await c.repositories.githubAccount() }),
+  'projects.add': async (input) => {
+    if (input.mode === 'folder') return addProject(chosen(input.path), input.name)
+    if (input.mode === 'clone') return addProject(await c.repositories.clone(input.url, chosen(input.parentDir)), input.name)
+    const created = await c.repositories.create(input.repoName, chosen(input.parentDir), input.github)
+    const project = await addProject(created.path, input.name)
+    if (created.warning) c.emit('app.notice', { level: 'warning', message: created.warning })
+    return project
+  },
+  'projects.previous': () => {
+    const open = c.projects.list()
+    const openAt = (path: string) => open.find((p) => samePath(p.repositoryRoot ?? p.path, path) || samePath(p.path, path))?.id
+    const removed: PreviousProject[] = c.projects.archived().map((a) => ({
+      source: 'removed',
+      name: a.project.name,
+      path: a.project.path,
+      workspaces: a.workspaces.map((w) => w.name),
+      agents: a.instances.length,
+      removedAt: a.removedAt,
+      missing: !existsSync(a.project.path)
+    }))
+    const found: PreviousProject[] = c.workspaces
+      .foundWorktrees()
+      .filter((f) => !removed.some((r) => samePath(r.path, f.repoRoot)))
+      .map((f) => ({ source: 'found', name: f.name, path: f.repoRoot, workspaces: f.workspaces, agents: 0, missing: false, projectId: openAt(f.repoRoot) }))
+    return [...removed, ...found]
+  },
+  'projects.restore': async ({ path }) => {
+    // Only something "Restore previous" listed.
+    const known = c.projects.archived().some((a) => samePath(a.project.path, path)) || c.workspaces.foundWorktrees().some((f) => samePath(f.repoRoot, path))
+    if (!known) fail('NOT_FOUND', 'There is nothing to restore there any more.')
+    const open = c.projects.list().find((p) => samePath(p.repositoryRoot ?? p.path, path) || samePath(p.path, path))
+    if (!open) return addProject(path)
+    await c.workspaces.adoptWorktrees(open.id)
+    return open
   },
   'projects.remove': ({ projectId }) => c.projects.remove(projectId),
   'projects.touch': ({ projectId }) => c.projects.touch(projectId),

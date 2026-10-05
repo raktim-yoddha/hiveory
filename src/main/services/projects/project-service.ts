@@ -7,10 +7,11 @@ import type { AgentService } from '../agents/agent-service'
 import type { Emit } from '../events'
 import { nowIso } from '../events'
 import { GitCommandError, type GitService } from '../git/git-service'
+import { MAX_ARCHIVED, type ArchivedProject } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
 
-const samePath = (a: string, b: string): boolean =>
-  process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
+export const samePath = (a: string, b: string): boolean =>
+  process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
 
 /** Opening a Project never creates a Workspace, worktree, branch or agent (STARTER_PROMPT §3). */
 export class ProjectService {
@@ -31,7 +32,12 @@ export class ProjectService {
     return project!
   }
 
-  async open(folder: string): Promise<Project> {
+  /**
+   * Adds a folder as a project. A folder that was a project before comes back
+   * whole — same workspaces, agents (resuming their conversations), layouts and
+   * open files — instead of starting over (ADR 0020).
+   */
+  async open(folder: string, name?: string): Promise<Project> {
     const path = resolve(folder)
     try {
       if (!statSync(path).isDirectory()) throw new Error('not a directory')
@@ -40,11 +46,13 @@ export class ProjectService {
     }
     const existing = this.store.state.projects.find((p) => samePath(p.path, path))
     if (existing) return this.touch(existing.id)
+    const archived = this.store.state.archive.find((a) => samePath(a.project.path, path))
+    if (archived) return this.restore(archived, name)
 
     const now = nowIso()
     const project: Project = {
       id: randomUUID(),
-      name: basename(path) || path,
+      name: name?.trim() || basename(path) || path,
       path,
       repositoryRoot: await this.git.repositoryRoot(path),
       createdAt: now,
@@ -99,18 +107,61 @@ export class ProjectService {
     return this.get(projectId)
   }
 
-  /** Removes the Project from Hiveory. Files and worktrees on disk are left untouched. */
+  /**
+   * Removes the Project from Hiveory: its agents stop and it leaves the sidebar.
+   * Nothing on disk changes, and nothing is forgotten: the project, its workspaces,
+   * agents, layouts and open files are archived, so adding the folder again (or
+   * "Restore previous" in Add project) brings them all back (ADR 0020).
+   */
   remove(projectId: string): void {
-    this.get(projectId)
-    this.agents.forgetProject(projectId)
+    const project = this.get(projectId)
+    this.agents.stopProject(projectId)
     this.store.update((s) => {
       const workspaceIds = new Set(s.workspaces.filter((w) => w.projectId === projectId).map((w) => w.id))
+      const layouts: ArchivedProject['layouts'] = {}
+      for (const [id, layout] of Object.entries(s.layouts)) {
+        if (!workspaceIds.has(id) && !id.startsWith(projectId)) continue
+        if (layout) layouts[id] = layout
+        delete s.layouts[id]
+      }
+      const entry: ArchivedProject = {
+        project,
+        workspaces: s.workspaces.filter((w) => w.projectId === projectId),
+        instances: s.instances.filter((i) => i.projectId === projectId),
+        layouts,
+        editors: s.editors.filter((e) => workspaceIds.has(e.workspaceId)),
+        removedAt: nowIso()
+      }
+      s.archive = [entry, ...s.archive.filter((a) => !samePath(a.project.path, project.path))].slice(0, MAX_ARCHIVED)
       s.projects = s.projects.filter((p) => p.id !== projectId)
       s.workspaces = s.workspaces.filter((w) => w.projectId !== projectId)
-      for (const id of Object.keys(s.layouts)) {
-        if (workspaceIds.has(id) || id.startsWith(projectId)) delete s.layouts[id]
-      }
+      s.instances = s.instances.filter((i) => i.projectId !== projectId)
+      s.editors = s.editors.filter((e) => !workspaceIds.has(e.workspaceId))
     })
     this.emit('state.changed', { topic: 'projects' })
+  }
+
+  /** Projects removed earlier that can be restored, newest first. */
+  archived(): ArchivedProject[] {
+    return [...this.store.state.archive]
+  }
+
+  /** Puts an archived project back exactly as it was and resumes its agents. */
+  private restore(entry: ArchivedProject, name?: string): Project {
+    const now = nowIso()
+    const project: Project = { ...entry.project, ...(name?.trim() ? { name: name.trim() } : {}), updatedAt: now, lastOpenedAt: now }
+    // Agent names stay unique across projects: a name taken meanwhile keeps its agent out (it would be ambiguous).
+    const taken = new Set(this.store.state.instances.map((i) => i.petName.toLowerCase()))
+    this.store.update((s) => {
+      s.archive = s.archive.filter((a) => a.project.id !== entry.project.id)
+      s.projects.push(project)
+      s.workspaces.push(...entry.workspaces)
+      s.instances.push(...entry.instances.filter((i) => !taken.has(i.petName.toLowerCase())))
+      s.editors.push(...entry.editors)
+      Object.assign(s.layouts, entry.layouts)
+    })
+    this.agents.resumeAll(project.id)
+    this.emit('state.changed', { topic: 'projects' })
+    return project
   }
 }

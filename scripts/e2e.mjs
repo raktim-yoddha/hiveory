@@ -135,6 +135,14 @@ const stubFolderPicker = (folder) =>
   app.evaluate(({ dialog }, f) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] })
   }, folder)
+/** Add project › Pick directory, with the folder picker stubbed to `folder`. */
+const addProjectFolder = async (folder) => {
+  await stubFolderPicker(folder)
+  await page.getByRole('button', { name: 'Add project', exact: true }).first().click()
+  const dialog = page.getByRole('dialog', { name: 'Add project' })
+  await dialog.getByRole('button', { name: 'Choose' }).click()
+  await dialog.getByRole('button', { name: /^Add project/ }).click()
+}
 const waitFor = async (fn, message, timeout = 15000) => {
   const end = Date.now() + timeout
   for (;;) {
@@ -312,8 +320,7 @@ await test('settings: updates are honest in development builds', async () => {
 // ======================= B. Projects, Git, workspaces =======================
 console.log('B. Projects, Git & workspaces')
 await test('open a Git project: no workspaces are created automatically', async () => {
-  await stubFolderPicker(repo)
-  await page.getByRole('button', { name: 'Open project' }).first().click()
+  await addProjectFolder(repo)
   await page.waitForSelector('text=Idle')
   projectId = (await value('projects.list'))[0].id
   expect((await value('workspaces.list', { projectId })).length === 0, 'a workspace was auto-created')
@@ -430,8 +437,7 @@ await test('deleting a dirty workspace needs a second confirmation; existing bra
 })
 
 await test('plain folder: Initialize Git makes isolation possible', async () => {
-  await stubFolderPicker(plain)
-  await page.getByRole('button', { name: 'Open project' }).first().click()
+  await addProjectFolder(plain)
   await page.waitForTimeout(500)
   plainProjectId = (await value('projects.list')).find((p) => p.path === plain).id
   await page.getByRole('button', { name: 'New workspace in plain-folder' }).click()

@@ -34,6 +34,12 @@ export class WorkspaceRepository {
     return workspace!
   }
 
+  /** Every linked worktree Hiveory knows, in open and removed projects alike. */
+  knownWorktrees(): string[] {
+    const { workspaces, archive } = this.store.state
+    return [...workspaces, ...archive.flatMap((a) => a.workspaces)].flatMap((w) => (w.git?.worktreePath ? [w.git.worktreePath] : []))
+  }
+
   isolated(projectId: string): Workspace[] {
     return this.store.state.workspaces
       .filter((w) => w.projectId === projectId && w.kind === 'isolated')

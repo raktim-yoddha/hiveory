@@ -11,6 +11,7 @@ import { ProjectScreen } from '../project/ProjectScreen'
 import { QueenAutoHide, QueenDock } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
+import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { SettingsScreen } from '../settings/SettingsScreen'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
@@ -128,6 +129,7 @@ export function AppShell() {
           </div>
         )}
       </div>
+      <AddProjectDialog />
       <Toasts />
     </div>
   )

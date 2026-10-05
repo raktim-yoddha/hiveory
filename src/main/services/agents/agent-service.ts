@@ -187,8 +187,8 @@ export class AgentService {
    * rebooted), each resuming its own conversation where its CLI allows.
    * Sessions are durable: nobody has to press Start.
    */
-  resumeAll(): void {
-    const agents = this.store.state.instances.filter((i) => !i.chatUi)
+  resumeAll(projectId?: string): void {
+    const agents = this.store.state.instances.filter((i) => !i.chatUi && (!projectId || i.projectId === projectId))
     agents.forEach((agent, index) => {
       setTimeout(() => {
         const instance = this.find(agent.id)
@@ -213,11 +213,17 @@ export class AgentService {
     })
   }
 
-  forgetProject(projectId: string): void {
-    for (const instance of this.instancesInProject(projectId)) this.disposeRuntime(instance)
-    this.store.update((s) => {
-      s.instances = s.instances.filter((i) => i.projectId !== projectId)
-    })
+  /**
+   * Stops every agent of a project but keeps its records (and chat history), so
+   * the project can be restored with its agents later (ADR 0020).
+   */
+  stopProject(projectId: string): void {
+    for (const instance of this.instancesInProject(projectId)) {
+      this.startedAt.delete(instance.id)
+      this.recoveries.delete(instance.id)
+      if (instance.chatUi) this.chats.stop(instance.id)
+      else this.runtime.dispose(instance.id)
+    }
   }
 
   find(instanceId: string): CliInstance | undefined {
@@ -233,8 +239,8 @@ export class AgentService {
   private build(workspace: Workspace, selections: CliSelection[]): CliInstance[] {
     const wanted = normalizeSelections(selections).filter((s) => this.registry.adapter(s.cliId))
     const total = wanted.reduce((n, s) => n + s.count, 0)
-    // Unique among every configured instance, across all projects.
-    const names = generatePetNames(total, this.store.state.instances.map((i) => i.petName))
+    // Unique among every configured instance, across all projects (removed ones too, so restoring them never clashes).
+    const names = generatePetNames(total, [...this.store.state.instances, ...this.store.state.archive.flatMap((a) => a.instances)].map((i) => i.petName))
     const now = nowIso()
     return wanted.flatMap(({ cliId, count }) =>
       Array.from({ length: count }, () => ({

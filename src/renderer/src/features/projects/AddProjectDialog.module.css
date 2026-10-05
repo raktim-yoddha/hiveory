@@ -1,0 +1,255 @@
+/* Add project (ADR 0020): name + Local/Remote, four ways in, then that way's fields. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* The project name reads as the dialog's headline: a large, quiet field. */
+.name {
+  height: calc(var(--control-lg) * 1.25);
+  background: transparent;
+  font-size: var(--text-xl);
+}
+
+.name:not(:focus-visible):not(:hover) {
+  border-color: transparent;
+}
+
+.where {
+  flex: none;
+  width: calc(var(--menu-min-width) * 0.85);
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.mode {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: var(--control-lg);
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.mode svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.mode:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.modeOn,
+.modeOn:hover {
+  border-color: transparent;
+  background: var(--fill-accent-soft);
+  color: var(--color-accent);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.label {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.note {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+.path {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--control-lg);
+  padding: 0 var(--space-2) 0 var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  font-size: var(--text-md);
+}
+
+.path > svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.pathText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pathEmpty .pathText {
+  color: var(--color-text-faint);
+}
+
+.github {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+.githubHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.githubRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.previous {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.none {
+  padding: var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: calc(var(--menu-min-width) * 1.6);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.item:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+}
+
+.item:disabled {
+  opacity: 0.55;
+}
+
+.itemOn,
+.itemOn:hover:not(:disabled) {
+  background: var(--fill-accent-soft);
+}
+
+.itemTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.itemName {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.itemOn .itemName {
+  color: var(--color-accent);
+}
+
+.badge {
+  flex: none;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--control-xs);
+}
+
+.itemPath {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemMeta {
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.submit {
+  gap: var(--space-4);
+}
+
+.kbd {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--control-xs);
+}
+
+@media (max-width: 760px) {
+  .modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

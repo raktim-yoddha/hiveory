@@ -134,6 +134,24 @@ image; Transparency · Blur · Dim sliders when a wallpaper is set.
 Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
 agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
 
+## Add project (ADR 0020)
+
+```text
+┌ Add project ───────────────────────────────────────── × ┐
+│  Project name                              [ Local ▾ ]  │
+│ [Pick directory] [New repository] [Clone] [Restore prev]│
+│ Directory                                                │
+│ [📁 C:\codepp                            ( Choose )] │
+├──────────────────────────────────────────────────────────┤
+│                                     [ Add project Ctrl⏎ ]│
+└──────────────────────────────────────────────────────────┘
+```
+
+New repository: name, "Also create it on GitHub" (owner, visibility), project directory.
+Clone: repository URL, project directory. Restore previous: removed projects (workspaces,
+agents, "Removed 2 days ago") and workspace folders found on disk ("Open now" adds them to
+the open project).
+
 ## Project
 
 ```text

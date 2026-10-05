@@ -1,9 +1,9 @@
-import { FolderOpen } from 'lucide-react'
+import { FolderPlus } from 'lucide-react'
 import { AppLogo } from '../../components/brand/AppLogo'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { useProjects } from '../../stores/data'
-import { openProjectFolder } from '../projects/project-actions'
+import { useAddProject } from '../projects/AddProjectDialog'
 import styles from './AppShell.module.css'
 
 /** Shown when no project is selected. */
@@ -18,11 +18,11 @@ export function HomeScreen() {
         description={
           hasProjects
             ? 'Choose a project from the sidebar to see its agents and workspaces.'
-            : 'Open a local project folder to run coding agents side by side.'
+            : 'Add a project — a folder, a new repository or a clone — to run coding agents side by side.'
         }
         actions={
-          <Button variant="primary" size="lg" icon={<FolderOpen />} onClick={() => void openProjectFolder()}>
-            Open project
+          <Button variant="primary" size="lg" icon={<FolderPlus />} onClick={() => useAddProject.getState().show()}>
+            Add project
           </Button>
         }
       />

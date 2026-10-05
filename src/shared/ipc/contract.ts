@@ -3,6 +3,7 @@ import { SESSION_ID } from '../domain/sessions'
 import type {
   AgentPreset,
   AgentSession,
+  PreviousProject,
   AppSettings,
   BrowserAnnotation,
   BrowserPageView,
@@ -59,6 +60,8 @@ const queenContextSchema = z.object({
 })
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
+const folderPath = z.string().min(1).max(1000)
+const projectName = z.string().trim().min(1).max(120)
 const side = z.enum(['left', 'right', 'top', 'bottom'])
 
 export const MAX_INSTANCES_PER_CLI = 8
@@ -158,6 +161,25 @@ export const requestSchemas = {
   'app.info': none,
   'projects.list': none,
   'projects.open': none,
+  /** Add project (ADR 0020): a folder picked in main, a clone, or a new repository; `name` overrides the folder's name. */
+  'projects.add': z.discriminatedUnion('mode', [
+    z.object({ mode: z.literal('folder'), path: folderPath, name: projectName.optional() }),
+    z.object({ mode: z.literal('clone'), url: z.string().trim().min(3).max(500), parentDir: folderPath, name: projectName.optional() }),
+    z.object({
+      mode: z.literal('create'),
+      repoName: z.string().trim().regex(/^[A-Za-z0-9._-]{1,100}$/),
+      parentDir: folderPath,
+      name: projectName.optional(),
+      github: z.object({ owner: z.string().regex(/^[A-Za-z0-9-]{1,39}$/), visibility: z.enum(['private', 'public']) }).optional()
+    })
+  ]),
+  /** Shows the folder picker; the chosen folder may then be used by projects.add. */
+  'projects.pickFolder': z.object({ purpose: z.enum(['project', 'parent']) }),
+  /** Where new repositories and clones go by default, and the GitHub account gh is signed in to. */
+  'projects.addDefaults': none,
+  /** Removed projects and workspace folders found on disk that Add project › Restore previous can bring back. */
+  'projects.previous': none,
+  'projects.restore': z.object({ path: folderPath }),
   'projects.remove': z.object({ projectId: id }),
   'projects.touch': z.object({ projectId: id }),
   'workspaces.list': z.object({ projectId: id }),
@@ -450,6 +472,11 @@ export interface ResponseMap {
   'app.info': AppInfo
   'projects.list': Project[]
   'projects.open': Project | null
+  'projects.add': Project
+  'projects.pickFolder': string | null
+  'projects.addDefaults': { parentDir: string; github: { available: boolean; login?: string; owners: string[]; reason?: string } }
+  'projects.previous': PreviousProject[]
+  'projects.restore': Project
   'projects.remove': void
   'projects.touch': Project
   'workspaces.list': WorkspaceView[]

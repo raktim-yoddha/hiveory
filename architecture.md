@@ -527,6 +527,9 @@ Crash recovery, chat view in Work (`ChatSession.agentId`), side-panel tabs,
 resizable sidebars, Dark theme: ADR 0013. Durable sessions (resume on start-up,
 per-CLI resume), chat attachments, Permissions pill: ADR 0014. Built-in agent
 browser (pages in main, browser_* MCP tools, profiles, viewports): ADR 0015.
+Project archive and restore, Add project dialog (folder, new repository, clone,
+restore), side panel areas and Sessions, live model tracking, skills folders from
+the registry, background tray: ADR 0020.
 Speed (diff snapshots, crawl, frame-aligned input), device mode, computer use,
 ask_agent / run_tools: ADR 0016. Plugins and Hiveory MCP servers through one
 gateway, skills management, six themes, wallpapers and transparency, motion

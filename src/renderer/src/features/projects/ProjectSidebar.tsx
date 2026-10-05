@@ -4,7 +4,7 @@ import type { ProjectSort } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { useProjects } from '../../stores/data'
-import { openProjectFolder } from './project-actions'
+import { useAddProject } from './AddProjectDialog'
 import { ProjectRow } from './ProjectRow'
 import styles from './ProjectSidebar.module.css'
 
@@ -44,7 +44,7 @@ export function ProjectSidebar() {
     }
   }
 
-  const addProject = (): void => void openProjectFolder()
+  const addProject = (): void => useAddProject.getState().show()
 
   return (
     <nav className={styles.sidebar} aria-label="Projects">
@@ -62,7 +62,7 @@ export function ProjectSidebar() {
           }))}
           trigger={(props) => <IconButton {...props} label="Sort projects" icon={<ListFilter />} />}
         />
-        <IconButton label="Open project" icon={<FolderPlus />} onClick={addProject} />
+        <IconButton label="Add project" icon={<FolderPlus />} onClick={addProject} />
       </div>
       {projects.length > 0 && (
         <ul className={styles.list}>
@@ -75,7 +75,7 @@ export function ProjectSidebar() {
         <div className={styles.empty}>
           <p>No projects yet.</p>
           <button type="button" className={styles.link} onClick={addProject}>
-            Open a folder
+            Add a project
           </button>
         </div>
       )}

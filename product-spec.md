@@ -15,6 +15,11 @@ first message. Chats keep running while the user is in Work.
 
 ## Project Lifecycle
 
+Add project (ADR 0020) is one dialog: a name, Local (Remote is listed but not available yet), and
+Pick directory · New repository (optionally also on GitHub) · Clone repository · Restore previous.
+Removing a project archives it: adding the folder again, or Restore previous, brings back its
+workspaces and agents. Workspace folders left on disk come back as workspaces.
+
 ```text
 Open/Create Project
         │
