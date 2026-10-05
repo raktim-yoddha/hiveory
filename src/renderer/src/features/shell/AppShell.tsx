@@ -3,6 +3,7 @@ import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
 import { cx } from '../../lib/cx'
+import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
@@ -22,8 +23,20 @@ import styles from './AppShell.module.css'
  * (which keeps its size, so agent terminals never reflow).
  */
 export function AppShell() {
-  const { mode, view, sidebarCollapsed, sidebarWidth, setSidebarWidth, panelOpen, panelWidth, setPanelWidth, panelMaximized } =
-    useNavigation()
+  const {
+    mode,
+    view,
+    sidebarCollapsed,
+    sidebarWidth,
+    setSidebarWidth,
+    toggleSidebar,
+    panelOpen,
+    panelWidth,
+    setPanelWidth,
+    togglePanel,
+    panelMaximized
+  } = useNavigation()
+  const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
   const showPanel = panelOpen && !inSettings
@@ -33,6 +46,7 @@ export function AppShell() {
 
   return (
     <div className={styles.app}>
+      {hasWallpaper && <div className={styles.wallpaper} aria-hidden />}
       <ErrorBoundary region="Title bar" compact>
         <TitleBar />
       </ErrorBoundary>
@@ -51,6 +65,7 @@ export function AppShell() {
               initial={SIDEBAR_WIDTH.initial}
               direction={1}
               onChange={setSidebarWidth}
+              onCollapse={toggleSidebar}
             />
           </aside>
         )}
@@ -61,7 +76,8 @@ export function AppShell() {
             </ErrorBoundary>
           )}
           <div className={styles.mode} hidden={inSettings || mode !== 'workspace'}>
-            <ErrorBoundary region="This screen" resetKey={viewKey}>
+            <div key={viewKey} className={styles.view}>
+              <ErrorBoundary region="This screen" resetKey={viewKey}>
               {workView.type === 'project' ? (
                 <ProjectScreen projectId={workView.projectId} tab={workView.tab} />
               ) : workView.type === 'workspace' ? (
@@ -74,7 +90,8 @@ export function AppShell() {
               ) : (
                 <HomeScreen />
               )}
-            </ErrorBoundary>
+              </ErrorBoundary>
+            </div>
           </div>
           <div className={styles.mode} hidden={inSettings || mode !== 'chatspace'}>
             <ErrorBoundary region="Chat">
@@ -94,6 +111,7 @@ export function AppShell() {
                 initial={PANEL_WIDTH.initial}
                 direction={-1}
                 onChange={setPanelWidth}
+                onCollapse={togglePanel}
               />
             )}
             <ErrorBoundary region="Side panel" compact>

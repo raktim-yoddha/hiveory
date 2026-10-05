@@ -1,4 +1,5 @@
-import { AlertTriangle, ArrowDown, ArrowUp, Bot, FileDiff, GitBranch, House, MoreHorizontal, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, FileDiff, GitBranch, House, MoreHorizontal, Wrench } from 'lucide-react'
+import { AgentIcon } from '../../components/brand/AgentIcon'
 import type { WorkspaceView } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
@@ -40,7 +41,7 @@ export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
             {branch && <span className={styles.branch}>{branch}</span>}
             <span className={styles.stats}>
               <span className={styles.meta}>
-                <Bot aria-hidden />
+                <AgentIcon aria-hidden />
                 {workspace.agentCount === 0 ? 'No agents' : `${workspace.agentCount} ${workspace.agentCount === 1 ? 'agent' : 'agents'}`}
               </span>
               {status && (

@@ -10,7 +10,7 @@
   background: var(--color-glass);
   backdrop-filter: var(--blur-glass);
   box-shadow: var(--shadow-popover);
-  animation: pop-in var(--duration-fast) var(--ease-out);
+  animation: pop-in var(--duration-slow) var(--ease-liquid);
 }
 
 .panel[data-width='lg'] {
@@ -20,6 +20,6 @@
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: translateY(var(--nudge-sm)) scale(0.985);
+    transform: translateY(var(--nudge)) scale(0.96);
   }
 }

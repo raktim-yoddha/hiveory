@@ -1,9 +1,16 @@
+/*
+ * The icon file carries a bevel highlight and drop shadow for the taskbar and
+ * installers. In the app the mark is shown flat: the rim and shadow are
+ * clipped off, so no glow surrounds it.
+ */
 .sm,
 .md,
 .lg {
   display: block;
   flex: none;
   object-fit: contain;
+  clip-path: inset(9.5% round 19%);
+  transform: scale(1.18);
 }
 
 .sm {
@@ -20,5 +27,4 @@
   width: calc(var(--space-11) * 1.5);
   height: calc(var(--space-11) * 1.5);
   margin-bottom: var(--space-2);
-  filter: drop-shadow(0 var(--space-4) var(--space-8) rgb(0 0 0 / 0.55));
 }

@@ -19,8 +19,9 @@ const ANSI_KEYS = [
 const readTheme = (): ITheme => {
   const css = getComputedStyle(document.documentElement)
   const token = (name: string): string => css.getPropertyValue(`--term-${name}`).trim()
+  // Over a wallpaper the pane's translucent surface shows through the terminal.
   const theme: ITheme = {
-    background: token('bg'),
+    background: 'wallpaper' in document.documentElement.dataset ? 'rgba(0, 0, 0, 0)' : token('bg'),
     foreground: token('fg'),
     cursor: token('cursor'),
     cursorAccent: token('bg'),
@@ -106,6 +107,7 @@ const create = (instanceId: string): Entry => {
     // Wide glyphs (emoji, CJK) never overlap their neighbours.
     rescaleOverlappingGlyphs: true,
     allowProposedApi: true,
+    allowTransparency: true,
     theme
   })
   const fit = new FitAddon()

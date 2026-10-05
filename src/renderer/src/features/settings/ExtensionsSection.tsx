@@ -1,21 +1,29 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FolderOpen, RefreshCw, Share2 } from 'lucide-react'
-import type { ExtensionsInventory } from '@shared/domain/extensions'
-import { CliLogo } from '../../components/cli/CliLogo'
-import { Button, IconButton } from '../../components/ui/Button'
+import { Blocks, RefreshCw, ScrollText, Server } from 'lucide-react'
+import { PLUGINS, type ExtensionsInventory } from '@shared/domain'
+import { IconButton } from '../../components/ui/Button'
+import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
+import { useConnections } from '../../stores/connections'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
-import { runAction, useNotices } from '../../stores/notices'
+import { runAction } from '../../stores/notices'
+import { McpPanel } from './extensions/McpPanel'
+import { PluginsPanel } from './extensions/PluginsPanel'
+import { SkillsPanel } from './extensions/SkillsPanel'
 import { SettingsPage } from './SettingsScreen'
-import styles from './Settings.module.css'
+import styles from './extensions/Extensions.module.css'
+
+type Tab = 'skills' | 'mcp' | 'plugins'
 
 /**
- * Skills (Agent Skills standard) and MCP servers across every installed CLI.
- * Read-only by design — each CLI owns its config — plus one explicit action:
- * share a skill with every agent via ~/.agents/skills.
+ * Everything agents can load, in one place: Agent Skills across CLIs, MCP
+ * servers (Hiveory's own and each CLI's), and plugins — apps set up with the
+ * user's own keys and served to every agent by Hiveory (ADR 0017).
  */
 export function ExtensionsSection() {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
+  const connections = useConnections((s) => s.connections)
+  const [tab, setTab] = useState<Tab>('skills')
   const [inventory, setInventory] = useState<ExtensionsInventory | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -36,77 +44,34 @@ export function ExtensionsSection() {
     }
   }, [projectId])
 
-  const share = (path: string): void =>
-    void runAction('Share skill', async () => {
-      const { path: target } = await api('extensions.shareSkill', { path })
-      useNotices.getState().push({ level: 'info', message: `Shared with every agent: ${target}` })
-      await scan()
-    })
+  const skillCount = new Set(inventory?.skills.map((s) => `${s.scope}:${s.folder}`)).size
+  const serverCount = connections.filter((c) => !c.pluginId).length + (inventory?.mcpServers.length ?? 0)
+  const pluginCount = connections.filter((c) => c.pluginId).length
+  const count = (n: number) => <span className={styles.count}>{n}</span>
 
   return (
     <SettingsPage
-      title="Skills & MCP"
-      description="What each agent can load. Skills follow the Agent Skills standard (a folder with SKILL.md); MCP servers come from each CLI's own config."
+      title="Skills, MCP & Plugins"
+      description="Everything your agents can load. Hiveory serves its MCP servers and plugins to every agent — terminal and chat — without touching any CLI's own config."
     >
-      <div className={styles.rowControl}>
-        <Button size="sm" icon={<RefreshCw />} loading={loading} onClick={() => void scan()}>
-          Rescan
-        </Button>
+      <div className={styles.header}>
+        <Tabs<Tab>
+          label="Extensions"
+          variant="segmented"
+          size="lg"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'skills', label: 'Skills', icon: <ScrollText />, badge: count(skillCount) },
+            { value: 'mcp', label: 'MCP servers', icon: <Server />, badge: count(serverCount) },
+            { value: 'plugins', label: 'Plugins', icon: <Blocks />, badge: count(pluginCount || PLUGINS.length) }
+          ]}
+        />
+        {tab !== 'plugins' && <IconButton label="Rescan" icon={<RefreshCw className={loading ? 'spin' : undefined} />} onClick={() => void scan()} />}
       </div>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>Skills · {inventory?.skills.length ?? 0}</div>
-        {inventory && inventory.skills.length === 0 && (
-          <p className={styles.empty}>No skills found in ~/.agents/skills, ~/.claude/skills, ~/.codex/skills or ~/.cursor/skills.</p>
-        )}
-        <ul className={styles.list}>
-          {inventory?.skills.map((skill) => (
-            <li key={skill.path} className={styles.listItem}>
-              <div className={styles.listMain}>
-                <span className={styles.listTitle}>{skill.name}</span>
-                <span className={styles.listMeta} title={skill.description}>
-                  {skill.source} · {skill.description ?? 'No description'}
-                </span>
-                <span className={styles.chips}>
-                  {skill.visibleTo.map((cliId) => (
-                    <CliLogo key={cliId} cliId={cliId} size="sm" />
-                  ))}
-                </span>
-              </div>
-              {!skill.source.endsWith('.agents/skills') && (
-                <IconButton label={`Share ${skill.name} with every agent`} icon={<Share2 />} onClick={() => share(skill.path)} />
-              )}
-              <IconButton
-                label={`Open ${skill.name} folder`}
-                icon={<FolderOpen />}
-                onClick={() => void api('extensions.revealSkill', { path: skill.path }).catch(() => undefined)}
-              />
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>MCP servers · {inventory?.mcpServers.length ?? 0}</div>
-        {inventory && inventory.mcpServers.length === 0 && <p className={styles.empty}>No MCP servers configured in installed CLIs.</p>}
-        <ul className={styles.list}>
-          {inventory?.mcpServers.map((server) => (
-            <li key={server.name} className={styles.listItem}>
-              <div className={styles.listMain}>
-                <span className={styles.listTitle}>{server.name}</span>
-                <span className={styles.listMeta} title={server.target}>
-                  {server.transport} · {server.target ?? 'no target'}
-                </span>
-              </div>
-              <span className={styles.chips}>
-                {server.configuredIn.map((c) => (
-                  <span key={`${c.cliId}-${c.file}`} title={`${c.file} (${c.scope})`}>
-                    <CliLogo cliId={c.cliId} size="sm" />
-                  </span>
-                ))}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {tab === 'skills' && <SkillsPanel key="skills" inventory={inventory} projectId={projectId} onChanged={scan} />}
+      {tab === 'mcp' && <McpPanel key="mcp" inventory={inventory} />}
+      {tab === 'plugins' && <PluginsPanel key="plugins" />}
     </SettingsPage>
   )
 }

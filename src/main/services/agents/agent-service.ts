@@ -99,8 +99,9 @@ export class AgentService {
     return { ...instance, runtime: this.details(instance) }
   }
 
+  /** Every pane in the workspace layout: agents, then files open in editor panes. */
   paneIds(workspaceId: string): string[] {
-    return this.instances(workspaceId).map((i) => i.id)
+    return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id)]
   }
 
   open(workspaceId: string, cliId: string, placement?: Placement): { agent: CliInstanceView; layout: LayoutNode | null } {

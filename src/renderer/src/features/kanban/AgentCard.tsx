@@ -18,7 +18,7 @@ export function AgentCard({ projectId, card }: { projectId: string; card: Kanban
   const status = runtime.running ? card.runtime.status : 'stopped'
 
   return (
-    <li>
+    <li data-flip={card.instanceId}>
       <button
         type="button"
         className={cx(styles.card, !runtime.running && styles.stopped)}

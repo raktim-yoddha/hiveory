@@ -10,6 +10,8 @@ export interface AppPaths {
   runtimeDir: string
   /** Root of isolated Workspace worktrees: <root>/<project>/<workspace>. */
   worktreeRoot: string
+  /** Copies of the wallpapers the user added. */
+  wallpapersDir: string
 }
 
 /**
@@ -28,6 +30,7 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
     chatsDir: join(userData, 'chats'),
     logDir: join(userData, 'logs'),
     runtimeDir: join(dataRoot, 'Runtime'),
-    worktreeRoot: join(dataRoot, 'Workspaces')
+    worktreeRoot: join(dataRoot, 'Workspaces'),
+    wallpapersDir: join(userData, 'wallpapers')
   }
 }

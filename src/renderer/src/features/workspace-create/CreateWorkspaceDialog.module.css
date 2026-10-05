@@ -50,7 +50,7 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-6);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-surface-inset);
   text-align: left;
@@ -60,13 +60,16 @@
 }
 
 .kind:not(:disabled):hover {
-  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
 }
 
+/* Selected reads as a tinted fill, never an outline (design.md "Selection"). */
 .kind[aria-checked='true'] {
-  border-color: var(--color-bronze);
   background: var(--fill-accent-soft);
-  box-shadow: var(--shadow-raised);
+}
+
+.kind[aria-checked='true'] .kindTitle {
+  color: var(--color-accent);
 }
 
 .kind:disabled {

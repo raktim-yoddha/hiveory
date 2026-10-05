@@ -7,7 +7,8 @@ import './styles/base.css'
 import { AppShell } from './features/shell/AppShell'
 import { useBrowser } from './stores/browser'
 import { installEventBridge } from './stores/bridge'
-import { refreshTerminalTheme } from './features/terminal/terminal-registry'
+import { applyLook } from './features/shell/appearance'
+import { useConnections } from './stores/connections'
 import { useApp, useClis, useSettings } from './stores/data'
 import { reportError } from './stores/notices'
 
@@ -18,19 +19,20 @@ window.addEventListener('error', (event) => {
 })
 
 function App() {
-  const theme = useSettings((s) => s.settings.theme)
+  const settings = useSettings((s) => s.settings)
+  const { theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim } = settings
   useEffect(() => {
     const uninstall = installEventBridge()
     void useApp.getState().load()
     void useClis.getState().load()
     void useSettings.getState().load()
     void useBrowser.getState().load()
+    void useConnections.getState().load()
     return uninstall
   }, [])
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    refreshTerminalTheme()
-  }, [theme])
+    applyLook({ theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim })
+  }, [theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim])
   return <AppShell />
 }
 

@@ -15,6 +15,10 @@ export interface McpEndpoint {
   browser?: boolean
   /** Computer use is on: the agent gets computer_* tools for the desktop. */
   computer?: boolean
+  /** Coordination tools (list_agents, send_message…) are on; false when only browser, computer or apps are served. */
+  coordination?: boolean
+  /** Plugins / MCP servers served through Hiveory (ADR 0017), by name. */
+  apps?: string[]
 }
 
 export interface LaunchContext {
@@ -54,6 +58,10 @@ export interface CliAdapter {
   icon: IconReference
   /** Executable names looked up on PATH, in priority order. */
   executables: string[]
+  /** Finds the executable when PATH lookup can't (e.g. Git Bash beside git.exe). */
+  locate?(env: import('../discovery').DiscoveryEnv): string | undefined
+  /** A plain shell, not an agent: no Kanban card, no chat, listed first when adding panes. */
+  kind?: 'shell'
   supportsAutoApprove: boolean
   /** The adapter knows how to load Hiveory's MCP server into a session (see `LaunchContext.mcp`). */
   injectMcp?: boolean

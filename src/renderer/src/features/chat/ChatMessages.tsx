@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { AlertCircle, Brain, CheckCircle2, ChevronRight, Loader2, Wrench, XCircle } from 'lucide-react'
 import type { ChatMessage, ChatPart, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -45,14 +45,15 @@ export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean 
           </div>
         )}
         {chat.messages.map((m) => (
-          <Message key={m.id} message={m} cliId={chat.cliId} />
+          <Message key={m.id} message={m} />
         ))}
       </div>
     </div>
   )
 }
 
-function Message({ message, cliId }: { message: ChatMessage; cliId?: string }) {
+/** Memoized: while one message streams, the others (and their Markdown) are not re-rendered. */
+const Message = memo(function Message({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
     const text = message.parts.map((p) => (p.kind === 'text' ? p.text : '')).join('\n')
     return (
@@ -64,7 +65,6 @@ function Message({ message, cliId }: { message: ChatMessage; cliId?: string }) {
   }
   return (
     <div className={styles.assistant}>
-      <span className={styles.avatar}>{cliId && <CliLogo cliId={cliId} size="sm" />}</span>
       <div className={styles.assistantBody}>
         {message.parts.map((part, i) => (
           <Part key={i} part={part} />
@@ -83,9 +83,9 @@ function Message({ message, cliId }: { message: ChatMessage; cliId?: string }) {
       </div>
     </div>
   )
-}
+})
 
-function Part({ part }: { part: ChatPart }) {
+const Part = memo(function Part({ part }: { part: ChatPart }) {
   if (part.kind === 'text') return <Markdown text={part.text} />
   if (part.kind === 'thinking') {
     return (
@@ -109,4 +109,4 @@ function Part({ part }: { part: ChatPart }) {
       {part.output && <pre className={styles.toolOutput}>{part.output}</pre>}
     </details>
   )
-}
+})

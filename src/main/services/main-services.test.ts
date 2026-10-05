@@ -182,7 +182,7 @@ describe('CLI catalog', () => {
     expect(new Set(ids).size).toBe(ids.length)
     expect(BUILT_IN_ADAPTERS.length).toBeGreaterThanOrEqual(20)
     for (const a of BUILT_IN_ADAPTERS) {
-      expect(a.executables.length).toBeGreaterThan(0)
+      expect(a.executables.length > 0 || Boolean(a.locate) || a.kind === 'shell').toBe(true)
       expect(a.icon).toBeTruthy()
     }
   })

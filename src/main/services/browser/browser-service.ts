@@ -19,7 +19,7 @@ import type { StateStore } from '../persistence/state-store'
 import type { SettingsService } from '../settings/settings-service'
 import { parseCookieFile, type CookieInput } from './cookies'
 import { PageDriver } from './page-driver'
-import { fitScale, normalizeUrl } from './urls'
+import { fitScale, isLoadable, normalizeUrl } from './urls'
 
 export interface LogEntry {
   at: number
@@ -321,6 +321,12 @@ export class BrowserService {
       if (message.startsWith('%cElectron Security Warning')) return
       push(page.console, { at: Date.now(), level, text: `${message}${sourceId ? `  (${sourceId}:${lineNumber})` : ''}` })
     })
+    // Links and redirects follow the same scheme rule as typed addresses (no custom protocols, no chrome:).
+    const guard = (event: { preventDefault: () => void }, url: string): void => {
+      if (!isLoadable(url)) event.preventDefault()
+    }
+    wc.on('will-navigate', guard)
+    wc.on('will-redirect', guard)
     // Popups open as new pages beside the opener (same folder, owner and profile).
     wc.setWindowOpenHandler(({ url }) => {
       if (/^https?:/i.test(url)) {

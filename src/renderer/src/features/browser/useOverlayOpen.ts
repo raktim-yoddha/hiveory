@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 
-const OVERLAY = '[role="menu"], dialog[open]'
+const OVERLAY = '[role="menu"], [role="listbox"], [role="dialog"], dialog[open]'
 
 export const isOverlayOpen = (): boolean => Boolean(document.querySelector(OVERLAY))
 
 /**
- * True while a menu or dialog is open anywhere in the window. The browser page
+ * True while a menu, listbox, popover or dialog is open anywhere in the window. The browser page
  * is a native view drawn above the app, so it steps aside while one is open.
  */
 export function useOverlayOpen(): boolean {

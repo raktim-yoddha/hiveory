@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
-import { ArrowLeft, BookOpen, Blocks, Bot, Download, Globe, Info, Palette } from 'lucide-react'
+import { useRef, type ReactNode } from 'react'
+import { ArrowLeft, BookOpen, Blocks, Download, Globe, Info, Palette } from 'lucide-react'
+import { AgentIcon } from '../../components/brand/AgentIcon'
 import { Button } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { cx } from '../../lib/cx'
+import { useSelectionBox } from '../../lib/useSelectionBox'
 import { useNavigation, type SettingsSection } from '../../stores/navigation'
 import { AboutSection } from './AboutSection'
 import { AgentsSection } from './AgentsSection'
@@ -15,9 +17,9 @@ import styles from './Settings.module.css'
 
 const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
   { id: 'appearance', label: 'Appearance', icon: <Palette /> },
-  { id: 'agents', label: 'Agents', icon: <Bot /> },
+  { id: 'agents', label: 'Agents', icon: <AgentIcon /> },
   { id: 'browser', label: 'Browser', icon: <Globe /> },
-  { id: 'extensions', label: 'Skills & MCP', icon: <Blocks /> },
+  { id: 'extensions', label: 'Skills, MCP & Plugins', icon: <Blocks /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
   { id: 'guide', label: 'Guide', icon: <BookOpen /> },
   { id: 'about', label: 'About', icon: <Info /> }
@@ -27,6 +29,8 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
 export function SettingsScreen({ section }: { section: SettingsSection }) {
   const { openSettings, closeSettings } = useNavigation()
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]!
+  const listRef = useRef<HTMLUListElement>(null)
+  const pill = useSelectionBox(listRef, '[aria-current="page"]', [current.id])
 
   return (
     <div className={styles.screen}>
@@ -35,7 +39,8 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
           Back
         </Button>
         <h1 className={styles.navTitle}>Settings</h1>
-        <ul className={styles.navList}>
+        <ul ref={listRef} className={styles.navList}>
+          {pill && <li className={styles.navPill} aria-hidden style={pill} />}
           {SECTIONS.map((s) => (
             <li key={s.id}>
               <button
@@ -52,7 +57,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
         </ul>
       </nav>
       <section className={styles.content} aria-label={current.label}>
-        <ErrorBoundary region={current.label} resetKey={current.id}>
+        <ErrorBoundary key={current.id} region={current.label} resetKey={current.id}>
           {current.id === 'appearance' && <AppearanceSection />}
           {current.id === 'agents' && <AgentsSection />}
           {current.id === 'browser' && <BrowserSection />}

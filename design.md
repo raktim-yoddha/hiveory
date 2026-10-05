@@ -88,8 +88,23 @@ Conceptually:
 Implemented palettes (`src/renderer/src/styles/tokens.css`): **Dark** (default) —
 pure black and neutral grey, perfectly flat, no gradients or sheen; **Bronze** —
 warm graphite with champagne-silver text and metallic accents; **Silver** — cool
-graphite with brushed-silver accents. Saturated color only for status. Component
-fills are `--fill-*` tokens so a theme can flatten them (ADR 0011, 0012, 0013).
+graphite with brushed-silver accents; **Midnight** — ink-blue graphite with steel
+highlights; **Jade** — obsidian green with jade accents; **Rose** — plum graphite
+with rose gold. Saturated color only for status. Component fills are `--fill-*`
+tokens so a theme can flatten them (ADR 0011, 0012, 0013, 0017).
+
+Every theme is flat: solid colors only — no gradients, sheen or textures. Containers
+have no resting outline; a border appears only on hover, focus or selection, and a
+pane's header shares its body's surface (no dividing line) (ADR 0018).
+
+Selection is a tinted fill, never an outline: selected chips, option cards and "on"
+badges use `--fill-accent-soft` with `--color-accent` text or check, which reads in every
+theme. A border is reserved for keyboard focus and the active pane (ADR 0018).
+
+Themes set opaque `--base-*` surfaces; components use `--color-surface*`, which
+become translucent over a wallpaper — one `--surface-alpha` for every surface. Dialogs use
+`--color-surface-solid`. Third-party brand marks sit on `--color-logo-tile`.
+The app logo is shown flat — no glow, shadow or gradient (ADR 0017).
 
 Do not scatter literal colors across components.
 
@@ -141,6 +156,17 @@ Icons are compact and consistent.
 Provider/CLI identity uses the actual provider logo where permitted.
 
 Generic actions use the application's shared icon set.
+
+"Agent" is drawn with Hiveory's own `AgentIcon` (a hive cell holding a prompt), never a
+generic robot. A CLI's logo appears where the CLI must be identified (pane header, pickers,
+cards) and nowhere it would repeat what is already on screen — chat replies carry no avatar.
+
+## Dropdowns
+
+Every dropdown is the shared `Select`: a themed listbox (keyboard, type-ahead, groups,
+`size="sm"` for toolbars). Never ship a native `<select>` — its popup is drawn by the OS
+and ignores the theme. Menus, popovers and listboxes opened inside a modal dialog are
+portaled into that dialog, and the in-app browser page steps aside while any is open.
 
 All icon buttons require accessible labels/tooltips.
 
@@ -244,8 +270,11 @@ A pane header may contain:
 - runtime/status indicator (color only)
 - plus action
 - maximize / restore
-- menu
 - close action
+
+Plus, maximize and close are always visible, at any pane width; the name truncates and the
+status detail drops first. Pane actions (restart, move, close) open from a right-click on the
+name.
 
 There is no Workspace header bar above the panes (ADR 0011).
 
@@ -305,15 +334,21 @@ For multiple panes:
 
 ## Motion
 
-Use subtle motion for:
+Fluid and premium, never heavy (ADR 0017):
 
 - pane creation/removal
-- Kanban card movement
-- menus
+- Kanban card movement (cards glide between columns)
+- menus, popovers, dialogs and toasts (spring in)
+- selection: one indicator glides between tabs / settings sections
+- screens, modes and sidebars fade or slide in
 - drop previews
 - status transitions
+- theme switches cross-fade the whole window
 
-Do not animate every hover.
+Rules: animate only `transform` and `opacity`; use `--ease-liquid` for
+movement and the `--duration-*` tokens; no `backdrop-filter` over large areas
+that repaint (terminals); no per-frame JavaScript loops; respect
+`prefers-reduced-motion`.
 
 Motion should clarify state, not decorate it.
 

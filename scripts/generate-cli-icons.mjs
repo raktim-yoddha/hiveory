@@ -11,7 +11,8 @@ const SILVER = '#DCD6CC'
 /** cliId → LobeHub icon file (color variants keep brand colors; mono ones get `color`). */
 const LOBE = {
   claude: { file: 'claudecode-color' },
-  codex: { file: 'openai', color: '#ECE7DE' },
+  // The Codex mark is the blue cloud; its white app tile is dropped so it sits on any theme.
+  codex: { file: 'codex-color', dropTile: true },
   gemini: { file: 'geminicli-color' },
   opencode: { file: 'opencode', color: SILVER },
   copilot: { file: 'githubcopilot', color: SILVER },
@@ -47,11 +48,12 @@ execFileSync('tar', ['xzf', execFileSync('cmd', ['/c', 'dir', '/b', '*.tgz'], { 
 
 const uri = (mime, data) => `data:${mime};base64,${Buffer.from(data).toString('base64')}`
 const entries = {}
-for (const [id, { file, color }] of Object.entries(LOBE)) {
+for (const [id, { file, color, dropTile }] of Object.entries(LOBE)) {
   let svg = readFileSync(join(dir, 'package', 'icons', `${file}.svg`), 'utf8')
     .replace(/<title>.*?<\/title>/, '')
     .replace(/ height="1em"| width="1em"| style="[^"]*"/g, '')
   if (color) svg = svg.replace(/currentColor/g, color)
+  if (dropTile) svg = svg.replace(/<path [^>]*fill="#fff"><\/path>/, '')
   entries[id] = uri('image/svg+xml', svg)
 }
 for (const [id, org] of Object.entries(GITHUB)) {

@@ -2,6 +2,8 @@ import { subscribe } from '../lib/api'
 import { useAgents, useLayouts, usePresets, useProjects, useSettings, useUpdates, useWorkspaces } from './data'
 import { useBrowser } from './browser'
 import { useChat } from './chat'
+import { useConnections } from './connections'
+import { useEditors } from './editors'
 import { useNotices } from './notices'
 
 /** Events arriving within this window trigger one reload per cache key. */
@@ -31,6 +33,8 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'presets') reload('presets', () => usePresets.getState().load())
       if (topic === 'settings') reload('settings', () => useSettings.getState().load())
       if (topic === 'chats') reload('chats', () => useChat.getState().loadList())
+      if (topic === 'connections') reload('connections', () => useConnections.getState().load())
+      if (topic === 'editors' && workspaceId) reload(`editors:${workspaceId}`, () => useEditors.getState().load(workspaceId))
       if ((topic === 'workspaces' || topic === 'agents') && projectId) {
         reload(`ws:${projectId}`, () => useWorkspaces.getState().load(projectId))
       }

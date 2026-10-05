@@ -1,6 +1,6 @@
 .card {
   position: relative;
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: var(--fill-raised);
   box-shadow: var(--shadow-raised);

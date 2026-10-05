@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, MoreHorizontal, Play, RotateCcw, Square, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Play, RotateCcw, Square, X } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -55,25 +55,10 @@ export function AgentPane({
       onHeaderDoubleClick={toggleMaximize}
       header={
         <>
-          <CliLogo cliId={agent.cliId} />
-          <span className={styles.name}>{agent.petName}</span>
-          <span data-pane-optional="status">
-            <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
-          </span>
-          <span className={styles.spacer} />
-          <span className={styles.actions}>
-          <span data-pane-optional="add">
-            <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} fits={fits} />
-          </span>
-          <IconButton
-            data-pane-optional="maximize"
-            label={maximized ? `Restore ${agent.petName}` : `Maximize ${agent.petName}`}
-            icon={maximized ? <Minimize2 /> : <Maximize2 />}
-            onClick={toggleMaximize}
-          />
+          {/* Right-click the name for the agent's actions (restart, move, close). */}
           <Menu
             label={`${agent.petName} actions`}
-            align="end"
+            context
             items={[
               agent.chatUi
                 ? {
@@ -91,16 +76,31 @@ export function AgentPane({
                     icon: runtime.running ? <RotateCcw /> : <Play />,
                     onSelect: () => void agentActions.restart(agent.id)
                   },
-              ...(maximized
-                ? []
-                : [{ type: 'item' as const, id: 'maximize', label: 'Maximize', icon: <Maximize2 />, onSelect: toggleMaximize }]),
               ...(moves.length ? [{ type: 'separator' as const }, ...moves] : []),
               { type: 'separator' },
-              { type: 'item', id: 'close', label: 'Close agent', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
+              { type: 'item', id: 'close', label: 'Close', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
             ]}
-            trigger={(props) => <IconButton {...props} label={`${agent.petName} actions`} icon={<MoreHorizontal />} />}
+            trigger={(props) => (
+              <button type="button" {...props} className={styles.identity} data-pane-grip aria-label={`${agent.petName} actions`} title="Right-click for actions">
+                <CliLogo cliId={agent.cliId} />
+                <span className={styles.name}>{agent.petName}</span>
+                <span data-pane-optional="status">
+                  <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
+                </span>
+              </button>
+            )}
           />
-          <IconButton label={`Close ${agent.petName}`} icon={<X />} onClick={() => void agentActions.close(agent)} />
+          <span className={styles.actions}>
+            <span data-pane-optional="add">
+              <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} fits={fits} />
+            </span>
+            <IconButton
+              data-pane-optional="maximize"
+              label={maximized ? `Restore ${agent.petName}` : `Maximize ${agent.petName}`}
+              icon={maximized ? <Minimize2 /> : <Maximize2 />}
+              onClick={toggleMaximize}
+            />
+            <IconButton label={`Close ${agent.petName}`} icon={<X />} onClick={() => void agentActions.close(agent)} />
           </span>
         </>
       }

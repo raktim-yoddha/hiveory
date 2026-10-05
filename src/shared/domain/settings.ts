@@ -1,6 +1,6 @@
 import type { Viewport } from './browser'
 
-export type ThemeId = 'dark' | 'bronze' | 'silver'
+export type ThemeId = 'dark' | 'bronze' | 'silver' | 'midnight' | 'jade' | 'rose'
 
 /** App-wide preferences, persisted with the rest of the domain state. */
 export interface AppSettings {
@@ -25,6 +25,14 @@ export interface AppSettings {
   browserViewports: Viewport[]
   /** Give agents computer_* tools: the desktop's mouse, keyboard, windows and screen (Windows). Off by default. */
   computerUse: boolean
+  /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
+  wallpaper: string
+  /** How opaque every surface is over a wallpaper (0 = fully transparent, 1 = solid). */
+  surfaceOpacity: number
+  /** Wallpaper blur in pixels (0–40). */
+  wallpaperBlur: number
+  /** Darkens the wallpaper so text stays readable (0–0.8). */
+  wallpaperDim: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -38,14 +46,22 @@ export const DEFAULT_SETTINGS: AppSettings = {
   browserHomeUrl: '',
   browserDefaultProfile: 'default',
   browserViewports: [],
-  computerUse: false
+  computerUse: false,
+  wallpaper: '',
+  surfaceOpacity: 0.6,
+  wallpaperBlur: 0,
+  wallpaperDim: 0.25
 }
 
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [
   { id: 'dark', name: 'Dark', description: 'Pure black and silver-grey, perfectly flat' },
   { id: 'bronze', name: 'Bronze', description: 'Warm graphite with champagne and bronze accents' },
-  { id: 'silver', name: 'Silver', description: 'Cool graphite with brushed-silver accents' }
+  { id: 'silver', name: 'Silver', description: 'Cool graphite with brushed-silver accents' },
+  { id: 'midnight', name: 'Midnight', description: 'Ink-blue graphite with cold steel highlights' },
+  { id: 'jade', name: 'Jade', description: 'Deep obsidian green with polished jade accents' },
+  { id: 'rose', name: 'Rose', description: 'Plum graphite with rose-gold accents' }
 ]
+
 
 export type UpdateStatus =
   | { state: 'unsupported'; reason: string }

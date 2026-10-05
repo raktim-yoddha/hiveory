@@ -17,7 +17,15 @@ import type {
   WorkspaceView
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
-import type { ExtensionsInventory } from '../domain/extensions'
+import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
+import type { EditorView, FileEntry } from '../domain/files'
+
+/** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
+export interface WallpaperImage {
+  file: string
+  url: string
+  thumb: string
+}
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
 
 /**
@@ -38,7 +46,19 @@ export const viewportSchema = z.object({
   mobile: z.boolean().optional()
 })
 
+/** '' (none) or an image Hiveory copied into its wallpapers folder. */
+export const wallpaperSchema = z.string().regex(/^$|^image:[A-Za-z0-9_-]{1,64}\.(?:jpg|jpeg|png|webp|gif|avif)$/)
+
 const pageId = z.string().regex(/^b\d{1,9}$/)
+const skillPath = z.string().min(1).max(1000)
+/** The folder files live in: a workspace, or a project when no workspace is open. */
+const fileScope = z.object({ workspaceId: id.optional(), projectId: id.optional() }).refine((s) => Boolean(s.workspaceId || s.projectId), 'A workspace or project is required.')
+const relPath = z.string().max(1000).refine((p) => !p.includes('\0'), 'Invalid path.')
+const fileName = z.string().min(1).max(1000)
+const skillRoot = z.enum(['agents', 'claude', 'codex', 'cursor'])
+const connectionId = z.string().regex(/^c[a-z0-9]{1,24}$/)
+const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
+const headerName = z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
 const profileId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
 const bounds = z.object({
   x: z.number().finite().min(-100000).max(100000),
@@ -144,7 +164,7 @@ export const requestSchemas = {
   'settings.get': none,
   'settings.update': z
     .object({
-      theme: z.enum(['dark', 'bronze', 'silver']),
+      theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']),
       autoCheckUpdates: z.boolean(),
       agentTools: z.boolean(),
       defaultAutoApprove: z.boolean(),
@@ -154,9 +174,18 @@ export const requestSchemas = {
       browserHomeUrl: z.string().trim().max(2000),
       browserDefaultProfile: profileId,
       browserViewports: z.array(viewportSchema).max(32),
-      computerUse: z.boolean()
+      computerUse: z.boolean(),
+      wallpaper: wallpaperSchema,
+      surfaceOpacity: z.number().min(0).max(1),
+      wallpaperBlur: z.number().min(0).max(40),
+      wallpaperDim: z.number().min(0).max(0.8)
     })
     .partial(),
+  /** Wallpapers the user added (copied into Hiveory's own folder). */
+  'wallpapers.list': none,
+  /** Opens a file picker; the chosen image is downscaled and copied in. */
+  'wallpapers.add': none,
+  'wallpapers.remove': z.object({ file: z.string().regex(/^[A-Za-z0-9_-]{1,64}\.(?:jpg|jpeg|png|webp|gif|avif)$/) }),
   'updates.status': none,
   'updates.check': none,
   'updates.download': none,
@@ -171,8 +200,57 @@ export const requestSchemas = {
   'shell.close': z.object({ id }),
   'extensions.scan': z.object({ projectId: id.optional() }),
   /** Paths must come from the last scan; main re-validates. */
-  'extensions.shareSkill': z.object({ path: z.string().min(1).max(1000) }),
-  'extensions.revealSkill': z.object({ path: z.string().min(1).max(1000) }),
+  'extensions.revealSkill': z.object({ path: skillPath }),
+  /** Copies a scanned skill into another skills folder (same scope), so more CLIs load it. */
+  'extensions.copySkill': z.object({ path: skillPath, rootId: skillRoot }),
+  /** Moves one copy of a scanned skill to the trash. */
+  'extensions.removeSkill': z.object({ path: skillPath }),
+  'extensions.createSkill': z.object({
+    name: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+    description: z.string().trim().min(1).max(1024),
+    body: z.string().max(100_000),
+    rootIds: z.array(skillRoot).min(1).max(4),
+    projectId: id.optional()
+  }),
+  /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
+  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(4), projectId: id.optional() }),
+  /** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
+  /** Explorer (ADR 0018): paths are relative to the scope's folder and re-checked in main. */
+  'files.list': z.object({ scope: fileScope, dir: relPath }),
+  'files.search': z.object({ scope: fileScope, query: z.string().max(200) }),
+  'files.read': z.object({ scope: fileScope, path: fileName }),
+  'files.write': z.object({ scope: fileScope, path: fileName, content: z.string().max(10_000_000) }),
+  'files.create': z.object({ scope: fileScope, path: fileName, kind: z.enum(['file', 'dir']) }),
+  'files.rename': z.object({ scope: fileScope, from: fileName, to: fileName }),
+  'files.delete': z.object({ scope: fileScope, paths: z.array(fileName).min(1).max(500) }),
+  'files.paste': z.object({ scope: fileScope, sources: z.array(fileName).min(1).max(500), targetDir: relPath, mode: z.enum(['copy', 'move']) }),
+  'files.reveal': z.object({ scope: fileScope, path: relPath }),
+  /** Watch the folder while its Explorer is open; changes arrive as `files.changed`. */
+  'files.watch': z.object({ scope: fileScope, watch: z.boolean() }),
+  'editors.list': z.object({ workspaceId: id }),
+  'editors.open': z.object({ workspaceId: id, path: fileName, targetPaneId: id.optional(), side: side.optional() }),
+  'editors.close': z.object({ editorId: z.string().regex(/^e[a-f0-9]{12}$/) }),
+  /** Opens a plugin's "create a key" page or a runner's install page in the system browser (allow-listed in main). */
+  'system.openUrl': z.object({ url: z.string().max(500) }),
+  'connections.list': none,
+  'connections.requirements': none,
+  'connections.savePlugin': z.object({ pluginId: z.string().regex(/^[a-z0-9]{1,32}$/), values: z.record(z.string().regex(/^\w{1,32}$/), z.string().max(4000)) }),
+  'connections.saveCustom': z.object({
+    id: connectionId.optional(),
+    name: z.string().trim().min(1).max(40),
+    transport: z.enum(['stdio', 'http']),
+    command: z.string().trim().max(500).optional(),
+    args: z.array(z.string().max(2000)).max(64).optional(),
+    url: z.string().trim().max(2000).optional(),
+    /** An empty value keeps the stored one. */
+    env: z.record(envName, z.string().max(8000)),
+    headers: z.record(headerName, z.string().max(8000))
+  }),
+  /** Copies a server found in a CLI's config into Hiveory, so every agent gets it. */
+  'connections.import': z.object({ name: z.string().min(1).max(200) }),
+  'connections.setEnabled': z.object({ id: connectionId, enabled: z.boolean() }),
+  'connections.test': z.object({ id: connectionId }),
+  'connections.remove': z.object({ id: connectionId }),
   /** Built-in browser (ADR 0015). Pages live in main; the panel only shows them. */
   'browser.state': none,
   'browser.open': z.object({ scope: id, url: z.string().max(4000).optional(), profileId: profileId.optional() }),
@@ -302,8 +380,36 @@ export interface ResponseMap {
   'shell.restart': void
   'shell.close': void
   'extensions.scan': ExtensionsInventory
-  'extensions.shareSkill': { path: string }
   'extensions.revealSkill': void
+  'extensions.copySkill': void
+  'extensions.removeSkill': void
+  'extensions.createSkill': void
+  'extensions.importSkill': boolean
+  'system.openUrl': void
+  'files.list': { root: string; entries: FileEntry[] }
+  'files.search': FileEntry[]
+  'files.read': { content: string; size: number }
+  'files.write': void
+  'files.create': void
+  'files.rename': void
+  'files.delete': void
+  'files.paste': string[]
+  'files.reveal': void
+  'files.watch': void
+  'editors.list': EditorView[]
+  'editors.open': EditorView
+  'editors.close': void
+  'connections.list': ConnectionView[]
+  'connections.requirements': ConnectionRequirements
+  'connections.savePlugin': ConnectionView
+  'connections.saveCustom': ConnectionView
+  'connections.import': ConnectionView
+  'connections.setEnabled': ConnectionView
+  'connections.test': ConnectionView
+  'connections.remove': void
+  'wallpapers.list': WallpaperImage[]
+  'wallpapers.add': WallpaperImage | null
+  'wallpapers.remove': void
   'browser.state': BrowserState
   'browser.open': BrowserPageView
   'browser.close': void
@@ -359,10 +465,12 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }
+  /** Something changed in a watched folder (scope = workspace or project id). */
+  'files.changed': { scope: string; paths: string[] }
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
   'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string }
   'app.notice': { level: 'info' | 'warning' | 'error'; message: string }
@@ -375,7 +483,18 @@ export interface EventMap {
 export type EventName = keyof EventMap
 
 export const CHANNELS = Object.keys(requestSchemas) as Channel[]
-export const EVENT_NAMES: EventName[] = ['terminal.data', 'runtime.changed', 'state.changed', 'app.notice', 'updates.changed', 'chat.event', 'browser.changed']
+/** Every event, checked against EventMap so a new event can't be left out of the preload allow-list. */
+const EVENTS: Record<EventName, true> = {
+  'terminal.data': true,
+  'runtime.changed': true,
+  'state.changed': true,
+  'app.notice': true,
+  'updates.changed': true,
+  'chat.event': true,
+  'browser.changed': true,
+  'files.changed': true
+}
+export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 
 /** Prefix keeping Hiveory IPC channels distinct from anything else on the bus. */
 export const IPC_PREFIX = 'hiveory:'

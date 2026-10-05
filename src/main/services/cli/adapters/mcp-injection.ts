@@ -39,11 +39,24 @@ export const COMPUTER_PROMPT =
 /** Speed: fewer model turns beat faster tools. */
 export const BATCH_PROMPT = 'Batch independent hiveory calls with run_tools; delegate to another agent with ask_agent (one call).'
 
+/** Apps the user connected in Settings › Plugins, reachable through the same MCP server (ADR 0017). */
+export const appsPrompt = (apps: string[]): string =>
+  `The user connected these apps to Hiveory: ${apps.join(', ')}. Their tools are hiveory MCP tools prefixed with the app name ` +
+  '(for example github_…); use them whenever a request involves one of these apps.'
+
 /** The system-prompt addition for an agent Hiveory launches (chat-only runs have no coordination tools). */
-export const agentPrompt = (mcp: McpEndpoint, coordination = true): string =>
-  [coordination ? AGENT_TOOLS_PROMPT : '', mcp.browser ? BROWSER_PROMPT : '', mcp.computer ? COMPUTER_PROMPT : '', coordination ? BATCH_PROMPT : '']
+export const agentPrompt = (mcp: McpEndpoint, coordination = true): string => {
+  const coord = coordination && mcp.coordination !== false
+  return [
+    coord ? AGENT_TOOLS_PROMPT : '',
+    mcp.browser ? BROWSER_PROMPT : '',
+    mcp.computer ? COMPUTER_PROMPT : '',
+    mcp.apps?.length ? appsPrompt(mcp.apps) : '',
+    coord ? BATCH_PROMPT : ''
+  ]
     .filter(Boolean)
     .join(' ')
+}
 
 /** Claude Code flags that load Hiveory's MCP server from `configPath`, pre-approved, with the prompt. */
 export const claudeMcpArgs = (mcp: McpEndpoint, configPath: string, coordination = true): string[] => [

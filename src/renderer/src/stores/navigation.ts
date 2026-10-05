@@ -12,12 +12,12 @@ export type View =
   | { type: 'workspace'; projectId: string; workspaceId: string; focusPaneId?: string }
 
 /**
- * One tab of the right side panel. Terminal tabs own a shell in main (`shell.open` with `tab: id`);
- * browser tabs show a main-owned page and use its id (`b3`).
+ * One tab of the right side panel: a browser page (main-owned, its id e.g. `b3`) or the
+ * folder's Explorer — at most one Explorer per folder (id `explorer`). Terminals open as panes.
  */
 export interface PanelTab {
   id: string
-  kind: 'terminal' | 'browser'
+  kind: 'browser' | 'explorer'
   title: string
 }
 
@@ -112,14 +112,16 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   },
   addPanelTab: (scope, kind, id, select = true) => {
     const tabs = get().panelTabs[scope] ?? []
-    const existing = id ? tabs.find((t) => t.id === id) : undefined
+    // Only one Explorer per folder: asking again selects it.
+    const tabId = kind === 'explorer' ? 'explorer' : id
+    const existing = tabId ? tabs.find((t) => t.id === tabId) : undefined
     if (existing) {
       if (select) set((s) => ({ activePanelTab: { ...s.activePanelTab, [scope]: existing.id } }))
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = kind === 'terminal' ? 'Terminal' : 'Browser'
-    const tab: PanelTab = { id: id ?? `t${++tabCounter}`, kind, title: n > 1 ? `${label} ${n}` : label }
+    const label = kind === 'explorer' ? 'Explorer' : 'Browser'
+    const tab: PanelTab = { id: tabId ?? `t${++tabCounter}`, kind, title: n > 1 ? `${label} ${n}` : label }
     set((s) => ({
       panelTabs: { ...s.panelTabs, [scope]: [...tabs, tab] },
       activePanelTab: select || !s.activePanelTab[scope] ? { ...s.activePanelTab, [scope]: tab.id } : s.activePanelTab

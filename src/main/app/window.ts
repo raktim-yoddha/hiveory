@@ -10,8 +10,13 @@ import type { ThemeId } from '@shared/domain'
 export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string }> = {
   dark: { background: '#000000', symbols: '#a3a3a3' },
   bronze: { background: '#080706', symbols: '#b8afa3' },
-  silver: { background: '#08090b', symbols: '#b6bac2' }
+  silver: { background: '#08090b', symbols: '#b6bac2' },
+  midnight: { background: '#05070c', symbols: '#a9b3c5' },
+  jade: { background: '#040706', symbols: '#a6b7ae' },
+  rose: { background: '#080608', symbols: '#bcadb3' }
 }
+/** Over a wallpaper the window controls sit on the picture, not on a solid strip. */
+const overlayColor = (theme: ThemeId, wallpaper: boolean): string => (wallpaper ? '#00000000' : THEME_CHROME[theme].background)
 export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
 export const TITLE_BAR_HEIGHT = 44
 
@@ -22,7 +27,7 @@ export interface WindowTargets {
 }
 
 /** Creates the hardened main window (Electron security checklist). */
-export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark'): BrowserWindow => {
+export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark', wallpaper = false): BrowserWindow => {
   const isMac = process.platform === 'darwin'
   const chrome = THEME_CHROME[theme]
   const window = new BrowserWindow({
@@ -38,7 +43,7 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 16, y: 15 } }
-      : { titleBarOverlay: { color: chrome.background, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
+      : { titleBarOverlay: { color: overlayColor(theme, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: targets.preload,
       contextIsolation: true,
@@ -60,6 +65,7 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     return { action: 'deny' }
   })
   window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+  window.webContents.session.setPermissionCheckHandler(() => false)
 
   // DevTools stay reachable in development without an application menu.
   if (targets.devServerUrl) {
@@ -92,12 +98,12 @@ export const rendererTargets = (baseDir: string): WindowTargets => ({
 })
 
 /** Repaints native chrome to match the theme. */
-export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId): void => {
+export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId, wallpaper = false): void => {
   const chrome = THEME_CHROME[theme]
   window.setBackgroundColor(chrome.background)
   if (process.platform !== 'darwin') {
     try {
-      window.setTitleBarOverlay({ color: chrome.background, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
+      window.setTitleBarOverlay({ color: overlayColor(theme, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
     } catch {
       // Overlay unavailable on this platform/window.
     }

@@ -26,6 +26,8 @@
 - `adr/0014-feedback-round-4.md`
 - `adr/0015-agent-browser.md`
 - `adr/0016-speed-device-mode-computer-use.md`
+- `adr/0017-plugins-appearance-motion.md`
+- `adr/0018-flat-ui-explorer-shells.md`
 
 ## Research
 

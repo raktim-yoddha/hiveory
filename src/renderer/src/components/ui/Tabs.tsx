@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { cx } from '../../lib/cx'
+import { useSelectionBox } from '../../lib/useSelectionBox'
 import styles from './Tabs.module.css'
 
 export interface TabOption<T extends string> {
@@ -16,12 +17,19 @@ interface TabsProps<T extends string> {
   onChange: (value: T) => void
   /** `underline` for page tabs, `segmented` for compact mode switches. */
   variant?: 'underline' | 'segmented'
+  /** Segmented only: `lg` for a section's main switch. */
+  size?: 'md' | 'lg'
   className?: string
 }
 
-/** Roving-focus tablist used for page tabs and segmented controls alike. */
-export function Tabs<T extends string>({ label, options, value, onChange, variant = 'underline', className }: TabsProps<T>) {
+/**
+ * Roving-focus tablist used for page tabs and segmented controls alike. The
+ * selection is one indicator that glides to the chosen tab (transform and
+ * width only), instead of each tab painting its own background.
+ */
+export function Tabs<T extends string>({ label, options, value, onChange, variant = 'underline', size = 'md', className }: TabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null)
+  const indicator = useSelectionBox(listRef, '[aria-selected="true"]', [value, options.length])
 
   const onKeyDown = (event: KeyboardEvent): void => {
     const index = options.findIndex((o) => o.value === value)
@@ -35,7 +43,8 @@ export function Tabs<T extends string>({ label, options, value, onChange, varian
   }
 
   return (
-    <div ref={listRef} role="tablist" aria-label={label} className={cx(styles.list, styles[variant], className)} onKeyDown={onKeyDown}>
+    <div ref={listRef} role="tablist" aria-label={label} className={cx(styles.list, styles[variant], size === 'lg' && styles.lg, className)} onKeyDown={onKeyDown}>
+      {indicator && <span className={styles.indicator} aria-hidden style={indicator} />}
       {options.map((option) => {
         const selected = option.value === value
         return (

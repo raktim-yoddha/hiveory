@@ -152,12 +152,11 @@ The pane header has `+`.
 It opens:
 
 ```text
-Placement
-├── Right
-└── Bottom
-
+Placement:  Right | Bottom   (one line)
+Search
+Terminals
+├── PowerShell / Command Prompt / Git Bash (when installed)
 Agents
-├── detected CLI
 ├── detected CLI
 └── ...
 ```
@@ -209,6 +208,25 @@ The side panel's Browser tab is a real browser (ADR 0015):
 ## Computer Use
 
 Off by default (Settings › Agents). When on, agents operate this computer through `computer_*` tools: app elements as text with refs, real mouse and keyboard, windows and screenshots (Windows for now; ADR 0016).
+
+## Plugins, MCP servers and skills
+
+Settings › Skills, MCP & Plugins has three tabs (ADR 0017):
+
+- **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash)
+- **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click
+- **Plugins** — 30 apps (GitHub, Linear, Notion, Slack, Stripe, Supabase…) set up with the user's own keys: no OAuth, nothing hosted; every agent — terminal and chat — gets their tools
+
+## Appearance
+
+Six flat themes, three per row. A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
+
+## Terminals, Explorer and editor panes (ADR 0018)
+
+- A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side
+- Terminal panes are not agents: no Kanban card
+- The side panel holds browsers and one Explorer per folder: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Important Non-Features
 

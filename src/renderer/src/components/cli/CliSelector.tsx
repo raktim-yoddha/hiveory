@@ -23,8 +23,10 @@ export function CliSelector({ value, onChange }: CliSelectorProps) {
     if (!loaded) void load()
   }, [loaded, load])
 
-  const available = clis.filter((c) => c.available)
-  const missing = clis.filter((c) => !c.available)
+  // Agents only: shells open from a pane's "+" menu.
+  const agents = clis.filter((c) => c.kind !== 'shell')
+  const available = agents.filter((c) => c.available)
+  const missing = agents.filter((c) => !c.available)
   const countOf = (cliId: string): number => value.find((s) => s.cliId === cliId)?.count ?? 0
 
   const setCount = (cliId: string, count: number): void => {

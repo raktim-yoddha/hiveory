@@ -1,17 +1,31 @@
-import { cpSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join, relative, resolve, sep } from 'node:path'
-import type { ExtensionsInventory, McpServerInfo, SkillInfo } from '@shared/domain/extensions'
+import type { ExtensionsInventory, McpServerInfo, SkillInfo, SkillRoot } from '@shared/domain/extensions'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
 
 /** Skill directories and the CLIs that read them (Agent Skills standard + vendor folders). */
-export const SKILL_ROOTS: Array<{ dir: string; visibleTo: string[] }> = [
-  { dir: '.agents/skills', visibleTo: ['codex', 'copilot', 'cursor', 'gemini', 'opencode', 'kilocode', 'amp', 'goose', 'letta', 'qwen'] },
-  { dir: '.claude/skills', visibleTo: ['claude', 'cursor', 'opencode', 'kilocode', 'copilot'] },
-  { dir: '.codex/skills', visibleTo: ['codex', 'cursor'] },
-  { dir: '.cursor/skills', visibleTo: ['cursor'] }
+export const SKILL_ROOTS: SkillRoot[] = [
+  {
+    id: 'agents',
+    dir: '.agents/skills',
+    label: 'Shared (.agents)',
+    visibleTo: ['codex', 'copilot', 'cursor', 'gemini', 'opencode', 'kilocode', 'amp', 'goose', 'letta', 'qwen']
+  },
+  { id: 'claude', dir: '.claude/skills', label: 'Claude', visibleTo: ['claude', 'cursor', 'opencode', 'kilocode', 'copilot'] },
+  { id: 'codex', dir: '.codex/skills', label: 'Codex', visibleTo: ['codex', 'cursor'] },
+  { id: 'cursor', dir: '.cursor/skills', label: 'Cursor', visibleTo: ['cursor'] }
 ]
+
+/** A server's full config as a CLI stores it — kept in main for "use in every agent", never sent to the renderer. */
+export interface McpRawConfig {
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  url?: string
+  headers?: Record<string, string>
+}
 
 /** Parses `name:` / `description:` from SKILL.md YAML frontmatter (single-line values). */
 export const parseSkillFrontmatter = (text: string): { name?: string; description?: string } => {
@@ -25,18 +39,45 @@ export const parseSkillFrontmatter = (text: string): { name?: string; descriptio
   return out
 }
 
-/** Server names and targets from `[mcp_servers.<name>]` tables in Codex's config.toml. */
-export const parseCodexMcp = (toml: string): Array<{ name: string; target?: string; transport: McpServerInfo['transport'] }> => {
-  const out: Array<{ name: string; target?: string; transport: McpServerInfo['transport'] }> = []
-  const blocks = toml.split(/^\[/m)
-  for (const block of blocks) {
-    const header = /^mcp_servers\.("?)([^\]"]+)\1\]\s*$/m.exec(block.split(/\r?\n/)[0] ?? '')
+/** `KEY = "value"` pairs of a TOML inline table or table body. */
+const tomlPairs = (text: string): Record<string, string> =>
+  Object.fromEntries([...text.matchAll(/^\s*"?([\w-]+)"?\s*=\s*"((?:\\.|[^"\\])*)"/gm)].map((m) => [m[1] as string, (m[2] as string).replace(/\\(.)/g, '$1')]))
+
+const tomlStrings = (text: string): string[] => [...text.matchAll(/"((?:\\.|[^"\\])*)"|'([^']*)'/g)].map((m) => (m[1] ?? m[2] ?? '').replace(/\\(.)/g, '$1'))
+
+/** Servers from `[mcp_servers.<name>]` tables in Codex's config.toml (including `.env` sub-tables). */
+export const parseCodexMcp = (
+  toml: string
+): Array<{ name: string; target?: string; transport: McpServerInfo['transport']; config: McpRawConfig }> => {
+  const out = new Map<string, { name: string; target?: string; transport: McpServerInfo['transport']; config: McpRawConfig }>()
+  for (const block of toml.split(/^\[/m)) {
+    const header = /^mcp_servers\.("?)([^\]"]+?)\1(\.(env|http_headers))?\]\s*$/m.exec(block.split(/\r?\n/)[0] ?? '')
     if (!header) continue
-    const url = /^url\s*=\s*"([^"]+)"/m.exec(block)?.[1]
-    const command = /^command\s*=\s*"([^"]+)"/m.exec(block)?.[1]
-    out.push({ name: header[2] as string, target: url ?? command, transport: url ? 'http' : command ? 'stdio' : 'unknown' })
+    const name = header[2] as string
+    const body = block.split(/\r?\n/).slice(1).join('\n')
+    const entry = out.get(name) ?? { name, transport: 'unknown' as const, config: {} }
+    if (header[4] === 'env') entry.config.env = { ...entry.config.env, ...tomlPairs(body) }
+    else if (header[4] === 'http_headers') entry.config.headers = { ...entry.config.headers, ...tomlPairs(body) }
+    else {
+      const url = /^url\s*=\s*"([^"]+)"/m.exec(body)?.[1]
+      const command = /^command\s*=\s*"([^"]+)"/m.exec(body)?.[1]
+      const args = /^args\s*=\s*\[([\s\S]*?)\]/m.exec(body)?.[1]
+      const env = /^env\s*=\s*\{([^}]*)\}/m.exec(body)?.[1]
+      const headers = /^http_headers\s*=\s*\{([^}]*)\}/m.exec(body)?.[1]
+      entry.target = url ?? command
+      entry.transport = url ? 'http' : command ? 'stdio' : 'unknown'
+      entry.config = {
+        ...entry.config,
+        ...(url ? { url } : {}),
+        ...(command ? { command } : {}),
+        ...(args !== undefined ? { args: tomlStrings(args) } : {}),
+        ...(env ? { env: { ...entry.config.env, ...tomlPairs(env.replace(/,/g, '\n')) } } : {}),
+        ...(headers ? { headers: { ...entry.config.headers, ...tomlPairs(headers.replace(/,/g, '\n')) } } : {})
+      }
+    }
+    out.set(name, entry)
   }
-  return out
+  return [...out.values()]
 }
 
 /** Strips // and /* *\/ comments and trailing commas so JSONC configs parse. */
@@ -48,48 +89,123 @@ export const parseJsonc = (text: string): unknown => {
 const asRecord = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 
-const describeServer = (config: unknown): { target?: string; transport: McpServerInfo['transport'] } => {
-  const c = asRecord(config)
-  const url = typeof c.url === 'string' ? c.url : typeof c.httpUrl === 'string' ? c.httpUrl : undefined
-  const command = Array.isArray(c.command) ? c.command.join(' ') : typeof c.command === 'string' ? c.command : undefined
-  return { target: url ?? command, transport: url || c.type === 'remote' || c.type === 'http' ? 'http' : command ? 'stdio' : 'unknown' }
+const stringRecord = (value: unknown): Record<string, string> | undefined => {
+  const entries = Object.entries(asRecord(value)).filter((e): e is [string, string] => typeof e[1] === 'string')
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
+/** Reads the JSON shapes Claude, Gemini, Cursor, Qwen and OpenCode use for one server. */
+export const rawFromJson = (config: unknown): McpRawConfig => {
+  const c = asRecord(config)
+  const url = typeof c.url === 'string' ? c.url : typeof c.httpUrl === 'string' ? c.httpUrl : undefined
+  const list = Array.isArray(c.command) ? c.command.filter((x): x is string => typeof x === 'string') : undefined
+  const command = list ? list[0] : typeof c.command === 'string' ? c.command : undefined
+  const args = list ? list.slice(1) : Array.isArray(c.args) ? c.args.filter((x): x is string => typeof x === 'string') : undefined
+  return {
+    ...(url ? { url } : {}),
+    ...(command ? { command } : {}),
+    ...(args?.length ? { args } : {}),
+    ...(stringRecord(c.env ?? c.environment) ? { env: stringRecord(c.env ?? c.environment) } : {}),
+    ...(stringRecord(c.headers) ? { headers: stringRecord(c.headers) } : {})
+  }
+}
+
+const describeServer = (config: unknown): { target?: string; transport: McpServerInfo['transport']; config: McpRawConfig } => {
+  const raw = rawFromJson(config)
+  const c = asRecord(config)
+  const target = raw.url ?? (raw.command ? [raw.command, ...(raw.args ?? [])].join(' ') : undefined)
+  return { target, transport: raw.url || c.type === 'remote' || c.type === 'http' ? 'http' : raw.command ? 'stdio' : 'unknown', config: raw }
+}
+
+const CLI_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', kilocode: 'Kilo Code', gemini: 'Gemini CLI', qwen: 'Qwen Code', cursor: 'Cursor' }
+
 /**
- * Read-only inventory of Agent Skills and MCP servers across installed CLIs
- * (each CLI keeps its own config; Hiveory never rewrites them). The only write
- * is an explicit "share this skill with every agent" copy into ~/.agents/skills.
+ * Agent Skills and MCP servers across installed CLIs. CLI configs are only
+ * read; skills are written only on an explicit action (copy into another
+ * skills folder, create, import, move one copy to the trash).
  */
 export class ExtensionsService {
   private lastSkills: SkillInfo[] = []
+  private lastRaw = new Map<string, { config: McpRawConfig; from: string }>()
 
   constructor(
     private readonly log: Logger,
-    private readonly home = homedir()
+    private readonly home = homedir(),
+    private readonly trash: (path: string) => Promise<void> = async () => fail('FORBIDDEN', 'Trash is not available.')
   ) {}
 
   scan(projectPath?: string): ExtensionsInventory {
     const skills = [...this.scanSkills(this.home, 'user'), ...(projectPath ? this.scanSkills(projectPath, 'project') : [])]
     this.lastSkills = skills
-    return { skills, mcpServers: this.scanMcp(projectPath) }
+    return { roots: SKILL_ROOTS, skills, mcpServers: this.scanMcp(projectPath) }
   }
 
-  /** Copies a scanned skill into ~/.agents/skills so every standards-following CLI loads it. */
-  shareSkill(skillPath: string): string {
+  private known(skillPath: string): SkillInfo {
     const skill = this.lastSkills.find((s) => resolve(s.path) === resolve(skillPath))
     if (!skill) fail('NOT_FOUND', 'Skill not found. Refresh the list and try again.')
-    const target = join(this.home, '.agents', 'skills', basename(skill!.path))
-    if (resolve(target) === resolve(skill!.path)) return target
-    if (existsSync(target)) fail('INVALID_INPUT', `A skill named "${basename(target)}" is already shared.`)
-    cpSync(skill!.path, target, { recursive: true, errorOnExist: true })
+    return skill!
+  }
+
+  private rootDir(rootId: SkillRoot['id'], base: string): string {
+    const root = SKILL_ROOTS.find((r) => r.id === rootId)
+    if (!root) fail('INVALID_INPUT', `Unknown skills folder: ${rootId}`)
+    return join(base, ...root!.dir.split('/'))
+  }
+
+  /** Copies a scanned skill into another skills folder of the same scope, so the CLIs reading it load it too. */
+  copySkill(skillPath: string, rootId: SkillRoot['id'], projectPath?: string): string {
+    const skill = this.known(skillPath)
+    const base = skill.scope === 'user' ? this.home : projectPath
+    if (!base) fail('INVALID_INPUT', 'Open the project this skill belongs to first.')
+    const target = join(this.rootDir(rootId, base!), skill.folder)
+    if (resolve(target) === resolve(skill.path)) return target
+    if (existsSync(target)) fail('INVALID_INPUT', `${SKILL_ROOTS.find((r) => r.id === rootId)?.label} already has a skill named "${skill.folder}".`)
+    cpSync(skill.path, target, { recursive: true, errorOnExist: true })
     return target
+  }
+
+  /** Moves one copy of a scanned skill to the OS trash (recoverable). */
+  async removeSkill(skillPath: string): Promise<void> {
+    await this.trash(this.known(skillPath).path)
+  }
+
+  /** Writes a new SKILL.md into each chosen skills folder. */
+  createSkill(input: { name: string; description: string; body: string; rootIds: SkillRoot['id'][] }, projectPath?: string): string[] {
+    const base = projectPath ?? this.home
+    const targets = input.rootIds.map((id) => join(this.rootDir(id, base), input.name))
+    const taken = targets.find((t) => existsSync(t))
+    if (taken) fail('INVALID_INPUT', `A skill named "${input.name}" already exists in ${relative(base, taken)}.`)
+    const description = input.description.replace(/\s+/g, ' ')
+    const content = `---\nname: ${input.name}\ndescription: ${JSON.stringify(description)}\n---\n\n${input.body.trim()}\n`
+    for (const target of targets) {
+      mkdirSync(target, { recursive: true })
+      writeFileSync(join(target, 'SKILL.md'), content)
+    }
+    return targets
+  }
+
+  /** Copies a skill folder (containing SKILL.md) chosen by the user into each chosen skills folder. */
+  importSkill(folder: string, rootIds: SkillRoot['id'][], projectPath?: string): string[] {
+    if (!existsSync(join(folder, 'SKILL.md'))) fail('INVALID_INPUT', 'That folder has no SKILL.md. Choose a skill folder.')
+    const base = projectPath ?? this.home
+    const name = basename(folder)
+    const targets = rootIds.map((id) => join(this.rootDir(id, base), name)).filter((t) => resolve(t) !== resolve(folder))
+    const taken = targets.find((t) => existsSync(t))
+    if (taken) fail('INVALID_INPUT', `A skill named "${name}" already exists in ${relative(base, taken)}.`)
+    for (const target of targets) cpSync(folder, target, { recursive: true, errorOnExist: true })
+    return targets
   }
 
   /** Folder to reveal for a scanned skill (only paths from the last scan are allowed). */
   skillFolder(skillPath: string): string {
-    const skill = this.lastSkills.find((s) => resolve(s.path) === resolve(skillPath))
-    if (!skill) fail('NOT_FOUND', 'Skill not found.')
-    return skill!.path
+    return this.known(skillPath).path
+  }
+
+  /** The full config of a server from the last scan (first CLI that defines it). */
+  rawServer(name: string): { config: McpRawConfig; from: string } {
+    const found = this.lastRaw.get(name)
+    if (!found) fail('NOT_FOUND', 'Server not found. Refresh the list and try again.')
+    return found!
   }
 
   private scanSkills(base: string, scope: 'user' | 'project'): SkillInfo[] {
@@ -112,7 +228,9 @@ export class ExtensionsService {
             name: meta.name || entry,
             description: meta.description,
             path: folder,
+            folder: entry,
             scope,
+            rootId: root.id,
             source: scope === 'user' ? `~/${root.dir}` : root.dir,
             visibleTo: root.visibleTo
           })
@@ -126,10 +244,12 @@ export class ExtensionsService {
 
   private scanMcp(projectPath?: string): McpServerInfo[] {
     const servers = new Map<string, McpServerInfo>()
+    this.lastRaw = new Map()
     const add = (cliId: string, file: string, scope: 'user' | 'project', name: string, info: ReturnType<typeof describeServer>): void => {
       const existing = servers.get(name) ?? { name, transport: info.transport, target: info.target, configuredIn: [] }
       existing.configuredIn.push({ cliId, file: this.display(file), scope })
       servers.set(name, existing)
+      if (!this.lastRaw.has(name) && (info.config.command || info.config.url)) this.lastRaw.set(name, { config: info.config, from: CLI_NAMES[cliId] ?? cliId })
     }
     const readJson = (file: string): unknown => {
       try {

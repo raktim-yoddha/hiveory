@@ -16,9 +16,24 @@
   gap: var(--space-1);
 }
 
-.spacer {
+/* Logo, name and status: fills the header, so it is both the drag grip and the right-click target. */
+.identity {
+  display: flex;
   flex: 1;
-  min-width: var(--space-2);
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+
+.identity:focus-visible {
+  outline-offset: calc(var(--space-1) * -1);
 }
 
 .stopped {

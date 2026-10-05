@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
+import { portalRoot } from '../../lib/portal-root'
 import styles from './Popover.module.css'
 
 export interface PopoverTriggerProps {
@@ -16,16 +17,19 @@ interface PopoverProps {
   /** Opens above the trigger (e.g. a composer at the bottom of the screen). */
   placement?: 'above' | 'below'
   width?: 'md' | 'lg'
+  /** 'end' lines the panel's right edge up with the trigger's (triggers near the right of the screen). */
+  align?: 'start' | 'end'
 }
 
 const GAP = 6
 
 /** Anchored floating panel for rich pickers (search + lists). Escape / outside click closes; focus returns. */
-export function Popover({ label, trigger, children, placement = 'below', width = 'md' }: PopoverProps) {
+export function Popover({ label, trigger, children, placement = 'below', width = 'md', align = 'start' }: PopoverProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
+  const [root, setRoot] = useState<Element | null>(null)
 
   const close = useCallback(() => {
     setOpen(false)
@@ -46,9 +50,9 @@ export function Popover({ label, trigger, children, placement = 'below', width =
     let top = placement === 'above' ? t.top - p.height - GAP : t.bottom + GAP
     if (top < GAP) top = t.bottom + GAP
     if (top + p.height > window.innerHeight - GAP) top = Math.max(GAP, t.top - p.height - GAP)
-    const left = Math.min(Math.max(GAP, t.left), window.innerWidth - p.width - GAP)
+    const left = Math.min(Math.max(GAP, align === 'end' ? t.right - p.width : t.left), window.innerWidth - p.width - GAP)
     setPosition({ top, left })
-  }, [open, placement])
+  }, [open, placement, align])
 
   useEffect(() => {
     if (!open) return
@@ -72,8 +76,13 @@ export function Popover({ label, trigger, children, placement = 'below', width =
 
   return (
     <>
-      {trigger({ ref: triggerRef, onClick: () => (open ? close() : setOpen(true)), 'aria-haspopup': 'dialog', 'aria-expanded': open })}
+      {trigger({ ref: triggerRef, onClick: () => {
+          if (open) return close()
+          setRoot(portalRoot(triggerRef.current))
+          setOpen(true)
+        }, 'aria-haspopup': 'dialog', 'aria-expanded': open })}
       {open &&
+        root &&
         createPortal(
           <div
             ref={panelRef}
@@ -85,7 +94,7 @@ export function Popover({ label, trigger, children, placement = 'below', width =
           >
             {children(close)}
           </div>,
-          document.body
+          root
         )}
     </>
   )

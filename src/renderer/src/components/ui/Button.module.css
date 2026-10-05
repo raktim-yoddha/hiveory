@@ -10,7 +10,14 @@
   transition:
     background var(--duration-fast) var(--ease-out),
     border-color var(--duration-fast) var(--ease-out),
-    color var(--duration-fast) var(--ease-out);
+    color var(--duration-fast) var(--ease-out),
+    transform var(--duration-base) var(--ease-liquid);
+}
+
+/* A tactile press: compositor-only, springs back on release. */
+.button:not(:disabled):active {
+  transform: scale(0.96);
+  transition-duration: var(--duration-fast);
 }
 
 .button svg {

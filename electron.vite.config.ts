@@ -16,7 +16,15 @@ export default defineConfig({
     build: { rollupOptions: { external: ['electron'], output: { format: 'cjs', entryFileNames: '[name].cjs' } } }
   },
   renderer: {
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        // The dev server's hot-reload socket is the only reason the CSP allows ws://localhost; builds drop it.
+        name: 'hiveory-csp',
+        apply: 'build',
+        transformIndexHtml: (html: string) => html.replace(' ws://localhost:*', '')
+      }
+    ],
     resolve: {
       alias: { ...shared, ...resources, '@renderer': resolve(import.meta.dirname, 'src/renderer/src') }
     }

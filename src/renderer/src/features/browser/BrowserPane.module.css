@@ -32,7 +32,7 @@
   min-width: 0;
   height: var(--control-md);
   padding: 0 var(--space-2) 0 var(--space-4);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-pill);
   background: var(--color-surface-inset);
   box-shadow: inset 0 var(--hairline) 0 var(--color-sheen);
@@ -84,7 +84,7 @@
   max-width: 40%;
   height: var(--control-xs);
   padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-pill);
   background: var(--color-surface-active);
   color: var(--color-text-secondary);
@@ -174,7 +174,7 @@
   min-width: 0;
   height: var(--control-sm);
   padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-surface-inset);
   color: var(--color-text);
@@ -284,26 +284,14 @@
   font-size: var(--text-xs);
 }
 
-.deviceSelect,
 .deviceDim {
   height: var(--control-sm);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-surface-inset);
   color: var(--color-text);
   font: inherit;
   font-size: var(--text-xs);
-}
-
-.deviceSelect {
-  max-width: calc(var(--space-11) * 4);
-  padding: 0 var(--space-2);
-}
-
-.deviceSelect option,
-.deviceSelect optgroup {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
 }
 
 .deviceDim {
@@ -314,7 +302,6 @@
   user-select: text;
 }
 
-.deviceSelect:focus,
 .deviceDim:focus {
   border-color: var(--color-focus);
   outline: none;

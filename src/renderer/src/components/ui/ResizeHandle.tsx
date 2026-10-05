@@ -13,16 +13,20 @@ interface ResizeHandleProps {
   onChange: (value: number) => void
   /** Double-click restores this width. */
   initial?: number
+  /** Dragging (or arrowing) well past `min` hides the sidebar instead of stopping at it, like VS Code. */
+  onCollapse?: () => void
   className?: string
 }
 
 const KEY_STEP = 16
+/** Fraction of the minimum width below which a drag collapses the sidebar. */
+const COLLAPSE_AT = 0.6
 
 /**
  * Vertical drag handle for resizing a sidebar. Lives in the gutter, invisible
  * until hovered (like pane dividers); arrow keys resize it too.
  */
-export function ResizeHandle({ label, value, min, max, direction, onChange, initial, className }: ResizeHandleProps) {
+export function ResizeHandle({ label, value, min, max, direction, onChange, initial, onCollapse, className }: ResizeHandleProps) {
   const [active, setActive] = useState(false)
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>): void => {
@@ -33,7 +37,15 @@ export function ResizeHandle({ label, value, min, max, direction, onChange, init
     const start = value
     target.setPointerCapture(event.pointerId)
     setActive(true)
-    const move = (e: globalThis.PointerEvent): void => onChange(start + (e.clientX - startX) * direction)
+    const move = (e: globalThis.PointerEvent): void => {
+      const next = start + (e.clientX - startX) * direction
+      if (onCollapse && next < min * COLLAPSE_AT) {
+        end()
+        // Keep the width from before the drag, so showing the sidebar again restores it.
+        onChange(start)
+        onCollapse()
+      } else onChange(next)
+    }
     const end = (): void => {
       setActive(false)
       target.removeEventListener('pointermove', move)
@@ -49,7 +61,9 @@ export function ResizeHandle({ label, value, min, max, direction, onChange, init
     const delta = event.key === 'ArrowRight' ? KEY_STEP : event.key === 'ArrowLeft' ? -KEY_STEP : 0
     if (!delta) return
     event.preventDefault()
-    onChange(value + delta * direction)
+    const next = value + delta * direction
+    if (onCollapse && next < min) onCollapse()
+    else onChange(next)
   }
 
   return (

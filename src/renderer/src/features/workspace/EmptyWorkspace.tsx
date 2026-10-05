@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Bot, ChevronDown, Layers, Settings2 } from 'lucide-react'
+import { ChevronDown, Layers, Settings2 } from 'lucide-react'
+import { AgentIcon } from '../../components/brand/AgentIcon'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
@@ -37,7 +38,7 @@ export function EmptyWorkspace({ workspaceId }: { workspaceId: string }) {
   return (
     <>
       <EmptyState
-        icon={<Bot />}
+        icon={<AgentIcon />}
         title="Empty workspace"
         description="Open an agent to start working, or load a preset to open several at once."
         actions={

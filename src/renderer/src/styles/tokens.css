@@ -10,23 +10,39 @@
 
   /* Surfaces: background → sidebar/page → pane/card → raised → interactive */
   --color-bg: #080706;
-  --color-surface: #110f0d;
-  --color-surface-top: #161310;
-  --color-surface-raised: #1b1814;
-  --color-surface-hover: #221e19;
-  --color-surface-active: #2b2620;
-  --color-surface-inset: #0c0b09;
-  --color-pane-header: #1a1712;
+  --base-surface: #110f0d;
+  --base-surface-top: #161310;
+  --base-surface-raised: #1b1814;
+  --base-surface-hover: #221e19;
+  --base-surface-active: #2b2620;
+  --base-surface-inset: #0c0b09;
+  --base-pane-header: #1a1712;
   --color-pane-header-edge: #2a251e;
   --color-overlay: rgb(5 4 3 / 0.66);
+
+  /*
+   * Surfaces as components use them. Themes set the opaque --base-* colors;
+   * over a wallpaper --surface-alpha (0–1) applies to every surface alike, so
+   * at full transparency the whole UI floats on the picture.
+   */
+  --surface-alpha: 1;
+  --color-surface: color-mix(in srgb, var(--base-surface) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-top: color-mix(in srgb, var(--base-surface-top) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-inset: color-mix(in srgb, var(--base-surface-inset) calc(var(--surface-alpha) * 100%), transparent);
+  --color-pane-header: color-mix(in srgb, var(--base-pane-header) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-raised: color-mix(in srgb, var(--base-surface-raised) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-hover: color-mix(in srgb, var(--base-surface-hover) calc(var(--surface-alpha) * 100%), transparent);
+  --color-surface-active: color-mix(in srgb, var(--base-surface-active) calc(var(--surface-alpha) * 100%), transparent);
+  /* Dialogs stay solid whatever the transparency. */
+  --color-surface-solid: var(--base-surface);
+  --color-surface-raised-solid: var(--base-surface-raised);
+  --wallpaper-blur: 0px;
+  --wallpaper-dim: 0;
   --color-glass: rgb(27 24 20 / 0.82);
 
-  --color-border-subtle: #1d1a16;
+  --color-border-subtle: transparent;
   --color-border: #2a2520;
   --color-border-strong: #3e3730;
-  /* Top-edge sheen that makes surfaces read as machined rather than flat. */
-  --color-sheen: rgb(255 236 210 / 0.05);
-  --color-sheen-strong: rgb(255 236 210 / 0.09);
 
   --color-text: #efe9e0;
   --color-text-secondary: #b8afa3;
@@ -40,20 +56,34 @@
   --color-bronze: #b08d62;
   --color-bronze-soft: rgb(176 141 98 / 0.14);
   --color-focus: #b39b78;
-  --gradient-metal: linear-gradient(180deg, #f1e9dc 0%, #d4c6ae 55%, #bba98c 100%);
-  --gradient-metal-hover: linear-gradient(180deg, #f8f1e6 0%, #e0d3bd 55%, #c9b799 100%);
-  --gradient-surface: linear-gradient(180deg, var(--color-surface-top) 0%, var(--color-surface) 120px);
-  --gradient-bronze-line: linear-gradient(90deg, transparent, rgb(176 141 98 / 0.55), transparent);
-  --gradient-app: radial-gradient(1200px 520px at 50% -180px, rgb(176 141 98 / 0.1), transparent 70%);
   /* Component fills (the Dark theme flattens every one of them to a single color). */
-  --fill-raised: linear-gradient(180deg, var(--color-surface-hover), var(--color-surface-raised));
-  --fill-icon: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-raised));
-  --fill-active: linear-gradient(180deg, var(--color-surface-active), var(--color-surface-hover));
-  --fill-selected: linear-gradient(90deg, var(--color-bronze-soft), var(--color-surface-active) 70%);
-  --fill-accent-soft: linear-gradient(180deg, var(--color-bronze-soft), var(--color-surface-raised));
-  --fill-glass-accent: linear-gradient(180deg, var(--color-bronze-soft), var(--color-glass));
-  --fill-hero: radial-gradient(600px 220px at 85% -40px, var(--color-bronze-soft), transparent 70%),
-    linear-gradient(180deg, var(--color-surface-raised), var(--color-surface-inset));
+
+  /* Third-party brand marks sit on a light tile in every theme, so official colors keep their contrast. */
+  --color-logo-tile: #f4f4f5;
+
+
+  /*
+   * Flat by design (ADR 0018): every theme is solid color — no gradients,
+   * sheen or textures. The gradient-named tokens stay as single-color fills so
+   * components need no special cases.
+   */
+  --color-sheen: transparent;
+  --color-sheen-strong: transparent;
+  --gradient-metal: linear-gradient(var(--color-accent), var(--color-accent));
+  --gradient-metal-hover: linear-gradient(var(--color-accent-hover), var(--color-accent-hover));
+  --gradient-surface: none;
+  --gradient-bronze-line: linear-gradient(var(--color-bronze), var(--color-bronze));
+  --gradient-app: none;
+  --fill-raised: var(--color-surface-raised);
+  --fill-icon: var(--color-surface-active);
+  --fill-active: var(--color-surface-active);
+  --fill-selected: var(--color-surface-active);
+  --fill-accent-soft: var(--color-bronze-soft);
+  --fill-glass-accent: var(--color-glass);
+  --fill-hero: var(--color-surface-raised);
+  --shadow-surface: none;
+  --shadow-raised: none;
+  --shadow-button: none;
 
   /* Status */
   --color-idle: #776d61;
@@ -174,14 +204,12 @@
   --page-padding: 10px;
 
   /* Elevation: restrained, warm-tinted */
-  --shadow-surface: inset 0 var(--hairline) 0 var(--color-sheen), 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-raised: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 1px 3px rgb(0 0 0 / 0.4);
   --shadow-popover: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 14px 36px rgb(0 0 0 / 0.6),
     0 0 0 var(--hairline) var(--color-border);
   --shadow-dialog: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 28px 70px rgb(0 0 0 / 0.72),
     0 0 0 var(--hairline) var(--color-border);
   --shadow-drag: 0 12px 32px rgb(0 0 0 / 0.6);
-  --shadow-button: inset 0 var(--hairline) 0 rgb(255 255 255 / 0.55), 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-logo-tile: inset 0 0 0 var(--hairline) rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.4);
   --blur-glass: blur(18px) saturate(1.2);
 
   /* Motion */
@@ -190,6 +218,11 @@
   --duration-fast: 110ms;
   --duration-base: 170ms;
   --duration-slow: 240ms;
+  --duration-glide: 360ms;
+  --ease-liquid: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* Delay between items of a list that animates in. */
+  --stagger: 18ms;
 
   --z-pane-overlay: 10;
   --z-dropzone: 20;
@@ -206,22 +239,20 @@
  */
 :root[data-theme='silver'] {
   --color-bg: #070809;
-  --color-surface: #0e0f11;
-  --color-surface-top: #131518;
-  --color-surface-raised: #17191c;
-  --color-surface-hover: #1e2024;
-  --color-surface-active: #26292e;
-  --color-surface-inset: #0a0b0d;
-  --color-pane-header: #16181c;
+  --base-surface: #0e0f11;
+  --base-surface-top: #131518;
+  --base-surface-raised: #17191c;
+  --base-surface-hover: #1e2024;
+  --base-surface-active: #26292e;
+  --base-surface-inset: #0a0b0d;
+  --base-pane-header: #16181c;
   --color-pane-header-edge: #262a30;
   --color-overlay: rgb(3 4 5 / 0.66);
   --color-glass: rgb(23 25 28 / 0.82);
 
-  --color-border-subtle: #1a1c20;
+  --color-border-subtle: transparent;
   --color-border: #272a30;
   --color-border-strong: #3a3e46;
-  --color-sheen: rgb(225 232 242 / 0.05);
-  --color-sheen-strong: rgb(225 232 242 / 0.09);
 
   --color-text: #eceef2;
   --color-text-secondary: #b1b5bd;
@@ -234,10 +265,6 @@
   --color-bronze: #9aa3b1;
   --color-bronze-soft: rgb(170 180 196 / 0.13);
   --color-focus: #9ea6b4;
-  --gradient-metal: linear-gradient(180deg, #f5f7fa 0%, #d3d8df 55%, #aeb5c0 100%);
-  --gradient-metal-hover: linear-gradient(180deg, #ffffff 0%, #e0e4ea 55%, #bcc3cd 100%);
-  --gradient-bronze-line: linear-gradient(90deg, transparent, rgb(200 208 220 / 0.6), transparent);
-  --gradient-app: radial-gradient(1200px 520px at 50% -180px, rgb(170 182 200 / 0.09), transparent 70%);
   --color-idle: #6d727b;
 
   --color-drop: rgb(215 219 226 / 0.07);
@@ -259,22 +286,20 @@
  */
 :root[data-theme='dark'] {
   --color-bg: #000000;
-  --color-surface: #0d0d0d;
-  --color-surface-top: #0d0d0d;
-  --color-surface-raised: #151515;
-  --color-surface-hover: #1c1c1c;
-  --color-surface-active: #262626;
-  --color-surface-inset: #080808;
-  --color-pane-header: #141414;
+  --base-surface: #0d0d0d;
+  --base-surface-top: #0d0d0d;
+  --base-surface-raised: #151515;
+  --base-surface-hover: #1c1c1c;
+  --base-surface-active: #262626;
+  --base-surface-inset: #080808;
+  --base-pane-header: #141414;
   --color-pane-header-edge: #232323;
   --color-overlay: rgb(0 0 0 / 0.7);
   --color-glass: rgb(21 21 21 / 0.92);
 
-  --color-border-subtle: #1a1a1a;
+  --color-border-subtle: transparent;
   --color-border: #262626;
   --color-border-strong: #3a3a3a;
-  --color-sheen: transparent;
-  --color-sheen-strong: transparent;
 
   --color-text: #ededed;
   --color-text-secondary: #b0b0b0;
@@ -289,22 +314,7 @@
   --color-focus: #a3a3a3;
   --color-idle: #6e6e6e;
 
-  --gradient-metal: linear-gradient(#e0e0e0, #e0e0e0);
-  --gradient-metal-hover: linear-gradient(#f0f0f0, #f0f0f0);
-  --gradient-surface: none;
-  --gradient-bronze-line: linear-gradient(#bdbdbd, #bdbdbd);
-  --gradient-app: none;
-  --fill-raised: var(--color-surface-raised);
-  --fill-icon: var(--color-surface-active);
-  --fill-active: var(--color-surface-active);
-  --fill-selected: var(--color-surface-active);
-  --fill-accent-soft: var(--color-surface-raised);
-  --fill-glass-accent: var(--color-glass);
-  --fill-hero: var(--color-surface-raised);
 
-  --shadow-surface: none;
-  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.5);
-  --shadow-button: 0 1px 2px rgb(0 0 0 / 0.5);
 
   --color-drop: rgb(255 255 255 / 0.06);
   --color-drop-border: rgb(255 255 255 / 0.4);
@@ -317,4 +327,136 @@
   --term-bright-black: #5c5c5c;
   --term-white: #d0d0d0;
   --term-bright-white: #f5f5f5;
+}
+
+/* Midnight: ink-blue graphite with cold steel highlights. */
+:root[data-theme='midnight'] {
+  --color-bg: #05070c;
+  --base-surface: #0b0f17;
+  --base-surface-top: #10151f;
+  --base-surface-raised: #141a25;
+  --base-surface-hover: #1a2130;
+  --base-surface-active: #222b3c;
+  --base-surface-inset: #080b12;
+  --base-pane-header: #121825;
+  --color-pane-header-edge: #212a3a;
+  --color-overlay: rgb(3 5 10 / 0.7);
+  --color-glass: rgb(20 26 37 / 0.82);
+
+  --color-border-subtle: transparent;
+  --color-border: #202838;
+  --color-border-strong: #323d52;
+
+  --color-text: #e8edf6;
+  --color-text-secondary: #a9b3c5;
+  --color-text-muted: #707b90;
+  --color-text-faint: #454e60;
+
+  --color-accent: #c6d4f0;
+  --color-accent-hover: #dfe8fb;
+  --color-accent-contrast: #0a0f1a;
+  --color-bronze: #7f9cd6;
+  --color-bronze-soft: rgb(120 150 220 / 0.15);
+  --color-focus: #8aa4dc;
+  --color-idle: #687286;
+
+  --color-drop: rgb(198 212 240 / 0.07);
+  --color-drop-border: rgb(198 212 240 / 0.5);
+
+  --term-bg: #0b0f17;
+  --term-fg: #dfe6f2;
+  --term-cursor: #c6d4f0;
+  --term-selection: rgb(198 212 240 / 0.22);
+  --term-black: #151b27;
+  --term-bright-black: #556078;
+  --term-white: #cdd5e3;
+  --term-bright-white: #f6f8fc;
+}
+
+/* Jade: deep obsidian green with polished jade accents. */
+:root[data-theme='jade'] {
+  --color-bg: #040706;
+  --base-surface: #0a0f0d;
+  --base-surface-top: #0e1512;
+  --base-surface-raised: #121a16;
+  --base-surface-hover: #18221d;
+  --base-surface-active: #202d27;
+  --base-surface-inset: #070b09;
+  --base-pane-header: #111915;
+  --color-pane-header-edge: #1f2b25;
+  --color-overlay: rgb(2 5 4 / 0.7);
+  --color-glass: rgb(18 26 22 / 0.82);
+
+  --color-border-subtle: transparent;
+  --color-border: #1e2a24;
+  --color-border-strong: #2f3f37;
+
+  --color-text: #e6efea;
+  --color-text-secondary: #a6b7ae;
+  --color-text-muted: #6d7f76;
+  --color-text-faint: #435049;
+
+  --color-accent: #bfe3d0;
+  --color-accent-hover: #d8f1e3;
+  --color-accent-contrast: #07110c;
+  --color-bronze: #5fb48a;
+  --color-bronze-soft: rgb(95 180 138 / 0.14);
+  --color-focus: #6fbf97;
+  --color-idle: #65756d;
+
+  --color-drop: rgb(191 227 208 / 0.07);
+  --color-drop-border: rgb(191 227 208 / 0.5);
+
+  --term-bg: #0a0f0d;
+  --term-fg: #dbe7e0;
+  --term-cursor: #bfe3d0;
+  --term-selection: rgb(191 227 208 / 0.22);
+  --term-black: #141c18;
+  --term-bright-black: #52635a;
+  --term-white: #ccd8d1;
+  --term-bright-white: #f4faf7;
+}
+
+/* Rose: plum graphite with rose-gold accents. */
+:root[data-theme='rose'] {
+  --color-bg: #080608;
+  --base-surface: #110d10;
+  --base-surface-top: #161115;
+  --base-surface-raised: #1b1519;
+  --base-surface-hover: #231b20;
+  --base-surface-active: #2c2228;
+  --base-surface-inset: #0c090b;
+  --base-pane-header: #1a1418;
+  --color-pane-header-edge: #2b2228;
+  --color-overlay: rgb(6 4 5 / 0.68);
+  --color-glass: rgb(27 21 25 / 0.82);
+
+  --color-border-subtle: transparent;
+  --color-border: #2a2126;
+  --color-border-strong: #3e3238;
+
+  --color-text: #f2e9ec;
+  --color-text-secondary: #bcadb3;
+  --color-text-muted: #85737a;
+  --color-text-faint: #554850;
+
+  --color-accent: #e8c4bd;
+  --color-accent-hover: #f4d8d2;
+  --color-accent-contrast: #1a0f0e;
+  --color-bronze: #c98f86;
+  --color-bronze-soft: rgb(201 143 134 / 0.15);
+  --color-focus: #c99a92;
+  --color-idle: #7a6a70;
+
+  --color-drop: rgb(232 196 189 / 0.07);
+  --color-drop-border: rgb(232 196 189 / 0.5);
+
+  --term-bg: #110d10;
+  --term-fg: #ebe0e4;
+  --term-cursor: #e8c4bd;
+  --term-selection: rgb(232 196 189 / 0.22);
+  --term-black: #1d171b;
+  --term-bright-black: #61535a;
+  --term-white: #d9ccd1;
+  --term-bright-white: #faf4f6;
 }

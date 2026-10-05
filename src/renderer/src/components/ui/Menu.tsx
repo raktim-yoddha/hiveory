@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '../../lib/cx'
+import { portalRoot } from '../../lib/portal-root'
 import styles from './Menu.module.css'
 
 export type MenuEntry =
@@ -63,6 +64,7 @@ export function Menu({ label, items, trigger, align = 'start', empty, context = 
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   /** Where a context menu was requested. */
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null)
+  const [root, setRoot] = useState<Element | null>(null)
 
   const close = useCallback((restoreFocus = true) => {
     setOpen(false)
@@ -131,20 +133,23 @@ export function Menu({ label, items, trigger, align = 'start', empty, context = 
                 const fromKeyboard = event.clientX === 0 && event.clientY === 0
                 setPoint(fromKeyboard && r ? { x: r.left + GAP * 4, y: r.bottom } : { x: event.clientX, y: event.clientY })
                 setPosition(null)
+                setRoot(portalRoot(triggerRef.current))
                 setOpen(true)
               }
             }
           : {
               onClick: () => {
                 setPoint(null)
-                if (open) close()
-                else setOpen(true)
+                if (open) return close()
+                setRoot(portalRoot(triggerRef.current))
+                setOpen(true)
               }
             }),
         'aria-haspopup': 'menu',
         'aria-expanded': open
       })}
       {open &&
+        root &&
         createPortal(
           <div
             ref={menuRef}
@@ -183,7 +188,7 @@ export function Menu({ label, items, trigger, align = 'start', empty, context = 
               )
             })}
           </div>,
-          document.body
+          root
         )}
     </>
   )

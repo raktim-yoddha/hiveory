@@ -1,6 +1,8 @@
-import { app, BrowserWindow, Menu } from 'electron'
+import { app, BrowserWindow, Menu, net, protocol } from 'electron'
 import electronUpdater from 'electron-updater'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { WALLPAPER_SCHEME } from './services/appearance/wallpaper-service'
 import { IPC_PREFIX } from '@shared/ipc/contract'
 import { createContainer, type Container } from './app/container'
 import { createLogger } from './app/logger'
@@ -26,6 +28,16 @@ process.on('unhandledRejection', (reason) => log.error('Unhandled rejection', re
 
 if (!app.requestSingleInstanceLock()) app.quit()
 
+// Wallpapers load through Hiveory's own scheme, limited to its wallpapers folder (never arbitrary files).
+protocol.registerSchemesAsPrivileged([{ scheme: WALLPAPER_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }])
+
+// Defense in depth for every web contents (window, browser pages, DevTools): no <webview>, and no
+// popups unless the creator installs its own handler (the window and browser pages do).
+app.on('web-contents-created', (_event, contents) => {
+  contents.on('will-attach-webview', (event) => event.preventDefault())
+  contents.setWindowOpenHandler(() => ({ action: 'deny' }))
+})
+
 const targets = rendererTargets(import.meta.dirname)
 let window: BrowserWindow | null = null
 let container: Container | null = null
@@ -37,7 +49,8 @@ const emit: Emit = (event, payload) => {
 }
 
 const openWindow = (): void => {
-  window = createMainWindow(targets, log, container?.settings.get().theme)
+  const s = container?.settings.get()
+  window = createMainWindow(targets, log, s?.theme, Boolean(s?.wallpaper))
   window.on('closed', () => (window = null))
   container?.browser.setWindow(window)
 }
@@ -53,6 +66,11 @@ app.whenReady().then(async () => {
   // Alt-shortcuts (Alt+V, Alt+C…) that CLIs rely on. Copy/paste are handled by the terminal.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   container = createContainer(paths, log, emit, app.isPackaged ? electronUpdater.autoUpdater : null)
+  const wallpapers = container.wallpapers
+  protocol.handle(WALLPAPER_SCHEME, (request) => {
+    const file = wallpapers.resolve(request.url)
+    return file ? net.fetch(pathToFileURL(file).toString()) : new Response(null, { status: 404 })
+  })
   const notice = container.store.load()
   container.workspaceRepo.adoptImplicitMainWorkspaces()
   container.chatStore.load()
@@ -65,7 +83,9 @@ app.whenReady().then(async () => {
   container.runtime.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   container.shells.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   container.settings.on('changed', (next, previous) => {
-    if (next.theme !== previous.theme) for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme)
+    if (next.theme !== previous.theme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
+      for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, Boolean(next.wallpaper))
+    }
     if (next.autoCheckUpdates !== previous.autoCheckUpdates) container?.updates.setAutoCheck(next.autoCheckUpdates)
     if (next.computerUse && !previous.computerUse) container?.computer.warm()
     if (!next.computerUse && previous.computerUse) container?.computer.dispose()
@@ -96,6 +116,8 @@ app.on('before-quit', () => {
   if (!container) return
   container.browser.closeAll()
   container.computer.dispose()
+  void container.gateway.closeAll()
+  container.files.closeAll()
   container.runtime.disposeAll()
   container.shells.disposeAll()
   container.chats.stopAll()

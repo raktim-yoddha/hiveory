@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { RotateCwSquare, X } from 'lucide-react'
 import { VIEWPORT_PRESETS, type Viewport, type ViewportGroup } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
+import { Select } from '../../components/ui/Select'
 import styles from './BrowserPane.module.css'
 
 const GROUPS: ViewportGroup[] = ['Phones', 'Tablets', 'Laptops & desktops']
 const RESPONSIVE = 'Responsive'
 const EDIT = '__edit'
+const RATIOS = [1, 1.5, 2, 2.625, 3, 3.5, 4]
 const clamp = (n: number): number => Math.min(4000, Math.max(200, Math.round(n)))
 
 interface DeviceToolbarProps {
@@ -35,47 +37,33 @@ export function DeviceToolbar({ viewport, custom, zoom, onChange, onEditSizes, o
 
   return (
     <div className={styles.deviceBar} role="toolbar" aria-label="Device toolbar">
-      <select className={styles.deviceSelect} aria-label="Device" value={selected} onChange={(e) => pick(e.target.value)}>
-        <option value={RESPONSIVE}>Responsive</option>
-        {GROUPS.map((group) => (
-          <optgroup key={group} label={group}>
-            {VIEWPORT_PRESETS.filter((d) => d.group === group).map((d) => (
-              <option key={d.name} value={d.name}>
-                {d.name}
-              </option>
-            ))}
-          </optgroup>
-        ))}
-        {custom.length > 0 && (
-          <optgroup label="Custom">
-            {custom.map((d) => (
-              <option key={`c-${d.name}`} value={d.name}>
-                {d.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        <option value={EDIT}>Edit sizes…</option>
-      </select>
+      <Select
+        size="sm"
+        label="Device"
+        value={selected}
+        onChange={pick}
+        options={[
+          { value: RESPONSIVE, label: RESPONSIVE },
+          ...GROUPS.flatMap((group) => VIEWPORT_PRESETS.filter((d) => d.group === group).map((d) => ({ value: d.name, label: d.name, group }))),
+          ...custom.map((d) => ({ value: d.name, label: d.name, group: 'Custom' })),
+          { value: EDIT, label: 'Edit sizes…', group: '' }
+        ]}
+      />
       <Dimension label="Width" value={viewport.width} onCommit={(w) => resize(w, viewport.height)} />
       <span className={styles.deviceTimes} aria-hidden>
         ×
       </span>
       <Dimension label="Height" value={viewport.height} onCommit={(h) => resize(viewport.width, h)} />
-      <select
-        className={styles.deviceSelect}
-        aria-label="Device pixel ratio"
+      <Select
+        size="sm"
+        label="Device pixel ratio"
         value={String(viewport.scale ?? 0)}
-        onChange={(e) => onChange({ ...viewport, scale: Number(e.target.value) || undefined })}
-      >
-        <option value="0">DPR auto</option>
-        {[1, 1.5, 2, 2.625, 3, 3.5, 4].map((r) => (
-          <option key={r} value={String(r)}>
-            DPR {r}
-          </option>
-        ))}
-        {viewport.scale && ![1, 1.5, 2, 2.625, 3, 3.5, 4].includes(viewport.scale) && <option value={String(viewport.scale)}>DPR {viewport.scale}</option>}
-      </select>
+        onChange={(v) => onChange({ ...viewport, scale: Number(v) || undefined })}
+        options={[
+          { value: '0', label: 'DPR auto' },
+          ...[...new Set([...RATIOS, ...(viewport.scale ? [viewport.scale] : [])])].map((r) => ({ value: String(r), label: `DPR ${r}` }))
+        ]}
+      />
       <span className={styles.deviceZoom} title="Shown at this zoom to fit the panel">
         {Math.round(zoom * 100)}%
       </span>

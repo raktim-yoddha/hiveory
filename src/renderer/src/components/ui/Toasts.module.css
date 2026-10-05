@@ -20,13 +20,13 @@
   backdrop-filter: var(--blur-glass);
   box-shadow: var(--shadow-popover);
   pointer-events: auto;
-  animation: toast-in var(--duration-base) var(--ease-out);
+  animation: toast-in var(--duration-glide) var(--ease-liquid);
 }
 
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(var(--nudge));
+    transform: translateY(var(--space-7)) scale(0.96);
   }
 }
 

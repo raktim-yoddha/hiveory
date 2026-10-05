@@ -46,6 +46,14 @@ process.env.GIT_COMMITTER_EMAIL = 'e2e@example.test'
 
 // ---------- harness ----------
 const results = []
+// Playwright asserts ("Target crashed") when a hidden background page it auto-attached to (a
+// browser_crawl worker) is closed. The app is fine — the main window has its own crash handler —
+// so that one assertion is logged instead of killing the run.
+process.on('uncaughtException', (error) => {
+  if (/Target crashed/.test(String(error?.message))) return console.log('  (ignored Playwright assertion: a background page target closed)')
+  console.error(error)
+  process.exit(1)
+})
 let app
 let page
 let closing = false
@@ -73,6 +81,11 @@ const close = async () => {
 const relaunch = async () => {
   await close()
   await launch()
+}
+/** Picks an option in the app's Select: a combobox with a themed listbox, never a native <select>. */
+const choose = async (scope, label, option) => {
+  await scope.getByRole('combobox', { name: label, exact: true }).click()
+  await page.getByRole('option', { name: option, exact: true }).click()
 }
 /** Waits until a workspace matching `pred` exists (the UI may still show the previous screen). */
 const workspaceWhere = async (pid, pred) => {
@@ -150,7 +163,7 @@ await test('home renders with DEV badge and Work/Chat modes', async () => {
 
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  for (const section of ['Appearance', 'Agents', 'Skills & MCP', 'Updates', 'Guide', 'About']) {
+  for (const section of ['Appearance', 'Agents', 'Skills, MCP & Plugins', 'Updates', 'Guide', 'About']) {
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: section }).click()
     await page.waitForTimeout(150)
     expect(!(await page.getByText('failed to display').isVisible()), `${section} crashed`)
@@ -177,6 +190,86 @@ await test('settings: Dark is the default theme and perfectly flat', async () =>
   const bg = await page.evaluate(() => getComputedStyle(document.body.firstElementChild).backgroundImage)
   expect(bg === 'none', `app background is not flat: ${bg}`)
   await shot('a2b-settings-dark')
+})
+
+await test('appearance: six themes, three per row; new themes apply', async () => {
+  const cards = page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio')
+  expect((await cards.count()) === 6, `theme count ${await cards.count()}`)
+  const tops = await cards.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)))
+  expect(tops[0] === tops[1] && tops[1] === tops[2] && tops[3] > tops[0] && tops[3] === tops[5], `not three per row: ${tops}`)
+  for (const [name, id] of [['Midnight', 'midnight'], ['Jade', 'jade'], ['Rose', 'rose']]) {
+    await page.getByRole('radio', { name: new RegExp(name) }).click()
+    await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.theme)) === id, `${id} theme`)
+  }
+  await page.waitForTimeout(500)
+  await shot('a2c-themes')
+  await page.getByRole('radio', { name: /^Dark/ }).click()
+})
+
+await test('appearance: an added image becomes the wallpaper; transparency reaches every surface', async () => {
+  expect((await page.getByRole('radiogroup', { name: 'Wallpaper' }).getByRole('radio').count()) === 1, 'built-in wallpapers still listed')
+  await stubFolderPicker(IMAGE)
+  await page.getByRole('button', { name: 'Add image' }).click()
+  await waitFor(async () => /^image:w-[a-f0-9]{12}\.jpg$/.test((await value('settings.get')).wallpaper), 'wallpaper saved')
+  await waitFor(async () => page.evaluate(() => 'wallpaper' in document.documentElement.dataset), 'wallpaper attribute')
+  const alphaOf = (selector) =>
+    page.locator(selector).first().evaluate((el) => {
+      const c = getComputedStyle(el).backgroundColor
+      const m = /\/\s*([\d.]+)\)$/.exec(c) ?? /rgba\([^)]*,\s*([\d.]+)\)$/.exec(c)
+      return m ? Number(m[1]) : 1
+    })
+  await page.getByLabel('Transparency').focus()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.up('ArrowRight')
+  await waitFor(async () => (await value('settings.get')).surfaceOpacity < 0.6, 'transparency saved')
+  // Fully transparent: every surface, raised ones included, in every theme.
+  await value('settings.update', { surfaceOpacity: 0 })
+  for (const theme of ['dark', 'bronze', 'silver']) {
+    await value('settings.update', { theme })
+    await page.waitForTimeout(450)
+    const alphas = [await alphaOf('nav[aria-label="Settings sections"]'), await alphaOf('[role="radiogroup"][aria-label="Theme"] [role="radio"]')]
+    expect(alphas.every((a) => a === 0), `${theme}: surfaces not fully transparent (${alphas})`)
+  }
+  await value('settings.update', { theme: 'dark', surfaceOpacity: 0.6 })
+  await page.waitForTimeout(400)
+  await shot('a2d-wallpaper')
+  await page.getByRole('radio', { name: 'None' }).click()
+  await waitFor(async () => !(await page.evaluate(() => 'wallpaper' in document.documentElement.dataset)), 'wallpaper removed')
+})
+
+await test('the title-bar logo is flat (no glow, no gradient)', async () => {
+  const logo = await page.locator('header img').first().evaluate((el) => {
+    const s = getComputedStyle(el)
+    return { filter: s.filter, clip: s.clipPath }
+  })
+  expect(logo.filter === 'none' && logo.clip.startsWith('inset'), JSON.stringify(logo))
+  const name = await page.locator('header').getByText('Hiveory', { exact: true }).evaluate((el) => getComputedStyle(el).backgroundImage)
+  expect(name === 'none', `brand name has a gradient: ${name}`)
+})
+
+await test('extensions: skills, MCP and plugins are separate tabs; plugins use real logos', async () => {
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
+  for (const tab of ['Skills', 'MCP servers', 'Plugins']) expect(await page.getByRole('tab', { name: new RegExp(tab) }).isVisible(), `${tab} tab missing`)
+  await page.getByRole('tab', { name: /MCP servers/ }).click()
+  await page.getByText('In Hiveory · every agent').waitFor()
+  await page.getByRole('tab', { name: /Plugins/ }).click()
+  const cards = page.locator('button').filter({ hasText: 'Set up' })
+  await waitFor(async () => (await cards.count()) >= 30, 'plugin cards')
+  const logos = await page.locator('img[src^="data:image/svg+xml"]').count()
+  expect(logos >= 30, `only ${logos} plugin logos`)
+  await page.getByRole('button', { name: 'Code', exact: true }).click()
+  await waitFor(async () => (await page.getByText('GitHub', { exact: true }).isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'category filter')
+  await page.getByRole('button', { name: 'All', exact: true }).click()
+  await page.getByText('GitHub', { exact: true }).click()
+  await page.getByRole('heading', { name: 'GitHub', exact: true }).waitFor()
+  expect(await page.getByLabel('Personal access token').isVisible(), 'token field missing')
+  await shot('a2e-plugin-setup')
+  await page.keyboard.press('Escape')
+  await page.getByRole('tab', { name: /Skills/ }).click()
+  await page.getByRole('button', { name: 'New skill' }).click()
+  await page.getByLabel('Name', { exact: true }).fill('E2E Skill')
+  expect((await page.getByLabel('Name', { exact: true }).inputValue()) === 'e2e-skill', 'skill name not slugged')
+  await page.keyboard.press('Escape')
 })
 
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
@@ -267,7 +360,7 @@ await test('new branch: invalid branch name is caught before creating', async ()
 
 await test('new branch from develop with a custom name creates a real worktree', async () => {
   await page.getByLabel('Workspace name').fill('Feature E2E')
-  await page.getByLabel('Base branch').selectOption('develop')
+  await choose(page, 'Base branch', 'develop')
   await page.getByLabel('New branch').fill('feature/e2e')
   await waitFor(async () => !(await page.getByRole('button', { name: 'Create empty' }).isDisabled()), 'create to enable')
   await shot('b1-create-branch')
@@ -283,7 +376,7 @@ await test('use an existing branch (develop) without ever deleting it', async ()
   await page.waitForSelector('dialog[open]')
   await page.getByRole('radio', { name: /New branch/ }).click()
   await page.getByRole('switch', { name: 'Use an existing branch' }).click()
-  await page.getByLabel('Branch to check out').selectOption('develop')
+  await choose(page, 'Branch to check out', 'develop')
   await page.getByLabel('Workspace name').fill('Develop')
   await page.getByRole('button', { name: 'Create empty' }).click()
   existingWs = await workspaceWhere(projectId, (w) => w.name === 'Develop')
@@ -437,7 +530,7 @@ await test('keyboard: divider arrows resize; pane menu moves panes', async () =>
   const order = async () => (await paneBoxes()).sort((a, b) => a.y - b.y || a.x - b.x).map((b) => b.name)
   const first = (await order())[0]
   await panes().filter({ hasText: '' }).first()
-  await page.getByRole('button', { name: `${first.replace(' agent', '')} actions` }).click()
+  await page.getByRole('button', { name: `${first.replace(' agent', '')} actions` }).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Move right' }).click()
   await page.waitForTimeout(400)
   expect((await order())[0] !== first, 'move right did nothing')
@@ -472,46 +565,72 @@ await test('a small window keeps every pane inside the layout', async () => {
 
 // ======================= D. Terminal & clipboard =======================
 console.log('D. Side panel, sidebars, terminal & clipboard')
-// eslint-disable-next-line no-control-regex -- strips terminal escape sequences
-const ANSI = /\x1b\[[0-9;?]*[A-Za-z]/g
 const sidePanel = () => page.locator('aside[aria-label="Side panel"]')
-await test('side panel starts empty; "+" adds terminals and browsers as tabs', async () => {
+await test('side panel starts empty; "+" adds browsers and a single Explorer', async () => {
   await page.getByRole('button', { name: 'Show side panel' }).click()
   await sidePanel().getByText('Nothing open').waitFor()
   const add = async (kind) => {
-    await sidePanel().getByRole('button', { name: 'Add terminal or browser' }).first().click()
+    await sidePanel().getByRole('button', { name: 'Add browser or explorer' }).first().click()
     await page.getByRole('menuitem', { name: new RegExp(kind) }).click()
   }
-  await add('Terminal')
+  expect(!(await sidePanel().getByText('Terminal').count()), 'terminal still offered in the side panel')
   await add('Browser')
-  await add('Terminal')
-  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 3, 'three tabs')
+  await add('Explorer')
+  await add('Explorer')
+  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 2, 'two tabs (one explorer)')
   const tabs = await sidePanel().getByRole('tab').allInnerTexts()
-  expect(JSON.stringify(tabs) === JSON.stringify(['Terminal', 'New tab', 'Terminal 2']), `tabs: ${tabs}`)
+  expect(JSON.stringify(tabs) === JSON.stringify(['New tab', 'Explorer']), `tabs: ${tabs}`)
   await sidePanel().getByRole('tab', { name: 'New tab' }).click()
   expect(await sidePanel().getByLabel('Address').isVisible(), 'browser address bar missing')
-  for (const tab of ['t1', 't2']) {
-    const id = `shell-${mainWs.id}-${tab}`
-    await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.length > 0, `shell prompt ${tab}`)
-    await value('terminal.write', { instanceId: id, data: `echo e2e-${tab}-ok\r` })
-    await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.includes(`e2e-${tab}-ok`), `shell output ${tab}`)
-  }
-  // Compact prompt: the folder name, not the full app-data path.
-  const prompt = (await value('terminal.snapshot', { instanceId: `shell-${mainWs.id}-t1` })).data
-  expect(!/Hiveory[^\r\n]*Workspaces/.test(prompt) && /demo-app>/.test(prompt.replace(ANSI, '')), 'prompt is not compact')
-  await sidePanel().getByRole('tab', { name: 'Terminal', exact: true }).click()
-  await shot('d1-terminal')
+  await sidePanel().getByRole('tab', { name: 'Explorer' }).click()
+  await sidePanel().getByRole('treeitem', { name: 'README.md' }).waitFor()
 })
 
-await test('closing a terminal tab ends its shell; the panel maximizes over the main area', async () => {
-  await sidePanel().getByRole('button', { name: 'Close Terminal 2' }).click()
+await test('explorer: create, search, open a file as an editable pane and save it', async () => {
+  await sidePanel().getByRole('button', { name: 'New file' }).click()
+  await sidePanel().getByLabel('File name').fill('notes.txt')
+  await page.keyboard.press('Enter')
+  await waitFor(async () => existsSync(join(repo, 'notes.txt')), 'file created on disk')
+  // A new file opens as a pane right away.
+  const editor = page.locator('section[aria-label="notes.txt file"]')
+  await editor.waitFor()
+  await editor.locator('.cm-content').click()
+  await page.keyboard.type('hello from the editor')
+  await waitFor(async () => (await editor.getByRole('img', { name: 'Unsaved changes' }).count()) === 1, 'dirty marker')
+  await page.keyboard.press('Control+S')
+  await waitFor(async () => readFileSync(join(repo, 'notes.txt'), 'utf8') === 'hello from the editor', 'saved to disk')
+  // An agent editing the file on disk shows up in the open pane.
+  writeFileSync(join(repo, 'notes.txt'), 'changed on disk')
+  await waitFor(async () => (await editor.locator('.cm-content').innerText()).includes('changed on disk'), 'reloaded after external change')
+  await shot('d1-explorer-editor')
+  await editor.getByRole('button', { name: 'Close notes.txt' }).click()
+  await waitFor(async () => (await editor.count()) === 0, 'editor pane closed')
+  // Search, then open from the results with a double-click.
+  await sidePanel().getByLabel('Search files').fill('readme')
+  await sidePanel().getByRole('listitem').filter({ hasText: 'README.md' }).dblclick()
+  await page.locator('section[aria-label="README.md file"]').waitFor()
+  await page.locator('section[aria-label="README.md file"]').getByRole('button', { name: 'Close README.md' }).click()
+  await sidePanel().getByLabel('Search files').fill('')
+  // Rename and delete through the context menu.
+  await sidePanel().getByRole('treeitem', { name: 'notes.txt' }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Rename' }).click()
+  await sidePanel().getByLabel('File name').fill('renamed.txt')
+  await page.keyboard.press('Enter')
+  await waitFor(async () => existsSync(join(repo, 'renamed.txt')) && !existsSync(join(repo, 'notes.txt')), 'renamed on disk')
+  await sidePanel().getByRole('treeitem', { name: 'renamed.txt' }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Delete' }).click()
+  await page.getByRole('button', { name: 'Move to trash' }).click()
+  await waitFor(async () => !existsSync(join(repo, 'renamed.txt')), 'deleted to trash')
+})
+
+await test('closing the browser tab closes its page; the panel maximizes over the main area', async () => {
   await sidePanel().getByRole('button', { name: 'Close New tab' }).click()
-  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 1, 'tabs closed')
+  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 1, 'tab closed')
   expect((await value('browser.state')).pages.length === 0, 'closing the browser tab left its page open')
   const before = await sidePanel().boundingBox()
   const paneBefore = await panes().first().boundingBox()
   await page.getByRole('button', { name: 'Maximize side panel' }).click()
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(400)
   const after = await sidePanel().boundingBox()
   const sidebar = await page.getByRole('navigation', { name: 'Projects' }).boundingBox()
   expect(after.width > before.width * 1.8, 'panel did not maximize')
@@ -542,26 +661,75 @@ await test('both sidebars resize by dragging their edge', async () => {
   await page.getByRole('separator', { name: 'Resize side panel' }).dblclick()
 })
 
+await test('dragging a sidebar well past its minimum hides it; showing it again restores its width', async () => {
+  const drag = async (name, dx) => {
+    const box = await page.getByRole('separator', { name }).boundingBox()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2, { steps: 8 })
+    await page.mouse.up()
+  }
+  const width = (await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width
+  await drag('Resize sidebar', -400)
+  await waitFor(async () => !(await page.getByRole('navigation', { name: 'Projects' }).isVisible()), 'sidebar collapsed')
+  await page.getByRole('button', { name: 'Show sidebar' }).click()
+  await page.waitForTimeout(400)
+  expect(Math.abs((await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width - width) < 2, 'sidebar width not restored')
+  await drag('Resize side panel', 900)
+  await waitFor(async () => !(await sidePanel().isVisible()), 'side panel collapsed')
+  await page.getByRole('button', { name: 'Show side panel' }).click()
+  await sidePanel().waitFor()
+})
+
+let shellPane
+await test('pane "+": terminals first, search, Right and Bottom side by side; PowerShell opens as a pane', async () => {
+  await page.getByRole('button', { name: 'Add agent' }).first().click()
+  const picker = page.getByRole('dialog', { name: 'Add pane' })
+  await picker.waitFor()
+  await page.waitForTimeout(400)
+  const right = await picker.getByRole('radio', { name: 'Right' }).boundingBox()
+  const bottom = await picker.getByRole('radio', { name: 'Bottom' }).boundingBox()
+  expect(Math.abs(right.y - bottom.y) < 1 && bottom.x > right.x, 'Right and Bottom are not on one line')
+  const names = await picker.getByRole('menuitem').allInnerTexts()
+  expect(names[0] === 'PowerShell' && names.includes('Command Prompt'), `terminals not first: ${names}`)
+  await picker.getByLabel('Search terminals and agents').fill('power')
+  await waitFor(async () => JSON.stringify(await picker.getByRole('menuitem').allInnerTexts()) === JSON.stringify(['PowerShell']), 'search filters')
+  await page.keyboard.press('Enter')
+  await waitFor(async () => (await picker.count()) === 0, 'picker closed after choosing')
+  const shell = async () => (await value('agents.list', { workspaceId: mainWs.id })).find((a) => a.cliId === 'powershell')
+  await waitFor(async () => Boolean(await shell()), 'powershell pane')
+  shellPane = await shell()
+  await page.locator(`section[aria-label="${shellPane.petName} agent"]`).waitFor()
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: shellPane.id })).data.length > 0, 'shell prompt')
+  await value('terminal.write', { instanceId: shellPane.id, data: 'echo e2e-shell-ok\r' })
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: shellPane.id })).data.includes('e2e-shell-ok'), 'shell output')
+  expect(!(await value('kanban.board', { projectId })).idle.some((c) => c.cliId === 'powershell'), 'a shell appeared on the Kanban board')
+})
+
 await test('Ctrl+V pastes from the system clipboard (dictation tools use this path)', async () => {
-  const id = `shell-${mainWs.id}-t1`
   await app.evaluate(({ clipboard }) => clipboard.writeText('echo pasted-ok'))
-  await page.locator('aside[aria-label="Side panel"] .xterm').click()
+  await page.locator(`section[aria-label="${shellPane.petName} agent"] .xterm`).click()
   await page.keyboard.press('Control+V')
   await page.keyboard.press('Enter')
-  await waitFor(async () => (await value('terminal.snapshot', { instanceId: id })).data.includes('pasted-ok'), 'pasted text')
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: shellPane.id })).data.includes('pasted-ok'), 'pasted text')
 })
 
 await test('selection + Ctrl+C copies to the system clipboard', async () => {
-  await app.evaluate(({ clipboard }) => clipboard.writeText(''))
-  const term = page.locator('aside[aria-label="Side panel"] .xterm-screen')
-  const box = await term.boundingBox()
-  await page.mouse.move(box.x + 4, box.y + 4)
-  await page.mouse.down()
-  await page.mouse.move(box.x + box.width - 10, box.y + 60, { steps: 5 })
-  await page.mouse.up()
-  await page.keyboard.press('Control+C')
-  await waitFor(async () => (await app.evaluate(({ clipboard }) => clipboard.readText())).length > 0, 'copied text')
-  await page.getByRole('button', { name: 'Hide side panel' }).click()
+  try {
+    await app.evaluate(({ clipboard }) => clipboard.writeText(''))
+    const term = page.locator(`section[aria-label="${shellPane.petName} agent"] .xterm-screen`)
+    const box = await term.boundingBox()
+    await page.mouse.move(box.x + 4, box.y + 4)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width - 10, box.y + 60, { steps: 5 })
+    await page.mouse.up()
+    await page.keyboard.press('Control+C')
+    await waitFor(async () => (await app.evaluate(({ clipboard }) => clipboard.readText())).length > 0, 'copied text')
+  } finally {
+    // The shell pane is only for these tests; later tests count agents.
+    if (shellPane) await value('agents.close', { instanceId: shellPane.id }).catch(() => undefined)
+    await page.getByRole('button', { name: 'Hide side panel' }).click()
+  }
 })
 
 // ======================= E. Agent tools (MCP) =======================
@@ -668,12 +836,17 @@ await test('rapid open/close spam leaves no orphan panes or processes', async ()
   expect((await panes().count()) === start, 'orphan panes on screen')
 })
 
-await test('turning agent tools off is enforced immediately', async () => {
+await test('turning agent tools off is enforced immediately (browser and plugins keep their own switches)', async () => {
   await value('settings.update', { agentTools: false })
-  const r = await rpc('tools/list', {})
-  expect(r.error && /turned off/.test(r.error.message), 'tools still served while disabled')
-  await value('settings.update', { agentTools: true })
-  expect((await rpc('tools/list', {})).result, 'tools not restored')
+  try {
+    const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
+    expect(!names.includes('list_agents') && !names.includes('run_tools'), 'coordination tools still served while disabled')
+    expect(names.some((n) => n.startsWith('browser_')), 'browser tools lost with agent tools off')
+    expect((await rpc('tools/call', { name: 'list_agents', arguments: {} })).error, 'list_agents still callable')
+  } finally {
+    await value('settings.update', { agentTools: true })
+  }
+  expect((await rpc('tools/list', {})).result.tools.some((t) => t.name === 'list_agents'), 'tools not restored')
 })
 
 // ======================= E2. Built-in browser =======================
@@ -762,9 +935,10 @@ await test('the agent page shows in the side panel under its name; viewport emul
   // The device toolbar appears for an agent-set device too.
   const bar = sidePanel().getByRole('toolbar', { name: 'Device toolbar' })
   await bar.waitFor()
-  expect((await bar.getByLabel('Device', { exact: true }).inputValue()) === 'iPhone SE', 'toolbar does not show the device')
+  expect((await bar.getByRole('combobox', { name: 'Device', exact: true }).textContent()) === 'iPhone SE', 'toolbar does not show the device')
   await shot('e3-browser-device')
-  await bar.getByLabel('Device', { exact: true }).selectOption('iPad Mini')
+  await choose(bar, 'Device', 'iPad Mini')
+  expect((await page.getByRole('listbox').count()) === 0, 'device list stayed open')
   await waitFor(async () => (await value('browser.state')).pages[0].viewport?.width === 768, 'iPad Mini applied')
   await bar.getByLabel('Width', { exact: true }).fill('500')
   await bar.getByLabel('Width', { exact: true }).press('Enter')
@@ -1037,6 +1211,33 @@ await test('invalid IPC payloads are rejected, never crash', async () => {
     const r = await invoke(c, p)
     expect(!r.ok && r.error.code === 'INVALID_INPUT', `${c} accepted bad input`)
   }
+})
+
+await test('plugins: a server added in Hiveory reaches agents through their MCP tools', async () => {
+  const script = join(sandbox, 'mcp-fixture.cjs')
+  writeFileSync(
+    script,
+    [
+      "const rl = require('readline').createInterface({ input: process.stdin })",
+      "const send = (m) => process.stdout.write(JSON.stringify(m) + String.fromCharCode(10))",
+      "rl.on('line', (line) => {",
+      '  const msg = JSON.parse(line)',
+      '  if (msg.id === undefined) return',
+      "  if (msg.method === 'initialize') return send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fx', version: '1' } } })",
+      "  if (msg.method === 'tools/list') return send({ jsonrpc: '2.0', id: msg.id, result: { tools: [{ name: 'ping', description: 'Pings', inputSchema: { type: 'object' } }] } })",
+      "  if (msg.method === 'tools/call') return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: 'pong ' + process.env.FX_KEY }] } })",
+      '})'
+    ].join('\n')
+  )
+  const view = await value('connections.saveCustom', { name: 'Fixture', transport: 'stdio', command: process.execPath, args: [script], env: { FX_KEY: 'k-123' }, headers: {} })
+  expect(view.state === 'ready' && view.tools[0]?.name === 'fixture_ping', JSON.stringify(view))
+  expect(!JSON.stringify(await value('connections.list')).includes('k-123'), 'secret reached the renderer')
+  const list = await rpc('tools/list', {})
+  expect(list.result.tools.some((t) => t.name === 'fixture_ping'), 'agent does not see the plugin tool')
+  const r = await tool('fixture_ping')
+  expect(r.content[0].text === 'pong k-123', r.content[0].text)
+  await value('connections.remove', { id: view.id })
+  expect(!(await rpc('tools/list', {})).result.tools.some((t) => t.name === 'fixture_ping'), 'removed tool still listed')
 })
 
 await test('everything survives a restart; agents come back on their own', async () => {

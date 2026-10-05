@@ -95,3 +95,10 @@ p {
     transform: rotate(360deg);
   }
 }
+
+/* Theme switches cross-fade the whole window once (document.startViewTransition). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--duration-glide);
+  animation-timing-function: var(--ease-in-out);
+}

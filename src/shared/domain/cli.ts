@@ -26,6 +26,8 @@ export interface CliDescriptor {
   id: string
   displayName: string
   icon: IconReference
+  /** `shell`: a plain terminal (PowerShell, Command Prompt, Git Bash), not an agent. */
+  kind: 'agent' | 'shell'
   supportsAutoApprove: boolean
   /** Has a headless mode Hiveory can show as a chat (Chat mode, and Work agents in chat view). */
   supportsChat: boolean

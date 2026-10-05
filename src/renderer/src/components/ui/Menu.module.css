@@ -10,13 +10,13 @@
   backdrop-filter: var(--blur-glass);
   box-shadow: var(--shadow-popover);
   transform-origin: top;
-  animation: menu-in var(--duration-fast) var(--ease-out);
+  animation: menu-in var(--duration-slow) var(--ease-liquid);
 }
 
 @keyframes menu-in {
   from {
     opacity: 0;
-    transform: translateY(calc(var(--nudge-sm) * -1)) scale(0.98);
+    transform: translateY(calc(var(--nudge) * -1)) scale(0.96);
   }
 }
 

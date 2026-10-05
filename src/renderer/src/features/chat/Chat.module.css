@@ -200,7 +200,7 @@
   align-self: flex-end;
   max-width: 100%;
   padding: var(--space-5) var(--space-6);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg) var(--radius-lg) var(--radius-sm) var(--radius-lg);
   background: var(--fill-raised);
   box-shadow: var(--shadow-raised);
@@ -210,12 +210,6 @@
 
 .assistant {
   display: flex;
-  gap: var(--space-5);
-}
-
-.avatar {
-  flex: none;
-  margin-top: var(--space-1);
 }
 
 .assistantBody {
@@ -358,17 +352,21 @@
   padding: 0 var(--space-5) var(--space-5);
 }
 
+/*
+ * The composer, in the pattern professional chat tools share: one quiet card,
+ * the message on top, a toolbar of borderless text controls that only light
+ * up on hover, and a compact square send button. No pills, no outlines at rest.
+ */
 .composer {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   max-width: var(--chat-max-width);
   margin: 0 auto;
-  padding: var(--space-4) var(--space-4) var(--space-4);
-  border: var(--border-width) solid var(--color-border);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-raised);
   transition: border-color var(--duration-fast) var(--ease-out);
 }
 
@@ -384,8 +382,8 @@
 
 .input {
   width: 100%;
-  min-height: var(--control-lg);
-  padding: var(--space-3) var(--space-4) 0;
+  min-height: calc(var(--control-lg) + var(--space-4));
+  padding: var(--space-2) var(--space-3) 0;
   overflow-y: hidden;
   border: 0;
   background: transparent;
@@ -410,35 +408,35 @@
 .controls {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-1);
   min-width: 0;
 }
 
-/* Pickers: separate pills, tall enough to hit comfortably. */
+/* Toolbar controls: text buttons with a hover fill — the label is the control. */
 .pill {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
   max-width: calc(var(--menu-min-width) * 1.1);
-  height: var(--control-lg);
-  padding: 0 var(--space-5);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-inset);
-  color: var(--color-text-secondary);
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   white-space: nowrap;
   transition:
-    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
 
 button.pill:hover,
 .pill[aria-expanded='true'] {
-  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
   color: var(--color-text);
 }
 
@@ -448,7 +446,7 @@ button.pill:hover,
   height: var(--icon-sm);
 }
 
-/* The model pill is the one that gives up width first. */
+/* The model control is the one that gives up width first. */
 .pillModel {
   flex: 0 1 auto;
 }
@@ -460,7 +458,7 @@ button.pill:hover,
 }
 
 .pillStatic {
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   cursor: default;
 }
 
@@ -468,7 +466,9 @@ button.pill:hover,
   text-transform: capitalize;
 }
 
-.chevron {
+.pill > .chevron {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   color: var(--color-text-faint);
 }
 
@@ -480,38 +480,47 @@ button.pill:hover,
   display: grid;
   flex: none;
   place-items: center;
-  width: var(--control-lg);
-  height: var(--control-lg);
+  width: var(--control-md);
+  height: var(--control-md);
+  margin-left: var(--space-2);
   border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--gradient-metal);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
   color: var(--color-accent-contrast);
-  box-shadow: var(--shadow-button);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.send:not(:disabled):hover {
+  background: var(--color-accent-hover);
 }
 
 .send:disabled {
   cursor: default;
-  opacity: 0.35;
+  background: var(--color-surface-active);
+  color: var(--color-text-faint);
 }
 
 .send svg {
-  width: var(--icon-md);
-  height: var(--icon-md);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: 2.5;
 }
 
-/* Narrow panes: pills keep their icon; labels go (the model name stays, truncated). */
-@container composer (max-width: 520px) {
-  .pill .pillLabel {
+/* Narrow panes: effort and access keep their icon; the model name stays, truncated. */
+@container composer (max-width: 460px) {
+  .pill:not(.pillModel) .pillLabel {
     display: none;
   }
 
   .pill {
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
   }
 }
 
 @container composer (max-width: 320px) {
-  .chevron {
+  .pill > .chevron {
     display: none;
   }
 }
@@ -533,7 +542,7 @@ button.pill:hover,
   max-width: calc(var(--menu-min-width) * 1.2);
   height: calc(var(--control-lg) + var(--space-4));
   padding: 0 var(--space-2) 0 var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-surface-inset);
 }
@@ -632,7 +641,7 @@ button.pill:hover,
   width: calc(var(--logo-xl) + var(--space-9));
   height: calc(var(--logo-xl) + var(--space-9));
   margin-bottom: var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
   background: var(--fill-raised);
   box-shadow: var(--shadow-raised);
@@ -753,7 +762,7 @@ button.pill:hover,
 
 .modelBadge {
   padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   font-size: var(--text-2xs);
@@ -771,4 +780,23 @@ button.pill:hover,
   padding: var(--space-4) var(--space-5);
   color: var(--color-text-muted);
   font-size: var(--text-xs);
+}
+
+/*
+ * Long chats stay light: turns far off screen skip layout and paint until
+ * scrolled near (their last size is remembered, so scrolling never jumps).
+ * New turns rise in.
+ */
+.userTurn,
+.assistant {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto var(--space-11);
+  animation: turn-in var(--duration-slow) var(--ease-out);
+}
+
+@keyframes turn-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3));
+  }
 }

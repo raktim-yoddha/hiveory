@@ -10,7 +10,14 @@ import { parseCookieFile } from './cookies'
 import { parseKeys } from './keys'
 import { PageError } from './page-driver'
 import { PAGE_SCRIPT, pageCall } from './page-script'
-import { fitScale, normalizeUrl } from './urls'
+import { fitScale, isLoadable, normalizeUrl } from './urls'
+
+describe('isLoadable', () => {
+  it('lets pages reach web, file and blank pages only', () => {
+    for (const ok of ['https://a.dev/x', 'http://localhost:3000', 'file:///C:/site/index.html', 'about:blank']) expect(isLoadable(ok)).toBe(true)
+    for (const bad of ['chrome://settings', 'ms-settings:privacy', 'javascript:alert(1)', 'data:text/html,x', 'vscode://file/x']) expect(isLoadable(bad)).toBe(false)
+  })
+})
 
 describe('normalizeUrl', () => {
   it('adds schemes: http for local dev servers, https for hosts', () => {

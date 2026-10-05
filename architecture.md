@@ -70,6 +70,21 @@ Electron is appropriate here because it provides a desktop application shell wit
 
 Electron's official guidance recommends context isolation and controlled contextBridge APIs rather than exposing powerful primitives directly to renderer code. citeturn0search2turn0search4
 
+### Hardening (ADR 0018)
+
+- Window and browser pages: `contextIsolation`, `sandbox`, `nodeIntegration: false`, `webSecurity`.
+- Every web contents refuses `<webview>` and popups unless its creator installs a handler
+  (`web-contents-created` in `main/index.ts`).
+- The window denies all permission requests and checks. Browser pages grant only
+  fullscreen and sanitized clipboard writes (requests; checks stay default — denying them
+  breaks agent snapshots and drag).
+- Browser pages load only http(s), file and about:blank — typed, agent-driven, link,
+  redirect or popup alike (`isLoadable`).
+- CSP: no objects, frames, `<base>` or form posts; the dev server's `ws://localhost`
+  is stripped from builds.
+- File access (`FileService.resolveIn`) stays inside the scope's folder, refuses `.git`
+  and refuses symlinks or junctions that lead outside it.
+
 ## Domain Model
 
 ```text
@@ -468,7 +483,11 @@ src/
 │       ├── browser/            BrowserService (pages = WebContentsViews), PageDriver (CDP input), page script, BrowserTools (MCP)
 │       ├── computer/           ComputerService (warm native helper: SendInput, GDI, UI Automation), ComputerTools (MCP)
 │       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
-│       ├── extensions/         Skills & MCP inventory
+│       ├── extensions/         Skills (copy/create/import/trash) & MCP inventory (full configs kept in main)
+│       ├── connections/        ConnectionService (plugins + Hiveory MCP servers, sealed secrets), McpGateway (MCP client → ToolFamily)
+│       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
+│       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
+│       ├── editors/            EditorService — files open as panes in workspace layouts
 │       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery
 │       └── cli/
@@ -499,7 +518,10 @@ resizable sidebars, Dark theme: ADR 0013. Durable sessions (resume on start-up,
 per-CLI resume), chat attachments, Permissions pill: ADR 0014. Built-in agent
 browser (pages in main, browser_* MCP tools, profiles, viewports): ADR 0015.
 Speed (diff snapshots, crawl, frame-aligned input), device mode, computer use,
-ask_agent / run_tools: ADR 0016.
+ask_agent / run_tools: ADR 0016. Plugins and Hiveory MCP servers through one
+gateway, skills management, six themes, wallpapers and transparency, motion
+and performance: ADR 0017. Flat outline-free UI, shell panes (PowerShell, Command
+Prompt, Git Bash), Explorer and CodeMirror editor panes, composer: ADR 0018.
 
 ### Agent tools data flow
 
@@ -509,7 +531,9 @@ agent CLI ──MCP (HTTP, bearer)──▶ HookServer /mcp/<instanceId> ──�
                                                                      ├─ CliRuntimeManager (read screen, write input, status)
                                                                      ├─ LayoutService (arrange)
                                                                      ├─ ShellService (terminal)
-                                                                     └─ BrowserTools ─▶ BrowserService ─▶ PageDriver
+                                                                     ├─ BrowserTools ─▶ BrowserService ─▶ PageDriver
+                                                                     └─ McpGateway ─▶ plugin / MCP servers (stdio or HTTP,
+                                                                                       started on first call, shared, idle-stopped)
 ```
 
 ### Browser data flow

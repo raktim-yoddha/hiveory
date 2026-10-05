@@ -20,7 +20,7 @@
   width: var(--space-11);
   height: var(--space-11);
   margin-bottom: var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
   background: var(--fill-icon);
   box-shadow: var(--shadow-raised);

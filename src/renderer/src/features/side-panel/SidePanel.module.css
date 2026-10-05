@@ -17,8 +17,7 @@
   gap: var(--space-2);
   height: calc(var(--pane-header-height) + var(--space-2));
   padding: 0 var(--space-2) 0 var(--space-3);
-  border-bottom: var(--border-width) solid var(--color-pane-header-edge);
-  background: var(--color-pane-header);
+  background: transparent;
 }
 
 /* Tabs scroll sideways when there are many; "+" follows the last tab. */
@@ -132,24 +131,5 @@
   display: none;
 }
 
-.shell {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
 
-.shellBar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-3) var(--space-3) var(--space-1);
-}
 
-.terminal {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  margin-left: var(--space-3);
-}

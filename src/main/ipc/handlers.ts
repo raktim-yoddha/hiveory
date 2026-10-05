@@ -1,6 +1,9 @@
 import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { isPluginHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
+import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
+import { findExecutable, processDiscoveryEnv } from '../services/cli/discovery'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
 
@@ -12,6 +15,25 @@ export const createHandlers = (c: Container): Handlers => {
   }
   const requireRepoRoot = async (projectId: string): Promise<string> =>
     (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This project is not a Git repository.')
+
+  /** The project folder for a project-scoped skill action (by id, or the project a scanned skill lives in). */
+  const projectPathOf = (projectId?: string, skillPath?: string): string | undefined => {
+    if (projectId) return c.workspaceRepo.project(projectId).path
+    if (!skillPath) return undefined
+    return c.projects.list().map((p) => p.path).find((root) => skillPath.startsWith(root))
+  }
+
+  /** A scope's folder (workspace, else project) and the id its events use. */
+  const folderOf = (scope: { workspaceId?: string; projectId?: string }): { root: string; key: string } =>
+    scope.workspaceId
+      ? { root: c.workspaceRepo.get(scope.workspaceId).path, key: scope.workspaceId }
+      : { root: c.workspaceRepo.project(scope.projectId!).path, key: scope.projectId! }
+
+  const pickPath = async (sender: Electron.WebContents, options: Electron.OpenDialogOptions): Promise<string | undefined> => {
+    const window = BrowserWindow.fromWebContents(sender)
+    const result = window ? await dialog.showOpenDialog(window, options) : await dialog.showOpenDialog(options)
+    return result.canceled ? undefined : result.filePaths[0]
+  }
 
   return {
   'app.info': () => ({
@@ -97,10 +119,82 @@ export const createHandlers = (c: Container): Handlers => {
 
   'extensions.scan': ({ projectId }) =>
     c.extensions.scan(projectId ? c.workspaceRepo.project(projectId).path : undefined),
-  'extensions.shareSkill': ({ path }) => ({ path: c.extensions.shareSkill(path) }),
   'extensions.revealSkill': async ({ path }) => {
     const error = await shell.openPath(c.extensions.skillFolder(path))
     if (error) fail('NOT_FOUND', 'Could not open the folder.', { detail: error })
+  },
+  'extensions.copySkill': ({ path, rootId }) => {
+    c.extensions.copySkill(path, rootId, projectPathOf(undefined, path))
+  },
+  'extensions.removeSkill': ({ path }) => c.extensions.removeSkill(path),
+  'extensions.createSkill': ({ projectId, ...input }) => {
+    c.extensions.createSkill(input, projectPathOf(projectId))
+  },
+  'extensions.importSkill': async ({ rootIds, projectId }, event) => {
+    const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })
+    if (!folder) return false
+    c.extensions.importSkill(folder, rootIds, projectPathOf(projectId))
+    return true
+  },
+
+  'system.openUrl': async ({ url }) => {
+    if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens plugin help pages from here.')
+    await shell.openExternal(url)
+  },
+  'files.list': async ({ scope, dir }) => {
+    const { root } = folderOf(scope)
+    return { root, entries: await c.files.list(root, dir) }
+  },
+  'files.search': ({ scope, query }) => c.files.search(folderOf(scope).root, query),
+  'files.read': ({ scope, path }) => c.files.read(folderOf(scope).root, path),
+  'files.write': ({ scope, path, content }) => c.files.write(folderOf(scope).root, path, content),
+  'files.create': ({ scope, path, kind }) => c.files.create(folderOf(scope).root, path, kind),
+  'files.rename': async ({ scope, from, to }) => {
+    await c.files.rename(folderOf(scope).root, from, to)
+    if (scope.workspaceId) c.editors.renamed(scope.workspaceId, from, to)
+  },
+  'files.delete': ({ scope, paths }) => c.files.remove(folderOf(scope).root, paths),
+  'files.paste': ({ scope, sources, targetDir, mode }) => c.files.paste(folderOf(scope).root, sources, targetDir, mode),
+  'files.reveal': ({ scope, path }) => {
+    shell.showItemInFolder(c.files.resolveIn(folderOf(scope).root, path))
+  },
+  'files.watch': ({ scope, watch }) => {
+    const { root, key } = folderOf(scope)
+    c.files.watch(key, root, watch)
+  },
+  'editors.list': ({ workspaceId }) => c.editors.list(workspaceId),
+  'editors.open': ({ workspaceId, path, targetPaneId, side }) => {
+    c.files.resolveIn(c.workspaceRepo.get(workspaceId).path, path)
+    return c.editors.open(workspaceId, path, targetPaneId && side ? { targetPaneId, side } : undefined)
+  },
+  'editors.close': ({ editorId }) => c.editors.close(editorId),
+  'connections.list': () => c.connections.list(),
+  'connections.requirements': () => {
+    const env = processDiscoveryEnv()
+    return { npx: Boolean(findExecutable('npx', env)), uvx: Boolean(findExecutable('uvx', env)) }
+  },
+  'connections.savePlugin': ({ pluginId, values }) => c.connections.savePlugin(pluginId, values),
+  'connections.saveCustom': (input) => c.connections.saveCustom(input),
+  'connections.import': ({ name }) => {
+    const { config, from } = c.extensions.rawServer(name)
+    return c.connections.importServer(name, config, from)
+  },
+  'connections.setEnabled': ({ id, enabled }) => c.connections.setEnabled(id, enabled),
+  'connections.test': ({ id }) => c.connections.test(id),
+  'connections.remove': ({ id }) => c.connections.remove(id),
+
+  'wallpapers.list': () => c.wallpapers.list(),
+  'wallpapers.add': async (_input, event) => {
+    const file = await pickPath(event.sender, {
+      title: 'Choose a wallpaper',
+      properties: ['openFile'],
+      filters: [{ name: 'Images', extensions: WALLPAPER_EXTENSIONS }]
+    })
+    return file ? c.wallpapers.add(file) : null
+  },
+  'wallpapers.remove': ({ file }) => {
+    if (c.settings.get().wallpaper === `image:${file}`) c.settings.update({ wallpaper: '' })
+    c.wallpapers.remove(file)
   },
 
   'browser.state': () => c.browser.state(),
@@ -189,7 +283,8 @@ export const createHandlers = (c: Container): Handlers => {
   'kanban.board': ({ projectId }) =>
     buildBoard(
       projectId,
-      c.agents.instancesInProject(projectId),
+      // Shells are terminals, not agents: they have no place on the board.
+      c.agents.instancesInProject(projectId).filter((i) => c.registry.adapter(i.cliId)?.kind !== 'shell'),
       (workspaceId) => c.workspaceRepo.find(workspaceId)?.name,
       (instanceId) => c.runtime.details(instanceId)
     )

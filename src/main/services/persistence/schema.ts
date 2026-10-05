@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { viewportSchema } from '@shared/ipc/contract'
+import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -12,6 +12,37 @@ export interface PersistedState {
   presets: AgentPreset[]
   settings: AppSettings
   browserProfiles: BrowserProfile[]
+  /** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Secret values are encrypted. */
+  connections: StoredConnection[]
+  /** Files open as panes in workspace layouts (ADR 0018). */
+  editors: StoredEditor[]
+}
+
+export interface StoredEditor {
+  id: string
+  workspaceId: string
+  /** Relative to the workspace folder. */
+  path: string
+}
+
+/** A connection as saved: env, header and secret field values are sealed by SecretBox. */
+export interface StoredConnection {
+  id: string
+  name: string
+  pluginId?: string
+  enabled: boolean
+  transport: 'stdio' | 'http'
+  command?: string
+  args?: string[]
+  url?: string
+  env: Record<string, string>
+  headers: Record<string, string>
+  /** Plugin field values (secret ones sealed). */
+  values: Record<string, string>
+  /** Tool list from the last successful connection, so agents see the tools without starting the server. */
+  tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
+  error?: string
+  importedFrom?: string
 }
 
 export const emptyState = (): PersistedState => ({
@@ -22,11 +53,13 @@ export const emptyState = (): PersistedState => ({
   layouts: {},
   presets: [],
   settings: { ...DEFAULT_SETTINGS },
-  browserProfiles: []
+  browserProfiles: [],
+  connections: [],
+  editors: []
 })
 
 const settingsSchema = z.object({
-  theme: z.enum(['dark', 'bronze', 'silver']).catch(DEFAULT_SETTINGS.theme),
+  theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']).catch(DEFAULT_SETTINGS.theme),
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
   defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),
@@ -36,7 +69,11 @@ const settingsSchema = z.object({
   browserHomeUrl: z.string().max(2000).catch(DEFAULT_SETTINGS.browserHomeUrl),
   browserDefaultProfile: z.string().max(128).catch(DEFAULT_SETTINGS.browserDefaultProfile),
   browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
-  computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse)
+  computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse),
+  wallpaper: wallpaperSchema.catch(DEFAULT_SETTINGS.wallpaper),
+  surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
+  wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),
+  wallpaperDim: z.number().min(0).max(0.8).catch(DEFAULT_SETTINGS.wallpaperDim)
 })
 
 const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })
@@ -98,6 +135,26 @@ export const layoutSchema: z.ZodType<LayoutNode> = z.lazy(() =>
   ])
 )
 
+const stringMap = z.record(z.string(), z.string())
+const connectionSchema: z.ZodType<StoredConnection> = z.object({
+  id: z.string().regex(/^c[a-z0-9]{1,24}$/),
+  name: str,
+  pluginId: str.optional(),
+  enabled: z.boolean(),
+  transport: z.enum(['stdio', 'http']),
+  command: str.optional(),
+  args: z.array(str).optional(),
+  url: str.optional(),
+  env: stringMap,
+  headers: stringMap,
+  values: stringMap,
+  tools: z.array(z.object({ name: str, description: z.string(), inputSchema: z.record(z.string(), z.unknown()) })),
+  error: str.optional(),
+  importedFrom: str.optional()
+})
+
+const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
+
 export const presetSchema: z.ZodType<AgentPreset> = z.object({
   id: str,
   name: str,
@@ -138,7 +195,9 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       presets: list(input.presets, presetSchema),
       // Unknown or invalid settings fall back to defaults field by field.
       settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {}),
-      browserProfiles: list(input.browserProfiles, browserProfileSchema)
+      browserProfiles: list(input.browserProfiles, browserProfileSchema),
+      connections: list(input.connections, connectionSchema),
+      editors: list(input.editors, editorSchema)
     },
     rejected
   }

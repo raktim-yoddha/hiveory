@@ -34,9 +34,7 @@
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-tight);
-  background: var(--gradient-metal);
-  background-clip: text;
-  color: transparent;
+  color: var(--color-text);
 }
 
 .end {

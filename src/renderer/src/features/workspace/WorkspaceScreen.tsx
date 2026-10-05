@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { FolderX } from 'lucide-react'
-import type { CliInstanceView, WorkspaceView } from '@shared/domain'
+import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useAgents, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
+import { useEditors } from '../../stores/editors'
+import { EditorPane } from '../editor/EditorPane'
 import { AgentPane } from '../agents/AgentPane'
 import { PaneLayout } from '../panes/PaneLayout'
 import { focusTerminal } from '../terminal/terminal-registry'
@@ -11,6 +13,7 @@ import { EmptyWorkspace } from './EmptyWorkspace'
 import styles from './WorkspaceScreen.module.css'
 
 const NO_AGENTS: CliInstanceView[] = []
+const NO_EDITORS: EditorView[] = []
 const NO_WORKSPACES: WorkspaceView[] = []
 
 interface WorkspaceScreenProps {
@@ -27,6 +30,8 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const workspace = workspaces.find((w) => w.id === workspaceId)
   const agents = useAgents((s) => s.byWorkspace[workspaceId])
   const loadAgents = useAgents((s) => s.load)
+  const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
+  const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const { load: loadLayout, apply } = useLayouts()
   const [clearedHighlight, setClearedHighlight] = useState<string>()
@@ -38,8 +43,9 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
 
   useEffect(() => {
     void loadAgents(workspaceId)
+    void loadEditors(workspaceId)
     void loadLayout(workspaceId)
-  }, [workspaceId, loadAgents, loadLayout])
+  }, [workspaceId, loadAgents, loadEditors, loadLayout])
 
   // Arriving from a Kanban card: focus that agent's terminal and briefly mark its pane.
   useEffect(() => {
@@ -59,11 +65,12 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
 
   const list = agents ?? NO_AGENTS
   const byId = new Map(list.map((a) => [a.id, a]))
+  const editorById = new Map(editors.map((e) => [e.id, e]))
 
   return (
     <section className={styles.screen} aria-label={`${workspace.name} workspace`}>
       <div className={styles.body}>
-        {agents && list.length === 0 ? (
+        {agents && list.length === 0 && editors.length === 0 ? (
           <div className={styles.emptySurface}>
             <EmptyWorkspace workspaceId={workspaceId} />
           </div>
@@ -73,6 +80,14 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
               tree={tree}
               onOperation={(operation) => void apply(workspaceId, operation)}
               renderPane={(paneId, props) => {
+                const editor = editorById.get(paneId)
+                if (editor) {
+                  return (
+                    <ErrorBoundary region={`${editor.name} editor`} compact resetKey={editor.id}>
+                      <EditorPane editor={editor} {...props} />
+                    </ErrorBoundary>
+                  )
+                }
                 const agent = byId.get(paneId)
                 if (!agent) return null
                 return (

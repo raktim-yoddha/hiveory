@@ -111,7 +111,8 @@ export const usePaneDrag = ({ containerRef, panes, onOperation }: Options) => {
 
   /** Attach to a pane's drag handle (its header). Presses on buttons inside are ignored. */
   const startDrag = useCallback((paneId: string, event: ReactPointerEvent) => {
-    if (event.button !== 0 || (event.target as HTMLElement).closest('button, input, [role="menu"]')) return
+    // The pane's name (data-pane-grip) is a button but also the drag grip.
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button:not([data-pane-grip]), input, [role="menu"]')) return
     pending.current = { paneId, x: event.clientX, y: event.clientY }
     pointer.current = { x: event.clientX, y: event.clientY }
   }, [])

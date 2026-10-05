@@ -11,7 +11,7 @@
   max-width: 100%;
   height: var(--control-md);
   padding: 0 var(--space-1) 0 var(--space-1);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-surface-inset);
   box-shadow: inset 0 var(--hairline) 0 var(--color-sheen);
@@ -50,7 +50,7 @@
   width: var(--control-xs);
   height: var(--control-xs);
   margin-right: var(--space-1);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-sm);
   background: var(--color-surface-active);
   color: var(--color-bronze);

@@ -97,9 +97,13 @@ describe('extensions inventory', () => {
     expect(parseSkillFrontmatter('---\nname: review\ndescription: "Reviews code"\n---\nbody')).toEqual({ name: 'review', description: 'Reviews code' })
     expect(parseSkillFrontmatter('no frontmatter')).toEqual({})
     expect(parseCodexMcp('[mcp_servers.docs]\ncommand = "npx"\n\n[mcp_servers."remote one"]\nurl = "https://x"\n[other]\n')).toEqual([
-      { name: 'docs', target: 'npx', transport: 'stdio' },
-      { name: 'remote one', target: 'https://x', transport: 'http' }
+      { name: 'docs', target: 'npx', transport: 'stdio', config: { command: 'npx' } },
+      { name: 'remote one', target: 'https://x', transport: 'http', config: { url: 'https://x' } }
     ])
+    // Full configs (args, inline env, env sub-table) are kept in main for "use in every agent".
+    expect(
+      parseCodexMcp('[mcp_servers.gh]\ncommand = "npx"\nargs = ["-y", "server"]\nenv = { A = "1", B = "two" }\n[mcp_servers.gh.env]\nC = "3"\n')[0]!.config
+    ).toEqual({ command: 'npx', args: ['-y', 'server'], env: { A: '1', B: 'two', C: '3' } })
     expect(parseJsonc('{ // comment\n "a": "http://x", /* c */ "b": [1,2,], }')).toEqual({ a: 'http://x', b: [1, 2] })
   })
 
@@ -117,10 +121,27 @@ describe('extensions inventory', () => {
     expect(inventory.skills[0]!.visibleTo).toContain('claude')
     expect(inventory.mcpServers).toHaveLength(1)
     expect(inventory.mcpServers[0]!.configuredIn.map((c) => c.cliId).sort()).toEqual(['claude', 'codex'])
-    const target = service.shareSkill(inventory.skills[0]!.path)
+    const target = service.copySkill(inventory.skills[0]!.path, 'agents')
     expect(target).toBe(join(home, '.agents', 'skills', 'review'))
     expect(service.scan().skills.map((s) => s.source).sort()).toEqual(['~/.agents/skills', '~/.claude/skills'])
-    expect(() => service.shareSkill(join(home, 'random'))).toThrow()
+    expect(() => service.copySkill(inventory.skills[0]!.path, 'agents')).toThrow(/already has/)
+    expect(() => service.copySkill(join(home, 'random'), 'codex')).toThrow()
+    expect(service.rawServer('docs')).toEqual({ config: { command: 'npx', args: ['d'] }, from: 'Claude Code' })
+  })
+
+  it('creates and imports skills into several folders', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hv-home-'))
+    const service = new ExtensionsService(log, home)
+    service.createSkill({ name: 'deploy', description: 'Ships it\nsafely', body: '# Steps', rootIds: ['agents', 'claude'] })
+    const skills = service.scan().skills
+    expect(skills.map((s) => s.rootId).sort()).toEqual(['agents', 'claude'])
+    expect(skills[0]!.description).toBe('Ships it safely')
+    expect(() => service.createSkill({ name: 'deploy', description: 'x', body: '', rootIds: ['codex', 'claude'] })).toThrow(/already exists/)
+    const outside = mkdtempSync(join(tmpdir(), 'hv-skill-'))
+    expect(() => service.importSkill(outside, ['codex'])).toThrow(/SKILL.md/)
+    writeFileSync(join(outside, 'SKILL.md'), '---\nname: outside\ndescription: d\n---\n')
+    expect(service.importSkill(outside, ['codex'])).toHaveLength(1)
+    expect(service.scan().skills.filter((s) => s.rootId === 'codex')).toHaveLength(1)
   })
 })
 

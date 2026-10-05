@@ -1,7 +1,6 @@
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode, SVGProps } from 'react'
 import {
   Blocks,
-  Bot,
   Compass,
   GitBranch,
   Keyboard,
@@ -13,6 +12,7 @@ import {
   SquareTerminal,
   Workflow
 } from 'lucide-react'
+import { AgentIcon } from '../../../components/brand/AgentIcon'
 
 export interface GuideSection {
   heading: string
@@ -25,7 +25,7 @@ export interface GuideChapter {
   id: string
   title: string
   summary: string
-  icon: typeof Compass
+  icon: ComponentType<SVGProps<SVGSVGElement>>
   sections: GuideSection[]
 }
 
@@ -110,7 +110,7 @@ export const GUIDE: GuideChapter[] = [
     id: 'panes',
     title: 'Agents & panes',
     summary: 'Pane controls, status colors, restart and maximize.',
-    icon: Bot,
+    icon: AgentIcon,
     sections: [
       {
         heading: 'Pane header',
@@ -281,16 +281,25 @@ export const GUIDE: GuideChapter[] = [
   },
   {
     id: 'extensions',
-    title: 'Skills & MCP',
-    summary: 'See what every agent can load.',
+    title: 'Skills, MCP & Plugins',
+    summary: 'Give every agent skills, MCP servers and apps.',
     icon: Blocks,
     sections: [
       {
-        heading: 'Inventory',
+        heading: 'Skills',
         body: (
           <p>
-            Settings → Skills &amp; MCP lists skills from the standard folders and MCP servers from each CLI's config, with which agents
-            see them. Share a skill to <code>~/.agents/skills</code> to make it available to every standards-following agent.
+            Settings → Skills, MCP &amp; Plugins → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
+            Codex, Cursor) to copy the skill there, create a new skill, or import a skill folder.
+          </p>
+        )
+      },
+      {
+        heading: 'MCP servers and plugins',
+        body: (
+          <p>
+            Servers you add under MCP servers, and plugins you connect with your own keys, are served by Hiveory to every agent — terminal
+            and chat — without changing any CLI's config. Keys are encrypted on this computer; there is no OAuth and nothing hosted.
           </p>
         )
       }

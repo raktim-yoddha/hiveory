@@ -7,7 +7,7 @@ interface PaneFrameProps {
   header: ReactNode
   children: ReactNode
   onHeaderPointerDown?: (event: ReactPointerEvent) => void
-  /** Double-clicking empty header space (not a button) toggles maximize. */
+  /** Double-clicking empty header space (or the pane's name, marked data-pane-grip) toggles maximize. */
   onHeaderDoubleClick?: () => void
   highlighted?: boolean
   /** Tints the frame so state reads at a glance (e.g. an agent waiting for you). */
@@ -22,7 +22,7 @@ export function PaneFrame({ label, header, children, onHeaderPointerDown, onHead
         className={styles.header}
         onPointerDown={onHeaderPointerDown}
         onDoubleClick={(e) => {
-          if (!(e.target as HTMLElement).closest('button')) onHeaderDoubleClick?.()
+          if (!(e.target as HTMLElement).closest('button:not([data-pane-grip])')) onHeaderDoubleClick?.()
         }}
       >
         {header}

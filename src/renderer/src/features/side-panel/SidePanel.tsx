@@ -1,28 +1,29 @@
-import { useEffect, useState } from 'react'
-import { Bot, Globe, Maximize2, Minimize2, Plus, RotateCcw, SquareTerminal, X } from 'lucide-react'
+import { useEffect } from 'react'
+import { FolderTree, Globe, Maximize2, Minimize2, PanelRight, Plus, X } from 'lucide-react'
+import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { Menu } from '../../components/ui/Menu'
-import { PathTrail } from '../../components/ui/PathTrail'
+
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useBrowser } from '../../stores/browser'
 import { useSettings } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type PanelTab } from '../../stores/navigation'
-import { reportError, runAction } from '../../stores/notices'
+import { runAction } from '../../stores/notices'
 import { BrowserPane } from '../browser/BrowserPane'
-import { TerminalView } from '../terminal/TerminalView'
+import { Explorer } from '../explorer/Explorer'
 import styles from './SidePanel.module.css'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { terminal: SquareTerminal, browser: Globe }
+const TAB_ICON = { explorer: FolderTree, browser: Globe }
 
 /**
- * Right side panel: any number of terminal and browser tabs for the folder in
- * view, added from "+". Starts empty. Can be maximized over the main area.
- * Browser pages live in main; pages agents open in this workspace appear here
- * as tabs on their own.
+ * Right side panel for the folder in view: browser tabs (any number) and the
+ * folder's Explorer (one), added from "+". Starts empty. Can be maximized over
+ * the main area. Browser pages live in main; pages agents open in this
+ * workspace appear here as tabs on their own. Terminals open as panes.
  */
 export function SidePanel() {
   const view = useNavigation((s) => s.view)
@@ -46,8 +47,7 @@ export function SidePanel() {
 
   const closeTab = (tab: PanelTab): void => {
     closePanelTab(scope, tab.id)
-    if (tab.kind === 'terminal') void api('shell.close', { id: shellId(scope, tab.id) }).catch(() => undefined)
-    else void api('browser.close', { pageId: tab.id }).catch(() => undefined)
+    if (tab.kind === 'browser') void api('browser.close', { pageId: tab.id }).catch(() => undefined)
   }
 
   const openBrowser = async (): Promise<void> => {
@@ -74,10 +74,18 @@ export function SidePanel() {
     <Menu
       label="Add to side panel"
       items={[
-        { type: 'item', id: 'terminal', label: 'Terminal', icon: <SquareTerminal />, disabled: !scope, onSelect: () => addPanelTab(scope, 'terminal') },
-        { type: 'item', id: 'browser', label: 'Browser', icon: <Globe />, disabled: !scope, onSelect: () => void openBrowser() }
+        { type: 'item', id: 'browser', label: 'Browser', icon: <Globe />, disabled: !scope, onSelect: () => void openBrowser() },
+        {
+          type: 'item',
+          id: 'explorer',
+          label: 'Explorer',
+          icon: <FolderTree />,
+          disabled: !scope,
+          hint: tabs.some((t) => t.kind === 'explorer') ? 'Open' : undefined,
+          onSelect: () => addPanelTab(scope, 'explorer')
+        }
       ]}
-      trigger={(props) => <IconButton {...props} label="Add terminal or browser" icon={<Plus />} className={styles.add} />}
+      trigger={(props) => <IconButton {...props} label="Add browser or explorer" icon={<Plus />} className={styles.add} />}
     />
   )
 
@@ -87,7 +95,7 @@ export function SidePanel() {
         <div className={styles.tabs} role="tablist" aria-label="Side panel tabs">
           {tabs.map((tab) => {
             const agentPage = tab.kind === 'browser' && Boolean(pages.find((p) => p.id === tab.id)?.ownerName)
-            const Icon = agentPage ? Bot : TAB_ICON[tab.kind]
+            const Icon = agentPage ? AgentIcon : TAB_ICON[tab.kind]
             const selected = tab.id === active?.id
             const title = tabTitle(tab)
             return (
@@ -125,22 +133,22 @@ export function SidePanel() {
       </header>
       <div className={styles.body}>
         {!scope ? (
-          <EmptyState compact icon={<SquareTerminal />} title="No folder selected" description="Open a project or workspace to use terminals here." />
+          <EmptyState compact icon={<PanelRight />} title="No folder selected" description="Open a project or workspace to browse and explore its files here." />
         ) : tabs.length === 0 ? (
           <EmptyState
             compact
             icon={<Plus />}
             title="Nothing open"
-            description="Add a terminal for this folder, or a browser."
+            description="Add a browser, or the Explorer for this folder's files."
             actions={addMenu}
           />
         ) : (
-          // Every tab stays mounted so terminals keep their state; only the active one is visible.
+          // Every tab stays mounted so pages and the Explorer keep their state; only the active one is visible.
           tabs.map((tab) => (
             <div key={tab.id} className={styles.page} hidden={tab.id !== active?.id}>
               <ErrorBoundary region={tab.title} compact>
-                {tab.kind === 'terminal' ? (
-                  <ShellTab scope={scope} tabId={tab.id} workspaceId={workspaceId} projectId={projectId} />
+                {tab.kind === 'explorer' ? (
+                  <Explorer key={scope} workspaceId={workspaceId} projectId={workspaceId ? undefined : projectId} />
                 ) : (
                   <BrowserPane pageId={tab.id} visible={tab.id === active?.id} />
                 )}
@@ -150,45 +158,5 @@ export function SidePanel() {
         )}
       </div>
     </aside>
-  )
-}
-
-/** Mirrors the id main gives a tab's shell (`shell-<scope>-<tab>`). */
-const shellId = (scope: string, tabId: string): string => `shell-${scope}-${tabId}`
-
-interface ShellTabProps {
-  scope: string
-  tabId: string
-  workspaceId?: string
-  projectId?: string
-}
-
-function ShellTab({ scope, tabId, workspaceId, projectId }: ShellTabProps) {
-  const [shell, setShell] = useState<{ id: string; cwd: string } | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    api('shell.open', workspaceId ? { workspaceId, tab: tabId } : { projectId, tab: tabId })
-      .then((result) => !cancelled && setShell(result))
-      .catch((error) => !cancelled && reportError(error, 'Open terminal'))
-    return () => {
-      cancelled = true
-    }
-  }, [scope, tabId, workspaceId, projectId])
-
-  return (
-    <div className={styles.shell}>
-      <div className={styles.shellBar}>
-        {shell && <PathTrail path={shell.cwd} reveal={workspaceId ? { workspaceId } : { projectId }} />}
-        {shell && (
-          <IconButton
-            label="Restart terminal"
-            icon={<RotateCcw />}
-            onClick={() => void api('shell.restart', { id: shell.id }).catch((e) => reportError(e, 'Restart terminal'))}
-          />
-        )}
-      </div>
-      <div className={styles.terminal}>{shell && <TerminalView key={shell.id} instanceId={shell.id} />}</div>
-    </div>
   )
 }

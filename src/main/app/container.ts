@@ -1,4 +1,12 @@
+import { app, nativeImage, safeStorage, shell } from 'electron'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { WallpaperService } from '../services/appearance/wallpaper-service'
+import { EditorService } from '../services/editors/editor-service'
+import { FileService } from '../services/files/file-service'
+import { ConnectionService } from '../services/connections/connection-service'
+import { McpGateway } from '../services/connections/mcp-gateway'
+import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
 import { handleBody } from '../services/agent-tools/mcp-protocol'
 import { AgentService } from '../services/agents/agent-service'
@@ -42,12 +50,25 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const computer = new ComputerService(paths.runtimeDir, log)
   let hookServer: HookServer | null = null
   let settings: SettingsService | null = null
+  const connections = new ConnectionService(store, new SecretBox(safeStorage), emit)
+  const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
+  connections.attach(gateway)
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
   const mcpFor = (id: string) => {
     const endpoint = hookServer?.endpoint
-    if (!endpoint || !settings?.get().agentTools) return undefined
+    if (!endpoint || !settings) return undefined
     const s = settings.get()
-    return { url: `${endpoint.baseUrl}/mcp/${id}`, token: endpoint.token, browser: s.browserUse, computer: s.computerUse && computer.supported }
+    const apps = connections.appNames()
+    const computerOn = s.computerUse && computer.supported
+    if (!s.agentTools && !s.browserUse && !computerOn && !apps.length) return undefined
+    return {
+      url: `${endpoint.baseUrl}/mcp/${id}`,
+      token: endpoint.token,
+      coordination: s.agentTools,
+      browser: s.browserUse,
+      computer: computerOn,
+      ...(apps.length ? { apps } : {})
+    }
   }
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
@@ -63,11 +84,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)
   const shells = new ShellService()
-  const extensions = new ExtensionsService(log)
+  const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
+  const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
+  const files = new FileService((path) => shell.trashItem(path), (scope, changed) => emit('files.changed', { scope, paths: changed }))
+  const editors = new EditorService(store, layouts, (workspaceId) => agents.paneIds(workspaceId), emit)
   const browser = new BrowserService(store, settings, emit, log)
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
   const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
-  const extraTools = () => (settings?.get().computerUse && computer.supported ? [computerTools] : [])
+  // Plugins and Hiveory's MCP servers come through the gateway (ADR 0017).
+  const extraTools = () => [...(settings?.get().computerUse && computer.supported ? [computerTools] : []), gateway]
   const toolDeps = {
     agents,
     runtime,
@@ -81,14 +106,16 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   }
   hookServer.setMcpHandler(async (instanceId, body) => {
     const refuse = (message: string) => ({ jsonrpc: '2.0', id: null, error: { code: -32001, message } })
-    if (!settings?.get().agentTools) return refuse('Agent tools are turned off in Hiveory settings.')
-    if (agents.find(instanceId)) return handleBody(body, new AgentTools(toolDeps, instanceId))
-    // A Chat-mode chat (not a Work agent) gets the browser only.
-    const chat = chatStore.get(instanceId)
-    if (!chat) return refuse('This agent is no longer registered in Hiveory.')
-    const caller = { id: chat.id, workspaceId: chat.projectId ?? `chat-${chat.id}`, petName: 'Chat' }
+    if (!settings) return refuse('Hiveory is starting.')
+    const agent = agents.find(instanceId)
+    if (agent && settings.get().agentTools) return handleBody(body, new AgentTools(toolDeps, instanceId))
+    // A Chat-mode chat, or any agent while coordination tools are off: browser, computer and apps only.
+    const chat = agent ? null : chatStore.get(instanceId)
+    if (!agent && !chat) return refuse('This agent is no longer registered in Hiveory.')
+    const caller = agent
+      ? { id: agent.id, workspaceId: agent.workspaceId, petName: agent.petName }
+      : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
     const families = [...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []), ...extraTools()]
-    if (!families.length) return refuse('Browser and computer use are turned off in Hiveory settings.')
     return handleBody(body, {
       list: () => families.flatMap((f) => f.definitions()),
       call: (name, args) => {
@@ -115,6 +142,11 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     updates,
     shells,
     extensions,
+    wallpapers,
+    files,
+    editors,
+    connections,
+    gateway,
     chatStore,
     chats,
     browser,

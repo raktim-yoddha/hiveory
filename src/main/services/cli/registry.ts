@@ -24,7 +24,7 @@ export class CliRegistry {
     this.cache = this.adapters.map((adapter) => {
       let executable: string | undefined
       try {
-        executable = adapter.executables.map((name) => findExecutable(name, env)).find(Boolean)
+        executable = adapter.locate?.(env) ?? adapter.executables.map((name) => findExecutable(name, env)).find(Boolean)
       } catch (error) {
         this.log.warn(`CLI detection failed for ${adapter.id}`, error)
       }
@@ -33,6 +33,7 @@ export class CliRegistry {
       return {
         id: adapter.id,
         displayName: adapter.displayName,
+        kind: adapter.kind ?? 'agent',
         icon: adapter.icon,
         supportsAutoApprove: adapter.supportsAutoApprove,
         supportsChat: (CHAT_CLI_IDS as readonly string[]).includes(adapter.id),

@@ -1,8 +1,54 @@
 .app {
+  position: relative;
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   height: 100%;
   background: var(--gradient-app), var(--color-bg);
+}
+
+:global(:root[data-wallpaper]) .app {
+  background: transparent;
+}
+
+/*
+ * The wallpaper is one fixed, composited layer under everything: blurred and
+ * dimmed once, then cached by the compositor — panels repaint on top of it
+ * without re-blurring (no backdrop-filter on every surface).
+ */
+.wallpaper {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+  animation: wallpaper-in var(--duration-glide) var(--ease-out);
+}
+
+.wallpaper::before,
+.wallpaper::after {
+  content: '';
+  position: absolute;
+}
+
+.wallpaper::before {
+  /* Overscan hides the soft edge a blur leaves. */
+  inset: calc(var(--wallpaper-blur) * -2);
+  background: var(--wallpaper-image);
+  filter: blur(var(--wallpaper-blur));
+  will-change: transform;
+}
+
+.wallpaper::after {
+  inset: 0;
+  background: rgb(0 0 0 / var(--wallpaper-dim));
+}
+
+@keyframes wallpaper-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .main {
@@ -72,9 +118,45 @@
   left: calc(var(--gutter) * -1);
 }
 
-/* Both modes stay mounted; the inactive one is hidden, not unmounted. */
-.mode {
+/*
+ * Both modes stay mounted; the inactive one is hidden, not unmounted. A mode
+ * (or screen) fades up as it appears — CSS animations restart when an element
+ * goes from display:none to shown, so this costs nothing while hidden.
+ */
+.mode,
+.view {
   height: 100%;
+  animation: screen-in var(--duration-slow) var(--ease-out);
+}
+
+/* Sidebars glide in from their edge when shown. */
+.sidebar {
+  animation: slide-from-left var(--duration-slow) var(--ease-liquid);
+}
+
+.panel {
+  animation: slide-from-right var(--duration-slow) var(--ease-liquid);
+}
+
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--nudge));
+  }
+}
+
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--space-7) * -1));
+  }
+}
+
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(var(--space-7));
+  }
 }
 
 .mode[hidden] {

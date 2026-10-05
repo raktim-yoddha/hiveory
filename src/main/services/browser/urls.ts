@@ -1,4 +1,7 @@
 const ALLOWED = /^(https?:|file:|about:blank$)/i
+
+/** Whether a page may load this URL at all (typed, agent-driven, link, redirect or popup). */
+export const isLoadable = (url: string): boolean => ALLOWED.test(url)
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d+)?([/?#]|$)/i
 
 /**

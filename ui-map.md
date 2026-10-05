@@ -41,6 +41,45 @@ drag handles on the emulated screen),
 </> developer tools; ⋯ holds profiles, cookies and Browser settings. Narrow
 panels fold ⌖ ✎ </> into ⋯.
 
+### Settings › Skills, MCP & Plugins (ADR 0017)
+
+```text
+┌ Skills, MCP & Plugins ───────────────────────────────────────┐
+│ ( Skills 12 | MCP servers 3 | Plugins 30 )               ⟳   │
+│ [ Search plugins                                   ]         │
+│ (All) (Connected) (Code) (Work) (Data) (Business) (Search) … │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
+│ │ [■] GitHub   │ │ [■] Linear   │ │ [■] Notion   │           │
+│ │ Repos, PRs…  │ │ Issues…      │ │ Pages…       │           │
+│ │ ● 41 tools   │ │ Set up →     │ │ Set up →     │           │
+│ └──────────────┘ └──────────────┘ └──────────────┘           │
+└──────────────────────────────────────────────────────────────┘
+```
+
+Skills rows: name, description, folder toggles (Shared · Claude · Codex ·
+Cursor), CLI logos that load it, open folder. MCP: "In Hiveory · every agent"
+(toggle, reconnect, edit, remove) and "In your CLIs" ("Every agent").
+
+### Settings › Appearance
+
+Theme cards three per row; Background: None, six presets, added images, Add
+image; Transparency · Blur · Dim sliders when a wallpaper is set.
+
+### Side panel Explorer (ADR 0018)
+
+```text
+┌ [GitHub ×] [Explorer ×] [+] ───────────── ⤢ × ┐
+│ DEMO-APP                     ＋file ＋dir ⟳ ⇤ │
+│ ( Search files                              ) │
+│ ▾ src                                        │
+│     index.ts                                 │
+│   README.md                                  │
+└───────────────────────────────────────────────┘
+```
+
+Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
+agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
+
 ## Project
 
 ```text
@@ -97,12 +136,13 @@ panels fold ⌖ ✎ </> into ⋯.
 
 ## Populated Workspace
 
-No header bar: panes fill the area (ADR 0011). ⤢ = maximize / restore.
+No header bar: panes fill the area (ADR 0011). ⤢ = maximize / restore. Right-click a
+pane's name for restart, move and close (ADR 0018).
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │ ┌───────────────────────┐      ┌──────────────────────────────┐ │
-│ │ [logo] Milo ●  + ⤢ ⋯ ×│      │ [logo] Luna ●    + ⤢ ⋯ ×    │ │
+│ │ [logo] Milo ●    + ⤢ ×│      │ [logo] Luna ●      + ⤢ ×    │ │
 │ ├───────────────────────┤      ├──────────────────────────────┤ │
 │ │                       │      │                              │ │
 │ │       CLI / PTY       │      │          CLI / PTY            │ │
@@ -141,18 +181,17 @@ No header bar: panes fill the area (ADR 0011). ⤢ = maximize / restore.
 ## Pane Add Menu
 
 ```text
-┌───────────────────────┐
-│ Add agent              │
-├───────────────────────┤
-│ Placement              │
-│   → Right              │
-│   ↓ Bottom             │
-├───────────────────────┤
-│ Agents                 │
-│   [logo] CLI A         │
-│   [logo] CLI B         │
-│   [logo] CLI C         │
-└───────────────────────┘
+┌──────────────────────────────┐
+│ ( → Right  |  ↓ Bottom )     │
+│ [ Search terminals and agents ] │
+│ TERMINALS                     │
+│   [logo] PowerShell           │
+│   [logo] Command Prompt       │
+│   [logo] Git Bash             │
+│ AGENTS                        │
+│   [logo] CLI A                │
+│   [logo] CLI B                │
+└──────────────────────────────┘
 ```
 
 ## Pane Swap

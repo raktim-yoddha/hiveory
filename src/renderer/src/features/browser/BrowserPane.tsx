@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type FormEvent, type PointerEvent as React
 import {
   ArrowLeft,
   ArrowRight,
-  Bot,
   Check,
   Cookie,
   Crosshair,
@@ -22,6 +21,7 @@ import {
   UserRoundPlus,
   X
 } from 'lucide-react'
+import { AgentIcon } from '../../components/brand/AgentIcon'
 import type { PickedElement, Viewport } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
@@ -82,21 +82,38 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
     if (!active) return
     let last = ''
     let frame = 0
-    const tick = (): void => {
+    const measure = (): void => {
+      frame = 0
       const el = boxRef.current
-      if (el) {
-        const r = el.getBoundingClientRect()
-        const key = `${r.left},${r.top},${r.width},${r.height}`
-        if (key !== last) {
-          last = key
-          void api('browser.show', { pageId, bounds: { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => undefined)
-        }
-      }
-      frame = requestAnimationFrame(tick)
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const key = `${r.left},${r.top},${r.width},${r.height}`
+      if (key === last) return
+      last = key
+      void api('browser.show', { pageId, bounds: { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => undefined)
     }
-    tick()
+    // Event-driven, not a per-frame loop: the native page moves only when the
+    // layout does (resize, panel/sidebar changes, a slide-in finishing).
+    const schedule = (): void => {
+      frame ||= requestAnimationFrame(measure)
+    }
+    measure()
+    const observer = new ResizeObserver(schedule)
+    if (boxRef.current) observer.observe(boxRef.current)
+    if (stageRef.current) observer.observe(stageRef.current)
+    observer.observe(document.body)
+    window.addEventListener('resize', schedule)
+    document.addEventListener('transitionend', schedule, true)
+    document.addEventListener('animationend', schedule, true)
+    // Safety net for moves no event reports (cheap: one rect read per half second).
+    const poll = setInterval(schedule, 500)
     return () => {
       cancelAnimationFrame(frame)
+      observer.disconnect()
+      clearInterval(poll)
+      window.removeEventListener('resize', schedule)
+      document.removeEventListener('transitionend', schedule, true)
+      document.removeEventListener('animationend', schedule, true)
       // Stepping aside for a menu: leave a picture of the page behind it.
       const freeze = isOverlayOpen()
       void api('browser.show', { pageId, bounds: null, freeze })
@@ -336,7 +353,7 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
 
       {page.ownerName && page.agentActive && (
         <div className={cx(styles.strip, styles.live)}>
-          <Bot aria-hidden />
+          <AgentIcon aria-hidden />
           <span>
             <strong>{page.ownerName}</strong> is using this page
           </span>

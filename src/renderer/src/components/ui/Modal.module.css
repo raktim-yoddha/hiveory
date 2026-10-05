@@ -4,7 +4,8 @@
   padding: 0;
   border: 0;
   border-radius: var(--radius-lg);
-  background: var(--gradient-surface), var(--color-surface);
+  /* Solid even over a wallpaper. */
+  background: var(--color-surface-solid);
   color: var(--color-text);
   box-shadow: var(--shadow-dialog);
 }
@@ -14,18 +15,28 @@
 }
 
 .dialog[open] {
-  animation: dialog-in var(--duration-base) var(--ease-out);
+  animation: dialog-in var(--duration-glide) var(--ease-liquid);
 }
 
-.dialog::backdrop {
+/*
+ * No backdrop blur: blurring the whole window would be recomputed on every
+ * frame a terminal behind the dialog prints. A deeper scrim reads as well.
+ */
+.dialog[open]::backdrop {
   background: var(--color-overlay);
-  backdrop-filter: blur(var(--space-2));
+  animation: backdrop-in var(--duration-base) var(--ease-out);
 }
 
 @keyframes dialog-in {
   from {
     opacity: 0;
-    transform: translateY(var(--nudge)) scale(0.985);
+    transform: translateY(var(--space-5)) scale(0.96);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
   }
 }
 
