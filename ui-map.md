@@ -141,7 +141,7 @@ agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
 │  Project name                              [ Local ▾ ]  │
 │ [Pick directory] [New repository] [Clone] [Restore prev]│
 │ Directory                                                │
-│ [📁 C:\codepp                            ( Choose )] │
+│ [📁 ~/code/app                              ( Choose )] │
 ├──────────────────────────────────────────────────────────┤
 │                                     [ Add project Ctrl⏎ ]│
 └──────────────────────────────────────────────────────────┘
