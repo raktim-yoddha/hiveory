@@ -28,13 +28,16 @@ export function TitleBar() {
             </span>
           )}
         </span>
-        <IconButton
-          label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          icon={<PanelLeft />}
-          active={!sidebarCollapsed && !inSettings}
-          onClick={toggleSidebar}
-          className={styles.noDrag}
-        />
+        {/* Nudges a little right while the sidebar is open, a little left while it is closed. */}
+        <span className={styles.sidebarToggle} data-open={!sidebarCollapsed && !inSettings}>
+          <IconButton
+            label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+            icon={<PanelLeft />}
+            active={!sidebarCollapsed && !inSettings}
+            onClick={toggleSidebar}
+            className={styles.noDrag}
+          />
+        </span>
       </div>
       <Tabs label="Mode" variant="segmented" options={MODES} value={mode} onChange={setMode} className={styles.noDrag} />
       <div className={styles.end}>

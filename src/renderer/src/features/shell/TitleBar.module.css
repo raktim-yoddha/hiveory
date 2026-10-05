@@ -59,3 +59,19 @@
 .noDrag {
   -webkit-app-region: no-drag;
 }
+
+.sidebarToggle {
+  display: inline-flex;
+  transform: translateX(calc(var(--space-2) * -1));
+  transition: transform var(--duration-base) var(--ease-liquid);
+}
+
+.sidebarToggle[data-open='true'] {
+  transform: translateX(var(--space-2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebarToggle {
+    transition: none;
+  }
+}
