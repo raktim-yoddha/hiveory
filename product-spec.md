@@ -228,6 +228,25 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - The side panel holds browsers and one Explorer per folder: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
+## Queen Bee (ADR 0019)
+
+- A bar docked under the main area (Work, Chat and Settings) or floating anywhere. Ctrl+Shift+K focuses it.
+- Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),
+  close agents (always after a yes), restart, jump to an agent, load a preset, switch
+  Work/Chat, open Home, a project, a workspace or a Settings section, show or hide the
+  side panel, and open a browser or the Explorer.
+- Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
+  live state. The current project, or every project from Home.
+- She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of
+  a command is unclear, and offers Undo for opens and navigation.
+- Personalities Ada, Sunny and Frankie change wording only. Settings › Queen Bee holds:
+  - personality and what she calls you;
+  - reply length;
+  - one extra per personality: Ada's honorific, Sunny's energy, Frankie's nudge time;
+  - placement.
+- Later phases add a model for free-form requests, voice, the system-wide hotkey,
+  learned memory and a custom personality.
+
 ## Important Non-Features
 
 Initial version does not include:

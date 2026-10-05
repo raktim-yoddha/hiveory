@@ -88,7 +88,17 @@
 }
 
 .content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
   grid-column: 1;
+}
+
+/* Screens fill what Queen Bee's docked bar leaves (ADR 0019). */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
 .withSidebar .content {

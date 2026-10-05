@@ -9,11 +9,10 @@ import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useBrowser } from '../../stores/browser'
-import { useSettings } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type PanelTab } from '../../stores/navigation'
-import { runAction } from '../../stores/notices'
 import { BrowserPane } from '../browser/BrowserPane'
 import { Explorer } from '../explorer/Explorer'
+import { openBrowserTab } from './panel-actions'
 import styles from './SidePanel.module.css'
 
 const EMPTY: PanelTab[] = []
@@ -34,7 +33,6 @@ export function SidePanel() {
   const activeId = useNavigation((s) => s.activePanelTab[scope])
   const { addPanelTab, closePanelTab, selectPanelTab, togglePanel, panelMaximized, togglePanelMaximized } = useNavigation()
   const pages = useBrowser((s) => s.pages)
-  const homeUrl = useSettings((s) => s.settings.browserHomeUrl)
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
 
   // Browser tabs mirror main's pages for this folder: agent-opened pages appear, closed ones go.
@@ -50,10 +48,7 @@ export function SidePanel() {
     if (tab.kind === 'browser') void api('browser.close', { pageId: tab.id }).catch(() => undefined)
   }
 
-  const openBrowser = async (): Promise<void> => {
-    const page = await runAction('Open browser', () => api('browser.open', { scope, url: homeUrl || undefined }))
-    if (page) addPanelTab(scope, 'browser', page.id)
-  }
+  const openBrowser = (): Promise<boolean> => openBrowserTab(scope)
 
   const tabTitle = (tab: PanelTab): string => {
     if (tab.kind !== 'browser') return tab.title

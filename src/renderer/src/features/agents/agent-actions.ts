@@ -22,6 +22,7 @@ export const agentActions = {
       runtime: { ...s.runtime, [result.agent.id]: result.agent.runtime }
     }))
     useLayouts.setState((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: result.layout } }))
+    return result.agent
   },
 
   restart: (instanceId: string) => runAction('Restart agent', () => api('agents.restart', { instanceId })),

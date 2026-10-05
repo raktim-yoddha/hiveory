@@ -33,6 +33,18 @@ export interface AppSettings {
   wallpaperBlur: number
   /** Darkens the wallpaper so text stays readable (0–0.8). */
   wallpaperDim: number
+  /** Queen Bee's personality (ADR 0019). */
+  queenPersona: 'ada' | 'sunny' | 'frankie'
+  /** What Queen Bee calls you ('' = nothing). */
+  queenCallMe: string
+  /** Ada: how she addresses you. */
+  queenHonorific: 'sir' | 'maam' | 'name' | 'none'
+  /** Sunny: celebration level. */
+  queenHype: 'calm' | 'lively' | 'max'
+  /** Frankie: minutes an agent may wait on you before she calls it out (0 = never). */
+  queenNudgeMinutes: number
+  /** Short replies drop the second sentence. */
+  queenLength: 'short' | 'normal'
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -50,7 +62,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wallpaper: '',
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,
-  wallpaperDim: 0.25
+  wallpaperDim: 0.25,
+  queenPersona: 'ada',
+  queenCallMe: '',
+  queenHonorific: 'none',
+  queenHype: 'lively',
+  queenNudgeMinutes: 10,
+  queenLength: 'normal'
 }
 
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [

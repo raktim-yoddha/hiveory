@@ -178,7 +178,13 @@ export const requestSchemas = {
       wallpaper: wallpaperSchema,
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),
-      wallpaperDim: z.number().min(0).max(0.8)
+      wallpaperDim: z.number().min(0).max(0.8),
+      queenPersona: z.enum(['ada', 'sunny', 'frankie']),
+      queenCallMe: z.string().trim().max(40),
+      queenHonorific: z.enum(['sir', 'maam', 'name', 'none']),
+      queenHype: z.enum(['calm', 'lively', 'max']),
+      queenNudgeMinutes: z.number().int().min(0).max(240),
+      queenLength: z.enum(['short', 'normal'])
     })
     .partial(),
   /** Wallpapers the user added (copied into Hiveory's own folder). */

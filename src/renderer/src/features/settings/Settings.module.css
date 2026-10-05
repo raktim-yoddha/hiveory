@@ -647,3 +647,58 @@
   flex: none;
   width: calc(var(--space-11) * 2);
 }
+
+/* Queen Bee personalities: selection is a tinted fill, never an outline. */
+.personas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.persona {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.persona:hover {
+  background: var(--color-surface-hover);
+}
+
+.persona[aria-checked='true'] {
+  background: var(--fill-accent-soft);
+}
+
+.personaName {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.persona[aria-checked='true'] .personaName {
+  color: var(--color-accent);
+}
+
+.personaTagline {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.personaSample {
+  margin-top: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-style: italic;
+}
+
+@container (max-width: 560px) {
+  .personas {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

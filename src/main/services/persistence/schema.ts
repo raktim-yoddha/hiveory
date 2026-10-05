@@ -73,7 +73,13 @@ const settingsSchema = z.object({
   wallpaper: wallpaperSchema.catch(DEFAULT_SETTINGS.wallpaper),
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
   wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),
-  wallpaperDim: z.number().min(0).max(0.8).catch(DEFAULT_SETTINGS.wallpaperDim)
+  wallpaperDim: z.number().min(0).max(0.8).catch(DEFAULT_SETTINGS.wallpaperDim),
+  queenPersona: z.enum(['ada', 'sunny', 'frankie']).catch(DEFAULT_SETTINGS.queenPersona),
+  queenCallMe: z.string().max(40).catch(DEFAULT_SETTINGS.queenCallMe),
+  queenHonorific: z.enum(['sir', 'maam', 'name', 'none']).catch(DEFAULT_SETTINGS.queenHonorific),
+  queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),
+  queenNudgeMinutes: z.number().int().min(0).max(240).catch(DEFAULT_SETTINGS.queenNudgeMinutes),
+  queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength)
 })
 
 const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })

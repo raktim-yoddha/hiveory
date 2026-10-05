@@ -468,6 +468,7 @@ src/
 │   ├── ipc/contract.ts         every IPC channel + zod schema + event types
 │   ├── layout/                 split/dock/move/swap/resize, geometry, drop resolution
 │   ├── naming/names.ts         the one pet-name / workspace-name service
+│   ├── queen/                  Queen Bee: action union, rule parser, computed reports, persona phrasing
 │   ├── presets.ts              preset normalization/serialization
 │   └── errors.ts               normalized AppError / Result
 ├── main/                       Electron main: all privileged work
@@ -503,7 +504,8 @@ src/
     ├── stores/                 Zustand caches + event bridge + notices
     ├── components/             reusable primitives (ui/, cli/, brand/)
     └── features/               shell, projects, project, kanban, workspace, workspace-create,
-                                presets, panes, agents, terminal, side-panel, settings (+guide), chat
+                                presets, panes, agents, terminal, side-panel, settings (+guide), chat,
+                                queen (bar, card, executor: parse → resolve → run → receipts)
 ```
 
 The adapter contract differs from the conceptual `CliAdapter` above: adapters

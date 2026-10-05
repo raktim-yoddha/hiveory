@@ -161,6 +161,16 @@ Generic actions use the application's shared icon set.
 generic robot. A CLI's logo appears where the CLI must be identified (pane header, pickers,
 cards) and nowhere it would repeat what is already on screen — chat replies carry no avatar.
 
+## Queen Bee
+
+One bar and one reply card, no history (ADR 0019).
+- **The bar:** the mark, the input, a dock/float toggle and ⋯. It's flat and outlined
+  only while focused.
+- **Docked:** it shares the main area's surface.
+- **Floating:** it uses a solid raised surface and the popover shadow, so terminal text never shows through.
+- **Receipts:** small, secondary text with an accent check.
+- **Report rows:** status dot, name, CLI and workspace, wait time.
+
 ## Dropdowns
 
 Every dropdown is the shared `Select`: a themed listbox (keyboard, type-ahead, groups,

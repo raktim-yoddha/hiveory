@@ -1,0 +1,247 @@
+/* Queen Bee (ADR 0019): one bar, one reply card. Flat, no outline at rest. */
+
+.dock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.floating {
+  position: fixed;
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: min(calc(var(--menu-min-width) * 2.8), calc(100vw - var(--space-8)));
+  transition: width var(--duration-base) var(--ease-liquid);
+}
+
+/* Near the top of the window the card opens below the bar. */
+.flip {
+  flex-direction: column-reverse;
+}
+
+.compact {
+  width: auto;
+}
+
+.dragging {
+  transition: none;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: calc(var(--control-lg) + var(--space-4));
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition: border-color var(--duration-base) var(--ease-out);
+}
+
+.floating .bar {
+  /* Solid: it floats over terminal text, which glass would let through. */
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+.bar:focus-within {
+  border-color: var(--color-border-strong);
+}
+
+.mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-accent);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.mark:hover {
+  background: var(--color-surface-hover);
+}
+
+.mark svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:active {
+  cursor: grabbing;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  outline: none;
+  user-select: text;
+}
+
+.input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.hint {
+  flex: none;
+  padding: 0 var(--space-2);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+}
+
+.busy {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  margin: 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-11) var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  animation: card-in var(--duration-slow) var(--ease-liquid);
+}
+
+.floating .card {
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--nudge));
+  }
+}
+
+.dismiss {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+}
+
+.text {
+  color: var(--color-text);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rows,
+.receipts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0 calc(var(--space-3) * -1);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  height: var(--control-md);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.row:not(:disabled):hover,
+.row:focus-visible {
+  background: var(--color-surface-hover);
+}
+
+.rowName {
+  font-weight: var(--weight-medium);
+}
+
+.rowMeta {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowWait {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.receipts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.receipts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.receipts svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--color-accent);
+}
+
+/* Narrow windows: the shortcut hint goes first. */
+@media (max-width: 720px) {
+  .hint {
+    display: none;
+  }
+}

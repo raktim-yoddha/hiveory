@@ -23,6 +23,23 @@
 
 Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010).
 
+### Queen Bee (ADR 0019)
+
+```text
+┌──────────────┬───────────────────────────────────────────────────┐
+│   Projects   │                 Current Screen                    │
+│              │            (lifts to make room)                   │
+│              │ ┌───────────────────────────────────────────────┐ │
+│              │ │ Reply card: answer, report rows, receipts, Undo│ │
+│              │ └───────────────────────────────────────────────┘ │
+│              │ [♛ Tell the hive…        Ctrl Shift K  ⧉  ⋯]     │
+└──────────────┴───────────────────────────────────────────────────┘
+```
+
+Floating: the same bar is a draggable pill (drag by the mark; click the mark to shrink).
+It steps aside from the browser page. ⋯ holds Personality and Configure… (Settings ›
+Queen Bee).
+
 ### Side panel browser tab (ADR 0015)
 
 ```text

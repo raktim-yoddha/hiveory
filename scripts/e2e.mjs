@@ -732,6 +732,64 @@ await test('selection + Ctrl+C copies to the system clipboard', async () => {
   }
 })
 
+await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, floats and changes voice', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  const card = page.locator('section[aria-label="Queen Bee says"]')
+  const say = async (text) => {
+    await queen.fill(text)
+    await queen.press('Enter')
+  }
+  const shells = async () => (await value('agents.list', { workspaceId: mainWs.id })).filter((a) => a.cliId === 'powershell')
+  try {
+    await page.keyboard.press('Control+Shift+K')
+    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'shortcut focuses Queen Bee')
+    const started = Date.now()
+    await say('please open two powershell')
+    await waitFor(async () => (await shells()).length === 2, 'two shells opened')
+    await card.getByText(/Two PowerShell agents are starting in Main/).waitFor()
+    console.log(`      (command to receipt: ${Date.now() - started} ms)`)
+    await shot('h1-queen-opened')
+    await card.getByRole('button', { name: 'Undo' }).click()
+    await waitFor(async () => (await shells()).length === 0, 'undo closed both')
+
+    await say('open powershell')
+    await waitFor(async () => (await shells()).length === 1, 'one shell')
+    const [shell] = await shells()
+    await say("what's left?")
+    await card.getByRole('button', { name: new RegExp(shell.petName) }).waitFor()
+    await shot('h2-queen-report')
+
+    await say(`close ${shell.petName}`)
+    await card.getByText(`Close ${shell.petName}?`).waitFor()
+    expect((await shells()).length === 1, 'closed before the yes')
+    await card.getByRole('button', { name: 'Close', exact: true }).click()
+    await waitFor(async () => (await shells()).length === 0, 'closed after the yes')
+
+    await say('open plugin settings')
+    await page.getByRole('heading', { name: 'Skills, MCP & Plugins' }).waitFor()
+    await say('take me to main')
+    await page.getByRole('heading', { name: 'Skills, MCP & Plugins' }).waitFor({ state: 'detached' })
+    expect((await queen.boundingBox()).y > (await page.locator('main').boundingBox()).y, 'docked bar not inside the main area')
+
+    await say('write me a poem')
+    await card.getByText(/outside what I can do/).waitFor()
+
+    await page.getByRole('button', { name: 'Queen Bee options' }).click()
+    await page.getByRole('menuitemradio', { name: /Sunny/ }).click()
+    await page.keyboard.press('Escape')
+    await say('switch to work mode')
+    await card.getByText(/On it!/).waitFor()
+
+    await page.getByRole('button', { name: 'Float Queen Bee' }).click()
+    await waitFor(async () => page.evaluate(() => getComputedStyle(document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]')).position === 'fixed'), 'floating bar')
+    await shot('h3-queen-floating')
+    await page.getByRole('button', { name: 'Dock Queen Bee' }).click()
+  } finally {
+    for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
+    await value('settings.update', { queenPersona: 'ada' })
+  }
+})
+
 // ======================= E. Agent tools (MCP) =======================
 console.log('E. Agent tools over MCP')
 let mcp

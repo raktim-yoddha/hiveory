@@ -8,6 +8,8 @@ import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigati
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
 import { ProjectScreen } from '../project/ProjectScreen'
+import { QueenDock, QueenFloating } from '../queen/Queen'
+import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { SettingsScreen } from '../settings/SettingsScreen'
 import { SidePanel } from '../side-panel/SidePanel'
@@ -37,6 +39,7 @@ export function AppShell() {
     panelMaximized
   } = useNavigation()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
+  const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
   const showPanel = panelOpen && !inSettings
@@ -70,6 +73,7 @@ export function AppShell() {
           </aside>
         )}
         <main className={styles.content}>
+          <div className={styles.stage}>
           {inSettings && (
             <ErrorBoundary region="Settings">
               <SettingsScreen section={view.section} />
@@ -98,6 +102,12 @@ export function AppShell() {
               <ChatScreen />
             </ErrorBoundary>
           </div>
+          </div>
+          {queenPlacement === 'docked' && (
+            <ErrorBoundary region="Queen Bee" compact>
+              <QueenDock />
+            </ErrorBoundary>
+          )}
         </main>
         {showPanel && (
           <div className={cx(styles.panel, panelMaximized && styles.panelMaximized)}>
@@ -120,6 +130,11 @@ export function AppShell() {
           </div>
         )}
       </div>
+      {queenPlacement === 'floating' && (
+        <ErrorBoundary region="Queen Bee" compact>
+          <QueenFloating />
+        </ErrorBoundary>
+      )}
       <Toasts />
     </div>
   )

@@ -83,6 +83,8 @@ interface AgentState {
   byWorkspace: Record<string, CliInstanceView[]>
   /** Live runtime details pushed from main; overrides what the last list returned. */
   runtime: Record<string, CliRuntimeDetails>
+  /** When each agent's status last changed (ms epoch), from live events; unknown until the first change. */
+  since: Record<string, number>
   load(workspaceId: string): Promise<void>
   setRuntime(instanceId: string, details: CliRuntimeDetails): void
 }
@@ -90,6 +92,7 @@ interface AgentState {
 export const useAgents = create<AgentState>((set) => ({
   byWorkspace: {},
   runtime: {},
+  since: {},
   load: (workspaceId) =>
     load(
       'Load agents',
@@ -100,7 +103,11 @@ export const useAgents = create<AgentState>((set) => ({
           runtime: { ...s.runtime, ...Object.fromEntries(list.map((a) => [a.id, a.runtime])) }
         }))
     ),
-  setRuntime: (instanceId, details) => set((s) => ({ runtime: { ...s.runtime, [instanceId]: details } }))
+  setRuntime: (instanceId, details) =>
+    set((s) => ({
+      runtime: { ...s.runtime, [instanceId]: details },
+      since: s.runtime[instanceId]?.status === details.status ? s.since : { ...s.since, [instanceId]: Date.now() }
+    }))
 }))
 
 interface LayoutState {
