@@ -18,7 +18,7 @@ import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 import type { SettingsService } from '../settings/settings-service'
 import { parseCookieFile, type CookieInput } from './cookies'
-import { PageDriver } from './page-driver'
+import { PageDriver, PageError } from './page-driver'
 import { fitScale, isLoadable, normalizeUrl } from './urls'
 
 export interface LogEntry {
@@ -530,6 +530,7 @@ export class BrowserService {
     }
     const queue = [clean(startUrl) ?? startUrl]
     const seen = new Set(queue)
+    const retried = new Set<string>()
     const results: CrawledPage[] = []
     let inflight = 0
     const workers = Array.from({ length: Math.min(options.concurrency, options.maxPages) }, () => {
@@ -562,6 +563,13 @@ export class BrowserService {
             }
           }
         } catch (error) {
+          // A frozen page (busy script, stuck renderer) never recovers: hand its URL to
+          // another worker once, and retire this one.
+          if (error instanceof PageError && /stopped answering/.test(error.message) && !retried.has(url)) {
+            retried.add(url)
+            queue.unshift(url)
+            return
+          }
           results.push({ url, text: `(could not read: ${error instanceof Error ? error.message : String(error)})` })
         } finally {
           inflight--

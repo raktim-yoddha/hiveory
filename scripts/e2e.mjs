@@ -112,8 +112,11 @@ const test = async (name, fn) => {
     results.push({ name, ok: true, ms: Date.now() - started })
     console.log(`  ✓ ${name} (${Date.now() - started} ms)`)
   } catch (error) {
-    results.push({ name, ok: false, error: String(error?.message ?? error).split('\n')[0] })
-    console.log(`  ✗ ${name}\n      ${String(error?.message ?? error).split('\n')[0]}`)
+    // fetch failures hide the real reason in error.cause (ECONNRESET, a timeout…).
+    const cause = error?.cause ? ` (cause: ${error.cause.code ?? ''} ${error.cause.message ?? error.cause})` : ''
+    const message = `${String(error?.message ?? error).split('\n')[0]}${cause} after ${Date.now() - started} ms`
+    results.push({ name, ok: false, error: message })
+    console.log(`  ✗ ${name}\n      ${message}`)
     await shot(`FAIL-${name.replace(/[^a-z0-9]+/gi, '-')}`)
   }
 }

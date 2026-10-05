@@ -9,9 +9,20 @@ import { normalizeUrl } from './urls'
 const WORLD = 1717
 const MAX_SNAPSHOT = 24000
 const LOAD_TIMEOUT_MS = 30000
+/** Longest a page-script call may take; the slowest real one (quiet) caps itself at 600 ms. */
+const CALL_TIMEOUT_MS = 15000
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class PageError extends Error {}
+
+/** Rejects with a PageError when the page has not answered within `ms` (the pending call is abandoned). */
+export const withDeadline = <T>(work: Promise<T>, ms: number): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new PageError(`The page stopped answering (no reply in ${ms / 1000} s).`)), ms)
+  })
+  return Promise.race([work, late]).finally(() => clearTimeout(timer))
+}
 
 export interface ActionOptions {
   label?: string
@@ -50,12 +61,17 @@ export class PageDriver {
 
   private async cdp<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!this.wc.debugger.isAttached()) this.wc.debugger.attach('1.3')
-    return (await this.wc.debugger.sendCommand(method, params)) as T
+    return (await withDeadline(this.wc.debugger.sendCommand(method, params), LOAD_TIMEOUT_MS)) as T
   }
 
-  /** Calls the page script. Errors it throws come back as PageError with its message. */
-  async call<T>(expression: string): Promise<T> {
-    const result = (await this.wc.executeJavaScriptInIsolatedWorld(WORLD, [{ code: pageCall(expression) }], true)) as
+  /**
+   * Calls the page script. Errors it throws come back as PageError with its message.
+   * Electron's script call can stay pending forever (the frame navigated or froze
+   * mid-call), so every call has a deadline; only waits on the user (pick) opt out.
+   */
+  async call<T>(expression: string, timeoutMs: number | null = CALL_TIMEOUT_MS): Promise<T> {
+    const run = this.wc.executeJavaScriptInIsolatedWorld(WORLD, [{ code: pageCall(expression) }], true)
+    const result = (await (timeoutMs === null ? run : withDeadline(run, timeoutMs))) as
       | { ok: true; value: T }
       | { ok: false; error: string }
       | undefined
@@ -195,12 +211,12 @@ export class PageDriver {
     const asBody = `(async () => {\n${script}\n})()`
     let value: unknown
     try {
-      value = await this.wc.executeJavaScript(asExpression, true)
+      value = await withDeadline(this.wc.executeJavaScript(asExpression, true), LOAD_TIMEOUT_MS)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (!/SyntaxError|Unexpected|Script failed to execute/i.test(message)) throw new PageError(message)
       try {
-        value = await this.wc.executeJavaScript(asBody, true)
+        value = await withDeadline(this.wc.executeJavaScript(asBody, true), LOAD_TIMEOUT_MS)
       } catch (inner) {
         throw new PageError(inner instanceof Error ? inner.message : String(inner))
       }
@@ -211,7 +227,8 @@ export class PageDriver {
   }
 
   pick(): Promise<PickedElement | null> {
-    return this.call<PickedElement | null>('pick()')
+    // Waits for the user's click: no deadline (cancelPick ends it).
+    return this.call<PickedElement | null>('pick()', null)
   }
 
   cancelPick(): Promise<boolean> {

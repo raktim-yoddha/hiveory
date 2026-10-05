@@ -8,7 +8,7 @@ import type { BrowserService } from './browser-service'
 import { BrowserTools } from './browser-tools'
 import { parseCookieFile } from './cookies'
 import { parseKeys } from './keys'
-import { PageError } from './page-driver'
+import { PageError, withDeadline } from './page-driver'
 import { PAGE_SCRIPT, pageCall } from './page-script'
 import { fitScale, isLoadable, normalizeUrl } from './urls'
 
@@ -202,5 +202,14 @@ describe('routing website requests to the browser', () => {
     expect(codex.env).toEqual({ HIVEORY_MCP_TOKEN: 't0k' })
     expect(CHAT_PROVIDERS.opencode!.run({ prompt: 'x', autoApprove: false, mcp }).env?.OPENCODE_CONFIG_CONTENT).toContain('/mcp/a1')
     expect(CHAT_PROVIDERS.claude!.run({ prompt: 'x', autoApprove: false }).args).not.toContain('--mcp-config')
+  })
+})
+
+describe('page call deadlines', () => {
+  it('a page that never answers fails with a PageError instead of hanging the tool call', async () => {
+    const never = new Promise<string>(() => undefined)
+    await expect(withDeadline(never, 20)).rejects.toBeInstanceOf(PageError)
+    await expect(withDeadline(never, 20)).rejects.toThrow(/stopped answering/)
+    expect(await withDeadline(Promise.resolve('ok'), 1000)).toBe('ok')
   })
 })
