@@ -2,7 +2,7 @@ import type { IconReference, WaitingReason } from '@shared/domain'
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
 import { officialIcon } from './icons'
 import { mcpServersJson, opencodeConfigJson } from './mcp-injection'
-import type { CliAdapter, McpEndpoint } from './types'
+import type { CliAdapter, McpEndpoint, SkillFolders } from './types'
 
 /**
  * Declarative catalog of CLIs that need no native hooks. Each entry is a full
@@ -21,6 +21,8 @@ interface CliSpec {
   waitingPatterns?: Array<{ pattern: RegExp; reason: WaitingReason }>
   /** How this CLI loads Hiveory's agent-tools MCP server, if it can. */
   mcp?: (endpoint: McpEndpoint) => { args?: string[]; env?: Record<string, string> }
+  /** Agent Skills folders it reads (Settings › Skills). */
+  skills?: SkillFolders
   /** How an agent gets its own conversation back after a restart (ADR 0014). */
   session?: {
     /** Hiveory chooses the session id up front (exact, per agent)… */
@@ -48,6 +50,7 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
   injectMcp: Boolean(spec.mcp),
+  ...(spec.skills ? { skills: spec.skills } : {}),
   ...(spec.session?.start && spec.session.resume
     ? { adoptSession: (id: string) => ({ conversationId: id }) }
     : spec.session?.byId
@@ -86,7 +89,8 @@ export const CATALOG: CliAdapter[] = [
     executables: ['gemini'],
     autoApproveArgs: ['--yolo'],
     session: { latest: ['--resume', 'latest'], byId: (id) => ['--resume', id] },
-    waitingPatterns: [{ pattern: /Allow execution|Apply this change\?|Waiting for user confirmation/i, reason: 'permission' }]
+    waitingPatterns: [{ pattern: /Allow execution|Apply this change\?|Waiting for user confirmation/i, reason: 'permission' }],
+    skills: { dir: '.gemini/skills', shared: true }
   }),
   defineCli({
     id: 'opencode',
@@ -96,7 +100,8 @@ export const CATALOG: CliAdapter[] = [
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
-    waitingPatterns: [{ pattern: /Permission required/i, reason: 'permission' }]
+    waitingPatterns: [{ pattern: /Permission required/i, reason: 'permission' }],
+    skills: { dir: '.config/opencode/skills', projectDir: '.opencode/skills', shared: true, alsoReads: ['.claude/skills'] }
   }),
   defineCli({
     id: 'copilot',
@@ -105,7 +110,8 @@ export const CATALOG: CliAdapter[] = [
     executables: ['copilot'],
     autoApproveArgs: ['--allow-all-tools'],
     session: { latest: ['--continue'] },
-    mcp: (endpoint) => ({ args: ['--additional-mcp-config', JSON.stringify(mcpServersJson(endpoint, { tools: ['*'] }))] })
+    mcp: (endpoint) => ({ args: ['--additional-mcp-config', JSON.stringify(mcpServersJson(endpoint, { tools: ['*'] }))] }),
+    skills: { dir: '.copilot/skills', projectDir: '.github/skills', shared: true, alsoReads: ['.claude/skills'] }
   }),
   defineCli({
     id: 'cursor',
@@ -113,7 +119,8 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('cursor', 'CU'),
     executables: ['cursor-agent'],
     autoApproveArgs: ['--force'],
-    session: { latest: ['resume'] }
+    session: { latest: ['resume'] },
+    skills: { dir: '.cursor/skills', shared: true, alsoReads: ['.claude/skills', '.codex/skills'] }
   }),
   defineCli({
     id: 'qwen',
@@ -121,14 +128,16 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('qwen', 'QW'),
     executables: ['qwen'],
     autoApproveArgs: ['--yolo'],
-    session: { latest: ['--continue'] }
+    session: { latest: ['--continue'] },
+    skills: { dir: '.qwen/skills', shared: true }
   }),
   defineCli({
     id: 'amp',
     displayName: 'Amp',
     icon: officialIcon('amp', 'AM'),
     executables: ['amp'],
-    autoApproveArgs: ['--dangerously-allow-all']
+    autoApproveArgs: ['--dangerously-allow-all'],
+    skills: { dir: '.config/agents/skills', projectDir: null, shared: true }
   }),
   defineCli({
     id: 'aider',
@@ -145,14 +154,16 @@ export const CATALOG: CliAdapter[] = [
     executables: ['goose'],
     args: ['session'],
     autoApproveEnv: { GOOSE_MODE: 'auto' },
-    session: { latest: ['--resume'] }
+    session: { latest: ['--resume'] },
+    skills: { dir: '.config/goose/skills', projectDir: '.goose/skills', shared: true }
   }),
   defineCli({
     id: 'crush',
     displayName: 'Crush',
     icon: officialIcon('crush', 'CR'),
     executables: ['crush'],
-    autoApproveArgs: ['--yolo']
+    autoApproveArgs: ['--yolo'],
+    skills: { dir: '.config/crush/skills', projectDir: '.crush/skills' }
   }),
   defineCli({
     id: 'kimi',
@@ -160,7 +171,8 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('kimi', 'KI'),
     executables: ['kimi'],
     autoApproveArgs: ['--yolo'],
-    session: { latest: ['--continue'] }
+    session: { latest: ['--continue'] },
+    skills: { shared: true }
   }),
   defineCli({
     id: 'kiro',
@@ -168,25 +180,29 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('kiro', 'KI'),
     executables: ['kiro-cli'],
     args: ['chat'],
-    autoApproveArgs: ['--trust-all-tools']
+    autoApproveArgs: ['--trust-all-tools'],
+    skills: { dir: '.kiro/skills' }
   }),
   defineCli({
     id: 'droid',
     displayName: 'Factory Droid',
     icon: officialIcon('droid', 'DR'),
-    executables: ['droid']
+    executables: ['droid'],
+    skills: { dir: '.factory/skills', shared: true }
   }),
   defineCli({
     id: 'auggie',
     displayName: 'Auggie',
     icon: officialIcon('auggie', 'AU'),
-    executables: ['auggie']
+    executables: ['auggie'],
+    skills: { dir: '.augment/skills' }
   }),
   defineCli({
     id: 'cline',
     displayName: 'Cline CLI',
     icon: officialIcon('cline', 'CL'),
-    executables: ['cline']
+    executables: ['cline'],
+    skills: { shared: true }
   }),
   defineCli({
     id: 'kilocode',
@@ -195,13 +211,15 @@ export const CATALOG: CliAdapter[] = [
     executables: ['kilo', 'kilocode'],
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
-    mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } })
+    mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
+    skills: { dir: '.kilo/skills', shared: true, alsoReads: ['.claude/skills'] }
   }),
   defineCli({
     id: 'vibe',
     displayName: 'Mistral Vibe',
     icon: officialIcon('vibe', 'VI'),
-    executables: ['vibe']
+    executables: ['vibe'],
+    skills: { dir: '.vibe/skills' }
   }),
   defineCli({
     id: 'grok',
@@ -209,19 +227,22 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('grok', 'GR'),
     executables: ['grok'],
     autoApproveArgs: ['--always-approve'],
-    session: { start: (id) => ['--session-id', id], resume: (id) => ['--resume', id] }
+    session: { start: (id) => ['--session-id', id], resume: (id) => ['--resume', id] },
+    skills: { dir: '.grok/skills' }
   }),
   defineCli({
     id: 'continue',
     displayName: 'Continue CLI',
     icon: officialIcon('continue', 'CO'),
-    executables: ['cn']
+    executables: ['cn'],
+    skills: { dir: '.continue/skills' }
   }),
   defineCli({
     id: 'openhands',
     displayName: 'OpenHands',
     icon: officialIcon('openhands', 'OP'),
-    executables: ['openhands']
+    executables: ['openhands'],
+    skills: { dir: '.openhands/skills' }
   }),
   defineCli({
     id: 'plandex',
@@ -233,7 +254,8 @@ export const CATALOG: CliAdapter[] = [
     id: 'letta',
     displayName: 'Letta Code',
     icon: officialIcon('letta', 'LE'),
-    executables: ['letta']
+    executables: ['letta'],
+    skills: { shared: true }
   }),
   defineCli({
     id: 'antigravity',
@@ -241,12 +263,14 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('antigravity', 'AG'),
     executables: ['agy'],
     autoApproveArgs: ['--dangerously-skip-permissions'],
-    session: { latest: ['--continue'] }
+    session: { latest: ['--continue'] },
+    skills: { dir: '.gemini/antigravity-cli/skills', projectDir: null, shared: true }
   }),
   defineCli({
     id: 'junie',
     displayName: 'Junie CLI',
     icon: officialIcon('junie', 'JU'),
-    executables: ['junie']
+    executables: ['junie'],
+    skills: { dir: '.junie/skills' }
   })
 ]

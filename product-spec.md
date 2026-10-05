@@ -215,7 +215,7 @@ Off by default (Settings › Agents). When on, agents operate this computer thro
 
 Settings › Skills, MCP & Plugins has three tabs (ADR 0017):
 
-- **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash)
+- **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash). The folders come from the CLI registry: the shared `.agents/skills` plus each CLI's own (Claude, Codex, Gemini, Copilot, Cursor, OpenCode, Qwen, Goose, Kiro, Droid, Kilo, Junie and more); chips show the folders an installed CLI reads (ADR 0020)
 - **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click
 - **Plugins** — 30 apps (GitHub, Linear, Notion, Slack, Stripe, Supabase…) set up with the user's own keys: no OAuth, nothing hosted; every agent — terminal and chat — gets their tools
 

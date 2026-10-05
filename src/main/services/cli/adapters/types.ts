@@ -49,6 +49,19 @@ export interface LaunchSpec {
 }
 
 /**
+ * Where a CLI loads Agent Skills from (folders with SKILL.md). `dir` is its own folder
+ * under the home folder; `projectDir` its folder inside a project when that differs.
+ * `shared` means it also reads the cross-agent `.agents/skills`; `alsoReads` lists other
+ * CLIs' folders it loads too (e.g. Cursor reads `.claude/skills`).
+ */
+export interface SkillFolders {
+  dir?: string
+  projectDir?: string | null
+  shared?: boolean
+  alsoReads?: string[]
+}
+
+/**
  * Everything provider-specific lives behind this contract (AGENTS.md rule 5).
  * Process lifecycle itself is generic and owned by CliRuntimeManager.
  */
@@ -63,6 +76,8 @@ export interface CliAdapter {
   /** A plain shell, not an agent: no Kanban card, no chat, listed first when adding panes. */
   kind?: 'shell'
   supportsAutoApprove: boolean
+  /** Agent Skills folders this CLI reads (Settings › Skills); absent: it has no skills support. */
+  skills?: SkillFolders
   /** Keys that stop the current task without quitting. Default: Esc for agents, Ctrl+C for shells. */
   interruptKeys?: string
   /** The adapter knows how to load Hiveory's MCP server into a session (see `LaunchContext.mcp`). */

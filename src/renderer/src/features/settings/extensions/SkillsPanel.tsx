@@ -38,7 +38,12 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
   const [query, setQuery] = useState('')
   const [creating, setCreating] = useState(false)
   const [removing, setRemoving] = useState<{ skill: SkillInfo; last: boolean } | null>(null)
-  const roots = inventory?.roots ?? []
+  // Every CLI's folder is known (from the CLI registry); the ones shown are the shared folder and
+  // folders an installed CLI reads. A folder that already holds a skill always shows on its row.
+  const allRoots = useMemo(() => inventory?.roots ?? [], [inventory])
+  const roots = useMemo(() => allRoots.filter((r) => r.id === 'agents' || r.visibleTo.some((id) => installed.has(id))), [allRoots, installed])
+  const rootsFor = (group: SkillGroup): SkillRoot[] => [...roots, ...allRoots.filter((r) => !roots.includes(r) && group.copies.some((c) => c.rootId === r.id))]
+  const clisName = (ids: string[]): string => ids.map((id) => clis.find((c) => c.id === id)?.displayName ?? id).join(', ')
 
   const groups = useMemo(() => {
     const map = new Map<string, SkillGroup>()
@@ -108,7 +113,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
                   </span>
                   <span className={styles.folders} role="group" aria-label={`Folders with ${group.name}`}>
                     <span className={styles.folderLabel}>In</span>
-                    {roots.map((root) => {
+                    {rootsFor(group).map((root) => {
                       const on = group.copies.some((c) => c.rootId === root.id)
                       return (
                         <button
@@ -116,7 +121,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
                           type="button"
                           aria-pressed={on}
                           className={cx(styles.folder, on && styles.folderOn)}
-                          title={`${root.dir} — read by ${root.visibleTo.join(', ')}`}
+                          title={`~/${root.dir} — read by ${clisName(root.visibleTo)}`}
                           onClick={() => toggleFolder(group, root)}
                         >
                           {on ? <Check aria-hidden /> : <Plus aria-hidden />}

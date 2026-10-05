@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_SETTINGS } from '@shared/domain'
 import { BUILT_IN_ADAPTERS } from './cli/adapters'
 import { codexMcpArgs, mcpServersJson, opencodeConfigJson } from './cli/adapters/mcp-injection'
-import { ExtensionsService, parseCodexMcp, parseJsonc, parseSkillFrontmatter } from './extensions/extensions-service'
+import { ExtensionsService, parseCodexMcp, parseJsonc, parseSkillFrontmatter, skillRoots } from './extensions/extensions-service'
 import { branchNameProblem, isBranchInUseError, parseStatus } from './git/git-commands'
 import { parseState } from './persistence/schema'
 import { resolveSpawnTarget } from './pty/spawn-target'
@@ -142,6 +142,29 @@ describe('extensions inventory', () => {
     writeFileSync(join(outside, 'SKILL.md'), '---\nname: outside\ndescription: d\n---\n')
     expect(service.importSkill(outside, ['codex'])).toHaveLength(1)
     expect(service.scan().skills.filter((s) => s.rootId === 'codex')).toHaveLength(1)
+  })
+})
+
+describe('skills folders from the CLI registry', () => {
+  it('lists every CLI with its own folder, and who reads each', () => {
+    const roots = skillRoots(BUILT_IN_ADAPTERS)
+    expect(roots[0]).toMatchObject({ id: 'agents', dir: '.agents/skills' })
+    expect(roots[0]!.visibleTo).toEqual(expect.arrayContaining(['codex', 'gemini', 'copilot', 'cursor', 'opencode', 'goose', 'droid']))
+    expect(roots.map((r) => r.id)).toEqual(expect.arrayContaining(['claude', 'codex', 'cursor', 'gemini', 'opencode', 'copilot', 'qwen', 'goose', 'kiro', 'droid', 'kilocode', 'junie']))
+    expect(roots.find((r) => r.id === 'claude')!.visibleTo).toEqual(expect.arrayContaining(['claude', 'cursor', 'opencode', 'copilot']))
+    // Shells and CLIs without skills support get no folder.
+    expect(roots.some((r) => r.id === 'powershell' || r.id === 'aider')).toBe(false)
+    expect(new Set(roots.map((r) => r.dir)).size).toBe(roots.length)
+  })
+
+  it('writes into a CLI folder at home and into its project folder', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hv-home-'))
+    const project = mkdtempSync(join(tmpdir(), 'hv-proj-'))
+    const service = new ExtensionsService(log, home)
+    expect(service.createSkill({ name: 'lint', description: 'd', body: '', rootIds: ['gemini'] })).toEqual([join(home, '.gemini', 'skills', 'lint')])
+    expect(service.createSkill({ name: 'lint', description: 'd', body: '', rootIds: ['copilot'] }, project)).toEqual([join(project, '.github', 'skills', 'lint')])
+    // Codex reads project skills from the shared folder only.
+    expect(() => service.createSkill({ name: 'x', description: 'd', body: '', rootIds: ['codex'] }, project)).toThrow(/shared folder/)
   })
 })
 

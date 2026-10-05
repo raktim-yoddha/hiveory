@@ -80,7 +80,8 @@ const skillPath = z.string().min(1).max(1000)
 const fileScope = z.object({ workspaceId: id.optional(), projectId: id.optional() }).refine((s) => Boolean(s.workspaceId || s.projectId), 'A workspace or project is required.')
 const relPath = z.string().max(1000).refine((p) => !p.includes('\0'), 'Invalid path.')
 const fileName = z.string().min(1).max(1000)
-const skillRoot = z.enum(['agents', 'claude', 'codex', 'cursor'])
+/** `agents` or the id of a CLI that has its own skills folder (checked against the registry's roots in main). */
+const skillRoot = id
 const connectionId = z.string().regex(/^c[a-z0-9]{1,24}$/)
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
 const headerName = z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
@@ -306,11 +307,11 @@ export const requestSchemas = {
     name: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
     description: z.string().trim().min(1).max(1024),
     body: z.string().max(100_000),
-    rootIds: z.array(skillRoot).min(1).max(4),
+    rootIds: z.array(skillRoot).min(1).max(40),
     projectId: id.optional()
   }),
   /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
-  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(4), projectId: id.optional() }),
+  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional() }),
   /** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
   /** Explorer (ADR 0018): paths are relative to the scope's folder and re-checked in main. */
   'files.list': z.object({ scope: fileScope, dir: relPath }),

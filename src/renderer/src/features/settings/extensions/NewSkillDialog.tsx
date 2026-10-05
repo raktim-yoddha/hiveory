@@ -116,7 +116,7 @@ export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: P
               )
             })}
           </span>
-          <span className={styles.hint}>Shared (.agents) reaches Codex, Gemini, Copilot, Cursor, OpenCode and more; Claude reads its own folder.</span>
+          <span className={styles.hint}>Shared (.agents) reaches every CLI that follows the Agent Skills standard; the others are each CLI's own folder (installed CLIs only).</span>
         </div>
       </div>
     </Modal>

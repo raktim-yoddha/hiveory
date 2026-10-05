@@ -57,6 +57,7 @@ export const claudeAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
+  skills: { dir: '.claude/skills' },
   // A session from its history: Claude takes Hiveory's conversation id as its own session id.
   adoptSession: (sessionId) => ({ conversationId: sessionId }),
   buildLaunch({ instance, autoApprove, hook, mcp, runtimeDir, resume }) {

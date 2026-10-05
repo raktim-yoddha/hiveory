@@ -1,8 +1,11 @@
 /** A skills directory and the CLIs that load skills from it. */
 export interface SkillRoot {
-  id: 'agents' | 'claude' | 'codex' | 'cursor'
-  /** Relative to the home folder (user scope) or the project (project scope), e.g. ".agents/skills". */
+  /** `agents` for the shared folder, otherwise the id of the CLI that owns the folder. */
+  id: string
+  /** Relative to the home folder (user scope), e.g. ".gemini/skills". */
   dir: string
+  /** Relative to a project (project scope), when it differs from `dir`; null: no project folder of its own. */
+  projectDir?: string | null
   label: string
   visibleTo: string[]
 }

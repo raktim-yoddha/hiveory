@@ -11,6 +11,7 @@ export const codexAdapter: CliAdapter = {
   supportsAutoApprove: true,
   injectMcp: true,
 
+  skills: { dir: '.codex/skills', projectDir: null, shared: true },
   // A session from its history resumes like one reported through notify.
   adoptSession: (sessionId) => ({ providerSessionId: sessionId }),
   buildLaunch({ instance, autoApprove, hook, mcp, resume, soleOfCli }) {

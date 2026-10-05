@@ -4,19 +4,36 @@ import { basename, join, relative, resolve, sep } from 'node:path'
 import type { ExtensionsInventory, McpServerInfo, SkillInfo, SkillRoot } from '@shared/domain/extensions'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
+import { BUILT_IN_ADAPTERS } from '../cli/adapters'
+import type { CliAdapter } from '../cli/adapters/types'
 
-/** Skill directories and the CLIs that read them (Agent Skills standard + vendor folders). */
-export const SKILL_ROOTS: SkillRoot[] = [
-  {
-    id: 'agents',
-    dir: '.agents/skills',
-    label: 'Shared (.agents)',
-    visibleTo: ['codex', 'copilot', 'cursor', 'gemini', 'opencode', 'kilocode', 'amp', 'goose', 'letta', 'qwen']
-  },
-  { id: 'claude', dir: '.claude/skills', label: 'Claude', visibleTo: ['claude', 'cursor', 'opencode', 'kilocode', 'copilot'] },
-  { id: 'codex', dir: '.codex/skills', label: 'Codex', visibleTo: ['codex', 'cursor'] },
-  { id: 'cursor', dir: '.cursor/skills', label: 'Cursor', visibleTo: ['cursor'] }
-]
+/** Short chip label: "Gemini CLI" → "Gemini", "Kilo Code CLI" → "Kilo Code". */
+const shortName = (name: string): string => name.replace(/ CLI$/, '').replace(/^GitHub /, '')
+
+/**
+ * Skills folders, built from the CLI registry (AGENTS.md rule 15): the shared
+ * `.agents/skills` (the Agent Skills standard) first, then each CLI's own folder
+ * with every CLI that reads it.
+ */
+export function skillRoots(adapters: Array<Pick<CliAdapter, 'id' | 'displayName' | 'skills'>>): SkillRoot[] {
+  const withSkills = adapters.filter((a) => a.skills)
+  const roots: SkillRoot[] = [{ id: 'agents', dir: '.agents/skills', label: 'Shared (.agents)', visibleTo: withSkills.filter((a) => a.skills!.shared).map((a) => a.id) }]
+  for (const a of withSkills) {
+    const dir = a.skills!.dir
+    if (!dir || roots.some((r) => r.dir === dir)) continue
+    roots.push({
+      id: a.id,
+      dir,
+      ...(a.skills!.projectDir !== undefined ? { projectDir: a.skills!.projectDir } : {}),
+      label: shortName(a.displayName),
+      visibleTo: [a.id, ...withSkills.filter((b) => b.id !== a.id && (b.skills!.dir === dir || b.skills!.alsoReads?.includes(dir))).map((b) => b.id)]
+    })
+  }
+  return roots
+}
+
+/** Where a root lives in a scope, or null when the CLI has no project folder of its own. */
+const rootPath = (root: SkillRoot, scope: 'user' | 'project'): string | null => (scope === 'user' ? root.dir : root.projectDir === undefined ? root.dir : root.projectDir)
 
 /** A server's full config as a CLI stores it — kept in main for "use in every agent", never sent to the renderer. */
 export interface McpRawConfig {
@@ -131,13 +148,14 @@ export class ExtensionsService {
   constructor(
     private readonly log: Logger,
     private readonly home = homedir(),
-    private readonly trash: (path: string) => Promise<void> = async () => fail('FORBIDDEN', 'Trash is not available.')
+    private readonly trash: (path: string) => Promise<void> = async () => fail('FORBIDDEN', 'Trash is not available.'),
+    private readonly roots: SkillRoot[] = skillRoots(BUILT_IN_ADAPTERS)
   ) {}
 
   scan(projectPath?: string): ExtensionsInventory {
     const skills = [...this.scanSkills(this.home, 'user'), ...(projectPath ? this.scanSkills(projectPath, 'project') : [])]
     this.lastSkills = skills
-    return { roots: SKILL_ROOTS, skills, mcpServers: this.scanMcp(projectPath) }
+    return { roots: this.roots, skills, mcpServers: this.scanMcp(projectPath) }
   }
 
   private known(skillPath: string): SkillInfo {
@@ -146,10 +164,12 @@ export class ExtensionsService {
     return skill!
   }
 
-  private rootDir(rootId: SkillRoot['id'], base: string): string {
-    const root = SKILL_ROOTS.find((r) => r.id === rootId)
+  private rootDir(rootId: SkillRoot['id'], base: string, scope: 'user' | 'project'): string {
+    const root = this.roots.find((r) => r.id === rootId)
     if (!root) fail('INVALID_INPUT', `Unknown skills folder: ${rootId}`)
-    return join(base, ...root!.dir.split('/'))
+    const dir = rootPath(root!, scope)
+    if (!dir) fail('INVALID_INPUT', `${root!.label} reads project skills from the shared folder. Use Shared (.agents).`)
+    return join(base, ...dir!.split('/'))
   }
 
   /** Copies a scanned skill into another skills folder of the same scope, so the CLIs reading it load it too. */
@@ -157,9 +177,9 @@ export class ExtensionsService {
     const skill = this.known(skillPath)
     const base = skill.scope === 'user' ? this.home : projectPath
     if (!base) fail('INVALID_INPUT', 'Open the project this skill belongs to first.')
-    const target = join(this.rootDir(rootId, base!), skill.folder)
+    const target = join(this.rootDir(rootId, base!, skill.scope), skill.folder)
     if (resolve(target) === resolve(skill.path)) return target
-    if (existsSync(target)) fail('INVALID_INPUT', `${SKILL_ROOTS.find((r) => r.id === rootId)?.label} already has a skill named "${skill.folder}".`)
+    if (existsSync(target)) fail('INVALID_INPUT', `${this.roots.find((r) => r.id === rootId)?.label} already has a skill named "${skill.folder}".`)
     cpSync(skill.path, target, { recursive: true, errorOnExist: true })
     return target
   }
@@ -172,7 +192,7 @@ export class ExtensionsService {
   /** Writes a new SKILL.md into each chosen skills folder. */
   createSkill(input: { name: string; description: string; body: string; rootIds: SkillRoot['id'][] }, projectPath?: string): string[] {
     const base = projectPath ?? this.home
-    const targets = input.rootIds.map((id) => join(this.rootDir(id, base), input.name))
+    const targets = input.rootIds.map((id) => join(this.rootDir(id, base, projectPath ? 'project' : 'user'), input.name))
     const taken = targets.find((t) => existsSync(t))
     if (taken) fail('INVALID_INPUT', `A skill named "${input.name}" already exists in ${relative(base, taken)}.`)
     const description = input.description.replace(/\s+/g, ' ')
@@ -189,7 +209,7 @@ export class ExtensionsService {
     if (!existsSync(join(folder, 'SKILL.md'))) fail('INVALID_INPUT', 'That folder has no SKILL.md. Choose a skill folder.')
     const base = projectPath ?? this.home
     const name = basename(folder)
-    const targets = rootIds.map((id) => join(this.rootDir(id, base), name)).filter((t) => resolve(t) !== resolve(folder))
+    const targets = rootIds.map((id) => join(this.rootDir(id, base, projectPath ? 'project' : 'user'), name)).filter((t) => resolve(t) !== resolve(folder))
     const taken = targets.find((t) => existsSync(t))
     if (taken) fail('INVALID_INPUT', `A skill named "${name}" already exists in ${relative(base, taken)}.`)
     for (const target of targets) cpSync(folder, target, { recursive: true, errorOnExist: true })
@@ -210,8 +230,10 @@ export class ExtensionsService {
 
   private scanSkills(base: string, scope: 'user' | 'project'): SkillInfo[] {
     const found: SkillInfo[] = []
-    for (const root of SKILL_ROOTS) {
-      const dir = join(base, ...root.dir.split('/'))
+    for (const root of this.roots) {
+      const rel = rootPath(root, scope)
+      if (!rel) continue
+      const dir = join(base, ...rel.split('/'))
       let entries: string[]
       try {
         entries = readdirSync(dir)
@@ -231,7 +253,7 @@ export class ExtensionsService {
             folder: entry,
             scope,
             rootId: root.id,
-            source: scope === 'user' ? `~/${root.dir}` : root.dir,
+            source: scope === 'user' ? `~/${rel}` : rel,
             visibleTo: root.visibleTo
           })
         } catch (error) {

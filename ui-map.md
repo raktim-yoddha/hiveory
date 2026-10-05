@@ -110,8 +110,8 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Cop
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Skills rows: name, description, folder toggles (Shared · Claude · Codex ·
-Cursor), CLI logos that load it, open folder. MCP: "In Hiveory · every agent"
+Skills rows: name, description, folder toggles (Shared, then one per installed CLI with its
+own skills folder — from the CLI registry), CLI logos that load it, open folder. MCP: "In Hiveory · every agent"
 (toggle, reconnect, edit, remove) and "In your CLIs" ("Every agent").
 
 ### Settings › Appearance
