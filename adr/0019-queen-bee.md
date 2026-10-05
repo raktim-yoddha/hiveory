@@ -87,7 +87,10 @@ only.
 
 **Text-to-speech.**
 - Kokoro-82M (Apache 2.0): English, Spanish, Portuguese, French and Hindi voices.
-- Users pick any of Kokoro's English voices. Loading arbitrary voice model files is not
+- Users pick one of four voices: Heart, Bella, Emma and Michael. These are the best-graded
+  and most distinct in Kokoro's own voice list; the rest are rough, so they aren't offered.
+  Each has its own preview, which works once Kokoro is installed. Until then the cards offer
+  the download and she uses the system voice. Loading arbitrary voice model files is not
   offered: an unverified model is untrusted native input to the inference runtime.
 
 **Downloads.**
@@ -291,7 +294,12 @@ and the request. Never files, code or terminal output.
 - She speaks with Kokoro when it is installed, otherwise with the operating system's own
   voice (local SAPI or macOS voices), so talkback works with no download.
 - Short sound cues are generated (no audio files): listening starts and stops, a reply
-  while talkback is off, an agent update. They can be turned off.
+  while talkback is off, an agent update. Each note is two slightly detuned sines plus a
+  quiet octave, low-pass filtered, with a soft attack and a long tail: a glassy chime, not a
+  beep. They can be turned off.
+- She speaks only the first two sentences of a reply. Kokoro renders it sentence by
+  sentence, so the first sentence plays (about 0.5 s) while the rest is still being made.
+  The engine uses half the CPU cores (2–4 threads).
 
 **Talking to agents by name** (rules, no model; the message is the user's exact words).
 - "codex run the tests", "Codex: …", "@claude …", "claude code …", "Bruno, …",

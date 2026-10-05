@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { CheckCircle2, Download, Lock, Trash2, Volume2, X } from 'lucide-react'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
-import { KOKORO_VOICES, packSize, PERSONA_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
-import { Button } from '../../components/ui/Button'
+import { packSize, PERSONA_VOICES, QUEEN_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
+import { Button, IconButton } from '../../components/ui/Button'
 import { RangeField } from '../../components/ui/RangeField'
 import { Toggle } from '../../components/ui/Toggle'
 import { Select } from '../../components/ui/Select'
@@ -119,37 +119,61 @@ export function QueenVoiceSettings() {
           description="A short tone when she starts and stops listening, and for agent updates."
           control={<Toggle label="Sound cues" checked={settings.queenSounds} onChange={(on) => void update({ queenSounds: on })} />}
         />
-        <SettingRow
-          title="Her voice"
-          description={state('kokoro').state === 'ready' ? `Speaking as ${voiceFor(settings).name}.` : 'Kokoro voices need the Kokoro pack; until then she uses your system’s voice.'}
-          control={
-            <span className={styles.inlineControls}>
-              <Select
-                label="Her voice"
-                hideLabel
-                value={String(settings.queenVoice)}
-                options={[
-                  { value: '-1', label: `Her personality’s own (${PERSONA_VOICES[settings.queenPersona].name})` },
-                  ...KOKORO_VOICES.map((v) => ({ value: String(v.sid), label: v.name }))
-                ]}
-                onChange={(v) => void update({ queenVoice: Number(v) })}
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                icon={<Volume2 />}
-                onClick={() => void speak(settings.queenCallMe ? `Hi ${settings.queenCallMe}, this is how I sound.` : 'Hi, this is how I sound.')}
-              >
-                Preview
-              </Button>
-            </span>
-          }
-        />
+        <VoicePicker ready={state('kokoro').state === 'ready'} downloading={state('kokoro').state === 'downloading' || state('kokoro').state === 'verifying'} />
         <div className={styles.fieldBlock}>
           <RangeField label="Speaking speed" value={settings.queenVoiceSpeed} min={0.8} max={1.4} step={0.05} format={(v) => `${v.toFixed(2)}×`} onCommit={(v) => void update({ queenVoiceSpeed: v })} />
         </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Her four voices, each with its own preview. They come with the free Kokoro pack
+ * (Apache-2.0, runs on this computer); until it is downloaded every preview would
+ * be the system voice, so the cards offer the download instead.
+ */
+function VoicePicker({ ready, downloading }: { ready: boolean; downloading: boolean }) {
+  const { settings, update } = useSettings()
+  const own = PERSONA_VOICES[settings.queenPersona]
+  const chosen = voiceFor(settings).sid
+  const line = settings.queenCallMe ? `Hi ${settings.queenCallMe}. Two agents are done, and one needs you.` : 'Hi. Two agents are done, and one needs you.'
+  return (
+    <div className={styles.fieldBlock}>
+      <div className={styles.voiceHead}>
+        <span className={styles.rowTitle}>Her voice</span>
+        {!ready && (
+          <Button size="sm" variant="primary" icon={<Download />} loading={downloading} onClick={() => void runAction('Download Kokoro', () => api('voice.download', { pack: 'kokoro' }))}>
+            {downloading ? 'Downloading voices…' : 'Get these voices (Kokoro, free)'}
+          </Button>
+        )}
+      </div>
+      <div className={styles.personas} role="radiogroup" aria-label="Her voice">
+        {QUEEN_VOICES.map((v) => (
+          <div key={v.sid} className={styles.voiceChoice}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={chosen === v.sid}
+              className={styles.persona}
+              onClick={() => void update({ queenVoice: v.sid === own.sid ? -1 : v.sid })}
+            >
+              <span className={styles.personaName}>{v.name}</span>
+              <span className={styles.personaTagline}>{v.description}</span>
+              {v.sid === own.sid && <span className={styles.personaSample}>Her personality’s own</span>}
+            </button>
+            <IconButton
+              className={styles.voicePreview}
+              label={ready ? `Preview ${v.name}` : `Preview ${v.name} (needs the Kokoro pack)`}
+              icon={<Volume2 />}
+              disabled={!ready}
+              onClick={() => void speak(line, { sid: v.sid, whole: true })}
+            />
+          </div>
+        ))}
+      </div>
+      {!ready && <p className={styles.groupNote}>Until then she speaks with your system’s voice.</p>}
+    </div>
   )
 }
 

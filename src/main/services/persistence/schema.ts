@@ -3,7 +3,7 @@ import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { parseShortcut } from '@shared/queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
 import { customNameProblem } from '@shared/queen/personas'
-import { KOKORO_VOICES } from '@shared/queen/voice'
+import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
@@ -107,7 +107,8 @@ const settingsSchema = z.object({
   queenIntensity: z.enum(['steady', 'hard']).catch(DEFAULT_SETTINGS.queenIntensity),
   queenMemory: z.array(z.string().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES).catch(DEFAULT_SETTINGS.queenMemory),
   queenGlobalShortcut: z.boolean().catch(DEFAULT_SETTINGS.queenGlobalShortcut),
-  queenVoice: z.number().int().min(-1).max(KOKORO_VOICES.length - 1).catch(DEFAULT_SETTINGS.queenVoice),
+  // A voice from an older, longer list falls back to the personality's own.
+  queenVoice: z.number().int().refine((v) => v === -1 || QUEEN_VOICES.some((x) => x.sid === v)).catch(DEFAULT_SETTINGS.queenVoice),
   queenCallMe: z.string().max(40).catch(DEFAULT_SETTINGS.queenCallMe),
   queenHonorific: z.enum(['sir', 'maam', 'name', 'none']).catch(DEFAULT_SETTINGS.queenHonorific),
   queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),

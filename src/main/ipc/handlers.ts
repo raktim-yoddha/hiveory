@@ -88,9 +88,9 @@ export const createHandlers = (c: Container): Handlers => {
   'voice.cancel': ({ pack }) => c.voice.cancel(pack),
   'voice.remove': ({ pack }) => c.voice.remove(pack),
   'voice.transcribe': ({ samples, language }) => c.voice.transcribe(samples, language),
-  'voice.speak': ({ text }) => {
+  'voice.speak': ({ text, sid }) => {
     const s = c.settings.get()
-    return c.voice.speak(text, voiceFor(s).sid, s.queenVoiceSpeed)
+    return c.voice.speak(text, sid ?? voiceFor(s).sid, s.queenVoiceSpeed)
   },
   'voice.micAccess': async () => {
     if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone')

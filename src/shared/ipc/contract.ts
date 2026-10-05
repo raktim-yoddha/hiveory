@@ -20,7 +20,7 @@ import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
-import { KOKORO_VOICES, type VoicePackState } from '../queen/voice'
+import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
 import { parseShortcut, type HotkeySignal, type HotkeyStatus } from '../queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '../queen/actions'
 import { customNameProblem } from '../queen/personas'
@@ -215,7 +215,8 @@ export const requestSchemas = {
   'voice.remove': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
   /** 16 kHz mono push-to-talk audio, at most 60 s. */
   'voice.transcribe': z.object({ samples: z.instanceof(Float32Array).refine((a) => a.length > 0 && a.length <= 16000 * 60, 'Clip too long.'), language: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']) }),
-  'voice.speak': z.object({ text: z.string().trim().min(1).max(600) }),
+  /** `sid`: a preview of one of her voices; otherwise the voice from Settings. */
+  'voice.speak': z.object({ text: z.string().trim().min(1).max(600), sid: z.number().int().refine((v) => QUEEN_VOICES.some((x) => x.sid === v)).optional() }),
   /** macOS asks for the microphone once; Windows reports its privacy setting. */
   'voice.micAccess': none,
   'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
@@ -256,7 +257,7 @@ export const requestSchemas = {
       queenIntensity: z.enum(['steady', 'hard']),
       queenMemory: z.array(z.string().trim().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES),
       queenGlobalShortcut: z.boolean(),
-      queenVoice: z.number().int().min(-1).max(KOKORO_VOICES.length - 1),
+      queenVoice: z.number().int().refine((v) => v === -1 || QUEEN_VOICES.some((x) => x.sid === v), 'Pick one of her voices.'),
       queenCallMe: z.string().trim().max(40),
       queenHonorific: z.enum(['sir', 'maam', 'name', 'none']),
       queenHype: z.enum(['calm', 'lively', 'max']),

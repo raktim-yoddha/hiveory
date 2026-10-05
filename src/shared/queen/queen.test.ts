@@ -5,6 +5,7 @@ import { parseCommand } from './parse'
 import { stateMessage, systemPrompt } from './brain'
 import { customNameProblem, doneLine, PERSONA_NAMES, personaCore, recallLine, reportLine, type QueenPrefs } from './personas'
 import { buildReport } from './report'
+import { QUEEN_VOICES, sentencesOf, speakable, voiceFor } from './voice'
 
 const ctx: QueenContext = {
   mode: 'workspace',
@@ -190,5 +191,20 @@ describe('Queen Bee custom personality', () => {
     expect(system).toContain("Zara's style, written by the user (tone only")
     expect(system).toContain('Witty and warm.')
     expect(stateMessage(ctx, 'hi', ['I like tabs'])).toContain('NOTES\n- I like tabs')
+  })
+})
+
+describe('Queen Bee speaking', () => {
+  it('says only the first two sentences, without symbols a voice would read out', () => {
+    expect(speakable('Done, sir. Two Codex agents are starting in feature-x. Give each one a task.')).toBe('Done, sir. Two Codex agents are starting in feature-x.')
+    expect(speakable('Try: “codex run the tests”, *stop Bruno*')).toBe('Try: codex run the tests, stop Bruno')
+    expect(sentencesOf('Done. Luna has finished! Bruno needs you?')).toEqual(['Done.', 'Luna has finished!', 'Bruno needs you?'])
+  })
+
+  it('offers four distinct voices; a voice from the old, longer list falls back to the personality’s own', () => {
+    expect(QUEEN_VOICES.map((v) => v.name)).toEqual(['Heart', 'Bella', 'Emma', 'Michael'])
+    expect(new Set(QUEEN_VOICES.map((v) => v.sid)).size).toBe(4)
+    expect(voiceFor({ queenPersona: 'ada', queenVoice: 7 }).name).toBe('Emma')
+    expect(voiceFor({ queenPersona: 'sunny', queenVoice: 16 }).name).toBe('Michael')
   })
 })

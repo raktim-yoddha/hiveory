@@ -870,3 +870,28 @@
   background: var(--fill-accent-soft);
   color: var(--color-accent);
 }
+
+/* Queen Bee › Voice: her voices as cards, each with its own preview. */
+.voiceHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.voiceChoice {
+  position: relative;
+  display: flex;
+}
+
+.voiceChoice > .persona {
+  flex: 1;
+  padding-right: calc(var(--space-6) + var(--control-sm));
+}
+
+.voicePreview {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+}

@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import type { VoicePackId } from '@shared/queen/voice'
 
@@ -21,7 +22,8 @@ interface Sherpa {
 let sherpa: Sherpa | null = null
 const load = (): Sherpa => (sherpa ??= createRequire(import.meta.url)('sherpa-onnx-node') as Sherpa)
 
-const threads = (): number => 2
+/** Half the cores, 2–4: fast enough to talk, light enough that agents keep their CPU. */
+const threads = (): number => Math.max(2, Math.min(4, Math.floor(availableParallelism() / 2)))
 
 /**
  * Recognizer config per pack. Whisper writes in Latin script ("do codex kholo"):

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { CLIP_SAMPLE_RATE, MAX_CLIP_SECONDS, SPEECH_LANGUAGES, type VoicePackState } from '@shared/queen/voice'
+import { CLIP_SAMPLE_RATE, MAX_CLIP_SECONDS, sentencesOf, SPEECH_LANGUAGES, speakable, type VoicePackState } from '@shared/queen/voice'
 import { api, toAppError } from '../../lib/api'
 import { useSettings } from '../../stores/data'
 import { useQueen } from './useQueen'
@@ -33,8 +33,8 @@ const setPhase = (phase: Phase, level = 0): void => useVoice.setState({ phase, l
 
 /** Live microphone capture for one push-to-talk clip. */
 let capture: { ctx: AudioContext; stream: MediaStream; node: ScriptProcessorNode; chunks: Float32Array[]; length: number } | null = null
-/** Reply audio that is playing. */
-let playing: { ctx: AudioContext; source: AudioBufferSourceNode } | null = null
+/** Reply audio being made and played, sentence by sentence. */
+let playing: { ctx: AudioContext | null; sources: AudioBufferSourceNode[]; at: number; done: boolean; stopped: boolean } | null = null
 
 const MIN_SAMPLES = CLIP_SAMPLE_RATE * 0.3
 
@@ -52,12 +52,15 @@ const ttsReady = (): boolean => useVoice.getState().packs.some((p) => p.id === '
 export function stopSpeaking(): void {
   window.speechSynthesis?.cancel()
   if (playing) {
-    try {
-      playing.source.stop()
-    } catch {
-      // Already finished.
+    playing.stopped = true
+    for (const source of playing.sources) {
+      try {
+        source.stop()
+      } catch {
+        // Already finished.
+      }
     }
-    void playing.ctx.close()
+    void playing.ctx?.close()
     playing = null
   }
   if (useVoice.getState().phase === 'speaking') setPhase('idle')
@@ -85,57 +88,90 @@ function speakWithSystemVoice(text: string): void {
   synth.speak(line)
 }
 
+/** Her cue notes (Hz): a rising fifth, the same falling, one soft bell, a gentle three-note roll. */
+const CUES = { listen: [659.25, 987.77], stop: [987.77, 659.25], done: [880], update: [783.99, 1046.5, 1318.51] }
+
 /**
  * Short sound cues, generated (no audio files): listening starts and stops, an
- * answer arrived while talkback is off, an agent has an update.
+ * answer arrived while talkback is off, an agent has an update. Each note is two
+ * slightly detuned sines and a quiet octave, softened by a low-pass filter, with a
+ * gentle attack and a long tail — a glassy chime rather than a beep.
  */
-export function cue(kind: 'listen' | 'stop' | 'done' | 'update'): void {
+export function cue(kind: keyof typeof CUES): void {
   if (!useSettings.getState().settings.queenSounds) return
   try {
     const ctx = new AudioContext()
-    const notes = { listen: [660, 880], stop: [880, 660], done: [784, 1047], update: [523, 659, 784] }[kind]
-    notes.forEach((hz, i) => {
-      const osc = ctx.createOscillator()
+    const warm = ctx.createBiquadFilter()
+    warm.type = 'lowpass'
+    warm.frequency.value = 3200
+    warm.connect(ctx.destination)
+    CUES[kind].forEach((hz, i) => {
+      const at = ctx.currentTime + 0.01 + i * 0.11
       const gain = ctx.createGain()
-      const at = ctx.currentTime + i * 0.09
-      osc.type = 'sine'
-      osc.frequency.value = hz
       gain.gain.setValueAtTime(0.0001, at)
-      gain.gain.exponentialRampToValueAtTime(0.12, at + 0.015)
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.16)
-      osc.connect(gain).connect(ctx.destination)
-      osc.start(at)
-      osc.stop(at + 0.18)
+      gain.gain.exponentialRampToValueAtTime(0.06, at + 0.025)
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.55)
+      gain.connect(warm)
+      const partials: Array<[number, number, number]> = [
+        [1, 1, -3],
+        [1, 1, 3],
+        [2, 0.18, 0]
+      ]
+      for (const [mult, level, cents] of partials) {
+        const osc = ctx.createOscillator()
+        const part = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.value = hz * mult
+        osc.detune.value = cents
+        part.gain.value = level
+        osc.connect(part).connect(gain)
+        osc.start(at)
+        osc.stop(at + 0.6)
+      }
     })
-    window.setTimeout(() => void ctx.close(), 900)
+    window.setTimeout(() => void ctx.close(), 1400)
   } catch {
     // No audio device: cues are optional.
   }
 }
 
-/** Says a line out loud: Kokoro with her chosen voice when installed, otherwise the system voice. */
-export async function speak(raw: string): Promise<void> {
-  const text = pronounced(raw.trim())
+/**
+ * Says a line out loud: Kokoro with her chosen voice when installed (sentence by
+ * sentence, so she starts talking while the rest is still being made), otherwise
+ * the system voice. Only the first two sentences: short is easier to listen to.
+ * `sid` previews one voice without changing the setting.
+ */
+export async function speak(raw: string, options: { sid?: number; whole?: boolean } = {}): Promise<void> {
+  const text = pronounced(options.whole ? raw.trim() : speakable(raw))
   if (!text) return
   stopSpeaking()
-  if (!ttsReady()) return speakWithSystemVoice(text.slice(0, 600))
+  if (!ttsReady()) return speakWithSystemVoice(text)
+  const run: NonNullable<typeof playing> = { ctx: null, sources: [], at: 0, done: false, stopped: false }
+  playing = run
+  setPhase('speaking')
+  const finished = (): void => {
+    if (playing === run && run.done && run.ctx && run.ctx.currentTime >= run.at - 0.05) stopSpeaking()
+  }
   try {
-    const { samples, sampleRate } = await api('voice.speak', { text: text.slice(0, 600) })
-    if (useVoice.getState().phase === 'listening') return
-    const ctx = new AudioContext({ sampleRate })
-    const buffer = ctx.createBuffer(1, samples.length, sampleRate)
-    buffer.copyToChannel(new Float32Array(samples), 0)
-    const source = ctx.createBufferSource()
-    source.buffer = buffer
-    source.connect(ctx.destination)
-    playing = { ctx, source }
-    source.onended = () => {
-      if (playing?.source === source) stopSpeaking()
+    for (const sentence of sentencesOf(text)) {
+      const { samples, sampleRate } = await api('voice.speak', { text: sentence.slice(0, 600), ...(options.sid !== undefined ? { sid: options.sid } : {}) })
+      if (run.stopped || useVoice.getState().phase === 'listening') return
+      run.ctx ??= new AudioContext({ sampleRate })
+      const buffer = run.ctx.createBuffer(1, samples.length, sampleRate)
+      buffer.copyToChannel(new Float32Array(samples), 0)
+      const source = run.ctx.createBufferSource()
+      source.buffer = buffer
+      source.connect(run.ctx.destination)
+      const start = Math.max(run.ctx.currentTime + 0.02, run.at)
+      source.start(start)
+      run.at = start + buffer.duration
+      run.sources.push(source)
+      source.onended = finished
     }
-    setPhase('speaking')
-    source.start()
+    run.done = true
+    finished()
   } catch {
-    setPhase('idle')
+    if (playing === run) stopSpeaking()
   }
 }
 

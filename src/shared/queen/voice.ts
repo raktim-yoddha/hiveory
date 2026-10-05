@@ -63,7 +63,7 @@ export const VOICE_PACKS: VoicePack[] = [
     id: 'kokoro',
     kind: 'speak',
     name: 'Kokoro',
-    description: 'Natural voices for Queen Bee’s replies (Kokoro 82M), on your CPU.',
+    description: 'Her four natural voices — Heart, Bella, Emma and Michael (Kokoro 82M) — on your CPU.',
     languages: 'English (US and UK voices)',
     license: 'Apache-2.0',
     files: [
@@ -98,31 +98,49 @@ export const SPEECH_LANGUAGES = [
 export type SpeechLanguage = (typeof SPEECH_LANGUAGES)[number]['id']
 
 /**
- * Kokoro v1.0's English speakers, by speaker id (the model's alphabetical order:
- * American women, American men, British women, British men). Replies are English,
- * so only these are offered.
+ * Her voices: four of Kokoro v1.0's speakers (speaker id = the model's index), the
+ * best-graded and most distinct in its own voice list. Few on purpose: each one
+ * clearly different, none of the rough ones.
  */
-const VOICE_NAMES: Array<[string, string]> = [
-  ['Alloy', 'American'], ['Aoede', 'American'], ['Bella', 'American'], ['Heart', 'American'], ['Jessica', 'American'], ['Kore', 'American'],
-  ['Nicole', 'American'], ['Nova', 'American'], ['River', 'American'], ['Sarah', 'American'], ['Sky', 'American'],
-  ['Adam', 'American, male'], ['Echo', 'American, male'], ['Eric', 'American, male'], ['Fenrir', 'American, male'], ['Liam', 'American, male'],
-  ['Michael', 'American, male'], ['Onyx', 'American, male'], ['Puck', 'American, male'], ['Santa', 'American, male'],
-  ['Alice', 'British'], ['Emma', 'British'], ['Isabella', 'British'], ['Lily', 'British'],
-  ['Daniel', 'British, male'], ['Fable', 'British, male'], ['George', 'British, male'], ['Lewis', 'British, male']
+export interface QueenVoice {
+  sid: number
+  name: string
+  description: string
+}
+export const QUEEN_VOICES: QueenVoice[] = [
+  { sid: 3, name: 'Heart', description: 'Warm and natural · American' },
+  { sid: 2, name: 'Bella', description: 'Bright and lively · American' },
+  { sid: 21, name: 'Emma', description: 'Calm and precise · British' },
+  { sid: 16, name: 'Michael', description: 'Low and steady · American, male' }
 ]
-export const KOKORO_VOICES: Array<{ sid: number; name: string }> = VOICE_NAMES.map(([name, accent], sid) => ({ sid, name: `${name} (${accent})` }))
+const voice = (sid: number): QueenVoice => QUEEN_VOICES.find((v) => v.sid === sid)!
 
-/** Each personality's own voice: formal British for Ada, bright for Sunny, direct for Frankie, warm for a custom one. */
-export const PERSONA_VOICES: Record<'ada' | 'sunny' | 'frankie' | 'custom', { sid: number; name: string }> = {
-  ada: KOKORO_VOICES[21]!,
-  sunny: KOKORO_VOICES[2]!,
-  frankie: KOKORO_VOICES[9]!,
-  custom: KOKORO_VOICES[3]!
+/** Each personality's own voice: British for Ada, bright for Sunny, warm for Frankie and a custom one. */
+export const PERSONA_VOICES: Record<'ada' | 'sunny' | 'frankie' | 'custom', QueenVoice> = {
+  ada: voice(21),
+  sunny: voice(2),
+  frankie: voice(3),
+  custom: voice(3)
 }
 
 /** The voice she speaks with: the one picked in Settings, or her personality's own. */
-export const voiceFor = (s: { queenPersona: keyof typeof PERSONA_VOICES; queenVoice: number }): { sid: number; name: string } =>
-  KOKORO_VOICES[s.queenVoice] ?? PERSONA_VOICES[s.queenPersona]
+export const voiceFor = (s: { queenPersona: keyof typeof PERSONA_VOICES; queenVoice: number }): QueenVoice =>
+  QUEEN_VOICES.find((v) => v.sid === s.queenVoice) ?? PERSONA_VOICES[s.queenPersona]
+
+/**
+ * What she says out loud: the reply's first two sentences, without quotes or
+ * symbols a voice would read oddly. Short is faster and easier to listen to.
+ */
+export function speakable(text: string, sentences = 2): string {
+  const clean = text
+    .replace(/[“”"`*_#>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return sentencesOf(clean).slice(0, sentences).join(' ').slice(0, 280)
+}
+
+/** A line split into sentences, so the first can play while the next is still being made. */
+export const sentencesOf = (text: string): string[] => (text.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) ?? [text]).map((s) => s.trim()).filter(Boolean)
 
 export type VoicePackState =
   | { id: VoicePackId; state: 'missing' }

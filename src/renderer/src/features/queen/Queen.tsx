@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, Ellipsis, Loader2, Mic, PanelBottom, PictureInPicture2, Undo2, X } from 'lucide-react'
+import { Check, Ellipsis, Loader2, Mic, PanelBottom, PictureInPicture2, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
@@ -16,7 +16,7 @@ import { cancelQueen, runQueen } from './queen-run'
 import { useQueen, type QueenCard } from './useQueen'
 import { useQueenShortcut } from './useQueenShortcut'
 import { useQueenUpdates } from './useQueenUpdates'
-import { queenVoice, useVoice } from './voice'
+import { queenVoice, stopSpeaking, useVoice } from './voice'
 import styles from './Queen.module.css'
 
 const GAP = 8
@@ -174,7 +174,9 @@ function QueenBar({ grip }: { grip?: Grip }) {
                 e.preventDefault()
                 submit()
               } else if (e.key === 'Escape') {
-                if (card) show(null)
+                // Esc first silences her, then dismisses the card, then leaves the field.
+                if (phase === 'speaking') stopSpeaking()
+                else if (card) show(null)
                 else e.currentTarget.blur()
               } else if (e.key === 'ArrowUp' && !text && history.current[0]) {
                 e.preventDefault()
@@ -189,6 +191,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
               {keys}
             </kbd>
           )}
+          {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
           <button
             type="button"
             className={cx(styles.mic, phase === 'listening' && styles.micOn)}

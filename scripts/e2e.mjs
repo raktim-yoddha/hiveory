@@ -901,6 +901,10 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
     await waitFor(async () => (await page.getByRole('button', { name: 'Download' }).count()) === 3, 'three speech packs offered')
     const voiceText = await page.locator('main').innerText()
     expect(['Parakeet', 'Whisper Turbo', 'Kokoro'].every((n) => voiceText.includes(n)), 'a speech pack is missing')
+    // Her four voices, each previewable once Kokoro is in; until then the cards offer the download.
+    for (const name of ['Heart', 'Bella', 'Emma', 'Michael']) await page.getByRole('radio', { name: new RegExp(name) }).waitFor()
+    expect(await page.getByRole('button', { name: 'Preview Heart (needs the Kokoro pack)' }).isDisabled(), 'preview played the system voice')
+    await page.getByRole('button', { name: /Get these voices/ }).waitFor()
     await shot('h6-queen-voice')
   } finally {
     for (const a of await value('queen.accounts')) await value('queen.removeAccount', { id: a.id })
@@ -1042,7 +1046,6 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
     window.__spoken = []
     window.speechSynthesis.speak = (line) => window.__spoken.push(line.text)
   })
-  const spoken = () => page.evaluate(() => window.__spoken)
   await value('settings.update', { queenTalkback: 'always', queenUpdates: 'all' })
   await page.getByRole('button', { name: 'demo-app', exact: true }).click()
   await say('go to main')
@@ -1061,7 +1064,8 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
     const after = await panes().first().boundingBox()
     // Sub-pixel layout settling is fine; a card pushing the panes would move them by its own height.
     expect(Math.abs(before.y - after.y) < 2 && Math.abs(before.height - after.height) < 2, `panes moved: ${JSON.stringify(before)} → ${JSON.stringify(after)}`)
-    await waitFor(async () => (await spoken()).some((t) => /has your message/.test(t)), 'talkback spoke the reply')
+    // Talkback: the system voice (captured) or, with Kokoro installed, her own voice (the bar offers Stop talking meanwhile).
+    await page.waitForFunction(() => window.__spoken.some((t) => /has your message/.test(t)) || document.querySelector('[aria-label="Stop talking"]'), null, { timeout: 15000 })
     await shot('h10-queen-card-hovers')
 
     // "stop <agent>" interrupts the running command without closing the agent.
@@ -1083,7 +1087,7 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
     await page.waitForTimeout(4500)
     await hook('Stop')
     await card.getByText(new RegExp(`${claude.petName} has finished in`)).waitFor()
-    await waitFor(async () => (await spoken()).some((t) => t.includes(`${claude.petName} has finished`)), 'update spoken')
+    await page.waitForFunction((pet) => window.__spoken.some((t) => t.includes(`${pet} has finished`)) || document.querySelector('[aria-label="Stop talking"]'), claude.petName, { timeout: 15000 })
     await shot('h11-queen-update')
   } finally {
     await value('agents.close', { instanceId: shell.id }).catch(() => undefined)
