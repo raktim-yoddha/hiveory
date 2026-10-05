@@ -1,35 +1,24 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
-import { Check, Ellipsis, Loader2, PanelBottom, PictureInPicture2, Undo2, X } from 'lucide-react'
+import { Check, Ellipsis, Loader2, Mic, PanelBottom, PictureInPicture2, Undo2, X } from 'lucide-react'
 import { PERSONAS, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
+import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
+import { SPEECH_LANGUAGES } from '@shared/queen/voice'
 import { QueenIcon } from '../../components/brand/QueenIcon'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
+import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { cancelQueen, runQueen } from './queen-run'
 import { useQueen, type QueenCard } from './useQueen'
+import { useQueenShortcut } from './useQueenShortcut'
+import { queenVoice, useVoice } from './voice'
 import styles from './Queen.module.css'
 
 const GAP = 8
-const SHORTCUT_LABEL = 'Ctrl Shift K'
-
-/** Ctrl+Shift+K from anywhere (terminals included) moves focus to Queen Bee. Plain Ctrl+K stays readline's kill-line. */
-function useQueenShortcut(): void {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.code === 'KeyK') {
-        e.preventDefault()
-        e.stopPropagation()
-        useQueen.getState().focus()
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [])
-}
 
 /** Queen Bee docked under the main area (the screens above lift to make room). */
 export function QueenDock() {
@@ -120,8 +109,16 @@ interface Grip {
 }
 
 function QueenBar({ grip }: { grip?: Grip }) {
-  const { placement, setPlacement, compact, busy, card, show, focusTick } = useQueen()
+  const { placement, setPlacement, compact, busy, card, show, focusTick, setSettingsTab } = useQueen()
   const persona = useSettings((s) => s.settings.queenPersona)
+  const shortcut = useSettings((s) => s.settings.queenShortcut)
+  const platform = usePlatform()
+  const phase = useVoice((s) => s.phase)
+  const level = useVoice((s) => s.level)
+  const language = useSettings((s) => s.settings.queenSpeechLanguage)
+  const listenPack = SPEECH_LANGUAGES.find((l) => l.id === language)?.pack ?? 'parakeet'
+  const voiceReady = useVoice((s) => s.packs.some((p) => p.id === listenPack && p.state === 'ready'))
+  const keys = shortcutLabel(parseShortcut(shortcut) ?? parseShortcut(DEFAULT_SHORTCUT)!, platform)
   const update = useSettings((s) => s.update)
   const openSettings = useNavigation((s) => s.openSettings)
   const [text, setText] = useState('')
@@ -148,7 +145,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
         'aria-label': grip.label,
         title: grip.label
       }
-    : { onClick: () => input.current?.focus(), 'aria-label': 'Ask Queen Bee', title: `Queen Bee (${SHORTCUT_LABEL})` }
+    : { onClick: () => input.current?.focus(), 'aria-label': 'Ask Queen Bee', title: `Queen Bee (${keys})` }
 
   return (
     <div className={styles.bar}>
@@ -162,7 +159,7 @@ function QueenBar({ grip }: { grip?: Grip }) {
             ref={input}
             className={styles.input}
             value={text}
-            placeholder={PERSONAS[persona].placeholder}
+            placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : PERSONAS[persona].placeholder}
             aria-label="Tell Queen Bee"
             spellCheck={false}
             onChange={(e) => setText(e.target.value)}
@@ -179,7 +176,35 @@ function QueenBar({ grip }: { grip?: Grip }) {
               }
             }}
           />
-          {busy ? <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" /> : <kbd className={styles.hint}>{SHORTCUT_LABEL}</kbd>}
+          {busy || phase === 'transcribing' ? (
+            <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
+          ) : (
+            <kbd className={styles.hint} title={voiceReady ? 'Tap to type, hold to talk' : 'Tap to focus'}>
+              {keys}
+            </kbd>
+          )}
+          <button
+            type="button"
+            className={cx(styles.mic, phase === 'listening' && styles.micOn)}
+            style={{ '--level': level } as CSSProperties}
+            aria-label={voiceReady ? 'Hold to talk' : 'Set up voice'}
+            title={voiceReady ? `Hold to talk (or hold ${keys})` : 'Set up voice'}
+            aria-pressed={phase === 'listening'}
+            onPointerDown={(e) => {
+              if (!voiceReady || e.button !== 0) return
+              e.currentTarget.setPointerCapture(e.pointerId)
+              void queenVoice.start()
+            }}
+            onPointerUp={() => voiceReady && void queenVoice.stop()}
+            onPointerCancel={() => voiceReady && void queenVoice.stop()}
+            onClick={() => {
+              if (voiceReady) return
+              setSettingsTab('voice')
+              openSettings('queen')
+            }}
+          >
+            <Mic aria-hidden />
+          </button>
           <IconButton
             label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
             icon={placement === 'docked' ? <PictureInPicture2 /> : <PanelBottom />}
@@ -200,7 +225,15 @@ function QueenBar({ grip }: { grip?: Grip }) {
                 onSelect: () => void update({ queenPersona: id })
               })),
               { type: 'separator' },
-              { type: 'item', id: 'configure', label: 'Configure…', onSelect: () => openSettings('queen') }
+              {
+                type: 'item',
+                id: 'configure',
+                label: 'Configure…',
+                onSelect: () => {
+                  setSettingsTab('personality')
+                  openSettings('queen')
+                }
+              }
             ]}
             trigger={(props) => <IconButton {...props} label="Queen Bee options" icon={<Ellipsis />} />}
           />
@@ -218,6 +251,7 @@ function QueenCardView() {
   return (
     <section className={styles.card} aria-label="Queen Bee says" aria-live="polite">
       <IconButton className={styles.dismiss} label="Dismiss" icon={<X />} onClick={() => show(null)} />
+      {card.heard && <p className={styles.heard}>“{card.heard}”</p>}
       <CardBody card={card} busy={busy} />
     </section>
   )

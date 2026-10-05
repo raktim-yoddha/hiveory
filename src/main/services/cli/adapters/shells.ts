@@ -33,8 +33,14 @@ const shell = (id: string, displayName: string, spec: { executables: string[]; a
  * Plain terminals that open as panes beside the agents (listed first in the
  * pane "+" menu). They are not agents: no Kanban card, no chat.
  */
+const posix = process.platform !== 'win32'
+
 export const SHELL_ADAPTERS: CliAdapter[] = [
+  // macOS and Linux: the user's shells first (zsh is the macOS default). Windows' bash.exe is WSL, so these stay off there.
+  shell('zsh', 'zsh', { executables: posix ? ['zsh'] : [], args: ['-l'] }),
+  shell('bash', 'bash', { executables: posix ? ['bash'] : [], args: ['-l'] }),
+  shell('fish', 'fish', { executables: posix ? ['fish'] : [], args: ['-l'] }),
   shell('powershell', 'PowerShell', { executables: ['pwsh', 'powershell'], args: ['-NoLogo'] }),
-  shell('cmd', 'Command Prompt', { executables: process.platform === 'win32' ? ['cmd'] : [] }),
+  shell('cmd', 'Command Prompt', { executables: posix ? [] : ['cmd'] }),
   shell('gitbash', 'Git Bash', { executables: [], args: ['--login', '-i'], locate: (env) => locateGitBash(env) })
 ]

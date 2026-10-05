@@ -742,3 +742,112 @@
 .testFail {
   color: var(--color-danger);
 }
+
+/* A section's main tab switch (Queen Bee), like Skills, MCP & Plugins. */
+.tabsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.persona[aria-pressed='true'] {
+  background: var(--fill-accent-soft);
+}
+
+.persona[aria-pressed='true'] .personaName {
+  color: var(--color-accent);
+}
+
+/* A shortcut shown as keys. */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  min-width: calc(var(--control-lg) * 2.5);
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-active);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.keycapLive {
+  background: var(--fill-accent-soft);
+  color: var(--color-accent);
+}
+
+.listDescription {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+/* Numbered how-to (Queen Bee › Voice). */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-7);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.steps strong {
+  color: var(--color-text);
+}
+
+.noteIcon {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  vertical-align: -2px;
+}
+
+/* Queen Bee › Providers: the add/edit dialog. */
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8);
+}
+
+.modelField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.modelField .inlineControls > :first-child {
+  flex: 1;
+}
+
+.modelList {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--control-md) * 8);
+  overflow-y: auto;
+}
+
+.modelOption {
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.modelOption:hover,
+.modelOption:focus-visible {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.modelOption[aria-selected='true'] {
+  background: var(--fill-accent-soft);
+  color: var(--color-accent);
+}

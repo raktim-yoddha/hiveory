@@ -65,8 +65,8 @@ only.
 - Input, mic (hold to talk), dock/float toggle, and ⋯ (personality, mute voice, Configure,
   which opens Settings › Queen Bee).
 - One reply card above the bar: the answer, action receipts and Undo. There is no
-  scrolling history. Esc dismisses; Ctrl+Shift+K focuses the input from anywhere,
-  terminals included. Plain Ctrl+K stays readline's kill-line.
+  scrolling history. Esc dismisses. Her shortcut (default Win+Alt, ⌘⌥ on macOS) taps
+  to focus her and holds to talk.
 
 ### Voice (phase 3)
 **Push-to-talk.**
@@ -124,6 +124,9 @@ never ambiguous.
 4. **System-wide hotkey** (opt-in), learned memory, and the custom persona.
 5. **Subscription brains**: codex app-server, and optionally a claude session.
 
+Phases 1–3 are built. Phase 4 (system-wide hotkey, learned memory, custom persona and
+voices) and phase 5 (subscription brains) remain.
+
 ## Phase 2 notes (as built)
 **Main process.**
 - `QueenBrain` speaks three wire formats: OpenAI-compatible (OpenAI, OpenRouter, Groq,
@@ -148,6 +151,69 @@ never ambiguous.
 
 **What the model sees.** Project, workspace, agent and CLI names and ids, agent statuses
 and the request. Never files, code or terminal output.
+
+## Phase 3 notes (as built)
+**Shortcut.**
+- One setting: two or three keys, at least one a modifier. Default `Meta+Alt`, which is
+  Win+Alt on Windows and ⌘⌥ on macOS.
+- Stored as modifiers plus a layout-independent `KeyboardEvent.code`. Tap focuses Queen
+  Bee; hold (350 ms) is push-to-talk.
+- Listened for in the capture phase, so terminals never swallow it. Combinations with a
+  regular key never reach them.
+- The recorder refuses keys terminals and the OS rely on: Ctrl+letter, Ctrl+Alt (AltGr),
+  Alt+Shift and Ctrl+Shift (layout switch), and reserved macOS/Windows combinations.
+- Works while Hiveory is focused; system-wide is phase 4.
+
+**Settings › Queen Bee** has tabs: Personality, Providers, Voice, Bar & shortcut.
+
+**Providers.**
+- An ordered list of accounts, several per provider allowed, each with a name.
+- The first enabled account plans; on any failure the next takes over.
+- Models come from the provider's own list endpoint (OpenAI-compatible `/models`,
+  Anthropic `/models`, Gemini `models` filtered to `generateContent`). Typing a name is
+  always allowed.
+- Custom providers choose their API format: OpenAI-, Anthropic- or Gemini-compatible.
+
+**Voice.**
+- sherpa-onnx (N-API, prebuilt for Windows, macOS and Linux) runs Parakeet TDT 0.6B v3,
+  Whisper large-v3-turbo and Kokoro-82M on the CPU, off the main thread. Models load on
+  first use and unload after 10 minutes idle.
+- Packs download only on request, from files pinned to a Hugging Face commit. Each file
+  is checked against its SHA-256. Downloads resume with Range requests and are verified
+  over the whole file; a mismatch is deleted.
+- espeak-ng data comes as an archive, unpacked by the OS's own bsdtar.
+- Clips are 16 kHz mono and at most 60 s. Audio never leaves the computer.
+
+**Hindi and Hinglish.**
+- Whisper Turbo can't translate reliably, and Devanagari output would bypass the rules.
+  So Whisper writes in Latin script, and the rule parser knows common Hinglish: kholo,
+  band karo, dikhao, numbers like ek/do/teen, "aur", and verb-last word order.
+- Anything else goes to the model.
+- Accuracy on real Hindi speech is not yet measured; synthetic Hindi from Kokoro was too
+  poor to judge.
+
+**Microphone.**
+- The main window may use only audio, only from its own page.
+- macOS asks once through `askForMediaAccess`. The app carries
+  `NSMicrophoneUsageDescription` and hardened-runtime entitlements (JIT, native
+  libraries, audio input).
+
+## Security pass (same round)
+- **Plugin servers' environment.** Local MCP servers start with the MCP SDK's minimal
+  environment plus locale, proxy and CA settings, and their own values. Never Hiveory's
+  whole environment, which may hold other keys.
+- **Secret masking.** A connection's secret values are masked in its tool results and
+  error text before agents or the UI see them.
+- **Plugin accounts.** A plugin can have several accounts ("GitHub · Work"). Each has its
+  own sealed keys and its own tool prefix.
+
+## macOS pass (same round)
+- **PATH.** Finder-launched apps get a minimal PATH. Hiveory adopts the login shell's
+  PATH at startup, plus common bin folders, so CLIs and npx/uvx plugins are found.
+- **Terminals.** The pane "+" offers zsh, bash and fish (and PowerShell when installed) on
+  macOS and Linux.
+- **Builds.** The DMG is built for the build machine's architecture, because native
+  modules install for the host only.
 
 ## Consequences
 - Most commands work with no key and no network.

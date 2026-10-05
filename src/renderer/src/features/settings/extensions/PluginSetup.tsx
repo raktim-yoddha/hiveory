@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, ExternalLink, Lock, Trash2 } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Lock, Plus, Trash2 } from 'lucide-react'
 import { RUNNER_INSTALL_URLS, type ConnectionView, type PluginDefinition } from '@shared/domain'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -15,7 +15,8 @@ import styles from './Extensions.module.css'
 
 interface Props {
   plugin: PluginDefinition
-  connection?: ConnectionView
+  /** The plugin's accounts (there can be several). */
+  accounts: ConnectionView[]
   onClose: () => void
 }
 
@@ -23,23 +24,38 @@ const RUNNERS = { npx: 'Node.js (npx)', uvx: 'uv (uvx)' } as const
 
 const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 
-/** Set up a plugin with the user's own keys: fill the fields, connect, see its tools. Keys are write-only. */
-export function PluginSetup({ plugin, connection, onClose }: Props) {
+/**
+ * Set up a plugin with the user's own keys: fill the fields, connect, see its tools.
+ * A plugin can have several accounts, each with its own name and keys. Keys are write-only.
+ */
+export function PluginSetup({ plugin, accounts, onClose }: Props) {
   const requirements = useConnections((s) => s.requirements)
   const put = useConnections((s) => s.put)
+  const [selected, setSelected] = useState<string | 'new'>(accounts[0]?.id ?? 'new')
+  const connection = accounts.find((a) => a.id === selected)
   const [values, setValues] = useState<Record<string, string>>(() => connection?.values ?? {})
+  const [label, setLabel] = useState(connection?.label ?? '')
+  const pick = (id: string | 'new'): void => {
+    const next = accounts.find((a) => a.id === id)
+    setSelected(id)
+    setValues(next?.values ?? {})
+    setLabel(next?.label ?? '')
+  }
   const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState(false)
   const runner = plugin.server.transport === 'stdio' ? plugin.server.command : null
   const missingRunner = runner && requirements && !requirements[runner]
   const saved = new Set(connection?.secretsSet)
-  const ready = plugin.fields.every((f) => f.optional || (values[f.key] ?? '').trim() || (f.secret && saved.has(f.key)))
+  // A second account needs a name so agents (and you) can tell them apart.
+  const needsLabel = !connection && accounts.length > 0
+  const ready = plugin.fields.every((f) => f.optional || (values[f.key] ?? '').trim() || (f.secret && saved.has(f.key))) && (!needsLabel || label.trim() !== '')
 
   const connect = (): void => {
     setBusy(true)
     void runAction(`Connect ${plugin.name}`, async () => {
-      const view = await api('connections.savePlugin', { pluginId: plugin.id, values })
+      const view = await api('connections.savePlugin', { pluginId: plugin.id, values, ...(connection ? { id: connection.id } : {}), ...(label.trim() || connection?.label ? { label: label.trim() } : {}) })
       put(view)
+      setSelected(view.id)
       setValues(view.values)
     }).finally(() => setBusy(false))
   }
@@ -49,7 +65,9 @@ export function PluginSetup({ plugin, connection, onClose }: Props) {
     setRemoving(true)
     void runAction(`Remove ${plugin.name}`, async () => {
       await api('connections.remove', { id: connection.id })
-      onClose()
+      const rest = accounts.filter((a) => a.id !== connection.id)
+      if (rest.length) pick(rest[0]!.id)
+      else onClose()
     }).finally(() => setRemoving(false))
   }
 
@@ -61,7 +79,7 @@ export function PluginSetup({ plugin, connection, onClose }: Props) {
   return (
     <Modal
       open
-      title={connection ? plugin.name : `Set up ${plugin.name}`}
+      title={connection ? connection.name : accounts.length ? `Add a ${plugin.name} account` : `Set up ${plugin.name}`}
       width="lg"
       onClose={onClose}
       footer={
@@ -98,6 +116,23 @@ export function PluginSetup({ plugin, connection, onClose }: Props) {
             </span>
           )}
         </div>
+
+        {accounts.length > 0 && (
+          <div className={styles.accountTabs} role="tablist" aria-label={`${plugin.name} accounts`}>
+            {accounts.map((a) => (
+              <button key={a.id} type="button" role="tab" aria-selected={a.id === selected} className={styles.category} aria-pressed={a.id === selected} onClick={() => pick(a.id)}>
+                {a.label || 'Default'}
+              </button>
+            ))}
+            <button type="button" role="tab" aria-selected={selected === 'new'} className={styles.category} aria-pressed={selected === 'new'} onClick={() => pick('new')}>
+              <Plus aria-hidden /> Add account
+            </button>
+          </div>
+        )}
+
+        {(needsLabel || connection?.label || (connection && accounts.length > 1)) && (
+          <TextField label="Account name" value={label} onChange={setLabel} maxLength={40} placeholder="Work, Personal…" />
+        )}
 
         {missingRunner && (
           <div className={cx(styles.notice, styles.noticeWarn)}>

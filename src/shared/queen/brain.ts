@@ -33,14 +33,33 @@ export const BRAIN_PRESETS: BrainPreset[] = [
   { id: 'custom', name: 'Custom (OpenAI-compatible)', kind: 'openai', baseUrl: '', model: '', keyRequired: false }
 ]
 
-/** What the renderer sees of the brain: never the key itself. */
-export interface BrainView {
-  provider: string | null
+/**
+ * One saved provider account. Several per provider are allowed (work and personal
+ * keys, two local servers…). Queen Bee tries enabled accounts in order: the first
+ * is primary, the rest are fallbacks when it fails.
+ */
+export interface BrainAccountView {
+  id: string
+  provider: string
+  /** "Work", "Personal"… shown after the provider name. */
+  label: string
+  /** The wire format: fixed for known providers, chosen for custom ones. */
+  kind: BrainKind
   baseUrl: string
   model: string
+  enabled: boolean
+  /** Never the key itself. */
   hasKey: boolean
   /** Whether the OS keychain protects saved keys (false: obfuscated only). */
   encrypted: boolean
+}
+
+export const presetOf = (provider: string): BrainPreset => BRAIN_PRESETS.find((p) => p.id === provider) ?? BRAIN_PRESETS.find((p) => p.id === 'custom')!
+
+/** "OpenAI · Work", or just "OpenAI". */
+export const accountName = (a: Pick<BrainAccountView, 'provider' | 'label'>): string => {
+  const base = presetOf(a.provider).id === 'custom' ? 'Custom' : presetOf(a.provider).name
+  return a.label ? `${base} · ${a.label}` : base
 }
 
 /** https everywhere, plain http only to this machine. */

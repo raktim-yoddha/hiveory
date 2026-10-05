@@ -2,6 +2,7 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import appIcon from '@resources/icon.png?asset'
 import devIcon from '@resources/icon-dev.png?asset'
+import { isTrustedSenderUrl } from '../ipc/trust'
 import type { Logger } from './logger'
 
 import type { ThemeId } from '@shared/domain'
@@ -64,8 +65,14 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
-  window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
-  window.webContents.session.setPermissionCheckHandler(() => false)
+  // Only the microphone, only audio, only for the app's own page: Queen Bee's push-to-talk.
+  const ownPage = (url: string): boolean => isTrustedSenderUrl(url, targets.devServerUrl, targets.rendererFile)
+  window.webContents.session.setPermissionRequestHandler((wc, permission, callback, details) => {
+    const audioOnly = permission === 'media' && 'mediaTypes' in details && (details.mediaTypes ?? []).length > 0 && (details.mediaTypes ?? []).every((t) => t === 'audio')
+    callback(audioOnly && wc === window.webContents && ownPage(details.requestingUrl))
+  })
+  // The window never navigates away from Hiveory's page (will-navigate is blocked), so its contents identify it.
+  window.webContents.session.setPermissionCheckHandler((wc, permission) => permission === 'media' && wc === window.webContents)
 
   // DevTools stay reachable in development without an application menu.
   if (targets.devServerUrl) {

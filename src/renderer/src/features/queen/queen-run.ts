@@ -20,6 +20,7 @@ import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from
 import { agentActions } from '../agents/agent-actions'
 import { openBrowserTab } from '../side-panel/panel-actions'
 import { useQueen } from './useQueen'
+import { speak } from './voice'
 
 /**
  * Queen Bee's executor (ADR 0019): parse → resolve against live state → run →
@@ -272,8 +273,14 @@ async function askBrain(input: string, ctx: QueenContext): Promise<BrainResult> 
   }
 }
 
-/** Handles one command typed (or, later, spoken) to Queen Bee. */
-export async function runQueen(input: string): Promise<void> {
+/** The words of the card on screen, for speaking it. */
+const cardText = (): string => {
+  const card = useQueen.getState().card
+  return !card ? '' : card.kind === 'ask' ? card.question.text : card.text
+}
+
+/** Handles one command typed or spoken to Queen Bee. */
+export async function runQueen(input: string, options: { spoken?: boolean } = {}): Promise<void> {
   const queen = useQueen.getState()
   if (!input.trim() || queen.busy) return
   queen.setBusy(true)
@@ -296,6 +303,9 @@ export async function runQueen(input: string): Promise<void> {
     queen.show({ kind: 'reply', text: failedLine(error instanceof Error ? error.message : String(error), prefs()), receipts: [] })
   } finally {
     useQueen.getState().setBusy(false)
+    if (options.spoken) useQueen.setState((s) => (s.card ? { card: { ...s.card, heard: input } } : {}))
+    const when = useSettings.getState().settings.queenSpeak
+    if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(cardText())
   }
 }
 

@@ -84,6 +84,11 @@ Electron's official guidance recommends context isolation and controlled context
   is stripped from builds.
 - File access (`FileService.resolveIn`) stays inside the scope's folder, refuses `.git`
   and refuses symlinks or junctions that lead outside it.
+- Local MCP servers start with a minimal environment (`serverEnv`), never Hiveory's own.
+  Each connection's secrets are masked from tool results and errors (`scrubSecrets`).
+- The window may use the microphone (audio only, its own page) for Queen Bee's
+  push-to-talk.
+- Speech packs download only from pinned URLs and must match their SHA-256.
 
 ## Domain Model
 
@@ -489,7 +494,8 @@ src/
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
-│       ├── queen/              QueenBrain — Queen Bee's optional model (3 wire formats, forced plan tool, sealed key)
+│       ├── queen/              QueenBrain — Queen Bee's provider accounts (3 wire formats, fallback, model lists, sealed keys)
+│       ├── voice/              VoiceService (pinned, verified, resumable pack downloads) + VoiceEngine (sherpa-onnx STT/TTS)
 │       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery
 │       └── cli/

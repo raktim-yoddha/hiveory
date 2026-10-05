@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
+import { parseShortcut } from '@shared/queen/shortcut'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -16,16 +17,20 @@ export interface PersistedState {
   connections: StoredConnection[]
   /** Files open as panes in workspace layouts (ADR 0018). */
   editors: StoredEditor[]
-  /** Queen Bee's model (ADR 0019); the key is sealed by SecretBox. */
-  queenBrain: StoredBrain | null
+  /** Queen Bee's provider accounts in priority order (ADR 0019); keys sealed by SecretBox. */
+  queenBrains: StoredBrainAccount[]
 }
 
-export interface StoredBrain {
+export interface StoredBrainAccount {
+  id: string
   provider: string
+  label: string
+  kind: 'openai' | 'anthropic' | 'gemini'
   baseUrl: string
   model: string
   /** Sealed API key ('' = none). */
   key: string
+  enabled: boolean
 }
 
 export interface StoredEditor {
@@ -40,6 +45,8 @@ export interface StoredConnection {
   id: string
   name: string
   pluginId?: string
+  /** A plugin's account name ("Work"), when there is more than one. */
+  label?: string
   enabled: boolean
   transport: 'stdio' | 'http'
   command?: string
@@ -66,7 +73,7 @@ export const emptyState = (): PersistedState => ({
   browserProfiles: [],
   connections: [],
   editors: [],
-  queenBrain: null
+  queenBrains: []
 })
 
 const settingsSchema = z.object({
@@ -90,7 +97,11 @@ const settingsSchema = z.object({
   queenHonorific: z.enum(['sir', 'maam', 'name', 'none']).catch(DEFAULT_SETTINGS.queenHonorific),
   queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),
   queenNudgeMinutes: z.number().int().min(0).max(240).catch(DEFAULT_SETTINGS.queenNudgeMinutes),
-  queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength)
+  queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength),
+  queenShortcut: z.string().refine((s) => parseShortcut(s) !== null).catch(DEFAULT_SETTINGS.queenShortcut),
+  queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']).catch(DEFAULT_SETTINGS.queenSpeechLanguage),
+  queenSpeak: z.enum(['after-voice', 'always', 'never']).catch(DEFAULT_SETTINGS.queenSpeak),
+  queenVoiceSpeed: z.number().min(0.8).max(1.4).catch(DEFAULT_SETTINGS.queenVoiceSpeed)
 })
 
 const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })
@@ -157,6 +168,7 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   id: z.string().regex(/^c[a-z0-9]{1,24}$/),
   name: str,
   pluginId: str.optional(),
+  label: z.string().max(40).optional(),
   enabled: z.boolean(),
   transport: z.enum(['stdio', 'http']),
   command: str.optional(),
@@ -170,7 +182,26 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   importedFrom: str.optional()
 })
 
-const brainSchema: z.ZodType<StoredBrain> = z.object({ provider: z.string().max(40), baseUrl: z.string().max(500), model: z.string().max(200), key: z.string().max(10_000) })
+const brainAccountSchema: z.ZodType<StoredBrainAccount> = z.object({
+  id: z.string().regex(/^q[a-f0-9]{12}$/),
+  provider: z.string().max(40),
+  label: z.string().max(40),
+  kind: z.enum(['openai', 'anthropic', 'gemini']),
+  baseUrl: z.string().max(500),
+  model: z.string().max(200),
+  key: z.string().max(10_000),
+  enabled: z.boolean()
+})
+
+/** Queen Bee's accounts; a single model saved by an earlier version becomes the first account. */
+const brainAccounts = (input: Record<string, unknown>): StoredBrainAccount[] => {
+  const list = Array.isArray(input.queenBrains) ? input.queenBrains.flatMap((a) => brainAccountSchema.safeParse(a).data ?? []) : []
+  if (list.length) return list
+  const old = z.object({ provider: z.string().max(40), baseUrl: z.string().max(500), model: z.string().max(200), key: z.string().max(10_000) }).safeParse(input.queenBrain).data
+  if (!old) return []
+  const kind = old.provider === 'anthropic' ? 'anthropic' : old.provider === 'gemini' ? 'gemini' : 'openai'
+  return [{ id: 'q000000000001', provider: old.provider, label: '', kind, baseUrl: old.baseUrl, model: old.model, key: old.key, enabled: true }]
+}
 
 const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
 
@@ -217,7 +248,7 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       browserProfiles: list(input.browserProfiles, browserProfileSchema),
       connections: list(input.connections, connectionSchema),
       editors: list(input.editors, editorSchema),
-      queenBrain: brainSchema.safeParse(input.queenBrain).data ?? null
+      queenBrains: brainAccounts(input)
     },
     rejected
   }

@@ -230,7 +230,9 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 ## Queen Bee (ADR 0019)
 
-- A bar docked under the main area (Work, Chat and Settings) or floating anywhere. Ctrl+Shift+K focuses it.
+- A bar docked under the main area (Work, Chat and Settings) or floating anywhere.
+- Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
+  her and holds to talk.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),
   close agents (always after a yes), restart, jump to an agent, load a preset, switch
   Work/Chat, open Home, a project, a workspace or a Settings section, show or hide the
@@ -245,12 +247,17 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   - one extra per personality: Ada's honorific, Sunny's energy, Frankie's nudge time;
   - placement.
 - "Tell <agent> to …" types your exact words into that agent and submits them.
-- Optional model (Settings › Queen Bee › Model): any OpenAI-compatible provider,
+- Voice (Settings › Queen Bee › Voice): local speech packs downloaded on request and
+  verified.
+  - Parakeet for English, Spanish, Portuguese, German and French.
+  - Whisper Turbo for Hindi/Hinglish.
+  - Kokoro voices so she can answer out loud.
+- Optional model (Settings › Queen Bee › Providers), with several accounts per provider
+  tried in order and models listed from the provider: any OpenAI-compatible provider,
   Anthropic or Gemini (AI Studio key), or a local server. It handles only what the rules
   don't understand, can only choose Queen Bee's actions, and asks before closing or
   messaging agents. A Test button checks the key, the model and tool calling.
-- Later phases add voice, the system-wide hotkey, learned memory and a custom
-  personality.
+- Later phases add the system-wide hotkey, learned memory and a custom personality.
 
 ## Important Non-Features
 

@@ -32,13 +32,15 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 │              │ ┌───────────────────────────────────────────────┐ │
 │              │ │ Reply card: answer, report rows, receipts, Undo│ │
 │              │ └───────────────────────────────────────────────┘ │
-│              │ [♛ Tell the hive…        Ctrl Shift K  ⧉  ⋯]     │
+│              │ [♛ Ada  Your instructions…  Win + Alt  🎙 ⧉ ⋯]   │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
 Floating: the same bar is a draggable pill (drag by the mark; click the mark to shrink).
-It steps aside from the browser page. ⋯ holds Personality and Configure… (Settings ›
-Queen Bee).
+It steps aside from the browser page. The mic button is hold-to-talk; until a speech pack
+is installed it opens Settings › Queen Bee › Voice. ⋯ holds Personality and Configure….
+
+Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
 
 ### Side panel browser tab (ADR 0015)
 

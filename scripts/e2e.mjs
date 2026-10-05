@@ -2,7 +2,8 @@
 // End-to-end battle test: drives the built Electron app with throwaway profiles and repositories.
 // Usage: pnpm build && node scripts/e2e.mjs [screenshotDir]   (E2E_CHAT=1 also runs real chat prompts)
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -741,7 +742,11 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
   }
   const shells = async () => (await value('agents.list', { workspaceId: mainWs.id })).filter((a) => a.cliId === 'powershell')
   try {
-    await page.keyboard.press('Control+Shift+K')
+    // Tap Win+Alt (⌘⌥ on macOS): the default shortcut.
+    await page.keyboard.down('Meta')
+    await page.keyboard.down('Alt')
+    await page.keyboard.up('Alt')
+    await page.keyboard.up('Meta')
     await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'shortcut focuses Queen Bee')
     const started = Date.now()
     await say('please open two powershell')
@@ -813,9 +818,11 @@ await test('Queen Bee model: rules miss → model plans over a forced tool call 
   await new Promise((r) => fake.listen(0, '127.0.0.1', r))
   const shells = async () => (await value('agents.list', { workspaceId: mainWs.id })).filter((a) => a.cliId === 'powershell')
   try {
-    const view = await value('queen.configureBrain', { provider: 'custom', baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'fake-model', apiKey: 'e2e-key' })
-    expect(view.hasKey && !JSON.stringify(view).includes('e2e-key'), 'key echoed back to the renderer')
-    expect((await value('queen.testBrain')).detail === 'Tool calling works.', 'model test failed')
+    // A dead primary account: Queen Bee must fall back to the working one.
+    await value('queen.saveAccount', { provider: 'custom', label: 'Dead', kind: 'openai', baseUrl: 'http://127.0.0.1:9/v1', model: 'x', apiKey: 'dead-key' })
+    const list = await value('queen.saveAccount', { provider: 'custom', label: 'Local fake', kind: 'openai', baseUrl: `http://127.0.0.1:${fake.address().port}/v1`, model: 'fake-model', apiKey: 'e2e-key' })
+    expect(list.length === 2 && list.every((a) => a.hasKey) && !JSON.stringify(list).includes('e2e-key'), 'key echoed back to the renderer')
+    expect((await value('queen.testAccount', { id: list[1].id })).detail === 'Tool calling works.', 'model test failed')
 
     await queen.fill('open powershell')
     await queen.press('Enter')
@@ -834,9 +841,102 @@ await test('Queen Bee model: rules miss → model plans over a forced tool call 
     await card.getByText(/has your message/).waitFor()
   } finally {
     for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
-    await value('queen.configureBrain', { provider: null, baseUrl: '', model: '' })
+    for (const a of await value('queen.accounts')) await value('queen.removeAccount', { id: a.id })
     fake.close()
   }
+})
+
+await test('Queen Bee settings: tabs; a new shortcut works; a provider added in the UI lists its models', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  // A provider that lists models and plans.
+  const fake = createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    if (req.method === 'GET' && req.url === '/v1/models') return res.end(JSON.stringify({ data: [{ id: 'tiny-planner' }, { id: 'big-thinker' }] }))
+    let raw = ''
+    req.on('data', (c) => (raw += c))
+    req.on('end', () => res.end(JSON.stringify({ choices: [{ message: { tool_calls: [{ function: { name: 'plan', arguments: '{"actions":[{"type":"navigate","to":"settings","section":"queen"}]}' } }] } }] })))
+  })
+  await new Promise((r) => fake.listen(0, '127.0.0.1', r))
+  try {
+    await queen.fill('configure the queen')
+    await queen.press('Enter')
+    await page.getByRole('heading', { name: 'Queen Bee' }).waitFor()
+    for (const tab of ['Personality', 'Providers', 'Voice', 'Bar & shortcut']) await page.getByRole('tab', { name: tab }).waitFor()
+
+    // Shortcut: pick Ctrl + Win, and it calls her.
+    await page.getByRole('tab', { name: 'Bar & shortcut' }).click()
+    await page.getByRole('button', { name: /Win \+ Ctrl|⌃⌘/ }).click()
+    await waitFor(async () => (await value('settings.get')).queenShortcut === 'Control+Meta', 'shortcut saved')
+    await page.getByRole('heading', { name: 'Queen Bee' }).click()
+    await page.keyboard.down('Control')
+    await page.keyboard.down('Meta')
+    await page.keyboard.up('Meta')
+    await page.keyboard.up('Control')
+    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'new shortcut focuses Queen Bee')
+    await value('settings.update', { queenShortcut: 'Meta+Alt' })
+
+    // Providers: add a custom one; its models load from the provider.
+    await page.getByRole('tab', { name: 'Providers' }).click()
+    await page.getByRole('button', { name: 'Add provider' }).click()
+    const dialog = page.locator('dialog[open]')
+    await choose(dialog, 'Provider', 'Custom (OpenAI-compatible)')
+    await dialog.getByLabel('Account name (optional)').fill('Lab')
+    await dialog.getByLabel('Address').fill(`http://127.0.0.1:${fake.address().port}/v1`)
+    await dialog.getByLabel('API key (optional)').fill('lab-key')
+    await dialog.getByRole('button', { name: /Load models/ }).click()
+    await dialog.getByRole('option', { name: 'tiny-planner' }).click()
+    await shot('h5-queen-provider-dialog')
+    await dialog.getByRole('button', { name: 'Save and test' }).click()
+    await waitFor(async () => (await value('queen.accounts')).length === 1, 'account saved')
+    const [account] = await value('queen.accounts')
+    expect(account.model === 'tiny-planner' && account.hasKey && account.label === 'Lab', `account saved wrong: ${JSON.stringify(account)}`)
+    await waitFor(async () => (await page.locator('[role="status"]').allInnerTexts()).some((t) => t.includes('Tool calling works')), 'test result shown')
+
+    await page.getByRole('tab', { name: 'Voice' }).click()
+    for (const name of ['Parakeet', 'Whisper Turbo', 'Kokoro']) await page.getByText(name, { exact: true }).first().waitFor()
+    await shot('h6-queen-voice')
+  } finally {
+    for (const a of await value('queen.accounts')) await value('queen.removeAccount', { id: a.id })
+    await value('settings.update', { queenShortcut: 'Meta+Alt' })
+    fake.close()
+    await page.getByRole('button', { name: 'Back' }).click().catch(() => undefined)
+  }
+})
+
+await test('Queen Bee voice inside Electron: speak → 16 kHz → transcribe (needs HIVEORY_VOICE_MODELS)', async () => {
+  const models = process.env.HIVEORY_VOICE_MODELS
+  if (!models || !existsSync(join(models, 'kokoro'))) return console.log('      (skipped: set HIVEORY_VOICE_MODELS to run it)')
+  // Install the packs the way a finished download leaves them: files plus verified markers.
+  const voiceDir = join(local, 'Hiveory Dev', 'Voice')
+  const files = { parakeet: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'], kokoro: ['model.onnx', 'voices.bin', 'tokens.txt', 'lexicon-us-en.txt', 'lexicon-gb-en.txt'] }
+  for (const [pack, names] of Object.entries(files)) {
+    mkdirSync(join(voiceDir, pack), { recursive: true })
+    for (const name of names) {
+      linkSync(join(models, pack, name), join(voiceDir, pack, name))
+      writeFileSync(join(voiceDir, pack, `${name}.ok`), createHash('sha256').update(readFileSync(join(models, pack, name))).digest('hex'))
+    }
+  }
+  symlinkSync(join(models, 'kokoro', 'espeak-ng-data'), join(voiceDir, 'kokoro', 'espeak-ng-data'), 'junction')
+  writeFileSync(join(voiceDir, 'kokoro', 'espeak-ng-data.tar.bz2.ok'), '4135ccf82e1f40613491c0874d4945ae9e9c7840933d8e25a6f9e003d9ebf533')
+  const status = await value('voice.status')
+  expect(status.filter((p) => p.state === 'ready').map((p) => p.id).join() === 'parakeet,kokoro', `packs not ready: ${JSON.stringify(status)}`)
+  // Opening the Voice tab refreshes what's installed; the bar's mic becomes hold-to-talk.
+  await page.getByLabel('Tell Queen Bee').fill('open queen settings')
+  await page.getByLabel('Tell Queen Bee').press('Enter')
+  await page.getByRole('tab', { name: 'Voice' }).click()
+  await page.getByRole('button', { name: 'Hold to talk' }).waitFor()
+  await shot('h7-queen-voice-ready')
+  const heard = await page.evaluate(async () => {
+    const said = await window.hiveory.invoke('voice.speak', { text: 'Open two Codex agents.' })
+    if (!said.ok) return said.error.message
+    const { samples, sampleRate } = said.value
+    const out = new Float32Array(Math.floor((samples.length * 16000) / sampleRate))
+    for (let i = 0; i < out.length; i++) out[i] = samples[Math.floor((i * sampleRate) / 16000)]
+    const r = await window.hiveory.invoke('voice.transcribe', { samples: out, language: 'en' })
+    return r.ok ? r.value.text : r.error.message
+  })
+  expect(/open two codex agents/i.test(heard), `heard: ${heard}`)
+  await page.getByRole('button', { name: 'Back' }).click()
 })
 
 // ======================= E. Agent tools (MCP) =======================

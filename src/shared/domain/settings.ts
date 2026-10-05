@@ -45,6 +45,14 @@ export interface AppSettings {
   queenNudgeMinutes: number
   /** Short replies drop the second sentence. */
   queenLength: 'short' | 'normal'
+  /** Tap to focus Queen Bee, hold to talk: "Meta+Alt" = Win+Alt / ⌘⌥ (see shared/queen/shortcut.ts). */
+  queenShortcut: string
+  /** The language Queen Bee listens in (picks the speech pack). */
+  queenSpeechLanguage: 'en' | 'es' | 'pt' | 'de' | 'fr' | 'hi'
+  /** When she answers out loud. */
+  queenSpeak: 'after-voice' | 'always' | 'never'
+  /** Speaking speed (0.8–1.4). */
+  queenVoiceSpeed: number
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -68,7 +76,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenHonorific: 'none',
   queenHype: 'lively',
   queenNudgeMinutes: 10,
-  queenLength: 'normal'
+  queenLength: 'normal',
+  queenShortcut: 'Meta+Alt',
+  queenSpeechLanguage: 'en',
+  queenSpeak: 'after-voice',
+  queenVoiceSpeed: 1.05
 }
 
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [

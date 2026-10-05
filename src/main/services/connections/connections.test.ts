@@ -29,7 +29,7 @@ rl.on('line', (line) => {
   if (msg.id === undefined) return
   if (msg.method === 'initialize') return send({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '1' } } })
   if (msg.method === 'tools/list') return send({ jsonrpc: '2.0', id: msg.id, result: { tools: [{ name: 'echo', description: 'Echoes', inputSchema: { type: 'object', properties: { text: { type: 'string' } } } }] } })
-  if (msg.method === 'tools/call') return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: msg.params.arguments.text + ':' + process.env.FIXTURE_KEY }] } })
+  if (msg.method === 'tools/call') return send({ jsonrpc: '2.0', id: msg.id, result: { content: [{ type: 'text', text: msg.params.arguments.text + ':' + process.env.FIXTURE_KEY + ':' + (process.env.HIVEORY_PARENT_SECRET || 'none') }] } })
   send({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'nope' } })
 })
 `
@@ -98,6 +98,8 @@ describe('gateway helpers', () => {
   })
 })
 
+process.env.HIVEORY_PARENT_SECRET = 'parent-only'
+
 describe('connections end to end', () => {
   const dir = mkdtempSync(join(tmpdir(), 'hv-conn-'))
   const script = join(dir, 'server.cjs')
@@ -117,13 +119,14 @@ describe('connections end to end', () => {
     expect(JSON.stringify(store.state.connections)).not.toContain('s3cret')
     expect(view.secretsSet).toEqual(['FIXTURE_KEY'])
     expect(gateway.definitions()[0]).toMatchObject({ name: 'fixture_one_echo', description: '[Fixture One] Echoes' })
-    expect(await gateway.call({}, 'fixture_one_echo', { text: 'hi' })).toEqual({ text: 'hi:s3cret', isError: false })
+    // The server got its own key (masked before agents see it) and none of Hiveory's environment.
+    expect(await gateway.call({}, 'fixture_one_echo', { text: 'hi' })).toEqual({ text: 'hi:••••:none', isError: false })
     expect(events).toContain('connections')
 
     // Editing with an empty value keeps the stored secret.
     const edited = await service.saveCustom({ id: view.id, name: 'Fixture One', transport: 'stdio', command: process.execPath, args: [script], env: { FIXTURE_KEY: '' }, headers: {} })
     expect(edited.state).toBe('ready')
-    expect(await gateway.call({}, 'fixture_one_echo', { text: 'again' })).toMatchObject({ text: 'again:s3cret' })
+    expect(await gateway.call({}, 'fixture_one_echo', { text: 'again' })).toMatchObject({ text: 'again:••••:none' })
 
     // Off: tools disappear for agents.
     await service.setEnabled(view.id, false)
@@ -192,5 +195,29 @@ describe('wallpapers', () => {
       wallpaper: DEFAULT_SETTINGS.wallpaper,
       surfaceOpacity: DEFAULT_SETTINGS.surfaceOpacity
     })
+  })
+})
+
+describe('plugin accounts', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hv-acct-'))
+  const store = new StateStore(join(dir, 'state.json'), log)
+  const service = new ConnectionService(store, new SecretBox(sealer), () => undefined)
+  // A gateway that "connects" instantly, so this test needs no network.
+  service.attach({ refresh: async () => ({ tools: [] }), close: async () => undefined, exposedNames: () => new Map(), isConnecting: () => false } as unknown as McpGateway)
+
+  it('keeps several named accounts of one plugin, each with its own name and key', async () => {
+    const work = await service.savePlugin('github', { token: 'ghp_work_123456' })
+    expect(work.name).toBe('GitHub')
+    await expect(service.savePlugin('github', { token: 'ghp_other' })).rejects.toThrow(/Name this account/)
+    const personal = await service.savePlugin('github', { token: 'ghp_personal_654321' }, { label: 'Personal' })
+    expect(personal.name).toBe('GitHub · Personal')
+    expect(personal.label).toBe('Personal')
+    await expect(service.savePlugin('github', { token: 'x' }, { label: 'personal' })).rejects.toThrow(/already exists/)
+    // Editing one account leaves the other's key alone.
+    await service.savePlugin('github', { token: '' }, { id: work.id, label: 'Work' })
+    const specs = service.all().map((c) => service.spec(c))
+    expect(specs.map((s) => s.headers?.Authorization)).toEqual(['Bearer ghp_work_123456', 'Bearer ghp_personal_654321'])
+    expect(service.list().map((c) => c.name)).toEqual(['GitHub · Work', 'GitHub · Personal'])
+    expect(JSON.stringify(service.list())).not.toMatch(/ghp_/)
   })
 })

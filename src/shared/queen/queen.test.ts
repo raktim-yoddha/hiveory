@@ -85,6 +85,16 @@ describe('Queen Bee rule parser', () => {
     expect(parseCommand('open 2 codex and write me a poem', ctx)).toEqual({ kind: 'unknown' })
   })
 
+  it('understands Hinglish, verb last included', () => {
+    expect(actions('do codex kholo')).toEqual([{ type: 'open-agents', cliId: 'codex', count: 2, workspaceId: 'w1', projectId: 'p1' }])
+    expect(actions('Do Codex Kolo')).toMatchObject([{ cliId: 'codex', count: 2 }])
+    expect(actions('settings dikhao')).toEqual([{ type: 'navigate', to: 'settings', section: 'appearance' }])
+    expect(actions('teen claude chalu karo aur chat mode pe jao').map((a) => a.type)).toEqual(['open-agents', 'set-mode'])
+    expect(parseCommand('bruno ko band karo', ctx)).toMatchObject({ actions: [{ type: 'close-agents', agentIds: ['a1'] }], confirm: 'Close Bruno?' })
+    expect(actions('kya chal raha hai')).toEqual([{ type: 'report', focus: 'all' }])
+    expect(actions('kaun wait kar raha hai')).toEqual([{ type: 'report', focus: 'waiting-for-you' }])
+  })
+
   it('reads reports with their focus', () => {
     expect(actions("what's left?")).toEqual([{ type: 'report', focus: 'all' }])
     expect(actions('who is waiting')).toEqual([{ type: 'report', focus: 'waiting-for-you' }])

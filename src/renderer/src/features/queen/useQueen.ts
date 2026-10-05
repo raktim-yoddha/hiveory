@@ -3,10 +3,16 @@ import type { QueenQuestion } from '@shared/queen/actions'
 import type { QueenReport } from '@shared/queen/report'
 
 /** The one card above Queen Bee's bar: her reply, a yes/no, or a question. */
-export type QueenCard =
+export type QueenCard = (
   | { kind: 'reply'; text: string; receipts: string[]; undo?: () => Promise<void>; report?: QueenReport }
   | { kind: 'confirm'; text: string; /** The yes button: Close, Send or Confirm. */ label: string; run: () => Promise<void> }
   | { kind: 'ask'; question: QueenQuestion }
+) & {
+  /** What she heard, when the command was spoken. */
+  heard?: string
+}
+
+export type QueenSettingsTab = 'personality' | 'providers' | 'voice' | 'bar'
 
 export interface QueenPoint {
   x: number
@@ -23,6 +29,9 @@ interface QueenState {
   busy: boolean
   /** Bumped to move focus into the input (shortcut, menu). */
   focusTick: number
+  /** Which tab Settings › Queen Bee opens on. */
+  settingsTab: QueenSettingsTab
+  setSettingsTab(tab: QueenSettingsTab): void
   setPlacement(placement: QueenState['placement']): void
   setPosition(position: QueenPoint | null): void
   setCompact(compact: boolean): void
@@ -61,6 +70,8 @@ export const useQueen = create<QueenState>((set, get) => ({
   card: null,
   busy: false,
   focusTick: 0,
+  settingsTab: 'personality',
+  setSettingsTab: (settingsTab) => set({ settingsTab }),
   setPlacement: (placement) => {
     set({ placement, compact: false })
     save(get())

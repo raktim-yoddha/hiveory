@@ -7,6 +7,7 @@ import { IPC_PREFIX } from '@shared/ipc/contract'
 import { createContainer, type Container } from './app/container'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
+import { adoptLoginShellPath } from './app/shell-path'
 import { applyWindowTheme, createMainWindow, rendererTargets } from './app/window'
 import { createHandlers } from './ipc/handlers'
 import { registerIpc } from './ipc/router'
@@ -65,6 +66,8 @@ app.whenReady().then(async () => {
   // No application menu on Windows/Linux: its hidden Alt accelerators would swallow
   // Alt-shortcuts (Alt+V, Alt+C…) that CLIs rely on. Copy/paste are handled by the terminal.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
+  // Finder-launched apps get a minimal PATH: adopt the login shell's before any CLI is looked up.
+  await adoptLoginShellPath(log)
   container = createContainer(paths, log, emit, app.isPackaged ? electronUpdater.autoUpdater : null)
   const wallpapers = container.wallpapers
   protocol.handle(WALLPAPER_SCHEME, (request) => {

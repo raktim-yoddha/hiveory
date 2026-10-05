@@ -49,6 +49,8 @@ export interface ConnectionView {
   name: string
   /** Set when made from a plugin in the catalog. */
   pluginId?: string
+  /** The plugin account's name ("Work"), when a plugin has several. */
+  label?: string
   enabled: boolean
   transport: 'stdio' | 'http'
   /** Command line or URL without secrets. */

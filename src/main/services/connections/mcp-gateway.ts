@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
+import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { homedir } from 'node:os'
 import type { Logger } from '../../app/logger'
@@ -16,7 +16,34 @@ export interface ConnectionSpec {
   env?: Record<string, string>
   url?: string
   headers?: Record<string, string>
+  /** Secret values of this connection: scrubbed from anything shown to agents or the user. */
+  secrets?: string[]
 }
+
+/**
+ * The environment a local MCP server starts with: only what a runtime needs to find
+ * itself and the network (the SDK's safe list, plus locale, proxy and CA settings),
+ * then the connection's own values. Never Hiveory's whole environment, which may
+ * hold the user's other keys.
+ */
+const PASS_THROUGH = [
+  'LANG', 'LC_ALL', 'TZ', 'TMPDIR', 'XDG_RUNTIME_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+  'NODE_EXTRA_CA_CERTS', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'REQUESTS_CA_BUNDLE',
+  'COMSPEC', 'PATHEXT', 'WINDIR', 'ProgramData', 'ProgramFiles(x86)', 'CommonProgramFiles', 'NUMBER_OF_PROCESSORS'
+]
+export const serverEnv = (own: Record<string, string> = {}): Record<string, string> => {
+  const base = getDefaultEnvironment()
+  for (const key of PASS_THROUGH) {
+    const value = process.env[key]
+    if (typeof value === 'string') base[key] = value
+  }
+  return { ...base, ...own }
+}
+
+/** Replaces each secret (6+ characters) with a mask. */
+export const scrubSecrets = (text: string, secrets: readonly string[] = []): string =>
+  secrets.filter((s) => s.length >= 6).reduce((out, s) => out.split(s).join('••••'), text)
 
 export type CachedTool = StoredConnection['tools'][number]
 
@@ -121,7 +148,8 @@ export class McpGateway implements ToolFamily {
         resetTimeoutOnProgress: true
       })
       live.lastUsed = Date.now()
-      return toToolResult(result as Record<string, unknown>)
+      const out = toToolResult(result as Record<string, unknown>)
+      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(entry.connection.id)) }
     } catch (error) {
       return { text: `${entry.connection.name}: ${this.describe(error, entry.connection.id)}`, isError: true }
     }
@@ -168,10 +196,12 @@ export class McpGateway implements ToolFamily {
   private describe(error: unknown, id: string): string {
     const message = error instanceof Error ? error.message : String(error)
     const stderr = this.stderrOf.get(id)?.trim().split(/\r?\n/).slice(-3).join(' · ')
-    return stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message
+    // Errors reach agents and the UI: the stderr tail helps, the connection's secrets must not ride along.
+    return scrubSecrets(stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message, this.secretsOf.get(id))
   }
 
   private readonly stderrOf = new Map<string, string>()
+  private readonly secretsOf = new Map<string, string[]>()
 
   private open(connection: StoredConnection): Promise<Live> {
     const existing = this.live.get(connection.id)
@@ -186,6 +216,7 @@ export class McpGateway implements ToolFamily {
 
   private async start(connection: StoredConnection): Promise<Live> {
     const spec = this.specOf(connection)
+    this.secretsOf.set(connection.id, [...(spec.secrets ?? []), ...Object.values(spec.env ?? {}), ...Object.values(spec.headers ?? {})])
     const client = new Client({ name: 'hiveory', version: this.version }, { capabilities: {} })
     const live: Live = { client, lastUsed: Date.now() }
     this.stderrOf.set(connection.id, '')
@@ -194,8 +225,7 @@ export class McpGateway implements ToolFamily {
     }
     if (spec.transport === 'stdio') {
       if (!spec.command) throw new Error('No command to run.')
-      const env = Object.fromEntries(Object.entries({ ...process.env, ...spec.env }).filter((e): e is [string, string] => typeof e[1] === 'string'))
-      const transport = new StdioClientTransport({ command: spec.command, args: spec.args ?? [], env, cwd: homedir(), stderr: 'pipe' })
+      const transport = new StdioClientTransport({ command: spec.command, args: spec.args ?? [], env: serverEnv(spec.env), cwd: homedir(), stderr: 'pipe' })
       transport.stderr?.on('data', (chunk: Buffer) => this.stderrOf.set(connection.id, ((this.stderrOf.get(connection.id) ?? '') + chunk.toString()).slice(-4000)))
       await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS })
       return live

@@ -19,7 +19,9 @@ import type {
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
-import type { BrainResult, BrainView } from '../queen/brain'
+import type { BrainAccountView, BrainResult } from '../queen/brain'
+import type { VoicePackState } from '../queen/voice'
+import { parseShortcut } from '../queen/shortcut'
 
 /** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
 export interface WallpaperImage {
@@ -181,14 +183,38 @@ export const requestSchemas = {
   /** Types a message into an agent and submits it (Queen Bee's "tell Bruno to …"). */
   'agents.sendMessage': z.object({ instanceId: id, message: z.string().trim().min(1).max(20_000) }),
   /** Queen Bee's model (ADR 0019). The key is write-only: never read back. */
-  'queen.brain': none,
-  'queen.configureBrain': z.object({
-    provider: z.string().regex(/^[a-z]{1,40}$/).nullable(),
+  'queen.accounts': none,
+  'queen.saveAccount': z.object({
+    id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
+    provider: z.string().regex(/^[a-z]{1,40}$/),
+    label: z.string().trim().max(40),
+    kind: z.enum(['openai', 'anthropic', 'gemini']).optional(),
     baseUrl: z.string().trim().max(500),
     model: z.string().trim().max(200),
-    apiKey: z.string().max(500).nullable().optional()
+    apiKey: z.string().max(500).nullable().optional(),
+    enabled: z.boolean().optional()
   }),
-  'queen.testBrain': none,
+  'queen.removeAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
+  'queen.moveAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/), to: z.number().int().min(0).max(50) }),
+  'queen.testAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
+  /** The provider's model list, with the key typed in the form or the saved key of `id`. */
+  'queen.listModels': z.object({
+    id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
+    provider: z.string().regex(/^[a-z]{1,40}$/),
+    kind: z.enum(['openai', 'anthropic', 'gemini']).optional(),
+    baseUrl: z.string().trim().max(500),
+    apiKey: z.string().max(500).optional()
+  }),
+  /** Local speech (ADR 0019 phase 3): packs download only on request. */
+  'voice.status': none,
+  'voice.download': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
+  'voice.cancel': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
+  'voice.remove': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
+  /** 16 kHz mono push-to-talk audio, at most 60 s. */
+  'voice.transcribe': z.object({ samples: z.instanceof(Float32Array).refine((a) => a.length > 0 && a.length <= 16000 * 60, 'Clip too long.'), language: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']) }),
+  'voice.speak': z.object({ text: z.string().trim().min(1).max(600) }),
+  /** macOS asks for the microphone once; Windows reports its privacy setting. */
+  'voice.micAccess': none,
   'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
   'settings.get': none,
   'settings.update': z
@@ -213,7 +239,11 @@ export const requestSchemas = {
       queenHonorific: z.enum(['sir', 'maam', 'name', 'none']),
       queenHype: z.enum(['calm', 'lively', 'max']),
       queenNudgeMinutes: z.number().int().min(0).max(240),
-      queenLength: z.enum(['short', 'normal'])
+      queenLength: z.enum(['short', 'normal']),
+      queenShortcut: z.string().max(60).refine((s) => parseShortcut(s) !== null, 'Use two or three keys, at least one of them a modifier.'),
+      queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']),
+      queenSpeak: z.enum(['after-voice', 'always', 'never']),
+      queenVoiceSpeed: z.number().min(0.8).max(1.4)
     })
     .partial(),
   /** Wallpapers the user added (copied into Hiveory's own folder). */
@@ -269,7 +299,13 @@ export const requestSchemas = {
   'system.openUrl': z.object({ url: z.string().max(500) }),
   'connections.list': none,
   'connections.requirements': none,
-  'connections.savePlugin': z.object({ pluginId: z.string().regex(/^[a-z0-9]{1,32}$/), values: z.record(z.string().regex(/^\w{1,32}$/), z.string().max(4000)) }),
+  /** Sets up a plugin account: `id` edits one, no `id` adds another (each with its own `label`). */
+  'connections.savePlugin': z.object({
+    pluginId: z.string().regex(/^[a-z0-9]{1,32}$/),
+    values: z.record(z.string().regex(/^\w{1,32}$/), z.string().max(4000)),
+    id: connectionId.optional(),
+    label: z.string().trim().max(40).regex(/^[\p{L}\p{N} ._-]*$/u, 'Use letters, numbers, spaces, dots, dashes or underscores.').optional()
+  }),
   'connections.saveCustom': z.object({
     id: connectionId.optional(),
     name: z.string().trim().min(1).max(40),
@@ -403,9 +439,19 @@ export interface ResponseMap {
   'presets.delete': void
   'kanban.board': KanbanBoard
   'agents.sendMessage': string
-  'queen.brain': BrainView
-  'queen.configureBrain': BrainView
-  'queen.testBrain': { ms: number; detail: string }
+  'queen.accounts': BrainAccountView[]
+  'queen.saveAccount': BrainAccountView[]
+  'queen.removeAccount': BrainAccountView[]
+  'queen.moveAccount': BrainAccountView[]
+  'queen.testAccount': { ms: number; detail: string }
+  'queen.listModels': string[]
+  'voice.status': VoicePackState[]
+  'voice.download': void
+  'voice.cancel': void
+  'voice.remove': void
+  'voice.transcribe': { text: string; ms: number }
+  'voice.speak': { samples: Float32Array; sampleRate: number }
+  'voice.micAccess': boolean
   'queen.plan': BrainResult
   'settings.get': AppSettings
   'settings.update': AppSettings
@@ -511,6 +557,7 @@ export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }
   /** Something changed in a watched folder (scope = workspace or project id). */
   'files.changed': { scope: string; paths: string[] }
+  'voice.changed': VoicePackState[]
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
   'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string }
   'app.notice': { level: 'info' | 'warning' | 'error'; message: string }
@@ -532,7 +579,8 @@ const EVENTS: Record<EventName, true> = {
   'updates.changed': true,
   'chat.event': true,
   'browser.changed': true,
-  'files.changed': true
+  'files.changed': true,
+  'voice.changed': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

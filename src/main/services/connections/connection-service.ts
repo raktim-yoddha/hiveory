@@ -67,8 +67,10 @@ export class ConnectionService {
     if (connection.pluginId) {
       const plugin = pluginById(connection.pluginId)
       if (!plugin) fail('NOT_FOUND', `Unknown plugin: ${connection.pluginId}`)
-      const { server } = resolvePluginServer(plugin!, open(connection.values))
-      return server
+      const opened = open(connection.values)
+      const { server } = resolvePluginServer(plugin!, opened)
+      const secrets = plugin!.fields.filter((f) => f.secret && opened[f.key]).map((f) => opened[f.key]!)
+      return { ...server, secrets }
     }
     return { transport: connection.transport, command: connection.command, args: connection.args, url: connection.url, env: open(connection.env), headers: open(connection.headers) }
   }
@@ -83,6 +85,7 @@ export class ConnectionService {
       id: connection.id,
       name: connection.name,
       ...(connection.pluginId ? { pluginId: connection.pluginId } : {}),
+      ...(connection.label ? { label: connection.label } : {}),
       enabled: connection.enabled,
       transport: spec.transport,
       target: spec.transport === 'http' ? redactUrl(spec.url ?? '') : [spec.command ?? '', ...(spec.args ?? [])].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' '),
@@ -116,11 +119,21 @@ export class ConnectionService {
     this.broadcast('state.changed', { topic: 'connections' })
   }
 
-  /** Sets up (or updates) a plugin from the catalog and connects to it. One connection per plugin. */
-  async savePlugin(pluginId: string, values: Record<string, string>): Promise<ConnectionView> {
+  /**
+   * Sets up a plugin account from the catalog and connects to it. `id` edits that
+   * account; without it a new account is added, so one plugin can hold several
+   * (work and personal GitHub…). Each account gets its own name — "GitHub · Work" —
+   * and so its own tool prefix, so agents always know which account they use.
+   */
+  async savePlugin(pluginId: string, values: Record<string, string>, options: { id?: string; label?: string } = {}): Promise<ConnectionView> {
     const plugin = pluginById(pluginId)
     if (!plugin) fail('NOT_FOUND', `Unknown plugin: ${pluginId}`)
-    const existing = this.all().find((c) => c.pluginId === pluginId)
+    const existing = options.id ? this.find(options.id) : undefined
+    if (existing && existing.pluginId !== pluginId) fail('INVALID_INPUT', 'That connection belongs to another plugin.')
+    const label = (options.label ?? existing?.label ?? '').trim()
+    const name = label ? `${plugin!.name} · ${label}` : plugin!.name
+    const clash = this.all().find((c) => c.id !== existing?.id && c.name.toLowerCase() === name.toLowerCase())
+    if (clash) fail('INVALID_INPUT', label ? `${name} already exists. Pick another account name.` : `${plugin!.name} is already set up. Name this account (for example Work) to add another.`)
     const stored = existing?.values ?? {}
     const next: Record<string, string> = {}
     for (const field of plugin!.fields) {
@@ -135,12 +148,14 @@ export class ConnectionService {
     if (missing.length) fail('INVALID_INPUT', `Fill in: ${missing.join(', ')}.`)
     const connection: StoredConnection = {
       ...(existing ?? { id: newId(), env: {}, headers: {}, tools: [] }),
-      name: plugin!.name,
+      name,
       pluginId,
+      ...(label ? { label } : {}),
       enabled: true,
       transport: plugin!.server.transport,
       values: next
     }
+    if (!label) delete connection.label
     this.put(connection)
     return this.test(connection.id)
   }

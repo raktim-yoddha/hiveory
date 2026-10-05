@@ -11,6 +11,7 @@ import { applyLook } from './features/shell/appearance'
 import { useConnections } from './stores/connections'
 import { useApp, useClis, useSettings } from './stores/data'
 import { reportError } from './stores/notices'
+import { useVoice } from './features/queen/voice'
 
 // Last-resort guards: stray async failures become notices instead of silent breakage.
 window.addEventListener('unhandledrejection', (event) => reportError(event.reason))
@@ -27,6 +28,8 @@ function App() {
     void useClis.getState().load()
     void useSettings.getState().load()
     void useBrowser.getState().load()
+    // Queen Bee's speech packs: the mic button and hold-to-talk need to know what's installed.
+    void useVoice.getState().load()
     void useConnections.getState().load()
     return uninstall
   }, [])

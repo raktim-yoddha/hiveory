@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, shell, systemPreferences } from 'electron'
 import { isPluginHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
@@ -7,6 +7,7 @@ import { findExecutable, processDiscoveryEnv } from '../services/cli/discovery'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
 import { deliverMessage } from '../services/agent-tools/deliver'
+import { PERSONA_VOICES } from '@shared/queen/voice'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 export const createHandlers = (c: Container): Handlers => {
@@ -74,9 +75,26 @@ export const createHandlers = (c: Container): Handlers => {
       fail('INVALID_INPUT', error instanceof Error ? error.message : String(error))
     )
   },
-  'queen.brain': () => c.queenBrain.view(),
-  'queen.configureBrain': (input) => c.queenBrain.configure(input),
-  'queen.testBrain': () => c.queenBrain.test(),
+  'queen.accounts': () => c.queenBrain.accounts(),
+  'queen.saveAccount': (input) => c.queenBrain.save(input),
+  'queen.removeAccount': ({ id }) => c.queenBrain.remove(id),
+  'queen.moveAccount': ({ id, to }) => c.queenBrain.move(id, to),
+  'queen.testAccount': ({ id }) => c.queenBrain.test(id),
+  'queen.listModels': (input) => c.queenBrain.listModels(input),
+  'voice.status': () => c.voice.status(),
+  'voice.download': ({ pack }) => c.voice.download(pack),
+  'voice.cancel': ({ pack }) => c.voice.cancel(pack),
+  'voice.remove': ({ pack }) => c.voice.remove(pack),
+  'voice.transcribe': ({ samples, language }) => c.voice.transcribe(samples, language),
+  'voice.speak': ({ text }) => {
+    const s = c.settings.get()
+    return c.voice.speak(text, PERSONA_VOICES[s.queenPersona].sid, s.queenVoiceSpeed)
+  },
+  'voice.micAccess': async () => {
+    if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone')
+    if (process.platform === 'win32') return systemPreferences.getMediaAccessStatus('microphone') !== 'denied'
+    return true
+  },
   'queen.plan': ({ utterance, context }) => c.queenBrain.plan(utterance, context, c.settings.get().queenPersona),
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)
@@ -184,7 +202,7 @@ export const createHandlers = (c: Container): Handlers => {
     const env = processDiscoveryEnv()
     return { npx: Boolean(findExecutable('npx', env)), uvx: Boolean(findExecutable('uvx', env)) }
   },
-  'connections.savePlugin': ({ pluginId, values }) => c.connections.savePlugin(pluginId, values),
+  'connections.savePlugin': ({ pluginId, values, id, label }) => c.connections.savePlugin(pluginId, values, { id, label }),
   'connections.saveCustom': (input) => c.connections.saveCustom(input),
   'connections.import': ({ name }) => {
     const { config, from } = c.extensions.rawServer(name)

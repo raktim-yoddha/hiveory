@@ -12,6 +12,8 @@ export interface AppPaths {
   worktreeRoot: string
   /** Copies of the wallpapers the user added. */
   wallpapersDir: string
+  /** Queen Bee's speech packs (large, machine-local). */
+  voiceDir: string
 }
 
 /**
@@ -31,6 +33,7 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
     logDir: join(userData, 'logs'),
     runtimeDir: join(dataRoot, 'Runtime'),
     worktreeRoot: join(dataRoot, 'Workspaces'),
-    wallpapersDir: join(userData, 'wallpapers')
+    wallpapersDir: join(userData, 'wallpapers'),
+    voiceDir: join(dataRoot, 'Voice')
   }
 }

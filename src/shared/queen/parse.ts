@@ -9,11 +9,30 @@ import { MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenPa
 
 const NUMBER_WORDS: Record<string, number> = {
   one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12, couple: 2, pair: 2, few: 3, single: 1, another: 1
+  eleven: 11, twelve: 12, couple: 2, pair: 2, few: 3, single: 1, another: 1,
+  // Hinglish, as speech recognition writes it.
+  ek: 1, do: 2, teen: 3, tin: 3, char: 4, chaar: 4, paanch: 5, panch: 5, chhe: 6, che: 6, saat: 7, aath: 8, aat: 8
 }
+
+/**
+ * Hinglish (romanised Hindi, as typed or as Whisper writes it) folded into the
+ * same canonical words. Hindi puts the verb last ("do codex kholo"); parseClause
+ * moves a trailing verb to the front.
+ */
+const HINGLISH: Array<[RegExp, string]> = [
+  [/\b(kya chal raha hai|kya ho raha hai|status batao|kya bacha hai|kitna bacha hai|update do)\b/g, 'status'],
+  [/\b(kaun wait kar raha hai|kaun ruka hai|kisko meri zarurat hai|kaun atka hai)\b/g, 'who is waiting'],
+  [/\b(restart karo|restart kar do|dobara chalao|phir se chalao)\b/g, 'restart'],
+  [/\b(khol do|khol de|kholo|kolo|khol|chalu karo|chalu kar do|chalao|start karo|shuru karo)\b/g, 'open'],
+  [/\b(band karo|band kar do|band kardo|bandh karo|bund karo|hata do|hatao|band)\b/g, 'close'],
+  [/\b(dikhao|dikha do|dikhau|dekhao|par jao|pe jao|jao)\b/g, 'show'],
+  [/\baur\b/g, 'and'],
+  [/\b(ko|zara|jaldi|bhai|yaar|na)\b/g, ' ']
+]
 
 /** Multi-word phrasings folded into one canonical verb before parsing. */
 const PHRASES: Array<[RegExp, string]> = [
+  ...HINGLISH,
   [/\b(take me to|bring me to|navigate to|head to|jump to|switch to|move to|go back to|go to)\b/g, 'go'],
   [/\b(spin up|fire up|boot up|bring up|start up|kick off)\b/g, 'open'],
   [/\b(shut down|close down|get rid of)\b/g, 'close'],
@@ -131,7 +150,12 @@ const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
   [/\b(about|version)\b/, 'about']
 ]
 
-const parseClause = (clause: string, ctx: QueenContext, previousVerb: string | null): { result: QueenParse; verb: string | null } => {
+const VERB_WORDS = /^(open|close|show|go|restart)$/
+
+const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string | null): { result: QueenParse; verb: string | null } => {
+  // Verb-last word order (Hindi, "settings show"): bring the verb to the front.
+  const words = sentence.split(' ')
+  const clause = words.length > 1 && VERB_WORDS.test(words.at(-1)!) && !VERB_WORDS.test(words[0]!) ? [words.at(-1)!, ...words.slice(0, -1)].join(' ') : sentence
   const done = (actions: QueenAction[], verb: string | null = null): { result: QueenParse; verb: string | null } => ({ result: { kind: 'actions', actions }, verb })
   const ask = (text: string, choices?: Array<{ label: string; command: string }>) => ({ result: { kind: 'ask', question: { text, choices } } as QueenParse, verb: null })
 

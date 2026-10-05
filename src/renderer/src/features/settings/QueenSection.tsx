@@ -3,18 +3,52 @@ import { doneLine, PERSONAS, type PersonaId, type QueenPrefs } from '@shared/que
 import { Select } from '../../components/ui/Select'
 import { TextInput } from '../../components/ui/TextField'
 import { useSettings } from '../../stores/data'
-import { useQueen } from '../queen/useQueen'
-import { QueenModelSettings } from './QueenModelSettings'
+import { Cpu, Drama, Keyboard, Mic } from 'lucide-react'
+import { Tabs } from '../../components/ui/Tabs'
+import { useQueen, type QueenSettingsTab } from '../queen/useQueen'
+import { QueenBarSettings } from './QueenBarSettings'
+import { QueenProviders } from './QueenProviders'
+import { QueenVoiceSettings } from './QueenVoiceSettings'
 import { SettingRow, SettingsPage } from './SettingsScreen'
 import styles from './Settings.module.css'
 
 const SAMPLE = [{ kind: 'opened' as const, count: 2, cliName: 'Codex', workspace: 'feature-x' }]
 
-/** Queen Bee (ADR 0019): personality, how she talks to you, and where she sits. */
+/** Queen Bee (ADR 0019): personality, providers, voice, and her bar and shortcut — one tab each. */
 export function QueenSection() {
+  const tab = useQueen((s) => s.settingsTab)
+  const setTab = useQueen((s) => s.setSettingsTab)
+  return (
+    <SettingsPage
+      title="Queen Bee"
+      description="Tell her what you want — typed, or spoken while you hold her shortcut — and she opens, closes and finds agents, messages them, switches pages and reports where every agent stands."
+    >
+      <div className={styles.tabsHeader}>
+        <Tabs<QueenSettingsTab>
+          label="Queen Bee settings"
+          variant="segmented"
+          size="lg"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'personality', label: 'Personality', icon: <Drama /> },
+            { value: 'providers', label: 'Providers', icon: <Cpu /> },
+            { value: 'voice', label: 'Voice', icon: <Mic /> },
+            { value: 'bar', label: 'Bar & shortcut', icon: <Keyboard /> }
+          ]}
+        />
+      </div>
+      {tab === 'personality' && <PersonalityTab />}
+      {tab === 'providers' && <QueenProviders />}
+      {tab === 'voice' && <QueenVoiceSettings />}
+      {tab === 'bar' && <QueenBarSettings />}
+    </SettingsPage>
+  )
+}
+
+/** Who she is and how she addresses you. Her personality changes wording only, never what she does. */
+function PersonalityTab() {
   const { settings, update } = useSettings()
-  const placement = useQueen((s) => s.placement)
-  const setPlacement = useQueen((s) => s.setPlacement)
   const [callMe, setCallMe] = useState<string | null>(null)
   const prefs: QueenPrefs = {
     persona: settings.queenPersona,
@@ -26,10 +60,7 @@ export function QueenSection() {
   }
 
   return (
-    <SettingsPage
-      title="Queen Bee"
-      description="Type what you want (Ctrl Shift K) and she opens, closes and finds agents, switches pages and tells you where every agent stands. Her personality only changes how she talks, never what she does."
-    >
+    <>
       <div className={styles.group}>
         <div className={styles.groupTitle}>Personality</div>
         <div className={styles.personas} role="radiogroup" aria-label="Personality">
@@ -144,27 +175,6 @@ export function QueenSection() {
         )}
       </div>
 
-      <QueenModelSettings />
-
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>Placement</div>
-        <SettingRow
-          title="Where she sits"
-          description="Docked sits under the main area and lifts it up. Floating can be dragged anywhere by her mark."
-          control={
-            <Select
-              label="Where she sits"
-              hideLabel
-              value={placement}
-              options={[
-                { value: 'docked', label: 'Docked' },
-                { value: 'floating', label: 'Floating' }
-              ]}
-              onChange={(v) => setPlacement(v as 'docked' | 'floating')}
-            />
-          }
-        />
-      </div>
-    </SettingsPage>
+    </>
   )
 }
