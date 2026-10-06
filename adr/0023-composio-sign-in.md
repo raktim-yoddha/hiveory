@@ -28,6 +28,17 @@ public OAuth client of the user's Composio account (standard MCP authorization):
 Composio holds the tokens of the apps the user connects there. When an agent first
 needs an app, Composio's tools give it a connect link for the user to approve.
 
+**Agents are told what the hub holds.** A plugin's `agentHint` goes next to its
+name in the agent prompt, for example: Composio holds Gmail, Drive, Slack…, so
+search its tools, and give the user the connect link for an app that isn't
+connected yet.
+
+**Testing.** `HIVEORY_PLUGIN_URL_COMPOSIO` points automated runs at a local
+stand-in, in the same way as `HIVEORY_USER_DATA`. Sign-in links must be https,
+except for a server on this computer. The e2e run checks sign-in, tool calls
+from a Work agent and from a bot, a silent token refresh, and keeping the
+sign-in across a restart.
+
 **Only a user action signs in.** Connecting, reconnecting or turning the plugin on
 may open the browser. An agent's call never does: if it has no usable token, it
 fails with "sign in again in Settings › Plugins".

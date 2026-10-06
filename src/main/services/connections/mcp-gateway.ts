@@ -152,7 +152,7 @@ export class McpGateway implements ToolFamily {
       })
       live.lastUsed = Date.now()
       const out = toToolResult(result as Record<string, unknown>)
-      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(entry.connection.id)) }
+      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(entry.connection.id)?.()) }
     } catch (error) {
       return { text: `${entry.connection.name}: ${this.describe(error, entry.connection.id)}`, isError: true }
     }
@@ -200,11 +200,12 @@ export class McpGateway implements ToolFamily {
     const message = error instanceof Error ? error.message : String(error)
     const stderr = this.stderrOf.get(id)?.trim().split(/\r?\n/).slice(-3).join(' · ')
     // Errors reach agents and the UI: the stderr tail helps, the connection's secrets must not ride along.
-    return scrubSecrets(stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message, this.secretsOf.get(id))
+    return scrubSecrets(stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message, this.secretsOf.get(id)?.())
   }
 
   private readonly stderrOf = new Map<string, string>()
-  private readonly secretsOf = new Map<string, string[]>()
+  /** Read at use time: a sign-in's tokens change when they refresh. */
+  private readonly secretsOf = new Map<string, () => string[]>()
 
   /** `interactive`: a user action, which may open the browser to sign in. */
   private open(connection: StoredConnection, interactive = false): Promise<Live> {
@@ -225,7 +226,8 @@ export class McpGateway implements ToolFamily {
       if (interactive) await oauth.signIn(new URL(spec.url))
       if (!oauth.signedIn) throw new Error(`Sign in to ${connection.name} first: Settings › Plugins › ${connection.name}.`)
     }
-    this.secretsOf.set(connection.id, [...(spec.secrets ?? []), ...(oauth?.secrets ?? []), ...Object.values(spec.env ?? {}), ...Object.values(spec.headers ?? {})])
+    const fixed = [...(spec.secrets ?? []), ...Object.values(spec.env ?? {}), ...Object.values(spec.headers ?? {})]
+    this.secretsOf.set(connection.id, () => [...fixed, ...(oauth?.secrets ?? [])])
     const client = new Client({ name: 'hiveory', version: this.version }, { capabilities: {} })
     const live: Live = { client, lastUsed: Date.now() }
     this.stderrOf.set(connection.id, '')

@@ -58,9 +58,14 @@ export class ConnectionService {
     return this.all().filter((c) => c.enabled)
   }
 
-  /** Names of enabled apps agents can use, for the agent prompt. */
+  /** Names of enabled apps agents can use, for the agent prompt; a hub says what it holds. */
   appNames(): string[] {
-    return this.enabled().filter((c) => c.tools.length).map((c) => c.name)
+    return this.enabled()
+      .filter((c) => c.tools.length)
+      .map((c) => {
+        const hint = c.pluginId ? pluginById(c.pluginId)?.agentHint : undefined
+        return hint ? `${c.name} (${hint})` : c.name
+      })
   }
 
   /** The server to start, with secrets opened. */
@@ -72,6 +77,9 @@ export class ConnectionService {
       if (!plugin) fail('NOT_FOUND', `Unknown plugin: ${connection.pluginId}`)
       const opened = open(connection.values)
       const { server } = resolvePluginServer(plugin!, opened)
+      // Automated runs point a sign-in plugin at a local stand-in (like HIVEORY_USER_DATA).
+      const standIn = plugin!.auth === 'oauth' ? process.env[`HIVEORY_PLUGIN_URL_${plugin!.id.toUpperCase()}`] : undefined
+      if (standIn && server.transport === 'http') server.url = standIn
       const secrets = plugin!.fields.filter((f) => f.secret && opened[f.key]).map((f) => opened[f.key]!)
       return { ...server, secrets, ...(plugin!.auth === 'oauth' ? { oauth: this.oauth(connection.id, plugin!.name) } : {}) }
     }

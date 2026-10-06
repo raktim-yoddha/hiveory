@@ -45,6 +45,73 @@ process.env.GIT_AUTHOR_EMAIL = 'e2e@example.test'
 process.env.GIT_COMMITTER_NAME = 'e2e'
 process.env.GIT_COMMITTER_EMAIL = 'e2e@example.test'
 
+// A stand-in for Composio (ADR 0023): its OAuth server (registration, PKCE, refresh) and its MCP server.
+const composio = { authorizes: 0, refreshes: 0, calls: 0, issued: 0, tokens: new Set(), codes: new Map() }
+const composioServer = createServer((req, res) => {
+  const base = `http://127.0.0.1:${composioServer.address().port}`
+  const url = new URL(req.url, base)
+  let body = ''
+  req.on('data', (chunk) => (body += chunk))
+  req.on('end', () => {
+    const json = (status, value, headers = {}) => res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(value))
+    if (url.pathname.startsWith('/.well-known/oauth-protected-resource')) return json(200, { resource: `${base}/mcp`, authorization_servers: [base] })
+    if (url.pathname === '/.well-known/oauth-authorization-server') {
+      return json(200, {
+        issuer: base,
+        authorization_endpoint: `${base}/authorize`,
+        token_endpoint: `${base}/token`,
+        registration_endpoint: `${base}/register`,
+        response_types_supported: ['code'],
+        grant_types_supported: ['authorization_code', 'refresh_token'],
+        code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['none']
+      })
+    }
+    if (url.pathname === '/register') return json(201, { ...JSON.parse(body), client_id: 'e2e-client' })
+    if (url.pathname === '/authorize') {
+      composio.authorizes++
+      const code = `e2e-code-${composio.authorizes}`
+      composio.codes.set(code, url.searchParams.get('code_challenge'))
+      const back = new URL(url.searchParams.get('redirect_uri'))
+      back.searchParams.set('code', code)
+      back.searchParams.set('state', url.searchParams.get('state'))
+      return res.writeHead(302, { location: back.href }).end()
+    }
+    if (url.pathname === '/token') {
+      const form = new URLSearchParams(body)
+      if (form.get('grant_type') === 'authorization_code') {
+        const challenge = composio.codes.get(form.get('code'))
+        if (!challenge || createHash('sha256').update(form.get('code_verifier') ?? '').digest('base64url') !== challenge) return json(400, { error: 'invalid_grant' })
+      } else if (form.get('grant_type') === 'refresh_token' && form.get('refresh_token') === 'e2e-refresh-token') composio.refreshes++
+      else return json(400, { error: 'invalid_grant' })
+      const access = `e2e-access-token-${++composio.issued}`
+      composio.tokens.add(access)
+      return json(200, { access_token: access, refresh_token: 'e2e-refresh-token', token_type: 'Bearer', expires_in: 3600 })
+    }
+    if (url.pathname === '/mcp') {
+      if (!composio.tokens.has((req.headers.authorization ?? '').replace(/^Bearer /, ''))) {
+        return json(401, { error: 'invalid_token' }, { 'www-authenticate': `Bearer error="invalid_token", resource_metadata="${base}/.well-known/oauth-protected-resource"` })
+      }
+      if (req.method !== 'POST') return res.writeHead(405).end()
+      const msg = JSON.parse(body)
+      if (msg.id === undefined) return res.writeHead(202).end()
+      const reply = (result) => json(200, { jsonrpc: '2.0', id: msg.id, result })
+      if (msg.method === 'initialize') return reply({ protocolVersion: msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fake-composio', version: '1' } })
+      if (msg.method === 'tools/list') {
+        return reply({ tools: [{ name: 'COMPOSIO_SEARCH_TOOLS', description: 'Find the tools for an app', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] })
+      }
+      if (msg.method === 'tools/call') {
+        composio.calls++
+        return reply({ content: [{ type: 'text', text: `found GMAIL_SEND_EMAIL for ${msg.params.arguments.query}` }] })
+      }
+      return json(200, { jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'nope' } })
+    }
+    res.writeHead(404).end()
+  })
+})
+await new Promise((r) => composioServer.listen(0, '127.0.0.1', r))
+process.env.HIVEORY_PLUGIN_URL_COMPOSIO = `http://127.0.0.1:${composioServer.address().port}/mcp`
+
 // ---------- harness ----------
 const results = []
 // Playwright asserts ("Target crashed") when a hidden background page it auto-attached to (a
@@ -143,6 +210,15 @@ const addProjectFolder = async (folder) => {
   await dialog.getByRole('button', { name: 'Choose' }).click()
   await dialog.getByRole('button', { name: /^Add project/ }).click()
 }
+/** The user's browser: records each page Hiveory opens and follows it (a sign-in redirects straight back). */
+const stubBrowser = () =>
+  app.evaluate(({ shell }) => {
+    globalThis.__opened = []
+    shell.openExternal = async (url) => {
+      globalThis.__opened.push(url)
+      await fetch(url)
+    }
+  })
 const waitFor = async (fn, message, timeout = 15000) => {
   const end = Date.now() + timeout
   for (;;) {
@@ -283,6 +359,25 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.getByRole('button', { name: 'New skill' }).click()
   await page.getByLabel('Name', { exact: true }).fill('E2E Skill')
   expect((await page.getByLabel('Name', { exact: true }).inputValue()) === 'e2e-skill', 'skill name not slugged')
+  await page.keyboard.press('Escape')
+})
+
+await test('Composio: one sign-in in the browser, then its tools are listed', async () => {
+  await stubBrowser()
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
+  await page.getByRole('tab', { name: /Plugins/ }).click()
+  await page.getByText('Composio', { exact: true }).click()
+  await page.getByRole('button', { name: 'Sign in with Composio' }).click()
+  await page.getByText('composio_COMPOSIO_SEARCH_TOOLS').waitFor({ timeout: 20000 })
+  const opened = await app.evaluate(() => globalThis.__opened)
+  expect(opened.length === 1 && opened[0].includes('/authorize?') && opened[0].includes('code_challenge='), `browser opened: ${opened}`)
+  expect(composio.authorizes === 1, `${composio.authorizes} sign-ins`)
+  const view = (await value('connections.list')).find((c) => c.pluginId === 'composio')
+  expect(view?.state === 'ready', `state ${view?.state}`)
+  expect(!JSON.stringify(view).includes('e2e-access-token') && !JSON.stringify(view).includes('e2e-refresh-token'), 'a token reached the renderer')
+  await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"oauth"'), 'sign-in saved')
+  expect(!/e2e-(access|refresh)-token/.test(readFileSync(join(profile, 'state.json'), 'utf8')), 'a token is in the state file in plain text')
+  await shot('a2f-composio-signed-in')
   await page.keyboard.press('Escape')
 })
 
@@ -1041,6 +1136,36 @@ await test('agents get an MCP server and Hiveory instructions', async () => {
   }
 })
 
+await test('Composio: Work agents and bots call its tools; an expired token refreshes without the browser', async () => {
+  const say = (r) => r.content.map((c) => c.text ?? '').join('\n')
+  const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
+  expect(names.includes('composio_COMPOSIO_SEARCH_TOOLS'), 'the agent has no Composio tools')
+  const first = await tool('composio_COMPOSIO_SEARCH_TOOLS', { query: 'gmail' })
+  expect(!first.isError && say(first).includes('found GMAIL_SEND_EMAIL for gmail'), say(first))
+  // The token expires on Composio's side: the next call refreshes it silently.
+  composio.tokens.clear()
+  await stubBrowser()
+  const again = await tool('composio_COMPOSIO_SEARCH_TOOLS', { query: 'slack' })
+  expect(!again.isError && say(again).includes('for slack'), say(again))
+  expect(composio.refreshes === 1 && composio.authorizes === 1, `refreshes ${composio.refreshes}, sign-ins ${composio.authorizes}`)
+  expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened during an agent call')
+  // A bot's thread reaches the same tools through its own route.
+  const bot = await value('bots.create', { name: 'E2E Mailer' })
+  const thread = await value('bots.newThread', { botId: bot.id })
+  const botRpc = async (method, params) => {
+    const res = await fetch(mcp.url.replace(/\/mcp\/[^/]+$/, `/mcp/${thread.id}`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: mcp.headers.Authorization },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+    })
+    return res.json()
+  }
+  expect((await botRpc('tools/list', {})).result.tools.some((t) => t.name === 'composio_COMPOSIO_SEARCH_TOOLS'), 'the bot has no Composio tools')
+  const fromBot = (await botRpc('tools/call', { name: 'composio_COMPOSIO_SEARCH_TOOLS', arguments: { query: 'calendar' } })).result
+  expect(!fromBot.isError && say(fromBot).includes('for calendar'), say(fromBot))
+  await value('bots.delete', { botId: bot.id })
+})
+
 await test('Queen Bee: messages by CLI name, stops work, reports everything, tells (out loud) when an agent finishes; her card never moves the panes', async () => {
   const queen = page.getByLabel('Tell Queen Bee')
   const card = page.locator('section[aria-label="Queen Bee says"]')
@@ -1604,6 +1729,15 @@ await test('everything survives a restart; agents come back on their own', async
   await value('settings.update', { theme: 'bronze' })
 })
 
+await test('Composio: the sign-in survives a restart; reconnecting never opens the browser', async () => {
+  await stubBrowser()
+  const before = composio.authorizes
+  const view = (await value('connections.list')).find((c) => c.pluginId === 'composio')
+  const after = await value('connections.test', { id: view.id })
+  expect(after.state === 'ready', `state ${after.state}: ${after.error ?? ''}`)
+  expect(composio.authorizes === before && (await app.evaluate(() => globalThis.__opened)).length === 0, 'signed in again after a restart')
+})
+
 await test('closing every agent returns to the empty workspace', async () => {
   for (const a of await value('agents.list', { workspaceId: mainWs.id })) await value('agents.close', { instanceId: a.id })
   await page.waitForSelector('text=Empty workspace')
@@ -1632,6 +1766,7 @@ await test('a corrupted state file is recovered with a notice', async () => {
 
 await close()
 fixtureServer.close()
+composioServer.close()
 const failed = results.filter((r) => !r.ok)
 console.log(`\n${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`)
 for (const f of failed) console.log(`  FAILED: ${f.name} — ${f.error}`)

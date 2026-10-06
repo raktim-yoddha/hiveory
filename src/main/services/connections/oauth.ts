@@ -148,7 +148,10 @@ export class ConnectionOAuth implements OAuthClientProvider {
 
   redirectToAuthorization(url: URL): void {
     if (!this.loopback) throw new Error(`${this.name} needs you to sign in again: Settings › Plugins › ${this.name}.`)
-    if (url.protocol !== 'https:') throw new Error(`${this.name} asked to sign in over an insecure link.`)
+    // http only for a server on this computer (a local stand-in, as in the e2e run).
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))) {
+      throw new Error(`${this.name} asked to sign in over an insecure link.`)
+    }
     this.openBrowser(url.href)
   }
 

@@ -40,6 +40,8 @@ export interface PluginDefinition {
   server: PluginServer
   /** 'oauth': the user signs in with their own account in the browser instead of pasting a key (ADR 0023). */
   auth?: 'oauth'
+  /** How agents should use a hub whose name alone doesn't say which apps it holds. */
+  agentHint?: string
 }
 
 const token = (label: string, placeholder?: string): PluginField => ({ key: 'token', label, secret: true, placeholder })
@@ -66,7 +68,9 @@ export const PLUGINS: PluginDefinition[] = [
     keyUrl: 'https://platform.composio.dev',
     fields: [],
     server: { transport: 'http', url: 'https://connect.composio.dev/mcp' },
-    auth: 'oauth'
+    auth: 'oauth',
+    agentHint:
+      "the user's hub for 1,000+ apps such as Gmail, Google Drive, Calendar, Slack and Outlook: search its tools for the app, and when an app isn't connected yet, give the user the connect link it returns"
   },
   {
     id: 'github',
