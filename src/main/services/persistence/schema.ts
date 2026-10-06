@@ -69,8 +69,10 @@ export interface StoredConnection {
   name: string
   /** 'composio': the Composio account that serves the plugins (ADR 0023). */
   pluginId?: string
-  /** Composio apps connected through Hiveory (toolkit slugs). */
+  /** Apps with an active account in Composio (toolkit slugs), for the agent prompt. */
   apps?: string[]
+  /** The Composio tool-router session that serves agents (ADR 0023). */
+  session?: string
   enabled: boolean
   transport: 'stdio' | 'http'
   command?: string
@@ -82,8 +84,6 @@ export interface StoredConnection {
   tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
   error?: string
   importedFrom?: string
-  /** A signed-in plugin's OAuth registration and tokens, as one sealed JSON value (ADR 0023). */
-  oauth?: string
 }
 
 export const emptyState = (): PersistedState => ({
@@ -221,7 +221,7 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   tools: z.array(z.object({ name: str, description: z.string(), inputSchema: z.record(z.string(), z.unknown()) })),
   error: str.optional(),
   importedFrom: str.optional(),
-  oauth: str.optional()
+  session: str.optional()
 })
 
 const brainAccountSchema: z.ZodType<StoredBrainAccount> = z.object({

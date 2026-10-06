@@ -7,7 +7,6 @@ import type { Logger } from '../../app/logger'
 import type { ToolFamily } from '../agent-tools/agent-tools'
 import type { ToolDefinition, ToolResult } from '../agent-tools/mcp-protocol'
 import type { StoredConnection } from '../persistence/schema'
-import type { ConnectionOAuth } from './oauth'
 
 /** What Hiveory needs to start one MCP server, secrets included (main only). */
 export interface ConnectionSpec {
@@ -19,8 +18,6 @@ export interface ConnectionSpec {
   headers?: Record<string, string>
   /** Secret values of this connection: scrubbed from anything shown to agents or the user. */
   secrets?: string[]
-  /** Set for a server the user signs in to with their own account (ADR 0023). */
-  oauth?: ConnectionOAuth
 }
 
 /**
@@ -143,23 +140,18 @@ export class McpGateway implements ToolFamily {
   async call(_caller: unknown, name: string, args: Record<string, unknown>): Promise<ToolResult> {
     const entry = this.table().get(name)
     if (!entry) return { text: `Unknown tool: ${name}`, isError: true }
-    return this.invoke(entry.connection, entry.tool.name, args)
-  }
-
-  /** Calls one of a connection's tools by its own name (Hiveory's use of Composio's tools, for one). */
-  async invoke(connection: StoredConnection, tool: string, args: Record<string, unknown>): Promise<ToolResult> {
     try {
-      const live = await this.open(connection)
+      const live = await this.open(entry.connection)
       live.lastUsed = Date.now()
-      const result = await live.client.callTool({ name: tool, arguments: args }, undefined, {
+      const result = await live.client.callTool({ name: entry.tool.name, arguments: args }, undefined, {
         timeout: CALL_TIMEOUT_MS,
         resetTimeoutOnProgress: true
       })
       live.lastUsed = Date.now()
       const out = toToolResult(result as Record<string, unknown>)
-      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(connection.id)?.()) }
+      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(entry.connection.id)) }
     } catch (error) {
-      return { text: `${connection.name}: ${this.describe(error, connection.id)}`, isError: true }
+      return { text: `${entry.connection.name}: ${this.describe(error, entry.connection.id)}`, isError: true }
     }
   }
 
@@ -168,7 +160,7 @@ export class McpGateway implements ToolFamily {
     await this.close(connection.id)
     this.connecting.add(connection.id)
     try {
-      const live = await this.open(connection, true)
+      const live = await this.open(connection)
       const tools: CachedTool[] = []
       let cursor: string | undefined
       do {
@@ -205,18 +197,16 @@ export class McpGateway implements ToolFamily {
     const message = error instanceof Error ? error.message : String(error)
     const stderr = this.stderrOf.get(id)?.trim().split(/\r?\n/).slice(-3).join(' · ')
     // Errors reach agents and the UI: the stderr tail helps, the connection's secrets must not ride along.
-    return scrubSecrets(stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message, this.secretsOf.get(id)?.())
+    return scrubSecrets(stderr && !message.includes(stderr) ? `${message} (${stderr.slice(0, 400)})` : message, this.secretsOf.get(id))
   }
 
   private readonly stderrOf = new Map<string, string>()
-  /** Read at use time: a sign-in's tokens change when they refresh. */
-  private readonly secretsOf = new Map<string, () => string[]>()
+  private readonly secretsOf = new Map<string, string[]>()
 
-  /** `interactive`: a user action, which may open the browser to sign in. */
-  private open(connection: StoredConnection, interactive = false): Promise<Live> {
+  private open(connection: StoredConnection): Promise<Live> {
     const existing = this.live.get(connection.id)
     if (existing) return existing
-    const started = this.start(connection, interactive)
+    const started = this.start(connection)
     this.live.set(connection.id, started)
     started.catch(() => this.live.get(connection.id) === started && this.live.delete(connection.id))
     this.sweep ??= setInterval(() => this.sweepIdle(), 60_000)
@@ -224,15 +214,9 @@ export class McpGateway implements ToolFamily {
     return started
   }
 
-  private async start(connection: StoredConnection, interactive: boolean): Promise<Live> {
+  private async start(connection: StoredConnection): Promise<Live> {
     const spec = this.specOf(connection)
-    const { oauth } = spec
-    if (oauth && spec.url) {
-      if (interactive) await oauth.signIn(new URL(spec.url))
-      if (!oauth.signedIn) throw new Error(`Sign in to ${connection.name} first: Settings › Plugins › ${connection.name}.`)
-    }
-    const fixed = [...(spec.secrets ?? []), ...Object.values(spec.env ?? {}), ...Object.values(spec.headers ?? {})]
-    this.secretsOf.set(connection.id, () => [...fixed, ...(oauth?.secrets ?? [])])
+    this.secretsOf.set(connection.id, [...(spec.secrets ?? []), ...Object.values(spec.env ?? {}), ...Object.values(spec.headers ?? {})])
     const client = new Client({ name: 'hiveory', version: this.version }, { capabilities: {} })
     const live: Live = { client, lastUsed: Date.now() }
     this.stderrOf.set(connection.id, '')
@@ -250,11 +234,10 @@ export class McpGateway implements ToolFamily {
     const url = new URL(spec.url)
     const requestInit = { headers: spec.headers ?? {} }
     try {
-      // With a sign-in, the transport sends the token and refreshes it when it expires.
-      await client.connect(new StreamableHTTPClientTransport(url, { requestInit, ...(oauth ? { authProvider: oauth } : {}) }), { timeout: CONNECT_TIMEOUT_MS })
+      await client.connect(new StreamableHTTPClientTransport(url, { requestInit }), { timeout: CONNECT_TIMEOUT_MS })
     } catch (error) {
-      // Older servers only speak the SSE transport; servers with a sign-in are never that old.
-      if (oauth || !/\b(404|405)\b/.test(String(error))) throw error
+      // Older servers only speak the SSE transport.
+      if (!/\b(404|405)\b/.test(String(error))) throw error
       this.log.info(`MCP ${connection.name}: falling back to SSE`)
       await client.connect(new SSEClientTransport(url, { requestInit, eventSourceInit: { fetch: (u, init) => fetch(u, { ...init, headers: { ...(init?.headers as Record<string, string>), ...requestInit.headers } }) } }), {
         timeout: CONNECT_TIMEOUT_MS

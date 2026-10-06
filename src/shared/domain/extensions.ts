@@ -52,7 +52,7 @@ export interface ConnectionView {
   name: string
   /** 'composio' for the Composio account that serves the plugins. */
   pluginId?: string
-  /** Composio apps connected through Hiveory (toolkit slugs). */
+  /** Apps with an active account in Composio (toolkit slugs). */
   apps?: string[]
   enabled: boolean
   transport: 'stdio' | 'http'

@@ -344,10 +344,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'editors.close': ({ editorId }) => c.editors.close(editorId),
   'connections.list': () => c.connections.list(),
-  'plugins.signIn': () => c.plugins.signIn(),
-  'plugins.signOut': () => c.plugins.signOut(),
-  'plugins.connect': ({ appId }) => c.plugins.connect(appId),
-  'plugins.check': ({ appId }) => c.plugins.check(appId),
+  'plugins.status': () => c.plugins.status(),
+  'plugins.setKey': ({ apiKey }) => c.plugins.setKey(apiKey),
+  'plugins.removeKey': () => c.plugins.removeKey(),
+  'plugins.connect': ({ appId, label }) => c.plugins.connect(appId, label),
+  'plugins.disconnect': ({ accountId }) => c.plugins.disconnect(accountId),
   'connections.saveCustom': (input) => c.connections.saveCustom(input),
   'connections.import': ({ name }) => {
     const { config, from } = c.extensions.rawServer(name)

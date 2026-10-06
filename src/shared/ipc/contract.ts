@@ -22,7 +22,7 @@ import type {
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
-import type { PluginConnectResult } from '../domain/plugins'
+import type { PluginAccount, PluginStatus } from '../domain/plugins'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
 import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
@@ -391,11 +391,12 @@ export const requestSchemas = {
   /** Opens the Composio account page in the system browser (allow-listed in main). */
   'system.openUrl': z.object({ url: z.string().max(500) }),
   'connections.list': none,
-  /** Plugins (ADR 0023): sign in to the user's own Composio account, then connect apps through it. */
-  'plugins.signIn': none,
-  'plugins.signOut': none,
-  'plugins.connect': z.object({ appId: pluginAppId }),
-  'plugins.check': z.object({ appId: pluginAppId }),
+  /** Plugins (ADR 0023): the user's Composio API key, and app accounts connected through it. */
+  'plugins.status': none,
+  'plugins.setKey': z.object({ apiKey: z.string().trim().min(8).max(200).regex(/^\S+$/, 'Paste the key without spaces.') }),
+  'plugins.removeKey': none,
+  'plugins.connect': z.object({ appId: pluginAppId, label: z.string().trim().max(40).regex(/^[\p{L}\p{N} ._-]*$/u, 'Use letters, numbers, spaces, dots, dashes or underscores.').optional() }),
+  'plugins.disconnect': z.object({ accountId: z.string().regex(/^[A-Za-z0-9_-]{3,64}$/) }),
   'connections.saveCustom': z.object({
     id: connectionId.optional(),
     name: z.string().trim().min(1).max(40),
@@ -624,10 +625,11 @@ export interface ResponseMap {
   'editors.open': EditorView
   'editors.close': void
   'connections.list': ConnectionView[]
-  'plugins.signIn': ConnectionView
-  'plugins.signOut': void
-  'plugins.connect': PluginConnectResult
-  'plugins.check': PluginConnectResult
+  'plugins.status': PluginStatus
+  'plugins.setKey': PluginStatus
+  'plugins.removeKey': void
+  'plugins.connect': PluginAccount
+  'plugins.disconnect': void
   'connections.saveCustom': ConnectionView
   'connections.import': ConnectionView
   'connections.setEnabled': ConnectionView

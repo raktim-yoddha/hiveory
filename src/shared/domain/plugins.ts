@@ -1,8 +1,8 @@
 /**
  * Plugins: apps every agent in Hiveory can use — terminal, chat and bots —
- * through the user's own Composio account, free or paid (ADR 0023). The user
- * signs in to Composio once; each app is then connected on Composio's own
- * page. Hiveory keeps no app keys and hosts nothing.
+ * through the user's own Composio project, free or paid (ADR 0023). The user
+ * pastes their Composio API key once; Connect then goes straight to each
+ * app's own sign-in. Hiveory keeps no app keys and hosts nothing.
  */
 
 export type PluginCategory = 'Work' | 'Code' | 'Data' | 'Business' | 'Search' | 'Media'
@@ -16,13 +16,13 @@ export interface PluginApp {
 }
 
 export const COMPOSIO = {
-  /** The plugin id of the Composio account connection. */
+  /** The plugin id of the Composio connection. */
   id: 'composio',
   name: 'Composio',
-  /** Composio's hosted MCP server; the user signs in to it with standard MCP OAuth. */
-  mcpUrl: 'https://connect.composio.dev/mcp',
-  /** Where the user creates an account or manages their connected apps. */
-  accountUrl: 'https://platform.composio.dev',
+  /** Composio's REST API. */
+  apiUrl: 'https://backend.composio.dev/api/v3.1',
+  /** Where the user creates a Composio account and copies a project API key. */
+  keyUrl: 'https://platform.composio.dev',
   /** Told to agents next to the connected apps. */
   agentHint:
     "the user's hub for 1,000+ apps: search its tools for the app, and when an app isn't connected yet, give the user the connect link it returns"
@@ -83,11 +83,24 @@ export const PLUGIN_APPS: PluginApp[] = [
 
 export const pluginAppById = (id: string): PluginApp | undefined => PLUGIN_APPS.find((a) => a.id === id)
 
-/** The only external page the Plugins screen opens itself: the Composio account page. */
-export const isPluginHelpUrl = (url: string): boolean => url === COMPOSIO.accountUrl
+/** The only external page the Plugins screen opens itself: where the Composio API key comes from. */
+export const isPluginHelpUrl = (url: string): boolean => url === COMPOSIO.keyUrl
 
-/** What connecting an app through Composio led to. */
-export interface PluginConnectResult {
-  /** connected: agents can use it now; pending: waiting for the user to approve it in the browser. */
-  state: 'connected' | 'pending'
+/** One account of an app, connected through Composio (several per app, told apart by label). */
+export interface PluginAccount {
+  /** Composio's connected account id (ca_…). */
+  id: string
+  /** The app's Composio toolkit slug. */
+  appId: string
+  label?: string
+  /** active: agents can use it; pending: waiting for the user to approve it in the browser. */
+  status: 'active' | 'pending' | 'failed' | 'expired'
+}
+
+export interface PluginStatus {
+  /** A Composio API key is saved. */
+  keySet: boolean
+  accounts: PluginAccount[]
+  /** Why Composio could not be reached, when it could not. */
+  error?: string
 }

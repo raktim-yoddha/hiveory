@@ -300,8 +300,8 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             Servers you add under MCP servers, and apps you connect under Plugins, are served by Hiveory to every agent — terminal, chat
-            and bots — without changing any CLI's config. Plugins run through your own Composio account: sign in once, then connect each
-            app on its own sign-in page. Hiveory keeps only the sign-in token, encrypted on this computer.
+            and bots — without changing any CLI's config. Plugins run through your own Composio project: paste its API key once, then Connect
+            takes you straight to each app's sign-in. The key is encrypted on this computer.
           </p>
         )
       }

@@ -73,7 +73,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   let bots: BotService | null = null
   const secrets = new SecretBox(safeStorage)
   const openBrowser = (url: string): void => void shell.openExternal(url)
-  const connections = new ConnectionService(store, secrets, emit, openBrowser)
+  const connections = new ConnectionService(store, secrets, emit)
   // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
   const queenBrain = new QueenBrain(store, secrets, fetch, {
     executable: (cliId) => registry.executable(cliId),
@@ -82,7 +82,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const voice = new VoiceService(paths.voiceDir, emit, log)
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
-  const plugins = new PluginService(connections, gateway, openBrowser)
+  const plugins = new PluginService(connections, openBrowser)
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
   const mcpFor = (id: string, baseUrl?: string) => {
     const endpoint = hookServer?.endpoint

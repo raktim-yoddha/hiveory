@@ -239,7 +239,7 @@ Settings › Skills, MCP & Plugins has three tabs (ADR 0017):
 
 - **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash). The folders come from the CLI registry: the shared `.agents/skills` plus each CLI's own (Claude, Codex, Gemini, Copilot, Cursor, OpenCode, Qwen, Goose, Kiro, Droid, Kilo, Junie and more); chips show the folders an installed CLI reads (ADR 0020)
 - **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click
-- **Plugins** — sign in once to the user's own Composio account (free or paid), then connect apps from a grid of cards (Gmail, Google Drive, Slack, GitHub, Notion, Linear, Stripe…) on each app's own sign-in page — no keys to paste. Every agent — terminal, chat and bots — gets the connected apps, and can connect any of Composio's 1,000+ apps on request (ADR 0023)
+- **Plugins** — paste the user's own Composio project API key once (free or paid); then Connect on any app card (Gmail, Google Drive, Slack, GitHub, Notion, Linear, Stripe…) goes straight to that app's sign-in — no Composio login, no app keys. Add account adds another labelled account of the same app; each account lists its id and status with Disconnect. Every agent — terminal, chat and bots — gets the connected apps, and can connect any of Composio's 1,000+ apps on request (ADR 0023)
 
 ## Appearance
 

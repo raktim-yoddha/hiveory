@@ -6,7 +6,6 @@ import type { McpRawConfig } from '../extensions/extensions-service'
 import type { StateStore } from '../persistence/state-store'
 import type { StoredConnection } from '../persistence/schema'
 import type { ConnectionSpec, McpGateway } from './mcp-gateway'
-import { ConnectionOAuth, type OAuthState } from './oauth'
 import type { SecretBox } from './secret-box'
 
 export interface CustomInput {
@@ -22,6 +21,8 @@ export interface CustomInput {
 }
 
 const newId = (): string => `c${randomBytes(6).toString('hex')}`
+/** Composio's project API key header. */
+export const COMPOSIO_KEY_HEADER = 'x-api-key'
 const isHttpUrl = (url: string): boolean => /^https?:\/\/\S+$/i.test(url)
 
 /** Seals the new values over the stored ones; '' keeps an existing value, a missing key drops it. */
@@ -40,8 +41,6 @@ export class ConnectionService {
     private readonly store: StateStore,
     private readonly box: SecretBox,
     private readonly broadcast: Emit,
-    /** Opens a provider's sign-in page in the user's browser. */
-    private readonly openBrowser: (url: string) => void = () => undefined,
     private gateway: McpGateway | null = null
   ) {}
 
@@ -69,39 +68,22 @@ export class ConnectionService {
       })
   }
 
-  /** The user's Composio account, when they signed in. */
+  /** The user's Composio connection, once they saved an API key. */
   composio(): StoredConnection | undefined {
     return this.all().find((c) => c.pluginId === COMPOSIO.id)
+  }
+
+  /** The saved Composio API key, opened (main only). */
+  composioKey(): string | undefined {
+    const sealed = this.composio()?.headers[COMPOSIO_KEY_HEADER]
+    return sealed ? this.box.open(sealed) || undefined : undefined
   }
 
   /** The server to start, with secrets opened. */
   spec(connection: StoredConnection): ConnectionSpec {
     const open = (record: Record<string, string>): Record<string, string> =>
       Object.fromEntries(Object.entries(record).map(([k, v]) => [k, this.box.open(v)]))
-    if (connection.pluginId === COMPOSIO.id) {
-      // Automated runs point it at a local stand-in (like HIVEORY_USER_DATA).
-      return { transport: 'http', url: process.env.HIVEORY_PLUGIN_URL_COMPOSIO || COMPOSIO.mcpUrl, headers: {}, oauth: this.oauth(connection.id, COMPOSIO.name) }
-    }
     return { transport: connection.transport, command: connection.command, args: connection.args, url: connection.url, env: open(connection.env), headers: open(connection.headers) }
-  }
-
-  /** The sign-in of an OAuth plugin, read fresh from the store and sealed back into it. */
-  private oauth(id: string, name: string): ConnectionOAuth {
-    const sealed = this.all().find((c) => c.id === id)?.oauth
-    let state: OAuthState = {}
-    try {
-      state = sealed ? (JSON.parse(this.box.open(sealed)) as OAuthState) : {}
-    } catch {
-      // Sealed on another machine: the user signs in again.
-    }
-    const persist = (next: OAuthState): void =>
-      this.store.update((s) => {
-        const target = s.connections.find((c) => c.id === id)
-        if (!target) return
-        if (next.client || next.tokens) target.oauth = this.box.seal(JSON.stringify(next))
-        else delete target.oauth
-      })
-    return new ConnectionOAuth(state, persist, this.openBrowser, name)
   }
 
   view(connection: StoredConnection): ConnectionView {
@@ -143,17 +125,25 @@ export class ConnectionService {
     this.broadcast('state.changed', { topic: 'connections' })
   }
 
-  /** Signs in to the user's Composio account (the browser opens when needed) and reads its tools. */
-  async signInComposio(): Promise<ConnectionView> {
+  /**
+   * Saves the Composio connection: its tool-router session's MCP server, reached
+   * with the user's API key (sealed), then reads its tools (ADR 0023).
+   */
+  async saveComposio(input: { apiKey: string; session: string; url: string }): Promise<ConnectionView> {
     const existing = this.composio()
-    const connection: StoredConnection = existing
-      ? { ...existing, enabled: true }
-      : { id: newId(), name: COMPOSIO.name, pluginId: COMPOSIO.id, apps: [], enabled: true, transport: 'http', env: {}, headers: {}, tools: [] }
+    const connection: StoredConnection = {
+      ...(existing ?? { id: newId(), name: COMPOSIO.name, pluginId: COMPOSIO.id, apps: [], env: {}, tools: [] }),
+      enabled: true,
+      transport: 'http',
+      url: input.url,
+      headers: { [COMPOSIO_KEY_HEADER]: this.box.seal(input.apiKey) },
+      session: input.session
+    }
     this.put(connection)
     return this.test(connection.id)
   }
 
-  /** Records which Composio apps are connected, for the Plugins screen and the agent prompt. */
+  /** Records which apps have an active account, for the Plugins tab badge and the agent prompt. */
   setApps(id: string, apps: string[]): void {
     this.put({ ...this.find(id), apps: [...new Set(apps)].sort() })
   }

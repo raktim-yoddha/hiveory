@@ -9,7 +9,7 @@ import { parseState } from '../persistence/schema'
 import { WallpaperService, type ImageCodec } from '../appearance/wallpaper-service'
 import { ConnectionService, redactUrl } from './connection-service'
 import { McpGateway, toolPrefix, toToolResult } from './mcp-gateway'
-import { PluginService, readConnection } from './plugin-service'
+import { COMPOSIO_USER, PluginService } from './plugin-service'
 import { SecretBox, type Sealer } from './secret-box'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
@@ -36,10 +36,10 @@ rl.on('line', (line) => {
 `
 
 describe('plugin catalog (ADR 0023)', () => {
-  it('lists unique Composio apps and opens only the Composio account page', () => {
+  it('lists unique Composio apps and opens only the page where the Composio key comes from', () => {
     expect(new Set(PLUGIN_APPS.map((a) => a.id)).size).toBe(PLUGIN_APPS.length)
     for (const app of PLUGIN_APPS) expect(app.id).toMatch(/^[a-z0-9_]+$/)
-    expect(isPluginHelpUrl(COMPOSIO.accountUrl)).toBe(true)
+    expect(isPluginHelpUrl(COMPOSIO.keyUrl)).toBe(true)
     expect(isPluginHelpUrl('https://evil.example')).toBe(false)
   })
 
@@ -55,17 +55,6 @@ describe('plugin catalog (ADR 0023)', () => {
     expect(state.connections.map((c) => c.id)).toEqual(['c2', 'c3'])
     expect(state.connections[0]!.apps).toEqual(['gmail'])
     expect(JSON.stringify(state)).not.toContain('v1:abc')
-  })
-
-  it('reads what Composio says about an app', () => {
-    const answer = (results: unknown) => JSON.stringify({ successful: true, data: { message: 'ok', results } })
-    expect(readConnection(answer({ gmail: { status: 'ACTIVE' } }), 'gmail')).toEqual({ connected: true })
-    expect(readConnection(answer({ gmail: { status: 'INITIATED', redirect_url: 'https://connect.composio.dev/link/ln_1' } }), 'gmail')).toEqual({
-      connected: false,
-      link: 'https://connect.composio.dev/link/ln_1'
-    })
-    expect(readConnection(answer({ gmail: { status: 'FAILED', error: 'Unknown toolkit' } }), 'gmail')).toEqual({ connected: false, error: 'Unknown toolkit' })
-    expect(readConnection('not json', 'gmail')).toMatchObject({ connected: false, error: 'not json' })
   })
 })
 
@@ -201,45 +190,84 @@ describe('wallpapers', () => {
   })
 })
 
-describe('plugins through Composio', () => {
+describe('plugins through the user Composio key', () => {
   const dir = mkdtempSync(join(tmpdir(), 'hv-plug-'))
   const store = new StateStore(join(dir, 'state.json'), log)
-  const opened: string[] = []
   const service = new ConnectionService(store, new SecretBox(sealer), () => undefined)
-  const composio = { gmail: 'INITIATED' }
-  // Composio's MANAGE tool, answered here, so this test needs no network.
-  const gateway = {
-    refresh: async () => ({ tools: [{ name: 'COMPOSIO_MANAGE_CONNECTIONS', description: '', inputSchema: {} }] }),
-    close: async () => undefined,
-    exposedNames: () => new Map(),
-    isConnecting: () => false,
-    invoke: async (_c: unknown, tool: string, args: { toolkits: string[] }) => {
-      const app = args.toolkits[0]!
-      const status = composio[app as 'gmail'] ?? 'ACTIVE'
-      return { isError: false, text: JSON.stringify({ successful: true, data: { results: { [app]: { status, ...(status === 'ACTIVE' ? {} : { redirect_url: `https://connect.composio.dev/link/${app}` }) } } } }) }
+  // A gateway that "connects" instantly, so this test needs no MCP server.
+  service.attach({ refresh: async () => ({ tools: [{ name: 'COMPOSIO_SEARCH_TOOLS', description: '', inputSchema: {} }] }), close: async () => undefined, exposedNames: () => new Map(), isConnecting: () => false } as unknown as McpGateway)
+  const opened: string[] = []
+  // Composio's REST API: sessions, link, list and delete, for one user and project key.
+  const composio = { sessions: 0, accounts: [] as Array<{ id: string; toolkit: { slug: string }; alias: string | null; status: string; state: unknown }>, seen: [] as string[] }
+  const fake = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input))
+    const path = url.pathname.replace('/api/v3.1', '')
+    composio.seen.push(`${init?.method ?? 'GET'} ${path}`)
+    const json = (status: number, value: unknown) => new Response(JSON.stringify(value), { status })
+    if ((init?.headers as Record<string, string>)['x-api-key'] !== 'ak_good_key') return json(401, { error: { message: 'Invalid API key' } })
+    const body = init?.body ? JSON.parse(String(init.body)) : {}
+    if (path === '/tool_router/session') {
+      expect(body).toMatchObject({ user_id: COMPOSIO_USER, multi_account: { enable: true } })
+      return json(201, { session_id: `trs_${++composio.sessions}`, mcp: { type: 'http', url: `https://backend.composio.dev/tool_router/trs_${composio.sessions}/mcp` } })
     }
-  } as unknown as McpGateway
-  service.attach(gateway)
-  const plugins = new PluginService(service, gateway, (url) => opened.push(url))
+    const link = path.match(/^\/tool_router\/session\/(trs_\d+)\/link$/)
+    if (link) {
+      if (link[1] !== `trs_${composio.sessions}`) return json(404, { error: { message: 'Session not found' } })
+      const id = `ca_${composio.accounts.length + 1}`
+      composio.accounts.push({ id, toolkit: { slug: body.toolkit }, alias: body.alias ?? null, status: 'INITIATED', state: { val: { access_token: 'secret-token-123' } } })
+      return json(201, { link_token: 'lt', redirect_url: `https://connect.composio.dev/link/${id}`, connected_account_id: id })
+    }
+    if (path === '/connected_accounts') {
+      expect(url.searchParams.get('user_ids')).toBe(COMPOSIO_USER)
+      return json(200, { items: composio.accounts })
+    }
+    const del = path.match(/^\/connected_accounts\/(ca_\d+)$/)
+    if (del && init?.method === 'DELETE') {
+      composio.accounts = composio.accounts.filter((a) => a.id !== del[1])
+      return json(200, { success: true })
+    }
+    return json(404, { error: { message: 'Not found' } })
+  }) as typeof fetch
+  const plugins = new PluginService(service, (url) => opened.push(url), fake, 'https://backend.composio.dev/api/v3.1')
 
-  it('needs a sign-in, then connects apps on Composio and tells agents which ones', async () => {
-    await expect(plugins.connect('gmail')).rejects.toThrow(/Sign in to Composio/)
-    const account = await plugins.signIn()
-    expect(account.pluginId).toBe('composio')
-    expect(service.spec(service.composio()!).url).toBe(COMPOSIO.mcpUrl)
-    // Not connected yet: the approval page opens; checking again does not open it twice.
-    expect(await plugins.connect('gmail')).toEqual({ state: 'pending' })
-    expect(opened).toEqual(['https://connect.composio.dev/link/gmail'])
-    expect(await plugins.check('gmail')).toEqual({ state: 'pending' })
-    expect(opened).toHaveLength(1)
-    // Approved in the browser.
-    composio.gmail = 'ACTIVE'
-    expect(await plugins.check('gmail')).toEqual({ state: 'connected' })
-    expect(await plugins.connect('github')).toEqual({ state: 'connected' })
-    expect(service.list()[0]!.apps).toEqual(['github', 'gmail'])
-    expect(service.appNames()[0]).toMatch(/^Composio \(connected: GitHub, Gmail; .*1,000\+ apps/)
+  it('saves a working key once, connects apps straight to their sign-in, holds labelled accounts and disconnects them', async () => {
+    expect(await plugins.status()).toEqual({ keySet: false, accounts: [] })
+    await expect(plugins.connect('gmail')).rejects.toThrow(/Composio API key first/)
+    await expect(plugins.setKey('ak_bad_key')).rejects.toThrow(/did not accept this API key/)
+    expect(service.composio()).toBeUndefined()
+
+    expect(await plugins.setKey('ak_good_key')).toEqual({ keySet: true, accounts: [] })
+    const saved = service.composio()!
+    expect(service.spec(saved)).toMatchObject({ transport: 'http', url: 'https://backend.composio.dev/tool_router/trs_1/mcp', headers: { 'x-api-key': 'ak_good_key' } })
+    expect(JSON.stringify(store.state.connections)).not.toContain('ak_good_key')
+    expect(JSON.stringify(service.list())).not.toContain('ak_good_key')
+
+    // Connect goes straight to the app's own sign-in page: no Composio login.
+    expect(await plugins.connect('gmail')).toEqual({ id: 'ca_1', appId: 'gmail', status: 'pending' })
+    expect(opened).toEqual(['https://connect.composio.dev/link/ca_1'])
+    composio.accounts[0]!.status = 'ACTIVE'
+    // A second, labelled account of the same app.
+    expect(await plugins.connect('gmail', 'Work')).toMatchObject({ id: 'ca_2', label: 'Work' })
+    composio.accounts[1]!.status = 'ACTIVE'
+    const status = await plugins.status()
+    expect(status.accounts).toEqual([
+      { id: 'ca_1', appId: 'gmail', status: 'active' },
+      { id: 'ca_2', appId: 'gmail', label: 'Work', status: 'active' }
+    ])
+    expect(JSON.stringify(status)).not.toContain('secret-token')
+    expect(service.appNames()[0]).toMatch(/^Composio \(connected: Gmail; /)
+
+    // A session deleted on Composio's side is started again.
+    composio.sessions++
+    expect(await plugins.connect('github')).toMatchObject({ id: 'ca_3', appId: 'github' })
+    expect(service.composio()!.session).toBe(`trs_${composio.sessions}`)
+
+    await plugins.disconnect('ca_2')
+    expect(composio.accounts.map((a) => a.id)).toEqual(['ca_1', 'ca_3'])
+    await expect(plugins.disconnect('ca_99')).rejects.toThrow(/no longer connected/)
     await expect(plugins.connect('not-an-app')).rejects.toThrow(/Unknown app/)
-    await plugins.signOut()
+
+    await plugins.removeKey()
     expect(service.list()).toEqual([])
   })
 })

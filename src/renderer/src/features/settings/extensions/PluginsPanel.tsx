@@ -1,123 +1,143 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { AlertTriangle, ArrowRight, ExternalLink, LogOut, RefreshCw } from 'lucide-react'
-import { COMPOSIO, PLUGIN_APPS, type PluginApp, type PluginCategory } from '@shared/domain'
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
+import { AlertTriangle, Check, ExternalLink, KeyRound, Plus, RefreshCw } from 'lucide-react'
+import { COMPOSIO, PLUGIN_APPS, type PluginAccount, type PluginApp, type PluginCategory, type PluginStatus } from '@shared/domain'
 import { Button, IconButton } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { TextInput } from '../../../components/ui/TextField'
 import { api } from '../../../lib/api'
 import { cx } from '../../../lib/cx'
-import { useConnections } from '../../../stores/connections'
 import { runAction } from '../../../stores/notices'
-import { ConnectionStatus } from './ConnectionStatus'
 import { PluginLogo } from './PluginLogo'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
 
 const CATEGORIES: Array<PluginCategory | 'All' | 'Connected'> = ['All', 'Connected', 'Work', 'Code', 'Data', 'Business', 'Search', 'Media']
 
+const STATUS_TEXT: Record<PluginAccount['status'], string> = {
+  active: 'active',
+  pending: 'waiting for you to approve it in the browser',
+  failed: 'failed',
+  expired: 'expired'
+}
+
 const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 
 /**
  * Apps every agent can use — terminal, chat and bots — through the user's own
- * Composio account (ADR 0023): sign in once, then connect each app on
- * Composio's own page. Hiveory keeps no app keys.
+ * Composio project (ADR 0023): paste the API key once, then Connect goes straight
+ * to each app's sign-in. An app can hold several labelled accounts.
  */
 export function PluginsPanel() {
-  const connections = useConnections((s) => s.connections)
-  const put = useConnections((s) => s.put)
-  const account = connections.find((c) => c.pluginId === COMPOSIO.id)
-  const signedIn = Boolean(account?.enabled && account.state === 'ready')
-  const connected = useMemo(() => new Set(account?.apps ?? []), [account])
-  /** Apps whose approval page is open in the browser. */
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
+  const [status, setStatus] = useState<PluginStatus | null>(null)
+  const [keyInput, setKeyInput] = useState('')
+  const [editingKey, setEditingKey] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
-  const [signingOut, setSigningOut] = useState(false)
+  /** The app whose "Add account" label form is open. */
+  const [labelFor, setLabelFor] = useState<string | null>(null)
+  const [label, setLabel] = useState('')
+  const [disconnecting, setDisconnecting] = useState<PluginAccount | null>(null)
+  const [removingKey, setRemovingKey] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All')
+
+  const refresh = useCallback(() => api('plugins.status').then(setStatus).catch(() => undefined), [])
+  useEffect(() => {
+    void refresh()
+    // Coming back from an app's sign-in page in the browser.
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [refresh])
+
+  const keySet = Boolean(status?.keySet)
+  const byApp = useMemo(() => {
+    const map = new Map<string, PluginAccount[]>()
+    for (const a of status?.accounts ?? []) map.set(a.appId, [...(map.get(a.appId) ?? []), a])
+    return map
+  }, [status])
+  const isConnected = useCallback((appId: string) => (byApp.get(appId) ?? []).some((a) => a.status === 'active'), [byApp])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return PLUGIN_APPS.filter(
       (a) =>
-        (category === 'All' || (category === 'Connected' ? connected.has(a.id) : a.category === category)) &&
+        (category === 'All' || (category === 'Connected' ? byApp.has(a.id) : a.category === category)) &&
         (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.category.toLowerCase().includes(q))
-    ).sort((a, b) => Number(connected.has(b.id)) - Number(connected.has(a.id)))
-  }, [query, category, connected])
+    ).sort((a, b) => Number(byApp.has(b.id)) - Number(byApp.has(a.id)))
+  }, [query, category, byApp])
 
-  const signIn = (): void => {
+  const saveKey = (event: FormEvent): void => {
+    event.preventDefault()
     setBusy(COMPOSIO.id)
-    void runAction('Sign in to Composio', async () => put(await api('plugins.signIn'))).finally(() => setBusy(null))
-  }
-
-  const markPending = (appId: string, isPending: boolean): void =>
-    setPending((s) => {
-      const next = new Set(s)
-      if (isPending) next.add(appId)
-      else next.delete(appId)
-      return next
-    })
-
-  /** Connects an app, or (once its page is open) asks Composio whether the user approved it. */
-  const connect = (app: PluginApp): void => {
-    const checking = pending.has(app.id) || connected.has(app.id)
-    setBusy(app.id)
-    void runAction(checking ? `Check ${app.name}` : `Connect ${app.name}`, async () => {
-      const result = await api(checking ? 'plugins.check' : 'plugins.connect', { appId: app.id })
-      markPending(app.id, result.state === 'pending')
+    void runAction('Save Composio API key', async () => {
+      setStatus(await api('plugins.setKey', { apiKey: keyInput }))
+      setKeyInput('')
+      setEditingKey(false)
     }).finally(() => setBusy(null))
   }
 
-  // Coming back from the browser: ask Composio about the apps waiting for approval.
-  useEffect(() => {
-    if (!pending.size) return
-    const onFocus = (): void => {
-      for (const appId of pending) {
-        void api('plugins.check', { appId })
-          .then((result) => markPending(appId, result.state === 'pending'))
-          .catch(() => undefined)
-      }
-    }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [pending])
+  const connect = (app: PluginApp, accountLabel?: string): void => {
+    setBusy(app.id)
+    void runAction(`Connect ${app.name}`, async () => {
+      await api('plugins.connect', { appId: app.id, ...(accountLabel ? { label: accountLabel } : {}) })
+      setLabelFor(null)
+      setLabel('')
+      await refresh()
+    }).finally(() => setBusy(null))
+  }
 
   return (
     <div className={styles.panel}>
       <div className={styles.accountBar}>
-        <PluginLogo id={COMPOSIO.id} name={COMPOSIO.name} />
+        <span className={styles.logoTile} aria-hidden>
+          <KeyRound className={styles.keyIcon} />
+        </span>
         <div className={styles.setupText}>
-          <strong>{signedIn ? 'Composio account' : 'Connect your apps with Composio'}</strong>
+          <strong>{keySet ? 'Composio' : 'Connect your apps with Composio'}</strong>
           <span className={styles.hint}>
-            {signedIn
-              ? 'Every agent — terminal, chat and bots — uses the apps you connect below. Apps run through Composio’s cloud and your Composio plan.'
-              : 'Sign in once with your own Composio account, free or paid. Then connect each app on its own sign-in page — no keys to paste.'}
+            {keySet
+              ? 'Every agent — terminal, chat and bots — uses the apps you connect below, through your Composio project and plan.'
+              : 'Paste your Composio project API key once, free or paid. Then Connect takes you straight to each app’s own sign-in.'}
           </span>
-          {!signedIn && (
-            <button type="button" className={styles.linkButton} onClick={() => openUrl(COMPOSIO.accountUrl)}>
-              No Composio account? Create one <ExternalLink aria-hidden />
+          {(!keySet || editingKey) && (
+            <form className={styles.keyForm} onSubmit={saveKey}>
+              <TextInput type="password" value={keyInput} onChange={setKeyInput} placeholder="Composio API key" aria-label="Composio API key" autoComplete="off" />
+              <Button type="submit" variant="primary" loading={busy === COMPOSIO.id} disabled={keyInput.trim().length < 8}>
+                Save key
+              </Button>
+              {editingKey && (
+                <Button variant="ghost" onClick={() => setEditingKey(false)}>
+                  Cancel
+                </Button>
+              )}
+            </form>
+          )}
+          {!keySet && (
+            <button type="button" className={styles.linkButton} onClick={() => openUrl(COMPOSIO.keyUrl)}>
+              Get your API key from Composio <ExternalLink aria-hidden />
             </button>
           )}
         </div>
-        <span className={styles.footerEnd}>
-          {account && <ConnectionStatus connection={busy === COMPOSIO.id ? { ...account, state: 'connecting' } : account} />}
-          {signedIn ? (
-            <>
-              <IconButton label="Reconnect Composio" icon={<RefreshCw />} onClick={signIn} />
-              <IconButton label="Sign out of Composio" icon={<LogOut />} onClick={() => setSigningOut(true)} />
-            </>
-          ) : (
-            <Button variant="primary" loading={busy === COMPOSIO.id} onClick={signIn}>
-              Sign in with Composio
+        {keySet && !editingKey && (
+          <span className={styles.footerEnd}>
+            <span className={cx(styles.status, status?.error ? styles.error : styles.ready)}>
+              <span className={styles.dot} aria-hidden />
+              {status?.error ? 'Error' : 'Key saved'}
+            </span>
+            <IconButton label="Refresh accounts" icon={<RefreshCw />} onClick={() => void refresh()} />
+            <Button size="sm" onClick={() => setEditingKey(true)}>
+              Change key
             </Button>
-          )}
-        </span>
+            <Button size="sm" variant="ghost" onClick={() => setRemovingKey(true)}>
+              Remove
+            </Button>
+          </span>
+        )}
       </div>
 
-      {busy === COMPOSIO.id && !signedIn && <p className={styles.hint}>Finish signing in to Composio in your browser, then come back here.</p>}
-      {account?.state === 'error' && account.error && (
+      {status?.error && (
         <div className={cx(styles.notice, styles.noticeError)}>
           <AlertTriangle aria-hidden />
-          <span>{account.error}</span>
+          <span>{status.error}</span>
         </div>
       )}
 
@@ -136,17 +156,14 @@ export function PluginsPanel() {
       {shown.length === 0 && <p className={settings.empty}>{category === 'Connected' ? 'No apps connected yet.' : 'No apps match.'}</p>}
       <div className={styles.pluginGrid}>
         {shown.map((app, index) => {
-          const isConnected = connected.has(app.id)
-          const isPending = pending.has(app.id)
+          const accounts = byApp.get(app.id) ?? []
+          const connected = isConnected(app.id)
           return (
-            <button
+            <section
               key={app.id}
-              type="button"
-              className={cx(styles.pluginCard, styles.stagger, isConnected && styles.pluginCardOn)}
+              aria-label={app.name}
+              className={cx(styles.pluginCard, styles.stagger, connected && styles.pluginCardOn)}
               style={{ '--i': index } as CSSProperties}
-              disabled={!signedIn || busy === app.id}
-              title={signedIn ? undefined : 'Sign in to Composio first'}
-              onClick={() => connect(app)}
             >
               <span className={styles.pluginTop}>
                 <PluginLogo id={app.id} name={app.name} />
@@ -157,47 +174,94 @@ export function PluginsPanel() {
               </span>
               <span className={styles.description}>{app.description}</span>
               <span className={styles.pluginFoot}>
-                {busy === app.id ? (
-                  <span className={cx(styles.status, styles.connecting)}>
-                    <span className={styles.dot} aria-hidden />
-                    {isPending ? 'Checking…' : 'Connecting…'}
-                  </span>
-                ) : isConnected ? (
+                {connected ? (
                   <span className={cx(styles.status, styles.ready)}>
-                    <span className={styles.dot} aria-hidden />
-                    Connected
-                  </span>
-                ) : isPending ? (
-                  <span className={cx(styles.status, styles.connecting)}>
-                    <span className={styles.dot} aria-hidden />
-                    Approve it in your browser · click to check
+                    <Check aria-hidden className={styles.checkIcon} /> Connected
                   </span>
                 ) : (
-                  <span className={styles.setUp}>
-                    Connect <ArrowRight aria-hidden />
-                  </span>
+                  <span />
+                )}
+                {accounts.length ? (
+                  <Button size="sm" icon={<Plus />} disabled={!keySet || busy === app.id} onClick={() => setLabelFor(labelFor === app.id ? null : app.id)}>
+                    Add account
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="primary" loading={busy === app.id} disabled={!keySet} title={keySet ? undefined : 'Add your Composio API key first'} onClick={() => connect(app)}>
+                    Connect
+                  </Button>
                 )}
               </span>
-            </button>
+
+              {accounts.length > 0 && (
+                <ul className={styles.accountList} aria-label={`${app.name} accounts`}>
+                  {accounts.map((account) => (
+                    <li key={account.id} className={styles.accountRow}>
+                      <span className={styles.setupText}>
+                        <strong>{account.label || 'Default'}</strong>
+                        <span className={styles.hint}>
+                          {account.id} · {STATUS_TEXT[account.status]}
+                        </span>
+                      </span>
+                      <Button size="sm" variant="ghost" onClick={() => setDisconnecting(account)}>
+                        {account.status === 'pending' ? 'Cancel' : 'Disconnect'}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {labelFor === app.id && (
+                <form
+                  className={styles.keyForm}
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    connect(app, label.trim())
+                  }}
+                >
+                  <TextInput value={label} onChange={setLabel} placeholder="Account label (work, personal…)" aria-label={`${app.name} account label`} maxLength={40} autoFocus />
+                  <Button type="submit" loading={busy === app.id} disabled={!label.trim()}>
+                    Continue
+                  </Button>
+                </form>
+              )}
+            </section>
           )
         })}
       </div>
-      <p className={styles.hint}>
-        Need another app? Composio has 1,000+. Ask any agent to use it and it sends you the link to connect it.
-      </p>
+      <p className={styles.hint}>Need another app? Composio has 1,000+. Ask any agent to use it and it sends you the link to connect it.</p>
 
       <ConfirmDialog
-        open={signingOut}
-        title="Sign out of Composio?"
-        confirmLabel="Sign out"
+        open={Boolean(disconnecting)}
+        title={`Disconnect ${disconnecting?.label || 'this account'}?`}
+        confirmLabel="Disconnect"
         danger
-        onClose={() => setSigningOut(false)}
+        onClose={() => setDisconnecting(null)}
         onConfirm={() => {
-          setSigningOut(false)
-          void runAction('Sign out of Composio', () => api('plugins.signOut'))
+          const target = disconnecting
+          setDisconnecting(null)
+          if (target) void runAction('Disconnect account', async () => {
+            await api('plugins.disconnect', { accountId: target.id })
+            await refresh()
+          })
         }}
       >
-        Agents lose every app connected through Composio, and Hiveory forgets the sign-in. Your apps stay connected in your Composio account.
+        Agents can no longer use this account. It is removed from your Composio project.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={removingKey}
+        title="Remove the Composio API key?"
+        confirmLabel="Remove"
+        danger
+        onClose={() => setRemovingKey(false)}
+        onConfirm={() => {
+          setRemovingKey(false)
+          void runAction('Remove Composio API key', async () => {
+            await api('plugins.removeKey')
+            await refresh()
+          })
+        }}
+      >
+        Agents lose every app connected through Composio. Your accounts stay in your Composio project and come back when you add the key again.
       </ConfirmDialog>
     </div>
   )

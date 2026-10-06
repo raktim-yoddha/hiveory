@@ -119,21 +119,25 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Cop
 ┌ Skills, MCP & Plugins ───────────────────────────────────────┐
 │ ( Skills 12 | MCP servers 3 | Plugins 2 )                ⟳   │
 │ ┌──────────────────────────────────────────────────────────┐ │
-│ │ [C] Composio account          ● 7 tools   ⟳  ⇥(sign out) │ │
-│ │     (signed out: [Sign in with Composio] · Create one ↗) │ │
+│ │ [⚿] Composio        ● Key saved  ⟳  [Change key] [Remove] │ │
+│ │     (no key: [•••• Composio API key] [Save key] · Get ↗) │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │ [ Search apps                                      ]         │
 │ (All) (Connected) (Work) (Code) (Data) (Business) (Search) … │
-│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
-│ │ [■] Gmail    │ │ [■] GitHub   │ │ [■] Notion   │           │
-│ │ Read, send…  │ │ Repos, PRs…  │ │ Pages…       │           │
-│ │ ● Connected  │ │ Connect →    │ │ ● Approve…   │           │
-│ └──────────────┘ └──────────────┘ └──────────────┘           │
+│ ┌────────────────────────┐ ┌────────────────────────┐        │
+│ │ [■] Gmail              │ │ [■] GitHub             │        │
+│ │ Read, send…            │ │ Repos, PRs…            │        │
+│ │ ✓ Connected [+ Add acc]│ │            [Connect]   │        │
+│ │ ┌ Work  ca_… · active ┐│ └────────────────────────┘        │
+│ │ └─────── [Disconnect] ┘│                                   │
+│ │ [Account label…][Cont.]│                                   │
+│ └────────────────────────┘                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Plugins: cards are disabled until Composio is signed in; Connect opens the app's
-approval page, and the card checks again when the window regains focus or is clicked.
+Plugins: Connect is disabled until a key is saved. Connect opens the app's own
+sign-in in the browser; Add account asks for a label first. Accounts refresh when
+the window regains focus.
 
 Skills rows: name and description; on the right a stacked logo group of the installed CLIs that
 load it (first three, then "+N"), one folders button ("Shared (.agents) ▾" or "2 folders ▾") and

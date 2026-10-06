@@ -45,88 +45,61 @@ process.env.GIT_AUTHOR_EMAIL = 'e2e@example.test'
 process.env.GIT_COMMITTER_NAME = 'e2e'
 process.env.GIT_COMMITTER_EMAIL = 'e2e@example.test'
 
-// A stand-in for Composio (ADR 0023): its OAuth server (registration, PKCE, refresh) and its MCP server.
-const composio = { authorizes: 0, refreshes: 0, calls: 0, issued: 0, tokens: new Set(), codes: new Map(), active: new Set() }
+// A stand-in for Composio (ADR 0023): its REST API (session, connect links, accounts) and the session's MCP server.
+const COMPOSIO_KEY = 'ak_e2e_project_key'
+const composio = { sessions: 0, calls: 0, accounts: [] }
 const composioServer = createServer((req, res) => {
   const base = `http://127.0.0.1:${composioServer.address().port}`
   const url = new URL(req.url, base)
   let body = ''
   req.on('data', (chunk) => (body += chunk))
   req.on('end', () => {
-    const json = (status, value, headers = {}) => res.writeHead(status, { 'content-type': 'application/json', ...headers }).end(JSON.stringify(value))
-    if (url.pathname.startsWith('/.well-known/oauth-protected-resource')) return json(200, { resource: `${base}/mcp`, authorization_servers: [base] })
-    if (url.pathname === '/.well-known/oauth-authorization-server') {
-      return json(200, {
-        issuer: base,
-        authorization_endpoint: `${base}/authorize`,
-        token_endpoint: `${base}/token`,
-        registration_endpoint: `${base}/register`,
-        response_types_supported: ['code'],
-        grant_types_supported: ['authorization_code', 'refresh_token'],
-        code_challenge_methods_supported: ['S256'],
-        token_endpoint_auth_methods_supported: ['none']
-      })
-    }
-    if (url.pathname === '/register') return json(201, { ...JSON.parse(body), client_id: 'e2e-client' })
-    if (url.pathname === '/authorize') {
-      composio.authorizes++
-      const code = `e2e-code-${composio.authorizes}`
-      composio.codes.set(code, url.searchParams.get('code_challenge'))
-      const back = new URL(url.searchParams.get('redirect_uri'))
-      back.searchParams.set('code', code)
-      back.searchParams.set('state', url.searchParams.get('state'))
-      return res.writeHead(302, { location: back.href }).end()
-    }
-    if (url.pathname === '/token') {
-      const form = new URLSearchParams(body)
-      if (form.get('grant_type') === 'authorization_code') {
-        const challenge = composio.codes.get(form.get('code'))
-        if (!challenge || createHash('sha256').update(form.get('code_verifier') ?? '').digest('base64url') !== challenge) return json(400, { error: 'invalid_grant' })
-      } else if (form.get('grant_type') === 'refresh_token' && form.get('refresh_token') === 'e2e-refresh-token') composio.refreshes++
-      else return json(400, { error: 'invalid_grant' })
-      const access = `e2e-access-token-${++composio.issued}`
-      composio.tokens.add(access)
-      return json(200, { access_token: access, refresh_token: 'e2e-refresh-token', token_type: 'Bearer', expires_in: 3600 })
-    }
-    // An app's approval page: opening it approves the app (the user clicking Allow).
-    if (url.pathname.startsWith('/connect/')) {
-      composio.active.add(url.pathname.slice('/connect/'.length))
+    const json = (status, value) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(value))
+    // An app's own sign-in page: opening it approves the account (the user clicking Allow).
+    const signIn = url.pathname.match(/^\/signin\/(ca_e2e\d+)$/)
+    if (signIn) {
+      const account = composio.accounts.find((a) => a.id === signIn[1])
+      if (account) account.status = 'ACTIVE'
       return res.writeHead(200, { 'content-type': 'text/html' }).end('<p>Connected</p>')
     }
-    if (url.pathname === '/mcp') {
-      if (!composio.tokens.has((req.headers.authorization ?? '').replace(/^Bearer /, ''))) {
-        return json(401, { error: 'invalid_token' }, { 'www-authenticate': `Bearer error="invalid_token", resource_metadata="${base}/.well-known/oauth-protected-resource"` })
-      }
+    if (req.headers['x-api-key'] !== COMPOSIO_KEY) return json(401, { error: { message: 'Invalid API key' } })
+    const input = body ? JSON.parse(body) : {}
+    const path = url.pathname
+    if (path === '/api/v3.1/tool_router/session' && req.method === 'POST') {
+      composio.sessions++
+      return json(201, { session_id: `trs_e2e${composio.sessions}`, mcp: { type: 'http', url: `${base}/tool_router/trs_e2e${composio.sessions}/mcp` }, tool_router_tools: [], config: {} })
+    }
+    if (/^\/api\/v3\.1\/tool_router\/session\/trs_e2e\d+\/link$/.test(path) && req.method === 'POST') {
+      const id = `ca_e2e${composio.accounts.length + 1}`
+      composio.accounts.push({ id, toolkit: { slug: input.toolkit }, alias: input.alias ?? null, status: 'INITIATED', state: { val: { access_token: 'e2e-app-token-secret' } } })
+      return json(201, { link_token: 'lt', redirect_url: `${base}/signin/${id}`, connected_account_id: id })
+    }
+    if (path === '/api/v3.1/connected_accounts' && req.method === 'GET') return json(200, { items: composio.accounts })
+    const removed = path.match(/^\/api\/v3\.1\/connected_accounts\/(ca_e2e\d+)$/)
+    if (removed && req.method === 'DELETE') {
+      composio.accounts = composio.accounts.filter((a) => a.id !== removed[1])
+      return json(200, { success: true })
+    }
+    if (/^\/tool_router\/trs_e2e\d+\/mcp$/.test(path)) {
       if (req.method !== 'POST') return res.writeHead(405).end()
-      const msg = JSON.parse(body)
-      if (msg.id === undefined) return res.writeHead(202).end()
-      const reply = (result) => json(200, { jsonrpc: '2.0', id: msg.id, result })
-      if (msg.method === 'initialize') return reply({ protocolVersion: msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fake-composio', version: '1' } })
-      if (msg.method === 'tools/list') {
-        return reply({
-          tools: [
-            { name: 'COMPOSIO_SEARCH_TOOLS', description: 'Find the tools for an app', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } },
-            { name: 'COMPOSIO_MANAGE_CONNECTIONS', description: 'Check or connect apps', inputSchema: { type: 'object', properties: { toolkits: { type: 'array', items: { type: 'string' } } } } }
-          ]
-        })
+      if (input.id === undefined) return res.writeHead(202).end()
+      const reply = (result) => json(200, { jsonrpc: '2.0', id: input.id, result })
+      if (input.method === 'initialize') return reply({ protocolVersion: input.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fake-composio', version: '1' } })
+      if (input.method === 'tools/list') {
+        return reply({ tools: [{ name: 'COMPOSIO_SEARCH_TOOLS', description: 'Find the tools for an app', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] })
       }
-      if (msg.method === 'tools/call' && msg.params.name === 'COMPOSIO_MANAGE_CONNECTIONS') {
-        const results = Object.fromEntries(
-          msg.params.arguments.toolkits.map((app) => [app, composio.active.has(app) ? { status: 'ACTIVE' } : { status: 'INITIATED', redirect_url: `${base}/connect/${app}` }])
-        )
-        return reply({ content: [{ type: 'text', text: JSON.stringify({ successful: true, data: { message: 'ok', results } }) }] })
-      }
-      if (msg.method === 'tools/call') {
+      if (input.method === 'tools/call') {
         composio.calls++
-        return reply({ content: [{ type: 'text', text: `found GMAIL_SEND_EMAIL for ${msg.params.arguments.query}` }] })
+        // Echoes the key it got, so the run can check agents only ever see it masked.
+        return reply({ content: [{ type: 'text', text: `found GMAIL_SEND_EMAIL for ${input.params.arguments.query} (key ${req.headers['x-api-key']})` }] })
       }
-      return json(200, { jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'nope' } })
+      return json(200, { jsonrpc: '2.0', id: input.id, error: { code: -32601, message: 'nope' } })
     }
     res.writeHead(404).end()
   })
 })
 await new Promise((r) => composioServer.listen(0, '127.0.0.1', r))
-process.env.HIVEORY_PLUGIN_URL_COMPOSIO = `http://127.0.0.1:${composioServer.address().port}/mcp`
+process.env.HIVEORY_COMPOSIO_API = `http://127.0.0.1:${composioServer.address().port}/api/v3.1`
 
 // ---------- harness ----------
 const results = []
@@ -359,17 +332,18 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.getByRole('tab', { name: /MCP servers/ }).click()
   await page.getByText('In Hiveory · every agent').waitFor()
   await page.getByRole('tab', { name: /Plugins/ }).click()
-  // Composio apps (ADR 0023): no key fields anywhere; cards wait for the Composio sign-in.
-  const cards = page.locator('button').filter({ hasText: 'Connect' })
-  await waitFor(async () => (await cards.count()) >= 40, 'app cards')
+  // Composio apps (ADR 0023): one Composio API key field, no per-app keys, no Composio login.
+  const connectButtons = page.getByRole('button', { name: 'Connect', exact: true })
+  await waitFor(async () => (await connectButtons.count()) >= 40, 'app cards')
   const logos = await page.locator('img[src^="data:image/svg+xml"]').count()
   expect(logos >= 40, `only ${logos} app logos`)
-  expect(await page.locator('button').filter({ hasText: 'Read, search, draft and send email.' }).isDisabled(), 'apps can be connected before signing in to Composio')
-  expect(await page.getByRole('button', { name: 'Sign in with Composio' }).isVisible(), 'no Composio sign-in')
+  expect(await page.locator('section[aria-label="Gmail"]').getByRole('button', { name: 'Connect', exact: true }).isDisabled(), 'apps can be connected before a Composio key is saved')
+  expect(await page.getByRole('textbox', { name: 'Composio API key', exact: true }).isVisible(), 'no Composio API key field')
+  expect((await page.locator('input[type="password"]').count()) === 1, 'a per-app key field is on the Plugins screen')
+  expect((await page.getByText(/Sign in with Composio/).count()) === 0, 'a Composio login is still on the Plugins screen')
   await page.getByRole('button', { name: 'Code', exact: true }).click()
   await waitFor(async () => (await page.getByText('GitHub', { exact: true }).isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'category filter')
   await page.getByRole('button', { name: 'All', exact: true }).click()
-  expect((await page.locator('input[type="password"]').count()) === 0, 'a key field is still on the Plugins screen')
   await shot('a2e-plugins-signed-out')
   await page.getByRole('tab', { name: /Skills/ }).click()
   await page.getByRole('button', { name: 'New skill' }).click()
@@ -378,43 +352,49 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.keyboard.press('Escape')
 })
 
-await test('plugins: sign in to Composio once, then connect an app on its own page', async () => {
+await test('plugins: a Composio key once; Connect goes straight to the app; a labelled second account; Disconnect', async () => {
   await stubBrowser()
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
   await page.getByRole('tab', { name: /Plugins/ }).click()
-  await page.getByRole('button', { name: 'Sign in with Composio' }).click()
-  await page.getByRole('button', { name: 'Sign out of Composio' }).waitFor({ timeout: 20000 })
-  const opened = await app.evaluate(() => globalThis.__opened)
-  expect(opened.length === 1 && opened[0].includes('/authorize?') && opened[0].includes('code_challenge='), `browser opened: ${opened}`)
-  expect(composio.authorizes === 1, `${composio.authorizes} sign-ins`)
-  const view = (await value('connections.list')).find((c) => c.pluginId === 'composio')
-  expect(view?.state === 'ready', `state ${view?.state}`)
-  expect(!JSON.stringify(view).includes('e2e-access-token') && !JSON.stringify(view).includes('e2e-refresh-token'), 'a token reached the renderer')
-  await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"oauth"'), 'sign-in saved')
-  expect(!/e2e-(access|refresh)-token/.test(readFileSync(join(profile, 'state.json'), 'utf8')), 'a token is in the state file in plain text')
-  // Gmail: its approval page opens; once approved, the card checks again and shows it connected.
-  const gmail = page.locator('button').filter({ hasText: 'Read, search, draft and send email.' })
-  expect(!(await gmail.isDisabled()), 'apps stay disabled after signing in')
-  await gmail.click()
-  await gmail.getByText(/Approve it in your browser/).waitFor({ timeout: 15000 })
-  await waitFor(async () => composio.active.has('gmail'), 'Gmail approved')
-  expect((await app.evaluate(() => globalThis.__opened)).filter((u) => u.includes('/connect/gmail')).length === 1, 'Gmail approval page not opened once')
-  await gmail.click()
-  await gmail.getByText('Connected').waitFor({ timeout: 15000 })
-  await waitFor(async () => (await value('connections.list')).find((c) => c.pluginId === 'composio')?.apps?.includes('gmail'), 'Gmail saved as connected')
-  // An app Composio already has connects without the browser.
-  composio.active.add('github')
-  await app.evaluate(() => (globalThis.__opened = []))
-  const github = page.locator('button').filter({ hasText: 'Repositories, issues, pull requests' })
-  await github.click()
-  await github.getByText('Connected').waitFor({ timeout: 15000 })
-  expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened for an app Composio already had')
-  await page.getByRole('button', { name: 'Connected', exact: true }).click()
-  await waitFor(async () => (await gmail.isVisible()) && (await github.isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'Connected filter')
-  await page.getByRole('button', { name: 'All', exact: true }).click()
-  await shot('a2f-plugins-composio-connected')
-})
+  const keyField = page.getByRole('textbox', { name: 'Composio API key', exact: true })
+  await keyField.fill('ak_wrong_key_123')
+  await page.getByRole('button', { name: 'Save key' }).click()
+  await page.getByText(/did not accept this API key/).first().waitFor({ timeout: 15000 })
+  await keyField.fill(COMPOSIO_KEY)
+  await page.getByRole('button', { name: 'Save key' }).click()
+  await page.getByText('Key saved').waitFor({ timeout: 20000 })
+  expect(!JSON.stringify(await value('connections.list')).includes(COMPOSIO_KEY), 'the key reached the renderer')
+  await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"pluginId": "composio"') || readFileSync(join(profile, 'state.json'), 'utf8').includes('"pluginId":"composio"'), 'key saved')
+  expect(!readFileSync(join(profile, 'state.json'), 'utf8').includes(COMPOSIO_KEY), 'the key is in the state file in plain text')
 
+  // Connect: straight to Gmail's own sign-in — no Composio login.
+  const gmail = page.locator('section[aria-label="Gmail"]')
+  await gmail.getByRole('button', { name: 'Connect', exact: true }).click()
+  await waitFor(async () => composio.accounts.find((a) => a.id === 'ca_e2e1')?.status === 'ACTIVE', 'Gmail signed in')
+  const opened = await app.evaluate(() => globalThis.__opened)
+  expect(opened.length === 1 && opened[0].endsWith('/signin/ca_e2e1'), `browser opened: ${opened}`)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await gmail.getByText('ca_e2e1 · active').waitFor({ timeout: 15000 })
+  expect(await gmail.getByText('Connected').isVisible(), 'Gmail not shown as connected')
+
+  // Add account: a label first, then that account's own sign-in.
+  await gmail.getByRole('button', { name: 'Add account' }).click()
+  await gmail.getByLabel('Gmail account label').fill('Work')
+  await gmail.getByRole('button', { name: 'Continue' }).click()
+  await waitFor(async () => composio.accounts.find((a) => a.id === 'ca_e2e2')?.status === 'ACTIVE', 'second Gmail account signed in')
+  expect(composio.accounts.find((a) => a.id === 'ca_e2e2').alias === 'Work', 'label not sent to Composio')
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await gmail.getByText('ca_e2e2 · active').waitFor({ timeout: 15000 })
+  expect(!JSON.stringify(await value('plugins.status')).includes('e2e-app-token-secret'), "an app's credentials reached the renderer")
+  await shot('a2f-plugins-composio-accounts')
+
+  // Disconnect the Work account (confirmed).
+  await gmail.locator('li').filter({ hasText: 'Work' }).getByRole('button', { name: 'Disconnect' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Disconnect' }).click()
+  await waitFor(async () => !composio.accounts.some((a) => a.id === 'ca_e2e2'), 'Work account removed from Composio')
+  await gmail.getByText('ca_e2e2 · active').waitFor({ state: 'detached', timeout: 15000 })
+  expect(await gmail.getByText('ca_e2e1 · active').isVisible(), 'the other account went too')
+})
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Agents' }).click()
   await page.getByRole('switch', { name: 'Use chat UI by default' }).click()
@@ -1170,19 +1150,13 @@ await test('agents get an MCP server and Hiveory instructions', async () => {
   }
 })
 
-await test('Composio: Work agents and bots call its tools; an expired token refreshes without the browser', async () => {
+await test('Composio: Work agents and bots call its tools; the key stays masked', async () => {
   const say = (r) => r.content.map((c) => c.text ?? '').join('\n')
   const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
   expect(names.includes('composio_COMPOSIO_SEARCH_TOOLS'), 'the agent has no Composio tools')
   const first = await tool('composio_COMPOSIO_SEARCH_TOOLS', { query: 'gmail' })
-  expect(!first.isError && say(first).includes('found GMAIL_SEND_EMAIL for gmail'), say(first))
-  // The token expires on Composio's side: the next call refreshes it silently.
-  composio.tokens.clear()
-  await stubBrowser()
-  const again = await tool('composio_COMPOSIO_SEARCH_TOOLS', { query: 'slack' })
-  expect(!again.isError && say(again).includes('for slack'), say(again))
-  expect(composio.refreshes === 1 && composio.authorizes === 1, `refreshes ${composio.refreshes}, sign-ins ${composio.authorizes}`)
-  expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened during an agent call')
+  expect(!first.isError && say(first).includes('found GMAIL_SEND_EMAIL for gmail (key ••••)'), say(first))
+  expect(!say(first).includes(COMPOSIO_KEY), 'an agent saw the Composio key')
   // A bot's thread reaches the same tools through its own route.
   const bot = await value('bots.create', { name: 'E2E Mailer' })
   const thread = await value('bots.newThread', { botId: bot.id })
@@ -1199,7 +1173,6 @@ await test('Composio: Work agents and bots call its tools; an expired token refr
   expect(!fromBot.isError && say(fromBot).includes('for calendar'), say(fromBot))
   await value('bots.delete', { botId: bot.id })
 })
-
 await test('Queen Bee: messages by CLI name, stops work, reports everything, tells (out loud) when an agent finishes; her card never moves the panes', async () => {
   const queen = page.getByLabel('Tell Queen Bee')
   const card = page.locator('section[aria-label="Queen Bee says"]')
@@ -1763,15 +1736,15 @@ await test('everything survives a restart; agents come back on their own', async
   await value('settings.update', { theme: 'bronze' })
 })
 
-await test('Composio: the sign-in survives a restart; reconnecting never opens the browser', async () => {
+await test('Composio: the key and accounts survive a restart; nothing opens the browser', async () => {
   await stubBrowser()
-  const before = composio.authorizes
+  const status = await value('plugins.status')
+  expect(status.keySet && status.accounts.some((a) => a.id === 'ca_e2e1' && a.status === 'active'), JSON.stringify(status))
   const view = (await value('connections.list')).find((c) => c.pluginId === 'composio')
   const after = await value('connections.test', { id: view.id })
   expect(after.state === 'ready', `state ${after.state}: ${after.error ?? ''}`)
-  expect(composio.authorizes === before && (await app.evaluate(() => globalThis.__opened)).length === 0, 'signed in again after a restart')
+  expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened after a restart')
 })
-
 await test('closing every agent returns to the empty workspace', async () => {
   for (const a of await value('agents.list', { workspaceId: mainWs.id })) await value('agents.close', { instanceId: a.id })
   await page.waitForSelector('text=Empty workspace')
