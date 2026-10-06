@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { mainWorkspaceId } from '@shared/domain'
 import type { AgentService } from '../agents/agent-service'
 import { GitService } from '../git/git-service'
 import { WorktreeService } from '../git/worktree-service'
@@ -26,7 +27,7 @@ const setup = () => {
   git(repo, 'add', '.')
   git(repo, 'commit', '-m', 'init')
   const store = new StateStore(join(root, 'state.json'), log)
-  const agents = { stopProject: vi.fn(), resumeAll: vi.fn(), createInstances: vi.fn(), countInWorkspace: () => 0 } as unknown as AgentService
+  const agents = { stopProject: vi.fn(), resumeAll: vi.fn(), createInstances: vi.fn(), forgetWorkspace: vi.fn(), countInWorkspace: () => 0 } as unknown as AgentService
   const gitService = new GitService()
   const repoStore = new WorkspaceRepository(store)
   const workspaces = new WorkspaceService(repoStore, gitService, new WorktreeService(gitService), agents, join(root, 'Workspaces'), () => undefined)
@@ -78,6 +79,42 @@ describe('removing and adding a project again', () => {
     // Adopted once only.
     expect(await workspaces.adoptWorktrees(second.id)).toBe(0)
     expect(workspaces.foundWorktrees()).toEqual([])
+  })
+})
+
+describe('one Main workspace per checkout (ADR 0021)', () => {
+  const main = (projectId: string) => ({ projectId, kind: 'main' as const, name: 'Main', cliSelections: [], autoApprove: false })
+
+  it('refuses a second Main workspace on the same checkout from a subfolder project', async () => {
+    const { repo, workspaces, projects } = setup()
+    mkdirSync(join(repo, 'web'))
+    const root = await projects.open(repo)
+    const sub = await projects.open(join(repo, 'web'))
+    expect(sub.id).not.toBe(root.id)
+    await workspaces.create(main(root.id))
+    await expect(workspaces.create(main(sub.id))).rejects.toMatchObject({ error: { code: 'INVALID_INPUT' } })
+    // It can live in the other project instead, once removed from the first.
+    await workspaces.delete(mainWorkspaceId(root.id), false)
+    await expect(workspaces.create(main(sub.id))).resolves.toMatchObject({ kind: 'main' })
+  })
+
+  it("refuses a Main workspace on a folder that is another project's isolated workspace", async () => {
+    const { workspaces, projects, repo } = setup()
+    const root = await projects.open(repo)
+    const ws = await workspaces.create({ projectId: root.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
+    const linked = await projects.open(ws.path)
+    await expect(workspaces.create(main(linked.id))).rejects.toMatchObject({ error: { code: 'INVALID_INPUT' } })
+  })
+
+  it('will not restore a project whose Main workspace another project now holds', async () => {
+    const { repo, workspaces, projects } = setup()
+    mkdirSync(join(repo, 'web'))
+    const sub = await projects.open(join(repo, 'web'))
+    await workspaces.create(main(sub.id))
+    projects.remove(sub.id)
+    const root = await projects.open(repo)
+    await workspaces.create(main(root.id))
+    await expect(projects.open(join(repo, 'web'))).rejects.toMatchObject({ error: { code: 'INVALID_INPUT' } })
   })
 })
 

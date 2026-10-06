@@ -1,6 +1,40 @@
+import { realpathSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mainWorkspaceId, type Project, type Workspace } from '@shared/domain'
 import { fail } from '@shared/errors'
+import type { PersistedState } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
+
+/** A folder as one comparable key: symlinks/junctions resolved, case folded on Windows. */
+const treeKey = (path: string): string => {
+  let real = resolve(path)
+  try {
+    real = realpathSync.native(real)
+  } catch {
+    // A missing folder still compares by its resolved path.
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real
+}
+
+/** The working tree a workspace runs agents in: a Main workspace uses the project's whole checkout. */
+const treeOf = (workspace: Workspace, project: Project | undefined): string =>
+  workspace.kind === 'main' ? (project?.repositoryRoot ?? project?.path ?? workspace.path) : (workspace.git?.worktreePath ?? workspace.path)
+
+/**
+ * The open workspace that already runs agents in `project`'s main working tree, from
+ * another project. One checkout hosts one workspace app-wide, so a repository opened
+ * twice (its root and a subfolder, or a linked worktree opened as a project) never gets
+ * two Main workspaces running agents on the same files (ADR 0021).
+ */
+export const mainTreeOwner = (state: PersistedState, project: Project): { project: Project; workspace: Workspace } | undefined => {
+  const tree = treeKey(project.repositoryRoot ?? project.path)
+  for (const workspace of state.workspaces) {
+    if (workspace.projectId === project.id) continue
+    const owner = state.projects.find((p) => p.id === workspace.projectId)
+    if (owner && treeKey(treeOf(workspace, owner)) === tree) return { project: owner, workspace }
+  }
+  return undefined
+}
 
 /**
  * Store access for Workspaces. A Project starts with no Workspaces at all —
@@ -19,6 +53,10 @@ export class WorkspaceRepository {
   main(project: Project): Workspace | undefined {
     const stored = this.store.state.workspaces.find((w) => w.id === mainWorkspaceId(project.id))
     return stored && { ...stored, path: project.path }
+  }
+
+  mainTreeOwner(project: Project): { project: Project; workspace: Workspace } | undefined {
+    return mainTreeOwner(this.store.state, project)
   }
 
   find(workspaceId: string): Workspace | undefined {

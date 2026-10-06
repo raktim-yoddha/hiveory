@@ -58,6 +58,13 @@ export class WorkspaceService {
     if (this.repo.main(project)) {
       fail('INVALID_INPUT', 'This project already has a main workspace.', { operation: 'Create workspace' })
     }
+    const owner = this.repo.mainTreeOwner(project)
+    if (owner) {
+      fail('INVALID_INPUT', `This folder's checkout is already the ${owner.workspace.name} workspace of ${owner.project.name}.`, {
+        operation: 'Create workspace',
+        hint: `Agents run in one place per checkout. Use it in ${owner.project.name}, or remove it there first (nothing on disk changes).`
+      })
+    }
     const now = nowIso()
     const workspace: Workspace = {
       id: mainWorkspaceId(project.id),

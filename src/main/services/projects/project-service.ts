@@ -9,6 +9,7 @@ import { nowIso } from '../events'
 import { GitCommandError, type GitService } from '../git/git-service'
 import { MAX_ARCHIVED, type ArchivedProject } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
+import { mainTreeOwner } from '../workspaces/workspace-repository'
 
 export const samePath = (a: string, b: string): boolean =>
   process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
@@ -150,6 +151,14 @@ export class ProjectService {
   private restore(entry: ArchivedProject, name?: string): Project {
     const now = nowIso()
     const project: Project = { ...entry.project, ...(name?.trim() ? { name: name.trim() } : {}), updatedAt: now, lastOpenedAt: now }
+    // Its Main workspace would share a checkout another project already runs agents in (ADR 0021).
+    const owner = entry.workspaces.some((w) => w.kind === 'main') ? mainTreeOwner(this.store.state, project) : undefined
+    if (owner) {
+      fail('INVALID_INPUT', `${project.name}'s Main workspace uses the same checkout as the ${owner.workspace.name} workspace of ${owner.project.name}.`, {
+        operation: 'Restore project',
+        hint: `Agents run in one place per checkout. Remove ${owner.workspace.name} from ${owner.project.name} (nothing on disk changes), then restore.`
+      })
+    }
     // Agent names stay unique across projects: a name taken meanwhile keeps its agent out (it would be ambiguous).
     const taken = new Set(this.store.state.instances.map((i) => i.petName.toLowerCase()))
     this.store.update((s) => {
