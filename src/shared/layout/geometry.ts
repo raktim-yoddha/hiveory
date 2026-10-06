@@ -88,6 +88,45 @@ export const computeGeometry = (
   return geometry
 }
 
+/** A length that follows the container: `share` of its size plus fixed `px` (the gutters). */
+export interface Span {
+  share: number
+  px: number
+}
+
+export interface RelativeRect {
+  x: Span
+  y: Span
+  width: Span
+  height: Span
+}
+
+/**
+ * The same layout as shares of the container plus fixed px. Every edge is linear in the
+ * container's size (ratios of what the gutters leave), so two passes give it exactly. CSS
+ * can then place panes itself — calc(share% + px) — in the very frame the container
+ * resizes, instead of a measure → render round trip that leaves panes a frame behind.
+ * `dividers` follows the order of computeGeometry's.
+ */
+export const relativeGeometry = (tree: LayoutNode | null, gutter: number): { panes: Record<string, RelativeRect>; dividers: RelativeRect[] } => {
+  const SMALL = 1000
+  const LARGE = 2000
+  const a = computeGeometry(tree, { x: 0, y: 0, width: SMALL, height: SMALL }, gutter)
+  const b = computeGeometry(tree, { x: 0, y: 0, width: LARGE, height: LARGE }, gutter)
+  const span = (small: number, large: number): Span => {
+    const share = (large - small) / (LARGE - SMALL)
+    return { share: Math.round(share * 1e6) / 1e6, px: Math.round((small - share * SMALL) * 1e3) / 1e3 }
+  }
+  const rect = (r: Rect, s: Rect): RelativeRect => ({ x: span(r.x, s.x), y: span(r.y, s.y), width: span(r.width, s.width), height: span(r.height, s.height) })
+  return {
+    panes: Object.fromEntries(Object.entries(a.panes).map(([id, r]) => [id, rect(r, b.panes[id]!)])),
+    dividers: a.dividers.map((d, i) => rect(d.rect, b.dividers[i]!.rect))
+  }
+}
+
+/** A Span at a given container size, in px. */
+export const resolveSpan = (s: Span, size: number): number => s.share * size + s.px
+
 /**
  * New ratios after dragging divider `index` by `delta` px. Only the two
  * neighbouring children change, and neither side may shrink below the

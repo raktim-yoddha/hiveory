@@ -33,19 +33,34 @@ moved, so projects jumped to the top just from being looked at.
 - The sort is labelled "Recent activity". Opening a project still records
   `lastOpenedAt`, but that no longer reorders anything.
 
-## Panes follow a moving sidebar exactly
-**Context.** Pane slots ease `left/top/width/height` so that splits, swaps and
-closes animate. A sidebar sliding or being dragged resizes the layout container on
-every frame, which restarted that easing toward a new target each frame. Panes
-lagged behind and wobbled, most visibly the rightmost one.
+## Panes follow a moving sidebar in the same frame
+**Context.** Panes are absolutely positioned. Their px rects were computed in
+JavaScript from a `ResizeObserver` measurement of the layout container. When a
+sidebar or the side panel moved, the CSS grid moved the column at once, but the
+measurement, and so the pane rects, arrived a frame later.
+
+Measured per animation frame while dragging the sidebar, every pane's x reversed
+direction 157 times, from stale px then the catch-up. That was the jitter. A first
+attempt that only turned off the slots' easing did not change it.
 
 **Decision.**
-- While the container is resizing, slots take no position transition (the
-  `following` state). This is the same rule already used while a divider or pane is
-  dragged.
-- Easing returns 180 ms after the last size change, so layout operations still
-  animate.
-- Terminals still refit once after a burst.
+- Panes and dividers are placed in shares of the container plus fixed px:
+  `calc(share% + px)`, from `relativeGeometry()`.
+- Every edge is linear in the container's size, so two geometry passes give it
+  exactly. A unit test checks it matches the px layout at any size.
+- The browser now lays panes out in the same frame as the container. The same drag
+  measures 2 reversals, which are the drag path's own turns.
+- Container resizes no longer change the slots' style values, so they never
+  animate. Split, swap and close still do.
+- Pixel geometry stays for drag targets and limits only.
+- Terminals still refit once after a resize burst. Refitting while dragging would
+  make every CLI redraw its whole screen many times a second.
+
+## Queen Bee floating: one size, one place
+**Decision.** The floating bar is fixed to the bottom centre of the window at
+`--queen-bar-width`. It doesn't shrink with the main area, and it doesn't move with
+it when sidebars or the side panel change. Only a window narrower than the bar caps
+its width. The docked bar still follows the main area.
 
 ## Queen Bee reaches the rest of the app
 **Decision.** New actions in the closed set:

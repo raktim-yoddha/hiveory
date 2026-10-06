@@ -1,6 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { LayoutNode, LayoutOperation } from '@shared/domain'
-import { computeGeometry, dragDivider, neighborOf, type Divider, type Rect } from '@shared/layout/geometry'
+import { computeGeometry, dragDivider, neighborOf, relativeGeometry, type Divider, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
 import { resizeSplit } from '@shared/layout/operations'
 import { cx } from '../../lib/cx'
 import { PaneDropPreview } from './PaneDropPreview'
@@ -34,8 +34,14 @@ const readPx = (el: HTMLElement, token: string, fallback: number): number => {
   return Number.isFinite(value) ? value : fallback
 }
 
-/** Quiet time after the container's last size change before pane moves animate again. */
-const FOLLOW_SETTLE_MS = 180
+const calc = (s: Span): string => (s.px ? `calc(${s.share * 100}% + ${s.px}px)` : `${s.share * 100}%`)
+/**
+ * Where a pane or divider sits, as shares of the layout plus px: the browser places it in the
+ * same frame the layout resizes (a sidebar moving), so nothing trails a frame behind. Only layout
+ * changes (split, swap, close) change these values, so only they animate.
+ */
+const placed = (r: RelativeRect): CSSProperties => ({ left: calc(r.x), top: calc(r.y), width: calc(r.width), height: calc(r.height) })
+const FULL: CSSProperties = { left: 0, top: 0, width: '100%', height: '100%' }
 
 const dividerKey = (d: Divider): string => `${d.path.join('.')}:${d.index}`
 
@@ -51,8 +57,6 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
   /** Local ratios while a divider is being dragged; committed on release. */
   const [resizing, setResizing] = useState<{ key: string; tree: LayoutNode | null } | null>(null)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
-  /** The container is being resized (a sidebar moving): panes follow it exactly instead of easing after it. */
-  const [following, setFollowing] = useState(false)
 
   useLayoutEffect(() => {
     const el = containerRef.current
@@ -62,20 +66,12 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
       minWidth: readPx(el, '--pane-min-width', 240),
       minHeight: readPx(el, '--pane-min-height', 140)
     })
-    let settle: ReturnType<typeof setTimeout> | undefined
+    // Pixel bounds are for drag targets and limits only; pane positions are relative (see placed()).
     const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return
-      setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
-      // Easing toward a target that moves every frame lags and wobbles; ease only layout changes.
-      setFollowing(true)
-      clearTimeout(settle)
-      settle = setTimeout(() => setFollowing(false), FOLLOW_SETTLE_MS)
+      if (entry) setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
     })
     observer.observe(el)
-    return () => {
-      clearTimeout(settle)
-      observer.disconnect()
-    }
+    return () => observer.disconnect()
   }, [])
 
   const activeTree = resizing?.tree ?? tree
@@ -84,6 +80,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
     () => computeGeometry(activeTree, bounds, metrics.gutter, minSize),
     [activeTree, bounds, metrics.gutter, minSize]
   )
+  const relative = useMemo(() => relativeGeometry(activeTree, metrics.gutter), [activeTree, metrics.gutter])
   const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation })
   // Falls back to the normal layout if the maximized pane was closed.
   const maximized = maximizedId && geometry.panes[maximizedId] ? maximizedId : null
@@ -122,11 +119,10 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
   }
 
   return (
-    <div ref={containerRef} className={cx(styles.layout, (resizing || drag) && styles.interacting, following && styles.following)}>
+    <div ref={containerRef} className={cx(styles.layout, (resizing || drag) && styles.interacting)}>
       {Object.entries(geometry.panes).map(([paneId, layoutRect]) => {
         const isMax = maximized === paneId
         // Hidden panes keep their own size so their terminals are not resized needlessly.
-        const rect = isMax ? bounds : layoutRect
         return (
           <div
             key={paneId}
@@ -137,7 +133,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
               maximized && !isMax && styles.concealed
             )}
             aria-hidden={maximized && !isMax ? true : undefined}
-            style={{ left: rect.x, top: rect.y, width: rect.width, height: rect.height }}
+            style={isMax || !relative.panes[paneId] ? FULL : placed(relative.panes[paneId]!)}
           >
             {renderPane(paneId, {
               onDragHandlePointerDown: (event) => (maximized ? undefined : startDrag(paneId, event)),
@@ -157,7 +153,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
           </div>
         )
       })}
-      {!maximized && geometry.dividers.map((d) => {
+      {!maximized && geometry.dividers.map((d, i) => {
         const ratio = Math.round((d.ratios[d.index] ?? 0) * 100)
         const horizontal = d.direction === 'horizontal'
         return (
@@ -171,7 +167,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
             aria-valuemin={0}
             aria-valuemax={100}
             className={cx(styles.divider, horizontal ? styles.dividerColumn : styles.dividerRow, resizing?.key === dividerKey(d) && styles.dividerActive)}
-            style={{ left: d.rect.x, top: d.rect.y, width: d.rect.width, height: d.rect.height }}
+            style={relative.dividers[i] ? placed(relative.dividers[i]!) : { left: d.rect.x, top: d.rect.y, width: d.rect.width, height: d.rect.height }}
             onPointerDown={(e) => startResize(d, e)}
             onKeyDown={(e) => {
               const back = horizontal ? 'ArrowLeft' : 'ArrowUp'

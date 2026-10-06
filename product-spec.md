@@ -269,7 +269,8 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 ## Queen Bee (ADR 0019)
 
 - A bar docked under the main area (Work, Chat and Settings), or floating: a fixed-size bar
-  that stays over the bottom of the main area, always visible, taking no room.
+  fixed to the bottom centre of the window that never moves or resizes with the sidebars or
+  side panel, always visible, taking no room.
 - Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
   her and holds to talk.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),

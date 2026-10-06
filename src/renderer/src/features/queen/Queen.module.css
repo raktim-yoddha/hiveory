@@ -19,15 +19,17 @@
 }
 
 /*
- * Floating: a fixed-size bar (the docked one follows the main area's width),
- * centred over the bottom of the main area and always there. It takes no room.
+ * Floating: one size and one place — centred over the bottom of the window — whatever
+ * the sidebars, the side panel or the main area do (the docked bar follows the main
+ * area). Always there, taking no room. Only a window narrower than the bar caps it.
  */
 .floating {
-  position: absolute;
-  bottom: var(--space-4);
+  position: fixed;
+  bottom: calc(var(--page-padding) + var(--space-4));
   left: 50%;
   z-index: var(--z-panel);
-  width: min(var(--queen-bar-width), calc(100% - var(--space-8)));
+  width: var(--queen-bar-width);
+  max-width: calc(100vw - var(--space-8));
   transform: translateX(-50%);
 }
 

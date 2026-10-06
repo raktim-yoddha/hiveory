@@ -1,4 +1,4 @@
-/* global document, window, getComputedStyle */
+/* global document, window, getComputedStyle, requestAnimationFrame, cancelAnimationFrame */
 // End-to-end battle test: drives the built Electron app with throwaway profiles and repositories.
 // Usage: pnpm build && node scripts/e2e.mjs [screenshotDir]   (E2E_CHAT=1 also runs real chat prompts)
 import { execFileSync } from 'node:child_process'
@@ -810,17 +810,30 @@ await test('both sidebars resize by dragging their edge', async () => {
   await page.getByRole('separator', { name: 'Resize side panel' }).dblclick()
 })
 
-await test('panes follow a moving sidebar exactly, and still animate layout changes (ADR 0024)', async () => {
-  const slotTransition = () => panes().first().evaluate((el) => getComputedStyle(el.closest('[class*="slot"]')).transitionProperty)
+await test('panes follow a moving sidebar in the same frame: no pane ever steps backwards (ADR 0024)', async () => {
+  // Every animation frame while the sidebar edge moves one way: each pane's left edge may only move that way.
+  await page.evaluate(() => {
+    window.__paneFrames = []
+    const loop = () => {
+      window.__paneFrames.push([...document.querySelectorAll('section[aria-label$=" agent"]')].map((el) => el.getBoundingClientRect().x))
+      window.__paneProbe = requestAnimationFrame(loop)
+    }
+    window.__paneProbe = requestAnimationFrame(loop)
+  })
   const box = await page.getByRole('separator', { name: 'Resize sidebar' }).boundingBox()
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
-  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 4 })
-  const during = await slotTransition()
+  for (let dx = 4; dx <= 120; dx += 4) {
+    await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2)
+    await page.waitForTimeout(16)
+  }
   await page.mouse.up()
-  expect(!/\b(left|width|all)\b/.test(during), `panes ease after the sidebar instead of following it: ${during}`)
+  await page.waitForTimeout(300)
+  const frames = await page.evaluate(() => (cancelAnimationFrame(window.__paneProbe), window.__paneFrames))
+  const backwards = frames.slice(1).flatMap((f, n) => f.map((x, i) => x - (frames[n][i] ?? x)).filter((d) => d < -0.5))
+  expect(frames.length > 20, `only ${frames.length} frames sampled`)
+  expect(backwards.length === 0, `panes stepped backwards ${backwards.length} times while the sidebar grew: ${backwards.slice(0, 5)}`)
   await page.getByRole('separator', { name: 'Resize sidebar' }).dblclick()
-  await waitFor(async () => /\b(left|width)\b/.test(await slotTransition()), 'pane moves animate again once the sidebar settles', 3000)
 })
 
 await test('dragging a sidebar well past its minimum hides it; showing it again restores its width', async () => {
@@ -947,7 +960,18 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await card.getByText(/On it!/).waitFor()
 
     await page.getByRole('button', { name: 'Float Queen Bee' }).click()
-    await waitFor(async () => page.evaluate(() => getComputedStyle(document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]')).position === 'absolute'), 'floating bar')
+    await waitFor(async () => page.evaluate(() => getComputedStyle(document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]')).position === 'fixed'), 'floating bar')
+    // Floating means one size and one place: the main area changing moves nothing (ADR 0024).
+    const barRect = () => page.evaluate(() => {
+      const r = document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]').getBoundingClientRect()
+      return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}`
+    })
+    const before = await barRect()
+    await page.getByRole('button', { name: 'Hide sidebar' }).click()
+    await page.waitForTimeout(300)
+    const hidden = await barRect()
+    await page.getByRole('button', { name: /Show sidebar|Hide sidebar/ }).first().click()
+    expect(hidden === before, `the floating bar moved or resized with the main area: ${before} → ${hidden}`)
     await shot('h3-queen-floating')
     await page.getByRole('button', { name: 'Dock Queen Bee' }).click()
   } finally {

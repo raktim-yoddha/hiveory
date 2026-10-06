@@ -31,9 +31,9 @@ export function QueenDock() {
 }
 
 /**
- * Queen Bee floating: a fixed-size bar that stays centred over the bottom of the
- * main area, always visible, taking no room (the panes don't lift for it). Her
- * card opens above it.
+ * Queen Bee floating: a fixed-size bar fixed to the bottom centre of the window —
+ * it never moves or resizes with the main area — always visible, taking no room
+ * (the panes don't lift for it). Her card opens above it.
  */
 export function QueenFloating() {
   useQueenShortcut()

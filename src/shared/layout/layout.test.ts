@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LayoutNode } from '../domain/layout'
 import { arrangeBarRects, resolveDropTarget } from './drop'
-import { computeGeometry, dragDivider, minSizeOf, neighborOf } from './geometry'
+import { computeGeometry, dragDivider, minSizeOf, neighborOf, relativeGeometry, resolveSpan } from './geometry'
 import { arrange, focusRest } from './presets'
 import {
   applyOperation,
@@ -227,5 +227,28 @@ describe('focus arrangement with many panes', () => {
     const tree = arrange(buildGridLayout(ids(9)), 'focus', 'p0')
     expect(tree?.type === 'split' && tree.ratios).toEqual([0.5, 0.5])
     expect(listPanes(tree)).toHaveLength(9)
+  })
+})
+
+describe('relative geometry (panes follow a resizing layout in the same frame)', () => {
+  it('lands on the same px as computeGeometry at any size, dividers included', () => {
+    const column: LayoutNode = { type: 'split', direction: 'vertical', children: [p('b'), h(p('c'), p('d'))], ratios: [0.35, 0.65] }
+    const tree = h(p('a'), column)
+    const relative = relativeGeometry(tree, 10)
+    for (const [width, height] of [[731, 402], [1440, 860], [333, 999]] as const) {
+      const px = computeGeometry(tree, { x: 0, y: 0, width, height }, 10)
+      for (const [id, r] of Object.entries(px.panes)) {
+        const s = relative.panes[id]!
+        expect(resolveSpan(s.x, width)).toBeCloseTo(r.x, 2)
+        expect(resolveSpan(s.y, height)).toBeCloseTo(r.y, 2)
+        expect(resolveSpan(s.width, width)).toBeCloseTo(r.width, 2)
+        expect(resolveSpan(s.height, height)).toBeCloseTo(r.height, 2)
+      }
+      px.dividers.forEach((d, i) => {
+        expect(resolveSpan(relative.dividers[i]!.x, width)).toBeCloseTo(d.rect.x, 2)
+        expect(resolveSpan(relative.dividers[i]!.width, width)).toBeCloseTo(d.rect.width, 2)
+      })
+    }
+    expect(relativeGeometry(null, 10)).toEqual({ panes: {}, dividers: [] })
   })
 })
