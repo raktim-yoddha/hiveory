@@ -374,8 +374,10 @@ VM / VPS (Linux)                                        Your desktop (client mod
 5. Local and VPS computers are **Docker** containers.
 6. Durability: one failing feature never takes the app down (ADR 0009 amendment).
 
-Status: B1 and B3 (Bots, Chief of Staff delegation) and R1 and R2 (local host process, SSH
-transport) are built. Next: remote projects in Work on the SSH host, then bot computers on Docker.
+Status: all phases in the table below are built except S3 (a phone companion) and bot routines.
+B1–B3 (Bots, Chief of Staff delegation), R1–R3 (host process, SSH transport, remote projects with
+worktrees and agents), C1–C2 (bot computers in Docker here or on an SSH host) and S1–S2 (Hiveory
+server and desktop client) are verified end to end (ADR 0022).
 
 ## 9. Phases
 
