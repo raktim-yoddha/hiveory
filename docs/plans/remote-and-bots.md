@@ -1,8 +1,7 @@
 # Plan: Bots mode, remote SSH, and VMs
 
-Status: **decided and partly built** (October 2026, ADR 0022). Turning it into decisions means
-an ADR per phase. It also means superseding two product-spec non-features: "Agent top-level
-mode" and "remote collaboration".
+Status: **decided and partly built** (October 2026). The decisions and what is built are in
+ADR 0022 (§8 and §9 below); the rest of this file is the research behind them.
 
 This plan answers four questions:
 
