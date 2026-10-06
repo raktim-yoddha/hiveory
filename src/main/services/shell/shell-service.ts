@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { fail } from '@shared/errors'
 import { sanitizeEnv } from '../pty/env'
 import { PtySession } from '../pty/pty-session'
+import { inProcessPty, type PtyBackend } from '../pty/pty-backend'
 
 export interface ShellServiceEvents {
   data: [id: string, data: string, offset: number]
@@ -34,6 +35,11 @@ export const defaultShell = (env: NodeJS.ProcessEnv = process.env): { file: stri
  */
 export class ShellService extends EventEmitter<ShellServiceEvents> {
   private readonly shells = new Map<string, { pty: PtySession; cwd: string }>()
+
+  /** `ptyBackend`: where shell PTYs run — the local host daemon in the app (ADR 0022). */
+  constructor(private readonly ptyBackend: PtyBackend = inProcessPty) {
+    super()
+  }
 
   /** Ensures a shell exists for `key` in `cwd` and returns its terminal id. */
   open(key: string, cwd: string): { id: string; cwd: string } {
@@ -91,7 +97,7 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
   }
 
   private createPty(id: string): PtySession {
-    const pty = new PtySession(true)
+    const pty = new PtySession(true, this.ptyBackend)
     pty.on('data', (data, offset) => this.emit('data', id, data, offset))
     pty.on('exit', () => pty.annotate('\r\n\x1b[2m── process exited ──\x1b[0m\r\n'))
     return pty

@@ -8,7 +8,15 @@ const resources = { '@resources': resolve(import.meta.dirname, 'resources') }
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
-    resolve: { alias: { ...shared, ...resources } }
+    resolve: { alias: { ...shared, ...resources } },
+    // hiveoryd, the host daemon (ADR 0022), is a second library entry beside main: out/main/host.js.
+    // (Library mode keeps electron-vite's externals: electron, Node built-ins and production deps.)
+    build: {
+      lib: {
+        entry: { index: resolve(import.meta.dirname, 'src/main/index.ts'), host: resolve(import.meta.dirname, 'src/host/main.ts') },
+        formats: ['es']
+      }
+    }
   },
   preload: {
     resolve: { alias: shared },

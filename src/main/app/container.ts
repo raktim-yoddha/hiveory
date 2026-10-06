@@ -24,6 +24,9 @@ import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
 import { HookServer } from '../services/cli/hooks/hook-server'
+import { hostPtyBackend } from '../services/hosts/host-client'
+import { LocalHost } from '../services/hosts/local-host'
+import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
 import type { Emit } from '../services/events'
@@ -93,7 +96,10 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       ...(bot ? { bot: bot.chief ? ('chief' as const) : bot.messaging ? ('member' as const) : ('solo' as const) } : {})
     }
   }
-  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor)
+  // Agent and shell PTYs run in the host daemon's own process (ADR 0022), in-process if it cannot start.
+  const localHost = new LocalHost(join(import.meta.dirname, 'host.js'), log, (message) => emit('app.notice', { level: 'warning', message }))
+  const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
+  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
 
   const workspaceRepo = new WorkspaceRepository(store)
@@ -154,7 +160,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       load: () => loadHook()
     }
   )
-  const shells = new ShellService()
+  const shells = new ShellService(ptyBackend)
   const sessions = new SessionHistoryService(log)
   const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)
@@ -212,6 +218,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     github,
     registry,
     runtime,
+    localHost,
     hookServer,
     workspaceRepo,
     layouts,

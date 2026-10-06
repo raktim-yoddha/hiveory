@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { createRequire } from 'node:module'
-import * as pty from '@lydell/node-pty'
+import { inProcessPty, type PtyBackend, type PtyHandle } from './pty-backend'
 import type { Terminal as HeadlessTerminalType } from '@xterm/headless'
 import { OutputBuffer } from './output-buffer'
 
@@ -39,14 +39,18 @@ const MIRROR_SCROLLBACK = 2000
  * plain text (used by agent tools). Kill never blocks the caller.
  */
 export class PtySession extends EventEmitter<PtySessionEvents> {
-  private process: pty.IPty | null = null
+  private process: PtyHandle | null = null
   private pending: { spec: PtySpawnSpec; timer: NodeJS.Timeout } | null = null
   private size: { cols: number; rows: number } | null = null
   private readonly buffer = new OutputBuffer()
   private outbox: { data: string; offset: number } | null = null
   private mirror: HeadlessTerminalType | null = null
 
-  constructor(private readonly withMirror = false) {
+  constructor(
+    private readonly withMirror = false,
+    /** Where the process runs: the host daemon in the app (ADR 0022), in-process by default. */
+    private readonly backend: PtyBackend = inProcessPty
+  ) {
     super()
   }
 
@@ -153,15 +157,7 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
       this.mirror = new HeadlessTerminal({ cols, rows, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
     }
     try {
-      const child = pty.spawn(pending.spec.file, pending.spec.args, {
-        name: 'xterm-256color',
-        cols,
-        rows,
-        cwd: pending.spec.cwd,
-        env: pending.spec.env,
-        // Bundled modern ConPTY renders far more faithfully than the inbox Windows one.
-        ...(process.platform === 'win32' ? { useConptyDll: true } : {})
-      })
+      const child = this.backend.spawn({ file: pending.spec.file, args: pending.spec.args, cwd: pending.spec.cwd, env: pending.spec.env, cols, rows })
       this.process = child
       child.onData((data) => {
         this.append(data)
@@ -171,14 +167,23 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
         if (this.process !== child) return
         this.process = null
         this.flush()
-        this.emit('exit', exitCode, signal ?? null)
+        this.emit('exit', exitCode, signal)
+      })
+      // A host daemon reports a failed spawn after the fact.
+      child.onError((error) => {
+        if (this.process !== child) return
+        this.process = null
+        this.fail(error)
       })
     } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error))
-      // An 'error' event with no listener would throw out of a timer or an IPC call; say it in the terminal instead.
-      if (this.listenerCount('error') > 0) this.emit('error', failure)
-      else this.annotate(`\r\n\x1b[31mCould not start: ${failure.message}\x1b[0m\r\n`)
+      this.fail(error instanceof Error ? error : new Error(String(error)))
     }
+  }
+
+  private fail(failure: Error): void {
+    // An 'error' event with no listener would throw out of a timer or an IPC call; say it in the terminal instead.
+    if (this.listenerCount('error') > 0) this.emit('error', failure)
+    else this.annotate(`\r\n\x1b[31mCould not start: ${failure.message}\x1b[0m\r\n`)
   }
 
   private append(data: string): void {

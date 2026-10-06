@@ -162,6 +162,7 @@ app.on('before-quit', () => {
   guard(log, 'File watcher shutdown', () => c.files.closeAll())
   guard(log, 'Agent shutdown', () => c.runtime.disposeAll())
   guard(log, 'Terminal shutdown', () => c.shells.disposeAll())
+  guard(log, 'Terminal host shutdown', () => c.localHost.dispose())
   guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())
   guard(log, 'State flush', () => c.store.flush())

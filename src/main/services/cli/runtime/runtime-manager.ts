@@ -6,6 +6,7 @@ import { fail } from '@shared/errors'
 import type { Logger } from '../../../app/logger'
 import { sanitizeEnv } from '../../pty/env'
 import { PtySession } from '../../pty/pty-session'
+import { inProcessPty, type PtyBackend } from '../../pty/pty-backend'
 import type { HookEndpoint, McpEndpoint } from '../adapters/types'
 import type { CliRegistry } from '../registry'
 import { HeuristicDetector } from '../status/heuristics'
@@ -58,7 +59,9 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     private readonly log: Logger,
     private readonly runtimeRoot: string,
     private readonly hookEndpoint: () => HookEndpoint | undefined,
-    private readonly mcpEndpoint: (instanceId: string) => McpEndpoint | undefined = () => undefined
+    private readonly mcpEndpoint: (instanceId: string) => McpEndpoint | undefined = () => undefined,
+    /** Where agent PTYs run: the local host daemon in the app (ADR 0022). */
+    private readonly ptyBackend: PtyBackend = inProcessPty
   ) {
     super()
     this.ticker = setInterval(() => this.tick(), 1000)
@@ -205,7 +208,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   }
 
   private createSession(instance: CliInstance): Session {
-    const session: Session = { instance, pty: new PtySession(true), detector: null, details: NOT_RUNNING }
+    const session: Session = { instance, pty: new PtySession(true, this.ptyBackend), detector: null, details: NOT_RUNNING }
     session.pty.on('data', (data, offset) => this.emit('data', session.instance.id, data, offset))
     session.pty.on('raw', (data) => {
       const event = session.detector?.onOutput(data, Date.now())

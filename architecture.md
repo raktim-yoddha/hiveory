@@ -570,6 +570,15 @@ Renderer composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ C
         └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
 ```
 
+### Terminal host data flow (ADR 0022)
+
+```text
+CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, replay) ─▶ PtyBackend
+   hostPtyBackend ─▶ HostClient ══ utility-process port (frames, HOST_PROTOCOL) ══▶ hiveoryd (out/main/host.js)
+        │  (host unavailable)                                                     └─ node-pty ─▶ OpenConsole / shell / agent CLI
+        └──────────────▶ inProcessPty (node-pty in main)
+```
+
 ### Bots data flow (ADR 0022)
 
 ```text

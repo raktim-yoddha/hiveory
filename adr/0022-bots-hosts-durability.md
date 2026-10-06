@@ -72,8 +72,23 @@ OpenMausBot), and a VPS computer is the same container through `docker -H ssh://
 hardened (no published ports, dropped capabilities, only the bot's folder mounted) and lease one
 thread at a time.
 
-Build order: (1) the `ExecutionHost` seam with `LocalHost`, no behaviour change; (2) `hiveoryd`
-over a pipe locally, then over SSH; (3) remote projects; (4) bot computers on containers.
+Build order: (1) `hiveoryd` locally, in its own process; (2) the same daemon over SSH;
+(3) remote projects; (4) bot computers on containers.
+
+**Step 1 (done).** `src/shared/host/protocol.ts` defines the frames (calls with results,
+fire-and-forget notifications, events; `HOST_PROTOCOL = 1`) and `HostTransport`.
+`src/host/host-server.ts` is the daemon: `hello`, `pty.spawn` / `pty.write` / `pty.resize` /
+`pty.kill` with `pty.data` / `pty.exit` events, and `exec` (no shell). `src/host/main.ts` serves
+it over an Electron utility-process port, or JSON lines on stdio, which is how it will run over
+SSH. The build emits it as `out/main/host.js`, a second library entry so electron-vite keeps its
+externals. In main, `LocalHost` forks it, checks `hello`, restarts it after a crash and gives up
+after three failed starts in a row. `HostClient` times out calls, and when the host disconnects
+it fails pending calls and reports every PTY it served as exited. `PtySession` takes a
+`PtyBackend`: the app passes `hostPtyBackend(localHost, inProcessPty)`, which runs PTYs on the
+daemon and falls back to in-process node-pty when the daemon is unavailable. Verified in the
+built app: the OpenConsole and pwsh processes are children of the host, and killing the host
+leaves Hiveory running; the affected agents show as exited and the next terminal starts a new
+host.
 
 ## Durability
 
