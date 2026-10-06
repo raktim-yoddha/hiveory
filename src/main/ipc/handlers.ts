@@ -1,4 +1,5 @@
 import { BrowserWindow, app, clipboard, dialog, shell, systemPreferences } from 'electron'
+import { HOST_PROTOCOL } from '@shared/host/protocol'
 import { isPluginHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
@@ -387,6 +388,17 @@ export const createHandlers = (c: Container): Handlers => {
     return c.chats.threads(botId)
   },
   'bots.newThread': ({ botId }) => c.bots.newThread(botId),
+  'hosts.check': async (target) => {
+    const info = await c.sshHosts.probe(target)
+    const installed = await c.sshHosts.deploy(target)
+    const client = await c.sshHosts.connect(target)
+    try {
+      const hello = await client.call('hello', { protocol: HOST_PROTOCOL })
+      return { platform: info.platform, arch: info.arch, node: info.node, installed, protocol: hello.protocol }
+    } finally {
+      client.close()
+    }
+  },
 
   'git.info': ({ projectId }) => c.workspaces.gitInfo(projectId),
   'git.validateBranch': async ({ projectId, name }) => {

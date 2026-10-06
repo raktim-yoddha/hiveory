@@ -67,6 +67,21 @@ piece of work. Rules from Orca carry over: the execution host owns execution; no
 fallback; process verdicts are `live` / `unverifiable` / `exited`; and the daemon is namespaced by
 protocol version, so app updates never strand live terminals.
 
+**Step 2 (done): the same daemon over SSH.** `SshHostConnector` uses the user's own OpenSSH, so
+their config, keys, agent, ProxyJump and `known_hosts` all apply. It runs with `BatchMode=yes`
+(never prompts, never stores passwords), `StrictHostKeyChecking` is left to the user (host keys
+are never accepted by Hiveory), and the destination is validated to an alias or `user@host`
+(never an option) after `--`. Only fixed commands run remotely. `probe` reads the OS, CPU, home
+and Node version (needs Node 20+). `deploy` uploads `out/main/host.js` to
+`~/.hiveory-host/v<protocol>/host.mjs` only when its SHA-256 changed, and installs node-pty there
+once with npm; it refuses a bundle that imports sibling chunks. `connect` starts
+`node host.mjs` over `ssh -T`, using the stdio transport and a hello handshake. ssh's failure text
+becomes a next step (untrusted host key, refused login, unreachable). Settings › Remote checks a
+host end to end (`hosts.check`). Verified locally with a fake ssh running the remote commands in
+Git Bash: probe, upload, skipped re-upload, `exec` and a real PTY over stdio; and the real ssh
+client's error path. A live SSH hop still needs a machine to test against. Remote projects and
+bot computers come next, on this connection.
+
 **Containers are Docker.** A local VM is a Docker container from a pinned desktop image (as in
 OpenMausBot), and a VPS computer is the same container through `docker -H ssh://alias`. Both are
 hardened (no published ports, dropped capabilities, only the bot's folder mounted) and lease one

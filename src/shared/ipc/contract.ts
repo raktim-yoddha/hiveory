@@ -461,6 +461,11 @@ export const requestSchemas = {
   'bots.delete': z.object({ botId: id }),
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
+  /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
+  'hosts.check': z.object({
+    destination: z.string().min(1).max(255).regex(/^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/),
+    port: z.number().int().min(1).max(65535).optional()
+  }),
   'git.info': z.object({ projectId: id }),
   'git.validateBranch': z.object({ projectId: id, name: z.string().max(200) }),
   /** Initializes Git in a project folder; `commit` also records an initial commit of its files. */
@@ -624,6 +629,7 @@ export interface ResponseMap {
   'bots.delete': void
   'bots.threads': ChatSummary[]
   'bots.newThread': ChatSession
+  'hosts.check': { platform: string; arch: string; node: string; installed: boolean; protocol: number }
   'git.info': GitInfo
   'git.validateBranch': { problem: string | null }
   'git.init': Project

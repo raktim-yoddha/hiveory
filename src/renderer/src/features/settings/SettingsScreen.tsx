@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react'
-import { ArrowLeft, BookOpen, Blocks, Download, Globe, Info, Palette } from 'lucide-react'
+import { ArrowLeft, BookOpen, Blocks, Download, Globe, Info, Palette, Server } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { QueenIcon } from '../../components/brand/QueenIcon'
 import { Button } from '../../components/ui/Button'
@@ -13,6 +13,7 @@ import { AppearanceSection } from './AppearanceSection'
 import { BrowserSection } from './BrowserSection'
 import { ExtensionsSection } from './ExtensionsSection'
 import { QueenSection } from './QueenSection'
+import { RemoteSection } from './RemoteSection'
 import { GuideSection } from './guide/GuideSection'
 import { UpdatesSection } from './UpdatesSection'
 import styles from './Settings.module.css'
@@ -23,6 +24,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
   { id: 'browser', label: 'Browser', icon: <Globe /> },
   { id: 'extensions', label: 'Skills, MCP & Plugins', icon: <Blocks /> },
   { id: 'queen', label: 'Queen Bee', icon: <QueenIcon /> },
+  { id: 'remote', label: 'Remote', icon: <Server /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
   { id: 'guide', label: 'Guide', icon: <BookOpen /> },
   { id: 'about', label: 'About', icon: <Info /> }
@@ -66,6 +68,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
           {current.id === 'browser' && <BrowserSection />}
           {current.id === 'extensions' && <ExtensionsSection />}
           {current.id === 'queen' && <QueenSection />}
+          {current.id === 'remote' && <RemoteSection />}
           {current.id === 'updates' && <UpdatesSection />}
           {current.id === 'guide' && <GuideSection />}
           {current.id === 'about' && <AboutSection />}

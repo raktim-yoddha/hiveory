@@ -316,6 +316,15 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - "Go to main" means the current project's Main; from Home, or for a name several projects
   share, she asks which project's ("main of api" names it directly).
 
+## Remote hosts (ADR 0022)
+
+- Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
+  installs Hiveory's small host program in `~/.hiveory-host` there (Node 20+ required).
+- Hiveory uses the user's own SSH setup, never prompts for or stores passwords, and never accepts
+  a host key on its own.
+- Agent and shell terminals on this computer run in a separate host process; if it crashes,
+  Hiveory keeps running, the affected terminals show as ended, and the next one starts a new host.
+
 ## Running in the background (ADR 0020)
 
 - Closing the window keeps Hiveory in the system tray and every agent keeps working (Settings ›

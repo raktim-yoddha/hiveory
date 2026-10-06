@@ -26,6 +26,7 @@ import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
 import { HookServer } from '../services/cli/hooks/hook-server'
 import { hostPtyBackend } from '../services/hosts/host-client'
 import { LocalHost } from '../services/hosts/local-host'
+import { SshHostConnector } from '../services/hosts/ssh-host'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -99,6 +100,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // Agent and shell PTYs run in the host daemon's own process (ADR 0022), in-process if it cannot start.
   const localHost = new LocalHost(join(import.meta.dirname, 'host.js'), log, (message) => emit('app.notice', { level: 'warning', message }))
   const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
+  // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
+  const sshHosts = new SshHostConnector(join(import.meta.dirname, 'host.js'), log)
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
 
@@ -219,6 +222,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     registry,
     runtime,
     localHost,
+    sshHosts,
     hookServer,
     workspaceRepo,
     layouts,
