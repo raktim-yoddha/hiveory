@@ -83,8 +83,13 @@ export class HeuristicDetector {
     return { type: 'turn-complete' }
   }
 
-  /** Keeps the detector in sync when an authoritative source (hooks) changes status. */
-  sync(phase: 'idle' | 'working' | 'waiting'): void {
+  /**
+   * Keeps the detector in sync when an authoritative source (hooks) changes status. A turn
+   * the hooks just started counts its silence from now: an agent that sat quiet before the
+   * prompt must not be called idle on the next tick.
+   */
+  sync(phase: 'idle' | 'working' | 'waiting', now = Date.now()): void {
+    if (phase === 'working' && this.phase !== 'working') this.lastOutputAt = now
     this.phase = phase
     if (phase !== 'waiting') this.tail = ''
   }

@@ -89,6 +89,14 @@ describe('heuristic detector', () => {
     expect(d.onOutput('running', 30)).toBeNull()
   })
 
+  it('counts silence from when hooks start a turn, not from the last output before it', () => {
+    const d = new HeuristicDetector({ ...config, workingOnSubmit: false, idleAfterSilenceMs: 8000 })
+    expect(d.onOutput('prompt ready', 0)).toBeNull()
+    d.sync('working', 12_000)
+    expect(d.tick(13_000)).toBeNull()
+    expect(d.tick(20_100)).toEqual({ type: 'turn-complete' })
+  })
+
   it('treats interrupts as turn end', () => {
     const d = new HeuristicDetector({ ...config, workingOnSubmit: false })
     d.sync('working')
