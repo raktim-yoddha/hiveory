@@ -20,6 +20,7 @@ import type {
   WorkspaceView
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotView } from '../domain/bot'
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
@@ -46,7 +47,7 @@ import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/
 /** What Queen Bee sends a model: names and ids only, bounded. */
 const shortText = z.string().max(200)
 const queenContextSchema = z.object({
-  mode: z.enum(['workspace', 'chatspace']),
+  mode: z.enum(['workspace', 'bots', 'chatspace']),
   projectId: shortText.optional(),
   workspaceId: shortText.optional(),
   projects: z.array(z.object({ id: shortText, name: shortText })).max(500),
@@ -60,6 +61,18 @@ const queenContextSchema = z.object({
 })
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
+const botName = z.string().trim().min(1).max(MAX_BOT_NAME)
+/** A bot's editable fields; '' clears the engine, model or effort. */
+const botFields = z.object({
+  brief: z.string().max(MAX_BOT_BRIEF).optional(),
+  cliId: z.union([id, z.literal('')]).optional(),
+  model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
+  effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
+  autoApprove: z.boolean().optional(),
+  chief: z.boolean().optional(),
+  messaging: z.boolean().optional(),
+  pinned: z.boolean().optional()
+})
 const folderPath = z.string().min(1).max(1000)
 const projectName = z.string().trim().min(1).max(120)
 const side = z.enum(['left', 'right', 'top', 'bottom'])
@@ -437,6 +450,17 @@ export const requestSchemas = {
   'chat.attachPath': z.object({ chatId: id, path: z.string().min(1).max(1000) }),
   'chat.stop': z.object({ chatId: id }),
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
+  // Bots mode (ADR 0022). A bot's threads are chats: send, stop, attach and delete them through chat.*.
+  'bots.list': none,
+  'bots.create': botFields.extend({ name: botName }),
+  'bots.update': botFields.extend({
+    botId: id,
+    name: botName.optional(),
+    memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).optional()
+  }),
+  'bots.delete': z.object({ botId: id }),
+  'bots.threads': z.object({ botId: id }),
+  'bots.newThread': z.object({ botId: id }),
   'git.info': z.object({ projectId: id }),
   'git.validateBranch': z.object({ projectId: id, name: z.string().max(200) }),
   /** Initializes Git in a project folder; `commit` also records an initial commit of its files. */
@@ -594,6 +618,12 @@ export interface ResponseMap {
   'chat.attachPath': ChatAttachment
   'chat.stop': void
   'chat.catalog': ChatCatalog
+  'bots.list': BotView[]
+  'bots.create': BotView
+  'bots.update': BotView
+  'bots.delete': void
+  'bots.threads': ChatSummary[]
+  'bots.newThread': ChatSession
   'git.info': GitInfo
   'git.validateBranch': { problem: string | null }
   'git.init': Project
@@ -618,7 +648,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }

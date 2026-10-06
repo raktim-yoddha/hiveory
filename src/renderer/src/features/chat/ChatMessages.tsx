@@ -8,7 +8,7 @@ import { Markdown } from '../../components/ui/Markdown'
 import styles from './Chat.module.css'
 
 /** The conversation; follows new output unless the user has scrolled up. */
-export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean } }) {
+export function ChatMessages({ chat, welcome }: { chat: ChatSession & { running: boolean }; welcome?: { title: string; text: string } }) {
   const listRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const cliName = useClis((s) => s.clis.find((c) => c.id === chat.cliId)?.displayName)
@@ -36,11 +36,12 @@ export function ChatMessages({ chat }: { chat: ChatSession & { running: boolean 
                 <CliLogo cliId={chat.cliId} size="xl" />
               </span>
             )}
-            <p className={styles.welcomeTitle}>{cliName ? `Chat with ${cliName}` : 'Start a chat'}</p>
+            <p className={styles.welcomeTitle}>{welcome?.title ?? (cliName ? `Chat with ${cliName}` : 'Start a chat')}</p>
             <p className={styles.welcomeText}>
-              {cliName
-                ? 'Ask anything. Paste or drop images, files and long text. Enter sends, Shift+Enter adds a line.'
-                : 'Choose a CLI below, then ask anything.'}
+              {welcome?.text ??
+                (cliName
+                  ? 'Ask anything. Paste or drop images, files and long text. Enter sends, Shift+Enter adds a line.'
+                  : 'Choose a CLI below, then ask anything.')}
             </p>
           </div>
         )}

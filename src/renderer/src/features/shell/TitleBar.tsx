@@ -8,10 +8,11 @@ import styles from './TitleBar.module.css'
 
 const MODES: Array<{ value: AppMode; label: string }> = [
   { value: 'workspace', label: 'Work' },
+  { value: 'bots', label: 'Bots' },
   { value: 'chatspace', label: 'Chat' }
 ]
 
-/** Frameless title bar: brand, panel toggles, the two top-level modes and app settings (design.md). */
+/** Frameless title bar: brand, panel toggles, the three top-level modes and app settings (design.md). */
 export function TitleBar() {
   const info = useApp((s) => s.info)
   const { mode, setMode, sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation()

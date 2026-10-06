@@ -21,7 +21,7 @@ import {
   type QueenOutcome,
   type QueenPrefs
 } from '@shared/queen/personas'
-import { MAX_NOTES } from '@shared/queen/actions'
+import { MAX_NOTES, MODE_LABEL } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
 import { api, HiveoryError } from '../../lib/api'
 import { useAgents, useClis, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
@@ -348,7 +348,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         case 'set-mode': {
           remember()
           nav().setMode(action.mode)
-          outcomes.push({ kind: 'mode', mode: action.mode === 'chatspace' ? 'Chat' : 'Work' })
+          outcomes.push({ kind: 'mode', mode: MODE_LABEL[action.mode] })
           break
         }
         case 'side-panel': {

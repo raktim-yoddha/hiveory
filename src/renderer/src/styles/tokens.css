@@ -99,6 +99,18 @@
   --glow-working: 0 0 8px rgb(111 207 142 / 0.55);
   --glow-waiting: 0 0 8px rgb(232 176 79 / 0.6);
 
+  /* Bot avatars (Bots mode): soft identity tiles, picked per bot from its id; theme-independent */
+  --bot-tile-1: #e8766a;
+  --bot-tile-2: #5fb3e6;
+  --bot-tile-3: #5ccf9f;
+  --bot-tile-4: #f0a64a;
+  --bot-tile-5: #a48ae8;
+  --bot-tile-6: #e57fb3;
+  --bot-tile-ink: #17120c;
+  --bot-avatar-sm: 28px;
+  --bot-avatar-md: 36px;
+  --bot-avatar-lg: 64px;
+
   /* Drop preview */
   --color-drop: rgb(217 203 180 / 0.07);
   --color-drop-border: rgb(217 203 180 / 0.5);
@@ -193,9 +205,13 @@
   --queen-bar-width: 600px;
   /* Longest side-panel tab title before it truncates. */
   --panel-tab-max-width: 180px;
+  /* Longest bot thread tab title before it truncates. */
+  --thread-tab-max-width: 220px;
   --menu-max-height: 70vh;
   --kanban-column-min: 240px;
   --border-width: 1px;
+  /* Selected-tab underline. */
+  --border-width-strong: 2px;
   --focus-ring-width: 2px;
   --status-dot: 7px;
   --nudge: 4px;

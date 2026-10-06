@@ -378,6 +378,15 @@ export const createHandlers = (c: Container): Handlers => {
   'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
   'chat.stop': ({ chatId }) => c.chats.stop(chatId),
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
+  'bots.list': () => c.bots.list(),
+  'bots.create': (input) => c.bots.create(input),
+  'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),
+  'bots.delete': ({ botId }) => c.bots.delete(botId),
+  'bots.threads': ({ botId }) => {
+    c.bots.get(botId)
+    return c.chats.threads(botId)
+  },
+  'bots.newThread': ({ botId }) => c.bots.newThread(botId),
 
   'git.info': ({ projectId }) => c.workspaces.gitInfo(projectId),
   'git.validateBranch': async ({ projectId, name }) => {

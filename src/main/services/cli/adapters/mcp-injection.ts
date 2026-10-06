@@ -44,11 +44,25 @@ export const appsPrompt = (apps: string[]): string =>
   `The user connected these apps to Hiveory: ${apps.join(', ')}. Their tools are hiveory MCP tools prefixed with the app name ` +
   '(for example github_…); use them whenever a request involves one of these apps.'
 
+/** A bot's thread: memory always; the team for the Chief of Staff (delegates) and for bots allowed to message (consult). */
+export const botPrompt = (role: NonNullable<McpEndpoint['bot']>): string =>
+  [
+    'Use the hiveory remember / forget tools for your memory.',
+    role === 'chief'
+      ? "You lead a team of bots: list_bots shows them; delegate_bot hands one a task (its result arrives here later and wakes you); ask_bot is for a quick question. Brief clearly, never invent a teammate's progress, and only report work done once its result has arrived. Do small things yourself."
+      : role === 'member'
+        ? 'list_bots shows teammates you may consult with ask_bot when you need their answer.'
+        : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
+
 /** The system-prompt addition for an agent Hiveory launches (chat-only runs have no coordination tools). */
 export const agentPrompt = (mcp: McpEndpoint, coordination = true): string => {
   const coord = coordination && mcp.coordination !== false
   return [
     coord ? AGENT_TOOLS_PROMPT : '',
+    mcp.bot ? botPrompt(mcp.bot) : '',
     mcp.browser ? BROWSER_PROMPT : '',
     mcp.computer ? COMPUTER_PROMPT : '',
     mcp.apps?.length ? appsPrompt(mcp.apps) : '',

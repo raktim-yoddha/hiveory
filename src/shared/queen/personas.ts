@@ -101,7 +101,7 @@ export type QueenOutcome =
   | { kind: 'focused'; name: string }
   | { kind: 'messaged'; name: string }
   | { kind: 'navigated'; place: string }
-  | { kind: 'mode'; mode: 'Work' | 'Chat' }
+  | { kind: 'mode'; mode: 'Work' | 'Bots' | 'Chat' }
   | { kind: 'preset'; name: string; workspace: string }
   | { kind: 'panel'; what: 'side panel' | 'side panel closed' | 'browser' | 'explorer' }
   | { kind: 'noted'; text: string }

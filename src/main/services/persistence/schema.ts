@@ -5,6 +5,8 @@ import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
 import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
+import type { Bot } from '@shared/domain/bot'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY } from '@shared/domain/bot'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -25,6 +27,8 @@ export interface PersistedState {
   queenBrains: StoredBrainAccount[]
   /** Projects removed from Hiveory, kept whole so adding the folder again restores them (ADR 0020). */
   archive: ArchivedProject[]
+  /** Bots mode teammates (ADR 0022); their threads are chats in the chats folder. */
+  bots: Bot[]
 }
 
 /** A removed project with everything that was in it: its workspaces, agents (to resume), layouts and open files. */
@@ -93,7 +97,8 @@ export const emptyState = (): PersistedState => ({
   connections: [],
   editors: [],
   queenBrains: [],
-  archive: []
+  archive: [],
+  bots: []
 })
 
 const settingsSchema = z.object({
@@ -257,6 +262,33 @@ export const presetSchema: z.ZodType<AgentPreset> = z.object({
   chatUi: z.boolean().optional()
 })
 
+export const botSchema: z.ZodType<Bot> = z.object({
+  id: str,
+  name: z.string().min(1).max(MAX_BOT_NAME),
+  brief: z.string().max(MAX_BOT_BRIEF).catch(''),
+  cliId: str.optional(),
+  model: str.optional(),
+  effort: str.optional(),
+  autoApprove: z.boolean().catch(false),
+  chief: z.boolean().catch(false),
+  messaging: z.boolean().catch(true),
+  memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).catch([]),
+  pinned: z.boolean().catch(false),
+  createdAt: str,
+  updatedAt: str
+})
+
+/** At most one Chief of Staff survives a hand-edited or corrupt file: the first one. */
+const oneChief = (bots: Bot[]): Bot[] => {
+  let seen = false
+  return bots.map((b) => {
+    if (!b.chief) return b
+    if (seen) return { ...b, chief: false }
+    seen = true
+    return b
+  })
+}
+
 /**
  * Parses each record independently so one corrupt entry is dropped instead of
  * discarding everything. Returns how many records were rejected.
@@ -293,7 +325,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       connections: list(input.connections, connectionSchema),
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
-      archive: list(input.archive, archivedSchema)
+      archive: list(input.archive, archivedSchema),
+      bots: oneChief(list(input.bots, botSchema))
     },
     rejected
   }

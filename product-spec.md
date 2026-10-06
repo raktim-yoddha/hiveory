@@ -2,12 +2,22 @@
 
 ## Product Modes
 
-Exactly two (labelled Work and Chat in the UI, ADR 0012):
+Exactly three, in this order (ADR 0012, ADR 0022):
 
 ```text
 Workspace (Work)
+Bots
 Chatspace (Chat)
 ```
+
+Bots (ADR 0022): a roster of global teammates. Each bot has a name, a brief, a default engine,
+model and permission, and a memory it carries into every new conversation. Its conversations are
+threads: tabs under the bot, each running on the chat engine in the bot's own folder, and they
+keep running while the user is elsewhere. One bot is the **Chief of Staff**: the user's main
+contact, who hands work to teammates (their results come back into its thread and wake it) and
+consults them. Bots that allow messaging may consult each other. Delegation is bounded (only the
+Chief delegates, at most two levels deep, 20 handoffs an hour per thread). Bots never appear on a
+project's Kanban.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the
@@ -318,11 +328,10 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 Initial version does not include:
 
-- agent-to-agent communication
-- remote collaboration
+- free-form agent-to-agent chat (Work agents coordinate through agent tools; bots through the Chief of Staff, ADR 0022)
+- remote collaboration (planned as one host layer for Work and Bots, ADR 0022)
 - global Kanban across projects
 - task history
 - Done Kanban column
 - user-controlled manual Kanban status
 - multiple user-facing Tasks inside a Workspace
-- Agent top-level mode

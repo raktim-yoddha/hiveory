@@ -22,7 +22,7 @@ export type QueenAction =
   | { type: 'navigate'; to: 'settings'; section: QueenSettingsSection }
   | { type: 'navigate'; to: 'project'; projectId: string }
   | { type: 'navigate'; to: 'workspace'; projectId: string; workspaceId: string }
-  | { type: 'set-mode'; mode: 'workspace' | 'chatspace' }
+  | { type: 'set-mode'; mode: 'workspace' | 'bots' | 'chatspace' }
   | { type: 'side-panel'; open: boolean }
   | { type: 'open-panel-tab'; kind: 'browser' | 'explorer' }
   /** Status of agents: the current project (or every project from Home), every project with `everywhere`, one CLI with `cliId`. */
@@ -50,9 +50,12 @@ export type QueenAction =
   /** Small talk ("hi", "thanks", "who are you"): she answers in her personality; nothing runs. */
   | { type: 'chat'; topic: SmallTalk }
 
+/** How each top-level mode is named to the user. */
+export const MODE_LABEL = { workspace: 'Work', bots: 'Bots', chatspace: 'Chat' } as const
+
 /** The plain snapshot of app state the parser reads. Built by the renderer from its stores. */
 export interface QueenContext {
-  mode: 'workspace' | 'chatspace'
+  mode: 'workspace' | 'bots' | 'chatspace'
   /** The current page; on Settings, the page it returns to. */
   projectId?: string
   workspaceId?: string

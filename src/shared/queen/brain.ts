@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse } from './actions'
+import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse } from './actions'
 
 /**
  * Tier 1 of Queen Bee (ADR 0019): a model plans what the rule parser could not.
@@ -139,7 +139,7 @@ export const PLAN_TOOL = {
             name: { type: 'string' },
             to: { type: 'string', enum: ['home', 'settings', 'project', 'workspace'] },
             section: { type: 'string', enum: [...QUEEN_SETTINGS_SECTIONS] },
-            mode: { type: 'string', enum: ['workspace', 'chatspace'] },
+            mode: { type: 'string', enum: ['workspace', 'bots', 'chatspace'] },
             theme: { type: 'string', enum: [...THEME_IDS] },
             open: { type: 'boolean' },
             kind: { type: 'string', enum: ['browser', 'explorer'] },
@@ -173,7 +173,7 @@ const actionSchema: z.ZodType<QueenAction> = z.union([
   z.object({ type: z.literal('navigate'), to: z.literal('settings'), section: z.enum(QUEEN_SETTINGS_SECTIONS) }),
   z.object({ type: z.literal('navigate'), to: z.literal('project'), projectId: id }),
   z.object({ type: z.literal('navigate'), to: z.literal('workspace'), projectId: id, workspaceId: id }),
-  z.object({ type: z.literal('set-mode'), mode: z.enum(['workspace', 'chatspace']) }),
+  z.object({ type: z.literal('set-mode'), mode: z.enum(['workspace', 'bots', 'chatspace']) }),
   z.object({ type: z.literal('set-theme'), theme: z.enum(THEME_IDS) }),
   z.object({ type: z.literal('side-panel'), open: z.boolean() }),
   z.object({ type: z.literal('open-panel-tab'), kind: z.enum(['browser', 'explorer']) }),
@@ -284,7 +284,7 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
       if (a.to === 'workspace') a.projectId ??= elsewhere?.projectId ?? ctx.projectId
       break
     case 'set-mode':
-      a.mode = { work: 'workspace', chat: 'chatspace' }[lower(a.mode)] ?? a.mode
+      a.mode = { work: 'workspace', bots: 'bots', bot: 'bots', chat: 'chatspace' }[lower(a.mode)] ?? a.mode
       break
     case 'set-theme':
       a.theme = lower(a.theme ?? a.name)
@@ -395,7 +395,7 @@ export function stateMessage(ctx: QueenContext, utterance: string, notes: string
   const page = ws ? `workspace ${ws.name} (${ws.id}) in project ${project?.name} (${project?.id})` : project ? `project ${project.name} (${project.id})` : 'home'
   const lines = [
     'STATE',
-    `page: ${page}; mode: ${ctx.mode === 'chatspace' ? 'Chat' : 'Work'}`,
+    `page: ${page}; mode: ${MODE_LABEL[ctx.mode]}`,
     `projects: ${ctx.projects.map((p) => `${p.id} ${p.name}`).join('; ') || 'none'}`,
     `workspaces: ${ctx.workspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [main]' : ''}`).join('; ') || 'none'}`,
     ...(ctx.otherWorkspaces?.length

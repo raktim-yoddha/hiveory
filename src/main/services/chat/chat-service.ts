@@ -67,7 +67,9 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     /** Hiveory's MCP endpoint for a chat (route id = chat id), or undefined when tools are off. */
     private readonly mcpFor: (chatId: string) => McpEndpoint | undefined = () => undefined,
     /** Per-run generated files (MCP configs). */
-    private readonly runtimeDir = join(attachmentsDir, '..', '.runtime')
+    private readonly runtimeDir = join(attachmentsDir, '..', '.runtime'),
+    /** Text sent ahead of a conversation's first turn (a bot's identity, brief and memory). */
+    private readonly preamble: (chat: ChatSession) => string | undefined = () => undefined
   ) {
     super()
   }
@@ -116,15 +118,51 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   list(): ChatSummary[] {
     return this.store
       .all()
-      .filter((c) => !c.agentId)
+      .filter((c) => !c.agentId && !c.botId)
       .map((c) => this.summary(c))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  }
+
+  /** A bot's threads, newest first. */
+  threads(botId: string): ChatSummary[] {
+    return this.store
+      .all()
+      .filter((c) => c.botId === botId)
+      .map((c) => this.summary(c))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  }
+
+  /** A new thread for a bot: it works in the bot's folder, starting from the bot's engine and permissions. */
+  createThread(input: Pick<ChatSession, 'botId' | 'cwd' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'delegation'> & { title?: string }): ChatSession {
+    const now = nowIso()
+    const cliId = input.cliId && this.clis().includes(input.cliId) ? input.cliId : undefined
+    const chat: ChatSession = {
+      id: randomUUID(),
+      title: input.title?.trim().slice(0, 80) || 'New chat',
+      botId: input.botId,
+      cwd: input.cwd,
+      cliId,
+      model: cliId ? input.model : undefined,
+      effort: cliId ? input.effort : undefined,
+      autoApprove: input.autoApprove,
+      ...(input.delegation ? { delegation: input.delegation } : {}),
+      messages: [],
+      createdAt: now,
+      updatedAt: now
+    }
+    this.store.save(chat)
+    this.broadcast('state.changed', { topic: 'chats' })
+    return chat
   }
 
   private mcpConfig(chat: ChatSession): ChatMcp | undefined {
     const endpoint = this.mcpFor(chat.id)
     if (!endpoint) return undefined
     return { endpoint, configPath: join(this.runtimeDir, `${chat.id}-mcp.json`), coordination: Boolean(chat.agentId) }
+  }
+
+  find(chatId: string): ChatSession | undefined {
+    return this.store.get(chatId)
   }
 
   get(chatId: string): ChatSession {
@@ -169,6 +207,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if (chat.agentId && ((patch.cliId && patch.cliId !== chat.cliId) || patch.projectId !== undefined)) {
       fail('FORBIDDEN', "An agent's CLI and folder are fixed.")
     }
+    if (chat.botId && patch.projectId !== undefined) fail('FORBIDDEN', "A bot's threads work in the bot's own folder.")
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
       if (started) fail('FORBIDDEN', 'The CLI is locked once a chat has started.', { hint: 'Start a new chat to use another CLI.' })
@@ -263,8 +302,12 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     chat.updatedAt = now
     this.store.save(chat)
 
+    // A bot's identity goes ahead of its first turn; providers without resume get it every turn with the transcript.
+    const intro = this.preamble(chat)
+    const body = provider!.resumable ? prompt : transcriptPrompt(history, prompt)
+    const firstTurn = !provider!.resumable || !chat.providerSessionId
     const spec = provider!.run({
-      prompt: provider!.resumable ? prompt : transcriptPrompt(history, prompt),
+      prompt: intro && firstTurn ? `${intro}\n\n---\n\n${body}` : body,
       model: chat.model,
       effort: chat.effort,
       sessionId: provider!.resumable ? chat.providerSessionId : undefined,
@@ -386,6 +429,15 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   }
 
   private summary(chat: ChatSession): ChatSummary {
-    return { id: chat.id, title: chat.title, cliId: chat.cliId, projectId: chat.projectId, updatedAt: chat.updatedAt, running: this.runs.has(chat.id), agentId: chat.agentId }
+    return {
+      id: chat.id,
+      title: chat.title,
+      cliId: chat.cliId,
+      projectId: chat.projectId,
+      updatedAt: chat.updatedAt,
+      running: this.runs.has(chat.id),
+      agentId: chat.agentId,
+      ...(chat.botId ? { botId: chat.botId } : {})
+    }
   }
 }

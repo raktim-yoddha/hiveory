@@ -5,6 +5,8 @@ import { Toasts } from '../../components/ui/Toasts'
 import { cx } from '../../lib/cx'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
+import { BotsScreen } from '../bots/BotsScreen'
+import { BotsSidebar } from '../bots/BotsSidebar'
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
 import { ProjectScreen } from '../project/ProjectScreen'
@@ -20,8 +22,8 @@ import { TitleBar } from './TitleBar'
 import styles from './AppShell.module.css'
 
 /**
- * Top-level layout. Work and Chat both stay mounted — switching modes only
- * hides one — so neither ever "sleeps". Each region has its own error boundary.
+ * Top-level layout. Work, Bots and Chat all stay mounted — switching modes only
+ * hides the others — so none ever "sleeps". Each region has its own error boundary.
  * Both sidebars are resizable; a maximized side panel overlays the main area
  * (which keeps its size, so agent terminals never reflow).
  */
@@ -59,7 +61,7 @@ export function AppShell() {
         {showSidebar && (
           <aside className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
-              {mode === 'chatspace' ? <ChatSidebar /> : <ProjectSidebar />}
+              {mode === 'chatspace' ? <ChatSidebar /> : mode === 'bots' ? <BotsSidebar /> : <ProjectSidebar />}
             </ErrorBoundary>
             <ResizeHandle
               label="Resize sidebar"
@@ -98,6 +100,11 @@ export function AppShell() {
               )}
               </ErrorBoundary>
             </div>
+          </div>
+          <div className={styles.mode} hidden={inSettings || mode !== 'bots'}>
+            <ErrorBoundary region="Bots">
+              <BotsScreen />
+            </ErrorBoundary>
           </div>
           <div className={styles.mode} hidden={inSettings || mode !== 'chatspace'}>
             <ErrorBoundary region="Chat">

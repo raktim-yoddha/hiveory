@@ -5,6 +5,8 @@ export interface AppPaths {
   stateFile: string
   /** One JSON file per chat. */
   chatsDir: string
+  /** Each bot's own working folder: <botsDir>/<bot id>. */
+  botsDir: string
   logDir: string
   /** Generated per-instance files such as hook settings. */
   runtimeDir: string
@@ -30,6 +32,7 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
   return {
     stateFile: join(userData, 'state.json'),
     chatsDir: join(userData, 'chats'),
+    botsDir: join(dataRoot, 'Bots'),
     logDir: join(userData, 'logs'),
     runtimeDir: join(dataRoot, 'Runtime'),
     worktreeRoot: join(dataRoot, 'Workspaces'),

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type AppMode = 'workspace' | 'chatspace'
+export type AppMode = 'workspace' | 'bots' | 'chatspace'
 export type ProjectTab = 'tasks' | 'pull-requests' | 'workspaces' | 'settings'
 
 export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'queen' | 'updates' | 'guide' | 'about'

@@ -121,8 +121,8 @@ export const useChat = create<ChatState>((set, get) => ({
   applyEvent: (chatId, message, summary) =>
     set((s) => {
       const chat = s.chats[chatId]
-      // Chats behind Work agents never appear in the Chat list.
-      const summaries = summary.agentId
+      // Chats behind Work agents, and bot threads, never appear in the Chat list.
+      const summaries = summary.agentId || summary.botId
         ? s.summaries
         : s.summaries.some((x) => x.id === chatId)
           ? s.summaries.map((x) => (x.id === chatId ? summary : x))

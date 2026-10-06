@@ -18,6 +18,8 @@ import { ExtensionsService } from '../services/extensions/extensions-service'
 import { SessionHistoryService } from '../services/sessions/session-history'
 import { ModelTracker } from '../services/sessions/model-tracker'
 import { RepositoryService } from '../services/projects/repository-service'
+import { BotService } from '../services/bots/bot-service'
+import { BotTools } from '../services/bots/bot-tools'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
@@ -59,6 +61,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const computer = new ComputerService(paths.runtimeDir, log)
   let hookServer: HookServer | null = null
   let settings: SettingsService | null = null
+  let bots: BotService | null = null
   const secrets = new SecretBox(safeStorage)
   const connections = new ConnectionService(store, secrets, emit)
   // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
@@ -76,14 +79,18 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const s = settings.get()
     const apps = connections.appNames()
     const computerOn = s.computerUse && computer.supported
-    if (!s.agentTools && !s.browserUse && !computerOn && !apps.length) return undefined
+    // A bot's thread always gets its memory and team tools, whatever the other tool settings say.
+    const botId = chatStore.get(id)?.botId
+    const bot = botId ? bots?.find(botId) : undefined
+    if (!s.agentTools && !s.browserUse && !computerOn && !apps.length && !bot) return undefined
     return {
       url: `${endpoint.baseUrl}/mcp/${id}`,
       token: endpoint.token,
       coordination: s.agentTools,
       browser: s.browserUse,
       computer: computerOn,
-      ...(apps.length ? { apps } : {})
+      ...(apps.length ? { apps } : {}),
+      ...(bot ? { bot: bot.chief ? ('chief' as const) : bot.messaging ? ('member' as const) : ('solo' as const) } : {})
     }
   }
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor)
@@ -92,7 +99,19 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const workspaceRepo = new WorkspaceRepository(store)
   const layouts = new LayoutService(store, emit)
   const chatStore = new ChatStore(paths.chatsDir, log)
-  const chats = new ChatService(chatStore, registry, workspaceRepo, log, emit, join(paths.chatsDir, 'attachments'), mcpFor, join(paths.runtimeDir, 'chat'))
+  const chats = new ChatService(
+    chatStore,
+    registry,
+    workspaceRepo,
+    log,
+    emit,
+    join(paths.chatsDir, 'attachments'),
+    mcpFor,
+    join(paths.runtimeDir, 'chat'),
+    (chat) => bots?.preamble(chat)
+  )
+  bots = new BotService(store, chats, paths.botsDir, emit, log)
+  const botTools = new BotTools(bots, chats)
   // Queen Bee's live updates watch every status change on its way to the renderer.
   const watcher = new QueenWatcher({
     agent: (id) => agents.find(id),
@@ -171,7 +190,11 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const caller = agent
       ? { id: agent.id, workspaceId: agent.workspaceId, petName: agent.petName }
       : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
-    const families = [...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []), ...extraTools()]
+    const families = [
+      ...(chat?.botId ? [botTools] : []),
+      ...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []),
+      ...extraTools()
+    ]
     return handleBody(body, {
       list: () => families.flatMap((f) => f.definitions()),
       call: (name, args) => {
@@ -209,6 +232,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     gateway,
     chatStore,
     chats,
+    bots,
     browser,
     computer,
     queenBrain,

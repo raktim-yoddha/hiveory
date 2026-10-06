@@ -55,6 +55,10 @@ export interface ChatSession {
   autoApprove: boolean
   /** Set when this chat backs a Work agent shown in chat view; such chats stay out of the Chat list. */
   agentId?: string
+  /** Set when this chat is a thread of a bot (ADR 0022); such chats stay out of the Chat list too. */
+  botId?: string
+  /** A thread another bot opened to hand this bot work; results go back to `fromChatId`. */
+  delegation?: { fromChatId: string; fromBotId: string; depth: number }
   /** The CLI's own session/thread id, used to resume the conversation. */
   providerSessionId?: string
   messages: ChatMessage[]
@@ -71,6 +75,8 @@ export interface ChatSummary {
   running: boolean
   /** Backs a Work agent in chat view (never listed in Chat mode). */
   agentId?: string
+  /** A bot thread (listed under its bot in Bots mode, never in Chat mode). */
+  botId?: string
 }
 
 /** CLIs that can drive a chat (headless mode with parseable output). Antigravity is excluded on purpose. */

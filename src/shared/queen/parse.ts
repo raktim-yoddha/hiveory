@@ -198,6 +198,7 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
   // Mode.
   if (/^(go |open |show )?(chat|chats|chat mode|chatspace)$/.test(clause)) return done([{ type: 'set-mode', mode: 'chatspace' }])
   if (/^(go |open |show )?(work|work mode|workspace mode|terminals)$/.test(clause)) return done([{ type: 'set-mode', mode: 'workspace' }])
+  if (/^(go |open |show )?(bots|bots mode|my bots|the bots)$/.test(clause)) return done([{ type: 'set-mode', mode: 'bots' }])
   if (/^(go )?(home|home page|start page)$/.test(clause)) return done([{ type: 'navigate', to: 'home' }])
 
   // Settings.

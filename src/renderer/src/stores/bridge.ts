@@ -1,5 +1,6 @@
 import { subscribe } from '../lib/api'
 import { useAgents, useLayouts, usePresets, useProjects, useSettings, useUpdates, useWorkspaces } from './data'
+import { useBots } from './bots'
 import { useBrowser } from './browser'
 import { useChat } from './chat'
 import { useConnections } from './connections'
@@ -34,6 +35,11 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'presets') reload('presets', () => usePresets.getState().load())
       if (topic === 'settings') reload('settings', () => useSettings.getState().load())
       if (topic === 'chats') reload('chats', () => useChat.getState().loadList())
+      if (topic === 'bots') reload('bots', () => useBots.getState().load())
+      if (topic === 'chats' && useBots.getState().activeBotId) {
+        const botId = useBots.getState().activeBotId!
+        reload(`bot-threads:${botId}`, () => useBots.getState().loadThreads(botId))
+      }
       if (topic === 'connections') reload('connections', () => useConnections.getState().load())
       if (topic === 'editors' && workspaceId) reload(`editors:${workspaceId}`, () => useEditors.getState().load(workspaceId))
       if ((topic === 'workspaces' || topic === 'agents') && projectId) {
@@ -48,7 +54,10 @@ export const installEventBridge = (): (() => void) => {
     subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
     subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
     subscribe('voice.changed', (packs) => useVoice.getState().setPacks(packs)),
-    subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary)),
+    subscribe('chat.event', ({ chatId, message, summary }) => {
+      useChat.getState().applyEvent(chatId, message, summary)
+      if (summary.botId) useBots.getState().applyThread(summary)
+    }),
     subscribe('browser.changed', (state) => useBrowser.getState().set(state))
   ]
   return () => {

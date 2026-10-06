@@ -569,3 +569,15 @@ Renderer composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ C
         ▲                               │ stdout lines → parser → ChatAccumulator
         └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
 ```
+
+### Bots data flow (ADR 0022)
+
+```text
+BotsScreen ─IPC bots.*─▶ BotService (PersistedState.bots, <data>/Bots/<id> folders)
+           ─IPC chat.*─▶ ChatService (a thread = a chat with botId; preamble(chat) ◀─ BotService)
+bot thread CLI ──MCP /mcp/<chatId>──▶ BotTools ─▶ BotService
+                                        ├─ remember / forget (memory)
+                                        ├─ list_bots, ask_bot (waits for the teammate's turn)
+                                        └─ delegate_bot ─▶ new thread on teammate ─▶ ChatService 'run' end
+                                                             └─▶ [Result from …] sent into the Chief's thread (queued while busy)
+```

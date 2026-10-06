@@ -4,7 +4,7 @@
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│                         Workspace | Chatspace                    │
+│                       Work | Bots | Chat                         │
 ├──────────────┬───────────────────────────────────────────────────┤
 │              │                                                   │
 │   Projects   │                 Current Screen                    │
@@ -22,6 +22,25 @@
 ```
 
 Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010).
+
+### Bots mode (ADR 0022)
+
+```text
+┌ BOTS        + ┐┌ [RN] Release notes editor          ● ⚙ ┐
+│ [RN] Release… CHIEF ││ Chief of Staff · Powered by Codex     │
+│ [S]  Scout       ● ││ [New chat] [From Chief: …] [+]        │
+│                │││          What should we work on?       │
+│                │││ ┌ Message Release notes editor…      ┐ │
+│                │││ │ 📎 Codex ▾  Model ▾  Effort  Read-only ↑│ │
+└────────────────┘└──────────────────────────────────────────┘
+```
+
+- Sidebar: the team, Chief of Staff first, then pinned, then by name. Right-click: Edit, Make
+  Chief of Staff, Pin, Delete. Double-click edits. A working dot shows running threads.
+- Header: avatar, name, role and engine, status, settings (opens the bot editor).
+- Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
+  first thread opens on its own.
+- Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Memory (edit mode).
 
 ### Queen Bee (ADR 0019)
 

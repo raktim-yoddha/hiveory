@@ -22,6 +22,9 @@ interface ChatComposerProps {
    * model, effort and permissions are offered.
    */
   agent?: boolean
+  /** Offer the folder picker (off for bot threads, which work in the bot's own folder). */
+  folder?: boolean
+  placeholder?: string
 }
 
 /**
@@ -29,7 +32,7 @@ interface ChatComposerProps {
  * text) and the CLI → model → effort pickers. Effort appears only when the
  * chosen model supports it. Shared by Chat mode and Work agents in chat view.
  */
-export function ChatComposer({ chat, agent = false }: ChatComposerProps) {
+export function ChatComposer({ chat, agent = false, folder = true, placeholder }: ChatComposerProps) {
   const { send, stop, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
   const clis = useClis((s) => s.clis)
   const projects = useProjects((s) => s.projects)
@@ -125,7 +128,7 @@ export function ChatComposer({ chat, agent = false }: ChatComposerProps) {
           ref={inputRef}
           className={styles.input}
           rows={1}
-          placeholder={chat.cliId ? `Ask ${cliName ?? 'the agent'} anything…` : 'Choose a CLI below to start'}
+          placeholder={chat.cliId ? (placeholder ?? `Ask ${cliName ?? 'the agent'} anything…`) : 'Choose a CLI below to start'}
           value={text}
           disabled={!chat.cliId}
           onChange={(e) => setText(e.target.value)}
@@ -216,7 +219,7 @@ export function ChatComposer({ chat, agent = false }: ChatComposerProps) {
               )}
             />
           )}
-          {!locked && (
+          {!locked && folder && (
             <Menu
               label="Folder"
               items={[
