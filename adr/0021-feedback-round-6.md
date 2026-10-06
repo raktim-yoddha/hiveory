@@ -45,3 +45,5 @@ its handshake ended. opentui crashes on late, partial handshake replies; other T
   output is still answered normally, so a pane that is open when a CLI starts handshakes as before.
 - The smallest grid sent to a PTY is 20×5, in the renderer and in `terminal.resize` validation
   (OpenCode also segfaults near 2×1, opencode #38199).
+- OpenCode starts with `--mini --replay-limit 100000`: its full-screen TUI still broke in small
+  panes, while the mini interface reflows and replays the session on resize.

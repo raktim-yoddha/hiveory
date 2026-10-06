@@ -97,6 +97,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'OpenCode',
     icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
+    // Full-screen TUI breaks in small panes; the mini interface reflows and replays history on resize.
+    args: ['--mini', '--replay-limit', '100000'],
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
