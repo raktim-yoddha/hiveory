@@ -163,7 +163,6 @@ app.whenReady().then(async () => {
     })
     // Supervisors and the person starting it read the address and the pairing code from stdout.
     console.log(`Hiveory server ready on ${serveHost}:${server.port}`)
-    console.log(`Pairing code: ${server.pairingCode()} (single use, 15 minutes)`)
   } else openWindow()
   // Durable sessions: every agent comes back on its own, resuming its conversation.
   guard(log, 'Agent resume', () => c.agents.resumeAll(), report('Resuming agents'))

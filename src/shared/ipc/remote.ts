@@ -24,8 +24,15 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest'
 ])
 
-/** Answered by the client's own machine even while it is connected to a server. */
-export const CLIENT_LOCAL_CHANNELS = new Set<Channel>(['app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect'])
+/**
+ * Answered by the client's own machine even while it is connected to a server: its clipboard,
+ * links, switching servers, and neutral answers for the window's start-up reads of things a
+ * client does not have (updates, voice packs, built-in browser pages, wallpapers).
+ */
+export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
+  'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect',
+  'updates.status', 'voice.status', 'browser.state', 'wallpapers.list'
+])
 
 /** The server's wire format: a call, and one event on the event stream. */
 export interface ServerCall {

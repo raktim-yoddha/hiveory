@@ -103,6 +103,8 @@ export const startServer = (options: { port: number; host: string; handlers: Han
     code = Array.from({ length: 8 }, () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)]).join('')
     codeUntil = Date.now() + PAIRING_TTL_MS
     log.info(`Hiveory server pairing code: ${code} (valid 15 minutes, single use)`)
+    // Whoever started the server reads the current code from its console.
+    console.log(`Pairing code: ${code} (single use, 15 minutes)`)
     return code
   }
   const currentCode = (): string => (Date.now() > codeUntil ? freshCode() : code)

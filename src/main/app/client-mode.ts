@@ -65,6 +65,10 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
       if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens plugin help pages from here.')
       await shell.openExternal(url)
     },
+    'updates.status': () => ({ state: 'unsupported' as const, reason: 'This window uses a Hiveory server. Update Hiveory on each machine.' }),
+    'voice.status': () => [],
+    'browser.state': () => ({ pages: [], profiles: [], annotations: [] }),
+    'wallpapers.list': () => [],
     'client.status': () => ({ mode: 'client' as const, server, connected: backend.isConnected }),
     'client.connect': async (input) => {
       const next = await connectAndSave(input, ssh, paths.clientFile, safeStorage)
