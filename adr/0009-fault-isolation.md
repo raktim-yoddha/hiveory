@@ -20,3 +20,21 @@ One broken feature must not break the app.
 - **CLIs**: detection is per adapter; a launch failure becomes that agent's
   runtime error, not a failed Workspace creation. Hook server failure degrades
   to heuristics (ADR 0006).
+
+## Amendment (ADR 0022)
+
+- **Startup steps are features.** `guard()` (`src/main/app/guard.ts`) runs each optional step
+  (chat history, hook server, wallpaper protocol, model tracker, computer use, Queen Bee's
+  shortcut, agent resume) on its own. A failure is logged and listed in one notice once the window
+  loads; the window always opens.
+- **Reactions are independent.** Each reaction to a settings change is guarded separately, so one
+  broken feature never skips the others or fails the save. Quit runs every disposer guarded, so the
+  final state flush always happens.
+- **Events never break their sender.** Main's `emit` contains send failures. In the renderer,
+  `subscribe` contains each listener, so one throwing listener cannot stop the others hearing an
+  event.
+- **No orphan `'error'` events.** `PtySession` emits `'error'` only when someone listens;
+  otherwise it writes the failure into the terminal (Node throws on an unheard `'error'`).
+- **Process isolation** (CLIs, PTY hosts, MCP servers, the computer helper and browser pages run in
+  their own processes) continues with the host daemon in ADR 0022: PTYs move out of main into a
+  separate host process, the same one that runs on remote machines.

@@ -24,8 +24,20 @@ export const api = async <C extends Channel>(
   return result.value
 }
 
+/**
+ * Listens to a main-process event. All listeners of an event share one emitter, so a
+ * throwing listener would stop the others from hearing it: each one is contained (ADR 0009).
+ */
 export const subscribe = <E extends EventName>(event: E, listener: (payload: EventMap[E]) => void): (() => void) =>
-  window.hiveory ? window.hiveory.on(event, listener) : () => undefined
+  window.hiveory
+    ? window.hiveory.on(event, (payload) => {
+        try {
+          listener(payload)
+        } catch (error) {
+          console.error(`A ${event} listener failed`, error)
+        }
+      })
+    : () => undefined
 
 export const toAppError = (error: unknown, operation?: string): AppError => {
   if (error instanceof HiveoryError) return { operation, ...error.error }

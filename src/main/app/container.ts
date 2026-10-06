@@ -42,6 +42,7 @@ import { UpdateService, type Updater } from '../services/updates/update-service'
 import { ProjectService } from '../services/projects/project-service'
 import { WorkspaceRepository } from '../services/workspaces/workspace-repository'
 import { WorkspaceService } from '../services/workspaces/workspace-service'
+import { guard } from './guard'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
 
@@ -138,7 +139,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const sessions = new SessionHistoryService(log)
   const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)
-  models.start()
+  guard(log, 'Model tracker', () => models.start())
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
   const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
   const files = new FileService((path) => shell.trashItem(path), (scope, changed) => emit('files.changed', { scope, paths: changed }))

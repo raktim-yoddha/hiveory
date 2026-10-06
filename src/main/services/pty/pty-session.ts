@@ -174,7 +174,10 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
         this.emit('exit', exitCode, signal ?? null)
       })
     } catch (error) {
-      this.emit('error', error instanceof Error ? error : new Error(String(error)))
+      const failure = error instanceof Error ? error : new Error(String(error))
+      // An 'error' event with no listener would throw out of a timer or an IPC call; say it in the terminal instead.
+      if (this.listenerCount('error') > 0) this.emit('error', failure)
+      else this.annotate(`\r\n\x1b[31mCould not start: ${failure.message}\x1b[0m\r\n`)
     }
   }
 
