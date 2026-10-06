@@ -190,6 +190,7 @@ Selecting a preset replaces the current CLI configuration when the Workspace is 
 Main Workspace:
 
 - is created by the user ("Create workspace" → "Project folder"), at most one per Project (ADR 0011)
+- one checkout hosts one workspace app-wide: if two projects share a repository (root and subfolder, or a linked worktree opened as a project), only one of them can have the Main workspace (ADR 0021)
 - maps to the original project folder
 - is never deleted from disk; it can be removed from Hiveory (agents close, folder untouched) and created again (ADR 0013)
 - can run CLI instances
@@ -236,7 +237,7 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side
 - Terminal panes are not agents: no Kanban card
-- The side panel holds browsers and one Explorer per folder: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in workspaces (never Home, project pages, Chat or Settings; ADR 0021). It holds browsers and one Explorer per workspace: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)
