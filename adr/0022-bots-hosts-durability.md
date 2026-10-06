@@ -111,10 +111,30 @@ bot computers come next, on this connection.
   there, the fake Claude Code sending a hook and listing 33 tools through the tunnel (status turned
   working), workspace deletion removing the worktree, and a killed daemon followed by a reconnect.
 
-**Containers are Docker.** A local VM is a Docker container from a pinned desktop image (as in
-OpenMausBot), and a VPS computer is the same container through `docker -H ssh://alias`. Both are
-hardened (no published ports, dropped capabilities, only the bot's folder mounted) and lease one
-thread at a time.
+**Step 4 (done): bot computers on Docker.** A bot may have its own Linux computer
+(`Bot.computer = { kind: 'docker', host? }`): a container on this computer, or on an SSH host.
+- **One path for both.** `BotComputers` runs every `docker` command through the host kit's
+  `exec`: locally a plain `execFile`, remotely through hiveoryd on the SSH connection Hiveory
+  already has (respecting the user's SSH setup), not `docker -H ssh://`. The image
+  (`hiveory-computer:1`: Xvfb, fluxbox, x11vnc + noVNC, xdotool, ImageMagick, Chromium, git, node)
+  is built from a Dockerfile in code with `docker build -`, so it builds the same way anywhere.
+- **Hardened.** `--cap-drop ALL`, `no-new-privileges`, PID, memory and CPU limits, and a label
+  that marks ownership (a container of the same name without this bot's label is refused, never
+  touched). Locally the bot's folder is `/workspace` and noVNC is published on `127.0.0.1` only.
+  Remotely it uses a named volume, publishes nothing, and "take control" opens an `ssh -L` tunnel
+  to the container. Hiveory never deletes a container on its own.
+- **Tools.** `desktop_run` (bash in /workspace, bounded output and timeout),
+  `desktop_screenshot`, `desktop_click`, `desktop_type`, `desktop_key` (key names only),
+  `desktop_scroll` and `desktop_open_url` (http/https), each a `docker exec` with an argument list.
+  Actions return a fresh screenshot. Named `desktop_*` so they never clash with `computer_*`
+  (the user's own PC). One conversation holds a desktop at a time (10-minute lease, released when
+  its turn ends).
+- **UI.** The bot editor has a Computer choice (none / Docker here / Docker on an SSH host); the
+  bot header has a Computer menu (state, start, stop, take control).
+- Verified with Docker Desktop: hardened local container, noVNC on loopback, a real Codex bot
+  calling `desktop_run` (writing `/workspace/answer.txt`, which appeared in the bot's folder) and
+  `desktop_screenshot`, stop, a remote bot computer created through hiveoryd on the SSH test server
+  and reached by tunnel, and a foreign same-named container left alone.
 
 Build order: (1) `hiveoryd` locally, in its own process; (2) the same daemon over SSH;
 (3) remote projects; (4) bot computers on containers.

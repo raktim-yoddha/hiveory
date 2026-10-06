@@ -25,6 +25,8 @@ export interface ExecParams {
   cwd?: string
   env?: Record<string, string>
   timeoutMs?: number
+  /** Text written to the program's stdin (e.g. a Dockerfile for `docker build -`). */
+  stdin?: string
 }
 
 /** Services the host runs on its own machine, so paths and tools are native there. */

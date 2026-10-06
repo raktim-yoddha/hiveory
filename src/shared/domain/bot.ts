@@ -24,8 +24,26 @@ export interface Bot {
   /** Durable facts the bot carries into every new thread. The user can read and edit them. */
   memory: string[]
   pinned: boolean
+  /** The bot's own Linux computer: a Docker container here, or on an SSH host (ADR 0022). Absent = none. */
+  computer?: BotComputer
   createdAt: string
   updatedAt: string
+}
+
+export interface BotComputer {
+  kind: 'docker'
+  /** Docker on another machine, reached through Hiveory's SSH host. Absent = this computer. */
+  host?: { kind: 'ssh'; destination: string; port?: number }
+}
+
+export type BotComputerState = 'off' | 'unavailable' | 'missing' | 'stopped' | 'running'
+
+export interface BotComputerStatus {
+  state: BotComputerState
+  /** Why it is unavailable, or what is happening. */
+  detail?: string
+  /** Where "take control" opens (loopback only). */
+  url?: string
 }
 
 /** A bot as the renderer sees it: its home folder and live thread counts. */

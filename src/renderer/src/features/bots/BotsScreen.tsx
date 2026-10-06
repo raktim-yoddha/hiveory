@@ -11,6 +11,7 @@ import { useClis } from '../../stores/data'
 import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
 import { BotEditor, useBotEditor } from './BotEditor'
+import { ComputerMenu } from './ComputerMenu'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
@@ -75,6 +76,7 @@ export function BotsScreen() {
           </span>
         </div>
         <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
+        {bot.computer && <ComputerMenu botId={bot.id} />}
         <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
       </header>
       <div className={styles.threads} role="tablist" aria-label={`${bot.name} threads`}>

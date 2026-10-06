@@ -1,6 +1,7 @@
 import { spawn as spawnProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { connect, createServer } from 'node:net'
 import { fail } from '@shared/errors'
 import { HOST_PROTOCOL, type HostFrame, type HostTransport } from '@shared/host/protocol'
 import type { Logger } from '../../app/logger'
@@ -58,6 +59,26 @@ export const explainSshFailure = (destination: string, stderr: string): never =>
   }
   return fail('UNEXPECTED', `SSH to ${destination} failed.`, { operation: 'Connect over SSH', detail: text || 'No output from ssh.' })
 }
+
+const freePort = (): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const server = createServer()
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const port = (server.address() as { port: number }).port
+      server.close(() => resolve(port))
+    })
+  })
+
+const accepts = (port: number): Promise<boolean> =>
+  new Promise((resolve) => {
+    const socket = connect(port, '127.0.0.1')
+    socket.once('connect', () => {
+      socket.destroy()
+      resolve(true)
+    })
+    socket.once('error', () => resolve(false))
+  })
 
 /** A frame transport over a child process: one JSON frame per line on stdin/stdout. */
 export const lineTransport = (child: ChildProcessWithoutNullStreams, log: Logger): HostTransport => {
@@ -178,6 +199,25 @@ export class SshHostConnector {
       throw error
     }
     return { client, home: hello.home ?? '', platform: hello.platform ?? 'linux', remotePort }
+  }
+
+  /**
+   * A local loopback port that reaches `host:port` as seen from the remote machine (ssh -L),
+   * e.g. a bot computer's desktop on a VPS. Closed by `close()` or when Hiveory quits.
+   */
+  async forward(target: SshTarget, host: string, port: number): Promise<{ port: number; close(): void }> {
+    if (!/^[A-Za-z0-9.:-]+$/.test(host) || !Number.isInteger(port)) fail('INVALID_INPUT', 'Invalid forward target.')
+    const local = await freePort()
+    const child = this.spawn('ssh', ['-N', '-o', 'ExitOnForwardFailure=yes', '-L', `127.0.0.1:${local}:${host}:${port}`, ...this.args(target)])
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (d: string) => this.log.warn(`ssh forward ${target.destination}: ${d.trim()}`))
+    // Ready once the local port accepts connections (or give up after a few seconds).
+    for (let i = 0; i < 40; i++) {
+      if (child.exitCode !== null) fail('UNEXPECTED', `Could not open a tunnel to ${target.destination}.`)
+      if (await accepts(local)) break
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    return { port: local, close: () => void child.kill() }
   }
 
   private args(target: SshTarget): string[] {

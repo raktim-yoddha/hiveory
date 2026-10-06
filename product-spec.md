@@ -17,7 +17,9 @@ keep running while the user is elsewhere. One bot is the **Chief of Staff**: the
 contact, who hands work to teammates (their results come back into its thread and wake it) and
 consults them. Bots that allow messaging may consult each other. Delegation is bounded (only the
 Chief delegates, at most two levels deep, 20 handoffs an hour per thread). Bots never appear on a
-project's Kanban.
+project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
+terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
+and the user can take control from the bot's Computer menu.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the

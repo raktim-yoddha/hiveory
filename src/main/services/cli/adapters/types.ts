@@ -21,6 +21,8 @@ export interface McpEndpoint {
   apps?: string[]
   /** A bot's thread (ADR 0022): memory tools, plus team tools for the Chief of Staff or a bot allowed to message. */
   bot?: 'chief' | 'member' | 'solo'
+  /** The bot has its own Linux computer (desktop_* tools). */
+  botComputer?: boolean
 }
 
 export interface LaunchContext {

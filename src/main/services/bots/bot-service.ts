@@ -17,8 +17,13 @@ import type { Emit } from '../events'
 import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned'>>
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory'>>
+export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned'>> & {
+  computer?: Bot['computer'] | null
+}
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory'>> & {
+  /** null takes the computer away from the bot (its container stays, as the user's). */
+  computer?: Bot['computer'] | null
+}
 
 /** How long ask_bot waits for an answer before leaving it in the teammate's thread. */
 export const ASK_TIMEOUT_MS = 10 * 60 * 1000
@@ -102,6 +107,7 @@ export class BotService {
       messaging: input.messaging ?? true,
       memory: [],
       pinned: input.pinned ?? false,
+      ...(input.computer ? { computer: input.computer } : {}),
       createdAt: now,
       updatedAt: now
     }
@@ -122,6 +128,7 @@ export class BotService {
       if (!target) return
       if (patch.chief) for (const b of s.bots) b.chief = false
       Object.assign(target, patch, { brief: (patch.brief ?? target.brief).trim(), updatedAt: nowIso() })
+      if (patch.computer === null) delete target.computer
       if (patch.cliId === '') target.cliId = undefined
       if (patch.model === '') target.model = undefined
       if (patch.effort === '') target.effort = undefined

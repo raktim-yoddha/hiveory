@@ -275,6 +275,10 @@ export const botSchema: z.ZodType<Bot> = z.object({
   messaging: z.boolean().catch(true),
   memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).catch([]),
   pinned: z.boolean().catch(false),
+  computer: z
+    .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
+    .optional()
+    .catch(undefined),
   createdAt: str,
   updatedAt: str
 })

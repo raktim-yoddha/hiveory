@@ -429,6 +429,17 @@ export const createHandlers = (c: Container): Handlers => {
     return c.chats.threads(botId)
   },
   'bots.newThread': ({ botId }) => c.bots.newThread(botId),
+  'bots.computer': async ({ botId, action }) => {
+    if (action === 'start') await c.computers.ensure(botId)
+    if (action === 'stop') await c.computers.stop(botId)
+    if (action === 'takeControl') {
+      // A loopback noVNC address Hiveory built itself (never a URL from the bot).
+      const url = await c.computers.takeControl(botId)
+      await shell.openExternal(url)
+      return { ...(await c.computers.status(botId)), url }
+    }
+    return c.computers.status(botId)
+  },
   'hosts.listDir': async ({ destination, port, path }) => {
     const kit = await c.hosts.kit({ kind: 'ssh', destination, ...(port ? { port } : {}) })
     const dir = !path || path === '~' ? kit.home : path.startsWith('~/') ? kit.paths.join(kit.home, path.slice(2)) : path

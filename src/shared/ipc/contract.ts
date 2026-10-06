@@ -20,7 +20,7 @@ import type {
   WorkspaceView
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotView } from '../domain/bot'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
 import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
@@ -73,7 +73,17 @@ const botFields = z.object({
   autoApprove: z.boolean().optional(),
   chief: z.boolean().optional(),
   messaging: z.boolean().optional(),
-  pinned: z.boolean().optional()
+  pinned: z.boolean().optional(),
+  /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
+  computer: z
+    .union([
+      z.object({
+        kind: z.literal('docker'),
+        host: z.object({ kind: z.literal('ssh'), destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }).optional()
+      }),
+      z.null()
+    ])
+    .optional()
 })
 const folderPath = z.string().min(1).max(1000)
 const projectName = z.string().trim().min(1).max(120)
@@ -472,6 +482,7 @@ export const requestSchemas = {
   'bots.delete': z.object({ botId: id }),
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
+  'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
   'hosts.check': z.object({ destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }),
   /** Folders on an SSH host, for picking a remote project folder. */
@@ -643,6 +654,7 @@ export interface ResponseMap {
   'bots.delete': void
   'bots.threads': ChatSummary[]
   'bots.newThread': ChatSession
+  'bots.computer': BotComputerStatus
   'hosts.check': { platform: string; arch: string; node: string; installed: boolean; protocol: number }
   'hosts.listDir': { path: string; home: string; dirs: string[] }
   'git.info': GitInfo

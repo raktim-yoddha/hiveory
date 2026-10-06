@@ -37,6 +37,22 @@ const toFailure = (error: unknown): HostFailure => {
   return { message: error instanceof Error ? error.message : String(error) }
 }
 
+/** Runs a program without a shell (optionally feeding stdin) and collects its output. */
+export const runProgram = (p: ExecParams): Promise<{ code: number | null; stdout: string; stderr: string }> =>
+  new Promise((resolve) => {
+    const child = execFile(
+      p.file,
+      p.args,
+      { cwd: p.cwd, env: p.env ? { ...process.env, ...p.env } : process.env, timeout: p.timeoutMs, windowsHide: true, maxBuffer: MAX_EXEC_OUTPUT },
+      (error, stdout, stderr) => {
+        const code = error ? (typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : null) : 0
+        resolve({ code, stdout: String(stdout), stderr: String(stderr || (error && code === null ? error.message : '')) })
+      }
+    )
+    child.stdin?.on('error', () => undefined)
+    child.stdin?.end(p.stdin ?? '')
+  })
+
 export interface HostServeOptions {
   /** How this machine trashes files: the OS trash locally, a folder under ~/.hiveory-host remotely. */
   trash?: (path: string) => Promise<void>
@@ -98,18 +114,7 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
     return { ptyId, pid: child.pid }
   }
 
-  const exec = (p: ExecParams): Promise<HostCalls['exec']['result']> =>
-    new Promise((resolve) => {
-      execFile(
-        p.file,
-        p.args,
-        { cwd: p.cwd, env: p.env ? { ...process.env, ...p.env } : process.env, timeout: p.timeoutMs, windowsHide: true, maxBuffer: MAX_EXEC_OUTPUT },
-        (error, stdout, stderr) => {
-          const code = error ? (typeof (error as { code?: unknown }).code === 'number' ? (error as { code: number }).code : null) : 0
-          resolve({ code, stdout: String(stdout), stderr: String(stderr || (error && code === null ? error.message : '')) })
-        }
-      )
-    })
+  const exec = (p: ExecParams): Promise<HostCalls['exec']['result']> => runProgram(p)
 
   const invoke = async ({ service, method, args }: HostCalls['invoke']['params']): Promise<unknown> => {
     const allowed = HOST_SERVICES[service] as readonly string[] | undefined

@@ -20,6 +20,8 @@ import { ModelTracker } from '../services/sessions/model-tracker'
 import { RepositoryService } from '../services/projects/repository-service'
 import { BotService } from '../services/bots/bot-service'
 import { BotTools } from '../services/bots/bot-tools'
+import { BotComputers } from '../services/bots/bot-computer'
+import { DesktopTools } from '../services/bots/desktop-tools'
 import { ChatService } from '../services/chat/chat-service'
 import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
@@ -97,7 +99,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       browser: s.browserUse,
       computer: computerOn,
       ...(apps.length ? { apps } : {}),
-      ...(bot ? { bot: bot.chief ? ('chief' as const) : bot.messaging ? ('member' as const) : ('solo' as const) } : {})
+      ...(bot ? { bot: bot.chief ? ('chief' as const) : bot.messaging ? ('member' as const) : ('solo' as const), botComputer: Boolean(bot.computer) } : {})
     }
   }
   // Agent and shell PTYs run in the host daemon's own process (ADR 0022), in-process if it cannot start.
@@ -123,8 +125,17 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     join(paths.runtimeDir, 'chat'),
     (chat) => bots?.preamble(chat)
   )
+  // Every project's machine: this computer, or an SSH host reached through hiveoryd (ADR 0022).
+  let hosts: HostRegistry | null = null
+  const kits = { kit: (host?: HostRef) => hosts!.kit(host) }
   bots = new BotService(store, chats, paths.botsDir, emit, log)
   const botTools = new BotTools(bots, chats)
+  // Each bot's own Linux computer, in Docker here or on an SSH host (ADR 0022).
+  const computers = new BotComputers((id) => bots!.get(id), kits, (id) => bots!.home(id), log)
+  const desktopTools = new DesktopTools(computers, chats)
+  chats.on('run', (chatId, running) => {
+    if (!running) computers.release(chatId)
+  })
   // Queen Bee's live updates watch every status change on its way to the renderer.
   const watcher = new QueenWatcher({
     agent: (id) => agents.find(id),
@@ -141,9 +152,6 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       watcher.onRuntime(instanceId, details)
     }
   }
-  // Every project's machine: this computer, or an SSH host reached through hiveoryd (ADR 0022).
-  let hosts: HostRegistry | null = null
-  const kits = { kit: (host?: HostRef) => hosts!.kit(host) }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
   const projects = new ProjectService(store, kits, agents, emit)
   const workspaces = new WorkspaceService(workspaceRepo, kits, agents, paths.worktreeRoot, emit)
@@ -227,6 +235,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
     const families = [
       ...(chat?.botId ? [botTools] : []),
+      ...(chat?.botId && bots?.find(chat.botId)?.computer ? [desktopTools] : []),
       ...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []),
       ...extraTools()
     ]
@@ -271,6 +280,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     chatStore,
     chats,
     bots,
+    computers,
     browser,
     computer,
     queenBrain,

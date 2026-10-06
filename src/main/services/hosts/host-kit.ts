@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { dirname, posix, win32 } from 'node:path'
 import { hostKey, hostLabel, type HostRef } from '@shared/domain'
+import type { ExecParams } from '@shared/host/protocol'
+import { runProgram } from '../../../host/host-server'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
 import type { CliAdapter } from '../cli/adapters'
@@ -44,6 +46,10 @@ export interface HostKit {
   fs: HostFs
   pty: PtyBackend
   registry: CliRegistry
+  /** Runs a program on this machine without a shell (docker for bot computers, for example). */
+  exec(params: ExecParams): Promise<{ code: number | null; stdout: string; stderr: string }>
+  /** Reaches `host:port` as seen from this machine through a local loopback port (identity locally). */
+  forward(host: string, port: number): Promise<{ port: number; close(): void }>
   /** Where agents on this host post status hooks and reach Hiveory's tools. */
   hook(): HookEndpoint | undefined
   /** Root of isolated workspaces on this host. */
@@ -102,6 +108,8 @@ export const localKit = (parts: LocalKitParts): HostKit => ({
   fs: localFs,
   pty: parts.pty,
   registry: parts.registry,
+  exec: runProgram,
+  forward: async (_host, port) => ({ port, close: () => undefined }),
   hook: parts.hook,
   worktreeRoot: parts.worktreeRoot,
   runtimeRoot: parts.runtimeRoot
@@ -196,6 +204,8 @@ export class HostRegistry {
         spawn: () => fail('NOT_FOUND', `${host.destination} is not connected.`)
       }),
       registry,
+      exec: (params) => client.call('exec', params, (params.timeoutMs ?? 60_000) + 10_000),
+      forward: (to, port) => this.ssh.forward(target, to, port),
       hook: () => (hook && remotePort ? { baseUrl: `http://127.0.0.1:${remotePort}`, token: hook.token } : undefined),
       worktreeRoot: paths.join(home, '.hiveory', 'workspaces'),
       runtimeRoot: paths.join(home, '.hiveory-host', 'runtime')
