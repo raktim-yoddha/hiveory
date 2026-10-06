@@ -1,6 +1,6 @@
 # Plan: Bots mode, remote SSH, and VMs
 
-Status: **proposal** (October 2026). Nothing here is built yet. Turning it into decisions means
+Status: **decided and partly built** (October 2026, ADR 0022). Turning it into decisions means
 an ADR per phase. It also means superseding two product-spec non-features: "Agent top-level
 mode" and "remote collaboration".
 
@@ -366,19 +366,17 @@ VM / VPS (Linux)                                        Your desktop (client mod
 
 ---
 
-## 8. Decisions for the product owner
+## 8. Decisions (made — see ADR 0022)
 
-1. **Name of the head bot.** Queen Bee already operates the app. Options: "Lead", "Chief", "Hive
-   lead", or let Queen Bee *become* the head bot. That last option conflicts with rule 27, because
-   she would then see bot output.
-2. **Mode name and order** in the title bar: Work · Bots · Chat (proposed), and whether Chat stays
-   or becomes "a bot without identity". BridgeMind keeps all three.
-3. **Bots and projects**: bots are global with Places (proposed), or each bot belongs to one project.
-4. **First remote target**: SSH in Work mode first (proposed; it shares the transport with
-   everything else), or Hiveory server first.
-5. **Container runtime on Windows**: require Docker Desktop or Podman (OpenMausBot chose Podman for
-   Windows), or skip local containers in v1 and offer `browser` and `this-pc` only.
-6. **Cloud computers** (Boat, Orgo, E2B…): a later provider adapter, or never (local-first only).
+1. Head bot: a **Chief of Staff** role on one bot (OpenMausBot's model), not Queen Bee.
+2. Modes: **Work · Bots · Chat**, each its own mode.
+3. Bots are **global** (as in Grok Bot, OpenMausBot and BridgeMind), each with its own folder.
+4. Remote is **one host layer** shared by Work and Bots (`hiveoryd` + the host protocol).
+5. Local and VPS computers are **Docker** containers.
+6. Durability: one failing feature never takes the app down (ADR 0009 amendment).
+
+Status: B1 and B3 (Bots, Chief of Staff delegation) and R1 and R2 (local host process, SSH
+transport) are built. Next: remote projects in Work on the SSH host, then bot computers on Docker.
 
 ## 9. Phases
 
