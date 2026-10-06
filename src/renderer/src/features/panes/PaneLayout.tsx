@@ -34,6 +34,9 @@ const readPx = (el: HTMLElement, token: string, fallback: number): number => {
   return Number.isFinite(value) ? value : fallback
 }
 
+/** Quiet time after the container's last size change before pane moves animate again. */
+const FOLLOW_SETTLE_MS = 180
+
 const dividerKey = (d: Divider): string => `${d.path.join('.')}:${d.index}`
 
 /**
@@ -48,6 +51,8 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
   /** Local ratios while a divider is being dragged; committed on release. */
   const [resizing, setResizing] = useState<{ key: string; tree: LayoutNode | null } | null>(null)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
+  /** The container is being resized (a sidebar moving): panes follow it exactly instead of easing after it. */
+  const [following, setFollowing] = useState(false)
 
   useLayoutEffect(() => {
     const el = containerRef.current
@@ -57,11 +62,20 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
       minWidth: readPx(el, '--pane-min-width', 240),
       minHeight: readPx(el, '--pane-min-height', 140)
     })
+    let settle: ReturnType<typeof setTimeout> | undefined
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
+      if (!entry) return
+      setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
+      // Easing toward a target that moves every frame lags and wobbles; ease only layout changes.
+      setFollowing(true)
+      clearTimeout(settle)
+      settle = setTimeout(() => setFollowing(false), FOLLOW_SETTLE_MS)
     })
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      clearTimeout(settle)
+      observer.disconnect()
+    }
   }, [])
 
   const activeTree = resizing?.tree ?? tree
@@ -108,7 +122,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
   }
 
   return (
-    <div ref={containerRef} className={cx(styles.layout, (resizing || drag) && styles.interacting)}>
+    <div ref={containerRef} className={cx(styles.layout, (resizing || drag) && styles.interacting, following && styles.following)}>
       {Object.entries(geometry.panes).map(([paneId, layoutRect]) => {
         const isMax = maximized === paneId
         // Hidden panes keep their own size so their terminals are not resized needlessly.

@@ -110,6 +110,14 @@ export type QueenOutcome =
   | { kind: 'theme'; name: string }
   | { kind: 'talkback'; on: boolean }
   | { kind: 'workspace'; name: string }
+  | { kind: 'setting'; name: string; on: boolean }
+  | { kind: 'page'; host: string }
+  | { kind: 'file'; name: string }
+  | { kind: 'arranged'; layout: 'equal' | 'columns' }
+  | { kind: 'preset-saved'; name: string }
+  | { kind: 'chat'; cliName?: string }
+  | { kind: 'resumed'; cliName: string; title: string }
+  | { kind: 'project'; name: string }
 
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
@@ -149,6 +157,22 @@ export function receipt(o: QueenOutcome): string {
       return o.on ? 'Talkback on' : 'Talkback off'
     case 'workspace':
       return `Created workspace ${o.name}`
+    case 'setting':
+      return `${o.name}: ${o.on ? 'on' : 'off'}`
+    case 'page':
+      return `Opened ${o.host} in the browser`
+    case 'file':
+      return `Opened ${o.name}`
+    case 'arranged':
+      return o.layout === 'columns' ? 'Arranged panes in columns' : 'Arranged panes evenly'
+    case 'preset-saved':
+      return `Saved preset ${o.name}`
+    case 'chat':
+      return o.cliName ? `New chat with ${o.cliName}` : 'New chat'
+    case 'resumed':
+      return `Resumed ${o.cliName}: ${o.title}`
+    case 'project':
+      return `Added project ${o.name}`
   }
 }
 
@@ -186,6 +210,22 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return o.on ? "I'll answer out loud" : "I'll stay quiet"
     case 'workspace':
       return `${o.name} is ready`
+    case 'setting':
+      return `${o.name.toLowerCase()} is ${o.on ? 'on' : 'off'}`
+    case 'page':
+      return `${o.host} is open`
+    case 'file':
+      return `${o.name} is open`
+    case 'arranged':
+      return o.layout === 'columns' ? 'the panes are in columns' : 'the panes are even'
+    case 'preset-saved':
+      return `the ${o.name} preset is saved`
+    case 'chat':
+      return o.cliName ? `a new chat with ${o.cliName} is open` : 'a new chat is open'
+    case 'resumed':
+      return `${o.cliName} is picking up “${o.title}”`
+    case 'project':
+      return `${o.name} is added`
   }
 }
 
@@ -378,6 +418,16 @@ export const HELP_EXAMPLES = [
   'stop Bruno',
   'close idle agents',
   'remember that I review with Claude',
+  'what changed',
+  'show open PRs',
+  'open localhost:3000',
+  'open README.md',
+  'tidy up the panes',
+  'resume my last claude session',
+  'new chat with codex about the API',
+  'which apps are connected',
+  'turn off browser use',
+  'save this as preset Backend',
   'jade theme',
   'mute'
 ]

@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, safeStorage, shell } from 'electron'
 import { join } from 'node:path'
-import { isPluginHelpUrl } from '@shared/domain'
+import { isAppsHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import { CHANNELS, IPC_PREFIX, type Channel } from '@shared/ipc/contract'
 import { CLIENT_LOCAL_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
@@ -62,7 +62,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'clipboard.readText': () => clipboard.readText(),
     'clipboard.writeText': ({ text }) => clipboard.writeText(text),
     'system.openUrl': async ({ url }) => {
-      if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
+      if (!isAppsHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
       await shell.openExternal(url)
     },
     'updates.status': () => ({ state: 'unsupported' as const, reason: 'This window uses a Hiveory server. Update Hiveory on each machine.' }),

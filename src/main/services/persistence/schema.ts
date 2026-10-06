@@ -19,7 +19,7 @@ export interface PersistedState {
   presets: AgentPreset[]
   settings: AppSettings
   browserProfiles: BrowserProfile[]
-  /** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Secret values are encrypted. */
+  /** MCP servers and apps Hiveory runs for every agent (ADR 0017). Secret values are encrypted. */
   connections: StoredConnection[]
   /** Files open as panes in workspace layouts (ADR 0018). */
   editors: StoredEditor[]
@@ -67,8 +67,8 @@ export interface StoredEditor {
 export interface StoredConnection {
   id: string
   name: string
-  /** 'composio': the Composio account that serves the plugins (ADR 0023). */
-  pluginId?: string
+  /** 'composio': the Composio connection that serves the apps (ADR 0023). */
+  provider?: string
   /** Apps with an active account in Composio (toolkit slugs), for the agent prompt. */
   apps?: string[]
   /** The Composio tool-router session that serves agents (ADR 0023). */
@@ -157,7 +157,8 @@ export const projectSchema: z.ZodType<Project> = z.object({
   host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional(),
   createdAt: str,
   updatedAt: str,
-  lastOpenedAt: str
+  lastOpenedAt: str,
+  lastActiveAt: str.optional()
 })
 
 export const workspaceSchema: z.ZodType<Workspace> = z.object({
@@ -209,7 +210,7 @@ const stringMap = z.record(z.string(), z.string())
 const connectionSchema: z.ZodType<StoredConnection> = z.object({
   id: z.string().regex(/^c[a-z0-9]{1,24}$/),
   name: str,
-  pluginId: str.optional(),
+  provider: str.optional(),
   apps: z.array(z.string().regex(/^[a-z0-9_]{1,40}$/)).max(1000).optional(),
   enabled: z.boolean(),
   transport: z.enum(['stdio', 'http']),
@@ -328,8 +329,14 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       // Unknown or invalid settings fall back to defaults field by field.
       settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {}),
       browserProfiles: list(input.browserProfiles, browserProfileSchema),
-      // Key-based plugins were replaced by the Composio account (ADR 0023): their saved keys are dropped.
-      connections: list(input.connections, connectionSchema).filter((c) => !c.pluginId || c.pluginId === 'composio'),
+      // Key-based plugins were replaced by Composio apps (ADR 0023): their saved keys are dropped.
+      // Older files name the provider `pluginId`.
+      connections: list(
+        Array.isArray(input.connections)
+          ? input.connections.map((c: unknown) => (c && typeof c === 'object' && 'pluginId' in c ? { ...c, provider: (c as { pluginId: unknown }).pluginId } : c))
+          : input.connections,
+        connectionSchema
+      ).filter((c) => !c.provider || c.provider === 'composio'),
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),

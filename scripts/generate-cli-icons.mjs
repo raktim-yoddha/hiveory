@@ -28,7 +28,14 @@ const LOBE = {
   grok: { file: 'grok', color: SILVER },
   openhands: { file: 'openhands-color' },
   junie: { file: 'junie-color' },
-  antigravity: { file: 'antigravity-color' }
+  antigravity: { file: 'antigravity-color' },
+  hermes: { file: 'hermesagent', color: SILVER },
+  devin: { file: 'devin-color' },
+  codebuddy: { file: 'codebuddy-color' },
+  qoder: { file: 'qoder-color' },
+  commandcode: { file: 'commandcode', color: SILVER },
+  mimo: { file: 'xiaomimimo', color: '#FF6900' },
+  trae: { file: 'trae-color' }
 }
 
 /** cliId → GitHub organization that publishes the CLI (its avatar is the official logo). */
@@ -39,7 +46,11 @@ const GITHUB = {
   auggie: 'augmentcode',
   continue: 'continuedev',
   plandex: 'plandex-ai',
-  letta: 'letta-ai'
+  letta: 'letta-ai',
+  jules: 'google-labs-code',
+  rovodev: 'atlassian',
+  codebuff: 'CodebuffAI',
+  pi: 'earendil-works'
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'hiveory-icons-'))

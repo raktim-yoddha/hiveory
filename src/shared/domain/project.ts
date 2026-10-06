@@ -24,6 +24,8 @@ export interface Project {
   createdAt: string
   updatedAt: string
   lastOpenedAt: string
+  /** Last real work here — an agent started a turn, an agent or workspace was created — for the sidebar order. */
+  lastActiveAt?: string
 }
 
 export type ProjectSort = 'recent' | 'name'

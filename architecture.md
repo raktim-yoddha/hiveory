@@ -490,7 +490,7 @@ src/
 │       ├── computer/           ComputerService (warm native helper: SendInput, GDI, UI Automation), ComputerTools (MCP)
 │       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
 │       ├── extensions/         Skills (copy/create/import/trash) & MCP inventory (full configs kept in main)
-│       ├── connections/        ConnectionService (Hiveory MCP servers incl. the Composio session, sealed secrets), McpGateway (MCP client → ToolFamily), PluginService (Composio REST: key, session, connect links, accounts — ADR 0023)
+│       ├── connections/        ConnectionService (Hiveory MCP servers incl. the Composio session, sealed secrets), McpGateway (MCP client → ToolFamily), AppService (Composio REST: key, session, connect links, accounts — ADR 0023)
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
 │       ├── sessions/           SessionHistoryService — the CLIs' own session history (Claude, Codex, Gemini readers), read-only, cached by mtime; ModelTracker — each running agent's live model (→ CliRuntimeDetails.model)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
@@ -531,7 +531,7 @@ Project archive and restore, Add project dialog (folder, new repository, clone,
 restore), side panel areas and Sessions, live model tracking, skills folders from
 the registry, background tray: ADR 0020.
 Speed (diff snapshots, crawl, frame-aligned input), device mode, computer use,
-ask_agent / run_tools: ADR 0016. Plugins and Hiveory MCP servers through one
+ask_agent / run_tools: ADR 0016. Apps and Hiveory MCP servers through one
 gateway, skills management, six themes, wallpapers and transparency, motion
 and performance: ADR 0017. Flat outline-free UI, shell panes (PowerShell, Command
 Prompt, Git Bash), Explorer and CodeMirror editor panes, composer: ADR 0018.
@@ -545,7 +545,7 @@ agent CLI ──MCP (HTTP, bearer)──▶ HookServer /mcp/<instanceId> ──�
                                                                      ├─ LayoutService (arrange)
                                                                      ├─ ShellService (terminal)
                                                                      ├─ BrowserTools ─▶ BrowserService ─▶ PageDriver
-                                                                     └─ McpGateway ─▶ plugin / MCP servers (stdio or HTTP,
+                                                                     └─ McpGateway ─▶ Composio / MCP servers (stdio or HTTP,
                                                                                        started on first call, shared, idle-stopped)
 ```
 

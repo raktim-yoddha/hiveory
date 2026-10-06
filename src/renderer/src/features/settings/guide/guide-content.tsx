@@ -282,7 +282,7 @@ export const GUIDE: GuideChapter[] = [
   },
   {
     id: 'extensions',
-    title: 'Skills, MCP & Plugins',
+    title: 'Skills, MCP & Apps',
     summary: 'Give every agent skills, MCP servers and apps.',
     icon: Blocks,
     sections: [
@@ -290,17 +290,17 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Skills',
         body: (
           <p>
-            Settings → Skills, MCP &amp; Plugins → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
+            Settings → Skills, MCP &amp; Apps → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
             Codex, Cursor) to copy the skill there, create a new skill, or import a skill folder.
           </p>
         )
       },
       {
-        heading: 'MCP servers and plugins',
+        heading: 'MCP servers and apps',
         body: (
           <p>
-            Servers you add under MCP servers, and apps you connect under Plugins, are served by Hiveory to every agent — terminal, chat
-            and bots — without changing any CLI's config. Plugins run through your own Composio project: paste its API key once, then Connect
+            Servers you add under MCP servers, and apps you connect under Apps, are served by Hiveory to every agent — terminal, chat
+            and bots — without changing any CLI's config. Apps run through your own Composio project: paste its API key once, then Connect
             takes you straight to each app's sign-in. The key is encrypted on this computer.
           </p>
         )

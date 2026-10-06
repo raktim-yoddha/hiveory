@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse } from './actions'
+import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
 
 /**
  * Tier 1 of Queen Bee (ADR 0019): a model plans what the rule parser could not.
@@ -105,8 +105,22 @@ const ACTION_TYPES = [
   'open-panel-tab',
   'report',
   'remember',
-  'help'
+  'help',
+  'set-setting',
+  'open-url',
+  'open-file',
+  'arrange',
+  'git-status',
+  'pull-requests',
+  'apps-report',
+  'check-updates',
+  'save-preset',
+  'new-chat',
+  'message-bot',
+  'resume-session',
+  'add-project'
 ] as const
+const SETTING_IDS = Object.keys(QUEEN_SETTINGS) as [QueenSetting, ...QueenSetting[]]
 
 const THEME_IDS = ['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose'] as const
 const FOCUS = ['all', 'idle', 'working', 'waiting-for-you'] as const
@@ -144,7 +158,13 @@ export const PLAN_TOOL = {
             open: { type: 'boolean' },
             kind: { type: 'string', enum: ['browser', 'explorer'] },
             focus: { type: 'string', enum: [...FOCUS] },
-            everywhere: { type: 'boolean' }
+            everywhere: { type: 'boolean' },
+            setting: { type: 'string', enum: [...SETTING_IDS] },
+            on: { type: 'boolean' },
+            url: { type: 'string' },
+            query: { type: 'string' },
+            layout: { type: 'string', enum: ['equal', 'columns'] },
+            botId: { type: 'string' }
           },
           required: ['type']
         }
@@ -179,7 +199,20 @@ const actionSchema: z.ZodType<QueenAction> = z.union([
   z.object({ type: z.literal('open-panel-tab'), kind: z.enum(['browser', 'explorer']) }),
   z.object({ type: z.literal('report'), focus: z.enum(FOCUS), everywhere: z.boolean().optional(), cliId: id.optional() }),
   z.object({ type: z.literal('remember'), text: z.string().trim().min(1).max(MAX_NOTE_LENGTH) }),
-  z.object({ type: z.literal('help') })
+  z.object({ type: z.literal('help') }),
+  z.object({ type: z.literal('set-setting'), setting: z.enum(SETTING_IDS), on: z.boolean() }),
+  z.object({ type: z.literal('open-url'), url: z.string().max(2000).regex(/^https?:\/\/\S+$/i), workspaceId: id }),
+  z.object({ type: z.literal('open-file'), query: z.string().trim().min(1).max(200), workspaceId: id }),
+  z.object({ type: z.literal('arrange'), layout: z.enum(['equal', 'columns']), workspaceId: id }),
+  z.object({ type: z.literal('git-status'), workspaceId: id }),
+  z.object({ type: z.literal('pull-requests'), projectId: id }),
+  z.object({ type: z.literal('apps-report') }),
+  z.object({ type: z.literal('check-updates') }),
+  z.object({ type: z.literal('save-preset'), name: z.string().trim().min(1).max(60), workspaceId: id }),
+  z.object({ type: z.literal('new-chat'), cliId: id.optional(), text: z.string().trim().min(1).max(20_000).optional(), projectId: id.optional() }),
+  z.object({ type: z.literal('message-bot'), botId: id, text: z.string().trim().min(1).max(20_000) }),
+  z.object({ type: z.literal('resume-session'), cliId: id, workspaceId: id, projectId: id }),
+  z.object({ type: z.literal('add-project') })
 ])
 
 /**
@@ -256,6 +289,8 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
   const elsewhere = ctx.otherWorkspaces?.find((w) => w.id === a.workspaceId)
   if (a.projectId !== undefined) a.projectId = find(a.projectId, ctx.projects, (p) => [p.name])
   if (a.presetId !== undefined) a.presetId = find(a.presetId, ctx.presets, (p) => [p.name])
+  if (a.botId !== undefined) a.botId = find(a.botId, ctx.bots ?? [], (b) => [b.name])
+  if (typeof a.on === 'string') a.on = a.on === 'true'
   if (typeof a.count === 'string' && /^\d+$/.test(a.count)) a.count = Number(a.count)
   if (typeof a.open === 'string') a.open = a.open === 'true'
 
@@ -293,6 +328,30 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
     case 'report':
       a.focus = { waiting: 'waiting-for-you', 'waiting for you': 'waiting-for-you', busy: 'working' }[lower(a.focus)] ?? (a.focus || 'all')
       break
+    case 'open-url':
+    case 'open-file':
+    case 'arrange':
+    case 'git-status':
+    case 'save-preset':
+      a.workspaceId ??= ctx.workspaceId
+      if (a.type === 'arrange') a.layout ??= 'equal'
+      if (a.type === 'save-preset') {
+        a.name ??= a.text
+        delete a.text
+      }
+      // A bare host gets https; any other scheme (javascript:, file:…) stays and fails validation.
+      if (a.type === 'open-url' && typeof a.url === 'string' && !/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(a.url)) a.url = `https://${a.url}`
+      break
+    case 'pull-requests':
+      a.projectId ??= ctx.projectId
+      break
+    case 'resume-session':
+      a.workspaceId ??= ctx.workspaceId
+      a.projectId ??= ctx.projectId
+      break
+    case 'new-chat':
+      a.projectId ??= ctx.projectId
+      break
   }
   for (const [key, value] of Object.entries(a)) if (value === undefined) delete a[key]
   return a
@@ -326,7 +385,8 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
     workspace: new Set(ctx.workspaces.map((w) => w.id)),
     project: new Set(ctx.projects.map((p) => p.id)),
     agent: new Set(ctx.agents.map((a) => a.id)),
-    preset: new Set(ctx.presets.map((p) => p.id))
+    preset: new Set(ctx.presets.map((p) => p.id)),
+    bot: new Set((ctx.bots ?? []).map((b) => b.id))
   }
   for (const item of list) {
     const parsed = actionSchema.safeParse(repair(item, ctx))
@@ -341,7 +401,8 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
       (typeof a.projectId === 'string' ? known.project.has(a.projectId) : true) &&
       (typeof a.agentId === 'string' ? known.agent.has(a.agentId) : true) &&
       (Array.isArray(a.agentIds) ? (a.agentIds as string[]).every((x) => known.agent.has(x)) : true) &&
-      (typeof a.presetId === 'string' ? known.preset.has(a.presetId) : true)
+      (typeof a.presetId === 'string' ? known.preset.has(a.presetId) : true) &&
+      (typeof a.botId === 'string' ? known.bot.has(a.botId) : true)
     if (!ok) return { kind: 'unknown' }
     actions.push(a)
   }
@@ -360,7 +421,13 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
           ? [`Open ${ctx.clis.find((c) => c.id === a.cliId)?.displayName ?? a.cliId} and send ${quote(a.text)}?`]
           : a.type === 'create-workspace'
             ? [`Create the workspace “${a.name}”?`]
-            : []
+            : a.type === 'message-bot' && !verbatim(a.text, utterance)
+              ? [`Send to ${ctx.bots?.find((b) => b.id === a.botId)?.name ?? 'the bot'}: ${quote(a.text)}?`]
+              : a.type === 'new-chat' && a.text && !verbatim(a.text, utterance)
+                ? [`Start a chat with ${quote(a.text)}?`]
+                : a.type === 'set-setting'
+                  ? [`Turn ${QUEEN_SETTINGS[a.setting].label.toLowerCase()} ${a.on ? 'on' : 'off'}?`]
+                  : []
   )
   return confirms.length ? { kind: 'actions', actions, confirm: confirms.join(' ') } : { kind: 'actions', actions }
 }
@@ -376,7 +443,11 @@ export function systemPrompt(persona: { name: string; tagline: string; text?: st
     '- message-agent {agentId, text}: send the user\'s exact words to an agent. open-and-message {cliId, text}: start one, then send.',
     '- report {focus, everywhere?, cliId?}: agent status. focus-waiting: go to the agent waiting longest.',
     '- navigate {to: home|settings+section|project+projectId|workspace+workspaceId}; set-mode {mode}; set-theme {theme}; side-panel {open}; open-panel-tab {kind}',
-    '- apply-preset {presetId}; create-workspace {name}; remember {text} (only when asked to remember); help.',
+    '- apply-preset {presetId}; save-preset {name}: save this workspace\'s agents; create-workspace {name}; add-project; remember {text} (only when asked to remember); help.',
+    `- set-setting {setting: ${SETTING_IDS.join('|')}, on}; check-updates; apps-report: connected apps.`,
+    '- open-url {url}: a page in the side browser; open-file {query}: a file of this workspace by name; arrange {layout: equal|columns}: tidy the panes.',
+    '- git-status: branch and changes here; pull-requests: open PRs of this project; resume-session {cliId}: reopen its latest conversation.',
+    '- new-chat {cliId?, text?}: a chat in Chat mode; message-bot {botId, text}: send the user\'s exact words to a bot.',
     'Rules: use ids or exact names from STATE only. workspaceId/projectId default to the current page. Ambiguous or unknown → no actions, set `question` (e.g. a workspace name several projects share: ask which project).',
     'Small talk (greetings, thanks, how are you, who are you, how to use Hiveory) → no actions; a short, friendly `reply` in character.',
     'Other requests outside Hiveory (writing code, facts, the web, files) → no actions; `reply` that an agent can do it, e.g. "tell Bruno to …". Never do or answer it yourself.',
@@ -404,6 +475,7 @@ export function stateMessage(ctx: QueenContext, utterance: string, notes: string
     `agents: ${ctx.agents.map((a) => `${a.id} ${a.petName} (cli ${a.cliId}, workspace ${a.workspaceId}${a.status ? `, ${STATUS_WORD[a.status]}` : ''})`).join('; ') || 'none'}`,
     `clis: ${ctx.clis.map((c) => `${c.id} = ${c.displayName}`).join('; ') || 'none'}`,
     `presets: ${ctx.presets.map((p) => `${p.id} ${p.name}`).join('; ') || 'none'}`,
+    `bots: ${(ctx.bots ?? []).map((b) => `${b.id} ${b.name}`).join('; ') || 'none'}`,
     ...(notes.length ? ['', 'NOTES', ...notes.map((n) => `- ${n}`)] : []),
     '',
     'REQUEST',

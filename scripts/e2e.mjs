@@ -242,7 +242,7 @@ await test('home renders with DEV badge and Work/Chat modes', async () => {
 
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  for (const section of ['Appearance', 'Agents', 'Skills, MCP & Plugins', 'Updates', 'Guide', 'About']) {
+  for (const section of ['Appearance', 'Agents', 'Skills, MCP & Apps', 'Updates', 'Guide', 'About']) {
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: section }).click()
     await page.waitForTimeout(150)
     expect(!(await page.getByText('failed to display').isVisible()), `${section} crashed`)
@@ -326,12 +326,12 @@ await test('the title-bar logo is flat (no glow, no gradient)', async () => {
   expect(name === 'none', `brand name has a gradient: ${name}`)
 })
 
-await test('extensions: skills, MCP and plugins are separate tabs; plugins use real logos', async () => {
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
-  for (const tab of ['Skills', 'MCP servers', 'Plugins']) expect(await page.getByRole('tab', { name: new RegExp(tab) }).isVisible(), `${tab} tab missing`)
+await test('extensions: skills, MCP and apps are separate tabs; apps use real logos', async () => {
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Apps' }).click()
+  for (const tab of ['Skills', 'MCP servers', 'Apps']) expect(await page.getByRole('tab', { name: new RegExp(tab) }).isVisible(), `${tab} tab missing`)
   await page.getByRole('tab', { name: /MCP servers/ }).click()
   await page.getByText('In Hiveory · every agent').waitFor()
-  await page.getByRole('tab', { name: /Plugins/ }).click()
+  await page.getByRole('tab', { name: /Apps/ }).click()
   // Composio apps (ADR 0023): one Composio API key field, no per-app keys, no Composio login.
   const connectButtons = page.getByRole('button', { name: 'Connect', exact: true })
   await waitFor(async () => (await connectButtons.count()) >= 40, 'app cards')
@@ -339,12 +339,12 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   expect(logos >= 40, `only ${logos} app logos`)
   expect(await page.locator('section[aria-label="Gmail"]').getByRole('button', { name: 'Connect', exact: true }).isDisabled(), 'apps can be connected before a Composio key is saved')
   expect(await page.getByRole('textbox', { name: 'Composio API key', exact: true }).isVisible(), 'no Composio API key field')
-  expect((await page.locator('input[type="password"]').count()) === 1, 'a per-app key field is on the Plugins screen')
-  expect((await page.getByText(/Sign in with Composio/).count()) === 0, 'a Composio login is still on the Plugins screen')
+  expect((await page.locator('input[type="password"]').count()) === 1, 'a per-app key field is on the Apps screen')
+  expect((await page.getByText(/Sign in with Composio/).count()) === 0, 'a Composio login is still on the Apps screen')
   await page.getByRole('button', { name: 'Code', exact: true }).click()
   await waitFor(async () => (await page.getByText('GitHub', { exact: true }).isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'category filter')
   await page.getByRole('button', { name: 'All', exact: true }).click()
-  await shot('a2e-plugins-signed-out')
+  await shot('a2e-apps-signed-out')
   await page.getByRole('tab', { name: /Skills/ }).click()
   await page.getByRole('button', { name: 'New skill' }).click()
   await page.getByLabel('Name', { exact: true }).fill('E2E Skill')
@@ -352,10 +352,10 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.keyboard.press('Escape')
 })
 
-await test('plugins: a Composio key once; Connect goes straight to the app; a labelled second account; Disconnect', async () => {
+await test('apps: a Composio key once; Connect goes straight to the app; a labelled second account; Disconnect', async () => {
   await stubBrowser()
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
-  await page.getByRole('tab', { name: /Plugins/ }).click()
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Apps' }).click()
+  await page.getByRole('tab', { name: /Apps/ }).click()
   const keyField = page.getByRole('textbox', { name: 'Composio API key', exact: true })
   await keyField.fill('ak_wrong_key_123')
   await page.getByRole('button', { name: 'Save key' }).click()
@@ -364,13 +364,18 @@ await test('plugins: a Composio key once; Connect goes straight to the app; a la
   await page.getByRole('button', { name: 'Save key' }).click()
   await page.getByText('Key saved').waitFor({ timeout: 20000 })
   expect(!JSON.stringify(await value('connections.list')).includes(COMPOSIO_KEY), 'the key reached the renderer')
-  await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"pluginId": "composio"') || readFileSync(join(profile, 'state.json'), 'utf8').includes('"pluginId":"composio"'), 'key saved')
+  await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"provider": "composio"') || readFileSync(join(profile, 'state.json'), 'utf8').includes('"provider":"composio"'), 'key saved')
   expect(!readFileSync(join(profile, 'state.json'), 'utf8').includes(COMPOSIO_KEY), 'the key is in the state file in plain text')
 
   // Connect: straight to Gmail's own sign-in — no Composio login.
   const gmail = page.locator('section[aria-label="Gmail"]')
+  // Connect asks for the account's name first, then opens Gmail's own sign-in.
   await gmail.getByRole('button', { name: 'Connect', exact: true }).click()
+  expect(await gmail.getByRole('button', { name: 'Continue' }).isDisabled(), 'an account can be connected without a name')
+  await gmail.getByLabel('Gmail account name').fill('Personal')
+  await gmail.getByRole('button', { name: 'Continue' }).click()
   await waitFor(async () => composio.accounts.find((a) => a.id === 'ca_e2e1')?.status === 'ACTIVE', 'Gmail signed in')
+  expect(composio.accounts.find((a) => a.id === 'ca_e2e1').alias === 'Personal', 'name not sent to Composio')
   const opened = await app.evaluate(() => globalThis.__opened)
   expect(opened.length === 1 && opened[0].endsWith('/signin/ca_e2e1'), `browser opened: ${opened}`)
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
@@ -379,14 +384,14 @@ await test('plugins: a Composio key once; Connect goes straight to the app; a la
 
   // Add account: a label first, then that account's own sign-in.
   await gmail.getByRole('button', { name: 'Add account' }).click()
-  await gmail.getByLabel('Gmail account label').fill('Work')
+  await gmail.getByLabel('Gmail account name').fill('Work')
   await gmail.getByRole('button', { name: 'Continue' }).click()
   await waitFor(async () => composio.accounts.find((a) => a.id === 'ca_e2e2')?.status === 'ACTIVE', 'second Gmail account signed in')
   expect(composio.accounts.find((a) => a.id === 'ca_e2e2').alias === 'Work', 'label not sent to Composio')
   await page.evaluate(() => window.dispatchEvent(new Event('focus')))
   await gmail.getByText('ca_e2e2 · active').waitFor({ timeout: 15000 })
-  expect(!JSON.stringify(await value('plugins.status')).includes('e2e-app-token-secret'), "an app's credentials reached the renderer")
-  await shot('a2f-plugins-composio-accounts')
+  expect(!JSON.stringify(await value('apps.status')).includes('e2e-app-token-secret'), "an app's credentials reached the renderer")
+  await shot('a2f-apps-composio-accounts')
 
   // Disconnect the Work account (confirmed).
   await gmail.locator('li').filter({ hasText: 'Work' }).getByRole('button', { name: 'Disconnect' }).click()
@@ -577,6 +582,27 @@ await test('open agents; panes fill the area without a header bar', async () => 
   expect((await page.getByRole('navigation', { name: 'Breadcrumb' }).count()) === 0, 'header bar still present')
   const boxes = await paneBoxes()
   expect(boxes[0].y < 70, `panes start too low (${boxes[0].y})`)
+})
+
+await test('the sidebar order follows work, not clicks (ADR 0024)', async () => {
+  const nav = page.getByRole('navigation', { name: 'Projects' })
+  const order = async () => {
+    const [a, b] = await Promise.all(['demo-app', 'plain-folder'].map(async (name) => (await nav.getByRole('button', { name, exact: true }).boundingBox()).y))
+    return a < b ? ['demo-app', 'plain-folder'] : ['plain-folder', 'demo-app']
+  }
+  const before = await order()
+  // Looking at the lower project does not move it.
+  await nav.getByRole('button', { name: before[1], exact: true }).click()
+  await page.waitForTimeout(500)
+  expect(JSON.stringify(await order()) === JSON.stringify(before), `clicking ${before[1]} moved it: ${await order()}`)
+  // Work there does: an agent opening in it.
+  const lowerId = (await value('projects.list')).find((x) => x.name === before[1]).id
+  const ws = (await value('workspaces.list', { projectId: lowerId }))[0]
+  const { agent } = await value('agents.open', { workspaceId: ws.id, cliId: 'powershell' })
+  await waitFor(async () => (await order())[0] === before[1], `${before[1]} to rise after work there`)
+  await value('agents.close', { instanceId: agent.id })
+  await openSidebarWorkspace('demo-app', 'Main')
+  await panes().first().waitFor()
 })
 
 await test('arrange bar: Columns, then narrow panes keep a reachable close button', async () => {
@@ -784,6 +810,19 @@ await test('both sidebars resize by dragging their edge', async () => {
   await page.getByRole('separator', { name: 'Resize side panel' }).dblclick()
 })
 
+await test('panes follow a moving sidebar exactly, and still animate layout changes (ADR 0024)', async () => {
+  const slotTransition = () => panes().first().evaluate((el) => getComputedStyle(el.closest('[class*="slot"]')).transitionProperty)
+  const box = await page.getByRole('separator', { name: 'Resize sidebar' }).boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 4 })
+  const during = await slotTransition()
+  await page.mouse.up()
+  expect(!/\b(left|width|all)\b/.test(during), `panes ease after the sidebar instead of following it: ${during}`)
+  await page.getByRole('separator', { name: 'Resize sidebar' }).dblclick()
+  await waitFor(async () => /\b(left|width)\b/.test(await slotTransition()), 'pane moves animate again once the sidebar settles', 3000)
+})
+
 await test('dragging a sidebar well past its minimum hides it; showing it again restores its width', async () => {
   const drag = async (name, dx) => {
     const box = await page.getByRole('separator', { name }).boundingBox()
@@ -893,9 +932,9 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await waitFor(async () => (await shells()).length === 0, 'closed after the yes')
 
     await say('open plugin settings')
-    await page.getByRole('heading', { name: 'Skills, MCP & Plugins' }).waitFor()
+    await page.getByRole('heading', { name: 'Skills, MCP & Apps' }).waitFor()
     await say('take me to main')
-    await page.getByRole('heading', { name: 'Skills, MCP & Plugins' }).waitFor({ state: 'detached' })
+    await page.getByRole('heading', { name: 'Skills, MCP & Apps' }).waitFor({ state: 'detached' })
     expect((await queen.boundingBox()).y > (await page.locator('main').boundingBox()).y, 'docked bar not inside the main area')
 
     await say('write me a poem')
@@ -1237,6 +1276,28 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
   }
 })
 
+await test('Queen Bee reaches the rest of the app: settings, Git and files (ADR 0024)', async () => {
+  const queen = page.getByLabel('Tell Queen Bee')
+  const card = page.locator('section[aria-label="Queen Bee says"]')
+  const say = async (text) => {
+    await queen.fill(text)
+    await queen.press('Enter')
+  }
+  await openSidebarWorkspace('demo-app', 'Main')
+  await panes().first().waitFor()
+  const browserUse = (await value('settings.get')).browserUse
+  await say(`turn ${browserUse ? 'off' : 'on'} browser use`)
+  await waitFor(async () => (await value('settings.get')).browserUse === !browserUse, 'browser use switched')
+  await say(`turn ${browserUse ? 'on' : 'off'} browser use`)
+  await waitFor(async () => (await value('settings.get')).browserUse === browserUse, 'browser use switched back')
+  await say('what changed')
+  await card.getByText(/^On main:|no changes|changed file/).first().waitFor({ timeout: 10000 })
+  await say('open README.md')
+  await page.locator('section[aria-label="README.md file"]').waitFor({ timeout: 10000 })
+  await page.locator('section[aria-label="README.md file"]').getByRole('button', { name: 'Close README.md' }).click()
+  await shot('h8-queen-app-commands')
+})
+
 await test('list_agents reports every agent with live status', async () => {
   const r = await tool('list_agents')
   expect(/has 4 agent\(s\)/.test(r.content[0].text), r.content[0].text)
@@ -1315,7 +1376,7 @@ await test('rapid open/close spam leaves no orphan panes or processes', async ()
   expect((await panes().count()) === start, 'orphan panes on screen')
 })
 
-await test('turning agent tools off is enforced immediately (browser and plugins keep their own switches)', async () => {
+await test('turning agent tools off is enforced immediately (browser and apps keep their own switches)', async () => {
   await value('settings.update', { agentTools: false })
   try {
     const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
@@ -1692,7 +1753,7 @@ await test('invalid IPC payloads are rejected, never crash', async () => {
   }
 })
 
-await test('plugins: a server added in Hiveory reaches agents through their MCP tools', async () => {
+await test('mcp: a server added in Hiveory reaches agents through their MCP tools', async () => {
   const script = join(sandbox, 'mcp-fixture.cjs')
   writeFileSync(
     script,
@@ -1712,7 +1773,7 @@ await test('plugins: a server added in Hiveory reaches agents through their MCP 
   expect(view.state === 'ready' && view.tools[0]?.name === 'fixture_ping', JSON.stringify(view))
   expect(!JSON.stringify(await value('connections.list')).includes('k-123'), 'secret reached the renderer')
   const list = await rpc('tools/list', {})
-  expect(list.result.tools.some((t) => t.name === 'fixture_ping'), 'agent does not see the plugin tool')
+  expect(list.result.tools.some((t) => t.name === 'fixture_ping'), 'agent does not see the server tool')
   const r = await tool('fixture_ping')
   expect(r.content[0].text === 'pong k-123', r.content[0].text)
   await value('connections.remove', { id: view.id })
@@ -1738,9 +1799,9 @@ await test('everything survives a restart; agents come back on their own', async
 
 await test('Composio: the key and accounts survive a restart; nothing opens the browser', async () => {
   await stubBrowser()
-  const status = await value('plugins.status')
+  const status = await value('apps.status')
   expect(status.keySet && status.accounts.some((a) => a.id === 'ca_e2e1' && a.status === 'active'), JSON.stringify(status))
-  const view = (await value('connections.list')).find((c) => c.pluginId === 'composio')
+  const view = (await value('connections.list')).find((c) => c.provider === 'composio')
   const after = await value('connections.test', { id: view.id })
   expect(after.state === 'ready', `state ${after.state}: ${after.error ?? ''}`)
   expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened after a restart')

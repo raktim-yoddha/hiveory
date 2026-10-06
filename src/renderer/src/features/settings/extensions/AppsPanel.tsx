@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
-import { AlertTriangle, Check, ExternalLink, KeyRound, Plus, RefreshCw } from 'lucide-react'
-import { COMPOSIO, PLUGIN_APPS, type PluginAccount, type PluginApp, type PluginCategory, type PluginStatus } from '@shared/domain'
+import { AlertTriangle, Check, ExternalLink, Plus, RefreshCw } from 'lucide-react'
+import { COMPOSIO, APPS, type AppAccount, type AppInfo, type AppCategory, type AppsStatus } from '@shared/domain'
 import { Button, IconButton } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { TextInput } from '../../../components/ui/TextField'
 import { api } from '../../../lib/api'
 import { cx } from '../../../lib/cx'
 import { runAction } from '../../../stores/notices'
-import { PluginLogo } from './PluginLogo'
+import { AppMark } from './AppMark'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
 
-const CATEGORIES: Array<PluginCategory | 'All' | 'Connected'> = ['All', 'Connected', 'Work', 'Code', 'Data', 'Business', 'Search', 'Media']
+const CATEGORIES: Array<AppCategory | 'All' | 'Connected'> = ['All', 'Connected', 'Work', 'Code', 'Data', 'Business', 'Search', 'Media']
 
-const STATUS_TEXT: Record<PluginAccount['status'], string> = {
+const STATUS_TEXT: Record<AppAccount['status'], string> = {
   active: 'active',
   pending: 'waiting for you to approve it in the browser',
   failed: 'failed',
@@ -27,20 +27,20 @@ const openUrl = (url: string): void => void api('system.openUrl', { url }).catch
  * Composio project (ADR 0023): paste the API key once, then Connect goes straight
  * to each app's sign-in. An app can hold several labelled accounts.
  */
-export function PluginsPanel() {
-  const [status, setStatus] = useState<PluginStatus | null>(null)
+export function AppsPanel() {
+  const [status, setStatus] = useState<AppsStatus | null>(null)
   const [keyInput, setKeyInput] = useState('')
   const [editingKey, setEditingKey] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   /** The app whose "Add account" label form is open. */
   const [labelFor, setLabelFor] = useState<string | null>(null)
   const [label, setLabel] = useState('')
-  const [disconnecting, setDisconnecting] = useState<PluginAccount | null>(null)
+  const [disconnecting, setDisconnecting] = useState<AppAccount | null>(null)
   const [removingKey, setRemovingKey] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('All')
 
-  const refresh = useCallback(() => api('plugins.status').then(setStatus).catch(() => undefined), [])
+  const refresh = useCallback(() => api('apps.status').then(setStatus).catch(() => undefined), [])
   useEffect(() => {
     void refresh()
     // Coming back from an app's sign-in page in the browser.
@@ -50,7 +50,7 @@ export function PluginsPanel() {
 
   const keySet = Boolean(status?.keySet)
   const byApp = useMemo(() => {
-    const map = new Map<string, PluginAccount[]>()
+    const map = new Map<string, AppAccount[]>()
     for (const a of status?.accounts ?? []) map.set(a.appId, [...(map.get(a.appId) ?? []), a])
     return map
   }, [status])
@@ -58,7 +58,7 @@ export function PluginsPanel() {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return PLUGIN_APPS.filter(
+    return APPS.filter(
       (a) =>
         (category === 'All' || (category === 'Connected' ? byApp.has(a.id) : a.category === category)) &&
         (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q) || a.category.toLowerCase().includes(q))
@@ -69,16 +69,17 @@ export function PluginsPanel() {
     event.preventDefault()
     setBusy(COMPOSIO.id)
     void runAction('Save Composio API key', async () => {
-      setStatus(await api('plugins.setKey', { apiKey: keyInput }))
+      setStatus(await api('apps.setKey', { apiKey: keyInput }))
       setKeyInput('')
       setEditingKey(false)
     }).finally(() => setBusy(null))
   }
 
-  const connect = (app: PluginApp, accountLabel?: string): void => {
+  /** Opens the app's sign-in for a new account, named first so several accounts stay apart. */
+  const connect = (app: AppInfo, accountLabel: string): void => {
     setBusy(app.id)
     void runAction(`Connect ${app.name}`, async () => {
-      await api('plugins.connect', { appId: app.id, ...(accountLabel ? { label: accountLabel } : {}) })
+      await api('apps.connect', { appId: app.id, label: accountLabel })
       setLabelFor(null)
       setLabel('')
       await refresh()
@@ -88,9 +89,7 @@ export function PluginsPanel() {
   return (
     <div className={styles.panel}>
       <div className={styles.accountBar}>
-        <span className={styles.logoTile} aria-hidden>
-          <KeyRound className={styles.keyIcon} />
-        </span>
+        <AppMark id={COMPOSIO.id} name={COMPOSIO.name} />
         <div className={styles.setupText}>
           <strong>{keySet ? 'Composio' : 'Connect your apps with Composio'}</strong>
           <span className={styles.hint}>
@@ -154,7 +153,7 @@ export function PluginsPanel() {
         ))}
       </div>
       {shown.length === 0 && <p className={settings.empty}>{category === 'Connected' ? 'No apps connected yet.' : 'No apps match.'}</p>}
-      <div className={styles.pluginGrid}>
+      <div className={styles.appGrid}>
         {shown.map((app, index) => {
           const accounts = byApp.get(app.id) ?? []
           const connected = isConnected(app.id)
@@ -162,18 +161,18 @@ export function PluginsPanel() {
             <section
               key={app.id}
               aria-label={app.name}
-              className={cx(styles.pluginCard, styles.stagger, connected && styles.pluginCardOn)}
+              className={cx(styles.appCard, styles.stagger, connected && styles.appCardOn)}
               style={{ '--i': index } as CSSProperties}
             >
-              <span className={styles.pluginTop}>
-                <PluginLogo id={app.id} name={app.name} />
-                <span className={styles.pluginName}>
+              <span className={styles.appTop}>
+                <AppMark id={app.id} name={app.name} />
+                <span className={styles.appName}>
                   <strong>{app.name}</strong>
                   <span>{app.category}</span>
                 </span>
               </span>
               <span className={styles.description}>{app.description}</span>
-              <span className={styles.pluginFoot}>
+              <span className={styles.appFoot}>
                 {connected ? (
                   <span className={cx(styles.status, styles.ready)}>
                     <Check aria-hidden className={styles.checkIcon} /> Connected
@@ -181,15 +180,21 @@ export function PluginsPanel() {
                 ) : (
                   <span />
                 )}
-                {accounts.length ? (
-                  <Button size="sm" icon={<Plus />} disabled={!keySet || busy === app.id} onClick={() => setLabelFor(labelFor === app.id ? null : app.id)}>
-                    Add account
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="primary" loading={busy === app.id} disabled={!keySet} title={keySet ? undefined : 'Add your Composio API key first'} onClick={() => connect(app)}>
-                    Connect
-                  </Button>
-                )}
+                {/* Connect and Add account both ask for the account's name first. */}
+                <Button
+                  size="sm"
+                  variant={accounts.length ? 'secondary' : 'primary'}
+                  icon={accounts.length ? <Plus /> : undefined}
+                  disabled={!keySet || busy === app.id}
+                  title={keySet ? undefined : 'Add your Composio API key first'}
+                  aria-expanded={labelFor === app.id}
+                  onClick={() => {
+                    setLabel('')
+                    setLabelFor(labelFor === app.id ? null : app.id)
+                  }}
+                >
+                  {accounts.length ? 'Add account' : 'Connect'}
+                </Button>
               </span>
 
               {accounts.length > 0 && (
@@ -218,7 +223,15 @@ export function PluginsPanel() {
                     connect(app, label.trim())
                   }}
                 >
-                  <TextInput value={label} onChange={setLabel} placeholder="Account label (work, personal…)" aria-label={`${app.name} account label`} maxLength={40} autoFocus />
+                  <TextInput
+                    value={label}
+                    onChange={setLabel}
+                    placeholder="Account name (work, personal…)"
+                    aria-label={`${app.name} account name`}
+                    maxLength={40}
+                    autoFocus
+                    onKeyDown={(event) => event.key === 'Escape' && setLabelFor(null)}
+                  />
                   <Button type="submit" loading={busy === app.id} disabled={!label.trim()}>
                     Continue
                   </Button>
@@ -240,7 +253,7 @@ export function PluginsPanel() {
           const target = disconnecting
           setDisconnecting(null)
           if (target) void runAction('Disconnect account', async () => {
-            await api('plugins.disconnect', { accountId: target.id })
+            await api('apps.disconnect', { accountId: target.id })
             await refresh()
           })
         }}
@@ -256,7 +269,7 @@ export function PluginsPanel() {
         onConfirm={() => {
           setRemovingKey(false)
           void runAction('Remove Composio API key', async () => {
-            await api('plugins.removeKey')
+            await api('apps.removeKey')
             await refresh()
           })
         }}

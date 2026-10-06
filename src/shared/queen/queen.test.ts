@@ -73,6 +73,7 @@ describe('Queen Bee rule parser', () => {
     expect(actions('go home')).toEqual([{ type: 'navigate', to: 'home' }])
     expect(actions('open settings')).toEqual([{ type: 'navigate', to: 'settings', section: 'appearance' }])
     expect(actions('open plugin settings')).toEqual([{ type: 'navigate', to: 'settings', section: 'extensions' }])
+    expect(actions('open apps settings')).toEqual([{ type: 'navigate', to: 'settings', section: 'extensions' }])
     expect(actions('configure the queen')).toEqual([{ type: 'navigate', to: 'settings', section: 'queen' }])
     expect(actions('switch to chat')).toEqual([{ type: 'set-mode', mode: 'chatspace' }])
     expect(actions('work mode')).toEqual([{ type: 'set-mode', mode: 'workspace' }])

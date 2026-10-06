@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { COMPOSIO, pluginAppById, type ConnectionView } from '@shared/domain'
+import { COMPOSIO, appById, type ConnectionView } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Emit } from '../events'
 import type { McpRawConfig } from '../extensions/extensions-service'
@@ -33,7 +33,7 @@ const mergeSealed = (stored: Record<string, string>, next: Record<string, string
 
 /**
  * The MCP servers Hiveory runs for every agent (ADR 0017): the user's Composio
- * account, which serves the plugins (ADR 0023), servers added by hand and
+ * account, which serves the apps (ADR 0023), servers added by hand and
  * servers imported from a CLI's config. Secrets are sealed and never leave main.
  */
 export class ConnectionService {
@@ -62,15 +62,15 @@ export class ConnectionService {
     return this.enabled()
       .filter((c) => c.tools.length)
       .map((c) => {
-        if (c.pluginId !== COMPOSIO.id) return c.name
-        const apps = (c.apps ?? []).map((id) => pluginAppById(id)?.name ?? id)
+        if (c.provider !== COMPOSIO.id) return c.name
+        const apps = (c.apps ?? []).map((id) => appById(id)?.name ?? id)
         return `${c.name} (${apps.length ? `connected: ${apps.join(', ')}; ` : ''}${COMPOSIO.agentHint})`
       })
   }
 
   /** The user's Composio connection, once they saved an API key. */
   composio(): StoredConnection | undefined {
-    return this.all().find((c) => c.pluginId === COMPOSIO.id)
+    return this.all().find((c) => c.provider === COMPOSIO.id)
   }
 
   /** The saved Composio API key, opened (main only). */
@@ -92,7 +92,7 @@ export class ConnectionService {
     return {
       id: connection.id,
       name: connection.name,
-      ...(connection.pluginId ? { pluginId: connection.pluginId, apps: connection.apps ?? [] } : {}),
+      ...(connection.provider ? { provider: connection.provider, apps: connection.apps ?? [] } : {}),
       enabled: connection.enabled,
       transport: spec.transport,
       target: spec.transport === 'http' ? redactUrl(spec.url ?? '') : [spec.command ?? '', ...(spec.args ?? [])].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' '),
@@ -132,7 +132,7 @@ export class ConnectionService {
   async saveComposio(input: { apiKey: string; session: string; url: string }): Promise<ConnectionView> {
     const existing = this.composio()
     const connection: StoredConnection = {
-      ...(existing ?? { id: newId(), name: COMPOSIO.name, pluginId: COMPOSIO.id, apps: [], env: {}, tools: [] }),
+      ...(existing ?? { id: newId(), name: COMPOSIO.name, provider: COMPOSIO.id, apps: [], env: {}, tools: [] }),
       enabled: true,
       transport: 'http',
       url: input.url,
@@ -143,7 +143,7 @@ export class ConnectionService {
     return this.test(connection.id)
   }
 
-  /** Records which apps have an active account, for the Plugins tab badge and the agent prompt. */
+  /** Records which apps have an active account, for the Apps tab badge and the agent prompt. */
   setApps(id: string, apps: string[]): void {
     this.put({ ...this.find(id), apps: [...new Set(apps)].sort() })
   }

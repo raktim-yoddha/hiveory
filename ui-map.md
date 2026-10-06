@@ -113,13 +113,13 @@ panels fold ⌖ ✎ </> into ⋯.
 Drag a tab into the lower half to open the bottom area ("Show below" preview); the browser page
 steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Copy session ID.
 
-### Settings › Skills, MCP & Plugins (ADR 0017, 0023)
+### Settings › Skills, MCP & Apps (ADR 0017, 0023)
 
 ```text
-┌ Skills, MCP & Plugins ───────────────────────────────────────┐
-│ ( Skills 12 | MCP servers 3 | Plugins 2 )                ⟳   │
+┌ Skills, MCP & Apps ──────────────────────────────────────────┐
+│ ( Skills 12 | MCP servers 3 | Apps 2 )                   ⟳   │
 │ ┌──────────────────────────────────────────────────────────┐ │
-│ │ [⚿] Composio        ● Key saved  ⟳  [Change key] [Remove] │ │
+│ │ [C] Composio        ● Key saved  ⟳  [Change key] [Remove] │ │
 │ │     (no key: [•••• Composio API key] [Save key] · Get ↗) │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │ [ Search apps                                      ]         │
@@ -130,14 +130,14 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Cop
 │ │ ✓ Connected [+ Add acc]│ │            [Connect]   │        │
 │ │ ┌ Work  ca_… · active ┐│ └────────────────────────┘        │
 │ │ └─────── [Disconnect] ┘│                                   │
-│ │ [Account label…][Cont.]│                                   │
+│ │ [Account name…] [Cont.]│                                   │
 │ └────────────────────────┘                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Plugins: Connect is disabled until a key is saved. Connect opens the app's own
-sign-in in the browser; Add account asks for a label first. Accounts refresh when
-the window regains focus.
+Apps: Connect is disabled until a key is saved. Connect and Add account both ask
+for the account's name first, then open the app's own sign-in in the browser.
+Accounts refresh when the window regains focus.
 
 Skills rows: name and description; on the right a stacked logo group of the installed CLIs that
 load it (first three, then "+N"), one folders button ("Shared (.agents) ▾" or "2 folders ▾") and

@@ -1,4 +1,4 @@
-import { COMPOSIO, pluginAppById, type PluginAccount, type PluginStatus } from '@shared/domain'
+import { COMPOSIO, appById, type AppAccount, type AppsStatus } from '@shared/domain'
 import { fail } from '@shared/errors'
 import { COMPOSIO_KEY_HEADER, type ConnectionService } from './connection-service'
 
@@ -8,7 +8,7 @@ import { COMPOSIO_KEY_HEADER, type ConnectionService } from './connection-servic
  */
 export const COMPOSIO_USER = 'hiveory'
 
-const STATUS: Record<string, PluginAccount['status']> = {
+const STATUS: Record<string, AppAccount['status']> = {
   ACTIVE: 'active',
   INITIATED: 'pending',
   INITIALIZING: 'pending',
@@ -44,14 +44,14 @@ interface ComposioAccount {
 }
 
 /**
- * Plugins (ADR 0023): the user pastes their Composio project API key once.
+ * Apps (ADR 0023): the user pastes their Composio project API key once.
  * Connect then asks Composio for the app's own sign-in link — no Composio login —
  * and an app can hold several accounts, each with a label. Agents get the
  * connected apps through a Composio tool-router session served by the gateway.
  * Only ids, apps, labels and statuses ever leave main; Composio's account state
  * (which can hold credentials) is never passed on.
  */
-export class PluginService {
+export class AppService {
   constructor(
     private readonly connections: ConnectionService,
     private readonly openBrowser: (url: string) => void,
@@ -94,7 +94,7 @@ export class PluginService {
   }
 
   /** Saves the key once it works (starting the session proves it), then connects agents to Composio. */
-  async setKey(apiKey: string): Promise<PluginStatus> {
+  async setKey(apiKey: string): Promise<AppsStatus> {
     const session = await this.newSession(apiKey)
     await this.connections.saveComposio({ apiKey, ...session })
     return this.status()
@@ -105,7 +105,7 @@ export class PluginService {
     if (connection) await this.connections.remove(connection.id)
   }
 
-  async status(): Promise<PluginStatus> {
+  async status(): Promise<AppsStatus> {
     if (!this.connections.composioKey()) return { keySet: false, accounts: [] }
     try {
       return { keySet: true, accounts: await this.accounts() }
@@ -115,9 +115,9 @@ export class PluginService {
   }
 
   /** The user's accounts in Composio; the active apps are kept for the agent prompt. */
-  private async accounts(): Promise<PluginAccount[]> {
+  private async accounts(): Promise<AppAccount[]> {
     const listed = await this.request<{ items?: ComposioAccount[] }>(`/connected_accounts?user_ids=${COMPOSIO_USER}&limit=200`)
-    const accounts = (listed?.items ?? []).flatMap((item): PluginAccount[] => {
+    const accounts = (listed?.items ?? []).flatMap((item): AppAccount[] => {
       const status = STATUS[item.status]
       return status && item.toolkit?.slug ? [{ id: item.id, appId: item.toolkit.slug, ...(item.alias ? { label: item.alias } : {}), status }] : []
     })
@@ -127,11 +127,15 @@ export class PluginService {
     return accounts
   }
 
-  /** Opens the app's own sign-in page for a new account; `label` tells several accounts apart. */
-  async connect(appId: string, label?: string): Promise<PluginAccount> {
-    if (!pluginAppById(appId)) fail('NOT_FOUND', 'Unknown app.')
-    const alias = label?.trim() || undefined
-    const body = { toolkit: appId, ...(alias ? { alias } : {}) }
+  /** Opens the app's own sign-in page for a new account, named by `label` so several accounts stay apart. */
+  async connect(appId: string, label: string): Promise<AppAccount> {
+    const app = appById(appId)
+    if (!app) fail('NOT_FOUND', 'Unknown app.')
+    const alias = label.trim()
+    if (!alias) fail('INVALID_INPUT', 'Name this account.')
+    const taken = (await this.accounts()).some((a) => a.appId === appId && a.label?.toLowerCase() === alias.toLowerCase())
+    if (taken) fail('INVALID_INPUT', `${app!.name} already has an account named ${alias}. Pick another name.`)
+    const body = { toolkit: appId, alias }
     const linkFor = (session: string) =>
       this.request<{ redirect_url: string; connected_account_id: string }>(`/tool_router/session/${encodeURIComponent(session)}/link`, { method: 'POST', body, missingOk: true })
     let link = await linkFor(this.connections.composio()?.session ?? '')
@@ -144,7 +148,7 @@ export class PluginService {
     }
     if (!link?.redirect_url || !isSafeLink(link.redirect_url)) fail('UNEXPECTED', 'Composio did not return a secure sign-in link.')
     this.openBrowser(link!.redirect_url)
-    return { id: link!.connected_account_id, appId, ...(alias ? { label: alias } : {}), status: 'pending' }
+    return { id: link!.connected_account_id, appId, label: alias, status: 'pending' }
   }
 
   /** Removes one of the user's accounts from Composio. */

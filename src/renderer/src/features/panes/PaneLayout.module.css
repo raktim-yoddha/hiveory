@@ -18,8 +18,9 @@
   animation: pane-in var(--duration-base) var(--ease-out);
 }
 
-/* Follow the pointer exactly while resizing or dragging. */
-.interacting .slot {
+/* Follow the pointer exactly while resizing or dragging, and the container while a sidebar moves. */
+.interacting .slot,
+.following .slot {
   transition: opacity var(--duration-fast) var(--ease-out);
 }
 

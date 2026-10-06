@@ -17,7 +17,7 @@ export interface McpEndpoint {
   computer?: boolean
   /** Coordination tools (list_agents, send_message…) are on; false when only browser, computer or apps are served. */
   coordination?: boolean
-  /** Plugins / MCP servers served through Hiveory (ADR 0017), by name. */
+  /** Apps / MCP servers served through Hiveory (ADR 0017), by name. */
   apps?: string[]
   /** A bot's thread (ADR 0022): memory tools, plus team tools for the Chief of Staff or a bot allowed to message. */
   bot?: 'chief' | 'member' | 'solo'

@@ -39,7 +39,7 @@ export const COMPUTER_PROMPT =
 /** Speed: fewer model turns beat faster tools. */
 export const BATCH_PROMPT = 'Batch independent hiveory calls with run_tools; delegate to another agent with ask_agent (one call).'
 
-/** Apps the user connected in Settings › Plugins, reachable through the same MCP server (ADR 0017). */
+/** Apps the user connected in Settings › Apps, reachable through the same MCP server (ADR 0017). */
 export const appsPrompt = (apps: string[]): string =>
   `The user connected these apps to Hiveory: ${apps.join(', ')}. Their tools are hiveory MCP tools prefixed with the app name ` +
   '(for example github_…); use them whenever a request involves one of these apps.'

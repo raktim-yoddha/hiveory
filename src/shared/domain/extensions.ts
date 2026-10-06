@@ -50,8 +50,8 @@ export interface ExtensionsInventory {
 export interface ConnectionView {
   id: string
   name: string
-  /** 'composio' for the Composio account that serves the plugins. */
-  pluginId?: string
+  /** 'composio' for the Composio connection that serves the apps. */
+  provider?: string
   /** Apps with an active account in Composio (toolkit slugs). */
   apps?: string[]
   enabled: boolean

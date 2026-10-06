@@ -17,7 +17,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'settings.get', 'settings.update', 'shell.open', 'shell.restart', 'shell.close', 'extensions.scan',
   'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'files.paste', 'files.watch',
   'editors.list', 'editors.open', 'editors.close',
-  'connections.list', 'plugins.status', 'plugins.setKey', 'plugins.removeKey', 'plugins.connect', 'plugins.disconnect', 'connections.saveCustom', 'connections.import', 'connections.setEnabled', 'connections.test', 'connections.remove',
+  'connections.list', 'apps.status', 'apps.setKey', 'apps.removeKey', 'apps.connect', 'apps.disconnect', 'connections.saveCustom', 'connections.import', 'connections.setEnabled', 'connections.test', 'connections.remove',
   'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.update', 'chat.delete', 'chat.send', 'chat.attach', 'chat.stop', 'chat.catalog',
   'bots.list', 'bots.create', 'bots.update', 'bots.delete', 'bots.threads', 'bots.newThread', 'bots.computer',
   'hosts.check', 'hosts.listDir', 'git.info', 'git.validateBranch', 'git.init',

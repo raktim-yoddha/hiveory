@@ -1,22 +1,22 @@
 /**
- * Plugins: apps every agent in Hiveory can use — terminal, chat and bots —
+ * Apps every agent in Hiveory can use — terminal, chat and bots —
  * through the user's own Composio project, free or paid (ADR 0023). The user
  * pastes their Composio API key once; Connect then goes straight to each
  * app's own sign-in. Hiveory keeps no app keys and hosts nothing.
  */
 
-export type PluginCategory = 'Work' | 'Code' | 'Data' | 'Business' | 'Search' | 'Media'
+export type AppCategory = 'Work' | 'Code' | 'Data' | 'Business' | 'Search' | 'Media'
 
-export interface PluginApp {
+export interface AppInfo {
   /** Composio's toolkit slug. */
   id: string
   name: string
-  category: PluginCategory
+  category: AppCategory
   description: string
 }
 
 export const COMPOSIO = {
-  /** The plugin id of the Composio connection. */
+  /** The provider of the Composio connection. */
   id: 'composio',
   name: 'Composio',
   /** Composio's REST API. */
@@ -28,7 +28,7 @@ export const COMPOSIO = {
     "the user's hub for 1,000+ apps: search its tools for the app, and when an app isn't connected yet, give the user the connect link it returns"
 } as const
 
-export const PLUGIN_APPS: PluginApp[] = [
+export const APPS: AppInfo[] = [
   { id: 'gmail', name: 'Gmail', category: 'Work', description: 'Read, search, draft and send email.' },
   { id: 'googlecalendar', name: 'Google Calendar', category: 'Work', description: 'Events, availability and invites.' },
   { id: 'googledrive', name: 'Google Drive', category: 'Work', description: 'Find, read, upload and share files.' },
@@ -81,13 +81,13 @@ export const PLUGIN_APPS: PluginApp[] = [
   { id: 'linkedin', name: 'LinkedIn', category: 'Media', description: 'Profile and posts.' }
 ]
 
-export const pluginAppById = (id: string): PluginApp | undefined => PLUGIN_APPS.find((a) => a.id === id)
+export const appById = (id: string): AppInfo | undefined => APPS.find((a) => a.id === id)
 
-/** The only external page the Plugins screen opens itself: where the Composio API key comes from. */
-export const isPluginHelpUrl = (url: string): boolean => url === COMPOSIO.keyUrl
+/** The only external page the Apps screen opens itself: where the Composio API key comes from. */
+export const isAppsHelpUrl = (url: string): boolean => url === COMPOSIO.keyUrl
 
 /** One account of an app, connected through Composio (several per app, told apart by label). */
-export interface PluginAccount {
+export interface AppAccount {
   /** Composio's connected account id (ca_…). */
   id: string
   /** The app's Composio toolkit slug. */
@@ -97,10 +97,10 @@ export interface PluginAccount {
   status: 'active' | 'pending' | 'failed' | 'expired'
 }
 
-export interface PluginStatus {
+export interface AppsStatus {
   /** A Composio API key is saved. */
   keySet: boolean
-  accounts: PluginAccount[]
+  accounts: AppAccount[]
   /** Why Composio could not be reached, when it could not. */
   error?: string
 }

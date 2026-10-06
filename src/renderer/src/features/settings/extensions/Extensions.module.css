@@ -1,4 +1,4 @@
-/* Skills · MCP · Plugins (Settings). Lists reuse Settings.module.css; this adds what is specific here. */
+/* Skills · MCP · Apps (Settings). Lists reuse Settings.module.css; this adds what is specific here. */
 
 .header {
   display: flex;
@@ -256,7 +256,7 @@
   white-space: nowrap;
 }
 
-/* Plugins */
+/* Apps */
 .categories {
   display: flex;
   flex-wrap: wrap;
@@ -294,7 +294,7 @@
   color: var(--color-accent-contrast);
 }
 
-.pluginGrid {
+.appGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
@@ -302,12 +302,12 @@
 }
 
 @container settings (width < 620px) {
-  .pluginGrid {
+  .appGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-.pluginCard {
+.appCard {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -327,7 +327,7 @@
 }
 
 /* A soft sheen that follows the card's top edge on hover (opacity only). */
-.pluginCard::before {
+.appCard::before {
   content: '';
   position: absolute;
   inset: 0 0 auto;
@@ -337,17 +337,17 @@
   transition: opacity var(--duration-base) var(--ease-out);
 }
 
-.pluginCard:hover {
+.appCard:hover {
   border-color: var(--color-border-strong);
   box-shadow: var(--shadow-raised);
   transform: translateY(calc(var(--nudge-sm) * -1));
 }
 
-.pluginCard:hover::before {
+.appCard:hover::before {
   opacity: 1;
 }
 
-.pluginCard:active {
+.appCard:active {
   transform: scale(0.985);
 }
 
@@ -382,18 +382,12 @@
   min-width: 0;
 }
 
-.keyIcon {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--color-logo-initial);
-}
-
 .checkIcon {
   width: var(--icon-xs);
   height: var(--icon-xs);
 }
 
-/* The Composio account the plugins run through (ADR 0023). */
+/* The Composio key the apps run through (ADR 0023). */
 .accountBar {
   display: flex;
   align-items: center;
@@ -404,23 +398,23 @@
   background: var(--color-surface-raised);
 }
 
-.pluginCardOn {
+.appCardOn {
   border-color: var(--color-bronze-soft);
 }
 
-.pluginTop {
+.appTop {
   display: flex;
   align-items: center;
   gap: var(--space-5);
 }
 
-.pluginName {
+.appName {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.pluginName strong {
+.appName strong {
   overflow: hidden;
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
@@ -428,7 +422,7 @@
   white-space: nowrap;
 }
 
-.pluginName span {
+.appName span {
   color: var(--color-text-faint);
   font-size: var(--text-2xs);
   letter-spacing: var(--tracking-caps);
@@ -448,7 +442,7 @@
   transition: transform var(--duration-base) var(--ease-liquid);
 }
 
-.pluginCard:hover .logoTile {
+.appCard:hover .logoTile {
   transform: scale(1.06) rotate(-2deg);
 }
 
@@ -458,27 +452,14 @@
   object-fit: contain;
 }
 
-.logoInitial {
-  color: var(--color-logo-initial);
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-  line-height: 1;
-}
-
-.logoLarge {
-  width: calc(var(--space-11) + var(--space-4));
-  height: calc(var(--space-11) + var(--space-4));
-  border-radius: var(--radius-lg);
-}
-
-.pluginFoot {
+.appFoot {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: auto;
 }
 
-/* Plugin setup dialog */
+/* Apps: the Composio key bar and an app's accounts */
 .setupText {
   display: flex;
   flex: 1;
@@ -545,4 +526,3 @@
   padding-top: var(--space-6);
 }
 
-/* A plugin with several accounts. */

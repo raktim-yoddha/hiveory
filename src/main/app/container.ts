@@ -6,7 +6,7 @@ import { EditorService } from '../services/editors/editor-service'
 import { FileService } from '../services/files/file-service'
 import { ConnectionService } from '../services/connections/connection-service'
 import { McpGateway } from '../services/connections/mcp-gateway'
-import { PluginService } from '../services/connections/plugin-service'
+import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
 import { handleBody } from '../services/agent-tools/mcp-protocol'
@@ -82,7 +82,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const voice = new VoiceService(paths.voiceDir, emit, log)
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
-  const plugins = new PluginService(connections, openBrowser)
+  const appService = new AppService(connections, openBrowser)
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
   const mcpFor = (id: string, baseUrl?: string) => {
     const endpoint = hookServer?.endpoint
@@ -153,6 +153,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     if (event === 'runtime.changed') {
       const { instanceId, runtime: details } = payload as { instanceId: string; runtime: Parameters<QueenWatcher['onRuntime']>[1] }
       watcher.onRuntime(instanceId, details)
+      // A turn started: real work, so the project rises in the sidebar.
+      if (details.status === 'working') projects.markActive(agents.find(instanceId)?.projectId)
     }
   }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
@@ -212,7 +214,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const browser = new BrowserService(store, settings, emit, log)
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
   const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
-  // Plugins and Hiveory's MCP servers come through the gateway (ADR 0017).
+  // Apps and Hiveory's MCP servers come through the gateway (ADR 0017, 0023).
   const extraTools = () => [...(settings?.get().computerUse && computer.supported ? [computerTools] : []), gateway]
   const toolDeps = {
     agents,
@@ -281,7 +283,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     editors,
     connections,
     gateway,
-    plugins,
+    apps: appService,
     chatStore,
     chats,
     bots,

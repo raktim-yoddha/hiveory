@@ -22,7 +22,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
   { id: 'appearance', label: 'Appearance', icon: <Palette /> },
   { id: 'agents', label: 'Agents', icon: <AgentIcon /> },
   { id: 'browser', label: 'Browser', icon: <Globe /> },
-  { id: 'extensions', label: 'Skills, MCP & Plugins', icon: <Blocks /> },
+  { id: 'extensions', label: 'Skills, MCP & Apps', icon: <Blocks /> },
   { id: 'queen', label: 'Queen Bee', icon: <QueenIcon /> },
   { id: 'remote', label: 'Remote', icon: <Server /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },

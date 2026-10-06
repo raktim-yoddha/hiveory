@@ -22,7 +22,7 @@ import type {
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
-import type { PluginAccount, PluginStatus } from '../domain/plugins'
+import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
 import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
@@ -58,7 +58,8 @@ const queenContextSchema = z.object({
     .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
     .max(500),
   clis: z.array(z.object({ id: shortText, displayName: shortText, kind: z.enum(['agent', 'shell']).optional() })).max(200),
-  presets: z.array(z.object({ id: shortText, name: shortText })).max(200)
+  presets: z.array(z.object({ id: shortText, name: shortText })).max(200),
+  bots: z.array(z.object({ id: shortText, name: shortText })).max(200).optional()
 })
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
@@ -112,7 +113,7 @@ const fileName = z.string().min(1).max(1000)
 /** `agents` or the id of a CLI that has its own skills folder (checked against the registry's roots in main). */
 const skillRoot = id
 const connectionId = z.string().regex(/^c[a-z0-9]{1,24}$/)
-const pluginAppId = z.string().regex(/^[a-z0-9_]{1,40}$/)
+const appIdSchema = z.string().regex(/^[a-z0-9_]{1,40}$/)
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
 const headerName = z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
 const profileId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -372,7 +373,7 @@ export const requestSchemas = {
   }),
   /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
   'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional() }),
-  /** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
+  /** MCP servers and apps Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
   /** Explorer (ADR 0018): paths are relative to the scope's folder and re-checked in main. */
   'files.list': z.object({ scope: fileScope, dir: relPath }),
   'files.search': z.object({ scope: fileScope, query: z.string().max(200) }),
@@ -391,12 +392,13 @@ export const requestSchemas = {
   /** Opens the Composio account page in the system browser (allow-listed in main). */
   'system.openUrl': z.object({ url: z.string().max(500) }),
   'connections.list': none,
-  /** Plugins (ADR 0023): the user's Composio API key, and app accounts connected through it. */
-  'plugins.status': none,
-  'plugins.setKey': z.object({ apiKey: z.string().trim().min(8).max(200).regex(/^\S+$/, 'Paste the key without spaces.') }),
-  'plugins.removeKey': none,
-  'plugins.connect': z.object({ appId: pluginAppId, label: z.string().trim().max(40).regex(/^[\p{L}\p{N} ._-]*$/u, 'Use letters, numbers, spaces, dots, dashes or underscores.').optional() }),
-  'plugins.disconnect': z.object({ accountId: z.string().regex(/^[A-Za-z0-9_-]{3,64}$/) }),
+  /** Apps (ADR 0023): the user's Composio API key, and app accounts connected through it. */
+  'apps.status': none,
+  'apps.setKey': z.object({ apiKey: z.string().trim().min(8).max(200).regex(/^\S+$/, 'Paste the key without spaces.') }),
+  'apps.removeKey': none,
+  /** Every account has a label, so several accounts of one app stay apart. */
+  'apps.connect': z.object({ appId: appIdSchema, label: z.string().trim().min(1, 'Name this account.').max(40).regex(/^[\p{L}\p{N} ._-]*$/u, 'Use letters, numbers, spaces, dots, dashes or underscores.') }),
+  'apps.disconnect': z.object({ accountId: z.string().regex(/^[A-Za-z0-9_-]{3,64}$/) }),
   'connections.saveCustom': z.object({
     id: connectionId.optional(),
     name: z.string().trim().min(1).max(40),
@@ -625,11 +627,11 @@ export interface ResponseMap {
   'editors.open': EditorView
   'editors.close': void
   'connections.list': ConnectionView[]
-  'plugins.status': PluginStatus
-  'plugins.setKey': PluginStatus
-  'plugins.removeKey': void
-  'plugins.connect': PluginAccount
-  'plugins.disconnect': void
+  'apps.status': AppsStatus
+  'apps.setKey': AppsStatus
+  'apps.removeKey': void
+  'apps.connect': AppAccount
+  'apps.disconnect': void
   'connections.saveCustom': ConnectionView
   'connections.import': ConnectionView
   'connections.setEnabled': ConnectionView

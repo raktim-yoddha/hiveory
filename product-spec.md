@@ -46,6 +46,10 @@ Open/Create Project
 
 Opening a Project does not create a Workspace.
 
+The Projects sidebar's "Recent activity" order moves a project up only for real work there:
+an agent starting a turn, an agent opening, a workspace being created (ADR 0024). Clicking a
+project to look at it does not move it.
+
 ## Workspace Lifecycle
 
 ```text
@@ -233,13 +237,13 @@ The side panel's Browser tab is a real browser (ADR 0015):
 
 Off by default (Settings › Agents). When on, agents operate this computer through `computer_*` tools: app elements as text with refs, real mouse and keyboard, windows and screenshots (Windows for now; ADR 0016).
 
-## Plugins, MCP servers and skills
+## Apps, MCP servers and skills
 
-Settings › Skills, MCP & Plugins has three tabs (ADR 0017):
+Settings › Skills, MCP & Apps has three tabs (ADR 0017, 0023):
 
 - **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash). The folders come from the CLI registry: the shared `.agents/skills` plus each CLI's own (Claude, Codex, Gemini, Copilot, Cursor, OpenCode, Qwen, Goose, Kiro, Droid, Kilo, Junie and more); chips show the folders an installed CLI reads (ADR 0020)
 - **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click
-- **Plugins** — paste the user's own Composio project API key once (free or paid); then Connect on any app card (Gmail, Google Drive, Slack, GitHub, Notion, Linear, Stripe…) goes straight to that app's sign-in — no Composio login, no app keys. Add account adds another labelled account of the same app; each account lists its id and status with Disconnect. Every agent — terminal, chat and bots — gets the connected apps, and can connect any of Composio's 1,000+ apps on request (ADR 0023)
+- **Apps** — paste the user's own Composio project API key once (free or paid). On any app card (Gmail, Google Drive, Slack, GitHub, Notion, Linear, Stripe…), Connect — or Add account for another one — first asks for the account's name (work, personal…), then goes straight to that app's sign-in: no Composio login, no app keys. Each account lists its name, id and status with Disconnect. Every app shows its real brand mark. Every agent — terminal, chat and bots — gets the connected apps, and can connect any of Composio's 1,000+ apps on request (ADR 0023)
 
 ## Appearance
 
@@ -288,6 +292,19 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   "what do you know about me?" reads them back, "forget …" removes them. Notes are local,
   editable in Settings, and reach a model provider only as facts.
 - "Tell <agent> to …" types your exact words into that agent and submits them.
+- The rest of the app (ADR 0024):
+  - settings on or off ("turn off browser use", "enable computer use");
+  - a page in the side browser ("open localhost:3000"), a file in an editor
+    ("open README.md");
+  - the panes tidied ("tidy up the panes", "side by side");
+  - the workspace's branch and changes ("what changed"), the project's open pull requests;
+  - connected apps, a Hiveory update check;
+  - the current agents saved as a preset ("save this as preset Backend");
+  - a new chat with a CLI and a first message;
+  - a message to a bot ("ask Scout to …");
+  - a CLI's last conversation resumed;
+  - a new project;
+  - "restart all".
 - Voice (Settings › Queen Bee › Voice): local speech packs downloaded on request and
   verified.
   - Parakeet for English, Spanish, Portuguese, German and French.

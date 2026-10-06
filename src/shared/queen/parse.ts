@@ -1,6 +1,7 @@
 import { THEMES, type ThemeId } from '../domain/settings'
 import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
 import { parseAddress, parseMessage, parseOpenAndSend } from './address'
+import { parseAppCommand } from './app-commands'
 import { parseSmallTalk } from './chat'
 import { CLOSE_VERBS, cliAliases, clauses, fold, GO_VERBS, hasWord, norm, NUMBER_WORDS, OPEN_VERBS, RESTART_VERBS, STOP_VERBS } from './words'
 
@@ -143,7 +144,7 @@ const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
   [/\b(queen|personality|persona|voice|assistant)\b/, 'queen'],
   [/\b(agents?|clis?)\b/, 'agents'],
   [/\b(browser|cookies|profiles?)\b/, 'browser'],
-  [/\b(extensions?|skills?|mcp|plugins?|servers?)\b/, 'extensions'],
+  [/\b(extensions?|skills?|mcp|plugins?|apps?|integrations?|servers?)\b/, 'extensions'],
   [/\b(updates?|upgrade)\b/, 'updates'],
   [/\b(guide|help|docs|tutorial)\b/, 'guide'],
   [/\b(about|version)\b/, 'about']
@@ -273,8 +274,10 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
   }
 
   if (verb === 'restart') {
-    if (agents.length !== 1) return (agents.length ? ask : soft)('Which agent should I restart?', ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId).slice(0, 4).map((a) => ({ label: a.petName, command: `restart ${a.petName}` })))
-    return done([{ type: 'restart-agent', agentId: agents[0]!.id }], 'restart')
+    // "restart all", "restart every codex": each one.
+    const targets = agents.length ? agents : many()
+    if (!targets.length) return soft('Which agent should I restart?', ctx.agents.filter((a) => a.workspaceId === ctx.workspaceId).slice(0, 4).map((a) => ({ label: a.petName, command: `restart ${a.petName}` })))
+    return done(targets.map((a) => ({ type: 'restart-agent', agentId: a.id })), 'restart')
   }
 
   // A named agent with a "show/go/open" verb: jump to its pane.
@@ -363,7 +366,7 @@ export function parseCommand(raw: string, ctx: QueenContext): QueenParse {
   const talk = parseSmallTalk(input)
   if (talk) return { kind: 'actions', actions: [{ type: 'chat', topic: talk }] }
   // Most specific first: notes, one-liners, then anything addressed to an agent by name.
-  const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
+  const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parseAppCommand(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
   if (direct) return direct
   const text = fold(input)
   if (!text) return { kind: 'unknown' }

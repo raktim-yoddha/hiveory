@@ -6,7 +6,7 @@ export interface Sealer {
 }
 
 /**
- * Seals plugin keys and server secrets before they reach the state file:
+ * Seals API keys and server secrets before they reach the state file:
  * OS-encrypted (DPAPI, Keychain, libsecret) when available, else only
  * encoded — the Linux-without-keyring case, reported by `encrypted`.
  */

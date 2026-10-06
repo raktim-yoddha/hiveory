@@ -49,6 +49,42 @@ export type QueenAction =
   | { type: 'recall' }
   /** Small talk ("hi", "thanks", "who are you"): she answers in her personality; nothing runs. */
   | { type: 'chat'; topic: SmallTalk }
+  /** Turns one app setting on or off (a closed set). */
+  | { type: 'set-setting'; setting: QueenSetting; on: boolean }
+  /** Opens a web page in the workspace's side-panel browser. */
+  | { type: 'open-url'; url: string; workspaceId: string }
+  /** Finds a file of the workspace by name and opens it as an editor pane. */
+  | { type: 'open-file'; query: string; workspaceId: string }
+  /** Rearranges the workspace's panes: equal tiles or side-by-side columns. */
+  | { type: 'arrange'; layout: 'equal' | 'columns'; workspaceId: string }
+  /** The workspace's branch, changes and sync state. */
+  | { type: 'git-status'; workspaceId: string }
+  /** The project's open pull requests. */
+  | { type: 'pull-requests'; projectId: string }
+  /** Apps connected through Composio. */
+  | { type: 'apps-report' }
+  /** Checks for a Hiveory update. */
+  | { type: 'check-updates' }
+  /** Saves the workspace's agents (CLIs and counts) as a preset. */
+  | { type: 'save-preset'; name: string; workspaceId: string }
+  /** Starts a chat in Chat mode, with a CLI and a first message when given. */
+  | { type: 'new-chat'; cliId?: string; text?: string; projectId?: string }
+  /** Sends a message to a bot in a new thread (Bots mode). */
+  | { type: 'message-bot'; botId: string; text: string }
+  /** Reopens a CLI's latest conversation in this workspace. */
+  | { type: 'resume-session'; cliId: string; workspaceId: string; projectId: string }
+  /** Adds a project folder (the folder picker opens). */
+  | { type: 'add-project' }
+
+/** Settings Queen Bee may turn on or off, and the app setting each one is. */
+export const QUEEN_SETTINGS = {
+  'agent-tools': { key: 'agentTools', label: 'Agent tools' },
+  'browser-use': { key: 'browserUse', label: 'Browser use' },
+  'computer-use': { key: 'computerUse', label: 'Computer use' },
+  'auto-approve': { key: 'defaultAutoApprove', label: 'Auto-approve for new agents' },
+  'chat-ui': { key: 'defaultChatUi', label: 'Chat view for new agents' }
+} as const
+export type QueenSetting = keyof typeof QUEEN_SETTINGS
 
 /** How each top-level mode is named to the user. */
 export const MODE_LABEL = { workspace: 'Work', bots: 'Bots', chatspace: 'Chat' } as const
@@ -69,6 +105,8 @@ export interface QueenContext {
   /** Installed agent CLIs and terminals. */
   clis: Array<{ id: string; displayName: string; kind?: 'agent' | 'shell' }>
   presets: Array<{ id: string; name: string }>
+  /** The user's bots (Bots mode), so "ask Scout to …" reaches one. */
+  bots?: Array<{ id: string; name: string }>
   /** A custom personality's name, so "Zara, open Codex" parses like "Queen, open Codex". */
   queenName?: string
 }

@@ -10,6 +10,9 @@ import { GitCommandError } from '../git/git-service'
 import { MAX_ARCHIVED, type ArchivedProject } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
 import { mainTreeOwner } from '../workspaces/workspace-repository'
+
+/** A project's activity time moves at most this often. */
+const ACTIVE_THROTTLE_MS = 30_000
 import type { KitSource } from '../workspaces/workspace-service'
 
 export const samePath = (a: string, b: string): boolean =>
@@ -90,6 +93,26 @@ export class ProjectService {
     })
     this.emit('state.changed', { topic: 'projects' })
     return project
+  }
+
+  /**
+   * Records real work in a project (a turn started, an agent or workspace created) so it
+   * rises in the sidebar; opening a project alone does not. Status flips often, so a project
+   * that is already the most recent is updated at most every 30 s: that can't change the order.
+   */
+  markActive(projectId: string | undefined): void {
+    const all = this.store.state.projects
+    const project = projectId ? all.find((p) => p.id === projectId) : undefined
+    if (!project) return
+    const now = Date.now()
+    const at = (p: Project): number => Date.parse(p.lastActiveAt ?? p.createdAt) || 0
+    const newest = all.every((p) => p === project || at(p) <= at(project))
+    if (project.lastActiveAt && newest && now - at(project) < ACTIVE_THROTTLE_MS) return
+    this.store.update((s) => {
+      const p = s.projects.find((x) => x.id === project.id)
+      if (p) p.lastActiveAt = new Date(now).toISOString()
+    })
+    this.emit('state.changed', { topic: 'projects' })
   }
 
   touch(projectId: string): Project {

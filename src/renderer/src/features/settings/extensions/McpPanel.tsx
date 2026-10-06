@@ -21,7 +21,7 @@ import styles from './Extensions.module.css'
 export function McpPanel({ inventory }: { inventory: ExtensionsInventory | null }) {
   const all = useConnections((s) => s.connections)
   const put = useConnections((s) => s.put)
-  const servers = all.filter((c) => !c.pluginId)
+  const servers = all.filter((c) => !c.provider)
   const [editing, setEditing] = useState<ConnectionView | 'new' | null>(null)
   const [removing, setRemoving] = useState<ConnectionView | null>(null)
   const [busy, setBusy] = useState<string | null>(null)

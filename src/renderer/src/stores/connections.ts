@@ -17,7 +17,7 @@ export const useConnections = create<ConnectionsState>((set) => ({
     try {
       set({ connections: await api('connections.list') })
     } catch (error) {
-      reportError(error, 'Load plugins')
+      reportError(error, 'Load apps')
     }
   },
   put: (connection) =>

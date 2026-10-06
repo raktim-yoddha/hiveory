@@ -28,6 +28,12 @@
 - `adr/0016-speed-device-mode-computer-use.md`
 - `adr/0017-plugins-appearance-motion.md`
 - `adr/0018-flat-ui-explorer-shells.md`
+- `adr/0019-queen-bee.md`
+- `adr/0020-feedback-round-5.md`
+- `adr/0021-feedback-round-6.md`
+- `adr/0022-bots-hosts-durability.md`
+- `adr/0023-composio-sign-in.md`
+- `adr/0024-feedback-round-7.md`
 
 ## Research
 

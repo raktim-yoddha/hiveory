@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Blocks, RefreshCw, ScrollText, Server } from 'lucide-react'
-import { COMPOSIO, PLUGIN_APPS, type ExtensionsInventory } from '@shared/domain'
+import { COMPOSIO, APPS, type ExtensionsInventory } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
@@ -8,17 +8,17 @@ import { useConnections } from '../../stores/connections'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { McpPanel } from './extensions/McpPanel'
-import { PluginsPanel } from './extensions/PluginsPanel'
+import { AppsPanel } from './extensions/AppsPanel'
 import { SkillsPanel } from './extensions/SkillsPanel'
 import { SettingsPage } from './SettingsScreen'
 import styles from './extensions/Extensions.module.css'
 
-type Tab = 'skills' | 'mcp' | 'plugins'
+type Tab = 'skills' | 'mcp' | 'apps'
 
 /**
  * Everything agents can load, in one place: Agent Skills across CLIs, MCP
- * servers (Hiveory's own and each CLI's), and plugins — apps set up with the
- * user's own keys and served to every agent by Hiveory (ADR 0017).
+ * servers (Hiveory's own and each CLI's), and apps — connected through the
+ * user's own Composio project and served to every agent by Hiveory (ADR 0023).
  */
 export function ExtensionsSection() {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
@@ -45,14 +45,14 @@ export function ExtensionsSection() {
   }, [projectId])
 
   const skillCount = new Set(inventory?.skills.map((s) => `${s.scope}:${s.folder}`)).size
-  const serverCount = connections.filter((c) => !c.pluginId).length + (inventory?.mcpServers.length ?? 0)
-  const pluginCount = connections.find((c) => c.pluginId === COMPOSIO.id)?.apps?.length ?? 0
+  const serverCount = connections.filter((c) => !c.provider).length + (inventory?.mcpServers.length ?? 0)
+  const appCount = connections.find((c) => c.provider === COMPOSIO.id)?.apps?.length ?? 0
   const count = (n: number) => <span className={styles.count}>{n}</span>
 
   return (
     <SettingsPage
-      title="Skills, MCP & Plugins"
-      description="Everything your agents can load. Hiveory serves its MCP servers and plugins to every agent — terminal and chat — without touching any CLI's own config."
+      title="Skills, MCP & Apps"
+      description="Everything your agents can load. Hiveory serves its MCP servers and apps to every agent — terminal, chat and bots — without touching any CLI's own config."
     >
       <div className={styles.header}>
         <Tabs<Tab>
@@ -64,14 +64,14 @@ export function ExtensionsSection() {
           options={[
             { value: 'skills', label: 'Skills', icon: <ScrollText />, badge: count(skillCount) },
             { value: 'mcp', label: 'MCP servers', icon: <Server />, badge: count(serverCount) },
-            { value: 'plugins', label: 'Plugins', icon: <Blocks />, badge: count(pluginCount || PLUGIN_APPS.length) }
+            { value: 'apps', label: 'Apps', icon: <Blocks />, badge: count(appCount || APPS.length) }
           ]}
         />
-        {tab !== 'plugins' && <IconButton label="Rescan" icon={<RefreshCw className={loading ? 'spin' : undefined} />} onClick={() => void scan()} />}
+        {tab !== 'apps' && <IconButton label="Rescan" icon={<RefreshCw className={loading ? 'spin' : undefined} />} onClick={() => void scan()} />}
       </div>
       {tab === 'skills' && <SkillsPanel key="skills" inventory={inventory} projectId={projectId} onChanged={scan} />}
       {tab === 'mcp' && <McpPanel key="mcp" inventory={inventory} />}
-      {tab === 'plugins' && <PluginsPanel key="plugins" />}
+      {tab === 'apps' && <AppsPanel key="apps" />}
     </SettingsPage>
   )
 }

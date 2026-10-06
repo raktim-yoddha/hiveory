@@ -2,7 +2,7 @@ import { BrowserWindow, app, clipboard, dialog, safeStorage, shell, systemPrefer
 import { connectAndSave } from '../app/client'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
-import { isPluginHelpUrl } from '@shared/domain'
+import { isAppsHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
@@ -148,7 +148,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
 
   'workspaces.list': ({ projectId }) => c.workspaces.list(projectId),
   'workspaces.suggestName': ({ projectId }) => c.workspaces.suggestName(projectId),
-  'workspaces.create': (input) => c.workspaces.create(input),
+  'workspaces.create': async (input) => {
+    const workspace = await c.workspaces.create(input)
+    c.projects.markActive(workspace.projectId)
+    return workspace
+  },
   'workspaces.delete': ({ workspaceId, force }) => c.workspaces.delete(workspaceId, force ?? false),
 
   'clis.list': async (input) => {
@@ -157,7 +161,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'agents.list': ({ workspaceId }) => c.agents.list(workspaceId),
-  'agents.open': ({ workspaceId, cliId, placement, resumeSession }) => c.agents.open(workspaceId, cliId, placement, resumeSession),
+  'agents.open': async ({ workspaceId, cliId, placement, resumeSession }) => {
+    const opened = await c.agents.open(workspaceId, cliId, placement, resumeSession)
+    c.projects.markActive(opened.agent.projectId)
+    return opened
+  },
   'sessions.list': ({ scope, workspaceId, projectId }) => {
     if (scope === 'all') return c.sessions.list()
     if (scope === 'workspace') return c.sessions.list(workspaceId ? [c.workspaceRepo.get(workspaceId).path] : [])
@@ -290,7 +298,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'system.openUrl': async ({ url }) => {
-    if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
+    if (!isAppsHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
     await shell.openExternal(url)
   },
   // Files run where the folder is: this computer, or the project's SSH host (ADR 0022).
@@ -344,11 +352,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'editors.close': ({ editorId }) => c.editors.close(editorId),
   'connections.list': () => c.connections.list(),
-  'plugins.status': () => c.plugins.status(),
-  'plugins.setKey': ({ apiKey }) => c.plugins.setKey(apiKey),
-  'plugins.removeKey': () => c.plugins.removeKey(),
-  'plugins.connect': ({ appId, label }) => c.plugins.connect(appId, label),
-  'plugins.disconnect': ({ accountId }) => c.plugins.disconnect(accountId),
+  'apps.status': () => c.apps.status(),
+  'apps.setKey': ({ apiKey }) => c.apps.setKey(apiKey),
+  'apps.removeKey': () => c.apps.removeKey(),
+  'apps.connect': ({ appId, label }) => c.apps.connect(appId, label),
+  'apps.disconnect': ({ accountId }) => c.apps.disconnect(accountId),
   'connections.saveCustom': (input) => c.connections.saveCustom(input),
   'connections.import': ({ name }) => {
     const { config, from } = c.extensions.rawServer(name)

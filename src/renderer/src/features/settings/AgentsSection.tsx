@@ -75,7 +75,7 @@ export function AgentsSection() {
         </p>
         <SettingRow
           title="Give agents Hiveory tools"
-          description="Seeing, messaging and arranging other agents. The browser, computer use and plugins have their own switches. Applies to agents started after the change."
+          description="Seeing, messaging and arranging other agents. The browser, computer use and apps have their own switches. Applies to agents started after the change."
           control={
             <Toggle label="Give agents Hiveory tools" checked={settings.agentTools} onChange={(agentTools) => void update({ agentTools })} />
           }

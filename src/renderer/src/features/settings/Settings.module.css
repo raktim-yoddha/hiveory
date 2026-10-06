@@ -762,7 +762,7 @@
   color: var(--color-danger);
 }
 
-/* A section's main tab switch (Queen Bee), like Skills, MCP & Plugins. */
+/* A section's main tab switch (Queen Bee), like Skills, MCP & Apps. */
 .tabsHeader {
   display: flex;
   align-items: center;

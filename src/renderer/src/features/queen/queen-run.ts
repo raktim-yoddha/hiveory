@@ -21,10 +21,12 @@ import {
   type QueenOutcome,
   type QueenPrefs
 } from '@shared/queen/personas'
-import { MAX_NOTES, MODE_LABEL } from '@shared/queen/actions'
+import { MAX_NOTES, MODE_LABEL, QUEEN_SETTINGS } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
 import { api, HiveoryError } from '../../lib/api'
-import { useAgents, useClis, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
+import { useBots } from '../../stores/bots'
+import { useChat } from '../../stores/chat'
+import { useAgents, useClis, useLayouts, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
 import { openBrowserTab } from '../side-panel/panel-actions'
@@ -100,10 +102,12 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
   const projects = useProjects.getState()
   const clis = useClis.getState()
   const presets = usePresets.getState()
-  const [projectList, cliList, presetList] = await Promise.all([
+  const bots = useBots.getState()
+  const [projectList, cliList, presetList, botList] = await Promise.all([
     ensure(projects.loaded, projects.load, () => useProjects.getState().projects),
     ensure(clis.loaded, () => clis.load(), () => useClis.getState().clis),
-    ensure(presets.loaded, presets.load, () => usePresets.getState().presets)
+    ensure(presets.loaded, presets.load, () => usePresets.getState().presets),
+    ensure(bots.loaded, bots.load, () => useBots.getState().bots).catch(() => [])
   ])
   let workspaces = projectId ? useWorkspaces.getState().byProject[projectId] : undefined
   if (projectId && !workspaces) {
@@ -127,6 +131,7 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName, kind: c.kind })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name })),
+      bots: botList.map((b) => ({ id: b.id, name: b.name })),
       ...(useSettings.getState().settings.queenPersona === 'custom' ? { queenName: personaInfo(useSettings.getState().settings).name } : {})
     }
   }
@@ -404,6 +409,161 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'chat': {
           reportText = smallTalkLine(action.topic, p, personaInfo(useSettings.getState().settings).name)
+          break
+        }
+        case 'set-setting': {
+          const { key, label } = QUEEN_SETTINGS[action.setting]
+          const before = useSettings.getState().settings[key]
+          await useSettings.getState().update({ [key]: action.on })
+          undos.push(() => useSettings.getState().update({ [key]: before }))
+          outcomes.push({ kind: 'setting', name: label, on: action.on })
+          break
+        }
+        case 'open-url': {
+          if (selectedWorkspaceId(nav().view) !== action.workspaceId) throw new QueenError('the browser opens in a workspace. Open one first.')
+          if (!nav().panelOpen) nav().togglePanel()
+          const page = await api('browser.open', { scope: action.workspaceId, url: action.url })
+          nav().addPanelTab(action.workspaceId, 'browser', page.id, true, 'top')
+          outcomes.push({ kind: 'page', host: new URL(action.url).host })
+          break
+        }
+        case 'open-file': {
+          const found = await api('files.search', { scope: { workspaceId: action.workspaceId }, query: action.query })
+          const files = found.filter((f) => f.kind === 'file')
+          const wanted = action.query.toLowerCase()
+          const file = files.find((f) => f.name.toLowerCase() === wanted) ?? files.find((f) => f.path.toLowerCase().endsWith(wanted)) ?? files[0]
+          if (!file) throw new QueenError(`there's no file called ${action.query} here.`)
+          await api('editors.open', { workspaceId: action.workspaceId, path: file.path })
+          outcomes.push({ kind: 'file', name: file.path })
+          break
+        }
+        case 'arrange': {
+          if (!useLayouts.getState().byWorkspace[action.workspaceId]) await useLayouts.getState().load(action.workspaceId)
+          if (!useLayouts.getState().byWorkspace[action.workspaceId]) throw new QueenError('there are no panes here to arrange.')
+          await useLayouts.getState().apply(action.workspaceId, { type: 'arrange', mode: action.layout })
+          outcomes.push({ kind: 'arranged', layout: action.layout })
+          break
+        }
+        case 'git-status': {
+          const git = await api('workspaces.gitStatus', { workspaceId: action.workspaceId })
+          if (!git) {
+            reportText = `${workspaceName(action.workspaceId)} isn't a Git repository.`
+            break
+          }
+          const changes = git.changed + git.untracked
+          const sync = [git.ahead ? `${git.ahead} ahead` : '', git.behind ? `${git.behind} behind` : ''].filter(Boolean).join(', ')
+          reportText = [
+            `${git.branch ? `On ${git.branch}` : 'Detached'}:`,
+            changes ? `${changes} changed ${changes === 1 ? 'file' : 'files'}${git.untracked ? ` (${git.untracked} new)` : ''}` : 'no changes',
+            sync ? `; ${sync} of ${git.upstream ?? 'its upstream'}.` : '.'
+          ].join(' ').replace(' ;', ';').replace(' .', '.')
+          break
+        }
+        case 'pull-requests': {
+          const prs = await api('github.pullRequests', { projectId: action.projectId })
+          reportText = prs.length
+            ? `${prs.length} open pull ${prs.length === 1 ? 'request' : 'requests'}: ${prs
+                .slice(0, 3)
+                .map((pr) => `#${pr.number} ${pr.title}${pr.draft ? ' (draft)' : ''}`)
+                .join('; ')}${prs.length > 3 ? '; …' : ''}.`
+            : 'No open pull requests.'
+          break
+        }
+        case 'apps-report': {
+          const status = await api('apps.status')
+          const active = status.accounts.filter((a) => a.status === 'active')
+          if (!status.keySet) reportText = 'No apps yet: add your Composio API key in Settings › Skills, MCP & Apps › Apps.'
+          else if (status.error) reportText = `Composio can't be reached: ${status.error}`
+          else if (!active.length) reportText = 'No apps are connected yet. Connect one in Settings › Skills, MCP & Apps › Apps.'
+          else {
+            const byApp = new Map<string, string[]>()
+            for (const a of active) byApp.set(a.appId, [...(byApp.get(a.appId) ?? []), a.label ?? 'Default'])
+            reportText = `Connected: ${[...byApp].map(([app, labels]) => `${app} (${labels.join(', ')})`).join('; ')}.`
+          }
+          break
+        }
+        case 'check-updates': {
+          const status = await api('updates.check')
+          reportText =
+            status.state === 'available' || status.state === 'downloaded'
+              ? `Hiveory ${status.version} is available. Install it in Settings › Updates.`
+              : status.state === 'downloading'
+                ? `Hiveory ${status.version} is downloading (${Math.round(status.percent)}%).`
+                : status.state === 'unsupported'
+                  ? status.reason
+                  : status.state === 'error'
+                    ? `I couldn't check: ${status.message}`
+                    : 'Hiveory is up to date.'
+          break
+        }
+        case 'save-preset': {
+          const counts = new Map<string, number>()
+          for (const a of ctx.agents) if (a.workspaceId === action.workspaceId) counts.set(a.cliId, (counts.get(a.cliId) ?? 0) + 1)
+          if (!counts.size) throw new QueenError('there are no agents here to save.')
+          const settings = useSettings.getState().settings
+          const existing = ctx.presets.find((x) => x.name.toLowerCase() === action.name.toLowerCase())
+          await api('presets.save', {
+            ...(existing ? { id: existing.id } : {}),
+            name: action.name,
+            cliSelections: [...counts].map(([cliId, count]) => ({ cliId, count })),
+            autoApprove: settings.defaultAutoApprove,
+            chatUi: settings.defaultChatUi
+          })
+          await usePresets.getState().load()
+          outcomes.push({ kind: 'preset-saved', name: action.name })
+          break
+        }
+        case 'new-chat': {
+          remember()
+          nav().setMode('chatspace')
+          await useChat.getState().create(action.projectId)
+          const chatId = useChat.getState().activeId
+          if (!chatId) throw new QueenError('the chat did not start.')
+          if (action.cliId) await useChat.getState().update(chatId, { cliId: action.cliId })
+          outcomes.push({ kind: 'chat', ...(action.cliId ? { cliName: cliName(action.cliId) } : {}) })
+          if (action.text) {
+            if (!(await useChat.getState().send(chatId, action.text))) throw new QueenError('the message was not sent.')
+            outcomes.push({ kind: 'messaged', name: 'the chat' })
+          }
+          break
+        }
+        case 'message-bot': {
+          const bot = ctx.bots?.find((b) => b.id === action.botId)
+          if (!bot) throw new QueenError('that bot no longer exists.')
+          remember()
+          nav().setMode('bots')
+          await useBots.getState().select(bot.id)
+          await useBots.getState().newThread(bot.id)
+          const thread = useBots.getState().activeThread[bot.id]
+          if (!thread || !(await useChat.getState().send(thread, action.text))) throw new QueenError(`${bot.name} did not get the message.`)
+          outcomes.push({ kind: 'messaged', name: bot.name })
+          break
+        }
+        case 'resume-session': {
+          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that workspace no longer exists.')
+          const sessions = await api('sessions.list', { scope: 'workspace', workspaceId: action.workspaceId })
+          const latest = sessions.filter((s) => s.cliId === action.cliId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
+          if (!latest) throw new QueenError(`there's no earlier ${cliName(action.cliId)} conversation here.`)
+          if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
+            remember()
+            nav().openWorkspace(action.projectId, action.workspaceId)
+          }
+          const created = await agentActions.open(action.workspaceId, action.cliId, undefined, latest.id)
+          if (!created) throw new QueenError(`${cliName(action.cliId)} did not start.`)
+          undos.push(() => agentActions.close({ id: created.id, workspaceId: action.workspaceId }))
+          outcomes.push({ kind: 'resumed', cliName: cliName(action.cliId), title: latest.title.slice(0, 60) })
+          break
+        }
+        case 'add-project': {
+          const project = await api('projects.open')
+          if (!project) {
+            reportText = 'No folder chosen.'
+            break
+          }
+          await useProjects.getState().load()
+          remember()
+          nav().openProject(project.id)
+          outcomes.push({ kind: 'project', name: project.name })
           break
         }
       }

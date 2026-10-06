@@ -132,3 +132,29 @@ describe('repository addresses', () => {
     expect(repoNameOf('git@github.com:acme/api.git')).toBe('api')
   })
 })
+
+describe('project activity (ADR 0024)', () => {
+  it('moves only on real work, at most every 30 seconds; looking at a project does not', async () => {
+    const { repo, store, projects } = setup()
+    const project = await projects.open(repo)
+    expect(project.lastActiveAt).toBeUndefined()
+    projects.touch(project.id)
+    expect(store.state.projects[0]!.lastActiveAt).toBeUndefined()
+    projects.markActive(project.id)
+    const first = store.state.projects[0]!.lastActiveAt
+    expect(first).toBeTruthy()
+    // Already the most recent: a quick second turn changes nothing.
+    projects.markActive(project.id)
+    expect(store.state.projects[0]!.lastActiveAt).toBe(first)
+    // Another project worked on since: the next turn here moves it back up straight away.
+    vi.useFakeTimers({ now: Date.parse(first!) + 5000 })
+    store.update((s) => {
+      s.projects.push({ ...s.projects[0]!, id: 'other', name: 'other', path: '/other', lastActiveAt: new Date(Date.parse(first!) + 2000).toISOString() })
+    })
+    projects.markActive(project.id)
+    expect(store.state.projects[0]!.lastActiveAt).toBe(new Date(Date.parse(first!) + 5000).toISOString())
+    vi.useRealTimers()
+    projects.markActive('missing')
+    projects.markActive(undefined)
+  })
+})

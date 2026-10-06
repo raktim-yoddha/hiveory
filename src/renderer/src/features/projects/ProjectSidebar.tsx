@@ -30,7 +30,8 @@ export function ProjectSidebar() {
   const sorted = useMemo(
     () =>
       [...projects].sort((a, b) =>
-        sort === 'name' ? a.name.localeCompare(b.name) : b.lastOpenedAt.localeCompare(a.lastOpenedAt)
+        // Recent = last real work (ADR 0024): opening a project does not move it.
+        sort === 'name' ? a.name.localeCompare(b.name) : (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt)
       ),
     [projects, sort]
   )
@@ -56,7 +57,7 @@ export function ProjectSidebar() {
           items={(['recent', 'name'] as const).map((value) => ({
             type: 'item' as const,
             id: value,
-            label: value === 'recent' ? 'Recently opened' : 'Name',
+            label: value === 'recent' ? 'Recent activity' : 'Name',
             icon: sort === value ? <Check /> : null,
             onSelect: () => chooseSort(value)
           }))}

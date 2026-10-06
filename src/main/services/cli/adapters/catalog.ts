@@ -274,5 +274,76 @@ export const CATALOG: CliAdapter[] = [
     icon: officialIcon('junie', 'JU'),
     executables: ['junie'],
     skills: { dir: '.junie/skills' }
+  }),
+  // Round 7 market check (Emdash's 35 providers, OpenMausBot, Superset): CLIs they run that Hiveory did not.
+  // Commands as their makers document them; no auto-approve or resume flag is assumed.
+  defineCli({
+    id: 'hermes',
+    displayName: 'Hermes Agent',
+    icon: officialIcon('hermes', 'HE'),
+    executables: ['hermes']
+  }),
+  defineCli({
+    id: 'devin',
+    displayName: 'Devin CLI',
+    icon: officialIcon('devin', 'DE'),
+    executables: ['devin']
+  }),
+  defineCli({
+    id: 'jules',
+    displayName: 'Jules',
+    icon: officialIcon('jules', 'JL'),
+    executables: ['jules']
+  }),
+  defineCli({
+    id: 'rovodev',
+    displayName: 'Rovo Dev',
+    icon: officialIcon('rovodev', 'RD'),
+    // Atlassian's CLI; the interactive agent is its `rovodev run` subcommand.
+    executables: ['acli'],
+    args: ['rovodev', 'run']
+  }),
+  defineCli({
+    id: 'codebuff',
+    displayName: 'Codebuff',
+    icon: officialIcon('codebuff', 'CB'),
+    executables: ['codebuff']
+  }),
+  defineCli({
+    id: 'codebuddy',
+    displayName: 'CodeBuddy Code',
+    icon: officialIcon('codebuddy', 'CB'),
+    executables: ['codebuddy', 'cbc']
+  }),
+  defineCli({
+    id: 'qoder',
+    displayName: 'Qoder CLI',
+    icon: officialIcon('qoder', 'QO'),
+    executables: ['qodercli']
+  }),
+  defineCli({
+    id: 'pi',
+    displayName: 'Pi',
+    icon: officialIcon('pi', 'PI'),
+    executables: ['pi']
+  }),
+  defineCli({
+    id: 'commandcode',
+    displayName: 'Command Code',
+    icon: officialIcon('commandcode', 'CC'),
+    executables: ['command-code']
+  }),
+  defineCli({
+    id: 'mimo',
+    displayName: 'MiMo Code',
+    icon: officialIcon('mimo', 'MI'),
+    executables: ['mimo']
+  }),
+  defineCli({
+    id: 'trae',
+    displayName: 'Trae Agent',
+    icon: officialIcon('trae', 'TR'),
+    executables: ['trae-cli'],
+    args: ['interactive']
   })
 ]

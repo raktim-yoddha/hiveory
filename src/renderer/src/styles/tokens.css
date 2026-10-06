@@ -60,8 +60,6 @@
 
   /* Third-party brand marks sit on a light tile in every theme, so official colors keep their contrast. */
   --color-logo-tile: #f4f4f5;
-  /* A plugin's initial on that tile, when the CC0 set has no mark for it. */
-  --color-logo-initial: #27272a;
 
 
   /*

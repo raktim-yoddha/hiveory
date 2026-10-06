@@ -1,4 +1,4 @@
-# ADR 0023 — Plugins through the user's Composio project
+# ADR 0023 — Apps through the user's Composio project
 
 Supersedes the plugin part of ADR 0017 ("Plugins are local-first", the key
 catalog and its inclusion rule). The gateway part of ADR 0017 stays. Builds on
@@ -12,7 +12,8 @@ decided:
 - apps connect through Composio, using the user's own project (free or paid
   plan);
 - there is no Composio login. Connect goes straight to each app's own sign-in;
-- an app can hold several accounts, each with a label;
+- an app can hold several accounts, each named before it connects;
+- the feature is called **Apps** throughout (UI, code, IPC: `apps.*`);
 - every agent gets them — Work CLIs, chat and bots.
 
 Composio needs a credential, and three options were weighed:
@@ -24,12 +25,12 @@ Composio needs a credential, and three options were weighed:
 
 ## Decision
 **The key.**
-- Settings › Plugins asks once for a Composio project API key.
+- Settings › Skills, MCP & Apps › Apps asks once for a Composio project API key.
 - Saving it starts a tool-router session (`POST /tool_router/session`), which
   also proves the key works. The session has user id `hiveory` and multi-account
   and connection management on.
 - The key is sealed with `SecretBox` as the `x-api-key` header of one connection
-  (`pluginId: 'composio'`) to the session's MCP URL. It never reaches the
+  (`provider: 'composio'`; older state files say `pluginId`, read as `provider`) to the session's MCP URL. It never reaches the
   renderer and is masked in tool output.
 
 **Agents.** The session's MCP server is served to every agent through
@@ -38,9 +39,11 @@ Agents are told which apps have an active account. They can still connect any of
 Composio's 1,000+ apps on request: its tools return a link for the user.
 
 **Connecting apps.**
-- Connect calls `POST /tool_router/session/{id}/link` with the app's toolkit,
-  plus `alias` for an extra account's label. Hiveory opens the `redirect_url`,
-  which is the app's own sign-in page.
+- Connect and Add account first ask for the account's name. It is required and
+  unique per app, because it is how the user and agents tell accounts apart.
+- Hiveory then calls `POST /tool_router/session/{id}/link` with the app's
+  toolkit and that name as `alias`, and opens the `redirect_url`, which is the
+  app's own sign-in page.
 - Accounts come from `GET /connected_accounts`. Hiveory reads them when the
   screen opens, when the window regains focus and after each action. Only id,
   app, label and status leave main; Composio's account state, which can hold
@@ -55,8 +58,9 @@ Hiveory install on that project shares its accounts.
 **Migration.** Connections of the removed key plugins, and their saved keys, are
 dropped when the state is read.
 
-**Logos.** Brand marks still come only from the CC0 svg-logos set. Apps without
-one show their initial.
+**Logos.** Every app shows its real brand mark, embedded at build time: from the
+CC0 svg-logos set, or, for apps it lacks, the official mark Composio serves for
+that toolkit. A test fails if an app has no mark.
 
 **Testing.** `HIVEORY_COMPOSIO_API` points automated runs at a local stand-in.
 Links may be http only for a server on this computer. The e2e run checks:
