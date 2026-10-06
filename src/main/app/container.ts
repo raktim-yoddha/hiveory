@@ -101,7 +101,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const localHost = new LocalHost(join(import.meta.dirname, 'host.js'), log, (message) => emit('app.notice', { level: 'warning', message }))
   const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
   // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
-  const sshHosts = new SshHostConnector(join(import.meta.dirname, 'host.js'), log)
+  // HIVEORY_SSH_CONFIG points automated runs at their own ssh config (like HIVEORY_USER_DATA); users rely on ~/.ssh/config.
+  const sshHosts = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, process.env.HIVEORY_SSH_CONFIG ? ['-F', process.env.HIVEORY_SSH_CONFIG] : [])
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
 

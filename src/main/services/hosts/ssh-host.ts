@@ -132,7 +132,7 @@ export class SshHostConnector {
     // The remote has only node-pty: a bundle importing sibling chunks could never start there.
     if (/from\s*["']\.\.?\//.test(bundle.toString('utf8'))) fail('UNEXPECTED', 'The host daemon bundle is not standalone.', { operation: 'Install the host' })
     const sha = createHash('sha256').update(bundle).digest('hex')
-    const state = await this.run(target, `cat ${REMOTE_DIR}/host.sha256 2>/dev/null; echo; test -d ${REMOTE_DIR}/node_modules/@lydell/node-pty && echo pty-ok`)
+    const state = await this.run(target, `cat ${REMOTE_DIR}/host.sha256 2>/dev/null; echo; test -d ${REMOTE_DIR}/node_modules/@lydell/node-pty && echo pty-ok || true`)
     let installed = false
     if (state.split(/\r?\n/)[0]?.trim() !== sha) {
       await this.run(target, `mkdir -p ${REMOTE_DIR} && cat > ${REMOTE_DIR}/host.mjs.tmp && mv ${REMOTE_DIR}/host.mjs.tmp ${REMOTE_DIR}/host.mjs && printf %s ${sha} > ${REMOTE_DIR}/host.sha256`, bundle)
