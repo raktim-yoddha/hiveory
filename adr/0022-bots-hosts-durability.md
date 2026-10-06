@@ -82,6 +82,35 @@ Git Bash: probe, upload, skipped re-upload, `exec` and a real PTY over stdio; an
 client's error path. A live SSH hop still needs a machine to test against. Remote projects and
 bot computers come next, on this connection.
 
+**Step 3 (done): remote projects in Work.** A project may live on an SSH host (`Project.host`).
+- **One kit per machine.** `HostKit` (`src/main/services/hosts/host-kit.ts`) is everything a
+  project needs from its machine: git, worktrees, files, fs, PTYs, its CLI registry, path rules
+  (`posix` for a Linux server even on Windows), hook endpoint and roots. `localKit` wraps
+  today's services; `HostRegistry` connects to an SSH host on first use and reconnects on the
+  next use after a drop. `WorkspaceService`, `ProjectService`, the file and git handlers, the
+  runtime and `AgentService` ask for the project's kit and never branch on local or remote.
+- **The daemon runs the same classes.** `hiveoryd` serves `git`, `worktrees`, `files` and `fs`
+  through `invoke`, with a fixed allowlist of methods per service (`HOST_SERVICES`; never
+  `git.run`), so paths and tools are native on the server. Errors keep their type across the
+  wire (`AppException`, `GitCommandError`), and folder watches come back as `files.changed`
+  events. Remote deletes go to `~/.hiveory-host/trash`. Over SSH the daemon adopts the login
+  shell's PATH, so CLIs in `~/.local/bin`, nvm or Homebrew are found, and `which` lists that
+  host's CLIs (shell adapters declare `platforms`, so a Linux server offers bash and never cmd).
+  It is built on its own (a Vite build after main), self-contained except for node-pty.
+- **Agents on the server.** The runtime launches with the host's registry, a runtime folder on
+  the host (files written there) and the host's own environment (`inheritEnv`, never this
+  computer's PATH). An `ssh -R` reverse tunnel carries status hooks and Hiveory's MCP tools back
+  to the local hook server (loopback on both ends, same per-agent token). Chat view runs CLIs
+  headless locally, so remote workspaces use terminals. A dropped link ends that host's agents
+  with a notice; restarting reconnects, and a restarted session picks up the new connection.
+- **Kept local.** Restore previous scans this computer only. GitHub features (`gh`), "reveal in
+  folder" and the Sessions history work for local projects; remote projects say so.
+- Verified against a Docker sshd server (Node 22, git, a fake `claude` on the login PATH): browse,
+  add `~/demo`, git info, the host's CLIs, a bash pane printing the server's hostname and folder,
+  Explorer create/write/read/delete (path escape refused), an isolated workspace as a worktree
+  there, the fake Claude Code sending a hook and listing 33 tools through the tunnel (status turned
+  working), workspace deletion removing the worktree, and a killed daemon followed by a reconnect.
+
 **Containers are Docker.** A local VM is a Docker container from a pinned desktop image (as in
 OpenMausBot), and a VPS computer is the same container through `docker -H ssh://alias`. Both are
 hardened (no published ports, dropped capabilities, only the bot's folder mounted) and lease one

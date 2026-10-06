@@ -5,7 +5,8 @@ import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
 import { cx } from '../../lib/cx'
-import { useClis } from '../../stores/data'
+import { useHostClis } from '../../stores/data'
+import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { agentActions } from './agent-actions'
 import styles from './AddAgentMenu.module.css'
 
@@ -31,7 +32,8 @@ export function AddAgentMenu({ workspaceId, paneId, fits }: AddAgentMenuProps) {
 }
 
 function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps & { onDone: () => void }) {
-  const { clis, loaded, load } = useClis()
+  const projectId = useNavigation((s) => selectedProjectId(s.view))
+  const { clis, loaded, load } = useHostClis(projectId)
   const [preferred, setSide] = useState<'right' | 'bottom'>('right')
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)

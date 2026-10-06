@@ -1,8 +1,24 @@
+/** Where a project's files, git and agents live (ADR 0022). Absent = this computer. */
+export interface HostRef {
+  kind: 'ssh'
+  /** An alias from ~/.ssh/config or user@host. */
+  destination: string
+  port?: number
+}
+
+/** One stable key per machine: 'local', or 'ssh:<destination>[:port]'. */
+export const hostKey = (host?: HostRef): string => (host ? `ssh:${host.destination}${host.port ? `:${host.port}` : ''}` : 'local')
+
+/** How a host is named to the user. */
+export const hostLabel = (host?: HostRef): string => (host ? host.destination : 'This computer')
+
 export interface Project {
   id: string
   name: string
-  /** Folder the user opened. */
+  /** Folder the user opened (on `host` when the project is remote). */
   path: string
+  /** A remote machine reached over SSH; absent for projects on this computer. */
+  host?: HostRef
   /** Git repository root, when the folder belongs to a repository. */
   repositoryRoot?: string
   createdAt: string

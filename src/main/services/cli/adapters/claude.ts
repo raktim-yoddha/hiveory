@@ -1,9 +1,8 @@
-import { join } from 'node:path'
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
 import { officialIcon } from './icons'
 import type { StatusEvent } from '../status/status-machine'
 import { claudeMcpArgs, MCP_TOOL_TIMEOUT_MS, mcpServersJson } from './mcp-injection'
-import { curlHookCommand, field, type CliAdapter } from './types'
+import { curlHookCommand, field, inDir, type CliAdapter } from './types'
 
 const HOOK_EVENTS = [
   'UserPromptSubmit',
@@ -69,7 +68,7 @@ export const claudeAdapter: CliAdapter = {
     const files: Array<{ path: string; content: string }> = []
     if (hook) {
       // Hooks are injected per launch via --settings; the user's own settings are never modified.
-      const settingsPath = join(runtimeDir, 'claude-hooks.json')
+      const settingsPath = inDir(runtimeDir, 'claude-hooks.json')
       const hooks = Object.fromEntries(
         HOOK_EVENTS.map((event) => [
           event,
@@ -82,7 +81,7 @@ export const claudeAdapter: CliAdapter = {
     const env: Record<string, string | undefined> = { CLAUDECODE: undefined }
     if (mcp) {
       // Agent tools: Hiveory's MCP server, pre-approved so coordination never stalls on a prompt.
-      const mcpPath = join(runtimeDir, 'hiveory-mcp.json')
+      const mcpPath = inDir(runtimeDir, 'hiveory-mcp.json')
       files.push({ path: mcpPath, content: JSON.stringify(mcpServersJson(mcp), null, 2) })
       args.push(...claudeMcpArgs(mcp, mcpPath))
       env.MCP_TOOL_TIMEOUT = String(MCP_TOOL_TIMEOUT_MS)

@@ -1,0 +1,29 @@
+.badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: var(--thread-tab-max-width);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-bronze-soft);
+  color: var(--color-bronze);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.badge svg {
+  width: var(--logo-sm);
+  height: var(--logo-sm);
+  flex-shrink: 0;
+}
+
+.badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconOnly {
+  padding: var(--space-1);
+}

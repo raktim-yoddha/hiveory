@@ -15,7 +15,9 @@ export class CliRegistry {
   constructor(
     private readonly adapters: CliAdapter[],
     private readonly log: Logger,
-    private readonly env: () => DiscoveryEnv = processDiscoveryEnv
+    private readonly env: () => DiscoveryEnv = processDiscoveryEnv,
+    /** Finds an adapter's executable another way (a remote host answers from its own PATH). */
+    private readonly resolve?: (adapter: CliAdapter) => string | undefined
   ) {}
 
   list(refresh = false): CliDescriptor[] {
@@ -23,8 +25,11 @@ export class CliRegistry {
     const env = this.env()
     this.cache = this.adapters.map((adapter) => {
       let executable: string | undefined
+      const family = env.platform === 'win32' ? 'win32' : 'posix'
       try {
-        executable = adapter.locate?.(env) ?? adapter.executables.map((name) => findExecutable(name, env)).find(Boolean)
+        if (adapter.platforms && !adapter.platforms.includes(family)) executable = undefined
+        else if (this.resolve) executable = this.resolve(adapter)
+        else executable = adapter.locate?.(env) ?? adapter.executables.map((name) => findExecutable(name, env)).find(Boolean)
       } catch (error) {
         this.log.warn(`CLI detection failed for ${adapter.id}`, error)
       }

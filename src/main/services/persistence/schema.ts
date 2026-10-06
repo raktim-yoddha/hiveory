@@ -153,6 +153,7 @@ export const projectSchema: z.ZodType<Project> = z.object({
   name: str,
   path: str,
   repositoryRoot: str.optional(),
+  host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional(),
   createdAt: str,
   updatedAt: str,
   lastOpenedAt: str

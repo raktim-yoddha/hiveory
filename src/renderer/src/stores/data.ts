@@ -70,14 +70,35 @@ interface CliState {
   clis: CliDescriptor[]
   loaded: boolean
   load(refresh?: boolean): Promise<void>
+  /** CLIs on each remote project's machine (ADR 0022), by project id. */
+  remote: Record<string, CliDescriptor[]>
+  loadRemote(projectId: string, refresh?: boolean): Promise<void>
 }
 
 export const useClis = create<CliState>((set) => ({
   clis: [],
   loaded: false,
   load: (refresh = false) =>
-    load('Detect CLIs', () => api('clis.list', { refresh }), (clis) => set({ clis, loaded: true }))
+    load('Detect CLIs', () => api('clis.list', { refresh }), (clis) => set({ clis, loaded: true })),
+  remote: {},
+  loadRemote: (projectId, refresh = false) =>
+    load('Detect CLIs on the remote host', () => api('clis.list', { refresh, projectId }), (clis) => set((s) => ({ remote: { ...s.remote, [projectId]: clis } })))
 }))
+
+/**
+ * The CLIs on a project's machine: this computer's for local projects, the SSH host's for
+ * remote ones (loaded on first use). Agent menus use this so they offer what can run there.
+ */
+export const useHostClis = (projectId?: string): { clis: CliDescriptor[]; loaded: boolean; load: (refresh?: boolean) => Promise<void> } => {
+  const remote = useProjects((s) => Boolean(projectId && s.projects.find((p) => p.id === projectId)?.host))
+  const local = useClis((s) => s.clis)
+  const localLoaded = useClis((s) => s.loaded)
+  const loadLocal = useClis((s) => s.load)
+  const remoteList = useClis((s) => (projectId ? s.remote[projectId] : undefined))
+  const loadRemote = useClis((s) => s.loadRemote)
+  if (!remote || !projectId) return { clis: local, loaded: localLoaded, load: loadLocal }
+  return { clis: remoteList ?? [], loaded: Boolean(remoteList), load: (refresh) => loadRemote(projectId, refresh) }
+}
 
 interface AgentState {
   byWorkspace: Record<string, CliInstanceView[]>

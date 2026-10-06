@@ -16,12 +16,17 @@ export const locateGitBash = (env: DiscoveryEnv, exists: (path: string) => boole
   return undefined
 }
 
-const shell = (id: string, displayName: string, spec: { executables: string[]; args?: string[]; locate?: CliAdapter['locate'] }): CliAdapter => ({
+const shell = (
+  id: string,
+  displayName: string,
+  spec: { executables: string[]; args?: string[]; locate?: CliAdapter['locate']; platforms?: CliAdapter['platforms'] }
+): CliAdapter => ({
   id,
   displayName,
   kind: 'shell',
   icon: { kind: 'image', src: SHELL_ICONS[id]! },
   executables: spec.executables,
+  platforms: spec.platforms,
   locate: spec.locate,
   supportsAutoApprove: false,
   buildLaunch: () => ({ args: spec.args ?? [] }),
@@ -33,14 +38,13 @@ const shell = (id: string, displayName: string, spec: { executables: string[]; a
  * Plain terminals that open as panes beside the agents (listed first in the
  * pane "+" menu). They are not agents: no Kanban card, no chat.
  */
-const posix = process.platform !== 'win32'
-
 export const SHELL_ADAPTERS: CliAdapter[] = [
-  // macOS and Linux: the user's shells first (zsh is the macOS default). Windows' bash.exe is WSL, so these stay off there.
-  shell('zsh', 'zsh', { executables: posix ? ['zsh'] : [], args: ['-l'] }),
-  shell('bash', 'bash', { executables: posix ? ['bash'] : [], args: ['-l'] }),
-  shell('fish', 'fish', { executables: posix ? ['fish'] : [], args: ['-l'] }),
+  // macOS and Linux (this computer or a remote host): the user's shells first (zsh is the macOS default).
+  // Windows' bash.exe is WSL, so these stay off there.
+  shell('zsh', 'zsh', { executables: ['zsh'], args: ['-l'], platforms: ['posix'] }),
+  shell('bash', 'bash', { executables: ['bash'], args: ['-l'], platforms: ['posix'] }),
+  shell('fish', 'fish', { executables: ['fish'], args: ['-l'], platforms: ['posix'] }),
   shell('powershell', 'PowerShell', { executables: ['pwsh', 'powershell'], args: ['-NoLogo'] }),
-  shell('cmd', 'Command Prompt', { executables: posix ? [] : ['cmd'] }),
-  shell('gitbash', 'Git Bash', { executables: [], args: ['--login', '-i'], locate: (env) => locateGitBash(env) })
+  shell('cmd', 'Command Prompt', { executables: ['cmd'], platforms: ['win32'] }),
+  shell('gitbash', 'Git Bash', { executables: [], args: ['--login', '-i'], locate: (env) => locateGitBash(env), platforms: ['win32'] })
 ]

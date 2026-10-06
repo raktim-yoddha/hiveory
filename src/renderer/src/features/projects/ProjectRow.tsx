@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { HostBadge } from '../../components/ui/HostBadge'
 import { AlertTriangle, ChevronRight, Copy, FolderOpen, GitBranch, House, LayoutGrid, Plus, X } from 'lucide-react'
 import type { Project, WorkspaceView } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
@@ -78,6 +79,7 @@ export function ProjectRow({ project }: { project: Project }) {
           trigger={(props) => (
             <button {...props} type="button" className={styles.rowButton} onClick={open} title={project.path}>
               <span className={styles.rowText}>{project.name}</span>
+              <HostBadge host={project.host} iconOnly />
             </button>
           )}
         />

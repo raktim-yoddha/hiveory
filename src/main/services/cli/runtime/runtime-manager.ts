@@ -9,6 +9,7 @@ import { PtySession } from '../../pty/pty-session'
 import { inProcessPty, type PtyBackend } from '../../pty/pty-backend'
 import type { HookEndpoint, McpEndpoint } from '../adapters/types'
 import type { CliRegistry } from '../registry'
+import type { HostKit } from '../../hosts/host-kit'
 import { HeuristicDetector } from '../status/heuristics'
 import { NOT_RUNNING, reduceStatus, sameDetails, type StatusEvent } from '../status/status-machine'
 
@@ -31,6 +32,8 @@ export interface RuntimeManagerEvents {
 export interface LaunchOptions {
   /** The only agent of its CLI in the folder (see `LaunchContext.soleOfCli`). */
   soleOfCli?: boolean
+  /** The machine the agent runs on when it is not this computer (ADR 0022); connected on demand. */
+  host?: Promise<HostKit>
 }
 
 const phaseOf = (d: CliRuntimeDetails): 'idle' | 'working' | 'waiting' =>
@@ -59,7 +62,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     private readonly log: Logger,
     private readonly runtimeRoot: string,
     private readonly hookEndpoint: () => HookEndpoint | undefined,
-    private readonly mcpEndpoint: (instanceId: string) => McpEndpoint | undefined = () => undefined,
+    /** Hiveory's MCP endpoint for an agent; `baseUrl` replaces the local one for agents on another machine. */
+    private readonly mcpEndpoint: (instanceId: string, baseUrl?: string) => McpEndpoint | undefined = () => undefined,
     /** Where agent PTYs run: the local host daemon in the app (ADR 0022). */
     private readonly ptyBackend: PtyBackend = inProcessPty
   ) {
@@ -74,32 +78,66 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
    * first frame at the wrong width (the cause of misaligned output).
    */
   launch(instance: CliInstance, cwd: string, options: LaunchOptions = {}): void {
+    if (this.sessions.get(instance.id)?.pty.running) return
+    if (!options.host) return this.launchOn(instance, cwd, options)
+    // Another machine: connect (installing hiveoryd if needed), then start there. A host
+    // that cannot be reached fails only this agent, with the reason in its pane.
+    options.host.then(
+      (kit) => {
+        try {
+          this.launchOn(instance, cwd, options, kit)
+        } catch (error) {
+          this.markFailed(instance, error instanceof Error ? error.message : String(error))
+        }
+      },
+      (error: unknown) => this.markFailed(instance, error instanceof Error ? error.message : String(error))
+    )
+  }
+
+  private launchOn(instance: CliInstance, cwd: string, options: LaunchOptions, kit?: HostKit): void {
     const existing = this.sessions.get(instance.id)
     if (existing?.pty.running) return
-    const adapter = this.registry.adapter(instance.cliId)
-    const executable = this.registry.executable(instance.cliId)
+    const registry = kit?.registry ?? this.registry
+    const adapter = registry.adapter(instance.cliId)
+    const executable = registry.executable(instance.cliId)
     if (!adapter || !executable) {
-      const message = `${this.registry.displayName(instance.cliId)} is not installed or not on PATH.`
+      const where = kit?.remote ? ` on ${kit.label}` : ''
+      const message = `${registry.displayName(instance.cliId)} is not installed${where} or not on PATH.`
       this.markFailed(instance, message)
       fail('CLI_UNAVAILABLE', message, { hint: 'Install the CLI, then refresh the agent list.' })
     }
-    const hook = adapter!.mapHookEvent ? this.hookEndpoint() : undefined
+    const hook = adapter!.mapHookEvent ? (kit ? kit.hook() : this.hookEndpoint()) : undefined
     const spec = adapter!.buildLaunch({
       instance,
       cwd,
       autoApprove: instance.autoApprove,
       hook,
-      mcp: adapter!.injectMcp ? this.mcpEndpoint(instance.id) : undefined,
-      runtimeDir: join(this.runtimeRoot, instance.id),
+      mcp: adapter!.injectMcp ? this.mcpEndpoint(instance.id, kit?.remote ? kit.hook()?.baseUrl : undefined) : undefined,
+      runtimeDir: kit ? kit.paths.join(kit.runtimeRoot, instance.id) : join(this.runtimeRoot, instance.id),
       resume: instance.hasConversation,
       soleOfCli: options.soleOfCli ?? false
     })
 
-    const session = existing ?? this.createSession(instance)
+    const session = existing ?? this.createSession(instance, kit?.pty)
+    if (kit) session.pty.useBackend(kit.pty)
     session.instance = instance
     const heuristics = adapter!.heuristics(Boolean(hook))
     session.detector = heuristics ? new HeuristicDetector(heuristics) : null
     this.sessions.set(instance.id, session)
+    if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
+
+    if (kit?.remote) {
+      // The remote machine's own environment, never this computer's (no Windows PATH on a Linux box).
+      const env: Record<string, string> = { TERM: 'xterm-256color', COLORTERM: 'truecolor', HIVEORY_INSTANCE_ID: instance.id }
+      for (const [k, v] of Object.entries(spec.env ?? {})) if (v !== undefined) env[k] = v
+      const files = spec.files ?? []
+      Promise.all(files.map((f) => kit.fs.writeText(f.path, f.content))).then(
+        () => session.pty.start({ file: executable!, args: spec.args, cwd, env, inheritEnv: true }),
+        (error: unknown) => this.markFailed(instance, `Could not prepare ${adapter!.displayName} on ${kit.label}: ${error instanceof Error ? error.message : String(error)}`)
+      )
+      this.apply(session, { type: 'started' }, 'process')
+      return
+    }
 
     try {
       for (const file of spec.files ?? []) {
@@ -112,7 +150,6 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     const env = sanitizeEnv(process.env, spec.env)
     env.HIVEORY_INSTANCE_ID = instance.id
     const [file, args] = resolveCommand(executable!, spec.args)
-    if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
     session.pty.start({ file, args, cwd, env })
     this.apply(session, { type: 'started' }, 'process')
   }
@@ -207,8 +244,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     }
   }
 
-  private createSession(instance: CliInstance): Session {
-    const session: Session = { instance, pty: new PtySession(true, this.ptyBackend), detector: null, details: NOT_RUNNING }
+  private createSession(instance: CliInstance, backend: PtyBackend = this.ptyBackend): Session {
+    const session: Session = { instance, pty: new PtySession(true, backend), detector: null, details: NOT_RUNNING }
     session.pty.on('data', (data, offset) => this.emit('data', session.instance.id, data, offset))
     session.pty.on('raw', (data) => {
       const event = session.detector?.onOutput(data, Date.now())

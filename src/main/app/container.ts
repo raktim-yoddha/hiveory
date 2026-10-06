@@ -27,6 +27,8 @@ import { HookServer } from '../services/cli/hooks/hook-server'
 import { hostPtyBackend } from '../services/hosts/host-client'
 import { LocalHost } from '../services/hosts/local-host'
 import { SshHostConnector } from '../services/hosts/ssh-host'
+import { HostRegistry, localKit } from '../services/hosts/host-kit'
+import type { HostRef } from '@shared/domain'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -77,7 +79,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
-  const mcpFor = (id: string) => {
+  const mcpFor = (id: string, baseUrl?: string) => {
     const endpoint = hookServer?.endpoint
     if (!endpoint || !settings) return undefined
     const s = settings.get()
@@ -88,7 +90,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const bot = botId ? bots?.find(botId) : undefined
     if (!s.agentTools && !s.browserUse && !computerOn && !apps.length && !bot) return undefined
     return {
-      url: `${endpoint.baseUrl}/mcp/${id}`,
+      // Agents on another machine reach the same server through their SSH tunnel.
+      url: `${baseUrl ?? endpoint.baseUrl}/mcp/${id}`,
       token: endpoint.token,
       coordination: s.agentTools,
       browser: s.browserUse,
@@ -138,9 +141,12 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       watcher.onRuntime(instanceId, details)
     }
   }
-  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats)
-  const projects = new ProjectService(store, git, agents, emit)
-  const workspaces = new WorkspaceService(workspaceRepo, git, worktrees, agents, paths.worktreeRoot, emit)
+  // Every project's machine: this computer, or an SSH host reached through hiveoryd (ADR 0022).
+  let hosts: HostRegistry | null = null
+  const kits = { kit: (host?: HostRef) => hosts!.kit(host) }
+  const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
+  const projects = new ProjectService(store, kits, agents, emit)
+  const workspaces = new WorkspaceService(workspaceRepo, kits, agents, paths.worktreeRoot, emit)
   const presets = new PresetService(store, emit)
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)
@@ -172,6 +178,25 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
   const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
   const files = new FileService((path) => shell.trashItem(path), (scope, changed) => emit('files.changed', { scope, paths: changed }))
+  hosts = new HostRegistry(
+    localKit({
+      git,
+      worktrees,
+      files,
+      pty: ptyBackend,
+      registry,
+      hook: () => hookServer?.endpoint,
+      worktreeRoot: paths.worktreeRoot,
+      runtimeRoot: paths.runtimeDir,
+      home: homedir()
+    }),
+    sshHosts,
+    BUILT_IN_ADAPTERS,
+    log,
+    () => hookServer?.endpoint,
+    (scope, changed) => emit('files.changed', { scope, paths: changed }),
+    (host) => emit('app.notice', { level: 'warning', message: `Lost the connection to ${host.destination}. Its agents stopped; they resume when you open them again.` })
+  )
   const editors = new EditorService(store, layouts, (workspaceId) => agents.paneIds(workspaceId), emit)
   const browser = new BrowserService(store, settings, emit, log)
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
@@ -224,6 +249,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     runtime,
     localHost,
     sshHosts,
+    hosts,
     hookServer,
     workspaceRepo,
     layouts,

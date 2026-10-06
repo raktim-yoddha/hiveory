@@ -1,9 +1,10 @@
+import type { AppError } from '../errors'
+
 /**
  * The execution-host protocol (ADR 0022): how Hiveory talks to a host daemon
- * (`hiveoryd`) that owns processes on a machine. The same frames run over a
- * local utility process today and over an SSH channel for remote hosts, so
- * Work and Bots share one remote layer. Bump HOST_PROTOCOL only for breaking
- * changes; a daemon keeps answering every version it knows.
+ * (`hiveoryd`) that owns processes, files and git on a machine. The same frames
+ * run over a local utility process and over an SSH channel, so Work and Bots
+ * share one remote layer. Bump HOST_PROTOCOL only for breaking changes.
  */
 export const HOST_PROTOCOL = 1
 
@@ -14,6 +15,8 @@ export interface PtySpawnParams {
   env: Record<string, string>
   cols: number
   rows: number
+  /** Start from the host's own environment and apply `env` on top (remote hosts: never ship this computer's env). */
+  inheritEnv?: boolean
 }
 
 export interface ExecParams {
@@ -24,13 +27,26 @@ export interface ExecParams {
   timeoutMs?: number
 }
 
+/** Services the host runs on its own machine, so paths and tools are native there. */
+export const HOST_SERVICES = {
+  git: ['repositoryRoot', 'currentBranch', 'hasCommits', 'localBranchExists', 'refExists', 'localBranches', 'status', 'branchNameProblem', 'init', 'defaultBranch'],
+  worktrees: ['create', 'remove', 'deleteBranchIfMerged', 'repairLink', 'list', 'prune', 'recreate'],
+  files: ['list', 'search', 'read', 'write', 'create', 'rename', 'remove', 'paste', 'watch', 'resolveIn'],
+  fs: ['exists', 'isDirectory', 'mkdirp', 'readDir', 'writeText']
+} as const
+export type HostService = keyof typeof HOST_SERVICES
+
 /** Calls that get exactly one result. */
 export interface HostCalls {
-  hello: { params: { protocol: number }; result: { protocol: number; pid: number; platform: string } }
+  hello: { params: { protocol: number }; result: { protocol: number; pid: number; platform: string; home: string } }
   'pty.spawn': { params: PtySpawnParams; result: { ptyId: string; pid: number } }
   'pty.kill': { params: { ptyId: string }; result: null }
-  /** Runs a program without a shell and returns its output (git, CLIs). */
+  /** Runs a program without a shell and returns its output. */
   exec: { params: ExecParams; result: { code: number | null; stdout: string; stderr: string } }
+  /** Where each named program is on the host's login PATH. */
+  which: { params: { names: string[] }; result: Record<string, string> }
+  /** A method of one of HOST_SERVICES, with JSON arguments. */
+  invoke: { params: { service: HostService; method: string; args: unknown[] }; result: unknown }
 }
 
 /** Fire-and-forget messages (keystrokes and resizes must not wait for a round trip). */
@@ -43,14 +59,23 @@ export interface HostNotifications {
 export interface HostEvents {
   'pty.data': { ptyId: string; data: string }
   'pty.exit': { ptyId: string; code: number | null; signal: number | null }
+  /** A watched folder changed (`scope` is the id the watch was opened with). */
+  'files.changed': { scope: string; paths: string[] }
 }
 
 export type HostCall = keyof HostCalls
 
+/** A failure as it crosses the wire: typed app errors and git failures keep their shape. */
+export interface HostFailure {
+  message: string
+  app?: AppError
+  git?: { args: string[]; stderr: string; exitCode: number | null }
+}
+
 export type HostFrame =
   | { kind: 'call'; id: number; method: HostCall; params: unknown }
   | { kind: 'result'; id: number; ok: true; value: unknown }
-  | { kind: 'result'; id: number; ok: false; error: string }
+  | { kind: 'result'; id: number; ok: false; error: string; failure?: HostFailure }
   | { kind: 'notify'; method: keyof HostNotifications; params: unknown }
   | { kind: 'event'; event: keyof HostEvents; params: unknown }
 

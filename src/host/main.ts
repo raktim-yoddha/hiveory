@@ -1,4 +1,5 @@
 import type { HostFrame, HostTransport } from '@shared/host/protocol'
+import { adoptLoginShellPath } from '../main/app/shell-path'
 import { serveHost } from './host-server'
 
 /**
@@ -56,9 +57,16 @@ const stdioTransport = (): HostTransport => {
   }
 }
 
-const transport = parentPort ? portTransport(parentPort) : stdioTransport()
-transport.onClose(() => setTimeout(() => process.exit(0), 100))
 // A bug in one request must not end every PTY on this machine.
 process.on('uncaughtException', (error) => console.error('hiveoryd: uncaught exception', error))
 process.on('unhandledRejection', (reason) => console.error('hiveoryd: unhandled rejection', reason))
-serveHost(transport)
+
+const start = async (): Promise<void> => {
+  // Over SSH the daemon starts from a non-login shell: take the login PATH so CLIs in ~/.local/bin, nvm,
+  // Homebrew… are found. Frames wait in stdin meanwhile. Locally it inherits Hiveory's (already adopted) PATH.
+  if (!parentPort) await adoptLoginShellPath({ info: () => undefined, warn: (m) => console.error(m), error: (m) => console.error(m) })
+  const transport = parentPort ? portTransport(parentPort) : stdioTransport()
+  transport.onClose(() => setTimeout(() => process.exit(0), 100))
+  serveHost(transport)
+}
+void start()

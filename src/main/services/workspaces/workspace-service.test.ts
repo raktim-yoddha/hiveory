@@ -10,6 +10,7 @@ import type { WorktreeService } from '../git/worktree-service'
 import { StateStore } from '../persistence/state-store'
 import { WorkspaceRepository } from './workspace-repository'
 import { WorkspaceService } from './workspace-service'
+import { localKitSource } from '../hosts/host-kit'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const project: Project = {
@@ -53,8 +54,7 @@ const setup = (git: Partial<Record<keyof GitService, unknown>> = {}) => {
   const repo = new WorkspaceRepository(store)
   const service = new WorkspaceService(
     repo,
-    fakeGit,
-    worktrees as unknown as WorktreeService,
+    localKitSource(fakeGit, worktrees as unknown as WorktreeService, join('/data', 'Workspaces')),
     agents as unknown as AgentService,
     join('/data', 'Workspaces'),
     () => undefined

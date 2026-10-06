@@ -73,6 +73,8 @@ export interface CliAdapter {
   icon: IconReference
   /** Executable names looked up on PATH, in priority order. */
   executables: string[]
+  /** Only offered on these platforms (shells): the target machine's, which may be a remote host's. */
+  platforms?: Array<'posix' | 'win32'>
   /** Finds the executable when PATH lookup can't (e.g. Git Bash beside git.exe). */
   locate?(env: import('../discovery').DiscoveryEnv): string | undefined
   /** A plain shell, not an agent: no Kanban card, no chat, listed first when adding panes. */
@@ -113,3 +115,7 @@ export const field = (payload: unknown, key: string): string | undefined => {
   const value = (payload as Record<string, unknown>)[key]
   return typeof value === 'string' ? value : undefined
 }
+
+/** A file inside `dir` on the machine `dir` belongs to: POSIX hosts use '/', a Windows folder its own separator. */
+export const inDir = (dir: string, name: string): string =>
+  dir.includes('\\') ? `${dir.replace(/\\+$/, '')}\\${name}` : `${dir.replace(/\/+$/, '')}/${name}`

@@ -1,4 +1,6 @@
-import type { HostCall, HostCalls, HostFrame, HostNotifications, HostTransport, PtySpawnParams } from '@shared/host/protocol'
+import { AppException } from '@shared/errors'
+import type { HostCall, HostCalls, HostEvents, HostFailure, HostFrame, HostNotifications, HostService, HostTransport, PtySpawnParams } from '@shared/host/protocol'
+import { GitCommandError } from '../git/git-service'
 import type { PtyBackend, PtyHandle } from '../pty/pty-backend'
 
 const CALL_TIMEOUT_MS = 30_000
@@ -16,6 +18,7 @@ export class HostClient {
   private readonly calls = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>()
   private readonly ptys = new Map<string, { data: (d: string) => void; exit: ExitListener }>()
   private readonly closeListeners: Array<() => void> = []
+  private readonly fileListeners: Array<(e: HostEvents['files.changed']) => void> = []
   private closed = false
 
   constructor(private readonly transport: HostTransport) {
@@ -52,6 +55,22 @@ export class HostClient {
     this.closeListeners.push(listener)
   }
 
+  onFilesChanged(listener: (e: HostEvents['files.changed']) => void): void {
+    this.fileListeners.push(listener)
+  }
+
+  /**
+   * A service object whose methods run on the host (git, worktrees, files, fs), with the
+   * same signatures as the local classes — so a service can be local or remote without
+   * knowing which. Every method becomes async.
+   */
+  service<T extends object>(service: HostService): T {
+    return new Proxy({} as T, {
+      get: (_target, method) =>
+        typeof method === 'string' && method !== 'then' ? (...args: unknown[]) => this.call('invoke', { service, method, args }, 120_000) : undefined
+    })
+  }
+
   close(): void {
     this.transport.close()
   }
@@ -63,7 +82,9 @@ export class HostClient {
       this.calls.delete(frame.id)
       clearTimeout(call.timer)
       if (frame.ok) call.resolve(frame.value)
-      else call.reject(new Error(frame.error))
+      else call.reject(rebuild(frame.failure ?? { message: frame.error }))
+    } else if (frame.kind === 'event' && frame.event === 'files.changed') {
+      for (const l of this.fileListeners) l(frame.params as HostEvents['files.changed'])
     } else if (frame.kind === 'event') {
       const p = frame.params as { ptyId: string; data?: string; code?: number | null; signal?: number | null }
       const target = this.ptys.get(p.ptyId)
@@ -90,6 +111,14 @@ export class HostClient {
     for (const l of this.closeListeners) l()
   }
 }
+
+/** The error the host threw, rebuilt with its type (AppException, GitCommandError) so callers' checks still work. */
+const rebuild = (failure: HostFailure): Error =>
+  failure.app
+    ? new AppException(failure.app)
+    : failure.git
+      ? new GitCommandError(failure.git.args, failure.git.stderr, failure.git.exitCode)
+      : new Error(failure.message)
 
 /**
  * A PtyHandle that exists at once and starts its process as soon as the host is

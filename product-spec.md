@@ -318,6 +318,11 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 ## Remote hosts (ADR 0022)
 
+- Add project › Remote (SSH): an SSH host and a folder there (typed, or browsed). The project's
+  files, git, worktrees and agents all stay on that machine; its sidebar row and page show the
+  host. Agent menus list the CLIs installed on that machine. Remote workspaces use terminal view.
+- Losing the connection stops that machine's agents with a notice; opening them again reconnects.
+
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
   installs Hiveory's small host program in `~/.hiveory-host` there (Node 20+ required).
 - Hiveory uses the user's own SSH setup, never prompts for or stores passwords, and never accepts

@@ -150,25 +150,34 @@ export class SshHostConnector {
     return installed
   }
 
-  /** Starts hiveoryd on the remote and returns a client once it has answered hello. */
-  async connect(target: SshTarget): Promise<HostClient> {
-    const child = this.spawn('ssh', ['-T', ...this.args(target), `cd ${REMOTE_DIR} && exec node host.mjs`])
+  /**
+   * Starts hiveoryd on the remote and returns a client once it has answered hello.
+   * With `tunnelPort`, a reverse tunnel lets agents there reach Hiveory's hook server
+   * (loopback on both ends); `remotePort` is where it listens on the remote.
+   */
+  async connect(target: SshTarget, tunnelPort?: string): Promise<{ client: HostClient; home: string; platform: string; remotePort?: number }> {
+    const tunnel = tunnelPort && /^\d+$/.test(tunnelPort) ? ['-o', 'ExitOnForwardFailure=yes', '-R', `0:127.0.0.1:${tunnelPort}`] : []
+    const child = this.spawn('ssh', ['-T', ...tunnel, ...this.args(target), `cd ${REMOTE_DIR} && exec node host.mjs`])
     let stderr = ''
+    let remotePort: number | undefined
     child.stderr.setEncoding('utf8')
     child.stderr.on('data', (d: string) => {
       stderr = (stderr + d).slice(-4000)
-      this.log.warn(`hiveoryd@${target.destination}: ${d.trim()}`)
+      const allocated = /Allocated port (\d+) for remote forward/.exec(d)
+      if (allocated) remotePort = Number(allocated[1])
+      else this.log.warn(`hiveoryd@${target.destination}: ${d.trim()}`)
     })
     const client = new HostClient(lineTransport(child, this.log))
+    let hello: Awaited<ReturnType<HostClient['call']>> & { home?: string; platform?: string; protocol?: number }
     try {
-      const hello = await client.call('hello', { protocol: HOST_PROTOCOL }, 20_000)
+      hello = await client.call('hello', { protocol: HOST_PROTOCOL }, 30_000)
       if (hello.protocol !== HOST_PROTOCOL) fail('UNEXPECTED', `The host on ${target.destination} speaks protocol ${hello.protocol}.`)
     } catch (error) {
       client.close()
       if (stderr) explainSshFailure(target.destination, stderr)
       throw error
     }
-    return client
+    return { client, home: hello.home ?? '', platform: hello.platform ?? 'linux', remotePort }
   }
 
   private args(target: SshTarget): string[] {

@@ -20,7 +20,11 @@ import { samePath } from '../services/projects/project-service'
 export const createHandlers = (c: Container): Handlers => {
   const repoRootOf = async (projectId: string): Promise<string | undefined> => {
     const project = c.workspaceRepo.project(projectId)
-    return project.repositoryRoot ?? (await c.git.repositoryRoot(project.path))
+    return project.repositoryRoot ?? (await (await c.hosts.kit(project.host)).git.repositoryRoot(project.path))
+  }
+  /** GitHub runs this computer's gh against a local checkout; remote projects use it from their own terminals. */
+  const localOnly = (projectId: string, what: string): void => {
+    if (c.workspaceRepo.project(projectId).host) fail('INVALID_INPUT', `${what} works for projects on this computer.`, { hint: 'Use gh in a terminal on that machine.' })
   }
   const requireRepoRoot = async (projectId: string): Promise<string> =>
     (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This project is not a Git repository.')
@@ -33,10 +37,16 @@ export const createHandlers = (c: Container): Handlers => {
   }
 
   /** A scope's folder (workspace, else project) and the id its events use. */
-  const folderOf = (scope: { workspaceId?: string; projectId?: string }): { root: string; key: string } =>
+  const folderOf = (scope: { workspaceId?: string; projectId?: string }): { root: string; key: string; projectId: string } =>
     scope.workspaceId
-      ? { root: c.workspaceRepo.get(scope.workspaceId).path, key: scope.workspaceId }
-      : { root: c.workspaceRepo.project(scope.projectId!).path, key: scope.projectId! }
+      ? { root: c.workspaceRepo.get(scope.workspaceId).path, key: scope.workspaceId, projectId: c.workspaceRepo.get(scope.workspaceId).projectId }
+      : { root: c.workspaceRepo.project(scope.projectId!).path, key: scope.projectId!, projectId: scope.projectId! }
+  /** The folder plus the file service of its machine: this computer, or the project's SSH host (ADR 0022). */
+  const filesOf = async (scope: { workspaceId?: string; projectId?: string }) => {
+    const folder = folderOf(scope)
+    const kit = await c.hosts.kit(c.workspaceRepo.project(folder.projectId).host)
+    return { ...folder, files: kit.files, remote: kit.remote }
+  }
 
   /**
    * Folders the user chose in a picker this session (plus the default parent):
@@ -90,6 +100,9 @@ export const createHandlers = (c: Container): Handlers => {
   },
   'projects.addDefaults': async () => ({ parentDir: defaultParent(), github: await c.repositories.githubAccount() }),
   'projects.add': async (input) => {
+    if (input.mode === 'remote') {
+      return c.projects.openRemote({ kind: 'ssh', destination: input.destination, ...(input.port ? { port: input.port } : {}) }, input.path, input.name)
+    }
     if (input.mode === 'folder') return addProject(chosen(input.path), input.name)
     if (input.mode === 'clone') return addProject(await c.repositories.clone(input.url, chosen(input.parentDir)), input.name)
     const created = await c.repositories.create(input.repoName, chosen(input.parentDir), input.github)
@@ -132,7 +145,10 @@ export const createHandlers = (c: Container): Handlers => {
   'workspaces.create': (input) => c.workspaces.create(input),
   'workspaces.delete': ({ workspaceId, force }) => c.workspaces.delete(workspaceId, force ?? false),
 
-  'clis.list': (input) => c.registry.list(input?.refresh ?? false),
+  'clis.list': async (input) => {
+    const host = input?.projectId ? c.workspaceRepo.project(input.projectId).host : undefined
+    return host ? (await c.hosts.kit(host)).registry.list(input?.refresh ?? false) : c.registry.list(input?.refresh ?? false)
+  },
 
   'agents.list': ({ workspaceId }) => c.agents.list(workspaceId),
   'agents.open': ({ workspaceId, cliId, placement, resumeSession }) => c.agents.open(workspaceId, cliId, placement, resumeSession),
@@ -229,6 +245,8 @@ export const createHandlers = (c: Container): Handlers => {
       : projectId
         ? c.workspaceRepo.project(projectId).path
         : fail('INVALID_INPUT', 'Nothing to reveal.')
+    const projectOf = workspaceId ? c.workspaceRepo.get(workspaceId).projectId : projectId!
+    if (c.workspaceRepo.project(projectOf).host) fail('INVALID_INPUT', 'That folder is on another machine.', { hint: 'Browse it in the Explorer instead.' })
     const error = await shell.openPath(folder)
     if (error) fail('NOT_FOUND', 'Could not open the folder.', { detail: error })
   },
@@ -269,30 +287,53 @@ export const createHandlers = (c: Container): Handlers => {
     if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens plugin help pages from here.')
     await shell.openExternal(url)
   },
+  // Files run where the folder is: this computer, or the project's SSH host (ADR 0022).
   'files.list': async ({ scope, dir }) => {
-    const { root } = folderOf(scope)
-    return { root, entries: await c.files.list(root, dir) }
+    const { root, files } = await filesOf(scope)
+    return { root, entries: await files.list(root, dir) }
   },
-  'files.search': ({ scope, query }) => c.files.search(folderOf(scope).root, query),
-  'files.read': ({ scope, path }) => c.files.read(folderOf(scope).root, path),
-  'files.write': ({ scope, path, content }) => c.files.write(folderOf(scope).root, path, content),
-  'files.create': ({ scope, path, kind }) => c.files.create(folderOf(scope).root, path, kind),
+  'files.search': async ({ scope, query }) => {
+    const { root, files } = await filesOf(scope)
+    return files.search(root, query)
+  },
+  'files.read': async ({ scope, path }) => {
+    const { root, files } = await filesOf(scope)
+    return files.read(root, path)
+  },
+  'files.write': async ({ scope, path, content }) => {
+    const { root, files } = await filesOf(scope)
+    return files.write(root, path, content)
+  },
+  'files.create': async ({ scope, path, kind }) => {
+    const { root, files } = await filesOf(scope)
+    return files.create(root, path, kind)
+  },
   'files.rename': async ({ scope, from, to }) => {
-    await c.files.rename(folderOf(scope).root, from, to)
+    const { root, files } = await filesOf(scope)
+    await files.rename(root, from, to)
     if (scope.workspaceId) c.editors.renamed(scope.workspaceId, from, to)
   },
-  'files.delete': ({ scope, paths }) => c.files.remove(folderOf(scope).root, paths),
-  'files.paste': ({ scope, sources, targetDir, mode }) => c.files.paste(folderOf(scope).root, sources, targetDir, mode),
-  'files.reveal': ({ scope, path }) => {
-    shell.showItemInFolder(c.files.resolveIn(folderOf(scope).root, path))
+  'files.delete': async ({ scope, paths }) => {
+    const { root, files } = await filesOf(scope)
+    return files.remove(root, paths)
   },
-  'files.watch': ({ scope, watch }) => {
-    const { root, key } = folderOf(scope)
-    c.files.watch(key, root, watch)
+  'files.paste': async ({ scope, sources, targetDir, mode }) => {
+    const { root, files } = await filesOf(scope)
+    return files.paste(root, sources, targetDir, mode)
+  },
+  'files.reveal': async ({ scope, path }) => {
+    const { root, files, remote } = await filesOf(scope)
+    if (remote) fail('INVALID_INPUT', 'That file is on another machine.', { hint: 'Open it from the Explorer instead.' })
+    shell.showItemInFolder(await files.resolveIn(root, path))
+  },
+  'files.watch': async ({ scope, watch }) => {
+    const { root, key, files } = await filesOf(scope)
+    await files.watch(key, root, watch)
   },
   'editors.list': ({ workspaceId }) => c.editors.list(workspaceId),
-  'editors.open': ({ workspaceId, path, targetPaneId, side }) => {
-    c.files.resolveIn(c.workspaceRepo.get(workspaceId).path, path)
+  'editors.open': async ({ workspaceId, path, targetPaneId, side }) => {
+    const { root, files } = await filesOf({ workspaceId })
+    await files.resolveIn(root, path)
     return c.editors.open(workspaceId, path, targetPaneId && side ? { targetPaneId, side } : undefined)
   },
   'editors.close': ({ editorId }) => c.editors.close(editorId),
@@ -388,10 +429,16 @@ export const createHandlers = (c: Container): Handlers => {
     return c.chats.threads(botId)
   },
   'bots.newThread': ({ botId }) => c.bots.newThread(botId),
+  'hosts.listDir': async ({ destination, port, path }) => {
+    const kit = await c.hosts.kit({ kind: 'ssh', destination, ...(port ? { port } : {}) })
+    const dir = !path || path === '~' ? kit.home : path.startsWith('~/') ? kit.paths.join(kit.home, path.slice(2)) : path
+    const entries = await kit.fs.readDir(dir)
+    return { path: dir, home: kit.home, dirs: entries.filter((e) => e.dir && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b)) }
+  },
   'hosts.check': async (target) => {
     const info = await c.sshHosts.probe(target)
     const installed = await c.sshHosts.deploy(target)
-    const client = await c.sshHosts.connect(target)
+    const { client } = await c.sshHosts.connect(target)
     try {
       const hello = await client.call('hello', { protocol: HOST_PROTOCOL })
       return { platform: info.platform, arch: info.arch, node: info.node, installed, protocol: hello.protocol }
@@ -403,23 +450,32 @@ export const createHandlers = (c: Container): Handlers => {
   'git.info': ({ projectId }) => c.workspaces.gitInfo(projectId),
   'git.validateBranch': async ({ projectId, name }) => {
     const project = c.workspaceRepo.project(projectId)
-    const repoRoot = project.repositoryRoot ?? (await c.git.repositoryRoot(project.path))
+    const kit = await c.hosts.kit(project.host)
+    const repoRoot = project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path))
     if (!repoRoot) return { problem: 'This project is not a Git repository.' }
-    const problem = await c.git.branchNameProblem(repoRoot, name)
+    const problem = await kit.git.branchNameProblem(repoRoot, name)
     if (problem) return { problem }
-    return { problem: (await c.git.localBranchExists(repoRoot, name)) ? `Branch ${name} already exists.` : null }
+    return { problem: (await kit.git.localBranchExists(repoRoot, name)) ? `Branch ${name} already exists.` : null }
   },
   'git.init': ({ projectId, commit }) => c.projects.initRepository(projectId, commit),
   'workspaces.gitStatus': ({ workspaceId }) => c.workspaces.gitStatus(workspaceId),
   'workspaces.repair': ({ workspaceId }) => c.workspaces.repair(workspaceId),
   'github.status': async ({ projectId }) => {
+    if (c.workspaceRepo.project(projectId).host) return { available: false, reason: 'GitHub features work for projects on this computer.' }
     const root = await repoRootOf(projectId)
     return root ? c.github.status(root) : { available: false, reason: 'This project is not a Git repository.' }
   },
-  'github.pullRequests': async ({ projectId }) => c.github.pullRequests(await requireRepoRoot(projectId)),
-  'github.issues': async ({ projectId }) => c.github.issues(await requireRepoRoot(projectId)),
+  'github.pullRequests': async ({ projectId }) => {
+    localOnly(projectId, 'Pull requests')
+    return c.github.pullRequests(await requireRepoRoot(projectId))
+  },
+  'github.issues': async ({ projectId }) => {
+    localOnly(projectId, 'Issues')
+    return c.github.issues(await requireRepoRoot(projectId))
+  },
   'github.createPullRequest': async ({ workspaceId, draft }) => {
     const workspace = c.workspaceRepo.get(workspaceId)
+    localOnly(workspace.projectId, 'Pull requests')
     const branch = workspace.git?.branch
     if (workspace.kind !== 'isolated' || !branch || !workspace.git?.worktreePath) {
       return fail('INVALID_INPUT', 'Pull requests are created from an isolated workspace branch.')

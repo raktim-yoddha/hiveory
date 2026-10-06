@@ -11,6 +11,7 @@ import { StateStore } from '../persistence/state-store'
 import { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { WorkspaceService } from '../workspaces/workspace-service'
 import { ProjectService } from './project-service'
+import { localKitSource } from '../hosts/host-kit'
 import { isCloneUrl, repoNameOf } from './repository-service'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
@@ -30,8 +31,9 @@ const setup = () => {
   const agents = { stopProject: vi.fn(), resumeAll: vi.fn(), createInstances: vi.fn(), forgetWorkspace: vi.fn(), countInWorkspace: () => 0 } as unknown as AgentService
   const gitService = new GitService()
   const repoStore = new WorkspaceRepository(store)
-  const workspaces = new WorkspaceService(repoStore, gitService, new WorktreeService(gitService), agents, join(root, 'Workspaces'), () => undefined)
-  const projects = new ProjectService(store, gitService, agents, () => undefined)
+  const kits = localKitSource(gitService, new WorktreeService(gitService), join(root, 'Workspaces'))
+  const workspaces = new WorkspaceService(repoStore, kits, agents, join(root, 'Workspaces'), () => undefined)
+  const projects = new ProjectService(store, kits, agents, () => undefined)
   return { repo, store, agents, workspaces, projects }
 }
 

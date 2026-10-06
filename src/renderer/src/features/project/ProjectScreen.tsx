@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { PathTrail } from '../../components/ui/PathTrail'
+import { HostBadge } from '../../components/ui/HostBadge'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { useProjects } from '../../stores/data'
@@ -48,8 +49,10 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
     <section className={styles.screen} aria-label={project.name}>
       <header className={styles.header}>
         <div className={styles.titles}>
-          <h1 className={styles.title}>{project.name}</h1>
-          <PathTrail path={project.path} reveal={{ projectId }} />
+          <h1 className={styles.title}>
+            {project.name} <HostBadge host={project.host} />
+          </h1>
+          <PathTrail path={project.path} reveal={project.host ? undefined : { projectId }} />
         </div>
       </header>
       <div className={styles.tabs}>

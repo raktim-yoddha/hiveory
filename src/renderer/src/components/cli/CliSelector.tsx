@@ -2,7 +2,8 @@ import { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { CliSelection } from '@shared/domain'
 import { MAX_INSTANCES_PER_CLI } from '@shared/ipc/contract'
-import { useClis } from '../../stores/data'
+import { useHostClis } from '../../stores/data'
+import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { Button, IconButton } from '../ui/Button'
 import { CounterControl } from '../ui/CounterControl'
 import { CliLogo } from './CliLogo'
@@ -18,7 +19,8 @@ interface CliSelectorProps {
  * Workspace creation and the preset editor (STARTER_PROMPT §10).
  */
 export function CliSelector({ value, onChange }: CliSelectorProps) {
-  const { clis, loaded, load } = useClis()
+  const projectId = useNavigation((s) => selectedProjectId(s.view))
+  const { clis, loaded, load } = useHostClis(projectId)
   useEffect(() => {
     if (!loaded) void load()
   }, [loaded, load])

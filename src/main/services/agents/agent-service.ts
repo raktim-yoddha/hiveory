@@ -14,6 +14,7 @@ import { nowIso, type Emit } from '../events'
 import type { LayoutService } from '../layout/layout-service'
 import type { StateStore } from '../persistence/state-store'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
+import type { KitSource } from '../workspaces/workspace-service'
 
 export interface Placement {
   targetPaneId: string
@@ -50,7 +51,9 @@ export class AgentService {
     private readonly runtime: CliRuntimeManager,
     private readonly log: Logger,
     private readonly emit: Emit,
-    private readonly chats: ChatService
+    private readonly chats: ChatService,
+    /** The machine of a remote project (ADR 0022); local projects never call it. */
+    private readonly kits: KitSource = { kit: () => Promise.reject(new Error('No remote hosts here.')) }
   ) {
     runtime.on('changed', (instance, runtimeDetails) => {
       if (runtimeDetails.status === 'working') this.markConversationStarted(instance.id)
@@ -253,7 +256,8 @@ export class AgentService {
         hasConversation: false,
         autoApprove: workspace.autoApprove && (this.registry.adapter(cliId)?.supportsAutoApprove ?? false),
         // Chat view only for CLIs with a headless mode; the rest keep their terminal.
-        chatUi: Boolean(workspace.chatUi) && CHAT_CAPABLE.has(cliId),
+        // Chat view runs the CLI headless on this computer, so remote projects keep their terminals.
+        chatUi: Boolean(workspace.chatUi) && CHAT_CAPABLE.has(cliId) && !this.workspaces.findProject(workspace.projectId)?.host,
         createdAt: now
       }))
     )
@@ -266,6 +270,15 @@ export class AgentService {
   }
 
   private launch(instance: CliInstance, workspace: Workspace): void {
+    const host = this.workspaces.findProject(workspace.projectId)?.host
+    if (host) {
+      // Runs on the project's machine: the folder is checked there; chat view needs a local CLI, so the terminal is used.
+      const soleOfCli = this.instances(workspace.id).filter((i) => i.cliId === instance.cliId).length === 1
+      if (instance.hasConversation) this.resumed.add(instance.id)
+      else this.resumed.delete(instance.id)
+      this.runtime.launch(instance, workspace.path, { soleOfCli, host: this.kits.kit(host) })
+      return
+    }
     if (!existsSync(workspace.path)) {
       const message = 'The workspace folder is missing.'
       this.runtime.markFailed(instance, message)

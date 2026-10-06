@@ -1,24 +1,30 @@
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
-import type { Project } from '@shared/domain'
+import { basename, posix, resolve } from 'node:path'
+import { hostKey, type HostRef, type Project } from '@shared/domain'
 import { AppException, fail } from '@shared/errors'
 import type { AgentService } from '../agents/agent-service'
 import type { Emit } from '../events'
 import { nowIso } from '../events'
-import { GitCommandError, type GitService } from '../git/git-service'
+import { GitCommandError } from '../git/git-service'
 import { MAX_ARCHIVED, type ArchivedProject } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
 import { mainTreeOwner } from '../workspaces/workspace-repository'
+import type { KitSource } from '../workspaces/workspace-service'
 
 export const samePath = (a: string, b: string): boolean =>
   process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
+
+/** The same folder on the same machine: a remote path compares as written, on its own host only. */
+const sameFolder = (project: Project, path: string, host?: HostRef): boolean =>
+  hostKey(project.host) === hostKey(host) && (host ? project.path === path : samePath(project.path, path))
 
 /** Opening a Project never creates a Workspace, worktree, branch or agent (STARTER_PROMPT §3). */
 export class ProjectService {
   constructor(
     private readonly store: StateStore,
-    private readonly git: GitService,
+    /** The machine a project lives on: this computer, or an SSH host (ADR 0022). */
+    private readonly kits: KitSource,
     private readonly agents: AgentService,
     private readonly emit: Emit
   ) {}
@@ -45,17 +51,36 @@ export class ProjectService {
     } catch {
       fail('NOT_FOUND', 'That folder does not exist.', { operation: 'Open project' })
     }
-    const existing = this.store.state.projects.find((p) => samePath(p.path, path))
+    return this.add(path, name)
+  }
+
+  /**
+   * Adds a folder on a machine reached over SSH (ADR 0022). Its files, git and agents stay
+   * there; Hiveory installs its small host program on first use. `~/x` means the login's home.
+   */
+  async openRemote(host: HostRef, folder: string, name?: string): Promise<Project> {
+    const kit = await this.kits.kit(host)
+    const raw = folder.trim()
+    const path = posix.normalize(raw === '~' || raw.startsWith('~/') ? posix.join(kit.home, raw.slice(1)) : raw).replace(/(.)\/+$/, '$1')
+    if (!posix.isAbsolute(path)) fail('INVALID_INPUT', 'Use a full path on that machine, like /home/me/app or ~/app.', { operation: 'Open project' })
+    if (!(await kit.fs.isDirectory(path))) fail('NOT_FOUND', `${path} is not a folder on ${host.destination}.`, { operation: 'Open project' })
+    return this.add(path, name, host)
+  }
+
+  private async add(path: string, name?: string, host?: HostRef): Promise<Project> {
+    const existing = this.store.state.projects.find((p) => sameFolder(p, path, host))
     if (existing) return this.touch(existing.id)
-    const archived = this.store.state.archive.find((a) => samePath(a.project.path, path))
+    const archived = this.store.state.archive.find((a) => sameFolder(a.project, path, host))
     if (archived) return this.restore(archived, name)
 
+    const kit = await this.kits.kit(host)
     const now = nowIso()
     const project: Project = {
       id: randomUUID(),
-      name: name?.trim() || basename(path) || path,
+      name: name?.trim() || (host ? posix.basename(path) : basename(path)) || path,
       path,
-      repositoryRoot: await this.git.repositoryRoot(path),
+      repositoryRoot: await kit.git.repositoryRoot(path),
+      ...(host ? { host: { kind: 'ssh' as const, destination: host.destination, ...(host.port ? { port: host.port } : {}) } } : {}),
       createdAt: now,
       updatedAt: now,
       lastOpenedAt: now
@@ -81,12 +106,13 @@ export class ProjectService {
   /** Turns a plain folder into a Git repository so isolated workspaces become possible. */
   async initRepository(projectId: string, commit: boolean): Promise<Project> {
     const project = this.get(projectId)
-    const existing = await this.git.repositoryRoot(project.path)
+    const git = (await this.kits.kit(project.host)).git
+    const existing = await git.repositoryRoot(project.path)
     try {
       if (existing) {
-        if (commit && !(await this.git.hasCommits(existing))) await this.git.init(existing, true)
+        if (commit && !(await git.hasCommits(existing))) await git.init(existing, true)
       } else {
-        await this.git.init(project.path, commit)
+        await git.init(project.path, commit)
       }
     } catch (error) {
       if (error instanceof AppException) throw error
@@ -99,7 +125,7 @@ export class ProjectService {
         detail
       })
     }
-    const repositoryRoot = await this.git.repositoryRoot(project.path)
+    const repositoryRoot = await git.repositoryRoot(project.path)
     this.store.update((s) => {
       const p = s.projects.find((x) => x.id === projectId)
       if (p) Object.assign(p, { repositoryRoot, updatedAt: nowIso() })
@@ -133,7 +159,7 @@ export class ProjectService {
         editors: s.editors.filter((e) => workspaceIds.has(e.workspaceId)),
         removedAt: nowIso()
       }
-      s.archive = [entry, ...s.archive.filter((a) => !samePath(a.project.path, project.path))].slice(0, MAX_ARCHIVED)
+      s.archive = [entry, ...s.archive.filter((a) => !sameFolder(a.project, project.path, project.host))].slice(0, MAX_ARCHIVED)
       s.projects = s.projects.filter((p) => p.id !== projectId)
       s.workspaces = s.workspaces.filter((w) => w.projectId !== projectId)
       s.instances = s.instances.filter((i) => i.projectId !== projectId)

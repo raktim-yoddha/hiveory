@@ -14,6 +14,8 @@ export interface PtySpawnSpec {
   args: string[]
   cwd: string
   env: Record<string, string>
+  /** On a remote host: start from that machine's environment, `env` on top. */
+  inheritEnv?: boolean
 }
 
 export interface PtySessionEvents {
@@ -49,9 +51,14 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   constructor(
     private readonly withMirror = false,
     /** Where the process runs: the host daemon in the app (ADR 0022), in-process by default. */
-    private readonly backend: PtyBackend = inProcessPty
+    private backend: PtyBackend = inProcessPty
   ) {
     super()
+  }
+
+  /** Where the next start runs: a remote agent restarted after a reconnect uses the new connection. */
+  useBackend(backend: PtyBackend): void {
+    this.backend = backend
   }
 
   get running(): boolean {
@@ -157,7 +164,7 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
       this.mirror = new HeadlessTerminal({ cols, rows, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
     }
     try {
-      const child = this.backend.spawn({ file: pending.spec.file, args: pending.spec.args, cwd: pending.spec.cwd, env: pending.spec.env, cols, rows })
+      const child = this.backend.spawn({ ...pending.spec, cols, rows })
       this.process = child
       child.onData((data) => {
         this.append(data)

@@ -13,6 +13,7 @@ import { usePlatform } from '../../lib/platform'
 import { useProjects } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
+import { RemoteFolderPicker, SSH_DESTINATION } from './RemoteFolderPicker'
 import styles from './AddProjectDialog.module.css'
 
 type Mode = 'folder' | 'create' | 'clone' | 'previous'
@@ -43,7 +44,7 @@ const ago = (iso?: string): string => {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
- * Add project (ADR 0020): Local or Remote (not available yet), then one of four
+ * Add project (ADR 0020, ADR 0022): Remote picks a folder on an SSH host. Local offers four
  * ways in — pick a folder, create a new repository (optionally on GitHub), clone
  * one, or restore a project removed earlier (with its workspaces and agents) or
  * workspace folders found on disk. Folders are always chosen with main's picker.
@@ -63,6 +64,9 @@ export function AddProjectDialog() {
   const [previous, setPrevious] = useState<PreviousProject[] | null>(null)
   const [restoring, setRestoring] = useState('')
   const [busy, setBusy] = useState(false)
+  const [where, setWhere] = useState<'local' | 'remote'>('local')
+  const [destination, setDestination] = useState('')
+  const [remoteFolder, setRemoteFolder] = useState('')
 
   // Fresh each time it opens: defaults (and the GitHub account), and what can be restored.
   useEffect(() => {
@@ -102,11 +106,12 @@ export function AddProjectDialog() {
 
   const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
   const cloneName = url.trim().replace(/[/\\]+$/, '').replace(/\.git$/i, '').split(/[/:]/).filter(Boolean).at(-1) ?? ''
-  const suggested = mode === 'folder' ? folderName(folder) : mode === 'create' ? repoName : mode === 'clone' ? cloneName : ''
+  const suggested = where === 'remote' ? folderName(remoteFolder) : mode === 'folder' ? folderName(folder) : mode === 'create' ? repoName : mode === 'clone' ? cloneName : ''
   const target = previous?.find((p) => p.path === restoring)
 
-  const ready =
-    mode === 'folder'
+  const ready = where === 'remote'
+    ? SSH_DESTINATION.test(destination.trim()) && /^(\/|~)/.test(remoteFolder.trim())
+    : mode === 'folder'
       ? Boolean(folder)
       : mode === 'create'
         ? /^[A-Za-z0-9._-]{1,100}$/.test(repoName) && Boolean(parentDir) && (!onGithub || Boolean(owner))
@@ -117,9 +122,10 @@ export function AddProjectDialog() {
   const submit = (): void => {
     if (!ready || busy) return
     setBusy(true)
-    const label = { folder: 'Add project', create: 'Create repository', clone: 'Clone repository', previous: 'Restore project' }[mode]
+    const label = where === 'remote' ? 'Add remote project' : { folder: 'Add project', create: 'Create repository', clone: 'Clone repository', previous: 'Restore project' }[mode]
     const custom = name.trim() || undefined
     void runAction(label, async (): Promise<Project> => {
+      if (where === 'remote') return api('projects.add', { mode: 'remote', destination: destination.trim(), path: remoteFolder.trim(), name: custom })
       if (mode === 'previous') return api('projects.restore', { path: restoring })
       if (mode === 'folder') return api('projects.add', { mode: 'folder', path: folder, name: custom })
       if (mode === 'clone') return api('projects.add', { mode: 'clone', url: url.trim(), parentDir, name: custom })
@@ -149,7 +155,7 @@ export function AddProjectDialog() {
     </div>
   )
 
-  const submitLabel = { folder: 'Add project', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore workspaces' : 'Restore' }[mode]
+  const submitLabel = where === 'remote' ? 'Add project' : { folder: 'Add project', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore workspaces' : 'Restore' }[mode]
 
   return (
     <Modal
@@ -180,112 +186,120 @@ export function AddProjectDialog() {
             placeholder={suggested || 'Project name'}
             value={name}
             onChange={setName}
-            disabled={mode === 'previous'}
+            disabled={mode === 'previous' && where === 'local'}
           />
           <div className={styles.where}>
             <Select
               label="Where the project lives"
               hideLabel
-              value="local"
+              value={where}
               options={[
                 { value: 'local', label: 'Local' },
-                { value: 'remote', label: 'Remote · coming soon', disabled: true }
+                { value: 'remote', label: 'Remote (SSH)' }
               ]}
-              onChange={() => undefined}
+              onChange={(v) => setWhere(v as 'local' | 'remote')}
             />
           </div>
         </div>
 
-        <div className={styles.modes} role="radiogroup" aria-label="How to add it">
-          {MODES.map((m) => (
-            <button key={m.id} type="button" role="radio" aria-checked={mode === m.id} className={cx(styles.mode, mode === m.id && styles.modeOn)} onClick={() => setMode(m.id)}>
-              {m.icon}
-              {m.label}
-            </button>
-          ))}
-        </div>
+        {where === 'remote' && (
+          <RemoteFolderPicker destination={destination} onDestination={setDestination} folder={remoteFolder} onFolder={setRemoteFolder} />
+        )}
 
-        {mode === 'folder' && pathRow('Directory', folder, 'Select a directory', 'project')}
-
-        {mode === 'create' && (
+        {where === 'local' && (
           <>
-            <TextField label="Repository name" value={repoName} onChange={(v) => setRepoName(v.replace(/\s+/g, '-'))} placeholder="Enter a repository name" />
-            <div className={styles.github}>
-              <div className={styles.githubHead}>
-                <div>
-                  <span className={styles.label}>Also create it on GitHub</span>
-                  <span className={styles.note}>
-                    {defaults?.github.available
-                      ? `Signed in to the GitHub CLI as @${defaults.github.login}.`
-                      : (defaults?.github.reason ?? 'Checking the GitHub CLI…')}
-                  </span>
-                </div>
-                <Toggle label="Also create it on GitHub" checked={onGithub} disabled={!defaults?.github.available} onChange={setOnGithub} />
-              </div>
-              {onGithub && defaults?.github.available && (
-                <div className={styles.githubRow}>
-                  <Select label="Owner" value={owner} options={defaults.github.owners.map((o) => ({ value: o, label: o }))} onChange={setOwner} />
-                  <Select
-                    label="Visibility"
-                    value={visibility}
-                    options={[
-                      { value: 'private', label: 'Private' },
-                      { value: 'public', label: 'Public' }
-                    ]}
-                    onChange={(v) => setVisibility(v as 'private' | 'public')}
-                  />
-                </div>
-              )}
+            <div className={styles.modes} role="radiogroup" aria-label="How to add it">
+              {MODES.map((m) => (
+                <button key={m.id} type="button" role="radio" aria-checked={mode === m.id} className={cx(styles.mode, mode === m.id && styles.modeOn)} onClick={() => setMode(m.id)}>
+                  {m.icon}
+                  {m.label}
+                </button>
+              ))}
             </div>
-            {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
-          </>
-        )}
 
-        {mode === 'clone' && (
-          <>
-            <TextField label="Repository URL" value={url} onChange={setUrl} placeholder="https://github.com/owner/repo.git" />
-            {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
-          </>
-        )}
+            {mode === 'folder' && pathRow('Directory', folder, 'Select a directory', 'project')}
 
-        {mode === 'previous' && (
-          <div className={styles.previous}>
-            <span className={styles.note}>
-              Projects you removed come back whole: workspaces, agents (resuming their conversations), layouts and open files. Workspace folders found
-              on disk come back as workspaces.
-            </span>
-            {previous === null ? null : previous.length === 0 ? (
-              <p className={styles.none}>Nothing to restore. Removed projects and leftover workspace folders show up here.</p>
-            ) : (
-              <ul className={styles.list} role="radiogroup" aria-label="Restore which">
-                {previous.map((p) => (
-                  <li key={`${p.source}:${p.path}`}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={restoring === p.path}
-                      disabled={p.missing}
-                      className={cx(styles.item, restoring === p.path && styles.itemOn)}
-                      onClick={() => setRestoring(p.path)}
-                    >
-                      <span className={styles.itemTop}>
-                        <span className={styles.itemName}>{p.name}</span>
-                        <span className={styles.badge}>{p.missing ? 'Folder missing' : p.source === 'removed' ? `Removed ${ago(p.removedAt)}` : p.projectId ? 'Open now' : 'Found on disk'}</span>
+            {mode === 'create' && (
+              <>
+                <TextField label="Repository name" value={repoName} onChange={(v) => setRepoName(v.replace(/\s+/g, '-'))} placeholder="Enter a repository name" />
+                <div className={styles.github}>
+                  <div className={styles.githubHead}>
+                    <div>
+                      <span className={styles.label}>Also create it on GitHub</span>
+                      <span className={styles.note}>
+                        {defaults?.github.available
+                          ? `Signed in to the GitHub CLI as @${defaults.github.login}.`
+                          : (defaults?.github.reason ?? 'Checking the GitHub CLI…')}
                       </span>
-                      <span className={styles.itemPath} title={p.path}>
-                        {p.path}
-                      </span>
-                      <span className={styles.itemMeta}>
-                        {plural(p.workspaces.length, 'workspace')}
-                        {p.workspaces.length ? `: ${p.workspaces.slice(0, 4).join(', ')}${p.workspaces.length > 4 ? '…' : ''}` : ''}
-                        {p.agents ? ` · ${plural(p.agents, 'agent')}` : ''}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                    </div>
+                    <Toggle label="Also create it on GitHub" checked={onGithub} disabled={!defaults?.github.available} onChange={setOnGithub} />
+                  </div>
+                  {onGithub && defaults?.github.available && (
+                    <div className={styles.githubRow}>
+                      <Select label="Owner" value={owner} options={defaults.github.owners.map((o) => ({ value: o, label: o }))} onChange={setOwner} />
+                      <Select
+                        label="Visibility"
+                        value={visibility}
+                        options={[
+                          { value: 'private', label: 'Private' },
+                          { value: 'public', label: 'Public' }
+                        ]}
+                        onChange={(v) => setVisibility(v as 'private' | 'public')}
+                      />
+                    </div>
+                  )}
+                </div>
+                {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
+              </>
             )}
-          </div>
+
+            {mode === 'clone' && (
+              <>
+                <TextField label="Repository URL" value={url} onChange={setUrl} placeholder="https://github.com/owner/repo.git" />
+                {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
+              </>
+            )}
+
+            {mode === 'previous' && (
+              <div className={styles.previous}>
+                <span className={styles.note}>
+                  Projects you removed come back whole: workspaces, agents (resuming their conversations), layouts and open files. Workspace folders found
+                  on disk come back as workspaces.
+                </span>
+                {previous === null ? null : previous.length === 0 ? (
+                  <p className={styles.none}>Nothing to restore. Removed projects and leftover workspace folders show up here.</p>
+                ) : (
+                  <ul className={styles.list} role="radiogroup" aria-label="Restore which">
+                    {previous.map((p) => (
+                      <li key={`${p.source}:${p.path}`}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={restoring === p.path}
+                          disabled={p.missing}
+                          className={cx(styles.item, restoring === p.path && styles.itemOn)}
+                          onClick={() => setRestoring(p.path)}
+                        >
+                          <span className={styles.itemTop}>
+                            <span className={styles.itemName}>{p.name}</span>
+                            <span className={styles.badge}>{p.missing ? 'Folder missing' : p.source === 'removed' ? `Removed ${ago(p.removedAt)}` : p.projectId ? 'Open now' : 'Found on disk'}</span>
+                          </span>
+                          <span className={styles.itemPath} title={p.path}>
+                            {p.path}
+                          </span>
+                          <span className={styles.itemMeta}>
+                            {plural(p.workspaces.length, 'workspace')}
+                            {p.workspaces.length ? `: ${p.workspaces.slice(0, 4).join(', ')}${p.workspaces.length > 4 ? '…' : ''}` : ''}
+                            {p.agents ? ` · ${plural(p.agents, 'agent')}` : ''}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </Modal>

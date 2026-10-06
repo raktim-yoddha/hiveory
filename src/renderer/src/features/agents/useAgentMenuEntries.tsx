@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
 import { CliLogo } from '../../components/cli/CliLogo'
 import type { MenuEntry } from '../../components/ui/Menu'
-import { useClis } from '../../stores/data'
+import { useHostClis } from '../../stores/data'
+import { selectedProjectId, useNavigation } from '../../stores/navigation'
 
 /** Menu entries for every detected CLI — the agent list is never hardcoded (AGENTS.md rule 15). */
 export const useAgentMenuEntries = (onPick: (cliId: string) => void): MenuEntry[] => {
-  const { clis, loaded, load } = useClis()
+  const projectId = useNavigation((s) => selectedProjectId(s.view))
+  const { clis, loaded, load } = useHostClis(projectId)
   useEffect(() => {
     if (!loaded) void load()
   }, [loaded, load])

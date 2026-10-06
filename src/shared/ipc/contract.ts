@@ -61,6 +61,8 @@ const queenContextSchema = z.object({
 })
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
+/** An SSH alias or user@host: never an ssh option, never shell syntax. */
+const sshDestination = z.string().min(1).max(255).regex(/^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/)
 const botName = z.string().trim().min(1).max(MAX_BOT_NAME)
 /** A bot's editable fields; '' clears the engine, model or effort. */
 const botFields = z.object({
@@ -177,6 +179,14 @@ export const requestSchemas = {
   /** Add project (ADR 0020): a folder picked in main, a clone, or a new repository; `name` overrides the folder's name. */
   'projects.add': z.discriminatedUnion('mode', [
     z.object({ mode: z.literal('folder'), path: folderPath, name: projectName.optional() }),
+    // A folder on an SSH host (ADR 0022): an absolute POSIX path or ~/…; the host checks it exists.
+    z.object({
+      mode: z.literal('remote'),
+      destination: sshDestination,
+      port: z.number().int().min(1).max(65535).optional(),
+      path: z.string().trim().min(1).max(1000).regex(/^(\/|~)/),
+      name: projectName.optional()
+    }),
     z.object({ mode: z.literal('clone'), url: z.string().trim().min(3).max(500), parentDir: folderPath, name: projectName.optional() }),
     z.object({
       mode: z.literal('create'),
@@ -199,7 +209,8 @@ export const requestSchemas = {
   'workspaces.suggestName': z.object({ projectId: id }),
   'workspaces.create': createWorkspaceSchema,
   'workspaces.delete': z.object({ workspaceId: id, force: z.boolean().optional() }),
-  'clis.list': z.object({ refresh: z.boolean().optional() }).optional(),
+  // With projectId: the CLIs on that project's machine (an SSH host's own, ADR 0022).
+  'clis.list': z.object({ refresh: z.boolean().optional(), projectId: id.optional() }).optional(),
   'agents.list': z.object({ workspaceId: id }),
   'agents.open': z.object({
     workspaceId: id,
@@ -462,9 +473,12 @@ export const requestSchemas = {
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
-  'hosts.check': z.object({
-    destination: z.string().min(1).max(255).regex(/^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/),
-    port: z.number().int().min(1).max(65535).optional()
+  'hosts.check': z.object({ destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }),
+  /** Folders on an SSH host, for picking a remote project folder. */
+  'hosts.listDir': z.object({
+    destination: sshDestination,
+    port: z.number().int().min(1).max(65535).optional(),
+    path: z.string().max(1000).regex(/^(\/|~|$)/).optional()
   }),
   'git.info': z.object({ projectId: id }),
   'git.validateBranch': z.object({ projectId: id, name: z.string().max(200) }),
@@ -630,6 +644,7 @@ export interface ResponseMap {
   'bots.threads': ChatSummary[]
   'bots.newThread': ChatSession
   'hosts.check': { platform: string; arch: string; node: string; installed: boolean; protocol: number }
+  'hosts.listDir': { path: string; home: string; dirs: string[] }
   'git.info': GitInfo
   'git.validateBranch': { problem: string | null }
   'git.init': Project

@@ -1,19 +1,23 @@
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { mainWorkspaceId, type Project, type Workspace } from '@shared/domain'
+import { hostKey, mainWorkspaceId, type Project, type Workspace } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { PersistedState } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
 
-/** A folder as one comparable key: symlinks/junctions resolved, case folded on Windows. */
-const treeKey = (path: string): string => {
+/**
+ * A folder as one comparable key: its machine, then the path (symlinks/junctions resolved and
+ * case folded on Windows for this computer; a remote host's path is compared as it is).
+ */
+const treeKey = (path: string, host?: Project['host']): string => {
+  if (host) return `${hostKey(host)}|${path}`
   let real = resolve(path)
   try {
     real = realpathSync.native(real)
   } catch {
     // A missing folder still compares by its resolved path.
   }
-  return process.platform === 'win32' ? real.toLowerCase() : real
+  return `local|${process.platform === 'win32' ? real.toLowerCase() : real}`
 }
 
 /** The working tree a workspace runs agents in: a Main workspace uses the project's whole checkout. */
@@ -27,11 +31,11 @@ const treeOf = (workspace: Workspace, project: Project | undefined): string =>
  * two Main workspaces running agents on the same files (ADR 0021).
  */
 export const mainTreeOwner = (state: PersistedState, project: Project): { project: Project; workspace: Workspace } | undefined => {
-  const tree = treeKey(project.repositoryRoot ?? project.path)
+  const tree = treeKey(project.repositoryRoot ?? project.path, project.host)
   for (const workspace of state.workspaces) {
     if (workspace.projectId === project.id) continue
     const owner = state.projects.find((p) => p.id === workspace.projectId)
-    if (owner && treeKey(treeOf(workspace, owner)) === tree) return { project: owner, workspace }
+    if (owner && treeKey(treeOf(workspace, owner), owner.host) === tree) return { project: owner, workspace }
   }
   return undefined
 }
@@ -42,6 +46,10 @@ export const mainTreeOwner = (state: PersistedState, project: Project): { projec
  */
 export class WorkspaceRepository {
   constructor(private readonly store: StateStore) {}
+
+  findProject(projectId: string): Project | undefined {
+    return this.store.state.projects.find((p) => p.id === projectId)
+  }
 
   project(projectId: string): Project {
     const project = this.store.state.projects.find((p) => p.id === projectId)
