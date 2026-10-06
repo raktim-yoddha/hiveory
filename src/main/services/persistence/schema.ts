@@ -63,13 +63,14 @@ export interface StoredEditor {
   path: string
 }
 
-/** A connection as saved: env, header and secret field values are sealed by SecretBox. */
+/** A connection as saved: env and header values are sealed by SecretBox. */
 export interface StoredConnection {
   id: string
   name: string
+  /** 'composio': the Composio account that serves the plugins (ADR 0023). */
   pluginId?: string
-  /** A plugin's account name ("Work"), when there is more than one. */
-  label?: string
+  /** Composio apps connected through Hiveory (toolkit slugs). */
+  apps?: string[]
   enabled: boolean
   transport: 'stdio' | 'http'
   command?: string
@@ -77,8 +78,6 @@ export interface StoredConnection {
   url?: string
   env: Record<string, string>
   headers: Record<string, string>
-  /** Plugin field values (secret ones sealed). */
-  values: Record<string, string>
   /** Tool list from the last successful connection, so agents see the tools without starting the server. */
   tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
   error?: string
@@ -211,7 +210,7 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   id: z.string().regex(/^c[a-z0-9]{1,24}$/),
   name: str,
   pluginId: str.optional(),
-  label: z.string().max(40).optional(),
+  apps: z.array(z.string().regex(/^[a-z0-9_]{1,40}$/)).max(1000).optional(),
   enabled: z.boolean(),
   transport: z.enum(['stdio', 'http']),
   command: str.optional(),
@@ -219,7 +218,6 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   url: str.optional(),
   env: stringMap,
   headers: stringMap,
-  values: stringMap,
   tools: z.array(z.object({ name: str, description: z.string(), inputSchema: z.record(z.string(), z.unknown()) })),
   error: str.optional(),
   importedFrom: str.optional(),
@@ -330,7 +328,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       // Unknown or invalid settings fall back to defaults field by field.
       settings: settingsSchema.parse(typeof input.settings === 'object' && input.settings !== null ? input.settings : {}),
       browserProfiles: list(input.browserProfiles, browserProfileSchema),
-      connections: list(input.connections, connectionSchema),
+      // Key-based plugins were replaced by the Composio account (ADR 0023): their saved keys are dropped.
+      connections: list(input.connections, connectionSchema).filter((c) => !c.pluginId || c.pluginId === 'composio'),
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),

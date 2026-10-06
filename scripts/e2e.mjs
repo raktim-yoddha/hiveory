@@ -46,7 +46,7 @@ process.env.GIT_COMMITTER_NAME = 'e2e'
 process.env.GIT_COMMITTER_EMAIL = 'e2e@example.test'
 
 // A stand-in for Composio (ADR 0023): its OAuth server (registration, PKCE, refresh) and its MCP server.
-const composio = { authorizes: 0, refreshes: 0, calls: 0, issued: 0, tokens: new Set(), codes: new Map() }
+const composio = { authorizes: 0, refreshes: 0, calls: 0, issued: 0, tokens: new Set(), codes: new Map(), active: new Set() }
 const composioServer = createServer((req, res) => {
   const base = `http://127.0.0.1:${composioServer.address().port}`
   const url = new URL(req.url, base)
@@ -88,6 +88,11 @@ const composioServer = createServer((req, res) => {
       composio.tokens.add(access)
       return json(200, { access_token: access, refresh_token: 'e2e-refresh-token', token_type: 'Bearer', expires_in: 3600 })
     }
+    // An app's approval page: opening it approves the app (the user clicking Allow).
+    if (url.pathname.startsWith('/connect/')) {
+      composio.active.add(url.pathname.slice('/connect/'.length))
+      return res.writeHead(200, { 'content-type': 'text/html' }).end('<p>Connected</p>')
+    }
     if (url.pathname === '/mcp') {
       if (!composio.tokens.has((req.headers.authorization ?? '').replace(/^Bearer /, ''))) {
         return json(401, { error: 'invalid_token' }, { 'www-authenticate': `Bearer error="invalid_token", resource_metadata="${base}/.well-known/oauth-protected-resource"` })
@@ -98,7 +103,18 @@ const composioServer = createServer((req, res) => {
       const reply = (result) => json(200, { jsonrpc: '2.0', id: msg.id, result })
       if (msg.method === 'initialize') return reply({ protocolVersion: msg.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'fake-composio', version: '1' } })
       if (msg.method === 'tools/list') {
-        return reply({ tools: [{ name: 'COMPOSIO_SEARCH_TOOLS', description: 'Find the tools for an app', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } }] })
+        return reply({
+          tools: [
+            { name: 'COMPOSIO_SEARCH_TOOLS', description: 'Find the tools for an app', inputSchema: { type: 'object', properties: { query: { type: 'string' } } } },
+            { name: 'COMPOSIO_MANAGE_CONNECTIONS', description: 'Check or connect apps', inputSchema: { type: 'object', properties: { toolkits: { type: 'array', items: { type: 'string' } } } } }
+          ]
+        })
+      }
+      if (msg.method === 'tools/call' && msg.params.name === 'COMPOSIO_MANAGE_CONNECTIONS') {
+        const results = Object.fromEntries(
+          msg.params.arguments.toolkits.map((app) => [app, composio.active.has(app) ? { status: 'ACTIVE' } : { status: 'INITIATED', redirect_url: `${base}/connect/${app}` }])
+        )
+        return reply({ content: [{ type: 'text', text: JSON.stringify({ successful: true, data: { message: 'ok', results } }) }] })
       }
       if (msg.method === 'tools/call') {
         composio.calls++
@@ -343,18 +359,18 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.getByRole('tab', { name: /MCP servers/ }).click()
   await page.getByText('In Hiveory · every agent').waitFor()
   await page.getByRole('tab', { name: /Plugins/ }).click()
-  const cards = page.locator('button').filter({ hasText: 'Set up' })
-  await waitFor(async () => (await cards.count()) >= 30, 'plugin cards')
+  // Composio apps (ADR 0023): no key fields anywhere; cards wait for the Composio sign-in.
+  const cards = page.locator('button').filter({ hasText: 'Connect' })
+  await waitFor(async () => (await cards.count()) >= 40, 'app cards')
   const logos = await page.locator('img[src^="data:image/svg+xml"]').count()
-  expect(logos >= 30, `only ${logos} plugin logos`)
+  expect(logos >= 40, `only ${logos} app logos`)
+  expect(await page.locator('button').filter({ hasText: 'Read, search, draft and send email.' }).isDisabled(), 'apps can be connected before signing in to Composio')
+  expect(await page.getByRole('button', { name: 'Sign in with Composio' }).isVisible(), 'no Composio sign-in')
   await page.getByRole('button', { name: 'Code', exact: true }).click()
   await waitFor(async () => (await page.getByText('GitHub', { exact: true }).isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'category filter')
   await page.getByRole('button', { name: 'All', exact: true }).click()
-  await page.getByText('GitHub', { exact: true }).click()
-  await page.getByRole('heading', { name: 'GitHub', exact: true }).waitFor()
-  expect(await page.getByLabel('Personal access token').isVisible(), 'token field missing')
-  await shot('a2e-plugin-setup')
-  await page.keyboard.press('Escape')
+  expect((await page.locator('input[type="password"]').count()) === 0, 'a key field is still on the Plugins screen')
+  await shot('a2e-plugins-signed-out')
   await page.getByRole('tab', { name: /Skills/ }).click()
   await page.getByRole('button', { name: 'New skill' }).click()
   await page.getByLabel('Name', { exact: true }).fill('E2E Skill')
@@ -362,13 +378,12 @@ await test('extensions: skills, MCP and plugins are separate tabs; plugins use r
   await page.keyboard.press('Escape')
 })
 
-await test('Composio: one sign-in in the browser, then its tools are listed', async () => {
+await test('plugins: sign in to Composio once, then connect an app on its own page', async () => {
   await stubBrowser()
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Plugins' }).click()
   await page.getByRole('tab', { name: /Plugins/ }).click()
-  await page.getByText('Composio', { exact: true }).click()
   await page.getByRole('button', { name: 'Sign in with Composio' }).click()
-  await page.getByText('composio_COMPOSIO_SEARCH_TOOLS').waitFor({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Sign out of Composio' }).waitFor({ timeout: 20000 })
   const opened = await app.evaluate(() => globalThis.__opened)
   expect(opened.length === 1 && opened[0].includes('/authorize?') && opened[0].includes('code_challenge='), `browser opened: ${opened}`)
   expect(composio.authorizes === 1, `${composio.authorizes} sign-ins`)
@@ -377,8 +392,27 @@ await test('Composio: one sign-in in the browser, then its tools are listed', as
   expect(!JSON.stringify(view).includes('e2e-access-token') && !JSON.stringify(view).includes('e2e-refresh-token'), 'a token reached the renderer')
   await waitFor(async () => readFileSync(join(profile, 'state.json'), 'utf8').includes('"oauth"'), 'sign-in saved')
   expect(!/e2e-(access|refresh)-token/.test(readFileSync(join(profile, 'state.json'), 'utf8')), 'a token is in the state file in plain text')
-  await shot('a2f-composio-signed-in')
-  await page.keyboard.press('Escape')
+  // Gmail: its approval page opens; once approved, the card checks again and shows it connected.
+  const gmail = page.locator('button').filter({ hasText: 'Read, search, draft and send email.' })
+  expect(!(await gmail.isDisabled()), 'apps stay disabled after signing in')
+  await gmail.click()
+  await gmail.getByText(/Approve it in your browser/).waitFor({ timeout: 15000 })
+  await waitFor(async () => composio.active.has('gmail'), 'Gmail approved')
+  expect((await app.evaluate(() => globalThis.__opened)).filter((u) => u.includes('/connect/gmail')).length === 1, 'Gmail approval page not opened once')
+  await gmail.click()
+  await gmail.getByText('Connected').waitFor({ timeout: 15000 })
+  await waitFor(async () => (await value('connections.list')).find((c) => c.pluginId === 'composio')?.apps?.includes('gmail'), 'Gmail saved as connected')
+  // An app Composio already has connects without the browser.
+  composio.active.add('github')
+  await app.evaluate(() => (globalThis.__opened = []))
+  const github = page.locator('button').filter({ hasText: 'Repositories, issues, pull requests' })
+  await github.click()
+  await github.getByText('Connected').waitFor({ timeout: 15000 })
+  expect((await app.evaluate(() => globalThis.__opened)).length === 0, 'the browser opened for an app Composio already had')
+  await page.getByRole('button', { name: 'Connected', exact: true }).click()
+  await waitFor(async () => (await gmail.isVisible()) && (await github.isVisible()) && !(await page.getByText('Notion', { exact: true }).isVisible()), 'Connected filter')
+  await page.getByRole('button', { name: 'All', exact: true }).click()
+  await shot('a2f-plugins-composio-connected')
 })
 
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {

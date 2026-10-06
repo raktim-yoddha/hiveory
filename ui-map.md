@@ -113,20 +113,27 @@ panels fold ⌖ ✎ </> into ⋯.
 Drag a tab into the lower half to open the bottom area ("Show below" preview); the browser page
 steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Copy session ID.
 
-### Settings › Skills, MCP & Plugins (ADR 0017)
+### Settings › Skills, MCP & Plugins (ADR 0017, 0023)
 
 ```text
 ┌ Skills, MCP & Plugins ───────────────────────────────────────┐
-│ ( Skills 12 | MCP servers 3 | Plugins 30 )               ⟳   │
-│ [ Search plugins                                   ]         │
-│ (All) (Connected) (Code) (Work) (Data) (Business) (Search) … │
+│ ( Skills 12 | MCP servers 3 | Plugins 2 )                ⟳   │
+│ ┌──────────────────────────────────────────────────────────┐ │
+│ │ [C] Composio account          ● 7 tools   ⟳  ⇥(sign out) │ │
+│ │     (signed out: [Sign in with Composio] · Create one ↗) │ │
+│ └──────────────────────────────────────────────────────────┘ │
+│ [ Search apps                                      ]         │
+│ (All) (Connected) (Work) (Code) (Data) (Business) (Search) … │
 │ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐           │
-│ │ [■] GitHub   │ │ [■] Linear   │ │ [■] Notion   │           │
-│ │ Repos, PRs…  │ │ Issues…      │ │ Pages…       │           │
-│ │ ● 41 tools   │ │ Set up →     │ │ Set up →     │           │
+│ │ [■] Gmail    │ │ [■] GitHub   │ │ [■] Notion   │           │
+│ │ Read, send…  │ │ Repos, PRs…  │ │ Pages…       │           │
+│ │ ● Connected  │ │ Connect →    │ │ ● Approve…   │           │
 │ └──────────────┘ └──────────────┘ └──────────────┘           │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+Plugins: cards are disabled until Composio is signed in; Connect opens the app's
+approval page, and the card checks again when the window regains focus or is clicked.
 
 Skills rows: name and description; on the right a stacked logo group of the installed CLIs that
 load it (first three, then "+N"), one folders button ("Shared (.agents) ▾" or "2 folders ▾") and

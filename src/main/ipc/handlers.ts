@@ -6,7 +6,6 @@ import { isPluginHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
-import { findExecutable, processDiscoveryEnv } from '../services/cli/discovery'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
 import { deliverMessage } from '../services/agent-tools/deliver'
@@ -291,7 +290,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'system.openUrl': async ({ url }) => {
-    if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens plugin help pages from here.')
+    if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
     await shell.openExternal(url)
   },
   // Files run where the folder is: this computer, or the project's SSH host (ADR 0022).
@@ -345,11 +344,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'editors.close': ({ editorId }) => c.editors.close(editorId),
   'connections.list': () => c.connections.list(),
-  'connections.requirements': () => {
-    const env = processDiscoveryEnv()
-    return { npx: Boolean(findExecutable('npx', env)), uvx: Boolean(findExecutable('uvx', env)) }
-  },
-  'connections.savePlugin': ({ pluginId, values, id, label }) => c.connections.savePlugin(pluginId, values, { id, label }),
+  'plugins.signIn': () => c.plugins.signIn(),
+  'plugins.signOut': () => c.plugins.signOut(),
+  'plugins.connect': ({ appId }) => c.plugins.connect(appId),
+  'plugins.check': ({ appId }) => c.plugins.check(appId),
   'connections.saveCustom': (input) => c.connections.saveCustom(input),
   'connections.import': ({ name }) => {
     const { config, from } = c.extensions.rawServer(name)

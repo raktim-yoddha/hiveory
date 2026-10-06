@@ -21,7 +21,8 @@ import type {
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
-import type { ConnectionRequirements, ConnectionView, ExtensionsInventory } from '../domain/extensions'
+import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
+import type { PluginConnectResult } from '../domain/plugins'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
 import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
@@ -111,6 +112,7 @@ const fileName = z.string().min(1).max(1000)
 /** `agents` or the id of a CLI that has its own skills folder (checked against the registry's roots in main). */
 const skillRoot = id
 const connectionId = z.string().regex(/^c[a-z0-9]{1,24}$/)
+const pluginAppId = z.string().regex(/^[a-z0-9_]{1,40}$/)
 const envName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/)
 const headerName = z.string().regex(/^[A-Za-z0-9-]{1,64}$/)
 const profileId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)
@@ -386,17 +388,14 @@ export const requestSchemas = {
   'editors.list': z.object({ workspaceId: id }),
   'editors.open': z.object({ workspaceId: id, path: fileName, targetPaneId: id.optional(), side: side.optional() }),
   'editors.close': z.object({ editorId: z.string().regex(/^e[a-f0-9]{12}$/) }),
-  /** Opens a plugin's "create a key" page or a runner's install page in the system browser (allow-listed in main). */
+  /** Opens the Composio account page in the system browser (allow-listed in main). */
   'system.openUrl': z.object({ url: z.string().max(500) }),
   'connections.list': none,
-  'connections.requirements': none,
-  /** Sets up a plugin account: `id` edits one, no `id` adds another (each with its own `label`). */
-  'connections.savePlugin': z.object({
-    pluginId: z.string().regex(/^[a-z0-9]{1,32}$/),
-    values: z.record(z.string().regex(/^\w{1,32}$/), z.string().max(4000)),
-    id: connectionId.optional(),
-    label: z.string().trim().max(40).regex(/^[\p{L}\p{N} ._-]*$/u, 'Use letters, numbers, spaces, dots, dashes or underscores.').optional()
-  }),
+  /** Plugins (ADR 0023): sign in to the user's own Composio account, then connect apps through it. */
+  'plugins.signIn': none,
+  'plugins.signOut': none,
+  'plugins.connect': z.object({ appId: pluginAppId }),
+  'plugins.check': z.object({ appId: pluginAppId }),
   'connections.saveCustom': z.object({
     id: connectionId.optional(),
     name: z.string().trim().min(1).max(40),
@@ -625,8 +624,10 @@ export interface ResponseMap {
   'editors.open': EditorView
   'editors.close': void
   'connections.list': ConnectionView[]
-  'connections.requirements': ConnectionRequirements
-  'connections.savePlugin': ConnectionView
+  'plugins.signIn': ConnectionView
+  'plugins.signOut': void
+  'plugins.connect': PluginConnectResult
+  'plugins.check': PluginConnectResult
   'connections.saveCustom': ConnectionView
   'connections.import': ConnectionView
   'connections.setEnabled': ConnectionView

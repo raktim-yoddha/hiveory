@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { pluginById, resolvePluginServer, type ConnectionView } from '@shared/domain'
+import { COMPOSIO, pluginAppById, type ConnectionView } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Emit } from '../events'
 import type { McpRawConfig } from '../extensions/extensions-service'
@@ -31,9 +31,9 @@ const mergeSealed = (stored: Record<string, string>, next: Record<string, string
   )
 
 /**
- * The MCP servers and plugins Hiveory runs for every agent (ADR 0017):
- * plugins set up with the user's keys, servers added by hand and servers
- * imported from a CLI's config. Keys are sealed at rest and never leave main.
+ * The MCP servers Hiveory runs for every agent (ADR 0017): the user's Composio
+ * account, which serves the plugins (ADR 0023), servers added by hand and
+ * servers imported from a CLI's config. Secrets are sealed and never leave main.
  */
 export class ConnectionService {
   constructor(
@@ -58,30 +58,29 @@ export class ConnectionService {
     return this.all().filter((c) => c.enabled)
   }
 
-  /** Names of enabled apps agents can use, for the agent prompt; a hub says what it holds. */
+  /** Names of enabled apps agents can use, for the agent prompt; Composio says which apps it holds. */
   appNames(): string[] {
     return this.enabled()
       .filter((c) => c.tools.length)
       .map((c) => {
-        const hint = c.pluginId ? pluginById(c.pluginId)?.agentHint : undefined
-        return hint ? `${c.name} (${hint})` : c.name
+        if (c.pluginId !== COMPOSIO.id) return c.name
+        const apps = (c.apps ?? []).map((id) => pluginAppById(id)?.name ?? id)
+        return `${c.name} (${apps.length ? `connected: ${apps.join(', ')}; ` : ''}${COMPOSIO.agentHint})`
       })
+  }
+
+  /** The user's Composio account, when they signed in. */
+  composio(): StoredConnection | undefined {
+    return this.all().find((c) => c.pluginId === COMPOSIO.id)
   }
 
   /** The server to start, with secrets opened. */
   spec(connection: StoredConnection): ConnectionSpec {
     const open = (record: Record<string, string>): Record<string, string> =>
       Object.fromEntries(Object.entries(record).map(([k, v]) => [k, this.box.open(v)]))
-    if (connection.pluginId) {
-      const plugin = pluginById(connection.pluginId)
-      if (!plugin) fail('NOT_FOUND', `Unknown plugin: ${connection.pluginId}`)
-      const opened = open(connection.values)
-      const { server } = resolvePluginServer(plugin!, opened)
-      // Automated runs point a sign-in plugin at a local stand-in (like HIVEORY_USER_DATA).
-      const standIn = plugin!.auth === 'oauth' ? process.env[`HIVEORY_PLUGIN_URL_${plugin!.id.toUpperCase()}`] : undefined
-      if (standIn && server.transport === 'http') server.url = standIn
-      const secrets = plugin!.fields.filter((f) => f.secret && opened[f.key]).map((f) => opened[f.key]!)
-      return { ...server, secrets, ...(plugin!.auth === 'oauth' ? { oauth: this.oauth(connection.id, plugin!.name) } : {}) }
+    if (connection.pluginId === COMPOSIO.id) {
+      // Automated runs point it at a local stand-in (like HIVEORY_USER_DATA).
+      return { transport: 'http', url: process.env.HIVEORY_PLUGIN_URL_COMPOSIO || COMPOSIO.mcpUrl, headers: {}, oauth: this.oauth(connection.id, COMPOSIO.name) }
     }
     return { transport: connection.transport, command: connection.command, args: connection.args, url: connection.url, env: open(connection.env), headers: open(connection.headers) }
   }
@@ -106,21 +105,16 @@ export class ConnectionService {
   }
 
   view(connection: StoredConnection): ConnectionView {
-    const plugin = connection.pluginId ? pluginById(connection.pluginId) : undefined
-    const secretKeys = new Set(plugin?.fields.filter((f) => f.secret).map((f) => f.key))
-    const values = Object.fromEntries(Object.entries(connection.values).filter(([k]) => !secretKeys.has(k)).map(([k, v]) => [k, this.box.open(v)]))
     const names = this.gateway?.exposedNames().get(connection.id)
     const spec = this.spec(connection)
     return {
       id: connection.id,
       name: connection.name,
-      ...(connection.pluginId ? { pluginId: connection.pluginId } : {}),
-      ...(connection.label ? { label: connection.label } : {}),
+      ...(connection.pluginId ? { pluginId: connection.pluginId, apps: connection.apps ?? [] } : {}),
       enabled: connection.enabled,
       transport: spec.transport,
       target: spec.transport === 'http' ? redactUrl(spec.url ?? '') : [spec.command ?? '', ...(spec.args ?? [])].map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' '),
-      values,
-      secretsSet: [...Object.keys(connection.values).filter((k) => secretKeys.has(k)), ...Object.keys(connection.env), ...Object.keys(connection.headers)],
+      secretsSet: [...Object.keys(connection.env), ...Object.keys(connection.headers)],
       envKeys: Object.keys(connection.env),
       headerKeys: Object.keys(connection.headers),
       tools: connection.tools.map((t, i) => ({ name: names?.[i] ?? t.name, description: t.description || undefined })),
@@ -149,45 +143,19 @@ export class ConnectionService {
     this.broadcast('state.changed', { topic: 'connections' })
   }
 
-  /**
-   * Sets up a plugin account from the catalog and connects to it. `id` edits that
-   * account; without it a new account is added, so one plugin can hold several
-   * (work and personal GitHub…). Each account gets its own name — "GitHub · Work" —
-   * and so its own tool prefix, so agents always know which account they use.
-   */
-  async savePlugin(pluginId: string, values: Record<string, string>, options: { id?: string; label?: string } = {}): Promise<ConnectionView> {
-    const plugin = pluginById(pluginId)
-    if (!plugin) fail('NOT_FOUND', `Unknown plugin: ${pluginId}`)
-    const existing = options.id ? this.find(options.id) : undefined
-    if (existing && existing.pluginId !== pluginId) fail('INVALID_INPUT', 'That connection belongs to another plugin.')
-    const label = (options.label ?? existing?.label ?? '').trim()
-    const name = label ? `${plugin!.name} · ${label}` : plugin!.name
-    const clash = this.all().find((c) => c.id !== existing?.id && c.name.toLowerCase() === name.toLowerCase())
-    if (clash) fail('INVALID_INPUT', label ? `${name} already exists. Pick another account name.` : `${plugin!.name} is already set up. Name this account (for example Work) to add another.`)
-    const stored = existing?.values ?? {}
-    const next: Record<string, string> = {}
-    for (const field of plugin!.fields) {
-      const value = (values[field.key] ?? '').trim()
-      if (field.secret) {
-        if (value) next[field.key] = this.box.seal(value)
-        else if (stored[field.key]) next[field.key] = stored[field.key]!
-      } else if (value) next[field.key] = value
-    }
-    const opened = Object.fromEntries(Object.entries(next).map(([k, v]) => [k, this.box.open(v)]))
-    const { missing } = resolvePluginServer(plugin!, opened)
-    if (missing.length) fail('INVALID_INPUT', `Fill in: ${missing.join(', ')}.`)
-    const connection: StoredConnection = {
-      ...(existing ?? { id: newId(), env: {}, headers: {}, tools: [] }),
-      name,
-      pluginId,
-      ...(label ? { label } : {}),
-      enabled: true,
-      transport: plugin!.server.transport,
-      values: next
-    }
-    if (!label) delete connection.label
+  /** Signs in to the user's Composio account (the browser opens when needed) and reads its tools. */
+  async signInComposio(): Promise<ConnectionView> {
+    const existing = this.composio()
+    const connection: StoredConnection = existing
+      ? { ...existing, enabled: true }
+      : { id: newId(), name: COMPOSIO.name, pluginId: COMPOSIO.id, apps: [], enabled: true, transport: 'http', env: {}, headers: {}, tools: [] }
     this.put(connection)
     return this.test(connection.id)
+  }
+
+  /** Records which Composio apps are connected, for the Plugins screen and the agent prompt. */
+  setApps(id: string, apps: string[]): void {
+    this.put({ ...this.find(id), apps: [...new Set(apps)].sort() })
   }
 
   /** Adds or edits a server entered by hand, then connects to it. */
@@ -205,7 +173,6 @@ export class ConnectionService {
       ...(input.transport === 'stdio' ? { command: input.command!.trim(), args: input.args ?? [] } : { url: input.url!.trim() }),
       env: input.transport === 'stdio' ? mergeSealed(existing?.env ?? {}, input.env, this.box) : {},
       headers: input.transport === 'http' ? mergeSealed(existing?.headers ?? {}, input.headers, this.box) : {},
-      values: {},
       tools: existing?.tools ?? [],
       ...(existing?.importedFrom ? { importedFrom: existing.importedFrom } : {})
     }
@@ -226,7 +193,6 @@ export class ConnectionService {
       ...(raw.url ? { url: raw.url } : { command: raw.command, args: raw.args ?? [] }),
       env: seal(raw.env),
       headers: seal(raw.headers),
-      values: {},
       tools: [],
       importedFrom: from
     }

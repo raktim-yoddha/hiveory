@@ -143,18 +143,23 @@ export class McpGateway implements ToolFamily {
   async call(_caller: unknown, name: string, args: Record<string, unknown>): Promise<ToolResult> {
     const entry = this.table().get(name)
     if (!entry) return { text: `Unknown tool: ${name}`, isError: true }
+    return this.invoke(entry.connection, entry.tool.name, args)
+  }
+
+  /** Calls one of a connection's tools by its own name (Hiveory's use of Composio's tools, for one). */
+  async invoke(connection: StoredConnection, tool: string, args: Record<string, unknown>): Promise<ToolResult> {
     try {
-      const live = await this.open(entry.connection)
+      const live = await this.open(connection)
       live.lastUsed = Date.now()
-      const result = await live.client.callTool({ name: entry.tool.name, arguments: args }, undefined, {
+      const result = await live.client.callTool({ name: tool, arguments: args }, undefined, {
         timeout: CALL_TIMEOUT_MS,
         resetTimeoutOnProgress: true
       })
       live.lastUsed = Date.now()
       const out = toToolResult(result as Record<string, unknown>)
-      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(entry.connection.id)?.()) }
+      return { ...out, text: scrubSecrets(out.text, this.secretsOf.get(connection.id)?.()) }
     } catch (error) {
-      return { text: `${entry.connection.name}: ${this.describe(error, entry.connection.id)}`, isError: true }
+      return { text: `${connection.name}: ${this.describe(error, connection.id)}`, isError: true }
     }
   }
 

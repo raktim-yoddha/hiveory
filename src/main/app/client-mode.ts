@@ -62,7 +62,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'clipboard.readText': () => clipboard.readText(),
     'clipboard.writeText': ({ text }) => clipboard.writeText(text),
     'system.openUrl': async ({ url }) => {
-      if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens plugin help pages from here.')
+      if (!isPluginHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
       await shell.openExternal(url)
     },
     'updates.status': () => ({ state: 'unsupported' as const, reason: 'This window uses a Hiveory server. Update Hiveory on each machine.' }),

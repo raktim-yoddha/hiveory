@@ -48,7 +48,7 @@ describe('sign-in plugins (ADR 0023)', () => {
     const ref: { oauth?: ConnectionOAuth } = {}
     const open = browser((authorize) => `${ref.oauth!.redirectUrl}?code=abc&state=${authorize.searchParams.get('state')}`)
     const { store, service } = setup(open)
-    const view = await service.savePlugin('composio', {})
+    const view = await service.signInComposio()
     const oauth = (ref.oauth = service.spec(store.state.connections.find((c) => c.id === view.id)!).oauth!)
     expect(oauth.signedIn).toBe(false)
 
@@ -68,7 +68,7 @@ describe('sign-in plugins (ADR 0023)', () => {
   it('rejects a loopback answer whose state does not match', async () => {
     const ref: { oauth?: ConnectionOAuth } = {}
     const { store, service } = setup(browser(() => `${ref.oauth!.redirectUrl}?code=abc&state=forged`))
-    const view = await service.savePlugin('composio', {})
+    const view = await service.signInComposio()
     const oauth = (ref.oauth = service.spec(store.state.connections.find((c) => c.id === view.id)!).oauth!)
     await expect(oauth.signIn(new URL('https://connect.composio.dev/mcp'))).rejects.toThrow(/did not finish/)
     expect(oauth.signedIn).toBe(false)

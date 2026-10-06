@@ -17,6 +17,16 @@ const CALLBACK_PATH = '/callback'
 const PAGE = (title: string, text: string): string =>
   `<!doctype html><meta charset="utf-8"><title>Hiveory</title><body style="font:16px system-ui,sans-serif;padding:64px 24px;text-align:center"><h1 style="font-size:20px">${title}</h1><p>${text}</p></body>`
 
+/** https, or http only for a server on this computer (a local stand-in, as in the e2e run). */
+export const isSafeLink = (link: string): boolean => {
+  try {
+    const url = new URL(link)
+    return url.protocol === 'https:' || (url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
+  } catch {
+    return false
+  }
+}
+
 /** The port a stored registration's redirect URI uses, so it stays valid across sign-ins. */
 const registeredPort = (client: OAuthClientInformationMixed | undefined): number => {
   const uri = client && 'redirect_uris' in client ? client.redirect_uris[0] : undefined
@@ -148,10 +158,7 @@ export class ConnectionOAuth implements OAuthClientProvider {
 
   redirectToAuthorization(url: URL): void {
     if (!this.loopback) throw new Error(`${this.name} needs you to sign in again: Settings › Plugins › ${this.name}.`)
-    // http only for a server on this computer (a local stand-in, as in the e2e run).
-    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))) {
-      throw new Error(`${this.name} asked to sign in over an insecure link.`)
-    }
+    if (!isSafeLink(url.href)) throw new Error(`${this.name} asked to sign in over an insecure link.`)
     this.openBrowser(url.href)
   }
 

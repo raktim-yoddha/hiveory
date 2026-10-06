@@ -23,7 +23,8 @@ CLIs that load MCP and every Chat run. A plugin's tools reach all of them as
 - With coordination tools off, the Hiveory MCP server still carries browser,
   computer use and apps.
 
-**Plugins are local-first.** There is no OAuth, Hiveory account or hosted
+**Plugins are local-first.** *(Superseded by ADR 0023: plugins now run through
+the user's own Composio account; the key catalog below is removed.)* There is no OAuth, Hiveory account or hosted
 relay. A plugin is a catalog template (`src/shared/domain/plugins.ts`) filled
 with keys the user creates:
 - a local `npx` / `uvx` server fed by environment variables; or

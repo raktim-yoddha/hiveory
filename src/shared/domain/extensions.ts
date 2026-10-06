@@ -43,24 +43,22 @@ export interface ExtensionsInventory {
 }
 
 /**
- * An MCP server Hiveory runs for every agent it launches — a plugin set up
- * with the user's keys, a server added by hand, or one imported from a CLI's
+ * An MCP server Hiveory runs for every agent it launches — the user's Composio
+ * account (ADR 0023), a server added by hand, or one imported from a CLI's
  * config (ADR 0017). Secrets stay in main; this view never carries them.
  */
 export interface ConnectionView {
   id: string
   name: string
-  /** Set when made from a plugin in the catalog. */
+  /** 'composio' for the Composio account that serves the plugins. */
   pluginId?: string
-  /** The plugin account's name ("Work"), when a plugin has several. */
-  label?: string
+  /** Composio apps connected through Hiveory (toolkit slugs). */
+  apps?: string[]
   enabled: boolean
   transport: 'stdio' | 'http'
   /** Command line or URL without secrets. */
   target: string
-  /** Plugin fields that are not secret. */
-  values: Record<string, string>
-  /** Plugin fields, env vars and headers that hold a value (the values stay in main). */
+  /** Env vars and headers that hold a value (the values stay in main). */
   secretsSet: string[]
   envKeys: string[]
   headerKeys: string[]
@@ -72,8 +70,3 @@ export interface ConnectionView {
   importedFrom?: string
 }
 
-/** What the local runners plugins use are installed. */
-export interface ConnectionRequirements {
-  npx: boolean
-  uvx: boolean
-}

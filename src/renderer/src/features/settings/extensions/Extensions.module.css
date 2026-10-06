@@ -350,6 +350,22 @@
   transform: scale(0.985);
 }
 
+.pluginCard:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* The Composio account the plugins run through (ADR 0023). */
+.accountBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
 .pluginCardOn {
   border-color: var(--color-bronze-soft);
 }
@@ -445,23 +461,12 @@
 }
 
 /* Plugin setup dialog */
-.setupHead {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-}
-
 .setupText {
   display: flex;
   flex: 1;
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
-}
-
-.setupHead h3 {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
 }
 
 .notice {
@@ -484,34 +489,11 @@
   margin-top: var(--nudge-sm);
 }
 
-.noticeWarn {
-  border-color: var(--color-waiting-edge);
-  background: var(--color-waiting-soft);
-}
-
 .noticeError {
   border-color: var(--color-danger);
   background: var(--color-danger-soft);
   color: var(--color-text);
   user-select: text;
-}
-
-.tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  max-height: calc(var(--space-11) * 2.5);
-  overflow-y: auto;
-}
-
-.tool {
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-active);
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  line-height: var(--control-xs);
 }
 
 .linkButton {
@@ -536,14 +518,6 @@
   text-decoration: underline;
 }
 
-.footerSpread {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
 .footerEnd {
   display: flex;
   gap: var(--space-4);
@@ -554,18 +528,3 @@
 }
 
 /* A plugin with several accounts. */
-.accounts {
-  color: var(--color-text-muted);
-  font-size: var(--text-2xs);
-}
-
-.accountTabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.accountTabs svg {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}

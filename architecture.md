@@ -490,7 +490,7 @@ src/
 │       ├── computer/           ComputerService (warm native helper: SendInput, GDI, UI Automation), ComputerTools (MCP)
 │       ├── chat/               ChatService, ChatStore, providers (per-CLI headless runs), stream parsers
 │       ├── extensions/         Skills (copy/create/import/trash) & MCP inventory (full configs kept in main)
-│       ├── connections/        ConnectionService (plugins + Hiveory MCP servers, sealed secrets), McpGateway (MCP client → ToolFamily), ConnectionOAuth (sign-in plugins: loopback OAuth, ADR 0023)
+│       ├── connections/        ConnectionService (Composio account + Hiveory MCP servers, sealed secrets), McpGateway (MCP client → ToolFamily), ConnectionOAuth (loopback OAuth sign-in), PluginService (apps connected through Composio, ADR 0023)
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme)
 │       ├── sessions/           SessionHistoryService — the CLIs' own session history (Claude, Codex, Gemini readers), read-only, cached by mtime; ModelTracker — each running agent's live model (→ CliRuntimeDetails.model)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch

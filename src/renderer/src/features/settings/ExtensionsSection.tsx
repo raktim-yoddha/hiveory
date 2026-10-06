@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Blocks, RefreshCw, ScrollText, Server } from 'lucide-react'
-import { PLUGINS, type ExtensionsInventory } from '@shared/domain'
+import { COMPOSIO, PLUGIN_APPS, type ExtensionsInventory } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
@@ -46,7 +46,7 @@ export function ExtensionsSection() {
 
   const skillCount = new Set(inventory?.skills.map((s) => `${s.scope}:${s.folder}`)).size
   const serverCount = connections.filter((c) => !c.pluginId).length + (inventory?.mcpServers.length ?? 0)
-  const pluginCount = connections.filter((c) => c.pluginId).length
+  const pluginCount = connections.find((c) => c.pluginId === COMPOSIO.id)?.apps?.length ?? 0
   const count = (n: number) => <span className={styles.count}>{n}</span>
 
   return (
@@ -64,7 +64,7 @@ export function ExtensionsSection() {
           options={[
             { value: 'skills', label: 'Skills', icon: <ScrollText />, badge: count(skillCount) },
             { value: 'mcp', label: 'MCP servers', icon: <Server />, badge: count(serverCount) },
-            { value: 'plugins', label: 'Plugins', icon: <Blocks />, badge: count(pluginCount || PLUGINS.length) }
+            { value: 'plugins', label: 'Plugins', icon: <Blocks />, badge: count(pluginCount || PLUGIN_APPS.length) }
           ]}
         />
         {tab !== 'plugins' && <IconButton label="Rescan" icon={<RefreshCw className={loading ? 'spin' : undefined} />} onClick={() => void scan()} />}

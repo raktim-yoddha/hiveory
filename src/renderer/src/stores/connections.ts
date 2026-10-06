@@ -1,24 +1,21 @@
 import { create } from 'zustand'
-import type { ConnectionRequirements, ConnectionView } from '@shared/domain'
+import type { ConnectionView } from '@shared/domain'
 import { api } from '../lib/api'
 import { reportError } from './notices'
 
 interface ConnectionsState {
   connections: ConnectionView[]
-  requirements: ConnectionRequirements | null
   load(): Promise<void>
   /** Puts a connection returned by an action into the list straight away (the broadcast follows). */
   put(connection: ConnectionView): void
 }
 
-/** MCP servers and plugins Hiveory runs for every agent (ADR 0017). Main holds the secrets; this holds views. */
+/** MCP servers and the Composio account Hiveory runs for every agent (ADR 0017, 0023). Main holds the secrets; this holds views. */
 export const useConnections = create<ConnectionsState>((set) => ({
   connections: [],
-  requirements: null,
   load: async () => {
     try {
-      const [connections, requirements] = await Promise.all([api('connections.list'), api('connections.requirements')])
-      set({ connections, requirements })
+      set({ connections: await api('connections.list') })
     } catch (error) {
       reportError(error, 'Load plugins')
     }

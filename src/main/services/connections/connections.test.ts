@@ -2,13 +2,14 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { PLUGINS, pluginById, resolvePluginServer, isPluginHelpUrl, DEFAULT_SETTINGS } from '@shared/domain'
+import { COMPOSIO, PLUGIN_APPS, isPluginHelpUrl, DEFAULT_SETTINGS } from '@shared/domain'
 import { agentPrompt } from '../cli/adapters/mcp-injection'
 import { StateStore } from '../persistence/state-store'
 import { parseState } from '../persistence/schema'
 import { WallpaperService, type ImageCodec } from '../appearance/wallpaper-service'
 import { ConnectionService, redactUrl } from './connection-service'
 import { McpGateway, toolPrefix, toToolResult } from './mcp-gateway'
+import { PluginService, readConnection } from './plugin-service'
 import { SecretBox, type Sealer } from './secret-box'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
@@ -34,35 +35,37 @@ rl.on('line', (line) => {
 })
 `
 
-describe('plugin catalog', () => {
-  it('lists unique plugins with a key page, fields and a server', () => {
-    expect(new Set(PLUGINS.map((p) => p.id)).size).toBe(PLUGINS.length)
-    for (const plugin of PLUGINS) {
-      expect(plugin.keyUrl).toMatch(/^https:\/\//)
-      // A sign-in plugin has no fields: the user signs in with their own account (ADR 0023).
-      expect(plugin.fields.length > 0 || plugin.auth === 'oauth').toBe(true)
-      expect(isPluginHelpUrl(plugin.keyUrl)).toBe(true)
-    }
+describe('plugin catalog (ADR 0023)', () => {
+  it('lists unique Composio apps and opens only the Composio account page', () => {
+    expect(new Set(PLUGIN_APPS.map((a) => a.id)).size).toBe(PLUGIN_APPS.length)
+    for (const app of PLUGIN_APPS) expect(app.id).toMatch(/^[a-z0-9_]+$/)
+    expect(isPluginHelpUrl(COMPOSIO.accountUrl)).toBe(true)
     expect(isPluginHelpUrl('https://evil.example')).toBe(false)
   })
 
-  it('fills templates and drops parts whose optional field is empty', () => {
-    const sentry = pluginById('sentry')!
-    expect(resolvePluginServer(sentry, { token: 'abc' })).toEqual({
-      server: { transport: 'stdio', command: 'npx', args: ['-y', '@sentry/mcp-server@latest'], env: { SENTRY_ACCESS_TOKEN: 'abc' } },
-      missing: []
+  it('drops the old key-based plugins and their keys when the state is read', () => {
+    const base = { enabled: true, transport: 'http', env: {}, headers: {}, tools: [] }
+    const { state } = parseState({
+      connections: [
+        { ...base, id: 'c1', name: 'GitHub', pluginId: 'github', values: { token: 'v1:abc' } },
+        { ...base, id: 'c2', name: 'Composio', pluginId: 'composio', apps: ['gmail'] },
+        { ...base, id: 'c3', name: 'My server', url: 'https://mcp.example' }
+      ]
     })
-    expect(resolvePluginServer(sentry, { token: 'abc', host: 'sentry.me' }).server).toMatchObject({ args: ['-y', '@sentry/mcp-server@latest', '--host=sentry.me'] })
-    // Defaults fill optional fields; required ones are reported by label.
-    expect(resolvePluginServer(pluginById('gitlab')!, { token: 't' }).server).toMatchObject({ env: { GITLAB_API_URL: 'https://gitlab.com/api/v4' } })
-    expect(resolvePluginServer(pluginById('slack')!, { token: 't' }).missing).toEqual(['Workspace (team) ID'])
-    // Remote plugins: bearer header and optional query parameters.
-    expect(resolvePluginServer(pluginById('supabase')!, { token: 'sbp', project: 'ref1' }).server).toEqual({
-      transport: 'http',
-      url: 'https://mcp.supabase.com/mcp?project_ref=ref1',
-      headers: { Authorization: 'Bearer sbp' }
+    expect(state.connections.map((c) => c.id)).toEqual(['c2', 'c3'])
+    expect(state.connections[0]!.apps).toEqual(['gmail'])
+    expect(JSON.stringify(state)).not.toContain('v1:abc')
+  })
+
+  it('reads what Composio says about an app', () => {
+    const answer = (results: unknown) => JSON.stringify({ successful: true, data: { message: 'ok', results } })
+    expect(readConnection(answer({ gmail: { status: 'ACTIVE' } }), 'gmail')).toEqual({ connected: true })
+    expect(readConnection(answer({ gmail: { status: 'INITIATED', redirect_url: 'https://connect.composio.dev/link/ln_1' } }), 'gmail')).toEqual({
+      connected: false,
+      link: 'https://connect.composio.dev/link/ln_1'
     })
-    expect(resolvePluginServer(pluginById('supabase')!, { token: 'sbp' }).server).toMatchObject({ url: 'https://mcp.supabase.com/mcp' })
+    expect(readConnection(answer({ gmail: { status: 'FAILED', error: 'Unknown toolkit' } }), 'gmail')).toEqual({ connected: false, error: 'Unknown toolkit' })
+    expect(readConnection('not json', 'gmail')).toMatchObject({ connected: false, error: 'not json' })
   })
 })
 
@@ -143,8 +146,7 @@ describe('connections end to end', () => {
     await service.remove(view.id)
   }, 30_000)
 
-  it('validates plugin fields before connecting', async () => {
-    await expect(service.savePlugin('slack', { token: 'xoxb' })).rejects.toThrow(/Workspace \(team\) ID/)
+  it('validates a server before connecting', async () => {
     await expect(service.saveCustom({ name: 'x', transport: 'http', url: 'ftp://nope', env: {}, headers: {} })).rejects.toThrow(/http/)
   })
 })
@@ -199,26 +201,45 @@ describe('wallpapers', () => {
   })
 })
 
-describe('plugin accounts', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'hv-acct-'))
+describe('plugins through Composio', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'hv-plug-'))
   const store = new StateStore(join(dir, 'state.json'), log)
+  const opened: string[] = []
   const service = new ConnectionService(store, new SecretBox(sealer), () => undefined)
-  // A gateway that "connects" instantly, so this test needs no network.
-  service.attach({ refresh: async () => ({ tools: [] }), close: async () => undefined, exposedNames: () => new Map(), isConnecting: () => false } as unknown as McpGateway)
+  const composio = { gmail: 'INITIATED' }
+  // Composio's MANAGE tool, answered here, so this test needs no network.
+  const gateway = {
+    refresh: async () => ({ tools: [{ name: 'COMPOSIO_MANAGE_CONNECTIONS', description: '', inputSchema: {} }] }),
+    close: async () => undefined,
+    exposedNames: () => new Map(),
+    isConnecting: () => false,
+    invoke: async (_c: unknown, tool: string, args: { toolkits: string[] }) => {
+      const app = args.toolkits[0]!
+      const status = composio[app as 'gmail'] ?? 'ACTIVE'
+      return { isError: false, text: JSON.stringify({ successful: true, data: { results: { [app]: { status, ...(status === 'ACTIVE' ? {} : { redirect_url: `https://connect.composio.dev/link/${app}` }) } } } }) }
+    }
+  } as unknown as McpGateway
+  service.attach(gateway)
+  const plugins = new PluginService(service, gateway, (url) => opened.push(url))
 
-  it('keeps several named accounts of one plugin, each with its own name and key', async () => {
-    const work = await service.savePlugin('github', { token: 'ghp_work_123456' })
-    expect(work.name).toBe('GitHub')
-    await expect(service.savePlugin('github', { token: 'ghp_other' })).rejects.toThrow(/Name this account/)
-    const personal = await service.savePlugin('github', { token: 'ghp_personal_654321' }, { label: 'Personal' })
-    expect(personal.name).toBe('GitHub · Personal')
-    expect(personal.label).toBe('Personal')
-    await expect(service.savePlugin('github', { token: 'x' }, { label: 'personal' })).rejects.toThrow(/already exists/)
-    // Editing one account leaves the other's key alone.
-    await service.savePlugin('github', { token: '' }, { id: work.id, label: 'Work' })
-    const specs = service.all().map((c) => service.spec(c))
-    expect(specs.map((s) => s.headers?.Authorization)).toEqual(['Bearer ghp_work_123456', 'Bearer ghp_personal_654321'])
-    expect(service.list().map((c) => c.name)).toEqual(['GitHub · Work', 'GitHub · Personal'])
-    expect(JSON.stringify(service.list())).not.toMatch(/ghp_/)
+  it('needs a sign-in, then connects apps on Composio and tells agents which ones', async () => {
+    await expect(plugins.connect('gmail')).rejects.toThrow(/Sign in to Composio/)
+    const account = await plugins.signIn()
+    expect(account.pluginId).toBe('composio')
+    expect(service.spec(service.composio()!).url).toBe(COMPOSIO.mcpUrl)
+    // Not connected yet: the approval page opens; checking again does not open it twice.
+    expect(await plugins.connect('gmail')).toEqual({ state: 'pending' })
+    expect(opened).toEqual(['https://connect.composio.dev/link/gmail'])
+    expect(await plugins.check('gmail')).toEqual({ state: 'pending' })
+    expect(opened).toHaveLength(1)
+    // Approved in the browser.
+    composio.gmail = 'ACTIVE'
+    expect(await plugins.check('gmail')).toEqual({ state: 'connected' })
+    expect(await plugins.connect('github')).toEqual({ state: 'connected' })
+    expect(service.list()[0]!.apps).toEqual(['github', 'gmail'])
+    expect(service.appNames()[0]).toMatch(/^Composio \(connected: GitHub, Gmail; .*1,000\+ apps/)
+    await expect(plugins.connect('not-an-app')).rejects.toThrow(/Unknown app/)
+    await plugins.signOut()
+    expect(service.list()).toEqual([])
   })
 })
