@@ -584,7 +584,7 @@ await test('side panel starts empty; "+" adds browsers and a single Explorer', a
   await page.getByRole('button', { name: 'Show side panel' }).click()
   await sidePanel().getByText('Nothing open').waitFor()
   const add = async (kind) => {
-    await sidePanel().getByRole('button', { name: 'Add browser or explorer' }).first().click()
+    await sidePanel().getByRole('button', { name: 'Add browser, explorer or sessions' }).first().click()
     await page.getByRole('menuitem', { name: new RegExp(kind) }).click()
   }
   expect(!(await sidePanel().getByText('Terminal').count()), 'terminal still offered in the side panel')
@@ -799,7 +799,7 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await card.getByText(/On it!/).waitFor()
 
     await page.getByRole('button', { name: 'Float Queen Bee' }).click()
-    await waitFor(async () => page.evaluate(() => getComputedStyle(document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]')).position === 'fixed'), 'floating bar')
+    await waitFor(async () => page.evaluate(() => getComputedStyle(document.querySelector('[aria-label="Tell Queen Bee"]').closest('[class*="floating"]')).position === 'absolute'), 'floating bar')
     await shot('h3-queen-floating')
     await page.getByRole('button', { name: 'Dock Queen Bee' }).click()
   } finally {
@@ -910,7 +910,7 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
     const voiceText = await page.locator('main').innerText()
     expect(['Parakeet', 'Whisper Turbo', 'Kokoro'].every((n) => voiceText.includes(n)), 'a speech pack is missing')
     // Her four voices, each previewable once Kokoro is in; until then the cards offer the download.
-    for (const name of ['Heart', 'Bella', 'Emma', 'Michael']) await page.getByRole('radio', { name: new RegExp(name) }).waitFor()
+    for (const name of ['Heart', 'Bella', 'Emma', 'Nicole']) await page.getByRole('radio', { name: new RegExp(name) }).waitFor()
     expect(await page.getByRole('button', { name: 'Preview Heart (needs the Kokoro pack)' }).isDisabled(), 'preview played the system voice')
     await page.getByRole('button', { name: /Get these voices/ }).waitFor()
     await shot('h6-queen-voice')
