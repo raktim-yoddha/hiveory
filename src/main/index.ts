@@ -1,10 +1,13 @@
-import { app, BrowserWindow, Menu, net, protocol } from 'electron'
+import { app, BrowserWindow, Menu, net, protocol, safeStorage } from 'electron'
 import electronUpdater from 'electron-updater'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { WALLPAPER_SCHEME } from './services/appearance/wallpaper-service'
 import { IPC_PREFIX } from '@shared/ipc/contract'
+import { readClientConfig } from './app/client'
+import { runClientMode } from './app/client-mode'
 import { createContainer, type Container } from './app/container'
+import { startServer, type HiveoryServer } from './app/server'
 import { guard } from './app/guard'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
@@ -24,6 +27,19 @@ app.setPath('userData', process.env.HIVEORY_USER_DATA ?? join(app.getPath('appDa
 
 const paths = resolvePaths(app.getPath('userData'), appName)
 const log = createLogger(paths.logDir)
+
+/** `--serve <port>` (or `--serve=<port>`): run as a Hiveory server without a window (ADR 0022). */
+const argValue = (flag: string): string | undefined => {
+  const at = process.argv.findIndex((a) => a === flag || a.startsWith(`${flag}=`))
+  if (at < 0) return undefined
+  const arg = process.argv[at]!
+  return arg.includes('=') ? arg.slice(flag.length + 1) : process.argv[at + 1]
+}
+const servePort = argValue('--serve')
+/** Loopback by default: clients come through an SSH tunnel. Another address (e.g. Tailscale) is explicit. */
+const serveHost = argValue('--serve-host') ?? '127.0.0.1'
+let server: HiveoryServer | null = null
+let stopClient: (() => void) | null = null
 
 // A bug in one service must never take the whole app down.
 process.on('uncaughtException', (error) => log.error('Uncaught exception', error))
@@ -62,6 +78,8 @@ const emit: Emit = (event, payload) => {
       log.warn(`Could not send ${event}`, error)
     }
   }
+  // Clients of this machine's server get every event too.
+  guard(log, 'Server events', () => server?.broadcast(event, payload))
 }
 
 const openWindow = (): void => {
@@ -85,6 +103,12 @@ app.whenReady().then(async () => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   // Finder-launched apps get a minimal PATH: adopt the login shell's before any CLI is looked up.
   await adoptLoginShellPath(log)
+  // A desktop paired with a Hiveory server runs no services of its own: it is that server's window.
+  const clientConfig = servePort === undefined ? readClientConfig(paths.clientFile, safeStorage) : null
+  if (clientConfig) {
+    stopClient = await runClientMode(clientConfig, paths, log, targets)
+    return
+  }
   container = createContainer(paths, log, emit, app.isPackaged ? electronUpdater.autoUpdater : null)
   const wallpapers = container.wallpapers
   guard(log, 'Wallpaper protocol', () =>
@@ -127,7 +151,20 @@ app.whenReady().then(async () => {
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
     log
   )
-  openWindow()
+  if (servePort !== undefined) {
+    // Server mode: no window; paired clients drive it (only REMOTE_CHANNELS, validated again).
+    server = await startServer({
+      port: Number(servePort) || 0,
+      host: serveHost,
+      handlers: createHandlers(container, { trustPaths: true }),
+      log,
+      devicesFile: paths.serverDevicesFile,
+      version: app.getVersion()
+    })
+    // Supervisors and the person starting it read the address and the pairing code from stdout.
+    console.log(`Hiveory server ready on ${serveHost}:${server.port}`)
+    console.log(`Pairing code: ${server.pairingCode()} (single use, 15 minutes)`)
+  } else openWindow()
   // Durable sessions: every agent comes back on its own, resuming its conversation.
   guard(log, 'Agent resume', () => c.agents.resumeAll(), report('Resuming agents'))
   const notices = [
@@ -146,12 +183,15 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // A server has no windows to close; it runs until stopped.
+  if (process.platform !== 'darwin' && servePort === undefined) app.quit()
 })
 
 app.on('before-quit', () => {
   quitting = true
   tray.destroy()
+  guard(log, 'Client shutdown', () => stopClient?.())
+  guard(log, 'Server shutdown', () => server?.close())
   const c = container
   if (!c) return
   // One disposer failing must not skip the rest — above all the final state flush.

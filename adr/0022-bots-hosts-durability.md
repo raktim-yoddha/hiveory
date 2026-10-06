@@ -154,6 +154,34 @@ built app: the OpenConsole and pwsh processes are children of the host, and kill
 leaves Hiveory running; the affected agents show as exited and the next terminal starts a new
 host.
 
+**Step 5 (done): Hiveory as a server, the desktop as its client.** The whole app can run on
+another machine (a VM, a VPS, a box under the desk) and keep working while laptops are closed.
+- **Server.** `hiveory --serve <port>` starts every service without a window and serves the IPC
+  contract over plain HTTP (no new dependency): `POST /call` for calls, `GET /events` as one
+  Server-Sent Events stream for every event, `POST /pair`, `GET /health`. It binds to
+  `127.0.0.1` unless `--serve-host` says otherwise. It prints a pairing code (8 characters, single
+  use, 15 minutes); a device trades it for a token and the server keeps only the token's SHA-256
+  hash. Ten wrong codes in 10 minutes pause pairing. Every call must be in `REMOTE_CHANNELS`
+  (`src/shared/ipc/remote.ts`, default deny) and passes the same zod schemas as local IPC. Nothing
+  that needs the server's screen, dialogs, clipboard, microphone or installer is remote. A paired
+  client may name folders on the server directly (`trustPaths`), since there is no picker there.
+- **Client.** Settings › Remote › Use a Hiveory server: through SSH (recommended: a `ssh -L`
+  tunnel from Hiveory's SSH layer to the server's loopback port) or at an address (Tailscale, an
+  HTTPS proxy). After pairing, the token is sealed with the OS keychain (`client.json`) and the app
+  relaunches as a client: no local services start, main forwards `REMOTE_CHANNELS` to the server
+  and relays its events, and the clipboard, links and server switching stay local
+  (`CLIENT_LOCAL_CHANNELS`); anything else says it is not available from a client. The renderer is
+  the same app; a SERVER chip in the title bar and typed folder paths in Add project are the only
+  differences. The event stream reconnects (reopening the tunnel) with backoff. Disconnect returns
+  to local mode.
+- **Not yet.** Take control of a bot computer opens on the server's own loopback, so from a
+  client it needs the server's desktop. There is no phone companion.
+- Verified on this machine: a server instance and a client instance (separate profiles) — health,
+  401 for unpaired calls, 403 for a wrong code, pairing from Settings, the server's project, files
+  and a PowerShell pane used from the client with live terminal output over the event stream,
+  dialogs, reveal and updates refused, the client's clipboard kept local, the SERVER chip, a server
+  restart survived with an automatic reconnect, and disconnect back to local mode.
+
 ## Durability
 
 ADR 0009 is extended (see its amendment). Every startup step, settings reaction and quit disposer

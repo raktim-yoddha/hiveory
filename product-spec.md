@@ -324,6 +324,11 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   files, git, worktrees and agents all stay on that machine; its sidebar row and page show the
   host. Agent menus list the CLIs installed on that machine. Remote workspaces use terminal view.
 - Losing the connection stops that machine's agents with a notice; opening them again reconnects.
+- Hiveory can run as a server (`hiveory --serve 7788`, no window, loopback only by default) so agents
+  and bots keep working while this computer is off. Settings › Remote › Use a Hiveory server pairs
+  this window with it (SSH tunnel or an address, plus the one-time code it printed); Hiveory then
+  restarts as that server's window. The server's dialogs, screen and installer are never reachable
+  from a client. Disconnect returns to local mode.
 
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
   installs Hiveory's small host program in `~/.hiveory-host` there (Node 20+ required).

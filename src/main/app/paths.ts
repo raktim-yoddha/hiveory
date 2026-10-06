@@ -16,6 +16,10 @@ export interface AppPaths {
   wallpapersDir: string
   /** Queen Bee's speech packs (large, machine-local). */
   voiceDir: string
+  /** Set when this desktop uses a Hiveory server (ADR 0022): how to reach it, token sealed. */
+  clientFile: string
+  /** Devices paired with this machine when it runs as a Hiveory server (token hashes only). */
+  serverDevicesFile: string
 }
 
 /**
@@ -37,6 +41,8 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
     runtimeDir: join(dataRoot, 'Runtime'),
     worktreeRoot: join(dataRoot, 'Workspaces'),
     wallpapersDir: join(userData, 'wallpapers'),
-    voiceDir: join(dataRoot, 'Voice')
+    voiceDir: join(dataRoot, 'Voice'),
+    clientFile: join(userData, 'client.json'),
+    serverDevicesFile: join(userData, 'server-devices.json')
   }
 }

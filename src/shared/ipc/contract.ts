@@ -500,7 +500,14 @@ export const requestSchemas = {
   'github.status': z.object({ projectId: id }),
   'github.pullRequests': z.object({ projectId: id }),
   'github.issues': z.object({ projectId: id }),
-  'github.createPullRequest': z.object({ workspaceId: id, draft: z.boolean().optional() })
+  'github.createPullRequest': z.object({ workspaceId: id, draft: z.boolean().optional() }),
+  // Use a Hiveory server from this desktop (ADR 0022): pair once with its code, then the app relaunches as its client.
+  'client.status': none,
+  'client.connect': z.discriminatedUnion('via', [
+    z.object({ via: z.literal('ssh'), destination: sshDestination, port: z.number().int().min(1).max(65535), code: z.string().regex(/^[A-Za-z0-9]{8}$/) }),
+    z.object({ via: z.literal('direct'), url: z.string().url().max(300).regex(/^https?:\/\//), code: z.string().regex(/^[A-Za-z0-9]{8}$/) })
+  ]),
+  'client.disconnect': none
 } as const
 
 export interface AppInfo {
@@ -510,6 +517,17 @@ export interface AppInfo {
   hooksAvailable: boolean
   /** Unpackaged development build (shows the DEV badge). */
   isDev: boolean
+  /** This window is a client of a Hiveory server (ADR 0022): everything runs there. */
+  client?: { server: string }
+}
+
+/** Server/client mode as Settings › Remote shows it. */
+export interface ClientStatus {
+  mode: 'local' | 'client'
+  /** Where the server is (an SSH host and port, or an address). */
+  server?: string
+  connected: boolean
+  detail?: string
 }
 
 export interface TerminalSnapshot {
@@ -666,6 +684,9 @@ export interface ResponseMap {
   'github.pullRequests': PullRequest[]
   'github.issues': GithubIssue[]
   'github.createPullRequest': { url: string }
+  'client.status': ClientStatus
+  'client.connect': ClientStatus
+  'client.disconnect': void
 }
 
 export interface GitStatusView {

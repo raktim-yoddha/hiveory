@@ -579,6 +579,15 @@ CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, rep
         └──────────────▶ inProcessPty (node-pty in main)
 ```
 
+### Server and client data flow (ADR 0022)
+
+```text
+client window ─IPC─▶ client main (no services) ─POST /call (bearer)─▶ hiveory --serve ─▶ REMOTE_CHANNELS ─▶ handlers
+       ▲                    │  local: clipboard, links, client.*            │ (same zod schemas)
+       └──── events ◀───────┴──────── GET /events (SSE) ◀──────── emit ─────┘
+          (through an ssh -L tunnel to the server's loopback, or an address)
+```
+
 ### Bots data flow (ADR 0022)
 
 ```text

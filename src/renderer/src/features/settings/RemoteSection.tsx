@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
+import { ServerConnection } from './ServerConnection'
 import { SettingRow, SettingsPage } from './SettingsScreen'
 import styles from './Settings.module.css'
 
@@ -64,6 +65,7 @@ export function RemoteSection() {
         description="Connect once in a terminal (ssh <host>) so you can check and accept its host key. Hiveory never accepts host keys on its own."
         control={null}
       />
+      <ServerConnection />
     </SettingsPage>
   )
 }

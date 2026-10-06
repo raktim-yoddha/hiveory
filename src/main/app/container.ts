@@ -249,6 +249,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   })
 
   return {
+    paths,
     log,
     emit,
     store,

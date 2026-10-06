@@ -1,4 +1,6 @@
-import { BrowserWindow, app, clipboard, dialog, shell, systemPreferences } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, safeStorage, shell, systemPreferences } from 'electron'
+import { connectAndSave } from '../app/client'
+import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
 import { isPluginHelpUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
@@ -17,7 +19,11 @@ import type { PreviousProject, Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
 
 /** Maps each contract channel onto an application service. No logic lives here. */
-export const createHandlers = (c: Container): Handlers => {
+/**
+ * `trustPaths`: requests from a paired client of this machine's Hiveory server name
+ * folders on this machine directly (there is no picker to choose them with).
+ */
+export const createHandlers = (c: Container, options: { trustPaths?: boolean } = {}): Handlers => {
   const repoRootOf = async (projectId: string): Promise<string | undefined> => {
     const project = c.workspaceRepo.project(projectId)
     return project.repositoryRoot ?? (await (await c.hosts.kit(project.host)).git.repositoryRoot(project.path))
@@ -55,6 +61,7 @@ export const createHandlers = (c: Container): Handlers => {
   const picked = new Set<string>()
   const defaultParent = (): string => join(app.getPath('home'), 'Hiveory', 'projects')
   const chosen = (path: string): string => {
+    if (options.trustPaths) return path
     if (![...picked, defaultParent()].some((p) => samePath(p, path))) fail('FORBIDDEN', 'Choose the folder with the picker first.')
     return path
   }
@@ -429,6 +436,14 @@ export const createHandlers = (c: Container): Handlers => {
     return c.chats.threads(botId)
   },
   'bots.newThread': ({ botId }) => c.bots.newThread(botId),
+  // This window runs its own services; connecting pairs with a server and relaunches as its client (ADR 0022).
+  'client.status': () => ({ mode: 'local' as const, connected: false }),
+  'client.connect': async (input) => {
+    const server = await connectAndSave(input, c.sshHosts, c.paths.clientFile, safeStorage)
+    relaunch()
+    return { mode: 'client' as const, server, connected: true }
+  },
+  'client.disconnect': () => undefined,
   'bots.computer': async ({ botId, action }) => {
     if (action === 'start') await c.computers.ensure(botId)
     if (action === 'stop') await c.computers.stop(botId)

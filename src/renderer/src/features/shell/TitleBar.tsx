@@ -23,6 +23,11 @@ export function TitleBar() {
         <span className={styles.brand}>
           <AppLogo />
           <span className={styles.name}>Hiveory</span>
+          {info?.client && (
+            <span className={styles.dev} title={`This window uses the Hiveory server ${info.client.server}`}>
+              SERVER
+            </span>
+          )}
           {info?.isDev && (
             <span className={styles.dev} title="Development build">
               DEV

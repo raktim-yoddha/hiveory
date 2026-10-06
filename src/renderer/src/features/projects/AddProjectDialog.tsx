@@ -10,7 +10,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
-import { useProjects } from '../../stores/data'
+import { useApp, useProjects } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { RemoteFolderPicker, SSH_DESTINATION } from './RemoteFolderPicker'
@@ -140,7 +140,12 @@ export function AddProjectDialog() {
       .finally(() => setBusy(false))
   }
 
-  const pathRow = (label: string, value: string, empty: string, purpose: 'project' | 'parent') => (
+  // A window using a Hiveory server has no folder picker on that machine: its folders are typed.
+  const onServer = Boolean(useApp.getState().info?.client)
+  const pathRow = (label: string, value: string, empty: string, purpose: 'project' | 'parent') =>
+    onServer ? (
+      <TextField label={`${label} on the server`} value={value} placeholder="/home/me/app" onChange={purpose === 'project' ? setFolder : setParentDir} />
+    ) : (
     <div className={styles.field}>
       <span className={styles.label}>{label}</span>
       <div className={cx(styles.path, !value && styles.pathEmpty)}>
@@ -153,7 +158,7 @@ export function AddProjectDialog() {
         </Button>
       </div>
     </div>
-  )
+    )
 
   const submitLabel = where === 'remote' ? 'Add project' : { folder: 'Add project', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore workspaces' : 'Restore' }[mode]
 
