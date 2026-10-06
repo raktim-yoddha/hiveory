@@ -404,6 +404,13 @@
   object-fit: contain;
 }
 
+.logoInitial {
+  color: var(--color-logo-initial);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+}
+
 .logoLarge {
   width: calc(var(--space-11) + var(--space-4));
   height: calc(var(--space-11) + var(--space-4));

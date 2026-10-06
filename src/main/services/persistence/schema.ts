@@ -83,6 +83,8 @@ export interface StoredConnection {
   tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>
   error?: string
   importedFrom?: string
+  /** A signed-in plugin's OAuth registration and tokens, as one sealed JSON value (ADR 0023). */
+  oauth?: string
 }
 
 export const emptyState = (): PersistedState => ({
@@ -220,7 +222,8 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   values: stringMap,
   tools: z.array(z.object({ name: str, description: z.string(), inputSchema: z.record(z.string(), z.unknown()) })),
   error: str.optional(),
-  importedFrom: str.optional()
+  importedFrom: str.optional(),
+  oauth: str.optional()
 })
 
 const brainAccountSchema: z.ZodType<StoredBrainAccount> = z.object({

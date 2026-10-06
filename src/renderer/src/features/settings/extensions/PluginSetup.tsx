@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, ExternalLink, Lock, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Globe, Lock, Plus, Trash2 } from 'lucide-react'
 import { RUNNER_INSTALL_URLS, type ConnectionView, type PluginDefinition } from '@shared/domain'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
@@ -25,8 +25,9 @@ const RUNNERS = { npx: 'Node.js (npx)', uvx: 'uv (uvx)' } as const
 const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 
 /**
- * Set up a plugin with the user's own keys: fill the fields, connect, see its tools.
- * A plugin can have several accounts, each with its own name and keys. Keys are write-only.
+ * Set up a plugin with the user's own keys — or, for a sign-in plugin, their own account
+ * in the browser (ADR 0023): connect, see its tools. A plugin can have several accounts,
+ * each with its own name and keys. Keys are write-only.
  */
 export function PluginSetup({ plugin, accounts, onClose }: Props) {
   const requirements = useConnections((s) => s.requirements)
@@ -44,6 +45,7 @@ export function PluginSetup({ plugin, accounts, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [removing, setRemoving] = useState(false)
   const runner = plugin.server.transport === 'stdio' ? plugin.server.command : null
+  const signIn = plugin.auth === 'oauth'
   const missingRunner = runner && requirements && !requirements[runner]
   const saved = new Set(connection?.secretsSet)
   // A second account needs a name so agents (and you) can tell them apart.
@@ -96,7 +98,7 @@ export function PluginSetup({ plugin, accounts, onClose }: Props) {
               {connection?.state === 'ready' ? 'Done' : 'Cancel'}
             </Button>
             <Button variant="primary" loading={busy} disabled={!ready || Boolean(missingRunner)} onClick={connect}>
-              {connection ? 'Save and reconnect' : 'Connect'}
+              {signIn ? (connection ? 'Reconnect' : `Sign in with ${plugin.name}`) : connection ? 'Save and reconnect' : 'Connect'}
             </Button>
           </span>
         </div>
@@ -159,17 +161,35 @@ export function PluginSetup({ plugin, accounts, onClose }: Props) {
         ))}
 
         <button type="button" className={styles.linkButton} onClick={() => openUrl(plugin.keyUrl)}>
-          Where to get {plugin.fields.some((f) => f.secret) ? 'your key' : 'these details'} <ExternalLink aria-hidden />
+          {signIn ? `No ${plugin.name} account? Create one` : `Where to get ${plugin.fields.some((f) => f.secret) ? 'your key' : 'these details'}`} <ExternalLink aria-hidden />
         </button>
 
-        <div className={styles.notice}>
-          <Lock aria-hidden />
-          <span>
-            Keys are encrypted on this computer and never leave it except to {plugin.name} itself
-            {runner ? `, through the ${plugin.name} server Hiveory runs locally` : ''}. Every agent in Hiveory — terminal and chat — gets{' '}
-            {plugin.name}&apos;s tools once it&apos;s connected.
-          </span>
-        </div>
+        {signIn && busy && (
+          <div className={styles.notice} role="status">
+            <Globe aria-hidden />
+            <span>Finish signing in to {plugin.name} in your browser, then come back here.</span>
+          </div>
+        )}
+
+        {signIn ? (
+          <div className={styles.notice}>
+            <Lock aria-hidden />
+            <span>
+              You sign in on {plugin.name}&apos;s own site; Hiveory keeps only the sign-in token, encrypted on this computer. Every agent in
+              Hiveory — terminal, chat and bots — gets {plugin.name}&apos;s tools. The first time an agent needs an app (Gmail, Slack…) it
+              gives you a {plugin.name} link to approve it. Apps you connect there run through {plugin.name}&apos;s cloud and its plan limits.
+            </span>
+          </div>
+        ) : (
+          <div className={styles.notice}>
+            <Lock aria-hidden />
+            <span>
+              Keys are encrypted on this computer and never leave it except to {plugin.name} itself
+              {runner ? `, through the ${plugin.name} server Hiveory runs locally` : ''}. Every agent in Hiveory — terminal and chat — gets{' '}
+              {plugin.name}&apos;s tools once it&apos;s connected.
+            </span>
+          </div>
+        )}
 
         {connection?.state === 'error' && connection.error && (
           <div className={cx(styles.notice, styles.noticeError)}>

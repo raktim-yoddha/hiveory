@@ -71,7 +71,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   let settings: SettingsService | null = null
   let bots: BotService | null = null
   const secrets = new SecretBox(safeStorage)
-  const connections = new ConnectionService(store, secrets, emit)
+  const connections = new ConnectionService(store, secrets, emit, (url) => void shell.openExternal(url))
   // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
   const queenBrain = new QueenBrain(store, secrets, fetch, {
     executable: (cliId) => registry.executable(cliId),

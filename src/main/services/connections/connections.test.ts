@@ -39,7 +39,8 @@ describe('plugin catalog', () => {
     expect(new Set(PLUGINS.map((p) => p.id)).size).toBe(PLUGINS.length)
     for (const plugin of PLUGINS) {
       expect(plugin.keyUrl).toMatch(/^https:\/\//)
-      expect(plugin.fields.length).toBeGreaterThan(0)
+      // A sign-in plugin has no fields: the user signs in with their own account (ADR 0023).
+      expect(plugin.fields.length > 0 || plugin.auth === 'oauth').toBe(true)
       expect(isPluginHelpUrl(plugin.keyUrl)).toBe(true)
     }
     expect(isPluginHelpUrl('https://evil.example')).toBe(false)

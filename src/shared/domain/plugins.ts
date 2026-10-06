@@ -4,7 +4,8 @@
  * Each plugin is a template for an MCP server: a local `npx`/`uvx` command
  * fed by environment variables, or a vendor's remote endpoint with a bearer
  * key. Only apps whose server works with a key the user can create
- * themselves are listed.
+ * themselves are listed — plus hubs the user signs in to with their own
+ * account, such as Composio (ADR 0023).
  */
 
 export type PluginCategory = 'Code' | 'Work' | 'Data' | 'Business' | 'Search' | 'Automation' | 'Media'
@@ -33,10 +34,12 @@ export interface PluginDefinition {
   name: string
   category: PluginCategory
   description: string
-  /** Where the user creates the key. */
+  /** Where the user creates the key (or, for a sign-in, the account). */
   keyUrl: string
   fields: PluginField[]
   server: PluginServer
+  /** 'oauth': the user signs in with their own account in the browser instead of pasting a key (ADR 0023). */
+  auth?: 'oauth'
 }
 
 const token = (label: string, placeholder?: string): PluginField => ({ key: 'token', label, secret: true, placeholder })
@@ -55,6 +58,16 @@ const uvx = (pkg: string, env: Record<string, string>, extra: string[] = []): Pl
 })
 
 export const PLUGINS: PluginDefinition[] = [
+  {
+    id: 'composio',
+    name: 'Composio',
+    category: 'Automation',
+    description: 'Sign in with your own Composio account, free or paid, to give agents 1,000+ apps — Gmail, Google Drive, Calendar, Outlook and more.',
+    keyUrl: 'https://platform.composio.dev',
+    fields: [],
+    server: { transport: 'http', url: 'https://connect.composio.dev/mcp' },
+    auth: 'oauth'
+  },
   {
     id: 'github',
     name: 'GitHub',

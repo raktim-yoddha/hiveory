@@ -6,6 +6,7 @@ import type { McpRawConfig } from '../extensions/extensions-service'
 import type { StateStore } from '../persistence/state-store'
 import type { StoredConnection } from '../persistence/schema'
 import type { ConnectionSpec, McpGateway } from './mcp-gateway'
+import { ConnectionOAuth, type OAuthState } from './oauth'
 import type { SecretBox } from './secret-box'
 
 export interface CustomInput {
@@ -39,6 +40,8 @@ export class ConnectionService {
     private readonly store: StateStore,
     private readonly box: SecretBox,
     private readonly broadcast: Emit,
+    /** Opens a provider's sign-in page in the user's browser. */
+    private readonly openBrowser: (url: string) => void = () => undefined,
     private gateway: McpGateway | null = null
   ) {}
 
@@ -70,9 +73,28 @@ export class ConnectionService {
       const opened = open(connection.values)
       const { server } = resolvePluginServer(plugin!, opened)
       const secrets = plugin!.fields.filter((f) => f.secret && opened[f.key]).map((f) => opened[f.key]!)
-      return { ...server, secrets }
+      return { ...server, secrets, ...(plugin!.auth === 'oauth' ? { oauth: this.oauth(connection.id, plugin!.name) } : {}) }
     }
     return { transport: connection.transport, command: connection.command, args: connection.args, url: connection.url, env: open(connection.env), headers: open(connection.headers) }
+  }
+
+  /** The sign-in of an OAuth plugin, read fresh from the store and sealed back into it. */
+  private oauth(id: string, name: string): ConnectionOAuth {
+    const sealed = this.all().find((c) => c.id === id)?.oauth
+    let state: OAuthState = {}
+    try {
+      state = sealed ? (JSON.parse(this.box.open(sealed)) as OAuthState) : {}
+    } catch {
+      // Sealed on another machine: the user signs in again.
+    }
+    const persist = (next: OAuthState): void =>
+      this.store.update((s) => {
+        const target = s.connections.find((c) => c.id === id)
+        if (!target) return
+        if (next.client || next.tokens) target.oauth = this.box.seal(JSON.stringify(next))
+        else delete target.oauth
+      })
+    return new ConnectionOAuth(state, persist, this.openBrowser, name)
   }
 
   view(connection: StoredConnection): ConnectionView {
