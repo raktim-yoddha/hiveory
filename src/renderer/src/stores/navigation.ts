@@ -42,7 +42,7 @@ interface NavigationState {
   panelWidth: number
   /** The side panel covers the main area, up to the left sidebar. */
   panelMaximized: boolean
-  /** Side-panel tabs per folder scope (workspace id, or project id on project pages). */
+  /** Side-panel tabs per workspace id (the side panel exists only in workspaces). */
   panelTabs: Record<string, PanelTab[]>
   /** Selected tab per area: `panelGroupKey(scope, group)` → tab id. */
   activePanelTab: Record<string, string>

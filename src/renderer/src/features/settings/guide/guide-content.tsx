@@ -210,7 +210,7 @@ export const GUIDE: GuideChapter[] = [
     sections: [
       {
         heading: 'Side panel',
-        body: <p>The right-panel button in the title bar opens a shell in the current workspace's folder. Agents can use it too, through their tools.</p>
+        body: <p>Inside a workspace, the right-panel button in the title bar opens the side panel: browsers, the workspace's Explorer and agent Sessions. Terminals open as panes from a pane's "+".</p>
       }
     ]
   },

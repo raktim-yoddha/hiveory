@@ -30,7 +30,7 @@ const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
- * Right side panel for the folder in view: browser tabs (any number), the folder's
+ * Right side panel for the workspace in view (never a project page): browser tabs (any number), the folder's
  * Explorer and the agent session history, added from "+". Tabs drag to reorder;
  * dragging one into the lower half splits the panel into a top and a bottom area,
  * each with its own tabs (a divider sets their heights). Browser pages live in
@@ -40,7 +40,8 @@ export function SidePanel() {
   const view = useNavigation((s) => s.view)
   const workspaceId = selectedWorkspaceId(view)
   const projectId = selectedProjectId(view)
-  const scope = workspaceId ?? projectId ?? ''
+  // Workspaces only — a project page has no side panel.
+  const scope = workspaceId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
   const { addPanelTab, closePanelTab, movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit } = useNavigation()
   const pages = useBrowser((s) => s.pages)
@@ -140,7 +141,7 @@ export function SidePanel() {
     return (
       <aside className={styles.panel} aria-label="Side panel">
         <div className={styles.area}>
-          <EmptyState compact icon={<PanelRight />} title="No folder selected" description="Open a project or workspace to browse and explore its files here." />
+          <EmptyState compact icon={<PanelRight />} title="No workspace open" description="Open a workspace to browse, explore its files and see its agent sessions here." />
         </div>
       </aside>
     )
@@ -332,7 +333,7 @@ function PanelArea({ scope, group, tabs, title, isAgentPage, onClose, dragging, 
             <div key={tab.id} className={styles.page} hidden={tab.id !== active?.id}>
               <ErrorBoundary region={tab.title} compact>
                 {tab.kind === 'explorer' ? (
-                  <Explorer key={scope} workspaceId={workspaceId} projectId={workspaceId ? undefined : projectId} />
+                  <Explorer key={scope} workspaceId={scope} />
                 ) : tab.kind === 'browser' ? (
                   <BrowserPane pageId={tab.id} visible={tab.id === active?.id} />
                 ) : (

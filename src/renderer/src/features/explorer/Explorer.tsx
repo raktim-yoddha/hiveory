@@ -22,14 +22,11 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { api, subscribe } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { useWorkspaces } from '../../stores/data'
-import { useNavigation } from '../../stores/navigation'
-import { reportError, runAction, useNotices } from '../../stores/notices'
+import { reportError, runAction } from '../../stores/notices'
 import styles from './Explorer.module.css'
 
 interface ExplorerProps {
-  workspaceId?: string
-  projectId?: string
+  workspaceId: string
 }
 
 interface Row {
@@ -48,11 +45,9 @@ const join = (dir: string, name: string): string => (dir ? `${dir}/${name}` : na
  * create, rename, cut/copy/paste, delete (to the trash), copy paths. Double-
  * click a file to open it as a pane. Updates live while it is open.
  */
-export function Explorer({ workspaceId, projectId }: ExplorerProps) {
-  const scope = useMemo(() => (workspaceId ? { workspaceId } : { projectId }), [workspaceId, projectId])
-  const scopeKey = workspaceId ?? projectId ?? ''
-  const workspaces = useWorkspaces((s) => (projectId ? s.byProject[projectId] : undefined))
-  const openWorkspace = useNavigation((s) => s.openWorkspace)
+export function Explorer({ workspaceId }: ExplorerProps) {
+  const scope = useMemo(() => ({ workspaceId }), [workspaceId])
+  const scopeKey = workspaceId
   const [root, setRoot] = useState('')
   const [children, setChildren] = useState<Record<string, FileEntry[]>>({})
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['']))
@@ -149,18 +144,7 @@ export function Explorer({ workspaceId, projectId }: ExplorerProps) {
   }
 
   const openFile = async (path: string): Promise<void> => {
-    if (workspaceId) {
-      await runAction('Open file', () => api('editors.open', { workspaceId, path }))
-      return
-    }
-    // On a project page, files open in its Main workspace (the same folder).
-    const main = workspaces?.find((w) => w.kind === 'main')
-    if (!main || !projectId) {
-      useNotices.getState().push({ level: 'info', message: 'Create the Main workspace for this project to edit files.' })
-      return
-    }
-    const opened = await runAction('Open file', () => api('editors.open', { workspaceId: main.id, path }))
-    if (opened) openWorkspace(projectId, main.id, opened.id)
+    await runAction('Open file', () => api('editors.open', { workspaceId, path }))
   }
 
   const activate = (entry: FileEntry): void => {

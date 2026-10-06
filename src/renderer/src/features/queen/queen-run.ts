@@ -352,6 +352,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'side-panel': {
+          if (action.open && nav().view.type !== 'workspace') throw new QueenError('the side panel is only in workspaces. Open one first.')
           if (nav().panelOpen !== action.open) nav().togglePanel()
           undos.push(() => {
             if (nav().panelOpen === action.open) nav().togglePanel()
@@ -360,8 +361,8 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'open-panel-tab': {
-          const scope = selectedWorkspaceId(nav().view) ?? selectedProjectId(nav().view)
-          if (!scope) throw new QueenError('open a project or workspace first.')
+          const scope = selectedWorkspaceId(nav().view)
+          if (!scope) throw new QueenError('the side panel is only in workspaces. Open one first.')
           if (!nav().panelOpen) nav().togglePanel()
           if (action.kind === 'browser') {
             if (!(await openBrowserTab(scope))) throw new QueenError('the browser did not open.')

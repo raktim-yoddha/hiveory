@@ -41,13 +41,16 @@ export function TitleBar() {
       </div>
       <Tabs label="Mode" variant="segmented" options={MODES} value={mode} onChange={setMode} className={styles.noDrag} />
       <div className={styles.end}>
-        <IconButton
-          label={panelOpen ? 'Hide side panel' : 'Show side panel'}
-          icon={<PanelRight />}
-          active={panelOpen && !inSettings}
-          onClick={togglePanel}
-          className={styles.noDrag}
-        />
+        {/* The side panel belongs to workspaces only (ADR 0021). */}
+        {mode === 'workspace' && view.type === 'workspace' && (
+          <IconButton
+            label={panelOpen ? 'Hide side panel' : 'Show side panel'}
+            icon={<PanelRight />}
+            active={panelOpen}
+            onClick={togglePanel}
+            className={styles.noDrag}
+          />
+        )}
         <IconButton
           label={inSettings ? 'Close settings' : 'Settings'}
           icon={<Settings />}

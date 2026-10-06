@@ -43,7 +43,8 @@ export function AppShell() {
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
-  const showPanel = panelOpen && !inSettings
+  // The side panel belongs to workspaces only: never on Home, a project page or Settings.
+  const showPanel = panelOpen && mode === 'workspace' && view.type === 'workspace'
   const workView = view.type === 'settings' ? view.returnTo : view
   const viewKey = workView.type === 'home' ? 'home' : workView.type === 'project' ? `p:${workView.projectId}` : `w:${workView.workspaceId}`
   const widths = { '--sidebar-width': `${sidebarWidth}px`, '--side-panel-width': `${panelWidth}px` } as CSSProperties
