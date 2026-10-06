@@ -201,10 +201,11 @@ export const requestSchemas = {
   'agents.restart': z.object({ instanceId: id }),
   'agents.applyPreset': z.object({ workspaceId: id, presetId: id }),
   'terminal.write': z.object({ instanceId: id, data: z.string().max(1_000_000) }),
+  // Floor: some TUIs crash on tiny grids (OpenCode segfaults near 2×1); the renderer never sends less.
   'terminal.resize': z.object({
     instanceId: id,
-    cols: z.number().int().min(2).max(1000),
-    rows: z.number().int().min(2).max(1000)
+    cols: z.number().int().min(20).max(1000),
+    rows: z.number().int().min(5).max(1000)
   }),
   'terminal.snapshot': z.object({ instanceId: id }),
   'layout.get': z.object({ workspaceId: id }),

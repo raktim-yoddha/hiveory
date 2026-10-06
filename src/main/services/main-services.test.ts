@@ -80,6 +80,8 @@ describe('IPC validation', () => {
     expect(requestSchemas['agents.open'].safeParse({ workspaceId: 'w', cliId: 'claude' }).success).toBe(true)
     expect(requestSchemas['agents.open'].safeParse({ workspaceId: 'w; rm -rf', cliId: 'claude' }).success).toBe(false)
     expect(requestSchemas['terminal.resize'].safeParse({ instanceId: 'a', cols: 0, rows: 10 }).success).toBe(false)
+    expect(requestSchemas['terminal.resize'].safeParse({ instanceId: 'a', cols: 19, rows: 10 }).success).toBe(false)
+    expect(requestSchemas['terminal.resize'].safeParse({ instanceId: 'a', cols: 20, rows: 5 }).success).toBe(true)
     expect(requestSchemas['layout.apply'].safeParse({ workspaceId: 'w', operation: { type: 'explode' } }).success).toBe(false)
     expect(requestSchemas['workspaces.create'].safeParse({ projectId: 'p', name: '', cliSelections: [], autoApprove: false }).success).toBe(false)
   })

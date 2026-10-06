@@ -31,9 +31,13 @@ const readTheme = (): ITheme => {
   return theme
 }
 
-/** Smallest grid worth sending to a CLI; anything smaller is a transient layout state. */
-const MIN_COLS = 12
-const MIN_ROWS = 4
+/**
+ * Smallest grid worth sending to a CLI; anything smaller is a transient layout state.
+ * Some TUIs crash on tiny grids (OpenCode's native renderer segfaults near 2×1), so the
+ * floor matches main's `terminal.resize` validation.
+ */
+const MIN_COLS = 20
+const MIN_ROWS = 5
 
 const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
 
@@ -115,7 +119,15 @@ const create = (instanceId: string): Entry => {
   // Unicode 11 widths match what modern CLIs assume, so columns line up.
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
-  term.onData((data) => send(instanceId, data))
+  // While replayed output is parsed, xterm.js would answer the old capability queries in it
+  // (device attributes, cursor position, modes, colors) and those replies would reach the
+  // live CLI as typed input, long after it stopped waiting. TUIs with strict handshakes
+  // (OpenCode/opentui) crash on such late, partial replies, so replies to the replay are
+  // dropped. A keystroke in those few milliseconds is dropped too.
+  let replaying = false
+  term.onData((data) => {
+    if (!replaying) send(instanceId, data)
+  })
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== 'keydown') return true
     const key = event.key.toLowerCase()
@@ -154,7 +166,10 @@ const create = (instanceId: string): Entry => {
 
   void api('terminal.snapshot', { instanceId })
     .then((snapshot) => {
-      term.write(snapshot.data)
+      replaying = true
+      term.write(snapshot.data, () => {
+        replaying = false
+      })
       entry.written = snapshot.end
     })
     .catch(() => {
