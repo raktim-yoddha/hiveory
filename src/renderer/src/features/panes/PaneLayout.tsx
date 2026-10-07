@@ -27,6 +27,8 @@ interface PaneLayoutProps {
   tree: LayoutNode | null
   renderPane: (paneId: string, props: PaneRenderProps) => ReactNode
   onOperation: (operation: LayoutOperation) => void
+  /** A pane that needs to stay wider than the shared minimum (px); dividers stop there. */
+  paneMinWidth?: (paneId: string) => number | undefined
 }
 
 const readPx = (el: HTMLElement, token: string, fallback: number): number => {
@@ -50,7 +52,7 @@ const dividerKey = (d: Divider): string => `${d.path.join('.')}:${d.index}`
  * (architecture.md "Pane Layout"). Panes are absolutely positioned from the
  * tree so a pane's DOM node — and its terminal — survives rearrangement.
  */
-export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
+export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth }: PaneLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [bounds, setBounds] = useState<Rect>({ x: 0, y: 0, width: 0, height: 0 })
   const [metrics, setMetrics] = useState({ gutter: 10, minWidth: 240, minHeight: 140 })
@@ -76,9 +78,13 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
 
   const activeTree = resizing?.tree ?? tree
   const minSize = useMemo(() => ({ width: metrics.minWidth, height: metrics.minHeight }), [metrics.minWidth, metrics.minHeight])
+  const minFor = useMemo(
+    () => (paneId: string) => ({ width: Math.max(minSize.width, paneMinWidth?.(paneId) ?? 0), height: minSize.height }),
+    [minSize, paneMinWidth]
+  )
   const geometry = useMemo(
-    () => computeGeometry(activeTree, bounds, metrics.gutter, minSize),
-    [activeTree, bounds, metrics.gutter, minSize]
+    () => computeGeometry(activeTree, bounds, metrics.gutter, minFor),
+    [activeTree, bounds, metrics.gutter, minFor]
   )
   const relative = useMemo(() => relativeGeometry(activeTree, metrics.gutter), [activeTree, metrics.gutter])
   const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation })
@@ -141,7 +147,7 @@ export function PaneLayout({ tree, renderPane, onOperation }: PaneLayoutProps) {
               maximized: isMax,
               toggleMaximize: () => setMaximizedId(isMax ? null : paneId),
               rect: layoutRect,
-              minSize,
+              minSize: minFor(paneId),
               gutter: metrics.gutter,
               moveTo: maximized
                 ? null

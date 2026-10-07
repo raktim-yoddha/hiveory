@@ -33,6 +33,12 @@ const SPAWN_FALLBACK_MS = 600
 const FLUSH_MS = 4
 const DEFAULT_SIZE = { cols: 120, rows: 32 }
 const MIRROR_SCROLLBACK = 2000
+/**
+ * Least time between two resizes reaching the process; the last size always arrives. A burst
+ * of resizes (dragging a divider or the window) crashes some TUIs: OpenCode's native renderer
+ * segfaults (exit 3) on resizes ~40ms apart at small sizes, never at 100ms+ (measured).
+ */
+const RESIZE_INTERVAL_MS = 150
 
 /**
  * One pseudo-terminal process with everything a pane needs: spawn deferred
@@ -47,6 +53,8 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   private readonly buffer = new OutputBuffer()
   private outbox: { data: string; offset: number } | null = null
   private mirror: HeadlessTerminalType | null = null
+  private lastResizeAt = 0
+  private resizeTimer: NodeJS.Timeout | null = null
 
   constructor(
     private readonly withMirror = false,
@@ -86,8 +94,19 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     this.size = { cols, rows }
     this.mirror?.resize(cols, rows)
     if (this.pending) return this.spawnNow()
+    if (this.resizeTimer) return
+    const wait = this.lastResizeAt + RESIZE_INTERVAL_MS - Date.now()
+    if (wait > 0) this.resizeTimer = setTimeout(() => this.applySize(), wait)
+    else this.applySize()
+  }
+
+  /** Sends the latest size to the process (paced by `resize`). */
+  private applySize(): void {
+    this.resizeTimer = null
+    this.lastResizeAt = Date.now()
+    if (!this.size) return
     try {
-      this.process?.resize(cols, rows)
+      this.process?.resize(this.size.cols, this.size.rows)
     } catch {
       // Resizing a process that is exiting can throw; it is never fatal.
     }
@@ -96,6 +115,8 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   /** Stops the process without waiting for ConPTY teardown. Returns true if something was running. */
   stop(): boolean {
     const wasRunning = this.running
+    if (this.resizeTimer) clearTimeout(this.resizeTimer)
+    this.resizeTimer = null
     if (this.pending) clearTimeout(this.pending.timer)
     this.pending = null
     const child = this.process
@@ -114,6 +135,8 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
 
   /** Synchronous kill for app shutdown. */
   killNow(): void {
+    if (this.resizeTimer) clearTimeout(this.resizeTimer)
+    this.resizeTimer = null
     if (this.pending) clearTimeout(this.pending.timer)
     this.pending = null
     try {
@@ -161,6 +184,8 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     clearTimeout(pending.timer)
     this.pending = null
     const { cols, rows } = this.size ?? DEFAULT_SIZE
+    // Spawning sets the first size; the next resize is paced from here.
+    this.lastResizeAt = Date.now()
     if (this.withMirror && !this.mirror) {
       this.mirror = new HeadlessTerminal({ cols, rows, scrollback: MIRROR_SCROLLBACK, allowProposedApi: true })
     }

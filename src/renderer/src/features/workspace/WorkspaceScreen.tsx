@@ -3,12 +3,12 @@ import { FolderX } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { useAgents, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
+import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
 import { useEditors } from '../../stores/editors'
 import { EditorPane } from '../editor/EditorPane'
 import { AgentPane } from '../agents/AgentPane'
 import { PaneLayout } from '../panes/PaneLayout'
-import { focusTerminal } from '../terminal/terminal-registry'
+import { focusTerminal, terminalMinWidth } from '../terminal/terminal-registry'
 import { EmptyWorkspace } from './EmptyWorkspace'
 import styles from './WorkspaceScreen.module.css'
 
@@ -33,6 +33,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
+  const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
   const [clearedHighlight, setClearedHighlight] = useState<string>()
   const highlight = focusPaneId !== clearedHighlight ? focusPaneId : undefined
@@ -79,6 +80,12 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
             <PaneLayout
               tree={tree}
               onOperation={(operation) => void apply(workspaceId, operation)}
+              paneMinWidth={(paneId) => {
+                // A CLI whose terminal breaks (or crashes) when too narrow locks its pane's width.
+                const agent = byId.get(paneId)
+                const minColumns = agent && !agent.chatUi ? clis.find((c) => c.id === agent.cliId)?.minColumns : undefined
+                return minColumns ? terminalMinWidth(minColumns) : undefined
+              }}
               renderPane={(paneId, props) => {
                 const editor = editorById.get(paneId)
                 if (editor) {

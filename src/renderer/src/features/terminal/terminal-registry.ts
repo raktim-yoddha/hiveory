@@ -44,6 +44,14 @@ const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
 const FONT_SIZE = 13
 /** Smallest font a narrow pane shrinks to so a CLI still gets its `minColumns`. */
 const MIN_FONT_SIZE = 9
+/** A monospace cell's width per px of font size (JetBrains Mono's advance is 600/1000 em). */
+const CELL_WIDTH_PER_PX = 0.6
+/** Pane width around the grid: the terminal's insets, the pane border and xterm's scrollbar. */
+const TERMINAL_CHROME_PX = 30
+
+/** Narrowest pane that still gives a CLI `minColumns` at the smallest font: the layout won't drag below it. */
+export const terminalMinWidth = (minColumns: number): number =>
+  Math.ceil(minColumns * MIN_FONT_SIZE * CELL_WIDTH_PER_PX) + TERMINAL_CHROME_PX
 
 interface Entry {
   term: Terminal
@@ -219,11 +227,14 @@ export const fitTerminal = (instanceId: string): void => {
   }
   // A hidden, collapsing or minimizing host can report a sliver; never squeeze a TUI into it.
   if (!proposed || !Number.isFinite(proposed.cols) || !Number.isFinite(proposed.rows) || proposed.cols < MIN_COLS || proposed.rows < MIN_ROWS) return
-  const key = `${proposed.cols}x${proposed.rows}`
+  // Never hand such a CLI fewer columns than it needs, even when the window itself squeezes the
+  // pane: OpenCode's renderer crashes on small, rapidly changing sizes. The extra columns clip.
+  const cols = Math.max(proposed.cols, entry.minColumns)
+  const key = `${cols}x${proposed.rows}`
   if (key === entry.lastSize) return
   entry.lastSize = key
-  entry.term.resize(proposed.cols, proposed.rows)
-  void api('terminal.resize', { instanceId, cols: proposed.cols, rows: proposed.rows }).catch(() => undefined)
+  entry.term.resize(cols, proposed.rows)
+  void api('terminal.resize', { instanceId, cols, rows: proposed.rows }).catch(() => undefined)
 }
 
 /** Mounts the instance's terminal into `host`. Returns a detach function. */

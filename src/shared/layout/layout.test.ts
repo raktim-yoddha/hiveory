@@ -133,6 +133,14 @@ describe('layout geometry', () => {
     expect(minSizeOf(h(p('a'), p('b')), { width: 150, height: 20 }, 10)).toEqual({ width: 310, height: 20 })
   })
 
+  it('stops a divider at a pane that needs to stay wider', () => {
+    const min = (id: string) => ({ width: id === 'a' ? 300 : 100, height: 20 })
+    const g = computeGeometry(h(p('a'), p('b')), { x: 0, y: 0, width: 810, height: 100 }, 10, min)
+    const ratios = dragDivider(g.dividers[0]!, -1000, 10)
+    expect(ratios[0]! * 800).toBeCloseTo(300)
+    expect(minSizeOf(h(p('a'), p('b')), min, 10)).toEqual({ width: 410, height: 20 })
+  })
+
   it('finds neighbours by direction', () => {
     const g = computeGeometry(insertBeside(h(p('a'), p('b')), 'c', 'b', 'bottom'), { x: 0, y: 0, width: 210, height: 210 }, 10)
     expect(neighborOf(g.panes, 'a', 'right')).toBe('b')

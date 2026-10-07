@@ -27,9 +27,12 @@ export interface MinPaneSize {
   height: number
 }
 
+/** One minimum for every pane, or per pane (a CLI that needs a wider terminal). */
+export type PaneMinimum = MinPaneSize | ((paneId: string) => MinPaneSize)
+
 /** Minimum px a subtree needs: sums along its split axis, max across it. */
-export const minSizeOf = (node: LayoutNode, min: MinPaneSize, gutter: number): MinPaneSize => {
-  if (node.type === 'pane') return min
+export const minSizeOf = (node: LayoutNode, min: PaneMinimum, gutter: number): MinPaneSize => {
+  if (node.type === 'pane') return typeof min === 'function' ? min(node.paneId) : min
   const sizes = node.children.map((c) => minSizeOf(c, min, gutter))
   const gutters = gutter * (sizes.length - 1)
   return node.direction === 'horizontal'
@@ -47,7 +50,7 @@ export const computeGeometry = (
   tree: LayoutNode | null,
   bounds: Rect,
   gutter: number,
-  min: MinPaneSize = { width: 0, height: 0 }
+  min: PaneMinimum = { width: 0, height: 0 }
 ): LayoutGeometry => {
   const geometry: LayoutGeometry = { panes: {}, dividers: [] }
   const walk = (node: LayoutNode, rect: Rect, path: number[]): void => {
