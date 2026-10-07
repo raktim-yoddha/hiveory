@@ -4,7 +4,7 @@ Research and integration plan. It follows `docs/plans/remote-and-bots.md` and AD
 needs an ADR before it is built (rule 22): parts of it touch rule 9 ("no work history") and
 product-spec's non-feature "task history".
 
-Status: **proposal**. Nothing here is built yet.
+Status: **decided, not built** (see §6).
 
 ---
 
@@ -242,7 +242,10 @@ Tasks board into Work. What fits:
 
 ---
 
-## 6. Decisions needed (ADR 0028)
+## 6. Decisions (product owner, 2026-10-07; record in ADR 0028 when A1 starts)
+
+Taken: (1) yes, Bots only and capped; (2) Composio first; (3) derived map M1; (4) Bots first.
+(5) `croner` is still open and is confirmed when A1 begins.
 
 1. Run logs and the "Finished recently" lane in Bots: allowed under rule 9 (scoped to Bots,
    retention capped)? *Recommended: yes, Bots only.*
