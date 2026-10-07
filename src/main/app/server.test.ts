@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CHANNELS } from '@shared/ipc/contract'
-import { CLIENT_LOCAL_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
+import { CLIENT_LOCAL_CHANNELS, MOBILE_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
 import type { Handlers } from '../ipc/router'
 import { startServer, type HiveoryServer } from './server'
 
@@ -27,7 +27,23 @@ const start = async (ownerPairing?: (address: string) => Promise<boolean>) => {
     fetch(`${base}/pair`, { method: 'POST', body: JSON.stringify({ code: code ?? undefined, name: 'Test' }) })
   const call = async (token: string, channel: string, payload?: unknown) =>
     (await fetch(`${base}/call`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: JSON.stringify({ channel, payload }) })).json()
-  return { base, dir, pair, call }
+  /** Pairs as the phone app does (ADR 0027). */
+  const pairPhone = async () =>
+    ((await (await fetch(`${base}/pair`, { method: 'POST', body: JSON.stringify({ code: server!.pairingCode(), name: 'Phone', client: 'mobile' }) })).json()) as { token: string }).token
+  return { base, dir, pair, call, pairPhone }
+}
+
+/** Reads one event stream until `until` holds (or 2 s pass); returns what arrived. */
+const readEvents = async (res: Response, until: (text: string) => boolean): Promise<string> => {
+  const reader = res.body!.getReader()
+  let text = ''
+  const end = Date.now() + 2000
+  while (!until(text) && Date.now() < end) {
+    const chunk = await Promise.race([reader.read(), new Promise<null>((r) => setTimeout(() => r(null), 200))])
+    if (chunk && !chunk.done) text += new TextDecoder().decode(chunk.value)
+  }
+  await reader.cancel()
+  return text
 }
 
 afterEach(() => {
@@ -122,6 +138,48 @@ describe('Hiveory server', () => {
     // 192.0.2.0/24 is reserved for documentation: no machine has it.
     await server!.setHosts(['127.0.0.1', '192.0.2.1'])
     expect((await fetch(`${base}/health`)).ok).toBe(true)
+  })
+
+  it('a phone may only use the phone channels, whatever it asks for', async () => {
+    const { call, pairPhone } = await start()
+    const token = await pairPhone()
+    expect(server!.devices()[0]).toMatchObject({ name: 'Phone', kind: 'mobile' })
+    expect(await call(token, 'projects.list')).toMatchObject({ ok: true })
+    expect(await call(token, 'projects.remove', { projectId: 'p1' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    expect(await call(token, 'settings.update', { theme: 'dark' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    expect(await call(token, 'terminal.resize', { instanceId: 'a1', cols: 40, rows: 20 })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    for (const c of MOBILE_CHANNELS) expect(REMOTE_CHANNELS.has(c)).toBe(true)
+  })
+
+  it('streams one terminal, or everything but terminals, to save a phone’s data', async () => {
+    const { base, pairPhone } = await start()
+    const token = await pairPhone()
+    const headers = { authorization: `Bearer ${token}` }
+    const quiet = await fetch(`${base}/events?terminal=none`, { headers })
+    const one = await fetch(`${base}/events?terminal=a1`, { headers })
+    await new Promise((r) => setTimeout(r, 50))
+    server!.broadcast('terminal.data', { instanceId: 'a1', data: 'mine', offset: 0 })
+    server!.broadcast('terminal.data', { instanceId: 'a2', data: 'other', offset: 0 })
+    server!.broadcast('state.changed', { topic: 'agents' })
+    const quietText = await readEvents(quiet, (t) => t.includes('state.changed'))
+    const oneText = await readEvents(one, (t) => t.includes('mine'))
+    expect(quietText).toContain('state.changed')
+    expect(quietText).not.toContain('terminal.data')
+    expect(oneText).toContain('"data":"mine"')
+    expect(oneText).not.toContain('other')
+    expect(oneText).not.toContain('state.changed')
+  })
+
+  it('keeps a phone’s push token, accepting only Expo tokens', async () => {
+    const { base, pairPhone } = await start()
+    const token = await pairPhone()
+    const push = (body: unknown) => fetch(`${base}/push`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+    expect((await push({ token: 'https://evil.example/hook' })).status).toBe(400)
+    expect((await push({ token: 'ExponentPushToken[abcdefgh12345]' })).status).toBe(200)
+    expect(server!.pushTokens()).toEqual(['ExponentPushToken[abcdefgh12345]'])
+    server!.dropPushToken('ExponentPushToken[abcdefgh12345]')
+    expect(server!.pushTokens()).toEqual([])
+    expect((await fetch(`${base}/push`, { method: 'POST', body: '{}' })).status).toBe(401)
   })
 
   it('remote and client-local channels are real channels and never overlap', () => {

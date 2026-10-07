@@ -6,7 +6,7 @@ import type { IpcMainInvokeEvent } from 'electron'
 import type { PairedDevice } from '@shared/domain/tailnet'
 import { toAppError, type Result } from '@shared/errors'
 import { requestSchemas, type Channel } from '@shared/ipc/contract'
-import { PAIRING_TTL_MS, REMOTE_CHANNELS, type ServerCall } from '@shared/ipc/remote'
+import { MOBILE_CHANNELS, PAIRING_TTL_MS, REMOTE_CHANNELS, type DeviceScope, type ServerCall } from '@shared/ipc/remote'
 import type { Handlers } from '../ipc/router'
 import type { Logger } from './logger'
 
@@ -23,7 +23,14 @@ interface Device {
   name: string
   tokenHash: string
   pairedAt: string
+  /** A phone may only use MOBILE_CHANNELS (ADR 0027). Absent = desktop (paired before scopes existed). */
+  scope?: DeviceScope
+  /** Where its "needs you" notifications go (an Expo push token), when it asked for them. */
+  pushToken?: string
 }
+
+/** Expo's push token shape; nothing else is ever stored or sent to. */
+const PUSH_TOKEN = /^Expo(nent)?PushToken\[[A-Za-z0-9_-]{8,200}\]$/
 
 const hash = (token: string): string => createHash('sha256').update(token).digest('hex')
 
@@ -37,18 +44,30 @@ class DeviceStore {
       this.devices = []
     }
   }
-  has(token: string): boolean {
+  find(token: string): Device | undefined {
     const wanted = hash(token)
-    return this.devices.some((d) => d.tokenHash === wanted)
+    return this.devices.find((d) => d.tokenHash === wanted)
   }
   list(): PairedDevice[] {
-    return this.devices.map(({ id, name, pairedAt }) => ({ id, name, pairedAt }))
+    return this.devices.map(({ id, name, pairedAt, scope }) => ({ id, name, pairedAt, kind: scope ?? 'desktop' }))
   }
-  add(name: string): string {
+  add(name: string, scope: DeviceScope): string {
     const token = randomBytes(32).toString('base64url')
-    this.devices.push({ id: randomBytes(6).toString('hex'), name: name.slice(0, 80), tokenHash: hash(token), pairedAt: new Date().toISOString() })
+    this.devices.push({ id: randomBytes(6).toString('hex'), name: name.slice(0, 80), tokenHash: hash(token), pairedAt: new Date().toISOString(), scope })
     this.save()
     return token
+  }
+  setPushToken(device: Device, pushToken: string | undefined): void {
+    device.pushToken = pushToken
+    this.save()
+  }
+  pushTokens(): string[] {
+    return this.devices.flatMap((d) => (d.pushToken ? [d.pushToken] : []))
+  }
+  /** Expo said a token is gone (app removed): stop sending to it. */
+  dropPushToken(pushToken: string): void {
+    for (const d of this.devices) if (d.pushToken === pushToken) d.pushToken = undefined
+    this.save()
   }
   /** Forgets a device; returns its token hash so its open streams can be closed. */
   remove(id: string): string | undefined {
@@ -101,6 +120,9 @@ export interface HiveoryServer {
   /** Listens on exactly these addresses (same port), e.g. when the Tailscale address appears or changes. */
   setHosts(hosts: string[]): Promise<void>
   broadcast(event: string, payload: unknown): void
+  /** Paired phones that want "needs you" notifications (ADR 0027). */
+  pushTokens(): string[]
+  dropPushToken(token: string): void
   close(): void
 }
 
@@ -130,8 +152,8 @@ export interface ServerOptions {
 export const startServer = async (options: ServerOptions): Promise<HiveoryServer> => {
   const { handlers, log } = options
   const devices = new DeviceStore(options.devicesFile)
-  /** Open event streams, with the token hash that opened each (for revocation). */
-  const streams = new Map<ServerResponse, string>()
+  /** Open event streams: who opened each (for revocation) and which terminal output it wants. */
+  const streams = new Map<ServerResponse, { tokenHash: string; terminal?: string }>()
   let code = ''
   let codeUntil = 0
   let failures: number[] = []
@@ -146,14 +168,15 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
   const currentCode = (): string => (Date.now() > codeUntil ? freshCode() : code)
   freshCode()
 
-  const authorized = (req: IncomingMessage): boolean => {
+  const deviceOf = (req: IncomingMessage): Device | undefined => {
     const header = req.headers.authorization ?? ''
-    return header.startsWith('Bearer ') && devices.has(header.slice(7))
+    return header.startsWith('Bearer ') ? devices.find(header.slice(7)) : undefined
   }
 
-  const call = async (body: ServerCall): Promise<Result<unknown>> => {
+  const call = async (body: ServerCall, device: Device): Promise<Result<unknown>> => {
     const channel = body.channel as Channel
     if (!REMOTE_CHANNELS.has(channel)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Not available from a client.' } }
+    if (device.scope === 'mobile' && !MOBILE_CHANNELS.has(channel)) return { ok: false, error: { code: 'FORBIDDEN', message: 'Do that on the computer itself.' } }
     const parsed = requestSchemas[channel].safeParse(body.payload)
     if (!parsed.success) return { ok: false, error: { code: 'INVALID_INPUT', message: 'Invalid request.', detail: parsed.error.message } }
     try {
@@ -174,13 +197,15 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
         const now = Date.now()
         failures = failures.filter((t) => now - t < PAIR_WINDOW_MS)
         if (failures.length >= MAX_PAIR_FAILURES) return json(res, 429, { error: 'Too many wrong codes. Try again later.' })
-        const body = (await readBody(req)) as { code?: unknown; name?: unknown }
+        const body = (await readBody(req)) as { code?: unknown; name?: unknown; client?: unknown }
         const name = typeof body.name === 'string' ? body.name : 'Desktop'
+        // A phone gets the phone's channels only (ADR 0027); it cannot ask for more.
+        const scope: DeviceScope = body.client === 'mobile' ? 'mobile' : 'desktop'
         if (body.code === undefined) {
           // No code: only the owner's own devices, proven by Tailscale from the socket address (never from the request).
           if (options.ownerPairing && (await options.ownerPairing(req.socket.remoteAddress ?? ''))) {
             log.info("One of the owner's devices paired with this Hiveory server")
-            return json(res, 200, { token: devices.add(name) })
+            return json(res, 200, { token: devices.add(name, scope) })
           }
           failures.push(now)
           return json(res, 403, { error: 'This device needs the pairing code that computer shows.', needsCode: true })
@@ -189,17 +214,27 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
           failures.push(now)
           return json(res, 403, { error: 'That pairing code is wrong or has expired.', needsCode: true })
         }
-        const token = devices.add(name)
+        const token = devices.add(name, scope)
         log.info('A device paired with this Hiveory server')
         freshCode()
         return json(res, 200, { token })
       }
-      if (!authorized(req)) return json(res, 401, { error: 'Pair this device first.' })
-      if (req.method === 'POST' && url.pathname === '/call') return json(res, 200, await call((await readBody(req)) as ServerCall))
+      const device = deviceOf(req)
+      if (!device) return json(res, 401, { error: 'Pair this device first.' })
+      if (req.method === 'POST' && url.pathname === '/call') return json(res, 200, await call((await readBody(req)) as ServerCall, device))
+      // Where this device's "needs you" notifications go (an Expo push token), or null to stop them.
+      if (req.method === 'POST' && url.pathname === '/push') {
+        const { token } = (await readBody(req)) as { token?: unknown }
+        if (token !== null && (typeof token !== 'string' || !PUSH_TOKEN.test(token))) return json(res, 400, { error: 'Not a push token.' })
+        devices.setPushToken(device, token ?? undefined)
+        return json(res, 200, { ok: true })
+      }
       if (req.method === 'GET' && url.pathname === '/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
         res.write('retry: 2000\n\n')
-        streams.set(res, hash((req.headers.authorization ?? '').slice(7)))
+        // A phone's data plan matters: ?terminal=<id> streams one terminal only, ?terminal=none every event but terminal output.
+        const terminal = url.searchParams.get('terminal')
+        streams.set(res, { tokenHash: device.tokenHash, terminal: terminal && /^[A-Za-z0-9_-]{1,128}$/.test(terminal) ? terminal : undefined })
         const keepalive = setInterval(() => res.write(': keepalive\n\n'), KEEPALIVE_MS)
         req.on('close', () => {
           clearInterval(keepalive)
@@ -249,14 +284,22 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
     devices: () => devices.list(),
     revoke: (id) => {
       const tokenHash = devices.remove(id)
-      for (const [s, h] of streams) if (h === tokenHash) s.end()
+      for (const [s, meta] of streams) if (meta.tokenHash === tokenHash) s.end()
     },
     setHosts,
     broadcast: (event, payload) => {
       if (!streams.size) return
       const frame = `data: ${JSON.stringify({ event, payload })}\n\n`
-      for (const s of streams.keys()) s.write(frame)
+      const output = event === 'terminal.data'
+      const instance = output ? (payload as { instanceId?: string }).instanceId : undefined
+      for (const [s, { terminal }] of streams) {
+        // No filter: everything. ?terminal=none: everything but terminal output. ?terminal=<id>: that terminal's output only.
+        const wanted = terminal === undefined || (terminal === 'none' ? !output : output && terminal === instance)
+        if (wanted) s.write(frame)
+      }
     },
+    pushTokens: () => devices.pushTokens(),
+    dropPushToken: (token) => devices.dropPushToken(token),
     close: () => {
       for (const s of streams.keys()) s.end()
       for (const server of listeners.values()) server.close()

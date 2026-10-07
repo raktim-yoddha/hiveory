@@ -4,7 +4,8 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import globals from 'globals'
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'node_modules/**'] },
+  // mobile/ has its own lint (Expo's rules and the phone app's boundaries).
+  { ignores: ['out/**', 'dist/**', 'node_modules/**', 'mobile/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

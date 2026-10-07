@@ -1,0 +1,19 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      // The desktop's contract and domain types (ADR 0027). Type-only, except the
+      // dependency-free modules the lint rule allows.
+      "@shared/*": ["../src/shared/*"],
+      // Shared files import zod: type them with the phone's copy, never the desktop's install.
+      "zod": ["./node_modules/zod"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "exclude": ["node_modules"]
+}

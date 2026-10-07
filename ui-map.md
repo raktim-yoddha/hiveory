@@ -327,3 +327,13 @@ Result:
 │ Pane B  │      │ Pane A  │
 └─────────┘      └─────────┘
 ```
+
+## Phone app (ADR 0027)
+
+```text
+Tabs ─ Inbox (Needs you · Working)  ─ Projects ─ Settings
+Projects › Project (Needs you | Working | Idle tabs, Workspaces, + New) › Workspace (Open an agent sheet) › Agent
+Agent: header (pet name, status pill, ⋯ actions) · terminal · needs-you bar (Esc / Enter) · key row · message box
+Welcome (3 steps) › Pair (QR scanner · or address + code)
+App-wide: SSH question sheet · notices · notification taps
+```

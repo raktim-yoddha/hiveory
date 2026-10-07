@@ -48,6 +48,8 @@ export interface PairedDevice {
   id: string
   name: string
   pairedAt: string
+  /** A desktop window, or a phone (which may only do everyday things, ADR 0027). */
+  kind: 'desktop' | 'mobile'
 }
 
 /** "Share this computer" (ADR 0025): this desktop also serves its window to the user's other devices. */
@@ -82,4 +84,23 @@ export interface RemotePort {
   address: string
   /** Set while it is forwarded to this computer. */
   localPort?: number
+}
+
+/**
+ * What the phone app scans to pair (ADR 0027): where this computer is on the
+ * tailnet and its one-time code. The app opens `hiveory://pair` links itself.
+ */
+export const pairingLink = (address: string, port: number, code: string): string =>
+  `hiveory://pair?a=${encodeURIComponent(address)}&p=${port}&c=${encodeURIComponent(code)}`
+
+/** The reverse of pairingLink; null for anything that is not a Hiveory pairing link. */
+export const parsePairingLink = (link: string): { address: string; port: number; code?: string } | null => {
+  const match = /^hiveory:\/\/pair\?(.*)$/.exec(link.trim())
+  if (!match) return null
+  const params = new URLSearchParams(match[1])
+  const address = params.get('a') ?? ''
+  const port = Number(params.get('p'))
+  if (!/^[A-Za-z0-9.:-]{1,253}$/.test(address) || !Number.isInteger(port) || port < 1 || port > 65535) return null
+  const code = params.get('c') ?? undefined
+  return { address, port, ...(code && /^[A-Za-z0-9]{8}$/.test(code) ? { code } : {}) }
 }

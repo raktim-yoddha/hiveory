@@ -1,0 +1,52 @@
+{
+  "name": "@hiveory/mobile",
+  "version": "0.1.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.16",
+    "@tanstack/react-query": "^5.104.1",
+    "@xterm/xterm": "^6.0.0",
+    "expo": "~57.0.27",
+    "expo-build-properties": "~57.0.22",
+    "expo-camera": "~57.0.6",
+    "expo-constants": "~57.0.21",
+    "expo-device": "~57.0.2",
+    "expo-haptics": "~57.0.3",
+    "expo-linking": "~57.0.12",
+    "expo-notifications": "~57.0.22",
+    "expo-router": "~57.0.25",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "lucide-react-native": "^1.52.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.2",
+    "react-native-sse": "^1.2.1",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.3",
+    "react-native-webview": "13.16.1",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "^57.0.2",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3",
+    "zod": "^4.6.5"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm lint && pnpm test",
+    "postinstall": "node scripts/build-terminal-html.mjs",
+    "sync:theme": "node scripts/sync-theme.mjs"
+  },
+  "private": true
+}

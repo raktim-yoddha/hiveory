@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import type { ShareStatus } from '@shared/domain/tailnet'
+import { pairingLink, type ShareStatus } from '@shared/domain/tailnet'
 import { IconButton } from '../../components/ui/Button'
+import { QrCode } from '../../components/ui/QrCode'
 import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useSettings } from '../../stores/data'
@@ -60,6 +61,13 @@ export function ShareThisComputer() {
           control={<span className={`${styles.chip} ${styles.chipOn} ${styles.mono}`}>{status.code}</span>}
         />
       )}
+      {on && status?.code && status.address && status.port && (
+        <SettingRow
+          title="Connect your phone"
+          description="Open the Hiveory app on your phone and scan this. Your phone needs Tailscale, signed in like this computer. Phones can watch and steer agents but not delete or change settings."
+          control={<QrCode value={pairingLink(status.address, status.port, status.code)} label="Pairing code for the Hiveory phone app" />}
+        />
+      )}
       {on && status && status.devices.length > 0 && (
         <>
           <div className={styles.groupTitle}>Paired devices</div>
@@ -68,7 +76,9 @@ export function ShareThisComputer() {
               <li key={d.id} className={styles.listItem}>
                 <div className={styles.listMain}>
                   <span className={styles.listTitle}>{d.name}</span>
-                  <span className={styles.listMeta}>Paired {new Date(d.pairedAt).toLocaleString()}</span>
+                  <span className={styles.listMeta}>
+                    {d.kind === 'mobile' ? 'Phone' : 'Desktop'} · paired {new Date(d.pairedAt).toLocaleString()}
+                  </span>
                 </div>
                 <IconButton
                   label={`Remove ${d.name}`}

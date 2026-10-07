@@ -571,6 +571,9 @@ export interface TerminalSnapshot {
   data: string
   /** Output offset the snapshot ends at; live chunks before it are already included. */
   end: number
+  /** The size the program draws for (a phone renders at this size instead of resizing it). */
+  cols?: number
+  rows?: number
 }
 
 export interface DeleteWorkspaceResult {

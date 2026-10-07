@@ -1,0 +1,14 @@
+.qr {
+  display: block;
+  width: calc(var(--space-11) * 3.5);
+  height: calc(var(--space-11) * 3.5);
+  border-radius: var(--radius-md);
+}
+
+.tile {
+  fill: var(--color-logo-tile);
+}
+
+.dots {
+  fill: var(--color-accent-contrast);
+}

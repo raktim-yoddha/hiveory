@@ -50,3 +50,20 @@ export const PAIRING_TTL_MS = 15 * 60_000
 
 /** Where a shared desktop listens, and where discovery looks for servers on the tailnet (ADR 0025). */
 export const DEFAULT_SERVER_PORT = 7788
+
+/**
+ * What a paired phone may do (ADR 0027): everyday control. It watches and steers
+ * agents, terminals, chats and SSH questions, and opens workspaces. Deleting,
+ * settings, accounts and anything that resizes a desktop terminal stay on the
+ * desktop. A subset of REMOTE_CHANNELS (a test checks).
+ */
+export const MOBILE_CHANNELS = new Set<Channel>([
+  'projects.list', 'workspaces.list', 'workspaces.create', 'workspaces.suggestName', 'workspaces.gitStatus',
+  'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
+  'terminal.write', 'terminal.snapshot', 'presets.list', 'kanban.board', 'settings.get', 'sessions.list',
+  'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.send', 'chat.stop', 'chat.catalog',
+  'hosts.status', 'ssh.pending', 'ssh.answer', 'git.info'
+])
+
+/** Who a paired device is: a desktop window (everything remote) or a phone (MOBILE_CHANNELS). */
+export type DeviceScope = 'desktop' | 'mobile'

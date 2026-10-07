@@ -370,6 +370,25 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - Agent and shell terminals on this computer run in a separate host process; if it crashes,
   Hiveory keeps running, the affected terminals show as ended, and the next one starts a new host.
 
+## Phone app (ADR 0027)
+
+- Hiveory for phones (`mobile/`) uses the user's own computer over their own Tailscale network;
+  no Hiveory server sits in between. Pairing: scan "Connect your phone" (Settings › Remote ›
+  Share this computer), open its `hiveory://pair` link, or type the computer's Tailscale name.
+  Same Tailscale account = no code.
+- A phone may do everyday things only: watch every project and agent, open agents and presets,
+  type in terminals, send messages, interrupt, restart and close agents, create workspaces, chat,
+  answer the computer's SSH questions. Deleting, settings, accounts and resizing a desktop
+  terminal stay on the computer (enforced by the server). Paired devices show as Phone or Desktop.
+- Tabs: **Inbox** (agents that need you across projects, then those working; badge on the tab),
+  **Projects** (each with live counts; a project's board one status at a time, most urgent first,
+  and its workspaces), **Settings** (computers, notifications, theme, privacy).
+- An agent screen shows its terminal exactly as on the computer (never resized), a bar that says
+  why it waits with Esc and Enter, the keys a phone lacks, and a message box.
+- Notifications (opt-in): "An agent needs you." through Expo push, at most once a minute per
+  agent; only ids travel. Tapping opens that agent on the right computer.
+- The phone wears the theme picked on the computer.
+
 ## Running in the background (ADR 0020)
 
 - Closing the window keeps Hiveory in the system tray and every agent keeps working (Settings ›

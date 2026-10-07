@@ -620,3 +620,16 @@ bot thread CLI ──MCP /mcp/<chatId>──▶ BotTools ─▶ BotService
                                         └─ delegate_bot ─▶ new thread on teammate ─▶ ChatService 'run' end
                                                              └─▶ [Result from …] sent into the Chief's thread (queued while busy)
 ```
+
+### Phone app (ADR 0027)
+
+```text
+mobile/ (own pnpm workspace, Expo Router)
+  src/app        routes: compose features, RouteErrorBoundary each
+  src/features   islands (inbox, projects, workspace, agent, onboarding, ssh-prompts, notifications, settings)
+  src/core       api (call · SSE · query invalidation) · computers · theme (from tokens.css) · ui · terminal
+       │ import type @shared/*  (one contract with the desktop)
+       ▼
+phone ──HTTP /call (MOBILE_CHANNELS) · SSE /events?terminal=none|<id> · POST /push──▶ Sharing/server
+desktop agent waits ─queen.update─▶ Sharing.notifyWaiting ─▶ Expo push (ids only)
+```

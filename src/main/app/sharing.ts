@@ -2,10 +2,13 @@ import type { ShareStatus, TailnetDevice } from '@shared/domain/tailnet'
 import type { Handlers } from '../ipc/router'
 import type { Tailscale } from '../services/tailscale/tailscale'
 import type { Logger } from './logger'
+import { sendPush } from './push'
 import { startServer, type HiveoryServer } from './server'
 
 /** How often the Tailscale address is re-read: it appears late after boot and can change after a re-login. */
 const FOLLOW_MS = 30_000
+/** One agent that keeps flipping to "needs you" notifies at most this often. */
+const PUSH_QUIET_MS = 60_000
 
 export interface ShareOptions {
   port: number
@@ -29,6 +32,7 @@ export class Sharing {
   private state: ShareStatus['state'] = 'off'
   private detail: string | undefined
   private timer: ReturnType<typeof setInterval> | null = null
+  private readonly pushedAt = new Map<string, number>()
 
   constructor(
     private readonly tailscale: Tailscale,
@@ -86,6 +90,25 @@ export class Sharing {
 
   broadcast(event: string, payload: unknown): void {
     this.server?.broadcast(event, payload)
+  }
+
+  /**
+   * Tells paired phones that an agent needs the user (ADR 0027). Only ids travel
+   * (the phone shows the names itself), and never more than once a minute per agent.
+   */
+  notifyWaiting(update: { kind: string; instanceId: string; projectId: string; workspaceId: string }): void {
+    const server = this.server
+    if (!server || update.kind !== 'waiting') return
+    const tokens = server.pushTokens()
+    const now = Date.now()
+    if (!tokens.length || now - (this.pushedAt.get(update.instanceId) ?? 0) < PUSH_QUIET_MS) return
+    this.pushedAt.set(update.instanceId, now)
+    // `from`: the address the phone paired with, so it opens the right computer.
+    const data = { instanceId: update.instanceId, projectId: update.projectId, workspaceId: update.workspaceId, from: this.self?.dnsName || this.self?.ip || '' }
+    void sendPush(tokens, { title: 'Hiveory', body: 'An agent needs you.', data }).then(
+      (gone) => gone.forEach((t) => server.dropPushToken(t)),
+      (error: unknown) => this.log.warn('Could not send a push notification', error)
+    )
   }
 
   stop(): void {

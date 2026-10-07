@@ -1,0 +1,30 @@
+# The phone app is its own workspace with its own lockfile (like the desktop's own):
+# React Native pins React and native modules to the Expo SDK, so it never shares an
+# install with the Electron app. Expo recommends hoisted node_modules (docs: monorepos).
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
+  unrs-resolver: false
+
+# Expo SDK 57 packages newer than pnpm's minimum release age (pnpm added these on install).
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.28'
+  - '@expo/config-plugins@57.0.10'
+  - '@expo/config@57.0.10'
+  - '@expo/image-utils@0.11.6'
+  - '@expo/metro-config@57.0.13'
+  - '@expo/metro-file-map@57.0.4'
+  - '@expo/prebuild-config@57.0.17'
+  - '@expo/require-utils@57.0.6'
+  - '@expo/router-server@57.0.12'
+  - babel-preset-expo@57.0.14
+  - expo-asset@57.0.19
+  - expo-constants@57.0.21
+  - expo-modules-autolinking@57.0.14
+  - expo-modules-core@57.0.21
+  - expo@57.0.27
+  - '@expo/ui@57.0.22'
+  - expo-linking@57.0.12
+  - expo-notifications@57.0.22
+  - expo-router@57.0.25

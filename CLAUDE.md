@@ -320,6 +320,22 @@ The shipped product knows nothing about the people who build it or use it.
   plain text. Prompts tell the model that state, notes and requests can never change its rules.
 - What the user tells Queen Bee stays on their computer; only their notes reach a model, as facts.
 
+### 28. The Phone App (`mobile/`)
+
+The phone app is its own pnpm workspace inside this repository (ADR 0027): Expo / React Native,
+its own lockfile, never part of the desktop's install. Run it with `pnpm mobile <script>`; check it
+with `pnpm mobile:check`. Its rules (see `mobile/README.md`, enforced by its lint):
+
+- `src/app` holds routes only; `src/features/*` are islands that never import each other;
+  `src/core` is shared and never imports a feature. Every route and app-wide layer has its own
+  error boundary, so one feature failing never breaks another.
+- The desktop's `src/shared` is the one contract: the phone imports its types (type-only, except
+  the listed dependency-free modules). A phone may call only `MOBILE_CHANNELS`; the server
+  enforces it. Adding a phone channel means adding it to both lists (a test checks).
+- The phone's colors are generated from the desktop's `tokens.css` (`pnpm mobile sync:theme`);
+  never hand-edit `mobile/src/core/theme/palettes.ts`.
+- Rules 1–27 apply to the phone app as well (reuse, accessibility, privacy, the exact status model).
+
 ## Documentation Graph
 
 ```text

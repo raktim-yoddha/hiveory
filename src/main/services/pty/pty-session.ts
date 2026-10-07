@@ -136,9 +136,10 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     return Boolean(this.mirror?.modes.bracketedPasteMode)
   }
 
-  snapshot(): { data: string; end: number } {
+  /** The output so far, and the terminal size it was drawn for (a phone draws it at that size, ADR 0027). */
+  snapshot(): { data: string; end: number; cols: number; rows: number } {
     this.flush()
-    return this.buffer.snapshot()
+    return { ...this.buffer.snapshot(), ...(this.size ?? DEFAULT_SIZE) }
   }
 
   /** The last `lines` lines of the rendered screen as plain text (requires `withMirror`). */

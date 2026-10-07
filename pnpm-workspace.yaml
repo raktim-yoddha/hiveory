@@ -1,3 +1,6 @@
+# The desktop app is this workspace's only package. mobile/ is the phone app's own workspace
+# (own lockfile, Expo's hoisted node_modules, React pinned by the Expo SDK), so it never
+# shares an install with Electron; run it with `pnpm mobile <script>` (ADR 0027).
 allowBuilds:
   esbuild: true
   electron: true

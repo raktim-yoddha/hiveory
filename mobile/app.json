@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Hiveory",
+    "slug": "hiveory",
+    "scheme": "hiveory",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "experiments": { "typedRoutes": true },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.hiveory.mobile",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.hiveory.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      ["expo-camera", { "cameraPermission": "Hiveory uses the camera only to scan the pairing code your computer shows.", "recordAudioAndroid": false }],
+      ["expo-notifications", { "color": "#d9cbb4" }],
+      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]
+    ],
+    "extra": {
+      "privacy": "Talks only to your own computers over your Tailscale network. Plain HTTP is allowed because Tailscale already encrypts every packet (ADR 0027)."
+    }
+  }
+}

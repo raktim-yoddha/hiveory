@@ -83,7 +83,7 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     this.shells.get(id)?.pty.resize(cols, rows)
   }
 
-  snapshot(id: string): { data: string; end: number } {
+  snapshot(id: string): { data: string; end: number; cols?: number; rows?: number } {
     return this.shells.get(id)?.pty.snapshot() ?? { data: '', end: 0 }
   }
 

@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { WALLPAPER_SCHEME } from './services/appearance/wallpaper-service'
 import { IPC_PREFIX } from '@shared/ipc/contract'
 import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
+import type { QueenUpdate } from '@shared/queen/updates'
 import { readClientConfig } from './app/client'
 import { runClientMode } from './app/client-mode'
 import { createContainer, type Container } from './app/container'
@@ -80,6 +81,8 @@ const emit: Emit = (event, payload) => {
   }
   // Clients of this machine's server get every event too.
   guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
+  // Paired phones hear when an agent needs the user, even with the app closed (ADR 0027).
+  if (event === 'queen.update') guard(log, 'Push', () => container?.sharing.notifyWaiting(payload as QueenUpdate))
 }
 
 const openWindow = (): void => {
