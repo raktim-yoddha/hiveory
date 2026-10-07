@@ -33,7 +33,7 @@ Replace the single `+` IconButton in `BotsSidebar` with the shared `Menu`:
 |---|---|---|
 | **New Bot** · `Ctrl N` | `useBotEditor.open('new')` (exists). The shortcut is registered in the existing shortcut hook, only in Bots mode | now |
 | **New group chat** | Rooms (B2). Hidden until rooms exist; no disabled teaser (rule 22: no product decision yet) | Tier 3 |
-| **Create team** | Teams (M2). **Conflict:** the decision was a *derived* team map (no teams). Hidden unless M2 is approved | — |
+| **Create team** | Teams (M2, approved 2026-10-07): `teams.create { name }` → a `Modal` with name + optional Chief. See §7 | Tier 2 |
 | **Templates** | Preset bots first (a list of New bot defaults); team packages later. Opens a `Modal` gallery | Tier 1 / 3 |
 
 The sidebar footer gets **Routines · Triggers · Apps · Team map**. Each one sets
@@ -84,7 +84,7 @@ interface Bot {
 
 | Card (screenshot) | Hiveory meaning | Tool families the thread gets | Availability check |
 |---|---|---|---|
-| **Auto** | whatever the task needs, cheapest first: browser → container → this computer (asks) | browser + `desktop_*` (if a container is configured) + `computer_*` (if allowed) | each family listed only if available |
+| **Auto** | whatever the task needs, cheapest first: browser → container. **Never this computer** (decided) | browser + `desktop_*` (if a container is configured) | each family listed only if available |
 | **Cloud computer** (Boat) | **"Server computer"**: Docker on an SSH host (`computer.host`). No Boat | `desktop_*` | `hosts.check` on the host |
 | **Local VM** | Docker on this computer (`hiveory-computer:1`) | `desktop_*` | `docker` reachable |
 | **This computer** | the user's real screen | `computer_*` | `computer.supported` + Settings › Computer use on; every action asks, whatever the approval level |
@@ -221,11 +221,37 @@ routines per bot).
 2. Bot panel shell (Tabs, resize, state) + Browser tab (scope `bot-<id>`, per-bot profile).
 3. A1: the routine model, scheduler, keep-awake, IPC, tests.
 4. RoutineEditor + Routines tab + run log; then the calendar page (A2).
-5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat and Create team stay hidden
-   until their decisions.
+5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat stays hidden until rooms exist.
+6. Teams (§7) + the team map with team cards.
 
-## Open points
+## 7. Teams (M2, approved 2026-10-07)
 
-- **Create team** contradicts the "derived team map" decision. Keep it hidden, or approve M2?
-- **This computer** under Auto: should Auto ever pick the user's real screen, or only when Works on
-  is set to This computer explicitly? *Recommended: explicitly only.*
+```ts
+// src/shared/domain/bot.ts
+interface Team { id: string; name: string; createdAt: string }   // PersistedState.teams; "General" always exists
+interface Bot { teamId: string /* migrate: General */ }
+```
+
+- **One Chief per team**, replacing ADR 0022's "at most one Chief". Making a bot Chief clears the
+  previous Chief *of that team* only. A file with two Chiefs in one team keeps the first.
+- **Reach**: a Chief reaches the bots in its own team. Messaging bots still reach other messaging
+  bots in any team, and the Chief of General may reach other teams' Chiefs (a hand-off between
+  teams goes Chief to Chief). Same depth and hourly limits. `reachable()` is the one place this
+  lives, and it is tested.
+- **Sidebar**: bots grouped under team headings (collapsible, team order persisted), Chief first.
+  The right-click menu gains "Move to team ▸".
+- **Team map**: one card per team (the screenshot's "General" card), with the Chief at the top and
+  live delegation edges inside and across cards. Drag a bot within a card to arrange it, or onto
+  another card to move it (`bots.update { teamId }`). Positions are stored per team. These drags
+  change membership only, never status (rule 7 is about CLI status, so it is not touched).
+- **Team actions** (`…` on the card): rename, delete (bots move to General; refused while a team's
+  bot is working, as OpenMausBot does), and later Share team (packages).
+- **Routines and triggers** stay per bot. The calendar filter gains "Team".
+- IPC: `teams.list | create | rename | delete`, plus `bots.update { teamId }`. ADR 0028 records the
+  change to ADR 0022.
+
+## Decisions (2026-10-07)
+
+- **Create team**: real teams (M2), §7.
+- **This computer under Auto**: never. Auto picks only the browser and the Docker computer; the
+  user's real screen needs Works on = **This computer**, chosen explicitly.

@@ -244,7 +244,8 @@ Tasks board into Work. What fits:
 
 ## 6. Decisions (product owner, 2026-10-07; record in ADR 0028 when A1 starts)
 
-Taken: (1) yes, Bots only and capped; (2) Composio first; (3) derived map M1; (4) Bots first.
+Taken: (1) yes, Bots only and capped; (2) Composio first; (3) derived map M1, **then real teams M2
+(approved later the same day; see `bots-ui-wiring.md` §7)**; (4) Bots first.
 (5) `croner` is still open and is confirmed when A1 begins.
 
 1. Run logs and the "Finished recently" lane in Bots: allowed under rule 9 (scoped to Bots,
