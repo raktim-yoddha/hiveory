@@ -7,13 +7,13 @@ import styles from './TerminalView.module.css'
 const FIT_DEBOUNCE_MS = 60
 
 /** Hosts an agent's persistent terminal and keeps it fitted to the pane. */
-export function TerminalView({ instanceId }: { instanceId: string }) {
+export function TerminalView({ instanceId, minColumns }: { instanceId: string; minColumns?: number }) {
   const hostRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
-    const detach = attachTerminal(instanceId, host)
+    const detach = attachTerminal(instanceId, host, minColumns)
     let timer: ReturnType<typeof setTimeout> | undefined
     // One trailing fit per resize burst: the TUI redraws once, at its final size.
     const observer = new ResizeObserver(() => {
@@ -26,7 +26,7 @@ export function TerminalView({ instanceId }: { instanceId: string }) {
       observer.disconnect()
       detach()
     }
-  }, [instanceId])
+  }, [instanceId, minColumns])
 
   return <div ref={hostRef} className={styles.host} />
 }

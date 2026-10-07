@@ -16,6 +16,8 @@ interface CliSpec {
   executables: string[]
   /** Arguments always passed (e.g. a subcommand that starts the interactive session). */
   args?: string[]
+  /** Columns its TUI needs before the layout breaks (see CliAdapter.minColumns). */
+  minColumns?: number
   autoApproveArgs?: string[]
   autoApproveEnv?: Record<string, string>
   waitingPatterns?: Array<{ pattern: RegExp; reason: WaitingReason }>
@@ -49,6 +51,7 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   icon: spec.icon,
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
+  ...(spec.minColumns ? { minColumns: spec.minColumns } : {}),
   injectMcp: Boolean(spec.mcp),
   ...(spec.skills ? { skills: spec.skills } : {}),
   ...(spec.session?.start && spec.session.resume
@@ -97,6 +100,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'OpenCode',
     icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
+    // Measured: its footer and prompt collapse into one-word columns below ~46 columns.
+    minColumns: 50,
     // Full-screen TUI breaks in small panes; the mini interface reflows and replays history on resize.
     args: ['--mini', '--replay-limit', '100000'],
     autoApproveArgs: ['--auto'],
@@ -172,6 +177,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Kimi CLI',
     icon: officialIcon('kimi', 'KI'),
     executables: ['kimi'],
+    // Measured: its welcome box and tips wrap into a narrow side column below ~46 columns.
+    minColumns: 50,
     autoApproveArgs: ['--yolo'],
     session: { latest: ['--continue'] },
     skills: { shared: true }
@@ -211,6 +218,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Kilo Code CLI',
     icon: officialIcon('kilocode', 'KI'),
     executables: ['kilo', 'kilocode'],
+    // Measured: OpenCode's TUI underneath; its logo is cut and the footer collapses below ~46 columns.
+    minColumns: 50,
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),

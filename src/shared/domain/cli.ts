@@ -35,6 +35,8 @@ export interface CliDescriptor {
   supportsChat: boolean
   /** Can continue a conversation from its own history by session id (the Sessions tab's Resume). */
   resumesById: boolean
+  /** Columns its full-screen TUI needs before the layout breaks; a narrower pane shrinks the font instead. */
+  minColumns?: number
   available: boolean
   /** Resolved executable path when available. */
   executable?: string

@@ -3,6 +3,7 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { api, subscribe } from '../../lib/api'
+import { createDarkBackgroundFilter } from './dark-backgrounds'
 
 /**
  * Keeps one xterm per agent instance alive outside React, so moving a pane
@@ -40,6 +41,9 @@ const MIN_COLS = 20
 const MIN_ROWS = 5
 
 const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
+const FONT_SIZE = 13
+/** Smallest font a narrow pane shrinks to so a CLI still gets its `minColumns`. */
+const MIN_FONT_SIZE = 9
 
 interface Entry {
   term: Terminal
@@ -50,6 +54,10 @@ interface Entry {
   written: number
   pending: Array<{ data: string; offset: number }>
   lastSize: string
+  /** Columns the CLI needs before its layout breaks (from the CLI registry); 0: any width works. */
+  minColumns: number
+  /** Output after near-black screen fills are dropped (stateful: chunks may split a sequence). */
+  filter: (chunk: string) => string
 }
 
 const entries = new Map<string, Entry>()
@@ -60,7 +68,7 @@ const fontReady = document.fonts?.load(`13px ${FONT}`).catch(() => undefined) ??
 const writeChunk = (entry: Entry, data: string, offset: number): void => {
   const end = offset + data.length
   if (end <= entry.written) return
-  entry.term.write(offset >= entry.written ? data : data.slice(entry.written - offset))
+  entry.term.write(entry.filter(offset >= entry.written ? data : data.slice(entry.written - offset)))
   entry.written = end
 }
 
@@ -98,12 +106,12 @@ const pasteClipboard = (instanceId: string, term: Terminal): void =>
     .then((text) => (text ? term.paste(text) : send(instanceId, CTRL_V)))
     .catch(() => send(instanceId, CTRL_V))
 
-const create = (instanceId: string): Entry => {
+const create = (instanceId: string, minColumns: number): Entry => {
   ensureListener()
   theme ??= readTheme()
   const term = new Terminal({
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: FONT_SIZE,
     lineHeight: 1.15,
     cursorBlink: true,
     scrollback: 10000,
@@ -161,13 +169,13 @@ const create = (instanceId: string): Entry => {
     if (!copySelection(term)) pasteClipboard(instanceId, term)
     else term.clearSelection()
   })
-  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '' }
+  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', minColumns, filter: createDarkBackgroundFilter() }
   entries.set(instanceId, entry)
 
   void api('terminal.snapshot', { instanceId })
     .then((snapshot) => {
       replaying = true
-      term.write(snapshot.data, () => {
+      term.write(entry.filter(snapshot.data), () => {
         replaying = false
       })
       entry.written = snapshot.end
@@ -197,7 +205,18 @@ const enableWebgl = (term: Terminal): void => {
 export const fitTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)
   if (!entry?.opened || !entry.element.isConnected) return
-  const proposed = entry.fit.proposeDimensions()
+  let proposed = entry.fit.proposeDimensions()
+  // A CLI whose layout breaks below `minColumns` gets a smaller font in a narrow pane instead
+  // (down to MIN_FONT_SIZE); columns grow as the font shrinks.
+  if (proposed && Number.isFinite(proposed.cols) && proposed.cols > 0) {
+    const current = entry.term.options.fontSize ?? FONT_SIZE
+    const atFull = (proposed.cols * current) / FONT_SIZE
+    const size = entry.minColumns && atFull < entry.minColumns ? Math.max(MIN_FONT_SIZE, Math.floor((FONT_SIZE * atFull * 2) / entry.minColumns) / 2) : FONT_SIZE
+    if (size !== current) {
+      entry.term.options.fontSize = size
+      proposed = entry.fit.proposeDimensions()
+    }
+  }
   // A hidden, collapsing or minimizing host can report a sliver; never squeeze a TUI into it.
   if (!proposed || !Number.isFinite(proposed.cols) || !Number.isFinite(proposed.rows) || proposed.cols < MIN_COLS || proposed.rows < MIN_ROWS) return
   const key = `${proposed.cols}x${proposed.rows}`
@@ -208,8 +227,9 @@ export const fitTerminal = (instanceId: string): void => {
 }
 
 /** Mounts the instance's terminal into `host`. Returns a detach function. */
-export const attachTerminal = (instanceId: string, host: HTMLElement): (() => void) => {
-  const entry = entries.get(instanceId) ?? create(instanceId)
+export const attachTerminal = (instanceId: string, host: HTMLElement, minColumns = 0): (() => void) => {
+  const entry = entries.get(instanceId) ?? create(instanceId, minColumns)
+  entry.minColumns = minColumns
   host.appendChild(entry.element)
   let cancelled = false
   void fontReady.then(() => {

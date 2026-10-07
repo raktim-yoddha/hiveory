@@ -5,7 +5,7 @@ import { Button, IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
-import { useAgents } from '../../stores/data'
+import { useAgents, useClis } from '../../stores/data'
 import { PaneFrame } from '../panes/PaneFrame'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { TerminalView } from '../terminal/TerminalView'
@@ -35,6 +35,7 @@ export function AgentPane({
   moveTo
 }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
+  const minColumns = useClis((s) => s.clis.find((c) => c.id === agent.cliId)?.minColumns)
   const fits = { right: rect.width >= minSize.width * 2 + gutter, bottom: rect.height >= minSize.height * 2 + gutter }
   const moves = moveTo
     ? (['left', 'right', 'up', 'down'] as const).map((direction) => ({
@@ -106,7 +107,7 @@ export function AgentPane({
       }
     >
       <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
-        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} />}
+        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={minColumns} />}
       </ErrorBoundary>
       {!runtime.running && !agent.chatUi && (
         <div className={styles.stopped}>
