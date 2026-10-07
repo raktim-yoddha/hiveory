@@ -12,12 +12,12 @@ import { useBots } from '../../stores/bots'
 import { useClis } from '../../stores/data'
 import { when } from '../routines/routine-text'
 import { useBotActions } from './bot-actions'
+import { BOT_DRAG_TYPE } from './bot-drag'
 import { useHandoffs } from './use-handoffs'
 import { useTeamDialog } from './TeamDialog'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
-const BOT_TYPE = 'application/x-hiveory-bot'
 
 /**
  * The team map (ADR 0028): one card per team, its Chief first, and the work bots are handing each
@@ -36,7 +36,7 @@ export function TeamMapPage() {
   const onDrop = (teamId: string) => (e: DragEvent<HTMLElement>) => {
     e.preventDefault()
     setOver(null)
-    const botId = e.dataTransfer.getData(BOT_TYPE)
+    const botId = e.dataTransfer.getData(BOT_DRAG_TYPE)
     if (botId && bots.find((b) => b.id === botId)?.teamId !== teamId) void update(botId, { teamId })
   }
 
@@ -67,7 +67,7 @@ export function TeamMapPage() {
                   className={cx(styles.teamCard, over === team.id && styles.teamCardOver)}
                   aria-label={`${team.name} team`}
                   onDragOver={(e) => {
-                    if (!e.dataTransfer.types.includes(BOT_TYPE)) return
+                    if (!e.dataTransfer.types.includes(BOT_DRAG_TYPE)) return
                     e.preventDefault()
                     setOver(team.id)
                   }}
@@ -103,7 +103,7 @@ export function TeamMapPage() {
                           draggable
                           className={styles.botTile}
                           onDragStart={(e) => {
-                            e.dataTransfer.setData(BOT_TYPE, bot.id)
+                            e.dataTransfer.setData(BOT_DRAG_TYPE, bot.id)
                             e.dataTransfer.effectAllowed = 'move'
                           }}
                           onClick={() => void select(bot.id)}

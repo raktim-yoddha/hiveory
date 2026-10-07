@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import type { RoutineRun, RoutineView } from '@shared/domain/routine'
 import { nextRuns } from '@shared/domain/routine-schedule'
 import { cx } from '../../lib/cx'
+import { BOT_DRAG_TYPE } from '../bots/bot-drag'
+import { DAY_MS, sameDay } from './calendar-dates'
 import { WEEKDAYS } from './routine-text'
 import styles from './Routines.module.css'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const HOURS = Array.from({ length: 24 }, (_, h) => h)
 // ponytail: a routine every 5 minutes would draw 2,000 blocks a week; it shows its first ones only.
 const MAX_PER_ROUTINE = 200
@@ -18,38 +19,37 @@ interface Item {
   status?: RoutineRun['status']
 }
 
-/** Monday 00:00 of the week holding `day`, in this computer's time. */
-export const weekStartOf = (day: Date): Date => {
-  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate())
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
-  return d
-}
-
-/** A week of routines: past runs from the log (by outcome), upcoming runs from each schedule. Click an empty hour to add one. */
+/**
+ * A week (or one day) of routines: past runs from the log (by outcome), upcoming runs from each
+ * schedule. Click an empty hour to add one there; drop a bot from the sidebar on it to add one for that bot.
+ */
 export function WeekCalendar({
-  weekStart,
+  start,
+  dayCount = 7,
   routines,
   runs,
   onSlot,
   onOpen
 }: {
-  weekStart: Date
+  start: Date
+  dayCount?: 1 | 7
   routines: RoutineView[]
   runs: RoutineRun[]
-  onSlot: (at: Date) => void
+  onSlot: (at: Date, botId?: string) => void
   onOpen: (routineId: string) => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
+  const [over, setOver] = useState<string | null>(null)
   const now = new Date()
-  const days = Array.from({ length: 7 }, (_, i) => new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i))
-  const end = days[6]!.getTime() + DAY_MS
+  const days = Array.from({ length: dayCount }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i))
+  const end = days.at(-1)!.getTime() + DAY_MS
 
   const items: Item[] = []
   for (const run of runs) {
     const at = new Date(run.scheduledFor)
-    if (at >= weekStart && at.getTime() < end) items.push({ key: run.id, routineId: run.routineId, name: run.routineName, at, status: run.status })
+    if (at >= start && at.getTime() < end) items.push({ key: run.id, routineId: run.routineId, name: run.routineName, at, status: run.status })
   }
-  const from = new Date(Math.max(weekStart.getTime(), now.getTime()))
+  const from = new Date(Math.max(start.getTime(), now.getTime()))
   for (const r of routines) {
     if (!r.enabled) continue
     for (const at of nextRuns(r, from, MAX_PER_ROUTINE)) {
@@ -64,8 +64,25 @@ export function WeekCalendar({
     if (el) el.scrollTop = (el.scrollHeight / 24) * 7
   }, [])
 
+  const dropOn = (at: Date) => ({
+    onDragOver: (e: DragEvent<HTMLButtonElement>) => {
+      if (!e.dataTransfer.types.includes(BOT_DRAG_TYPE)) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      setOver(at.toISOString())
+    },
+    onDragLeave: () => setOver((o) => (o === at.toISOString() ? null : o)),
+    onDrop: (e: DragEvent<HTMLButtonElement>) => {
+      const botId = e.dataTransfer.getData(BOT_DRAG_TYPE)
+      setOver(null)
+      if (!botId) return
+      e.preventDefault()
+      onSlot(at, botId)
+    }
+  })
+
   return (
-    <div className={styles.week}>
+    <div className={cx(styles.week, dayCount === 1 && styles.oneDay)}>
       <div className={styles.weekHead}>
         <span className={styles.zone} title={Intl.DateTimeFormat().resolvedOptions().timeZone}>
           {Intl.DateTimeFormat().resolvedOptions().timeZone}
@@ -93,9 +110,10 @@ export function WeekCalendar({
                 <button
                   key={h}
                   type="button"
-                  className={styles.slot}
+                  className={cx(styles.slot, over === at.toISOString() && styles.slotOver)}
                   aria-label={`New routine ${WEEKDAYS[d.getDay()]} ${d.getDate()} at ${String(h).padStart(2, '0')}:00`}
                   onClick={() => onSlot(at)}
+                  {...dropOn(at)}
                 />
               )
             })}
@@ -133,5 +151,4 @@ const stacked = (items: Item[]): Array<{ item: Item; index: number; size: number
   })
 }
 
-const sameDay = (a: Date, b: Date): boolean => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 const pad = (d: Date): string => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

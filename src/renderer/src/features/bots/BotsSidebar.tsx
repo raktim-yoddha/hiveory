@@ -10,6 +10,7 @@ import { useApprovals } from '../../stores/approvals'
 import { useBots } from '../../stores/bots'
 import { useApp } from '../../stores/data'
 import { useBotActions } from './bot-actions'
+import { BOT_DRAG_TYPE } from './bot-drag'
 import { useBotEditor } from './BotEditor'
 import { TeamDialog, useTeamDialog } from './TeamDialog'
 import { TemplatesDialog } from './TemplatesDialog'
@@ -61,6 +62,12 @@ export function BotsSidebar() {
             {...props}
             type="button"
             className={cx(chat.chatRow, page === 'bot' && bot.id === activeBotId && chat.chatActive)}
+            // Drop it on a calendar hour for a new routine there, or on a team on the team map.
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(BOT_DRAG_TYPE, bot.id)
+              e.dataTransfer.effectAllowed = 'copyMove'
+            }}
             onClick={() => void select(bot.id)}
             onDoubleClick={() => openEditor(bot.id)}
             aria-current={page === 'bot' && bot.id === activeBotId ? 'page' : undefined}

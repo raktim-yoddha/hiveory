@@ -352,3 +352,100 @@
   background: var(--color-danger);
   pointer-events: none;
 }
+
+/* Day view: one column */
+.oneDay .weekHead,
+.oneDay .weekBody {
+  grid-template-columns: var(--calendar-gutter-width) minmax(0, 1fr);
+}
+
+/* A bot dragged over an hour */
+.slotOver {
+  background: var(--fill-accent-soft);
+}
+
+/* The range doubles as the date picker's button */
+button.range {
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+button.range:hover {
+  background: var(--color-surface-hover);
+}
+
+/* Mini month */
+.miniMonth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.miniHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.miniTitle {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.miniGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
+.miniDayHead {
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  text-align: center;
+}
+
+.miniDay {
+  position: relative;
+  height: var(--control-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.miniDay:hover {
+  background: var(--color-surface-hover);
+}
+
+.miniOther {
+  color: var(--color-text-faint);
+}
+
+.miniToday {
+  color: var(--color-accent);
+  font-weight: var(--weight-semibold);
+}
+
+.miniPicked {
+  background: var(--fill-accent-soft);
+}
+
+.miniDot {
+  position: absolute;
+  bottom: var(--space-1);
+  left: 50%;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  background: var(--color-accent);
+  transform: translateX(-50%);
+}

@@ -174,6 +174,6 @@ importing whole teams comes later.
 
 ## Next
 
-Nothing planned. Deferred: routine attachments; the calendar's day view, mini month and drag-a-bot;
+The calendar's day view, mini month and drag-a-bot are built (Routines page). Deferred: routine attachments;
 container gaps against OpenMausBot (Podman, a pinned image, accessibility-tree control, shared seats);
 approval levels and the sending-on-your-behalf gate; K2 queued requests; Work and Chat routines.

@@ -68,10 +68,12 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
   drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to
   <team>" included. Below: Handoffs, "From → To · thread · Working / Done · when", each opening its thread.
-- Routines page: header (Routines, ‹ › week, "October 5 – 11, 2026", Today, Week · List · Run logs,
+- Routines page: header (Routines, ‹ › week or day, the range ("October 5 – 11, 2026"; a button opening a
+  mini month whose days with runs carry a dot; picking a day jumps there), Today, Day · Week · List · Run logs,
   bot filter, New routine); the keep-awake switch with its explanation; Week: Mon–Sun columns,
   hour rows (opening at 07:00), today shaded, a now line, past runs coloured by outcome and upcoming
   runs from each schedule (same-time runs side by side); click an empty hour for a new routine there,
+  or drop a bot from the sidebar on it for a new routine for that bot at that hour; Day: the same for one day;
   click a run to edit its routine. List: routine rows. Run logs: status, routine, bot, when, by you
   or the schedule, duration, why it failed, and Open thread.
 - Routine editor (modal): Title; Starts (date, time, this computer's timezone); Repeat (Does not
