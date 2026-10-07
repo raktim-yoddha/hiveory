@@ -19,7 +19,9 @@ hands work to its bots (their results come back into its thread and wake it) and
 Chiefs reach General's Chief, so work crosses teams Chief to Chief. Bots that allow messaging may
 consult each other in any team. Delegation is bounded (only Chiefs delegate, at most two levels
 deep, 20 handoffs an hour per thread). The team map shows each team and the work bots are handing
-each other; dragging a bot onto another team moves it there. Bots never appear on a
+each other; dragging a bot onto another team moves it there. The **work board** lists what the team owes: handoffs
+and routine and trigger runs, as Working, Didn't finish or Done, by their real state; finished work
+stays a day (Bots-only, capped history, ADR 0028). Bots never appear on a
 project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

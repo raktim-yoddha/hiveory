@@ -153,6 +153,15 @@ importing whole teams comes later.
 - **Not verified live:** a real Funnel and a real Composio delivery (this machine has no Tailscale);
   covered by tests, including deliveries over a real loopback socket.
 
+## Work board (built: phase K1)
+
+- Derived, no new data (`features/bots/work-board.ts`): handoffs (`bots.handoffs`) and routine and
+  trigger runs (`routines.runs`). Columns follow real state (rule 7): **Working** (a running handoff or
+  run), **Didn't finish** (failed, missed or skipped, with the reason) and **Done**. Finished work
+  stays 24 hours: Bots-only, capped history (decision 1), not a Done column on Work's Kanban.
+- Each row: who asked (a bot, a routine or a trigger) → the bot, the title, when; it opens its thread.
+- K2 (queued requests dropped on a bot) is not built.
+
 ## Next
 
-The work board (K1); Queen Bee actions for routines and triggers.
+Queen Bee actions for routines and triggers.

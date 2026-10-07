@@ -24,12 +24,13 @@ interface BotsState {
   panelOpen: boolean
   panelTab: BotPanelTab
   /** What Bots mode shows: a bot's conversation, the Routines page (filtered to one bot, or all), or the team map. */
-  page: 'bot' | 'routines' | 'triggers' | 'team-map'
+  page: 'bot' | 'work' | 'routines' | 'triggers' | 'team-map'
   routinesFilter?: string
   setPanelOpen(open: boolean): void
   setPanelTab(tab: BotPanelTab): void
   showRoutines(botId?: string): void
   showTeamMap(): void
+  showWorkBoard(): void
   showTriggers(): void
   createTeam(name: string): Promise<Team | undefined>
   renameTeam(teamId: string, name: string): Promise<void>
@@ -64,6 +65,7 @@ export const useBots = create<BotsState>((set, get) => ({
   setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
   showRoutines: (routinesFilter) => set({ page: 'routines', routinesFilter }),
   showTeamMap: () => set({ page: 'team-map' }),
+  showWorkBoard: () => set({ page: 'work' }),
   showTriggers: () => set({ page: 'triggers' }),
 
   createTeam: async (name) => {

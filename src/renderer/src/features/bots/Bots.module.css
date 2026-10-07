@@ -594,3 +594,19 @@
 details.card > summary {
   cursor: pointer;
 }
+
+/* Work board: the handoff row, stacked to fit a column */
+.workItem {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.workItem .handoffTitle {
+  white-space: normal;
+}
+
+.workProblem {
+  color: var(--color-danger);
+}

@@ -14,6 +14,7 @@ import { RoutineEditor } from '../routines/RoutineEditor'
 import { RoutinesPage } from '../routines/RoutinesPage'
 import { BotEditor, useBotEditor } from './BotEditor'
 import { TeamMapPage } from './TeamMapPage'
+import { WorkBoardPage } from './WorkBoardPage'
 import { TriggersPage } from '../triggers/TriggersPage'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
@@ -48,6 +49,15 @@ export function BotsScreen() {
     starting.current.add(activeBotId)
     void newThread(activeBotId).finally(() => starting.current.delete(activeBotId))
   }, [activeBotId, loadedThreads, newThread])
+
+  if (page === 'work') {
+    return (
+      <>
+        <WorkBoardPage />
+        <BotEditor />
+      </>
+    )
+  }
 
   if (page === 'triggers') {
     return (

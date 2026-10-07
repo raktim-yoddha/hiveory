@@ -1,25 +1,23 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useState, type DragEvent } from 'react'
 import { ArrowRight, Crown, Ellipsis, Network, Pencil, Plus, Trash2 } from 'lucide-react'
-import { GENERAL_TEAM, type Handoff, type Team } from '@shared/domain/bot'
+import { GENERAL_TEAM, type Team } from '@shared/domain/bot'
 import { BotAvatar } from '../../components/brand/BotAvatar'
 import { Button, IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
-import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
 import { useClis } from '../../stores/data'
 import { when } from '../routines/routine-text'
 import { useBotActions } from './bot-actions'
+import { useHandoffs } from './use-handoffs'
 import { useTeamDialog } from './TeamDialog'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
 const BOT_TYPE = 'application/x-hiveory-bot'
-// ponytail: handoffs are polled while the map is open; push them through state.changed if this ever matters.
-const HANDOFF_POLL_MS = 10_000
 
 /**
  * The team map (ADR 0028): one card per team, its Chief first, and the work bots are handing each
@@ -30,20 +28,9 @@ export function TeamMapPage() {
   const openTeam = useTeamDialog((s) => s.open)
   const actions = useBotActions()
   const clis = useClis((s) => s.clis)
-  const [handoffs, setHandoffs] = useState<Handoff[]>([])
+  const handoffs = useHandoffs()
   const [over, setOver] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<Team | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    const load = (): void => void api('bots.handoffs').then((h) => alive && setHandoffs(h), () => undefined)
-    load()
-    const timer = setInterval(load, HANDOFF_POLL_MS)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [bots])
 
   const name = (botId: string): string => bots.find((b) => b.id === botId)?.name ?? 'A deleted bot'
   const onDrop = (teamId: string) => (e: DragEvent<HTMLElement>) => {
