@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ApprovalLevel } from '@shared/domain/approval'
 import type { BotView } from '@shared/domain/bot'
 import type { ExtensionsInventory } from '@shared/domain'
+import { Select } from '../../components/ui/Select'
 import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useBots } from '../../stores/bots'
@@ -10,6 +12,12 @@ import { useRoutines } from '../../stores/routines'
 import { SkillsPanel } from '../settings/extensions/SkillsPanel'
 import { botOverview } from './bot-overview'
 import styles from './Bots.module.css'
+
+const APPROVAL_OPTIONS: Array<{ value: ApprovalLevel; label: string }> = [
+  { value: 'sends', label: 'Sending as you' },
+  { value: 'changes', label: 'Any change' },
+  { value: 'never', label: 'Never' }
+]
 
 /** Rough token count of a prompt (about four characters a token), for the preview's size line. */
 const tokens = (text: string): number => Math.round(text.length / 4)
@@ -84,6 +92,21 @@ export function OverviewTab({ bot }: { bot: BotView }) {
             <span className={styles.switchHint}>When it replies or a routine of its ends while you are away from Hiveory.</span>
           </span>
           <Toggle label={`Notifications from ${bot.name}`} checked={bot.notify} onChange={(notify) => void update(bot.id, { notify })} />
+        </div>
+      </section>
+      <section className={styles.card} aria-label="Approvals">
+        <div className={styles.switchRow}>
+          <span className={styles.switchText}>
+            <span className={styles.switchTitle}>Asks before</span>
+            <span className={styles.switchHint}>Its app and MCP actions wait for your yes, in its thread and on the work board. Reading is never asked.</span>
+          </span>
+          <Select
+            label={`When ${bot.name} asks`}
+            hideLabel
+            value={bot.approvals}
+            options={APPROVAL_OPTIONS}
+            onChange={(v) => void update(bot.id, { approvals: v as ApprovalLevel })}
+          />
         </div>
       </section>
       <details className={styles.card}>

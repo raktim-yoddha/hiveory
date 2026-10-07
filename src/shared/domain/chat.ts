@@ -59,6 +59,8 @@ export interface ChatSession {
   botId?: string
   /** A thread another bot opened to hand this bot work; results go back to `fromChatId`. */
   delegation?: { fromChatId: string; fromBotId: string; depth: number }
+  /** Held to reading and answering (a trigger's run, ADR 0028): no full access, no app changes. */
+  readOnly?: boolean
   /** The CLI's own session/thread id, used to resume the conversation. */
   providerSessionId?: string
   messages: ChatMessage[]

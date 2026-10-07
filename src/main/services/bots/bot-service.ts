@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { DEFAULT_APPROVAL_LEVEL } from '@shared/domain/approval'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -21,10 +22,10 @@ import type { Emit } from '../events'
 import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'blurb' | 'notify' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines' | 'teamId'>> & {
+export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'blurb' | 'notify' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines' | 'teamId' | 'approvals'>> & {
   computer?: Bot['computer'] | null
 }
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines' | 'teamId' | 'blurb' | 'notify'>> & {
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines' | 'teamId' | 'blurb' | 'notify' | 'approvals'>> & {
   /** null takes the computer away from the bot (its container stays, as the user's). */
   computer?: Bot['computer'] | null
 }
@@ -127,6 +128,7 @@ export class BotService {
       pinned: input.pinned ?? false,
       worksOn: input.worksOn ?? 'auto',
       routines: input.routines ?? false,
+      approvals: input.approvals ?? DEFAULT_APPROVAL_LEVEL,
       ...(input.computer ? { computer: input.computer } : {}),
       createdAt: now,
       updatedAt: now
@@ -184,6 +186,7 @@ export class BotService {
       model: bot.model,
       effort: bot.effort,
       autoApprove: options.readOnly ? false : bot.autoApprove,
+      ...(options.readOnly ? { readOnly: true } : {}),
       title,
       delegation
     })

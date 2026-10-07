@@ -52,9 +52,12 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   project's webhook goes elsewhere); then "⚡ When [app · account] [event] → [bot] should", the event's
   fields, "What it should do with each event", Create trigger; then YOUR TRIGGERS (name, app → bot,
   last event, instructions, delete, on/off). Without a Composio key or connected app: a pointer to Apps.
-- Work board: three cards, Working · Didn't finish · Done, each with a count; a row per handoff or
+- Work board: four cards, Needs you (approval cards) · Working · Didn't finish · Done, each with a count; a row per handoff or
   routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
+- Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
+  send or post as you / change something in your apps", the tool, "What it will send" (the arguments
+  as plain text), Decline, Allow. The bot's dot turns to waiting while one is open.
 - Team map: header (bot and team count, Create team); a card per team (name, count, ⋯ Rename /
   Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
   drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to
@@ -72,7 +75,8 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   on a schedule" inline); Post results to (a dedicated results thread · one of the bot's threads ·
   only each run's own thread); Instructions. Editing adds Delete and Run now.
 - Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Overview · Computer · Routines · Browser):
-  - **Overview**: name and blurb; Does; Can reach; Won't; Notifications switch; Prompt preview
+  - **Overview**: name and blurb; Does; Can reach; Won't; Notifications switch; Asks before (Sending as
+    you · Any change · Never, ADR 0029); Prompt preview
     (bytes ≈ tokens, expands to the exact text); Skills (the shared Skills panel, scoped to the bot:
     its own skills marked "This bot").
   - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is

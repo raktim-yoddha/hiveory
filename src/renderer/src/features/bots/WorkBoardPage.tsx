@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { ArrowRight, ListChecks } from 'lucide-react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { cx } from '../../lib/cx'
+import { useApprovals } from '../../stores/approvals'
 import { useBots } from '../../stores/bots'
 import { useRoutines } from '../../stores/routines'
 import { when } from '../routines/routine-text'
+import { ApprovalCard } from './ApprovalCard'
 import { useHandoffs } from './use-handoffs'
 import { workBoard, type WorkColumn, type WorkItem } from './work-board'
 import chat from '../chat/Chat.module.css'
@@ -24,6 +26,7 @@ export function WorkBoardPage() {
   const { bots, openBotThread } = useBots()
   const { runs, loaded, load } = useRoutines()
   const handoffs = useHandoffs()
+  const { requests, answer } = useApprovals()
   useEffect(() => {
     if (!loaded) void load()
   }, [loaded, load])
@@ -33,7 +36,7 @@ export function WorkBoardPage() {
   const board = workBoard(handoffs, runs, now)
   const name = (botId: string): string => bots.find((b) => b.id === botId)?.name ?? 'A deleted bot'
   const from = (item: WorkItem): string => (item.from.kind === 'bot' ? name(item.from.botId) : item.from.kind === 'trigger' ? 'Trigger' : 'Routine')
-  const total = board.working.length + board.unfinished.length + board.done.length
+  const total = requests.length + board.working.length + board.unfinished.length + board.done.length
 
   return (
     <section className={chat.surface} aria-label="Work board">
@@ -53,6 +56,23 @@ export function WorkBoardPage() {
           />
         ) : (
           <div className={styles.teamCards}>
+            <section className={styles.teamCard} aria-label="Needs you">
+              <header className={styles.teamCardHead}>
+                <h2 className={styles.cardTitle}>Needs you</h2>
+                <span className={styles.teamCount}>{requests.length}</span>
+              </header>
+              {requests.length === 0 ? (
+                <p className={styles.switchHint}>Nothing is waiting for your yes.</p>
+              ) : (
+                <ul className={styles.handoffList}>
+                  {requests.map((r) => (
+                    <li key={r.id}>
+                      <ApprovalCard request={r} botName={name(r.botId)} onAnswer={(allow) => void answer(r.id, allow)} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
             {COLUMNS.map((column) => (
               <section key={column.id} className={styles.teamCard} aria-label={column.title}>
                 <header className={styles.teamCardHead}>

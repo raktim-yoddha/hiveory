@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { APPROVAL_LEVELS, DEFAULT_APPROVAL_LEVEL } from '@shared/domain/approval'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { parseShortcut } from '@shared/queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
@@ -309,6 +310,7 @@ export const botSchema: z.ZodType<Bot> = z.object({
   // Bots saved before "Works on" existed keep the browser and their Linux computer.
   worksOn: z.enum(WORKS_ON).catch('auto'),
   routines: z.boolean().catch(false),
+  approvals: z.enum(APPROVAL_LEVELS).catch(DEFAULT_APPROVAL_LEVEL),
   computer: z
     .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
     .optional()

@@ -221,6 +221,7 @@ app.on('before-quit', () => {
   guard(log, 'Port forwards shutdown', () => c.ports.closeAll())
   guard(log, 'Bot computer tunnels', () => c.computers.closeAll())
   guard(log, 'Routine scheduler shutdown', () => c.routines.dispose())
+  guard(log, 'Approvals shutdown', () => c.approvals.dispose())
   guard(log, 'Trigger link shutdown', () => void c.triggers.close())
   guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())

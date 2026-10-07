@@ -133,7 +133,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   }
 
   /** A new thread for a bot: it works in the bot's folder, starting from the bot's engine and permissions. */
-  createThread(input: Pick<ChatSession, 'botId' | 'cwd' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'delegation'> & { title?: string }): ChatSession {
+  createThread(input: Pick<ChatSession, 'botId' | 'cwd' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'delegation' | 'readOnly'> & { title?: string }): ChatSession {
     const now = nowIso()
     const cliId = input.cliId && this.clis().includes(input.cliId) ? input.cliId : undefined
     const chat: ChatSession = {
@@ -146,6 +146,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       effort: cliId ? input.effort : undefined,
       autoApprove: input.autoApprove,
       ...(input.delegation ? { delegation: input.delegation } : {}),
+      ...(input.readOnly ? { readOnly: true } : {}),
       messages: [],
       createdAt: now,
       updatedAt: now
@@ -208,6 +209,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       fail('FORBIDDEN', "An agent's CLI and folder are fixed.")
     }
     if (chat.botId && patch.projectId !== undefined) fail('FORBIDDEN', "A bot's threads work in the bot's own folder.")
+    if (chat.readOnly && patch.autoApprove) fail('FORBIDDEN', 'A trigger run stays read-only.', { hint: 'Start a new thread to give the bot full access.' })
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
       if (started) fail('FORBIDDEN', 'The CLI is locked once a chat has started.', { hint: 'Start a new chat to use another CLI.' })

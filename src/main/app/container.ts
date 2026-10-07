@@ -6,6 +6,7 @@ import { EditorService } from '../services/editors/editor-service'
 import { FileService } from '../services/files/file-service'
 import { ConnectionService } from '../services/connections/connection-service'
 import { McpGateway } from '../services/connections/mcp-gateway'
+import { ApprovalService } from '../services/bots/approval-service'
 import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
@@ -218,6 +219,14 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     if (!chat || !bot?.notify || chat.delegation || routines.isRunThread(chatId)) return
     notifyDesktop(replyNotice(bot.name, chats.lastReply(chatId)), bot.id, chatId)
   })
+  // A bot's app calls wait here for the user's yes when its approval level asks (ADR 0029).
+  const approvals = new ApprovalService({
+    changed: () => emit('state.changed', { topic: 'approvals' }),
+    notify: (request) => {
+      const bot = bots?.find(request.botId)
+      notifyDesktop({ title: `${bot?.name ?? 'A bot'} is waiting for you`, body: `Allow ${request.tool}?` }, request.botId, request.threadId)
+    }
+  })
   // Outside events start read-only runs (ADR 0028): Composio's webhook, over Tailscale Funnel, to a loopback listener.
   const triggers = new TriggerService({
     store,
@@ -347,7 +356,12 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const browserFamily = { handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }
     const reach = bot ? botReach(bot, { browser: settings.get().browserUse, computer: settings.get().computerUse && computer.supported }) : []
     const families = bot
-      ? [botTools, ...(bot.routines ? [routineTools] : []), ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]), gateway]
+      ? [
+          botTools,
+          ...(bot.routines ? [routineTools] : []),
+          ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]),
+          approvals.guard(gateway, { botId: bot.id, threadId: chat!.id, level: bot.approvals, readOnly: chat!.readOnly === true })
+        ]
       : [...(settings.get().browserUse ? [browserFamily] : []), ...extraTools()]
     return handleBody(body, {
       list: () => families.flatMap((f) => f.definitions()),
@@ -399,6 +413,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     teams,
     routines,
     triggers,
+    approvals,
     computers,
     browser,
     computer,

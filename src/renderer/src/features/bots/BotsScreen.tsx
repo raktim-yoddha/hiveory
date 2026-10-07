@@ -5,6 +5,7 @@ import { Button, IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
+import { useApprovals } from '../../stores/approvals'
 import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
@@ -12,6 +13,7 @@ import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
 import { RoutineEditor } from '../routines/RoutineEditor'
 import { RoutinesPage } from '../routines/RoutinesPage'
+import { ApprovalCard } from './ApprovalCard'
 import { BotEditor, useBotEditor } from './BotEditor'
 import { TeamMapPage } from './TeamMapPage'
 import { WorkBoardPage } from './WorkBoardPage'
@@ -39,9 +41,11 @@ export function BotsScreen() {
   const bot = bots.find((b) => b.id === activeBotId)
   const cliName = useClis((s) => s.clis.find((c) => c.id === (thread?.cliId ?? bot?.cliId))?.displayName)
 
+  const { requests: approvals, load: loadApprovals, answer } = useApprovals()
   useEffect(() => {
     void load()
-  }, [load])
+    void loadApprovals()
+  }, [load, loadApprovals])
 
   // A bot always has a thread to type into: its first one is created when it is opened.
   useEffect(() => {
@@ -115,7 +119,10 @@ export function BotsScreen() {
             {cliName ? `Powered by ${cliName}` : 'No engine yet: choose one in its settings'}
           </span>
         </div>
-        <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
+        <StatusDot
+          status={approvals.some((r) => r.botId === bot.id) ? 'waiting-for-you' : bot.running > 0 ? 'working' : 'idle'}
+          detail={approvals.some((r) => r.botId === bot.id) ? 'Waiting for your yes' : bot.running > 0 ? `${bot.running} working` : 'Ready'}
+        />
         <IconButton label="Computer and browser" icon={<Monitor />} active={panelOpen} aria-pressed={panelOpen} onClick={() => setPanelOpen(!panelOpen)} />
         <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
       </header>
@@ -164,6 +171,11 @@ export function BotsScreen() {
                 : `Give ${bot.name} a task. It keeps its brief and memory in every thread.`
             }}
           />
+          {approvals
+            .filter((r) => r.threadId === thread.id)
+            .map((r) => (
+              <ApprovalCard key={r.id} request={r} botName={bot.name} onAnswer={(allow) => void answer(r.id, allow)} />
+            ))}
           <ChatComposer chat={thread} folder={false} placeholder={`Message ${bot.name}…`} />
         </>
       ) : (

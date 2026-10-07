@@ -58,4 +58,10 @@ describe('bot overview', () => {
   it('never claims the browser when Settings switched it off', () => {
     expect(botOverview(bot(), { ...base, switches: { browser: false, computer: false } }).reach[0]).toBe('The apps and MCP servers you connected.')
   })
+
+  it('says when it asks before acting in apps', () => {
+    expect(botOverview(bot({ approvals: 'sends' }), base).wont).toContain("Won't send or post as you without asking.")
+    expect(botOverview(bot({ approvals: 'changes' }), base).wont).toContain("Won't change anything in your apps without asking.")
+    expect(botOverview(bot({ approvals: 'never' }), base).wont.join(' ')).not.toContain('asking')
+  })
 })

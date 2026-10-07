@@ -21,6 +21,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.update', 'chat.delete', 'chat.send', 'chat.attach', 'chat.stop', 'chat.catalog',
   'bots.list', 'bots.create', 'bots.update', 'bots.delete', 'bots.threads', 'bots.newThread', 'bots.computer', 'bots.screen',
   'teams.list', 'teams.create', 'teams.rename', 'teams.delete', 'bots.handoffs', 'bots.preview',
+  'approvals.list', 'approvals.answer',
   'triggers.status', 'triggers.list', 'triggers.types', 'triggers.create', 'triggers.update', 'triggers.delete',
   'routines.list', 'routines.create', 'routines.update', 'routines.delete', 'routines.runNow', 'routines.runs',
   'hosts.check', 'hosts.suggest', 'hosts.status', 'hosts.listDir', 'ssh.pending', 'ssh.answer', 'git.info', 'git.validateBranch', 'git.init',

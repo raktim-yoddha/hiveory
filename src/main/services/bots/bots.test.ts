@@ -120,6 +120,9 @@ describe('bots', () => {
     bots.remember(bot.id, 'The product is called Hiveory.')
     const thread = bots.newThread(bot.id)
     expect(thread).toMatchObject({ botId: bot.id, cliId: 'codex', autoApprove: true, cwd: bots.home(bot.id) })
+    expect(bot.approvals).toBe('sends')
+    // A trigger's run: read-only whatever the bot's default, and marked so its app calls can't change anything.
+    expect(bots.newThread(bot.id, 'Event', undefined, { readOnly: true })).toMatchObject({ autoApprove: false, readOnly: true })
     const intro = bots.preamble(thread)!
     expect(intro).toContain('You are "Writer"')
     expect(intro).toContain('Draft release notes.')

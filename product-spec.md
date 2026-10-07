@@ -21,7 +21,10 @@ consult each other in any team. Delegation is bounded (only Chiefs delegate, at 
 deep, 20 handoffs an hour per thread). The team map shows each team and the work bots are handing
 each other; dragging a bot onto another team moves it there. The **work board** lists what the team owes: handoffs
 and routine and trigger runs, as Working, Didn't finish or Done, by their real state; finished work
-stays a day (Bots-only, capped history, ADR 0028). Bots never appear on a
+stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in your apps** (ADR
+0029): by default before it sends or posts as you, or before any change, or never, per bot; reading is
+never asked. The request waits in its thread and on the work board for Allow or Decline, and is
+declined after 15 minutes. A trigger's read-only run can't change or send anything in apps. Bots never appear on a
 project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

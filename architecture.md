@@ -624,6 +624,8 @@ RoutineService (ADR 0028; PersistedState.routines + routineRuns)
   activity(running, nextDue) ─▶ KeepAwake (powerSaveBlocker, mains power only)
 Composio ─HTTPS─▶ Tailscale Funnel (/hiveory/<random>) ─▶ TriggerIngress (127.0.0.1) ─▶ TriggerService
   (signature, freshness, dedupe) ─▶ RoutineService.runEvent ─▶ read-only bot thread, event fenced as data
+bot thread app/MCP call ─▶ ApprovalService.guard (ADR 0029: toolRisk × Bot.approvals × chat.readOnly)
+  read ─▶ McpGateway · change/send ─▶ refuse (read-only) | ask ─▶ approvals.list ◀─ ApprovalCard ─▶ approvals.answer
 ```
 
 ### Phone app (ADR 0027)

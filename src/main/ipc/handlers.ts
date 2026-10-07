@@ -439,17 +439,24 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
   'chat.create': ({ projectId }) => c.chats.create(projectId),
   'chat.update': ({ chatId, ...patch }) => c.chats.update(chatId, patch),
-  'chat.delete': ({ chatId }) => c.chats.delete(chatId),
+  'chat.delete': ({ chatId }) => {
+    c.approvals.drop({ threadId: chatId })
+    return c.chats.delete(chatId)
+  },
   'chat.send': ({ chatId, text, attachments }) => c.chats.send(chatId, text, attachments ?? []),
   'chat.attach': ({ chatId, name, mime, data }) => c.chats.attach(chatId, name, mime, data),
   'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
-  'chat.stop': ({ chatId }) => c.chats.stop(chatId),
+  'chat.stop': ({ chatId }) => {
+    c.approvals.drop({ threadId: chatId })
+    return c.chats.stop(chatId)
+  },
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
   'bots.list': () => c.bots.list(),
   'bots.create': (input) => c.bots.create(input),
   'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),
   'bots.delete': async ({ botId }) => {
     c.bots.delete(botId)
+    c.approvals.drop({ botId })
     c.routines.removeForBot(botId)
     await c.triggers.removeForBot(botId)
   },
@@ -489,6 +496,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'triggers.status': () => c.triggers.status(),
   'triggers.enableLink': ({ takeOver }) => c.triggers.enableLink(takeOver ?? false),
   'triggers.disableLink': () => c.triggers.disableLink(),
+  'approvals.list': () => c.approvals.list(),
+  'approvals.answer': ({ approvalId, allow }) => c.approvals.answer(approvalId, allow),
   'triggers.openFix': async () => {
     const url = c.triggers.status().fixUrl
     if (url && /^https:\/\/(login\.)?tailscale\.com\//.test(url)) await shell.openExternal(url)

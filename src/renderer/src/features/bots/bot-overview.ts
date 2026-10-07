@@ -43,6 +43,8 @@ export function botOverview(bot: BotView, c: { teamName: string; teamCount: numb
 
   const wont: string[] = []
   if (!bot.autoApprove) wont.push("Won't edit files or run commands without your approval.")
+  if (bot.approvals === 'changes') wont.push("Won't change anything in your apps without asking.")
+  else if (bot.approvals === 'sends') wont.push("Won't send or post as you without asking.")
   wont.push(bot.routines ? 'Routines it saves itself stay paused until you switch them on.' : "Won't act on a schedule.")
   if (bot.worksOn !== 'this-computer') wont.push("Won't touch your screen.")
   if (!bot.messaging && !bot.chief) wont.push("Won't message other bots.")

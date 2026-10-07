@@ -6,6 +6,7 @@ import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
+import { useApprovals } from '../../stores/approvals'
 import { useBots } from '../../stores/bots'
 import { useApp } from '../../stores/data'
 import { useBotActions } from './bot-actions'
@@ -18,6 +19,7 @@ import styles from './Bots.module.css'
 /** Bots mode's sidebar: the bots like a contact list, grouped by team (each Chief first). Right-click a bot for its actions. */
 export function BotsSidebar() {
   const { bots, teams, activeBotId, load, select, page, showWorkBoard, showRoutines, showTriggers, showTeamMap } = useBots()
+  const waiting = new Set(useApprovals((s) => s.requests).map((r) => r.botId))
   const openEditor = useBotEditor((s) => s.open)
   const openTeam = useTeamDialog((s) => s.open)
   const actions = useBotActions()
@@ -71,7 +73,11 @@ export function BotsSidebar() {
               </span>
               <span className={chat.chatMeta}>{bot.blurb || bot.brief.split('\n')[0] || 'No brief yet'}</span>
             </span>
-            {bot.running > 0 && <StatusDot status="working" detail={`${bot.running} working`} />}
+            {waiting.has(bot.id) ? (
+              <StatusDot status="waiting-for-you" detail="Waiting for your yes" />
+            ) : (
+              bot.running > 0 && <StatusDot status="working" detail={`${bot.running} working`} />
+            )}
           </button>
         )}
       />

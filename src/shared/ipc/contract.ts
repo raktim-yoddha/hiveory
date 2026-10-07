@@ -21,6 +21,7 @@ import type {
   HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
+import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
 import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger, type TriggerLinkStatus, type TriggerType } from '../domain/trigger'
@@ -87,6 +88,8 @@ const botFields = z.object({
   worksOn: z.enum(WORKS_ON).optional(),
   /** May run on a schedule (ADR 0028). */
   routines: z.boolean().optional(),
+  /** When it stops to ask before acting in apps (ADR 0029). */
+  approvals: z.enum(APPROVAL_LEVELS).optional(),
   /** Its team; moving it there makes it Chief only if that team has none (ADR 0028). */
   teamId: id.optional(),
   /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
@@ -543,6 +546,9 @@ export const requestSchemas = {
   'triggers.disableLink': none,
   /** Opens the page that fixes the link (a tailscale.com page main chose; never a URL from the renderer). */
   'triggers.openFix': none,
+  /** Bot calls waiting for the user's yes (ADR 0029). */
+  'approvals.list': none,
+  'approvals.answer': z.object({ approvalId: id, allow: z.boolean() }),
   'triggers.list': none,
   'triggers.types': z.object({ appId: appIdSchema }),
   'triggers.create': z.object({
@@ -811,6 +817,8 @@ export interface ResponseMap {
   'triggers.enableLink': TriggerLinkStatus
   'triggers.disableLink': TriggerLinkStatus
   'triggers.openFix': void
+  'approvals.list': ApprovalRequest[]
+  'approvals.answer': void
   'triggers.list': Trigger[]
   'triggers.types': TriggerType[]
   'triggers.create': Trigger
@@ -862,7 +870,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }
