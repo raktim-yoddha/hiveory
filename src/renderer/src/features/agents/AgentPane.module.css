@@ -17,6 +17,11 @@
 }
 
 /* Logo, name and status: fills the header, so it is both the drag grip and the right-click target. */
+.status {
+  display: inline-flex;
+  flex: none;
+}
+
 .identity {
   display: flex;
   flex: 1;

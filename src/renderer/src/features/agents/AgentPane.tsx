@@ -85,7 +85,8 @@ export function AgentPane({
               <button type="button" {...props} className={styles.identity} data-pane-grip aria-label={`${agent.petName} actions`} title="Right-click for actions">
                 <CliLogo cliId={agent.cliId} />
                 <span className={styles.name}>{agent.petName}</span>
-                <span data-pane-optional="status">
+                {/* The dot is the only status signal and takes no room, so it stays at any width. */}
+                <span className={styles.status}>
                   <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
                 </span>
               </button>
