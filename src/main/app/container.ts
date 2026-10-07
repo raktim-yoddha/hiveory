@@ -8,6 +8,7 @@ import { ConnectionService } from '../services/connections/connection-service'
 import { McpGateway } from '../services/connections/mcp-gateway'
 import { ApprovalService } from '../services/bots/approval-service'
 import { startWorkRun } from '../services/routines/work-run'
+import { RoutineFiles } from '../services/routines/routine-files'
 import { PromptLibrary } from '../services/chat/prompt-library'
 import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
@@ -191,6 +192,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   }
   // Bots' scheduled work (ADR 0028); while plugged in, the computer stays awake around due runs.
   const keepAwake = new KeepAwake({ start: () => powerSaveBlocker.start('prevent-app-suspension'), stop: (id) => powerSaveBlocker.stop(id) })
+  const routineFiles = new RoutineFiles(join(paths.chatsDir, 'routine-files'))
   const routines = new RoutineService({
     store,
     bots,
@@ -207,6 +209,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
         })
       ),
     // A run that ended or was missed while the user is elsewhere: a desktop notification that opens its thread.
+    files: routineFiles,
     outcome: (run) => {
       const bot = run.botId ? bots?.find(run.botId) : undefined
       if (bot?.notify !== false) notifyDesktop(runNotice(run, bot?.name ?? run.where), run.botId ?? '', bot ? run.threadId : undefined)
@@ -219,10 +222,20 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
         const workspace = workspaceRepo.find(target.workspaceId)
         return workspace ? `${cli} in ${workspaceRepo.project(target.projectId).name} · ${workspace.name}` : `${cli} in a removed workspace`
       },
-      chat: (target, title, prompt) => {
+      chat: (target, title, prompt, files) => {
         const chat = chats.create()
         chats.update(chat.id, { cliId: target.cliId, ...(target.model ? { model: target.model } : {}), title })
-        chats.send(chat.id, prompt)
+        chats.send(
+          chat.id,
+          prompt,
+          files.flatMap((path) => {
+            try {
+              return [chats.attachPath(chat.id, path)]
+            } catch {
+              return []
+            }
+          })
+        )
         return chat.id
       },
       workspace: (target, prompt) => {
@@ -434,6 +447,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     bots,
     teams,
     routines,
+    routineFiles,
     triggers,
     approvals,
     prompts,

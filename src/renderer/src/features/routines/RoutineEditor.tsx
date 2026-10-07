@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Play, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Paperclip, Play, Trash2 } from 'lucide-react'
 import { create } from 'zustand'
-import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, type RepeatPreset, type RoutineSchedule, type RoutineTarget, type RoutineView } from '@shared/domain/routine'
+import type { ChatAttachment } from '@shared/domain/chat'
+import { INTERVAL_MINUTES, MAX_ROUTINE_FILE_BYTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, type RepeatPreset, type RoutineSchedule, type RoutineTarget, type RoutineView } from '@shared/domain/routine'
 import { compileRepeat, cronProblem, nextRuns } from '@shared/domain/routine-schedule'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -13,7 +14,11 @@ import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
 import { useClis, useProjects, useWorkspaces } from '../../stores/data'
+import { api } from '../../lib/api'
+import { reportError, runAction } from '../../stores/notices'
 import { useRoutines } from '../../stores/routines'
+import { AttachmentChips } from '../chat/AttachmentChips'
+import { base64Of } from '../chat/useAttachments'
 import { cronDays, localZone, sameZone, when, WEEKDAYS } from './routine-text'
 import form from '../../components/ui/form.module.css'
 import styles from './Routines.module.css'
@@ -50,6 +55,8 @@ interface Draft {
   endsDate: string
   /** 'dedicated' · 'none' · a thread id */
   results: string
+  /** Copies kept for every run (ADR 0030). */
+  attachments: ChatAttachment[]
 }
 
 const pad = (n: number): string => String(n).padStart(2, '0')
@@ -84,7 +91,8 @@ const draftOf = (routine: RoutineView | undefined, target: Target, firstBot: str
     cron: s?.kind === 'cron' ? s.expr : '0 9 * * 1-5',
     timeoutMinutes: routine?.timeoutMinutes ? String(routine.timeoutMinutes) : '',
     endsDate: routine?.endsAt ? dateOf(new Date(routine.endsAt)) : '',
-    results: routine?.results === 'none' ? 'none' : (routine?.resultsThreadId ?? 'dedicated')
+    results: routine?.results === 'none' ? 'none' : (routine?.resultsThreadId ?? 'dedicated'),
+    attachments: routine?.attachments ?? []
   }
 }
 
@@ -123,6 +131,20 @@ function EditorDialog({ target }: { target: Target }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(routine, target, bots[0]?.id ?? ''))
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const addFiles = async (picked: File[]): Promise<void> => {
+    setAdding(true)
+    for (const file of picked.slice(0, MAX_ROUTINE_FILES - draft.attachments.length)) {
+      if (file.size > MAX_ROUTINE_FILE_BYTES) {
+        reportError(new Error(`${file.name} is over ${MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB.`), 'Add file')
+        continue
+      }
+      const copy = await runAction('Add file', async () => api('routines.addFile', { name: file.name, data: await base64Of(file) }))
+      if (copy) setDraft((d) => ({ ...d, attachments: [...d.attachments, copy] }))
+    }
+    setAdding(false)
+  }
   const set = <K extends keyof Draft>(key: K, value: Draft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
   const bot = draft.doer === 'bot' ? bots.find((b) => b.id === draft.botId) : undefined
@@ -187,7 +209,7 @@ function EditorDialog({ target }: { target: Target }) {
     const results = draft.results === 'none' ? ('none' as const) : ('thread' as const)
     const thread = draft.results !== 'none' && draft.results !== 'dedicated' ? draft.results : undefined
     const timeout = Number(draft.timeoutMinutes) || undefined
-    const fields = { name: draft.name.trim(), prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, results }
+    const fields = { name: draft.name.trim(), prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, results, attachments: draft.attachments }
     const doer = runsOn ? { target: runsOn } : { botId: draft.botId }
     const saved = routine
       ? await update(routine.id, {
@@ -377,6 +399,35 @@ function EditorDialog({ target }: { target: Target }) {
             placeholder="What to do on every run, where to look, and what to report. Keep anything irreversible for your approval."
             onChange={(v) => set('prompt', v)}
           />
+          <div className={styles.files}>
+            <AttachmentChips
+              items={draft.attachments.map((a) => ({ key: a.path, name: a.name, kind: a.kind, size: a.size }))}
+              onRemove={(key) => set('attachments', draft.attachments.filter((a) => a.path !== key))}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Paperclip />}
+              loading={adding}
+              disabled={draft.attachments.length >= MAX_ROUTINE_FILES}
+              onClick={() => fileRef.current?.click()}
+            >
+              {draft.attachments.length ? 'Add another file' : 'Add files for every run'}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                void addFiles([...(e.target.files ?? [])])
+                e.target.value = ''
+              }}
+            />
+            <span className={styles.note}>
+              Up to {MAX_ROUTINE_FILES} files, {MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB each. Hiveory keeps a copy, so each run gets them even if the originals move.
+            </span>
+          </div>
         </div>
       </Modal>
       {routine && (

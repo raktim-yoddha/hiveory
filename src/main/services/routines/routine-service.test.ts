@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '@shared/domain/bot'
-import type { ChatSession } from '@shared/domain/chat'
+import type { ChatAttachment, ChatSession } from '@shared/domain/chat'
 import type { Trigger } from '@shared/domain/trigger'
 import { MAX_ROUTINE_RUNS, type RoutineRun } from '@shared/domain/routine'
 import { parseState } from '../persistence/schema'
@@ -21,12 +21,17 @@ const T0 = Date.parse('2026-10-07T08:00:00.000Z')
 /** Threads in memory; a turn runs until the test ends it (optionally with an error). */
 class FakeChats extends EventEmitter<{ run: [chatId: string, running: boolean] }> {
   readonly sessions = new Map<string, ChatSession>()
-  readonly sent: Array<{ chatId: string; text: string }> = []
+  readonly sent: Array<{ chatId: string; text: string; files?: string[] }> = []
+  readonly missing = new Set<string>()
+  attachPath(_chatId: string, path: string): ChatAttachment {
+    if (this.missing.has(path)) throw new Error('That file no longer exists.')
+    return { name: path.split('/').pop()!, path, kind: 'file', size: 1 }
+  }
   readonly stopped: string[] = []
   failSend = false
-  send(chatId: string, text: string): void {
+  send(chatId: string, text: string, attachments: ChatAttachment[] = []): void {
     if (this.failSend) throw new Error('Choose a CLI first.')
-    this.sent.push({ chatId, text })
+    this.sent.push({ chatId, text, ...(attachments.length ? { files: attachments.map((a) => a.path) } : {}) })
     this.emit('run', chatId, true)
   }
   stop(chatId: string): void {
@@ -447,5 +452,32 @@ describe('routines on a chat or a Work agent (ADR 0030)', () => {
     expect(() => service.update(routine.id, { botId: 'b1', target: null })).toThrow('Allow Scout')
     const moved = service.update(routine.id, { target: { kind: 'workspace', projectId: 'p1', workspaceId: 'w1', cliId: 'claude' } })
     expect(moved.target).toMatchObject({ kind: 'workspace' })
+  })
+})
+
+describe("a routine's files (ADR 0030)", () => {
+  const file = (path: string): ChatAttachment => ({ name: path.split('/').pop()!, path, kind: 'file', size: 1 })
+  const withFiles = () => {
+    const removed: string[] = []
+    const ctx = setup(undefined, { files: { owns: (p) => p.startsWith('/data/routine-files/'), remove: (paths) => void removed.push(...paths) } })
+    return { ...ctx, removed }
+  }
+
+  it('attaches its copies to every run, leaving out one that went missing', () => {
+    const { service, chats, advance, daily9 } = withFiles()
+    service.create(daily9({ attachments: [file('/data/routine-files/a-report.csv'), file('/data/routine-files/b-gone.txt')] }))
+    chats.missing.add('/data/routine-files/b-gone.txt')
+    advance(HOUR)
+    expect(chats.sent[0]!.files).toEqual(['/data/routine-files/a-report.csv'])
+  })
+
+  it('refuses any other path, and deletes copies it no longer uses', () => {
+    const { service, daily9, removed } = withFiles()
+    expect(() => service.create(daily9({ attachments: [file('C:/Users/me/secret.txt')] }))).toThrow('Add the files again.')
+    const routine = service.create(daily9({ attachments: [file('/data/routine-files/a.csv'), file('/data/routine-files/b.csv')] }))
+    service.update(routine.id, { attachments: [file('/data/routine-files/b.csv')] })
+    expect(removed).toEqual(['/data/routine-files/a.csv'])
+    service.delete(routine.id)
+    expect(removed).toEqual(['/data/routine-files/a.csv', '/data/routine-files/b.csv'])
   })
 })

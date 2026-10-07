@@ -26,7 +26,18 @@ same scheduler"). Decided by the agent on the product owner's standing instructi
 - Shared helpers: `waitIdle` and `waitReady` now live in `agent-tools/deliver.ts` (used by agent
   tools and Work runs); `routines/work-run.ts` runs one Work routine.
 
+## Files for every run
+
+- A routine may carry up to 5 files (25 MB each). The editor's "Add files for every run" sends each to
+  `routines.addFile`, which keeps a copy under a safe name in `<userData>/chats/routine-files`; the
+  routine stores those copies. Main refuses any path outside that folder (a renderer or paired client
+  can't make a run read an arbitrary file), and deletes copies a routine drops or that go with it.
+- Each bot or chat run attaches them to its turn (a copy that went missing is left out and logged);
+  a Work run lists their paths after the instructions.
+
 ## Not done
+
+- Copies added in the editor and then cancelled stay in the folder until removed by hand.
 
 - A Work run reusing an idle agent instead of opening a new one.
 - Opening a Work run's agent from the run log (its workspace is shown by name only).

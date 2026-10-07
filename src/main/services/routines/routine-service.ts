@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '@shared/domain/bot'
-import type { ChatSession } from '@shared/domain/chat'
+import type { ChatAttachment, ChatSession } from '@shared/domain/chat'
 import {
   CATCH_UP_MS,
+  MAX_ROUTINE_FILES,
   MAX_ROUTINE_RUNS,
   MAX_ROUTINES_PER_BOT,
   type Routine,
@@ -19,7 +20,7 @@ import type { Emit } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
 export type RoutineInput = Pick<Routine, 'name' | 'prompt' | 'schedule' | 'startsAt' | 'timezone'> &
-  Partial<Pick<Routine, 'botId' | 'target' | 'endsAt' | 'timeoutMinutes' | 'enabled' | 'results' | 'resultsThreadId'>>
+  Partial<Pick<Routine, 'botId' | 'target' | 'attachments' | 'endsAt' | 'timeoutMinutes' | 'enabled' | 'results' | 'resultsThreadId'>>
 export type RoutinePatch = Partial<Omit<RoutineInput, 'botId' | 'target' | 'endsAt' | 'timeoutMinutes' | 'resultsThreadId'>> & {
   /** null clears it: a routine moves between a bot and a chat or Work target. */
   botId?: string | null
@@ -38,7 +39,9 @@ export interface RoutineDeps {
   store: StateStore
   bots: { find(botId: string): Bot | undefined; newThread(botId: string, title?: string, delegation?: undefined, options?: { readOnly?: boolean }): ChatSession }
   chats: {
-    send(chatId: string, text: string): void
+    send(chatId: string, text: string, attachments?: ChatAttachment[]): void
+    /** Lets a chat send a file by path (a routine's copy). */
+    attachPath(chatId: string, path: string): ChatAttachment
     stop(chatId: string): void
     note(chatId: string, text: string): void
     lastReply(chatId: string): string
@@ -49,11 +52,13 @@ export interface RoutineDeps {
   targets?: {
     /** "Codex in a new chat", "Claude Code in demo-app · main": who did a run, for its receipt. */
     describe(target: RoutineTarget): string
-    /** Starts a new chat with the target's CLI and sends the prompt; returns the chat's id (the run's thread). */
-    chat(target: Extract<RoutineTarget, { kind: 'chat' }>, title: string, prompt: string): string
+    /** Starts a new chat with the target's CLI and sends the prompt (and files); returns the chat's id (the run's thread). */
+    chat(target: Extract<RoutineTarget, { kind: 'chat' }>, title: string, prompt: string, files: string[]): string
     /** Opens an agent in the workspace and gives it the prompt once it is ready; `done` settles when it stops working. */
     workspace(target: Extract<RoutineTarget, { kind: 'workspace' }>, prompt: string): { agentId: string; done: Promise<{ ok: boolean; detail?: string }> }
   }
+  /** The folder of routines' file copies: only paths in it may be attached, and removed ones are deleted. */
+  files?: { owns(path: string): boolean; remove(paths: string[]): void }
   emit: Emit
   log: Logger
   /** Told after every change: how many runs are going, and when the next one is due (keep-awake). */
@@ -202,6 +207,7 @@ export class RoutineService {
       name: input.name.trim(),
       ...(input.target ? { target: input.target } : { botId: input.botId! }),
       prompt: input.prompt.trim(),
+      ...(input.attachments?.length ? { attachments: this.checkFiles(input.attachments) } : {}),
       schedule: input.schedule,
       startsAt: input.startsAt,
       timezone: input.timezone,
@@ -238,6 +244,10 @@ export class RoutineService {
       delete next.resultsThreadId
     }
     if (patch.botId !== undefined || patch.target !== undefined) this.checkDoer(next)
+    if (patch.attachments !== undefined) {
+      if (patch.attachments.length) next.attachments = this.checkFiles(patch.attachments)
+      else delete next.attachments
+    }
     const now = iso(this.now())
     // A new time (or switching it back on) starts from now: it never fires for times already past.
     if (timingChanged(patch)) next.checkedThrough = now
@@ -248,13 +258,14 @@ export class RoutineService {
     this.d.store.update((s) => {
       s.routines = s.routines.map((r) => (r.id === routineId ? next : r))
     })
+    this.dropFiles(current.attachments, next.attachments)
     this.changed()
     return this.view(routineId)
   }
 
   /** Removes the routine; its run log stays, and a run going now finishes. */
   delete(routineId: string): void {
-    this.get(routineId)
+    this.dropFiles(this.get(routineId).attachments)
     this.d.store.update((s) => {
       s.routines = s.routines.filter((r) => r.id !== routineId)
     })
@@ -264,6 +275,7 @@ export class RoutineService {
   /** A deleted bot takes its routines with it. */
   removeForBot(botId: string): void {
     if (!this.d.store.state.routines.some((r) => r.botId === botId)) return
+    for (const r of this.d.store.state.routines) if (r.botId === botId) this.dropFiles(r.attachments)
     this.d.store.update((s) => {
       s.routines = s.routines.filter((r) => r.botId !== botId)
     })
@@ -326,7 +338,7 @@ export class RoutineService {
         trigger === 'schedule'
           ? `This is a scheduled run of your routine "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
           : `The user started your routine "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
-      this.d.chats.send(thread.id, `${intro}\n\n${routine.prompt}`)
+      this.d.chats.send(thread.id, `${intro}\n\n${routine.prompt}`, this.filesFor(thread.id, routine))
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error)
       return this.record({ ...this.receipt(routine, when, trigger, 'failed', `${bot.name} could not start: ${why}`), ...(thread ? { threadId: thread.id } : {}) })
@@ -356,10 +368,12 @@ export class RoutineService {
     let run: RoutineRun
     try {
       if (target.kind === 'chat') {
-        const threadId = targets.chat(target, `${routine.name} · ${label}`, prompt)
+        const threadId = targets.chat(target, `${routine.name} · ${label}`, prompt, (routine.attachments ?? []).map((a) => a.path))
         run = this.record({ ...this.receipt(routine, when, trigger, 'running'), startedAt: iso(this.now()), threadId, where })
       } else {
-        const { agentId, done } = targets.workspace(target, prompt)
+        // A Work agent reads files by path: they are listed after the instructions.
+        const files = (routine.attachments ?? []).map((a) => `- ${a.path}`)
+        const { agentId, done } = targets.workspace(target, files.length ? `${prompt}\n\nFiles for this run:\n${files.join('\n')}` : prompt)
         run = this.record({ ...this.receipt(routine, when, trigger, 'running'), startedAt: iso(this.now()), agentId, where })
         const runId = run.id
         done.then(
@@ -470,6 +484,32 @@ ${outcome || '(No reply.)'}`)
     // A run that could not start, or was missed, is news too.
     if (run.status === 'failed' || run.status === 'missed') this.tell(run)
     return run
+  }
+
+  /** A routine's files must be copies Hiveory made (`routines.addFile`), never any other path. */
+  private checkFiles(files: ChatAttachment[]): ChatAttachment[] {
+    if (files.length > MAX_ROUTINE_FILES) fail('INVALID_INPUT', `A routine can carry ${MAX_ROUTINE_FILES} files at most.`)
+    if (!this.d.files || files.some((f) => !this.d.files!.owns(f.path))) fail('INVALID_INPUT', 'Add the files again.')
+    return files
+  }
+
+  /** Deletes the copies `before` had that `after` no longer uses. */
+  private dropFiles(before: ChatAttachment[] = [], after: ChatAttachment[] = []): void {
+    const kept = new Set(after.map((f) => f.path))
+    const gone = before.map((f) => f.path).filter((p) => !kept.has(p))
+    if (gone.length) this.d.files?.remove(gone)
+  }
+
+  /** A run's files, registered with its thread; a copy that went missing is left out, not fatal. */
+  private filesFor(threadId: string, routine: Routine): ChatAttachment[] {
+    return (routine.attachments ?? []).flatMap((f) => {
+      try {
+        return [this.d.chats.attachPath(threadId, f.path)]
+      } catch (error) {
+        this.d.log.warn(`Routine "${routine.name}": file ${f.name} is missing`, error)
+        return []
+      }
+    })
   }
 
   /** A routine runs on exactly one: a bot allowed to work on a schedule, or a chat or Work target. */

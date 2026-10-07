@@ -337,6 +337,10 @@ export const routineSchema: z.ZodType<Routine> = z.object({
     ])
     .optional(),
   prompt: z.string().min(1).max(MAX_ROUTINE_PROMPT),
+  attachments: z
+    .array(z.object({ name: str, path: str, kind: z.enum(['image', 'video', 'text', 'file']), size: z.number().int().min(0) }))
+    .optional()
+    .catch(undefined),
   schedule: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('once') }),
     z.object({ kind: z.literal('interval'), everyMinutes: z.number().int().min(INTERVAL_MINUTES.min).max(INTERVAL_MINUTES.max) }),

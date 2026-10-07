@@ -56,7 +56,8 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
 - Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)" and "A new agent in a
-  Work workspace" (Project, Workspace, CLI). Chat's sidebar header: Schedule a chat (calendar icon) beside
+  Work workspace" (Project, Workspace, CLI). Below the instructions: the routine's files (chips) and "Add files
+  for every run". Chat's sidebar header: Schedule a chat (calendar icon) beside
   New chat. A workspace's menu: Schedule a routine…
 - Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
   as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting

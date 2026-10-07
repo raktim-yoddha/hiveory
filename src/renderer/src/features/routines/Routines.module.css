@@ -449,3 +449,11 @@ button.range:hover {
   background: var(--color-accent);
   transform: translateX(-50%);
 }
+
+/* A routine's files */
+.files {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}

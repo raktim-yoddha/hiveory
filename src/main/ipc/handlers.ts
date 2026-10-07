@@ -515,6 +515,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'routines.list': ({ botId }) => c.routines.list(botId),
   'routines.create': (input) => c.routines.create(input),
   'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),
+  'routines.addFile': ({ name, data }) => c.routineFiles.add(name, data),
   'routines.delete': ({ routineId }) => c.routines.delete(routineId),
   'routines.runNow': ({ routineId }) => c.routines.runNow(routineId),
   'routines.runs': (filter) => c.routines.runs(filter),

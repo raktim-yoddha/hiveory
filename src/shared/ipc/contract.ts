@@ -24,7 +24,7 @@ import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary
 import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
 import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
-import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
+import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger, type TriggerLinkStatus, type TriggerType } from '../domain/trigger'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
@@ -127,6 +127,11 @@ const routineFields = z.object({
   endsAt: isoDate.optional(),
   timeoutMinutes: z.number().int().min(1).max(1440).optional(),
   results: z.enum(['thread', 'none']).optional(),
+  /** Copies made by `routines.addFile`; main refuses any other path. */
+  attachments: z
+    .array(z.object({ name: z.string().min(1).max(260), path: z.string().min(1).max(1000), kind: z.enum(['image', 'video', 'text', 'file']), size: z.number().int().min(0) }))
+    .max(MAX_ROUTINE_FILES)
+    .optional(),
   /** Post into this thread of the bot instead of a dedicated one. */
   resultsThreadId: id.optional(),
   enabled: z.boolean().optional()
@@ -594,6 +599,8 @@ export const requestSchemas = {
     resultsThreadId: id.nullable().optional()
   }),
   'routines.delete': z.object({ routineId: id }),
+  /** Keeps a copy of a file for a routine's runs; its result goes into the routine's `attachments`. */
+  'routines.addFile': z.object({ name: z.string().min(1).max(200), data: z.string().max(36_000_000) }),
   'routines.runNow': z.object({ routineId: id }),
   'routines.runs': z.object({ botId: id.optional(), routineId: id.optional() }),
   /** A screenshot of the bot's running Linux computer (base64 PNG) for the bot panel; null while it is not running. */
@@ -848,6 +855,7 @@ export interface ResponseMap {
   'routines.create': RoutineView
   'routines.update': RoutineView
   'routines.delete': void
+  'routines.addFile': ChatAttachment
   'routines.runNow': RoutineRun
   'routines.runs': RoutineRun[]
   'hosts.check': { platform: string; arch: string; node: string; installed: boolean; nodeInstalled: boolean; protocol: number }

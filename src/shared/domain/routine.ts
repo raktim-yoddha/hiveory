@@ -1,3 +1,5 @@
+import type { ChatAttachment } from './chat'
+
 /**
  * Routines (ADR 0028): scheduled work. Each run opens a fresh thread on a bot, a new chat in Chat mode,
  * or an agent in a Work workspace (ADR 0030) with the routine's instructions; a run is a receipt that
@@ -29,6 +31,8 @@ export interface Routine {
   target?: RoutineTarget
   /** What the bot is asked to do on every run. */
   prompt: string
+  /** Files every run gets (copies Hiveory keeps, ADR 0030): attached to a bot's or chat's turn, listed by path for a Work agent. */
+  attachments?: ChatAttachment[]
   schedule: RoutineSchedule
   /** The first run ("once": the only one; "interval": the anchor; cron: nothing runs before it). */
   startsAt: string
@@ -85,6 +89,8 @@ export interface RoutineView extends Routine {
 export const MAX_ROUTINE_NAME = 80
 export const MAX_ROUTINE_PROMPT = 24_000
 export const MAX_ROUTINES_PER_BOT = 50
+export const MAX_ROUTINE_FILES = 5
+export const MAX_ROUTINE_FILE_BYTES = 25 * 1024 * 1024
 /** Runs kept for the run log, newest first; older ones drop off. */
 export const MAX_ROUTINE_RUNS = 500
 export const INTERVAL_MINUTES = { min: 5, max: 1440 }

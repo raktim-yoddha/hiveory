@@ -39,7 +39,7 @@ const EXT_BY_MIME: Record<string, string> = {
 export const attachmentKind = (name: string): ChatAttachment['kind'] => KIND_BY_EXT[extname(name).toLowerCase()] ?? 'file'
 
 /** A file name that is safe on every platform. */
-const safeName = (name: string): string => basename(name).replace(/[^\w.() -]+/g, '_').slice(0, 120) || 'file'
+export const safeName = (name: string): string => basename(name).replace(/[^\w.() -]+/g, '_').slice(0, 120) || 'file'
 
 interface Run {
   child: ChildProcess

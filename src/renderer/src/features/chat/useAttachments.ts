@@ -32,7 +32,7 @@ const readAsDataUrl = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob)
   })
 
-const base64Of = async (blob: Blob): Promise<string> => (await readAsDataUrl(blob)).split(',')[1] ?? ''
+export const base64Of = async (blob: Blob): Promise<string> => (await readAsDataUrl(blob)).split(',')[1] ?? ''
 
 let counter = 0
 let pastedTexts = 0
