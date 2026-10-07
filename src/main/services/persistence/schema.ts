@@ -7,6 +7,7 @@ import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON } from '@shared/domain/bot'
+import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -29,6 +30,10 @@ export interface PersistedState {
   archive: ArchivedProject[]
   /** Bots mode teammates (ADR 0022); their threads are chats in the chats folder. */
   bots: Bot[]
+  /** Bots' scheduled work (ADR 0028). */
+  routines: Routine[]
+  /** The run log, newest first, at most MAX_ROUTINE_RUNS. */
+  routineRuns: RoutineRun[]
 }
 
 /** A removed project with everything that was in it: its workspaces, agents (to resume), layouts and open files. */
@@ -99,7 +104,9 @@ export const emptyState = (): PersistedState => ({
   editors: [],
   queenBrains: [],
   archive: [],
-  bots: []
+  bots: [],
+  routines: [],
+  routineRuns: []
 })
 
 const settingsSchema = z.object({
@@ -115,6 +122,7 @@ const settingsSchema = z.object({
   browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
   computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse),
   keepRunningInBackground: z.boolean().catch(DEFAULT_SETTINGS.keepRunningInBackground),
+  keepAwakeForRoutines: z.boolean().catch(DEFAULT_SETTINGS.keepAwakeForRoutines),
   shareOnTailnet: z.boolean().catch(DEFAULT_SETTINGS.shareOnTailnet),
   wallpaper: wallpaperSchema.catch(DEFAULT_SETTINGS.wallpaper),
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
@@ -280,6 +288,7 @@ export const botSchema: z.ZodType<Bot> = z.object({
   pinned: z.boolean().catch(false),
   // Bots saved before "Works on" existed keep the browser and their Linux computer.
   worksOn: z.enum(WORKS_ON).catch('auto'),
+  routines: z.boolean().catch(false),
   computer: z
     .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
     .optional()
@@ -287,6 +296,43 @@ export const botSchema: z.ZodType<Bot> = z.object({
   browserProfileId: str.optional().catch(undefined),
   createdAt: str,
   updatedAt: str
+})
+
+const isoDate = z.string().datetime({ offset: true })
+
+export const routineSchema: z.ZodType<Routine> = z.object({
+  id: str,
+  name: z.string().min(1).max(MAX_ROUTINE_NAME),
+  botId: str,
+  prompt: z.string().min(1).max(MAX_ROUTINE_PROMPT),
+  schedule: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('once') }),
+    z.object({ kind: z.literal('interval'), everyMinutes: z.number().int().min(INTERVAL_MINUTES.min).max(INTERVAL_MINUTES.max) }),
+    z.object({ kind: z.literal('cron'), expr: z.string().min(1).max(120), preset: z.enum(REPEAT_PRESETS).catch('custom') })
+  ]),
+  startsAt: isoDate,
+  timezone: z.string().min(1).max(64),
+  endsAt: isoDate.optional().catch(undefined),
+  timeoutMinutes: z.number().int().positive().optional().catch(undefined),
+  enabled: z.boolean().catch(false),
+  checkedThrough: isoDate,
+  createdAt: str,
+  updatedAt: str
+})
+
+export const routineRunSchema: z.ZodType<RoutineRun> = z.object({
+  id: str,
+  routineId: str,
+  routineName: str,
+  botId: str,
+  trigger: z.enum(['schedule', 'manual']),
+  prompt: str,
+  scheduledFor: str,
+  startedAt: str.optional(),
+  endedAt: str.optional(),
+  threadId: str.optional(),
+  status: z.enum(['running', 'completed', 'failed', 'missed', 'skipped']),
+  detail: str.optional()
 })
 
 /** At most one Chief of Staff survives a hand-edited or corrupt file: the first one. */
@@ -344,7 +390,9 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),
-      bots: oneChief(list(input.bots, botSchema))
+      bots: oneChief(list(input.bots, botSchema)),
+      routines: list(input.routines, routineSchema),
+      routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS)
     },
     rejected
   }

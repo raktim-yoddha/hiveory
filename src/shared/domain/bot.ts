@@ -24,6 +24,8 @@ export interface Bot {
   /** Durable facts the bot carries into every new thread. The user can read and edit them. */
   memory: string[]
   pinned: boolean
+  /** May run on a schedule (routines). Off until the user allows it (ADR 0028). */
+  routines: boolean
   /** Where the bot may use a computer (the bot panel's "Works on"). Which tools its threads get follows from it: see bot-reach. */
   worksOn: WorksOn
   /** The bot's own Linux computer: a Docker container here, or on an SSH host (ADR 0022). Absent = none set up. */

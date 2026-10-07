@@ -619,6 +619,9 @@ bot thread CLI ──MCP /mcp/<chatId>──▶ BotTools ─▶ BotService
                                         ├─ list_bots, ask_bot (waits for the teammate's turn)
                                         └─ delegate_bot ─▶ new thread on teammate ─▶ ChatService 'run' end
                                                              └─▶ [Result from …] sent into the Chief's thread (queued while busy)
+RoutineService (ADR 0028; PersistedState.routines + routineRuns)
+  one timer ─▶ due run ─▶ BotService.newThread + ChatService.send ─▶ 'run' end ─▶ run completed/failed
+  activity(running, nextDue) ─▶ KeepAwake (powerSaveBlocker, mains power only)
 ```
 
 ### Phone app (ADR 0027)

@@ -1,0 +1,51 @@
+# ADR 0028 — Bots automation: routines, triggers, teams
+
+Builds on ADR 0022 (Bots mode). Research and plans: `docs/plans/bots-automation.md`,
+`docs/plans/bots-feature-scope.md`, `docs/plans/bots-ui-wiring.md` (OpenMausBot, BridgeMind, Grok
+Bot, OpenAI dots, Claude Cowork, OpenClaw, Hermes Agent, Lindy).
+
+## Decisions (product owner, 2026-10-07)
+
+1. **History in Bots only, capped.** Run logs (and later usage and change journals) are allowed in
+   Bots mode, bounded. Rule 9 and the "task history" non-feature still hold for Work's Kanban.
+2. **Triggers arrive through Composio first**, then a link on the tailnet or a Hiveory server, then
+   `gh` polling. Trigger runs start read-only and treat their payload as untrusted data.
+3. **Real teams** (one Chief per team) replace ADR 0022's single Chief, with a team map of team cards.
+4. **Bots first.** Workspace routines (Work) and scheduled chats (Chat) follow on the same scheduler.
+5. **`croner`** is the one date engine, for the editor's preview and the scheduler.
+6. **Auto never reaches the user's screen** (ADR 0022 amendment, "Works on").
+
+## Routines (built: phase A1)
+
+- **Model** (`src/shared/domain/routine.ts`): name, bot, instructions, schedule, start, IANA
+  timezone, optional end and time limit, enabled, and `checkedThrough` (occurrences up to it are
+  handled). Schedules are `once`, `interval` (5–1440 minutes from the start) or five-field `cron`;
+  the editor's presets (daily, weekdays, weekly, selected days, monthly, last day of the month,
+  yearly) compile to cron at the start's wall-clock time (`routine-schedule.ts`). No seconds,
+  years, @macros or shell. At most 50 routines per bot.
+- **Permission:** `Bot.routines`, off by default. Creating a routine for a bot needs it; a bot that
+  loses it skips its scheduled runs with a reason. "Run now" is the user's own action and works anyway.
+- **Scheduler** (`RoutineService`): one timer for the next due run, sleeping at most 5 minutes, and
+  re-checked on resume and on mains-power changes. Each run opens a fresh thread on the bot
+  (`BotService.newThread`) and sends the instructions after a line saying it is a scheduled run.
+  The run ends with the thread's turn: `completed`, or `failed` with the engine's error.
+- **Rules (from OpenMausBot):** a run missed while Hiveory was closed or asleep still happens if it
+  is less than 12 hours late; older ones become a `missed` receipt; a series never replays every
+  occurrence it slept through. A run due while the previous run of the same routine is going is
+  `skipped`. A time limit stops the turn. A changed schedule, or switching a routine back on, starts
+  from now. Runs a closed app left going are marked failed at the next start. `once` switches itself off.
+- **Run log:** `PersistedState.routineRuns`, newest first, at most 500. A run snapshots the routine's
+  name and instructions, so edits and deletes never rewrite history. Deleting a bot deletes its
+  routines; the log stays.
+- **Keep awake:** `keepAwakeForRoutines` (on by default). While plugged in, Electron's
+  `powerSaveBlocker` holds the computer awake for the hour before the next run and while one runs.
+  A closed lid still sleeps and nothing wakes a computer: for 24/7, run Hiveory as a server.
+- **Where it runs:** wherever the services run. A desktop paired with a Hiveory server runs no
+  services, so routines run once, on the server.
+- **IPC:** `routines.list | create | update | delete | runNow | runs` (all remote-allowed), and
+  `state.changed` with topic `routines`.
+
+## Next
+
+Routine editor, the bot panel's Routines tab and the run log (A2); a bot proposing a routine through
+a confirm card, and Queen Bee actions (A3); triggers (T1); teams and the team map (M2); the work board (K1).

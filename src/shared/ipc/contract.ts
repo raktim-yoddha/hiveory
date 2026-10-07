@@ -22,6 +22,7 @@ import type {
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON, type BotComputerStatus, type BotView } from '../domain/bot'
+import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
@@ -80,6 +81,8 @@ const botFields = z.object({
   pinned: z.boolean().optional(),
   /** Where the bot may use a computer (the bot panel's "Works on"). */
   worksOn: z.enum(WORKS_ON).optional(),
+  /** May run on a schedule (ADR 0028). */
+  routines: z.boolean().optional(),
   /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
   computer: z
     .union([
@@ -90,6 +93,23 @@ const botFields = z.object({
       z.null()
     ])
     .optional()
+})
+const isoDate = z.string().datetime({ offset: true })
+/** A routine's editable fields; the service checks the timezone, the cron rule and that a run is left. */
+const routineFields = z.object({
+  name: z.string().trim().min(1).max(MAX_ROUTINE_NAME),
+  botId: id,
+  prompt: z.string().trim().min(1).max(MAX_ROUTINE_PROMPT),
+  schedule: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('once') }),
+    z.object({ kind: z.literal('interval'), everyMinutes: z.number().int().min(INTERVAL_MINUTES.min).max(INTERVAL_MINUTES.max) }),
+    z.object({ kind: z.literal('cron'), expr: z.string().trim().min(1).max(120), preset: z.enum(REPEAT_PRESETS) })
+  ]),
+  startsAt: isoDate,
+  timezone: z.string().min(1).max(64),
+  endsAt: isoDate.optional(),
+  timeoutMinutes: z.number().int().min(1).max(1440).optional(),
+  enabled: z.boolean().optional()
 })
 const folderPath = z.string().min(1).max(1000)
 const projectName = z.string().trim().min(1).max(120)
@@ -320,6 +340,7 @@ export const requestSchemas = {
       browserViewports: z.array(viewportSchema).max(32),
       computerUse: z.boolean(),
       keepRunningInBackground: z.boolean(),
+      keepAwakeForRoutines: z.boolean(),
       shareOnTailnet: z.boolean(),
       wallpaper: wallpaperSchema,
       surfaceOpacity: z.number().min(0).max(1),
@@ -495,6 +516,17 @@ export const requestSchemas = {
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
   'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
+  // Routines (ADR 0028): a bot's scheduled work, and the run log.
+  'routines.list': z.object({ botId: id.optional() }),
+  'routines.create': routineFields,
+  'routines.update': routineFields.partial().extend({
+    routineId: id,
+    endsAt: isoDate.nullable().optional(),
+    timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional()
+  }),
+  'routines.delete': z.object({ routineId: id }),
+  'routines.runNow': z.object({ routineId: id }),
+  'routines.runs': z.object({ botId: id.optional(), routineId: id.optional() }),
   /** A screenshot of the bot's running Linux computer (base64 PNG) for the bot panel; null while it is not running. */
   'bots.screen': z.object({ botId: id }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
@@ -721,6 +753,12 @@ export interface ResponseMap {
   'bots.newThread': ChatSession
   'bots.computer': BotComputerStatus
   'bots.screen': string | null
+  'routines.list': RoutineView[]
+  'routines.create': RoutineView
+  'routines.update': RoutineView
+  'routines.delete': void
+  'routines.runNow': RoutineRun
+  'routines.runs': RoutineRun[]
   'hosts.check': { platform: string; arch: string; node: string; installed: boolean; nodeInstalled: boolean; protocol: number }
   'hosts.suggest': { tailscale: TailnetStatus['state']; hosts: SshHostSuggestion[] }
   'hosts.status': Record<string, HostLinkStatus>
@@ -761,7 +799,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }

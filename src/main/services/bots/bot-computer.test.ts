@@ -16,6 +16,7 @@ const bot = (computer?: Bot['computer']): Bot => ({
   memory: [],
   pinned: false,
   worksOn: 'auto',
+  routines: false,
   ...(computer ? { computer } : {}),
   createdAt: '',
   updatedAt: ''

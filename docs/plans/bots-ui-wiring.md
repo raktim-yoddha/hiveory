@@ -221,7 +221,8 @@ routines per bot).
 2. ✔ (2026-10-07) The bot panel moves into AppShell's right column (the Work side panel's resize
    handle and saved width) with Computer · Browser tabs; Browser tab (scope `bot-<id>`, per-bot
    profile via `BrowserService`'s `profileFor`, `BotService.browserProfile`).
-3. A1: the routine model, scheduler, keep-awake, IPC, tests.
+3. ✔ (2026-10-07) A1: the routine model, scheduler, keep-awake, IPC, tests (ADR 0028). Results
+   posting ("Post results to") and attachments come with the editor in step 4.
 4. RoutineEditor + Routines tab + run log; then the calendar page (A2).
 5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat stays hidden until rooms exist.
 6. Teams (§7) + the team map with team cards.

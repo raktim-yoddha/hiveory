@@ -246,7 +246,7 @@ Tasks board into Work. What fits:
 
 Taken: (1) yes, Bots only and capped; (2) Composio first; (3) derived map M1, **then real teams M2
 (approved later the same day; see `bots-ui-wiring.md` §7)**; (4) Bots first.
-(5) `croner` is still open and is confirmed when A1 begins.
+(5) `croner`: approved. Recorded in ADR 0028; A1 built.
 
 1. Run logs and the "Finished recently" lane in Bots: allowed under rule 9 (scoped to Bots,
    retention capped)? *Recommended: yes, Bots only.*

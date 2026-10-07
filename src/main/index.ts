@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, net, protocol, safeStorage } from 'electron'
+import { app, BrowserWindow, Menu, net, powerMonitor, protocol, safeStorage } from 'electron'
 import electronUpdater from 'electron-updater'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -127,6 +127,12 @@ app.whenReady().then(async () => {
   const notice = c.store.load()
   guard(log, 'Main workspace adoption', () => c.workspaceRepo.adoptImplicitMainWorkspaces())
   guard(log, 'Chat history', () => c.chatStore.load(), report('Chat history'))
+  guard(log, 'Routines', () => c.routines.start(), report('Routines'))
+  // Waking up, or plugging in or out, re-checks what is due and whether to keep the computer awake.
+  const recheckRoutines = (): void => void guard(log, 'Routines', () => c.routines.tick())
+  powerMonitor.on('resume', recheckRoutines)
+  powerMonitor.on('on-ac', recheckRoutines)
+  powerMonitor.on('on-battery', recheckRoutines)
   // Status detection degrades to PTY heuristics without the hook server (ADR 0006).
   await guard(log, 'Hook server', () => c.hookServer.start())
   container.runtime.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
@@ -213,6 +219,7 @@ app.on('before-quit', () => {
   guard(log, 'SSH questions shutdown', () => c.sshAuth.close())
   guard(log, 'Port forwards shutdown', () => c.ports.closeAll())
   guard(log, 'Bot computer tunnels', () => c.computers.closeAll())
+  guard(log, 'Routine scheduler shutdown', () => c.routines.dispose())
   guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())
   guard(log, 'State flush', () => c.store.flush())

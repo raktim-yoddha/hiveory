@@ -446,7 +446,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'bots.list': () => c.bots.list(),
   'bots.create': (input) => c.bots.create(input),
   'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),
-  'bots.delete': ({ botId }) => c.bots.delete(botId),
+  'bots.delete': ({ botId }) => {
+    c.bots.delete(botId)
+    c.routines.removeForBot(botId)
+  },
   'bots.threads': ({ botId }) => {
     c.bots.get(botId)
     return c.chats.threads(botId)
@@ -474,6 +477,12 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     }
     return c.computers.status(botId)
   },
+  'routines.list': ({ botId }) => c.routines.list(botId),
+  'routines.create': (input) => c.routines.create(input),
+  'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),
+  'routines.delete': ({ routineId }) => c.routines.delete(routineId),
+  'routines.runNow': ({ routineId }) => c.routines.runNow(routineId),
+  'routines.runs': (filter) => c.routines.runs(filter),
   'bots.screen': async ({ botId }) => ((await c.computers.status(botId)).state === 'running' ? c.computers.screenshot(botId) : null),
   'hosts.listDir': async ({ destination, port, path }) => {
     const kit = await c.hosts.kit({ kind: 'ssh', destination, ...(port ? { port } : {}) })

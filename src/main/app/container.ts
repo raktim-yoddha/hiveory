@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, safeStorage, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, nativeImage, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
@@ -36,6 +36,8 @@ import { PortForwards } from '../services/hosts/ports'
 import { hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
 import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
+import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
+import { RoutineService } from '../services/routines/routine-service'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -165,6 +167,24 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // Each bot's own Linux computer, in Docker here or on an SSH host (ADR 0022).
   const computers = new BotComputers((id) => bots!.get(id), kits, (id) => bots!.home(id), log)
   const desktopTools = new DesktopTools(computers, chats)
+  // Bots' scheduled work (ADR 0028); while plugged in, the computer stays awake around due runs.
+  const keepAwake = new KeepAwake({ start: () => powerSaveBlocker.start('prevent-app-suspension'), stop: (id) => powerSaveBlocker.stop(id) })
+  const routines = new RoutineService({
+    store,
+    bots,
+    chats,
+    emit,
+    log,
+    activity: (running, nextDueAt) =>
+      keepAwake.set(
+        wantsAwake({
+          enabled: settings?.get().keepAwakeForRoutines ?? true,
+          onBattery: powerMonitor.isOnBatteryPower(),
+          running,
+          untilNextMs: nextDueAt === undefined ? undefined : nextDueAt - Date.now()
+        })
+      )
+  })
   chats.on('run', (chatId, running) => {
     if (!running) computers.release(chatId)
   })
@@ -330,6 +350,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     chatStore,
     chats,
     bots,
+    routines,
     computers,
     browser,
     computer,

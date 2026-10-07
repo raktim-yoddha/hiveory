@@ -25,6 +25,10 @@ never the user's screen), its Linux computer, this computer (the user's screen, 
 the browser only, or none. Settings' Browser use and Computer use still switch those off for every
 agent. A bot's threads share one set of browser pages in the bot's own browser profile; the user
 signs in to sites for it in the bot panel's Browser tab, never by putting a password in a chat.
+A bot the user allows to run on a schedule can have **routines** (ADR 0028): instructions run in a
+fresh thread once, every few minutes, or on a calendar rule in a chosen timezone. They run while
+Hiveory (or the user's Hiveory server) is running; a run missed by less than 12 hours still happens
+when it is back, and every run is kept in a run log.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the
@@ -409,7 +413,7 @@ Initial version does not include:
 - free-form agent-to-agent chat (Work agents coordinate through agent tools; bots through the Chief of Staff, ADR 0022)
 - remote collaboration (planned as one host layer for Work and Bots, ADR 0022)
 - global Kanban across projects
-- task history
+- task history in Work (Bots keeps a bounded run log for routines, ADR 0028)
 - Done Kanban column
 - user-controlled manual Kanban status
 - multiple user-facing Tasks inside a Workspace
