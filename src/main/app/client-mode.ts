@@ -1,11 +1,13 @@
 import { app, BrowserWindow, clipboard, safeStorage, shell } from 'electron'
 import { join } from 'node:path'
 import { isAppsHelpUrl } from '@shared/domain'
+import type { SshPrompt } from '@shared/domain/tailnet'
 import { fail } from '@shared/errors'
 import { CHANNELS, IPC_PREFIX, type Channel } from '@shared/ipc/contract'
 import { CLIENT_LOCAL_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
 import { registerIpc, type Handlers } from '../ipc/router'
 import { isTrustedSenderUrl } from '../ipc/trust'
+import { SshAuth } from '../services/hosts/ssh-auth'
 import { SshHostConnector } from '../services/hosts/ssh-host'
 import { Tailscale } from '../services/tailscale/tailscale'
 import { clearClientConfig, connectAndSave, describeServer, discover, openBase, RemoteBackend, type ClientConfig } from './client'
@@ -31,20 +33,18 @@ export const sshOptions = (): string[] => (process.env.HIVEORY_SSH_CONFIG ? ['-F
  * the same app; it only learns it is a client from app.info.
  */
 export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: Logger, targets: ReturnType<typeof rendererTargets>): Promise<() => void> => {
-  const ssh = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, sshOptions())
-  const tailscale = new Tailscale()
   const server = describeServer(config)
   const send = (event: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed() && !w.webContents.isDestroyed()) w.webContents.send(IPC_PREFIX + event, payload)
     }
   }
+  // The SSH tunnel to the server asks its questions (a password, a code) in this window too (ADR 0025).
+  const sshAuth = new SshAuth(paths.runtimeDir, send, log)
+  const ssh = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, sshOptions(), undefined, sshAuth)
+  const tailscale = new Tailscale()
+  // The way to the server opens once the window is up (it may need to ask something); the stream retries until then.
   let opened: { base: string; close(): void } = { base: 'http://127.0.0.1:0', close: () => undefined }
-  try {
-    opened = await openBase(config, ssh, tailscale)
-  } catch (error) {
-    log.warn(`Could not reach the Hiveory server ${server}`, error)
-  }
   const backend = new RemoteBackend(
     opened.base,
     config.token,
@@ -93,10 +93,14 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
           : () => fail('INVALID_INPUT', 'Not available while this window uses a Hiveory server.', { hint: 'It works on the server itself, or after Disconnect in Settings › Remote.' })
     ])
   ) as unknown as Handlers
+  // SSH questions: this window's own (its tunnel) are answered here, the server's there.
+  handlers['ssh.answer'] = (input) => (sshAuth.has(input.id) ? sshAuth.answer(input.id, input.answer) : (backend.call('ssh.answer', input) as Promise<void>))
+  handlers['ssh.pending'] = async () => [...sshAuth.pending(), ...((await backend.call('ssh.pending', undefined).catch(() => [])) as SshPrompt[])]
   registerIpc(handlers, (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile), log)
   createMainWindow(targets, log, undefined, false)
   log.info(`Client mode: using the Hiveory server ${server}`)
   return () => {
+    sshAuth.close()
     backend.stop()
     opened.close()
   }

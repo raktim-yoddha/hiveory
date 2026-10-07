@@ -12,6 +12,12 @@ export const hostKey = (host?: HostRef): string => (host ? `ssh:${host.destinati
 /** How a host is named to the user. */
 export const hostLabel = (host?: HostRef): string => (host ? host.destination : 'This computer')
 
+/**
+ * The link to a remote host (ADR 0025): `reconnecting` while its terminals are
+ * kept on the other side, `offline` once Hiveory gave up (the next use connects again).
+ */
+export type HostLinkStatus = 'connecting' | 'connected' | 'reconnecting' | 'offline'
+
 export interface Project {
   id: string
   name: string

@@ -11,6 +11,7 @@ import { useProjects } from '../../stores/data'
 import { useNavigation, type ProjectTab } from '../../stores/navigation'
 import { KanbanBoard } from '../kanban/KanbanBoard'
 import { CreateWorkspaceDialog } from '../workspace-create/CreateWorkspaceDialog'
+import { PortsMenu } from './PortsMenu'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
 import { PullRequestsTab } from './PullRequestsTab'
 import { WorkspacesTab } from './WorkspacesTab'
@@ -57,9 +58,12 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
       </header>
       <div className={styles.tabs}>
         <Tabs label="Project sections" options={TABS} value={tab} onChange={(next) => openProject(projectId, next)} />
-        <Button size="sm" variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-          New workspace
-        </Button>
+        <div className={styles.actions}>
+          {project.host && <PortsMenu projectId={projectId} host={project.host.destination} />}
+          <Button size="sm" variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
+            New workspace
+          </Button>
+        </div>
       </div>
       <div className={styles.content} role="tabpanel" aria-label={REGION[tab]}>
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>

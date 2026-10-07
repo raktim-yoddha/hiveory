@@ -27,3 +27,24 @@
 .iconOnly {
   padding: var(--space-1);
 }
+
+.dot {
+  flex: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+}
+
+.connected {
+  background: var(--color-success);
+}
+
+.connecting,
+.reconnecting {
+  background: var(--color-warning);
+}
+
+.offline {
+  background: var(--color-danger);
+}

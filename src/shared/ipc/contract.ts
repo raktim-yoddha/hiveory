@@ -17,7 +17,8 @@ import type {
   KanbanBoard,
   LayoutNode,
   Project,
-  WorkspaceView
+  WorkspaceView,
+  HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
@@ -38,7 +39,7 @@ export interface WallpaperImage {
   thumb: string
 }
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
-import type { Discovery, ShareStatus } from '../domain/tailnet'
+import type { Discovery, ShareStatus, RemotePort, SshHostSuggestion, SshPrompt, TailnetStatus } from '../domain/tailnet'
 
 /**
  * The complete renderer ↔ main contract. Main validates every payload against
@@ -494,6 +495,20 @@ export const requestSchemas = {
   'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
   'hosts.check': z.object({ destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }),
+  /** The SSH picker's hosts: Tailscale devices and ~/.ssh/config aliases (ADR 0025). */
+  'hosts.suggest': none,
+  /** The link to each remote host Hiveory uses, by host key (ADR 0025). */
+  'hosts.status': none,
+  // Ports listening on a remote project's machine, forwarded to this computer's loopback on request (ADR 0025).
+  'ports.list': z.object({ projectId: id }),
+  'ports.forward': z.object({ projectId: id, port: z.number().int().min(1).max(65535) }),
+  'ports.stop': z.object({ projectId: id, port: z.number().int().min(1).max(65535) }),
+  /** Opens a forwarded port in the system browser (only ports Hiveory forwarded). */
+  'ports.open': z.object({ projectId: id, port: z.number().int().min(1).max(65535) }),
+  /** Questions ssh is still waiting on (for a window that opened after they were asked). */
+  'ssh.pending': none,
+  /** The window's answer to a question ssh asked (null = cancelled). Never stored on disk. */
+  'ssh.answer': z.object({ id: z.string().regex(/^q[a-f0-9]{6}\d{1,9}$/), answer: z.string().max(4096).nullable() }),
   /** Folders on an SSH host, for picking a remote project folder. */
   'hosts.listDir': z.object({
     destination: sshDestination,
@@ -698,7 +713,15 @@ export interface ResponseMap {
   'bots.threads': ChatSummary[]
   'bots.newThread': ChatSession
   'bots.computer': BotComputerStatus
-  'hosts.check': { platform: string; arch: string; node: string; installed: boolean; protocol: number }
+  'hosts.check': { platform: string; arch: string; node: string; installed: boolean; nodeInstalled: boolean; protocol: number }
+  'hosts.suggest': { tailscale: TailnetStatus['state']; hosts: SshHostSuggestion[] }
+  'hosts.status': Record<string, HostLinkStatus>
+  'ssh.pending': SshPrompt[]
+  'ports.list': RemotePort[]
+  'ports.forward': { localPort: number }
+  'ports.stop': void
+  'ports.open': void
+  'ssh.answer': void
   'hosts.listDir': { path: string; home: string; dirs: string[] }
   'git.info': GitInfo
   'git.validateBranch': { problem: string | null }
@@ -748,6 +771,12 @@ export interface EventMap {
   /** Snapshot of the assistant message being streamed (or just finished). */
   'chat.event': { chatId: string; message: ChatMessage; summary: ChatSummary }
   'browser.changed': BrowserState
+  /** The link to a remote host changed (ADR 0025). */
+  'hosts.changed': { key: string; status: HostLinkStatus }
+  /** ssh needs an answer from the user (ADR 0025). */
+  'ssh.prompt': SshPrompt
+  /** That question was answered (here or in another window) or timed out. */
+  'ssh.promptDone': { id: string }
 }
 
 export type EventName = keyof EventMap
@@ -765,7 +794,10 @@ const EVENTS: Record<EventName, true> = {
   'files.changed': true,
   'voice.changed': true,
   'queen.hotkey': true,
-  'queen.update': true
+  'queen.update': true,
+  'hosts.changed': true,
+  'ssh.prompt': true,
+  'ssh.promptDone': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

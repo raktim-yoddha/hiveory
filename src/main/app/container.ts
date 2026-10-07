@@ -30,8 +30,10 @@ import { HookServer } from '../services/cli/hooks/hook-server'
 import { hostPtyBackend } from '../services/hosts/host-client'
 import { LocalHost } from '../services/hosts/local-host'
 import { SshHostConnector } from '../services/hosts/ssh-host'
+import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
-import type { HostRef } from '@shared/domain'
+import { PortForwards } from '../services/hosts/ports'
+import { hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -112,7 +114,27 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
   // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
   // HIVEORY_SSH_CONFIG points automated runs at their own ssh config (like HIVEORY_USER_DATA); users rely on ~/.ssh/config.
-  const sshHosts = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, process.env.HIVEORY_SSH_CONFIG ? ['-F', process.env.HIVEORY_SSH_CONFIG] : [])
+  // Its questions (passwords, passphrases, codes, new host keys) are asked in the window (ADR 0025).
+  const sshAuth = new SshAuth(paths.runtimeDir, (event, payload) => emit(event, payload as never), log)
+  const sshHosts = new SshHostConnector(
+    join(import.meta.dirname, 'host.js'),
+    log,
+    process.env.HIVEORY_SSH_CONFIG ? ['-F', process.env.HIVEORY_SSH_CONFIG] : [],
+    undefined,
+    sshAuth
+  )
+  // A dropped host reconnects on its own while its terminals wait there (ADR 0025); say so once per change.
+  const hostStatus = new Map<string, HostLinkStatus>()
+  const onHostStatus = (host: HostRef, status: HostLinkStatus): void => {
+    const before = hostStatus.get(hostKey(host))
+    hostStatus.set(hostKey(host), status)
+    emit('hosts.changed', { key: hostKey(host), status })
+    if (status === 'reconnecting') emit('app.notice', { level: 'warning', message: `Lost the connection to ${host.destination}. Reconnecting; its agents keep running there meanwhile.` })
+    if (status === 'connected' && before === 'reconnecting') emit('app.notice', { level: 'info', message: `Reconnected to ${host.destination}.` })
+    if (status === 'offline' && before === 'reconnecting') {
+      emit('app.notice', { level: 'warning', message: `Could not reconnect to ${host.destination}. Its agents stopped; they resume when you open them again.` })
+    }
+  }
   // The user's own Tailscale (ADR 0025): finding their devices, and serving this one to them.
   const tailscale = new Tailscale()
   const sharing = new Sharing(tailscale, log, paths.serverDevicesFile, app.getVersion())
@@ -213,8 +235,10 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     log,
     () => hookServer?.endpoint,
     (scope, changed) => emit('files.changed', { scope, paths: changed }),
-    (host) => emit('app.notice', { level: 'warning', message: `Lost the connection to ${host.destination}. Its agents stopped; they resume when you open them again.` })
+    (host, status) => onHostStatus(host, status)
   )
+  // Remote projects' ports, forwarded to this computer on request (ADR 0025).
+  const ports = new PortForwards((host) => hosts!.kit(host))
   const editors = new EditorService(store, layouts, (workspaceId) => agents.paneIds(workspaceId), emit)
   const browser = new BrowserService(store, settings, emit, log)
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
@@ -269,6 +293,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     runtime,
     localHost,
     sshHosts,
+    sshAuth,
+    ports,
     tailscale,
     sharing,
     hosts,

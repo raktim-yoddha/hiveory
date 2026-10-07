@@ -338,10 +338,19 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 ## Remote hosts (ADR 0022)
 
-- Add project › Remote (SSH): an SSH host and a folder there (typed, or browsed). The project's
-  files, git, worktrees and agents all stay on that machine; its sidebar row and page show the
-  host. Agent menus list the CLIs installed on that machine. Remote workspaces use terminal view.
-- Losing the connection stops that machine's agents with a notice; opening them again reconnects.
+- Add project › Remote (SSH): an SSH host and a folder there (typed, or browsed). The host is
+  picked from the user's Tailscale devices and ~/.ssh/config hosts, or typed (ADR 0026). The
+  project's files, git, worktrees and agents all stay on that machine; its sidebar row and page
+  show the host with a live link dot. Agent menus list the CLIs installed on that machine. Remote
+  workspaces use terminal view.
+- When ssh needs a password, key passphrase, one-time code or the OK for a new host's fingerprint,
+  Hiveory asks in a dialog. Passwords are kept in memory until quit, never on disk; a changed host
+  key is always refused. A machine without Node 20+ gets Hiveory's own (checksum-pinned) Node.
+- Losing the connection keeps that machine's agents running there: Hiveory reconnects on its own
+  for 5 minutes and the same terminals continue with what they printed meanwhile. Only after that
+  do they stop (with a notice); opening them again reconnects.
+- A remote project's Ports button lists what listens on that machine and forwards a port to this
+  computer (same number when free) and opens it in the browser.
 - Hiveory can run as a server (`hiveory --serve 7788`, no window, loopback only by default) so agents
   and bots keep working while this computer is off. Settings › Remote › Use a Hiveory server pairs
   this window with it (SSH tunnel or an address, plus the one-time code it printed); Hiveory then
@@ -355,7 +364,7 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   does the same with `hiveory --serve 7788 --tailscale`.
 
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
-  installs Hiveory's small host program in `~/.hiveory-host` there (Node 20+ required).
+  installs Hiveory's small host program in `~/.hiveory-host` there (with its own Node if needed).
 - Hiveory uses the user's own SSH setup, never prompts for or stores passwords, and never accepts
   a host key on its own.
 - Agent and shell terminals on this computer run in a separate host process; if it crashes,

@@ -5,6 +5,7 @@ import { useBrowser } from './browser'
 import { useChat } from './chat'
 import { useConnections } from './connections'
 import { useEditors } from './editors'
+import { useHostLinks, useSshPrompts } from './hosts'
 import { useNotices } from './notices'
 import { useVoice } from '../features/queen/voice'
 
@@ -58,7 +59,10 @@ export const installEventBridge = (): (() => void) => {
       useChat.getState().applyEvent(chatId, message, summary)
       if (summary.botId) useBots.getState().applyThread(summary)
     }),
-    subscribe('browser.changed', (state) => useBrowser.getState().set(state))
+    subscribe('browser.changed', (state) => useBrowser.getState().set(state)),
+    subscribe('hosts.changed', ({ key, status }) => useHostLinks.getState().set(key, status)),
+    subscribe('ssh.prompt', (prompt) => useSshPrompts.getState().add(prompt)),
+    subscribe('ssh.promptDone', ({ id }) => useSshPrompts.getState().remove(id))
   ]
   return () => {
     if (timer) clearTimeout(timer)

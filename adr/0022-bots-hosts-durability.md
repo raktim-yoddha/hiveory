@@ -1,5 +1,8 @@
 # ADR 0022 — Bots mode, one remote host layer, durability
 
+> Amended by ADR 0026: ssh now asks for passwords, codes and new host keys in Hiveory (memory only,
+> never on disk), brings its own Node, and remote terminals survive a dropped link for 5 minutes.
+
 Builds on ADR 0019–0021 and `docs/plans/remote-and-bots.md` (the research). The product owner
 decided this round:
 

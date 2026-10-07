@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ArrowUp, Folder, FolderOpen, Server } from 'lucide-react'
+import { ArrowUp, Folder, FolderOpen } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
+import { SshHostField } from './SshHostField'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
 import styles from './AddProjectDialog.module.css'
@@ -42,15 +43,12 @@ export function RemoteFolderPicker({ destination, onDestination, folder, onFolde
 
   return (
     <>
-      <TextField
-        label="SSH host"
+      <SshHostField
         value={destination}
-        placeholder="devbox or me@build.example.com"
         onChange={(v) => {
           onDestination(v)
           setListing(null)
         }}
-        adornment={<Server aria-hidden />}
       />
       <TextField
         label="Folder on that machine"
@@ -87,8 +85,8 @@ export function RemoteFolderPicker({ destination, onDestination, folder, onFolde
         </ul>
       )}
       <span className={styles.note}>
-        Uses your own SSH setup (~/.ssh/config, keys, agent). Connect once in a terminal to trust a new host. Agents, git and files stay on that machine;
-        it needs Node 20 or newer.
+        Uses your own SSH setup (~/.ssh/config, keys, agent). A password, a code or a new host's fingerprint is asked right here. Agents, git and
+        files stay on that machine; Hiveory brings its own Node if it has none.
       </span>
     </>
   )

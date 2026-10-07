@@ -58,22 +58,38 @@ export interface HostServeOptions {
   trash?: (path: string) => Promise<void>
 }
 
+/** Output kept per terminal while no client is attached (the newest part wins). */
+const MAX_KEPT = 2 * 1024 * 1024
+
+interface HostedTerminal {
+  child: pty.IPty
+  /** Output since the last client went away; null while a client is attached. */
+  kept: string[] | null
+  keptSize: number
+}
+
 /**
- * The host daemon (`hiveoryd`, ADR 0022): it owns PTYs, processes, files and git
- * on its machine and answers over any transport. Git, worktrees and files run
- * here through the same classes main uses locally, so paths and tools are
- * native to the machine. It never reaches back into Hiveory; when the transport
- * closes, its PTYs and watchers end.
+ * Everything a host daemon owns, independent of who is connected: its
+ * terminals, git, files. Locally one transport uses it for its whole life;
+ * on a remote machine it outlives SSH connections (ADR 0025).
  */
-export const serveHost = (transport: HostTransport, options: HostServeOptions = {}): void => {
-  const ptys = new Map<string, pty.IPty>()
-  let seq = 0
-  const event = (name: 'pty.data' | 'pty.exit' | 'files.changed', params: unknown): void => transport.send({ kind: 'event', event: name, params })
+export interface HostState {
+  terminals: Map<string, HostedTerminal>
+  /** Terminals that ended while no client was attached, with how they ended. */
+  ended: Map<string, { code: number | null; signal: number | null }>
+  services: Record<HostService, object>
+  /** The attached client, if any. */
+  out: HostTransport | null
+  seq: number
+}
+
+export const createHostState = (options: HostServeOptions = {}): HostState => {
   const git = new GitService()
-  const services: Record<HostService, object> = {
+  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0 }
+  state.services = {
     git,
     worktrees: new WorktreeService(git),
-    files: new FileService(options.trash ?? remoteTrash, (scope, paths) => event('files.changed', { scope, paths })),
+    files: new FileService(options.trash ?? remoteTrash, (scope, paths) => state.out?.send({ kind: 'event', event: 'files.changed', params: { scope, paths } })),
     fs: {
       exists: (path: string) => existsSync(path),
       isDirectory: (path: string) => {
@@ -84,13 +100,44 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
         }
       },
       mkdirp: (path: string) => void mkdirSync(path, { recursive: true }),
-      readDir: async (path: string) =>
-        (await readdir(path, { withFileTypes: true }).catch(() => [])).map((d) => ({ name: d.name, dir: d.isDirectory() })),
+      readDir: async (path: string) => (await readdir(path, { withFileTypes: true }).catch(() => [])).map((d) => ({ name: d.name, dir: d.isDirectory() })),
       writeText: async (path: string, content: string) => {
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, content, 'utf8')
       }
     }
+  }
+  return state
+}
+
+/** Ends every terminal and watcher (a local daemon whose app went away, or a remote one past its grace period). */
+export const disposeHostState = (state: HostState): void => {
+  for (const { child } of state.terminals.values()) {
+    try {
+      child.kill()
+    } catch {
+      // Already gone.
+    }
+  }
+  state.terminals.clear()
+  ;(state.services.files as FileService).closeAll()
+}
+
+/**
+ * Serves one client over `transport`. With `persist`, terminals and watchers
+ * survive the transport closing: their output is kept until a later client
+ * takes them back with `pty.attach`. Otherwise they end with it. A newer
+ * client replaces an older one (its connection is usually already dead).
+ */
+export const attachHost = (state: HostState, transport: HostTransport, persist: boolean): void => {
+  const previous = state.out
+  state.out = transport
+  // Terminals wait for their new client to take them back; their output is kept meanwhile.
+  for (const t of state.terminals.values()) t.kept ??= []
+  previous?.close()
+
+  const send = (frame: HostFrame): void => {
+    if (state.out === transport) transport.send(frame)
   }
 
   const spawn = (p: PtySpawnParams): HostCalls['pty.spawn']['result'] => {
@@ -104,22 +151,42 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
       // Bundled modern ConPTY renders far more faithfully than the inbox Windows one.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
-    const ptyId = `p${++seq}`
-    ptys.set(ptyId, child)
-    child.onData((data) => event('pty.data', { ptyId, data }))
+    const ptyId = `p${++state.seq}`
+    const terminal: HostedTerminal = { child, kept: null, keptSize: 0 }
+    state.terminals.set(ptyId, terminal)
+    child.onData((data) => {
+      if (terminal.kept && state.terminals.get(ptyId) === terminal) {
+        terminal.kept.push(data)
+        terminal.keptSize += data.length
+        while (terminal.keptSize > MAX_KEPT && terminal.kept.length > 1) terminal.keptSize -= terminal.kept.shift()!.length
+      } else state.out?.send({ kind: 'event', event: 'pty.data', params: { ptyId, data } })
+    })
     child.onExit(({ exitCode, signal }) => {
-      ptys.delete(ptyId)
-      event('pty.exit', { ptyId, code: exitCode, signal: signal ?? null })
+      state.terminals.delete(ptyId)
+      const exit = { code: exitCode, signal: signal ?? null }
+      if (terminal.kept || !state.out) state.ended.set(ptyId, exit)
+      else state.out.send({ kind: 'event', event: 'pty.exit', params: { ptyId, ...exit } })
     })
     return { ptyId, pid: child.pid }
   }
 
-  const exec = (p: ExecParams): Promise<HostCalls['exec']['result']> => runProgram(p)
+  const attach = ({ ptyId }: { ptyId: string }): HostCalls['pty.attach']['result'] => {
+    const terminal = state.terminals.get(ptyId)
+    if (!terminal) {
+      const ended = state.ended.get(ptyId)
+      state.ended.delete(ptyId)
+      return { alive: false, code: ended?.code ?? null, signal: ended?.signal ?? null }
+    }
+    const data = (terminal.kept ?? []).join('')
+    terminal.kept = null
+    terminal.keptSize = 0
+    return { alive: true, data }
+  }
 
   const invoke = async ({ service, method, args }: HostCalls['invoke']['params']): Promise<unknown> => {
     const allowed = HOST_SERVICES[service] as readonly string[] | undefined
     if (!allowed?.includes(method)) throw new Error(`Not allowed on this host: ${service}.${method}`)
-    const target = services[service] as Record<string, (...a: unknown[]) => unknown>
+    const target = state.services[service] as Record<string, (...a: unknown[]) => unknown>
     return target[method]!(...args)
   }
 
@@ -129,17 +196,19 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
         return { protocol: HOST_PROTOCOL, pid: process.pid, platform: process.platform, home: homedir() }
       case 'pty.spawn':
         return spawn(params as PtySpawnParams)
+      case 'pty.attach':
+        return attach(params as { ptyId: string })
       case 'pty.kill': {
         const { ptyId } = params as { ptyId: string }
         try {
-          ptys.get(ptyId)?.kill()
+          state.terminals.get(ptyId)?.child.kill()
         } catch {
           // Already gone.
         }
         return null
       }
       case 'exec':
-        return exec(params as ExecParams)
+        return runProgram(params as ExecParams)
       case 'which': {
         const env = { platform: process.platform, path: process.env.PATH ?? process.env.Path ?? '', pathExt: process.env.PATHEXT }
         const found: Record<string, string> = {}
@@ -157,17 +226,18 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
   }
 
   transport.onFrame((frame: HostFrame) => {
+    if (state.out !== transport) return
     if (frame.kind === 'call') {
       call(frame.method, frame.params).then(
-        (value) => transport.send({ kind: 'result', id: frame.id, ok: true, value: value ?? null }),
+        (value) => send({ kind: 'result', id: frame.id, ok: true, value: value ?? null }),
         (error: unknown) => {
           const failure = toFailure(error)
-          transport.send({ kind: 'result', id: frame.id, ok: false, error: failure.message, failure })
+          send({ kind: 'result', id: frame.id, ok: false, error: failure.message, failure })
         }
       )
     } else if (frame.kind === 'notify') {
       const p = frame.params as { ptyId: string; data?: string; cols?: number; rows?: number }
-      const child = ptys.get(p.ptyId)
+      const child = state.terminals.get(p.ptyId)?.child
       try {
         if (frame.method === 'pty.write' && p.data !== undefined) child?.write(p.data)
         else if (frame.method === 'pty.resize' && p.cols && p.rows) child?.resize(p.cols, p.rows)
@@ -178,14 +248,18 @@ export const serveHost = (transport: HostTransport, options: HostServeOptions = 
   })
 
   transport.onClose(() => {
-    for (const child of ptys.values()) {
-      try {
-        child.kill()
-      } catch {
-        // Already gone.
-      }
-    }
-    ptys.clear()
-    ;(services.files as FileService).closeAll()
+    if (state.out !== transport) return
+    state.out = null
+    if (!persist) return disposeHostState(state)
+    for (const t of state.terminals.values()) t.kept ??= []
   })
 }
+
+/**
+ * The host daemon (`hiveoryd`, ADR 0022) for one transport: it owns PTYs,
+ * processes, files and git on its machine and answers over any transport. Git,
+ * worktrees and files run here through the same classes main uses locally, so
+ * paths and tools are native to the machine. It never reaches back into
+ * Hiveory; when the transport closes, its PTYs and watchers end.
+ */
+export const serveHost = (transport: HostTransport, options: HostServeOptions = {}): void => attachHost(createHostState(options), transport, false)

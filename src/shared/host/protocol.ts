@@ -6,7 +6,8 @@ import type { AppError } from '../errors'
  * run over a local utility process and over an SSH channel, so Work and Bots
  * share one remote layer. Bump HOST_PROTOCOL only for breaking changes.
  */
-export const HOST_PROTOCOL = 1
+// 2: remote daemons outlive their connection; pty.attach takes a terminal back after a reconnect (ADR 0025).
+export const HOST_PROTOCOL = 2
 
 export interface PtySpawnParams {
   file: string
@@ -43,6 +44,11 @@ export interface HostCalls {
   hello: { params: { protocol: number }; result: { protocol: number; pid: number; platform: string; home: string } }
   'pty.spawn': { params: PtySpawnParams; result: { ptyId: string; pid: number } }
   'pty.kill': { params: { ptyId: string }; result: null }
+  /**
+   * Takes a terminal back after a reconnect: its output since the link dropped, or how it ended.
+   * Until attached, a surviving terminal's output is kept for it.
+   */
+  'pty.attach': { params: { ptyId: string }; result: { alive: true; data: string } | { alive: false; code: number | null; signal: number | null } }
   /** Runs a program without a shell and returns its output. */
   exec: { params: ExecParams; result: { code: number | null; stdout: string; stderr: string } }
   /** Where each named program is on the host's login PATH. */

@@ -597,6 +597,15 @@ Settings › Remote ─client.discover─▶ Tailscale (CLI: status --json) ─�
 settings.shareOnTailnet ─▶ Sharing ─▶ startServer(hosts: 127.0.0.1 + own 100.x, re-read every 30 s)
 ```
 
+### Remote SSH (ADR 0026)
+
+```text
+ssh ──SSH_ASKPASS=Hiveory exe (node mode)──▶ SshAuth loopback ─ssh.prompt─▶ SshPromptDialog ─ssh.answer─▶ ssh
+HostRegistry ─ssh -T … host.mjs --attach─▶ unix socket ─▶ hiveoryd --daemon (terminals outlive the link)
+   on drop: reconnecting (backoff ≤5 min) ─▶ HostClient.adopt(old) ─pty.attach─▶ kept output replayed
+PortForwards ─exec cat /proc/net/tcp─▶ list;  ─ssh -L─▶ localhost:<same port>
+```
+
 `Tailscale` (`services/tailscale`) only reads the user's own Tailscale. `Sharing` (`app/sharing.ts`)
 owns the server for both the desktop switch and `--serve [--tailscale]`.
 

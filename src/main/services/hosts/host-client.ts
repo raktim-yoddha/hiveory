@@ -7,6 +7,13 @@ const CALL_TIMEOUT_MS = 30_000
 
 type ExitListener = (exit: { exitCode: number | null; signal: number | null }) => void
 
+interface PtyListeners {
+  data: (d: string) => void
+  exit: ExitListener
+  /** The terminal now lives on another client (after a reconnect). */
+  moved?: (client: HostClient) => void
+}
+
 /**
  * The client side of the execution-host protocol (ADR 0022): calls with
  * timeouts, fire-and-forget notifications, and PTY events routed to their
@@ -16,12 +23,16 @@ type ExitListener = (exit: { exitCode: number | null; signal: number | null }) =
 export class HostClient {
   private seq = 0
   private readonly calls = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>()
-  private readonly ptys = new Map<string, { data: (d: string) => void; exit: ExitListener }>()
+  private readonly ptys = new Map<string, PtyListeners>()
   private readonly closeListeners: Array<() => void> = []
   private readonly fileListeners: Array<(e: HostEvents['files.changed']) => void> = []
   private closed = false
 
-  constructor(private readonly transport: HostTransport) {
+  constructor(
+    private readonly transport: HostTransport,
+    /** A remote daemon keeps its terminals when the link drops (ADR 0025): they wait for `adopt` instead of exiting. */
+    private readonly options: { keepPtys?: boolean } = {}
+  ) {
     transport.onFrame((frame) => this.onFrame(frame))
     transport.onClose(() => this.onClose())
   }
@@ -47,8 +58,34 @@ export class HostClient {
     if (!this.closed) this.transport.send({ kind: 'notify', method, params })
   }
 
-  bind(ptyId: string, listeners: { data: (d: string) => void; exit: ExitListener }): void {
+  bind(ptyId: string, listeners: PtyListeners): void {
     this.ptys.set(ptyId, listeners)
+  }
+
+  /**
+   * Takes over the terminals of a client whose link dropped (ADR 0025): each one the
+   * daemon still runs continues here with the output it produced meanwhile; one that
+   * ended meanwhile reports its exit.
+   */
+  async adopt(from: HostClient): Promise<void> {
+    const moving = [...from.ptys]
+    from.ptys.clear()
+    for (const [ptyId, listeners] of moving) {
+      const result = await this.call('pty.attach', { ptyId }).catch(() => ({ alive: false as const, code: null, signal: null }))
+      if (!result.alive) {
+        listeners.exit({ exitCode: result.code, signal: result.signal })
+        continue
+      }
+      this.ptys.set(ptyId, listeners)
+      listeners.moved?.(this)
+      if (result.data) listeners.data(result.data)
+    }
+  }
+
+  /** Gives up on kept terminals (the host stayed unreachable): their panes say they ended. */
+  abandon(): void {
+    for (const pty of this.ptys.values()) pty.exit({ exitCode: null, signal: null })
+    this.ptys.clear()
   }
 
   onClosed(listener: () => void): void {
@@ -106,8 +143,8 @@ export class HostClient {
     }
     this.calls.clear()
     // A local host takes its PTYs with it; the processes are gone, so their panes say so.
-    for (const pty of this.ptys.values()) pty.exit({ exitCode: null, signal: null })
-    this.ptys.clear()
+    // A remote daemon keeps them for a while: they wait to be adopted by the next connection.
+    if (!this.options.keepPtys) this.abandon()
     for (const l of this.closeListeners) l()
   }
 }
@@ -176,14 +213,23 @@ class HostedPty implements PtyHandle {
 
   private startRemote(client: HostClient, spec: PtySpawnParams): void {
     const at = this.size ?? { cols: spec.cols, rows: spec.rows }
+    // The client this terminal talks through; a reconnect moves it to the new one.
+    let live = client
     client.call('pty.spawn', { ...spec, ...at }).then(
       ({ ptyId }) => {
-        client.bind(ptyId, { data: (d) => this.dataListeners.forEach((l) => l(d)), exit: (e) => this.exitListeners.forEach((l) => l(e)) })
+        client.bind(ptyId, {
+          data: (d) => this.dataListeners.forEach((l) => l(d)),
+          exit: (e) => this.exitListeners.forEach((l) => l(e)),
+          moved: (next) => {
+            live = next
+            if (this.size) next.notify('pty.resize', { ptyId, ...this.size })
+          }
+        })
         this.ready(
           {
-            write: (data) => client.notify('pty.write', { ptyId, data }),
-            resize: (cols, rows) => client.notify('pty.resize', { ptyId, cols, rows }),
-            kill: () => void client.call('pty.kill', { ptyId }).catch(() => undefined)
+            write: (data) => live.notify('pty.write', { ptyId, data }),
+            resize: (cols, rows) => live.notify('pty.resize', { ptyId, cols, rows }),
+            kill: () => void live.call('pty.kill', { ptyId }).catch(() => undefined)
           },
           { ...spec, ...at }
         )

@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
+import { SshPromptDialog } from './SshPromptDialog'
 import { cx } from '../../lib/cx'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
@@ -138,6 +139,7 @@ export function AppShell() {
         )}
       </div>
       <AddProjectDialog />
+      <SshPromptDialog />
       <Toasts />
     </div>
   )

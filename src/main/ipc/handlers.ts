@@ -1,5 +1,6 @@
 import { BrowserWindow, app, clipboard, dialog, safeStorage, shell, systemPreferences } from 'electron'
 import { connectAndSave, discover } from '../app/client'
+import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
 import { isAppsHelpUrl } from '@shared/domain'
@@ -16,6 +17,14 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { PreviousProject, Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
+import type { HostRef } from '@shared/domain'
+
+/** The machine a remote project lives on (ports exist only there). */
+const remoteHost = (c: Container, projectId: string): HostRef => {
+  const host = c.projects.get(projectId).host
+  if (!host) fail('INVALID_INPUT', 'This project is on this computer; its ports need no forwarding.')
+  return host!
+}
 
 /** Maps each contract channel onto an application service. No logic lives here. */
 /**
@@ -471,13 +480,24 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const entries = await kit.fs.readDir(dir)
     return { path: dir, home: kit.home, dirs: entries.filter((e) => e.dir && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b)) }
   },
+  'hosts.suggest': () => suggestHosts(c.tailscale),
+  'hosts.status': () => c.hosts.statuses(),
+  'ssh.pending': () => c.sshAuth.pending(),
+  'ports.list': ({ projectId }) => c.ports.list(remoteHost(c, projectId)),
+  'ports.forward': async ({ projectId, port }) => ({ localPort: await c.ports.forward(remoteHost(c, projectId), port) }),
+  'ports.stop': ({ projectId, port }) => c.ports.stop(remoteHost(c, projectId), port),
+  'ports.open': async ({ projectId, port }) => {
+    const local = c.ports.localPort(remoteHost(c, projectId), port)
+    if (!local) fail('NOT_FOUND', 'Forward that port first.')
+    await shell.openExternal(`http://localhost:${local}/`)
+  },
+  'ssh.answer': ({ id, answer }) => c.sshAuth.answer(id, answer),
   'hosts.check': async (target) => {
-    const info = await c.sshHosts.probe(target)
-    const installed = await c.sshHosts.deploy(target)
+    const { info, installed, nodeInstalled } = await c.sshHosts.deploy(target)
     const { client } = await c.sshHosts.connect(target)
     try {
       const hello = await client.call('hello', { protocol: HOST_PROTOCOL })
-      return { platform: info.platform, arch: info.arch, node: info.node, installed, protocol: hello.protocol }
+      return { platform: info.platform, arch: info.arch, node: info.node, installed, nodeInstalled, protocol: hello.protocol }
     } finally {
       client.close()
     }

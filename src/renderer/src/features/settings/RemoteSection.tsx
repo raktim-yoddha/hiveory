@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { CheckCircle2, Server } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
-import { TextField } from '../../components/ui/TextField'
+import { SshHostField } from '../projects/SshHostField'
 import { api } from '../../lib/api'
 import { useApp } from '../../stores/data'
 import { runAction } from '../../stores/notices'
@@ -52,14 +52,12 @@ export function RemoteSection() {
       {!onServer && <ShareThisComputer />}
       <SettingRow
         title="Check an SSH host"
-        description="An alias from ~/.ssh/config or user@host. The check installs Hiveory's small host program in ~/.hiveory-host on that machine (it needs Node 20 or newer) and connects to it."
+        description="An alias from ~/.ssh/config or user@host. The check installs Hiveory's small host program in ~/.hiveory-host on that machine (with its own Node when the machine has none) and connects to it."
         control={null}
       />
       <div ref={sshField}>
-        <TextField
-          label="SSH host"
+        <SshHostField
           value={destination}
-          placeholder="devbox or me@build.example.com"
           onChange={setDestination}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && valid && !busy) void check()
@@ -78,8 +76,8 @@ export function RemoteSection() {
         </p>
       )}
       <SettingRow
-        title="Before the first check"
-        description="Connect once in a terminal (ssh <host>) so you can check and accept its host key. Hiveory never accepts host keys on its own."
+        title="Passwords, codes and new hosts"
+        description="When ssh needs a password, a key passphrase, a one-time code or your OK for a new host's fingerprint, Hiveory asks here. Passwords stay in memory until Hiveory quits, never on disk. A changed host key is always refused."
         control={null}
       />
       <ServerConnection />
