@@ -115,6 +115,7 @@ const settingsSchema = z.object({
   browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
   computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse),
   keepRunningInBackground: z.boolean().catch(DEFAULT_SETTINGS.keepRunningInBackground),
+  shareOnTailnet: z.boolean().catch(DEFAULT_SETTINGS.shareOnTailnet),
   wallpaper: wallpaperSchema.catch(DEFAULT_SETTINGS.wallpaper),
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
   wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),

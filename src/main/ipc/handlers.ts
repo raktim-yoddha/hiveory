@@ -1,5 +1,5 @@
 import { BrowserWindow, app, clipboard, dialog, safeStorage, shell, systemPreferences } from 'electron'
-import { connectAndSave } from '../app/client'
+import { connectAndSave, discover } from '../app/client'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
 import { isAppsHelpUrl } from '@shared/domain'
@@ -446,11 +446,14 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   // This window runs its own services; connecting pairs with a server and relaunches as its client (ADR 0022).
   'client.status': () => ({ mode: 'local' as const, connected: false }),
   'client.connect': async (input) => {
-    const server = await connectAndSave(input, c.sshHosts, c.paths.clientFile, safeStorage)
+    const server = await connectAndSave(input, c.sshHosts, c.tailscale, c.paths.clientFile, safeStorage)
     relaunch()
     return { mode: 'client' as const, server, connected: true }
   },
   'client.disconnect': () => undefined,
+  'client.discover': () => discover(c.tailscale),
+  'share.status': () => c.sharing.status(),
+  'share.revoke': ({ deviceId }) => c.sharing.revoke(deviceId),
   'bots.computer': async ({ botId, action }) => {
     if (action === 'start') await c.computers.ensure(botId)
     if (action === 'stop') await c.computers.stop(botId)

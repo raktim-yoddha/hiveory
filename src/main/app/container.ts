@@ -56,6 +56,8 @@ import { WorkspaceService } from '../services/workspaces/workspace-service'
 import { guard } from './guard'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
+import { Sharing } from './sharing'
+import { Tailscale } from '../services/tailscale/tailscale'
 
 export type Container = ReturnType<typeof createContainer>
 
@@ -111,6 +113,9 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
   // HIVEORY_SSH_CONFIG points automated runs at their own ssh config (like HIVEORY_USER_DATA); users rely on ~/.ssh/config.
   const sshHosts = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, process.env.HIVEORY_SSH_CONFIG ? ['-F', process.env.HIVEORY_SSH_CONFIG] : [])
+  // The user's own Tailscale (ADR 0025): finding their devices, and serving this one to them.
+  const tailscale = new Tailscale()
+  const sharing = new Sharing(tailscale, log, paths.serverDevicesFile, app.getVersion())
   const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend)
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
 
@@ -264,6 +269,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     runtime,
     localHost,
     sshHosts,
+    tailscale,
+    sharing,
     hosts,
     hookServer,
     workspaceRepo,

@@ -18,11 +18,13 @@ const handlers = new Proxy({} as Handlers, {
 })
 
 let server: HiveoryServer | null = null
-const start = async () => {
+const start = async (ownerPairing?: (address: string) => Promise<boolean>) => {
   const dir = mkdtempSync(join(tmpdir(), 'hv-server-'))
-  server = await startServer({ port: 0, host: '127.0.0.1', handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0' })
+  server = await startServer({ port: 0, hosts: ['127.0.0.1'], handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0', ownerPairing })
   const base = `http://127.0.0.1:${server.port}`
-  const pair = async (code = server!.pairingCode()) => fetch(`${base}/pair`, { method: 'POST', body: JSON.stringify({ code, name: 'Test' }) })
+  /** null sends no code at all (the owner's code-less pairing). */
+  const pair = async (code: string | null = server!.pairingCode()) =>
+    fetch(`${base}/pair`, { method: 'POST', body: JSON.stringify({ code: code ?? undefined, name: 'Test' }) })
   const call = async (token: string, channel: string, payload?: unknown) =>
     (await fetch(`${base}/call`, { method: 'POST', headers: { authorization: `Bearer ${token}` }, body: JSON.stringify({ channel, payload }) })).json()
   return { base, dir, pair, call }
@@ -79,6 +81,47 @@ describe('Hiveory server', () => {
     while (!text.includes('state.changed')) text += new TextDecoder().decode((await reader.read()).value)
     expect(text).toContain('"topic":"projects"')
     await reader.cancel()
+  })
+
+  it("pairs the owner's own devices without a code, judged from the socket address", async () => {
+    const seen: string[] = []
+    const { pair } = await start(async (address) => {
+      seen.push(address)
+      return true
+    })
+    expect((await pair(null)).status).toBe(200)
+    expect(seen[0]).toMatch(/127\.0\.0\.1$/)
+    expect(server!.devices()).toHaveLength(1)
+  })
+
+  it('asks for the code when the device is not the owner’s, or without Tailscale', async () => {
+    const { pair } = await start(async () => false)
+    const refused = await pair(null)
+    expect(refused.status).toBe(403)
+    expect(await refused.json()).toMatchObject({ needsCode: true })
+    expect((await pair()).status).toBe(200)
+    server!.close()
+    const plain = await start()
+    expect((await plain.pair(null)).status).toBe(403)
+  })
+
+  it('revoking a device ends its event stream and refuses its token', async () => {
+    const { base, pair, call } = await start()
+    const { token } = (await (await pair()).json()) as { token: string }
+    const res = await fetch(`${base}/events`, { headers: { authorization: `Bearer ${token}` } })
+    const reader = res.body!.getReader()
+    await reader.read()
+    server!.revoke(server!.devices()[0]!.id)
+    for (;;) if ((await reader.read()).done) break
+    expect(server!.devices()).toEqual([])
+    expect(await call(token, 'projects.list')).toMatchObject({ error: 'Pair this device first.' })
+  })
+
+  it('keeps serving when an extra address cannot be opened', async () => {
+    const { base } = await start()
+    // 192.0.2.0/24 is reserved for documentation: no machine has it.
+    await server!.setHosts(['127.0.0.1', '192.0.2.1'])
+    expect((await fetch(`${base}/health`)).ok).toBe(true)
   })
 
   it('remote and client-local channels are real channels and never overlap', () => {

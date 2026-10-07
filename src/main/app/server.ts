@@ -1,8 +1,9 @@
 import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { dirname } from 'node:path'
 import type { IpcMainInvokeEvent } from 'electron'
+import type { PairedDevice } from '@shared/domain/tailnet'
 import { toAppError, type Result } from '@shared/errors'
 import { requestSchemas, type Channel } from '@shared/ipc/contract'
 import { PAIRING_TTL_MS, REMOTE_CHANNELS, type ServerCall } from '@shared/ipc/remote'
@@ -40,13 +41,27 @@ class DeviceStore {
     const wanted = hash(token)
     return this.devices.some((d) => d.tokenHash === wanted)
   }
+  list(): PairedDevice[] {
+    return this.devices.map(({ id, name, pairedAt }) => ({ id, name, pairedAt }))
+  }
   add(name: string): string {
     const token = randomBytes(32).toString('base64url')
     this.devices.push({ id: randomBytes(6).toString('hex'), name: name.slice(0, 80), tokenHash: hash(token), pairedAt: new Date().toISOString() })
+    this.save()
+    return token
+  }
+  /** Forgets a device; returns its token hash so its open streams can be closed. */
+  remove(id: string): string | undefined {
+    const device = this.devices.find((d) => d.id === id)
+    if (!device) return undefined
+    this.devices = this.devices.filter((d) => d !== device)
+    this.save()
+    return device.tokenHash
+  }
+  private save(): void {
     mkdirSync(dirname(this.file), { recursive: true })
     writeFileSync(`${this.file}.tmp`, JSON.stringify({ devices: this.devices }, null, 2), { mode: 0o600 })
     renameSync(`${this.file}.tmp`, this.file)
-    return token
   }
 }
 
@@ -80,8 +95,28 @@ export interface HiveoryServer {
   port: number
   /** The current pairing code (a fresh one replaces it after each pairing or when it expires). */
   pairingCode(): string
+  devices(): PairedDevice[]
+  /** Unpairs a device and ends its open event streams at once. */
+  revoke(id: string): void
+  /** Listens on exactly these addresses (same port), e.g. when the Tailscale address appears or changes. */
+  setHosts(hosts: string[]): Promise<void>
   broadcast(event: string, payload: unknown): void
   close(): void
+}
+
+export interface ServerOptions {
+  port: number
+  /** Addresses to listen on; the first one picks the port (0 = any free one). */
+  hosts: string[]
+  handlers: Handlers
+  log: Logger
+  devicesFile: string
+  version: string
+  /**
+   * Code-less pairing (ADR 0025): true when the connecting socket address is one
+   * of the owner's own devices, as Tailscale reports it.
+   */
+  ownerPairing?: (remoteAddress: string) => Promise<boolean>
 }
 
 /**
@@ -92,10 +127,11 @@ export interface HiveoryServer {
  * for a device token. Every call is a REMOTE_CHANNELS channel and is validated
  * with the same schemas as local IPC.
  */
-export const startServer = (options: { port: number; host: string; handlers: Handlers; log: Logger; devicesFile: string; version: string }): Promise<HiveoryServer> => {
+export const startServer = async (options: ServerOptions): Promise<HiveoryServer> => {
   const { handlers, log } = options
   const devices = new DeviceStore(options.devicesFile)
-  const streams = new Set<ServerResponse>()
+  /** Open event streams, with the token hash that opened each (for revocation). */
+  const streams = new Map<ServerResponse, string>()
   let code = ''
   let codeUntil = 0
   let failures: number[] = []
@@ -130,7 +166,7 @@ export const startServer = (options: { port: number; host: string; handlers: Han
     }
   }
 
-  const server = createServer((req, res) => {
+  const handle = (req: IncomingMessage, res: ServerResponse): void => {
     const url = new URL(req.url ?? '/', 'http://hiveory')
     void (async () => {
       if (req.method === 'GET' && url.pathname === '/health') return json(res, 200, { ok: true, app: 'hiveory', version: options.version })
@@ -139,11 +175,21 @@ export const startServer = (options: { port: number; host: string; handlers: Han
         failures = failures.filter((t) => now - t < PAIR_WINDOW_MS)
         if (failures.length >= MAX_PAIR_FAILURES) return json(res, 429, { error: 'Too many wrong codes. Try again later.' })
         const body = (await readBody(req)) as { code?: unknown; name?: unknown }
+        const name = typeof body.name === 'string' ? body.name : 'Desktop'
+        if (body.code === undefined) {
+          // No code: only the owner's own devices, proven by Tailscale from the socket address (never from the request).
+          if (options.ownerPairing && (await options.ownerPairing(req.socket.remoteAddress ?? ''))) {
+            log.info("One of the owner's devices paired with this Hiveory server")
+            return json(res, 200, { token: devices.add(name) })
+          }
+          failures.push(now)
+          return json(res, 403, { error: 'This device needs the pairing code that computer shows.', needsCode: true })
+        }
         if (typeof body.code !== 'string' || body.code.toUpperCase() !== currentCode()) {
           failures.push(now)
-          return json(res, 403, { error: 'That pairing code is wrong or has expired.' })
+          return json(res, 403, { error: 'That pairing code is wrong or has expired.', needsCode: true })
         }
-        const token = devices.add(typeof body.name === 'string' ? body.name : 'Desktop')
+        const token = devices.add(name)
         log.info('A device paired with this Hiveory server')
         freshCode()
         return json(res, 200, { token })
@@ -153,7 +199,7 @@ export const startServer = (options: { port: number; host: string; handlers: Han
       if (req.method === 'GET' && url.pathname === '/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' })
         res.write('retry: 2000\n\n')
-        streams.add(res)
+        streams.set(res, hash((req.headers.authorization ?? '').slice(7)))
         const keepalive = setInterval(() => res.write(': keepalive\n\n'), KEEPALIVE_MS)
         req.on('close', () => {
           clearInterval(keepalive)
@@ -165,26 +211,56 @@ export const startServer = (options: { port: number; host: string; handlers: Han
     })().catch((error: unknown) => {
       if (!res.headersSent) json(res, 400, { error: error instanceof Error ? error.message : 'Bad request.' })
     })
-  })
+  }
 
-  return new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(options.port, options.host, () => {
-      const port = (server.address() as { port: number }).port
-      log.info(`Hiveory server listening on ${options.host}:${port}`)
-      resolve({
-        port,
-        pairingCode: currentCode,
-        broadcast: (event, payload) => {
-          if (!streams.size) return
-          const frame = `data: ${JSON.stringify({ event, payload })}\n\n`
-          for (const s of streams) s.write(frame)
-        },
-        close: () => {
-          for (const s of streams) s.end()
-          server.close()
-        }
+  const listen = (port: number, host: string): Promise<Server> =>
+    new Promise((resolve, reject) => {
+      const server = createServer(handle)
+      server.once('error', reject)
+      server.listen(port, host, () => {
+        log.info(`Hiveory server listening on ${host}:${(server.address() as { port: number }).port}`)
+        resolve(server)
       })
     })
-  })
+
+  const [first = '127.0.0.1', ...rest] = options.hosts
+  const listeners = new Map<string, Server>([[first, await listen(options.port, first)]])
+  const port = (listeners.get(first)!.address() as { port: number }).port
+  const setHosts = async (hosts: string[]): Promise<void> => {
+    for (const [host, server] of listeners) {
+      if (hosts.includes(host)) continue
+      server.close()
+      listeners.delete(host)
+    }
+    for (const host of hosts) {
+      if (listeners.has(host)) continue
+      // An extra address failing (e.g. Tailscale going down meanwhile) never stops the others.
+      await listen(port, host).then(
+        (server) => listeners.set(host, server),
+        (error: unknown) => log.warn(`Hiveory server could not listen on ${host}:${port}`, error)
+      )
+    }
+  }
+  await setHosts([first, ...rest])
+
+  return {
+    port,
+    pairingCode: currentCode,
+    devices: () => devices.list(),
+    revoke: (id) => {
+      const tokenHash = devices.remove(id)
+      for (const [s, h] of streams) if (h === tokenHash) s.end()
+    },
+    setHosts,
+    broadcast: (event, payload) => {
+      if (!streams.size) return
+      const frame = `data: ${JSON.stringify({ event, payload })}\n\n`
+      for (const s of streams.keys()) s.write(frame)
+    },
+    close: () => {
+      for (const s of streams.keys()) s.end()
+      for (const server of listeners.values()) server.close()
+      listeners.clear()
+    }
+  }
 }

@@ -27,6 +27,8 @@ export interface AppSettings {
   computerUse: boolean
   /** Closing the window keeps Hiveory (and every agent) running in the tray; Quit stops them. */
   keepRunningInBackground: boolean
+  /** Share this computer with the user's other devices over Tailscale (ADR 0025). Off by default. */
+  shareOnTailnet: boolean
   /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
   wallpaper: string
   /** How opaque every surface is over a wallpaper (0 = fully transparent, 1 = solid). */
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   browserViewports: [],
   computerUse: false,
   keepRunningInBackground: true,
+  shareOnTailnet: false,
   wallpaper: '',
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,

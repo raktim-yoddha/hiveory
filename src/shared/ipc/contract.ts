@@ -38,6 +38,7 @@ export interface WallpaperImage {
   thumb: string
 }
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
+import type { Discovery, ShareStatus } from '../domain/tailnet'
 
 /**
  * The complete renderer ↔ main contract. Main validates every payload against
@@ -184,6 +185,11 @@ export const createWorkspaceSchema = z.object({
 })
 
 const none = z.undefined()
+/** A Tailscale address: 100.64.0.0/10 or fd7a:115c:a1e0::/48. */
+const tailnetIp = z
+  .string()
+  .max(64)
+  .regex(/^(100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|fd7a:115c:a1e0:[0-9a-f:]+)$/i)
 
 export const requestSchemas = {
   'app.info': none,
@@ -311,6 +317,7 @@ export const requestSchemas = {
       browserViewports: z.array(viewportSchema).max(32),
       computerUse: z.boolean(),
       keepRunningInBackground: z.boolean(),
+      shareOnTailnet: z.boolean(),
       wallpaper: wallpaperSchema,
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),
@@ -507,9 +514,22 @@ export const requestSchemas = {
   'client.status': none,
   'client.connect': z.discriminatedUnion('via', [
     z.object({ via: z.literal('ssh'), destination: sshDestination, port: z.number().int().min(1).max(65535), code: z.string().regex(/^[A-Za-z0-9]{8}$/) }),
-    z.object({ via: z.literal('direct'), url: z.string().url().max(300).regex(/^https?:\/\//), code: z.string().regex(/^[A-Za-z0-9]{8}$/) })
+    z.object({ via: z.literal('direct'), url: z.string().url().max(300).regex(/^https?:\/\//), code: z.string().regex(/^[A-Za-z0-9]{8}$/) }),
+    // A device on the user's tailnet (ADR 0025): no code when it is signed in to the same Tailscale login.
+    z.object({
+      via: z.literal('tailnet'),
+      ip: tailnetIp,
+      port: z.number().int().min(1).max(65535),
+      name: z.string().min(1).max(100),
+      code: z.string().regex(/^[A-Za-z0-9]{8}$/).optional()
+    })
   ]),
-  'client.disconnect': none
+  'client.disconnect': none,
+  /** The user's tailnet devices, marking the ones that run a Hiveory server. */
+  'client.discover': none,
+  // Share this computer with the user's other devices (ADR 0025); switched on with settings.shareOnTailnet.
+  'share.status': none,
+  'share.revoke': z.object({ deviceId: z.string().regex(/^[a-f0-9]{12}$/) })
 } as const
 
 export interface AppInfo {
@@ -692,6 +712,9 @@ export interface ResponseMap {
   'client.status': ClientStatus
   'client.connect': ClientStatus
   'client.disconnect': void
+  'client.discover': Discovery
+  'share.status': ShareStatus
+  'share.revoke': void
 }
 
 export interface GitStatusView {

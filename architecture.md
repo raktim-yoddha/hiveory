@@ -588,6 +588,18 @@ client window ─IPC─▶ client main (no services) ─POST /call (bearer)─�
           (through an ssh -L tunnel to the server's loopback, or an address)
 ```
 
+### Tailnet devices (ADR 0025)
+
+```text
+Settings › Remote ─client.discover─▶ Tailscale (CLI: status --json) ─▶ probe <100.x>:7788/health
+                  ─client.connect {via:'tailnet'}─▶ POST /pair (no code) ─▶ Sharing.isOwnersDevice
+                                                         (whois socket address == own login)
+settings.shareOnTailnet ─▶ Sharing ─▶ startServer(hosts: 127.0.0.1 + own 100.x, re-read every 30 s)
+```
+
+`Tailscale` (`services/tailscale`) only reads the user's own Tailscale. `Sharing` (`app/sharing.ts`)
+owns the server for both the desktop switch and `--serve [--tailscale]`.
+
 ### Bots data flow (ADR 0022)
 
 ```text

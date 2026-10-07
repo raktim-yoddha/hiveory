@@ -7,7 +7,8 @@ import { CLIENT_LOCAL_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
 import { registerIpc, type Handlers } from '../ipc/router'
 import { isTrustedSenderUrl } from '../ipc/trust'
 import { SshHostConnector } from '../services/hosts/ssh-host'
-import { clearClientConfig, connectAndSave, describeServer, openBase, RemoteBackend, type ClientConfig } from './client'
+import { Tailscale } from '../services/tailscale/tailscale'
+import { clearClientConfig, connectAndSave, describeServer, discover, openBase, RemoteBackend, type ClientConfig } from './client'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
 import { createMainWindow, type rendererTargets } from './window'
@@ -31,6 +32,7 @@ export const sshOptions = (): string[] => (process.env.HIVEORY_SSH_CONFIG ? ['-F
  */
 export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: Logger, targets: ReturnType<typeof rendererTargets>): Promise<() => void> => {
   const ssh = new SshHostConnector(join(import.meta.dirname, 'host.js'), log, sshOptions())
+  const tailscale = new Tailscale()
   const server = describeServer(config)
   const send = (event: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -39,7 +41,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
   }
   let opened: { base: string; close(): void } = { base: 'http://127.0.0.1:0', close: () => undefined }
   try {
-    opened = await openBase(config, ssh)
+    opened = await openBase(config, ssh, tailscale)
   } catch (error) {
     log.warn(`Could not reach the Hiveory server ${server}`, error)
   }
@@ -51,7 +53,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     log,
     async () => {
       opened.close()
-      opened = await openBase(config, ssh)
+      opened = await openBase(config, ssh, tailscale)
       return opened.base
     }
   )
@@ -71,10 +73,11 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'wallpapers.list': () => [],
     'client.status': () => ({ mode: 'client' as const, server, connected: backend.isConnected }),
     'client.connect': async (input) => {
-      const next = await connectAndSave(input, ssh, paths.clientFile, safeStorage)
+      const next = await connectAndSave(input, ssh, tailscale, paths.clientFile, safeStorage)
       relaunch()
       return { mode: 'client' as const, server: next, connected: true }
     },
+    'client.discover': () => discover(tailscale),
     'client.disconnect': () => {
       clearClientConfig(paths.clientFile)
       relaunch()

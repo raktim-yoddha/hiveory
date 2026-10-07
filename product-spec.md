@@ -347,6 +347,12 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   this window with it (SSH tunnel or an address, plus the one-time code it printed); Hiveory then
   restarts as that server's window. The server's dialogs, screen and installer are never reachable
   from a client. Disconnect returns to local mode.
+- With Tailscale (ADR 0025), Settings › Remote › Your devices lists the user's tailnet devices.
+  Devices sharing Hiveory show Connect. It takes one click on the user's own Tailscale login, and
+  the sharing computer's code otherwise. Other online devices show Use over SSH. "Share this
+  computer" (off by default) serves this desktop to them on its Tailscale address only, shows its
+  pairing code and paired devices, and removing a device cuts it off at once. A headless server
+  does the same with `hiveory --serve 7788 --tailscale`.
 
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
   installs Hiveory's small host program in `~/.hiveory-host` there (Node 20+ required).

@@ -30,7 +30,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
  * client does not have (updates, voice packs, built-in browser pages, wallpapers).
  */
 export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
-  'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect',
+  'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
   'updates.status', 'voice.status', 'browser.state', 'wallpapers.list'
 ])
 
@@ -47,3 +47,6 @@ export interface ServerEvent {
 /** One pairing code per server start (or `--pair`): short, single use, expires. */
 export const PAIRING_CODE = /^[A-Z0-9]{8}$/
 export const PAIRING_TTL_MS = 15 * 60_000
+
+/** Where a shared desktop listens, and where discovery looks for servers on the tailnet (ADR 0025). */
+export const DEFAULT_SERVER_PORT = 7788

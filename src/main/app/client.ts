@@ -3,11 +3,17 @@ import { hostname } from 'node:os'
 import { AppException, fail, type Result } from '@shared/errors'
 import type { Channel } from '@shared/ipc/contract'
 import type { ServerEvent } from '@shared/ipc/remote'
+import type { DiscoveredDevice, Discovery } from '@shared/domain/tailnet'
+import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
 import type { SshHostConnector } from '../services/hosts/ssh-host'
+import type { Tailscale } from '../services/tailscale/tailscale'
 import type { Logger } from './logger'
 
-/** Where a Hiveory server is: a loopback port on an SSH host (tunnelled), or an address. */
-export type ServerAddress = { via: 'ssh'; destination: string; port: number } | { via: 'direct'; url: string }
+/** Where a Hiveory server is: a loopback port on an SSH host (tunnelled), an address, or a device on the user's tailnet. */
+export type ServerAddress =
+  | { via: 'ssh'; destination: string; port: number }
+  | { via: 'direct'; url: string }
+  | { via: 'tailnet'; ip: string; port: number; name: string }
 
 /** How this desktop reaches its Hiveory server; the token is sealed by the OS keychain. */
 export type ClientConfig = ServerAddress & { token: string }
@@ -18,7 +24,10 @@ export interface Sealer {
   decryptString(data: Buffer): string
 }
 
-export const describeServer = (config: ServerAddress): string => (config.via === 'ssh' ? `${config.destination}:${config.port} (over SSH)` : config.url)
+export const describeServer = (config: ServerAddress): string =>
+  config.via === 'ssh' ? `${config.destination}:${config.port} (over SSH)` : config.via === 'tailnet' ? `${config.name} (Tailscale)` : config.url
+
+const hostUrl = (ip: string, port: number): string => `http://${ip.includes(':') ? `[${ip}]` : ip}:${port}`
 
 export const readClientConfig = (file: string, sealer: Sealer): ClientConfig | null => {
   try {
@@ -39,19 +48,26 @@ export const writeClientConfig = (file: string, config: ClientConfig, sealer: Se
 
 export const clearClientConfig = (file: string): void => rmSync(file, { force: true })
 
-/** The server's base URL from here: an SSH tunnel to its loopback port, or its address. */
-export const openBase = async (config: ServerAddress, ssh: SshHostConnector): Promise<{ base: string; close(): void }> => {
+/**
+ * The server's base URL from here: an SSH tunnel to its loopback port, or its address. A tailnet
+ * device is looked up by name each time, so it is found again if its Tailscale address changed.
+ */
+export const openBase = async (config: ServerAddress, ssh: SshHostConnector, tailscale: Tailscale): Promise<{ base: string; close(): void }> => {
   if (config.via === 'direct') return { base: config.url.replace(/\/+$/, ''), close: () => undefined }
+  if (config.via === 'tailnet') {
+    const found = (await tailscale.status()).devices.find((d) => d.name === config.name)
+    return { base: hostUrl(found?.ip ?? config.ip, config.port), close: () => undefined }
+  }
   const tunnel = await ssh.forward({ destination: config.destination }, '127.0.0.1', config.port)
   return { base: `http://127.0.0.1:${tunnel.port}`, close: tunnel.close }
 }
 
-/** Trades the server's one-time pairing code for this device's token. */
-export const pair = async (base: string, code: string): Promise<string> => {
+/** Trades the server's one-time pairing code (none: the owner's own tailnet device) for this device's token. */
+export const pair = async (base: string, code?: string): Promise<string> => {
   const health = await fetch(`${base}/health`).catch(() => null)
   const info = (await health?.json().catch(() => null)) as { app?: string } | null
   if (!health?.ok || info?.app !== 'hiveory') fail('NOT_FOUND', 'No Hiveory server answers there.', { hint: 'Start it with "hiveory --serve" and check the port.' })
-  const res = await fetch(`${base}/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code.toUpperCase(), name: hostname() }) })
+  const res = await fetch(`${base}/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code?.toUpperCase(), name: hostname() }) })
   const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string }
   if (!res.ok || !body.token) fail('FORBIDDEN', body.error ?? 'The server refused the pairing.')
   return body.token!
@@ -155,12 +171,20 @@ export class RemoteBackend {
   }
 }
 
-export type ConnectRequest = { via: 'ssh'; destination: string; port: number; code: string } | { via: 'direct'; url: string; code: string }
+export type ConnectRequest =
+  | { via: 'ssh'; destination: string; port: number; code: string }
+  | { via: 'direct'; url: string; code: string }
+  | { via: 'tailnet'; ip: string; port: number; name: string; code?: string }
 
 /** Pairs with a server and saves how to reach it (token sealed). The app then relaunches as its client. */
-export const connectAndSave = async (request: ConnectRequest, ssh: SshHostConnector, file: string, sealer: Sealer): Promise<string> => {
-  const where: ServerAddress = request.via === 'ssh' ? { via: 'ssh', destination: request.destination, port: request.port } : { via: 'direct', url: request.url }
-  const opened = await openBase(where, ssh)
+export const connectAndSave = async (request: ConnectRequest, ssh: SshHostConnector, tailscale: Tailscale, file: string, sealer: Sealer): Promise<string> => {
+  const where: ServerAddress =
+    request.via === 'ssh'
+      ? { via: 'ssh', destination: request.destination, port: request.port }
+      : request.via === 'tailnet'
+        ? { via: 'tailnet', ip: request.ip, port: request.port, name: request.name }
+        : { via: 'direct', url: request.url }
+  const opened = await openBase(where, ssh, tailscale)
   try {
     const token = await pair(opened.base, request.code)
     writeClientConfig(file, { ...where, token }, sealer)
@@ -168,4 +192,29 @@ export const connectAndSave = async (request: ConnectRequest, ssh: SshHostConnec
     opened.close()
   }
   return describeServer(where)
+}
+
+/** How long a tailnet device gets to say it is a Hiveory server (peers answer in milliseconds). */
+const PROBE_MS = 1500
+
+/**
+ * The user's tailnet devices (ADR 0025), each online one probed once on the default
+ * port so the picker can show which ones already run a Hiveory server.
+ */
+export const discover = async (tailscale: Tailscale, probe: typeof fetch = fetch): Promise<Discovery> => {
+  const status = await tailscale.status()
+  const me = status.self?.owner ?? ''
+  const devices = await Promise.all(
+    status.devices.map(async (device): Promise<DiscoveredDevice> => {
+      const mine = me !== '' && device.owner === me
+      if (!device.online) return { ...device, mine }
+      const health = await probe(`${hostUrl(device.ip, DEFAULT_SERVER_PORT)}/health`, { signal: AbortSignal.timeout(PROBE_MS) })
+        .then((r) => (r.ok ? (r.json() as Promise<{ app?: string; version?: string }>) : null))
+        .catch(() => null)
+      return health?.app === 'hiveory' ? { ...device, mine, hiveory: { version: health.version ?? '', port: DEFAULT_SERVER_PORT } } : { ...device, mine }
+    })
+  )
+  // Hiveory servers first, then the user's own devices, then the rest.
+  devices.sort((a, b) => Number(Boolean(b.hiveory)) - Number(Boolean(a.hiveory)) || Number(b.mine) - Number(a.mine) || Number(b.online) - Number(a.online))
+  return { state: status.state, devices }
 }

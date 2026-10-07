@@ -1,21 +1,27 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { CheckCircle2, Server } from 'lucide-react'
 import { Button } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
+import { useApp } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import { ServerConnection } from './ServerConnection'
+import { ShareThisComputer } from './ShareThisComputer'
+import { TailnetDevices } from './TailnetDevices'
 import { SettingRow, SettingsPage } from './SettingsScreen'
 import styles from './Settings.module.css'
 
 type Result = Awaited<ReturnType<typeof api<'hosts.check'>>>
 
 /**
- * Remote machines (ADR 0022): one host layer for Work and Bots. Today it checks
- * an SSH host end to end and installs Hiveory's host there; remote projects and
- * bot computers build on the same connection.
+ * Remote machines (ADR 0022, 0025): the user's own devices found through
+ * Tailscale (one click), sharing this computer with them, an SSH host check
+ * (Hiveory's host for remote projects and bot computers), and connecting to a
+ * Hiveory server by hand.
  */
 export function RemoteSection() {
+  const onServer = Boolean(useApp((s) => s.info?.client))
+  const sshField = useRef<HTMLDivElement>(null)
   const [destination, setDestination] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ destination: string; value: Result } | null>(null)
@@ -33,27 +39,38 @@ export function RemoteSection() {
   return (
     <SettingsPage
       title="Remote"
-      description="Run agents and bots on other machines over SSH. Hiveory uses your own SSH setup (config, keys, agent, known hosts) and never asks for or stores passwords."
+      description="Use your other computers from here, or this one from them. Devices on your Tailscale network connect in one click; SSH uses your own setup (config, keys, agent, known hosts) and Hiveory never asks for or stores passwords."
     >
+      <TailnetDevices
+        onUseSsh={(host) => {
+          setDestination(host)
+          setResult(null)
+          sshField.current?.scrollIntoView({ block: 'center' })
+          sshField.current?.querySelector('input')?.focus()
+        }}
+      />
+      {!onServer && <ShareThisComputer />}
       <SettingRow
         title="Check an SSH host"
         description="An alias from ~/.ssh/config or user@host. The check installs Hiveory's small host program in ~/.hiveory-host on that machine (it needs Node 20 or newer) and connects to it."
         control={null}
       />
-      <TextField
-        label="SSH host"
-        value={destination}
-        placeholder="devbox or me@build.example.com"
-        onChange={setDestination}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && valid && !busy) void check()
-        }}
-        adornment={
-          <Button variant="primary" icon={<Server />} loading={busy} disabled={!valid} onClick={() => void check()}>
-            Check
-          </Button>
-        }
-      />
+      <div ref={sshField}>
+        <TextField
+          label="SSH host"
+          value={destination}
+          placeholder="devbox or me@build.example.com"
+          onChange={setDestination}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && valid && !busy) void check()
+          }}
+          adornment={
+            <Button variant="primary" icon={<Server />} loading={busy} disabled={!valid} onClick={() => void check()}>
+              Check
+            </Button>
+          }
+        />
+      </div>
       {result && (
         <p className={styles.rowDescription} role="status">
           <CheckCircle2 aria-hidden /> {result.destination} is ready: {result.value.platform} {result.value.arch}, Node {result.value.node}
