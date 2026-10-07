@@ -91,7 +91,22 @@ importing whole teams comes later.
   to open). IPC: `teams.list | create | rename | delete`, `bots.handoffs`.
 - **Not yet:** a free-form canvas with zoom, arranging bots inside a card, and drawn lines between bots.
 
+## Bots schedule themselves; run notifications (built: phase A3)
+
+- **Tools** (`RoutineTools`, only for a bot allowed to run on a schedule): `list_routines` and
+  `schedule_routine` (name, instructions, first run as ISO 8601 with an offset, repeat as once /
+  interval / a preset / cron, optional days and timezone, defaulting to this computer's). Presets
+  compile with the editor's `compileRepeat`, so a bot's routine reads like one made by hand.
+- **Always paused.** A routine a bot saves is created switched off, and the tool tells the bot to say
+  so. The user turns it on in the Routines tab: a bot can never put itself on a schedule. This
+  replaces the confirm card first planned: no new chat UI, same safety.
+- **Notifications:** when a run ends (done or failed) or is missed while no Hiveory window is focused,
+  a desktop notification names the routine and the bot (the user's own names, on their own screen;
+  skipped runs stay quiet). Clicking it brings Hiveory forward, switches to Bots and opens the run's
+  thread (`bots.open` event).
+- **Fix:** croner's `startAt` left out a run at exactly the start time (the first run a user picks).
+  The scheduler no longer passes it and applies the start itself.
+
 ## Next
 
-A bot proposing a routine through a confirm card, and Queen Bee actions (A3); triggers (T1); teams and
-the team map (M2); the work board (K1).
+Triggers (T1); the work board (K1); Queen Bee actions for routines.

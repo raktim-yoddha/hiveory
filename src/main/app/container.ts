@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
@@ -38,6 +38,8 @@ import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
 import { RoutineService } from '../services/routines/routine-service'
+import { RoutineTools } from '../services/routines/routine-tools'
+import { runNotice } from '../services/routines/run-notice'
 import { TeamService } from '../services/bots/team-service'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
@@ -185,8 +187,24 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
           running,
           untilNextMs: nextDueAt === undefined ? undefined : nextDueAt - Date.now()
         })
-      )
+      ),
+    // A run that ended or was missed while the user is elsewhere: a desktop notification that opens its thread.
+    outcome: (run) => {
+      const window = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+      if (!window || BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
+      const notice = new Notification(runNotice(run, bots?.find(run.botId)?.name))
+      notice.on('click', () => {
+        if (window.isDestroyed()) return
+        if (window.isMinimized()) window.restore()
+        window.show()
+        window.focus()
+        if (run.threadId) emit('bots.open', { botId: run.botId, threadId: run.threadId })
+      })
+      notice.show()
+    }
   })
+  // A bot allowed to run on a schedule can see its routines and save new ones, always paused.
+  const routineTools = new RoutineTools(() => routines, (chatId) => chats.find(chatId)?.botId)
   chats.on('run', (chatId, running) => {
     if (!running) computers.release(chatId)
   })
@@ -303,7 +321,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const browserFamily = { handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }
     const reach = bot ? botReach(bot, { browser: settings.get().browserUse, computer: settings.get().computerUse && computer.supported }) : []
     const families = bot
-      ? [botTools, ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]), gateway]
+      ? [botTools, ...(bot.routines ? [routineTools] : []), ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]), gateway]
       : [...(settings.get().browserUse ? [browserFamily] : []), ...extraTools()]
     return handleBody(body, {
       list: () => families.flatMap((f) => f.definitions()),

@@ -841,6 +841,8 @@ export interface EventMap {
   'ssh.prompt': SshPrompt
   /** That question was answered (here or in another window) or timed out. */
   'ssh.promptDone': { id: string }
+  /** The user clicked a routine's notification: open the bot's thread (ADR 0028). */
+  'bots.open': { botId: string; threadId: string }
 }
 
 export type EventName = keyof EventMap
@@ -861,7 +863,8 @@ const EVENTS: Record<EventName, true> = {
   'queen.update': true,
   'hosts.changed': true,
   'ssh.prompt': true,
-  'ssh.promptDone': true
+  'ssh.promptDone': true,
+  'bots.open': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

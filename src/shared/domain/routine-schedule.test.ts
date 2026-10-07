@@ -82,3 +82,12 @@ describe('routine schedules', () => {
     expect(latestRun(t, new Date('2026-09-30T00:00:00.000Z'))).toBeUndefined()
   })
 })
+
+describe('the first run', () => {
+  it('counts a run at exactly the start, the time the user picked', () => {
+    // Thursday 8 October 2026, 09:00 in India, on a weekdays-at-09:00 rule.
+    const t = timing({ kind: 'cron', expr: '0 9 * * 1-5', preset: 'weekdays' }, '2026-10-08T03:30:00.000Z', IN)
+    expect(iso(nextRuns(t, new Date('2026-10-07T00:00:00.000Z'), 2))).toEqual(['2026-10-08T03:30:00.000Z', '2026-10-09T03:30:00.000Z'])
+    expect(latestRun(t, new Date('2026-10-08T03:30:00.000Z'))?.toISOString()).toBe('2026-10-08T03:30:00.000Z')
+  })
+})

@@ -41,7 +41,7 @@ export class BotComputers {
   ) {}
 
   private async kitFor(bot: Bot): Promise<HostKit> {
-    if (!bot.computer) fail('INVALID_INPUT', `${bot.name} has no computer.`, { hint: 'Give it one in its settings: Computer › Docker.' })
+    if (!bot.computer) fail('INVALID_INPUT', `${bot.name} has no computer.`, { hint: "Choose where its Linux computer runs in the bot's panel: Computer › Works on." })
     return this.kits.kit(bot.computer!.host)
   }
 

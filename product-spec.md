@@ -31,7 +31,9 @@ signs in to sites for it in the bot panel's Browser tab, never by putting a pass
 A bot the user allows to run on a schedule can have **routines** (ADR 0028): instructions run in a
 fresh thread once, every few minutes, or on a calendar rule in a chosen timezone. They run while
 Hiveory (or the user's Hiveory server) is running; a run missed by less than 12 hours still happens
-when it is back, and every run is kept in a run log.
+when it is back, and every run is kept in a run log. A bot can save routines for itself when asked
+("send me this every morning"); they arrive paused until the user switches them on. When a run ends
+or is missed while the user is elsewhere, a desktop notification opens its thread.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the

@@ -9,6 +9,7 @@ import { useHostLinks, useSshPrompts } from './hosts'
 import { useNotices } from './notices'
 import { useVoice } from '../features/queen/voice'
 import { useRoutines } from './routines'
+import { useNavigation } from './navigation'
 
 /** Events arriving within this window trigger one reload per cache key. */
 const COALESCE_MS = 24
@@ -55,6 +56,11 @@ export const installEventBridge = (): (() => void) => {
     }),
     subscribe('runtime.changed', ({ instanceId, runtime }) => useAgents.getState().setRuntime(instanceId, runtime)),
     subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
+    // A routine's notification was clicked: show that run's thread.
+    subscribe('bots.open', ({ botId, threadId }) => {
+      useNavigation.getState().setMode('bots')
+      void useBots.getState().openBotThread(botId, threadId)
+    }),
     subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
     subscribe('voice.changed', (packs) => useVoice.getState().setPacks(packs)),
     subscribe('chat.event', ({ chatId, message, summary }) => {

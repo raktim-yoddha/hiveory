@@ -10,6 +10,8 @@ import { parseState } from '../persistence/schema'
 import { StateStore } from '../persistence/state-store'
 import { KEEP_AWAKE_LEAD_MS, KeepAwake, wantsAwake } from './keep-awake'
 import { RoutineService, type RoutineInput } from './routine-service'
+import { RoutineTools } from './routine-tools'
+import { runNotice } from './run-notice'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const HOUR = 60 * 60 * 1000
@@ -55,6 +57,7 @@ const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: '
   let n = 0
   const timers: Array<{ fn: () => void; at: number; live: boolean }> = []
   const activity: Array<[number, number | undefined]> = []
+  const told: string[] = []
   const service = new RoutineService({
     store,
     chats,
@@ -70,6 +73,7 @@ const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: '
       clear: (t) => void ((t as { live: boolean }).live = false)
     },
     activity: (running, next) => activity.push([running, next]),
+    outcome: (run) => told.push(`${run.routineName}:${run.status}`),
     bots: {
       find: (id) => bots.find((b) => b.id === id) as Bot | undefined,
       newThread: (botId, title) => {
@@ -100,7 +104,7 @@ const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: '
     timezone: 'UTC',
     ...over
   })
-  return { store, chats, service, advance, daily9, activity, setClock: (ms: number) => (clock = ms), runs: (): RoutineRun[] => service.runs() }
+  return { store, chats, service, advance, daily9, activity, told, setClock: (ms: number) => (clock = ms), runs: (): RoutineRun[] => service.runs() }
 }
 
 describe('routines', () => {
@@ -294,5 +298,67 @@ describe('keep awake', () => {
     awake.set(false)
     awake.set(false)
     expect(calls).toEqual(['start', 'stop 7'])
+  })
+})
+
+describe('bots and their routines', () => {
+  const withTools = (bots?: Array<Partial<Bot> & { id: string }>) => {
+    const s = setup(bots)
+    const tools = new RoutineTools(() => s.service, (chatId) => (chatId === 'c1' ? 'b1' : undefined), () => 'Asia/Kolkata', () => T0)
+    const call = (name: string, args: Record<string, unknown> = {}) => tools.call({ id: 'c1' }, name, args)
+    return { ...s, tools, call }
+  }
+
+  it('lets a bot save a routine, always paused, in its own words and zone', async () => {
+    const { service, call } = withTools()
+    const result = await call('schedule_routine', {
+      name: 'Morning report',
+      instructions: 'Summarise the inbox.',
+      first_run: '2026-10-08T09:00:00+05:30',
+      repeat: 'weekdays'
+    })
+    expect(result.text).toContain('paused')
+    expect(result.text).toContain('Thu, Oct 8, 09:00')
+    expect(service.list('b1')).toMatchObject([
+      { name: 'Morning report', enabled: false, timezone: 'Asia/Kolkata', schedule: { kind: 'cron', expr: '0 9 * * 1-5', preset: 'weekdays' } }
+    ])
+    expect((await call('list_routines')).text).toContain('Morning report · paused')
+  })
+
+  it('tells the bot what to fix instead of saving something wrong', async () => {
+    const { call } = withTools()
+    const base = { name: 'X', instructions: 'Go.', first_run: '2026-10-08T09:00:00Z' }
+    await expect(call('schedule_routine', { ...base, first_run: '2026-10-01T09:00:00Z', repeat: 'once' })).rejects.toThrow('already passed')
+    await expect(call('schedule_routine', { ...base, repeat: 'daily', timezone: 'Mars/Base' })).rejects.toThrow('Unknown timezone')
+    await expect(call('schedule_routine', { ...base, repeat: 'selected-days' })).rejects.toThrow('needs days')
+    await expect(call('schedule_routine', { ...base, repeat: 'cron', cron: '@daily' })).rejects.toThrow('five fields')
+    await expect(call('schedule_routine', { ...base, first_run: 'tomorrow', repeat: 'daily' })).rejects.toThrow('ISO 8601')
+  })
+
+  it('refuses a bot that may not run on a schedule, and anyone who is not a bot', async () => {
+    const { call, tools } = withTools([{ id: 'b1', name: 'Scout', routines: false }])
+    await expect(call('schedule_routine', { name: 'X', instructions: 'Go.', first_run: '2026-10-08T09:00:00Z', repeat: 'daily' })).rejects.toThrow('Allow Scout')
+    expect(await tools.call({ id: 'someone-else' }, 'list_routines', {})).toMatchObject({ isError: true })
+  })
+
+  it('announces runs that end or are missed, never skipped ones', () => {
+    const { service, chats, advance, daily9, setClock, told } = setup()
+    service.create(daily9())
+    advance(HOUR)
+    chats.end('t1')
+    service.create({ name: 'Watch', botId: 'b1', prompt: 'Check.', schedule: { kind: 'interval', everyMinutes: 30 }, startsAt: '2026-10-07T09:30:00.000Z', timezone: 'UTC' })
+    advance(60 * 60 * 1000) // Watch runs at 09:30, then 10:00 is skipped while it is still going
+    setClock(T0 + 3 * 24 * HOUR)
+    service.tick()
+    expect(told).toContain('Morning report:completed')
+    expect(told).toContain('Morning report:missed')
+    expect(told.some((t) => t.endsWith(':skipped'))).toBe(false)
+  })
+
+  it('words notifications plainly', () => {
+    const run = { id: 'r', routineId: 'x', routineName: 'Morning report', botId: 'b', trigger: 'schedule' as const, prompt: '', scheduledFor: '' }
+    expect(runNotice({ ...run, status: 'completed' }, 'Scout')).toEqual({ title: 'Morning report is done', body: 'Scout finished this run. Its report is in the thread.' })
+    expect(runNotice({ ...run, status: 'failed', detail: 'Rate limited.' }).title).toBe('Morning report failed')
+    expect(runNotice({ ...run, status: 'failed', detail: 'x'.repeat(500) }).body).toHaveLength(140)
   })
 })

@@ -61,8 +61,9 @@ export function cronProblem(expr: string): string | null {
   }
 }
 
-const cronOf = (schedule: Extract<RoutineSchedule, { kind: 'cron' }>, t: Timing): Cron =>
-  new Cron(schedule.expr, { mode: '5-part', timezone: t.timezone, startAt: new Date(t.startsAt) })
+// No croner `startAt`: it leaves out a run at exactly the start, which is the first run a user picks.
+// The start is applied below instead.
+const cronOf = (schedule: Extract<RoutineSchedule, { kind: 'cron' }>, t: Timing): Cron => new Cron(schedule.expr, { mode: '5-part', timezone: t.timezone })
 
 const intervalMs = (schedule: Extract<RoutineSchedule, { kind: 'interval' }>): number => schedule.everyMinutes * 60_000
 
@@ -76,7 +77,12 @@ export function nextRuns(t: Timing, after: Date, n: number): Date[] {
     const every = intervalMs(t.schedule)
     const first = after < start ? 0 : Math.floor((after.getTime() - start.getTime()) / every) + 1
     runs = Array.from({ length: n }, (_, i) => new Date(start.getTime() + (first + i) * every))
-  } else runs = cronOf(t.schedule, t).nextRuns(n, after < start ? new Date(start.getTime() - 1) : after)
+  } else {
+    // A second before the start, so a run at exactly the start counts (croner works in whole seconds).
+    runs = cronOf(t.schedule, t)
+      .nextRuns(n + 1, after < start ? new Date(start.getTime() - 1000) : after)
+      .filter((d) => d >= start && d > after)
+  }
   return runs.filter((d) => d.getTime() <= end).slice(0, n)
 }
 

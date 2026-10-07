@@ -44,6 +44,8 @@ export interface RoutineDeps {
   log: Logger
   /** Told after every change: how many runs are going, and when the next one is due (keep-awake). */
   activity?: (running: number, nextDueAt: number | undefined) => void
+  /** Told when a run ends (done or failed) or is missed: the desktop notification. Skipped runs stay quiet. */
+  outcome?: (run: RoutineRun) => void
   now?: () => number
   timers?: Timers
 }
@@ -291,8 +293,17 @@ export class RoutineService {
       } catch (error) {
         this.d.log.warn(`Could not post the result of "${run.routineName}"`, error)
       }
+      this.tell(run)
     }
     this.changed()
+  }
+
+  private tell(run: RoutineRun): void {
+    try {
+      this.d.outcome?.(run)
+    } catch (error) {
+      this.d.log.warn('Could not announce a routine run', error)
+    }
   }
 
   /** A finished run's dated summary goes into the routine's results thread (made on the first result). */
@@ -338,6 +349,8 @@ ${outcome || '(No reply.)'}`)
     this.d.store.update((s) => {
       s.routineRuns = [run, ...s.routineRuns].slice(0, MAX_ROUTINE_RUNS)
     })
+    // A run that could not start, or was missed, is news too.
+    if (run.status === 'failed' || run.status === 'missed') this.tell(run)
     return run
   }
 
