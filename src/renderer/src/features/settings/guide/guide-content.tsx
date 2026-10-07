@@ -35,24 +35,24 @@ export const GUIDE: GuideChapter[] = [
   {
     id: 'start',
     title: 'Getting started',
-    summary: 'Open a project, create a workspace, start your first agents.',
+    summary: 'Open a workspace, create a worktree, start your first agents.',
     icon: Compass,
     sections: [
       {
-        heading: 'Open a project',
+        heading: 'Open a workspace',
         body: (
           <p>
-            Click <b>Add project</b> (or the folder icon in the sidebar): pick a local folder, create a new repository, clone one, or
-            restore a project you removed earlier with its workspaces and agents. Adding a project creates nothing — no workspace,
+            Click <b>Add workspace</b> (or the folder icon in the sidebar): pick a local folder, create a new repository, clone one, or
+            restore a workspace you removed earlier with its worktrees and agents. Adding a workspace creates nothing — no worktree,
             branch or agent — until you ask for it.
           </p>
         )
       },
       {
-        heading: 'Create a workspace',
+        heading: 'Create a worktree',
         body: (
           <p>
-            Press <b>+</b> next to the project name. Choose <b>Project folder</b> to work directly in the folder (one per project), or{' '}
+            Press <b>+</b> next to the workspace name. Choose <b>Workspace folder</b> to work directly in the folder (one per workspace), or{' '}
             <b>New branch</b> for an isolated copy on its own Git branch so agents never collide.
           </p>
         )
@@ -61,7 +61,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Open agents',
         body: (
           <p>
-            Pick CLIs and counts while creating the workspace, or use <b>Open agent</b> in an empty workspace. Every installed CLI is
+            Pick CLIs and counts while creating the worktree, or use <b>Open agent</b> in an empty worktree. Every installed CLI is
             detected automatically; each instance gets its own pet name, terminal and status.
           </p>
         )
@@ -70,15 +70,15 @@ export const GUIDE: GuideChapter[] = [
   },
   {
     id: 'git',
-    title: 'Workspaces & branches',
+    title: 'Worktrees & branches',
     summary: 'How isolation works, base branches, existing branches and cleanup.',
     icon: GitBranch,
     sections: [
       {
-        heading: 'Isolated workspaces',
+        heading: 'Isolated worktrees',
         body: (
           <p>
-            A <b>New branch</b> workspace is a Git worktree: a separate folder that shares your repository but has its own branch and
+            A <b>New branch</b> worktree is a separate folder that shares your repository but has its own branch and
             files. Hiveory creates the folder and branch for you (default <code>hiveory/&lt;name&gt;</code>) from the base branch you
             choose.
           </p>
@@ -87,7 +87,7 @@ export const GUIDE: GuideChapter[] = [
       },
       {
         heading: 'Use an existing branch',
-        body: <p>Turn on “Use existing branch” to check out a branch you already have into a new isolated workspace.</p>
+        body: <p>Turn on “Use existing branch” to check out a branch you already have into a new isolated worktree.</p>
       },
       {
         heading: 'No Git yet?',
@@ -98,8 +98,8 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Status, pull requests and cleanup',
         body: (
           <p>
-            The Workspaces tab shows each branch's changes and ahead/behind counts. With the GitHub CLI signed in, the Pull Requests tab
-            lists PRs and can open one from a workspace branch. Deleting a workspace removes its folder; branches with unmerged commits
+            The Worktrees tab shows each branch's changes and ahead/behind counts. With the GitHub CLI signed in, the Pull Requests tab
+            lists PRs and can open one from a worktree branch. Deleting a worktree removes its folder; branches with unmerged commits
             are always kept. A missing folder can be repaired from the branch.
           </p>
         ),
@@ -183,7 +183,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Three columns, no manual moves',
         body: (
           <p>
-            The project's Tasks tab shows every agent sorted by what it is actually doing. Cards move by themselves; click one to jump to
+            The workspace's Tasks tab shows every agent sorted by what it is actually doing. Cards move by themselves; click one to jump to
             its pane.
           </p>
         )
@@ -198,19 +198,19 @@ export const GUIDE: GuideChapter[] = [
     sections: [
       {
         heading: 'Save and load',
-        body: <p>A preset remembers which CLIs, how many of each and the auto-approve setting — never the layout. Load one into any empty workspace.</p>
+        body: <p>A preset remembers which CLIs, how many of each and the auto-approve setting — never the layout. Load one into any empty worktree.</p>
       }
     ]
   },
   {
     id: 'terminal',
     title: 'Terminal & side panel',
-    summary: 'A real shell for each workspace.',
+    summary: 'A real shell for each worktree.',
     icon: SquareTerminal,
     sections: [
       {
         heading: 'Side panel',
-        body: <p>Inside a workspace, the right-panel button in the title bar opens the side panel: browsers, the workspace's Explorer and agent Sessions. Terminals open as panes from a pane's "+".</p>
+        body: <p>Inside a worktree, the right-panel button in the title bar opens the side panel: browsers, the worktree's Explorer and agent Sessions. Terminals open as panes from a pane's "+".</p>
       }
     ]
   },

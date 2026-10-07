@@ -22,7 +22,7 @@ import type { HostRef } from '@shared/domain'
 /** The machine a remote project lives on (ports exist only there). */
 const remoteHost = (c: Container, projectId: string): HostRef => {
   const host = c.projects.get(projectId).host
-  if (!host) fail('INVALID_INPUT', 'This project is on this computer; its ports need no forwarding.')
+  if (!host) fail('INVALID_INPUT', 'This workspace is on this computer; its ports need no forwarding.')
   return host!
 }
 
@@ -38,10 +38,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   }
   /** GitHub runs this computer's gh against a local checkout; remote projects use it from their own terminals. */
   const localOnly = (projectId: string, what: string): void => {
-    if (c.workspaceRepo.project(projectId).host) fail('INVALID_INPUT', `${what} works for projects on this computer.`, { hint: 'Use gh in a terminal on that machine.' })
+    if (c.workspaceRepo.project(projectId).host) fail('INVALID_INPUT', `${what} works for workspaces on this computer.`, { hint: 'Use gh in a terminal on that machine.' })
   }
   const requireRepoRoot = async (projectId: string): Promise<string> =>
-    (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This project is not a Git repository.')
+    (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This workspace is not a Git repository.')
 
   /** The project folder for a project-scoped skill action (by id, or the project a scanned skill lives in). */
   const projectPathOf = (projectId?: string, skillPath?: string): string | undefined => {
@@ -80,7 +80,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   const addProject = async (path: string, name?: string): Promise<Project> => {
     const project = await c.projects.open(path, name)
     const adopted = await c.workspaces.adoptWorktrees(project.id).catch(() => 0)
-    if (adopted) c.log.info(`Restored ${adopted} workspace folder(s) for ${project.name}`)
+    if (adopted) c.log.info(`Restored ${adopted} worktree folder(s) for ${project.name}`)
     return project
   }
 
@@ -101,7 +101,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'projects.list': () => c.projects.list(),
   'projects.open': async (_input, event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
-    const options = { title: 'Open project', properties: ['openDirectory', 'createDirectory'] as const }
+    const options = { title: 'Open workspace', properties: ['openDirectory', 'createDirectory'] as const }
     const result = window
       ? await dialog.showOpenDialog(window, { ...options, properties: [...options.properties] })
       : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
@@ -110,7 +110,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'projects.pickFolder': async ({ purpose }, event) => {
     const folder = await pickPath(event.sender, {
-      title: purpose === 'project' ? 'Choose the project folder' : 'Choose where it goes',
+      title: purpose === 'project' ? 'Choose the workspace folder' : 'Choose where it goes',
       properties: ['openDirectory', 'createDirectory']
     })
     if (folder) picked.add(folder)
@@ -284,7 +284,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const suffix = tab ? `-${tab}` : ''
     if (workspaceId) return c.shells.open(workspaceId + suffix, c.workspaceRepo.get(workspaceId).path)
     if (projectId) return c.shells.open(projectId + suffix, c.workspaceRepo.project(projectId).path)
-    return fail('INVALID_INPUT', 'Choose a project or workspace first.')
+    return fail('INVALID_INPUT', 'Choose a workspace or worktree first.')
   },
   'shell.restart': ({ id }) => c.shells.restart(id),
   'shell.close': ({ id }) => c.shells.close(id),
@@ -555,7 +555,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const project = c.workspaceRepo.project(projectId)
     const kit = await c.hosts.kit(project.host)
     const repoRoot = project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path))
-    if (!repoRoot) return { problem: 'This project is not a Git repository.' }
+    if (!repoRoot) return { problem: 'This workspace is not a Git repository.' }
     const problem = await kit.git.branchNameProblem(repoRoot, name)
     if (problem) return { problem }
     return { problem: (await kit.git.localBranchExists(repoRoot, name)) ? `Branch ${name} already exists.` : null }
@@ -564,9 +564,9 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'workspaces.gitStatus': ({ workspaceId }) => c.workspaces.gitStatus(workspaceId),
   'workspaces.repair': ({ workspaceId }) => c.workspaces.repair(workspaceId),
   'github.status': async ({ projectId }) => {
-    if (c.workspaceRepo.project(projectId).host) return { available: false, reason: 'GitHub features work for projects on this computer.' }
+    if (c.workspaceRepo.project(projectId).host) return { available: false, reason: 'GitHub features work for workspaces on this computer.' }
     const root = await repoRootOf(projectId)
-    return root ? c.github.status(root) : { available: false, reason: 'This project is not a Git repository.' }
+    return root ? c.github.status(root) : { available: false, reason: 'This workspace is not a Git repository.' }
   },
   'github.pullRequests': async ({ projectId }) => {
     localOnly(projectId, 'Pull requests')
@@ -581,7 +581,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     localOnly(workspace.projectId, 'Pull requests')
     const branch = workspace.git?.branch
     if (workspace.kind !== 'isolated' || !branch || !workspace.git?.worktreePath) {
-      return fail('INVALID_INPUT', 'Pull requests are created from an isolated workspace branch.')
+      return fail('INVALID_INPUT', 'Pull requests are created from an isolated worktree branch.')
     }
     const root = await requireRepoRoot(workspace.projectId)
     return { url: await c.github.createPullRequest(root, workspace.git.worktreePath, branch, draft ?? false) }

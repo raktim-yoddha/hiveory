@@ -39,7 +39,7 @@ export function EmptyWorkspace({ workspaceId }: { workspaceId: string }) {
     <>
       <EmptyState
         icon={<AgentIcon />}
-        title="Empty workspace"
+        title="Empty worktree"
         description="Open an agent to start working, or load a preset to open several at once."
         actions={
           <>

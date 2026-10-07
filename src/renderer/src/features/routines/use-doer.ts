@@ -14,8 +14,8 @@ export function useDoerName(): (r: { botId?: string; target?: RoutineTarget; whe
     const cli = clis.find((c) => c.id === r.target!.cliId)?.displayName ?? r.target.cliId
     if (r.target.kind === 'chat') return `${cli} · new chat`
     const { projectId, workspaceId } = r.target
-    const project = projects.find((p) => p.id === projectId)?.name ?? 'a project'
-    const workspace = byProject[projectId]?.find((w) => w.id === workspaceId)?.name ?? 'a workspace'
+    const project = projects.find((p) => p.id === projectId)?.name ?? 'a workspace'
+    const workspace = byProject[projectId]?.find((w) => w.id === workspaceId)?.name ?? 'a worktree'
     return `${cli} · ${project} · ${workspace}`
   }
 }

@@ -31,7 +31,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Stack.Screen options={{ title: project?.name ?? 'Project' }} />
+      <Stack.Screen options={{ title: project?.name ?? 'Workspace' }} />
       <Screen
         refreshing={refreshing}
         onRefresh={() => {
@@ -59,10 +59,10 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
               />
             ))
           ) : (
-            <EmptyState icon={Sparkles} title={`No agent is ${status === 'waiting-for-you' ? 'waiting for you' : status}`} body="Open one in a workspace below." />
+            <EmptyState icon={Sparkles} title={`No agent is ${status === 'waiting-for-you' ? 'waiting for you' : status}`} body="Open one in a worktree below." />
           )}
         </Section>
-        <Section title="Workspaces" aside={<Button label="New" size="sm" icon={Plus} onPress={() => setCreating(true)} />}>
+        <Section title="Worktrees" aside={<Button label="New" size="sm" icon={Plus} onPress={() => setCreating(true)} />}>
           {(workspaces.data ?? []).map((w) => (
             <ListRow
               key={w.id}
@@ -72,7 +72,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
               onPress={() => router.push(routes.workspace(w.id, projectId))}
             />
           ))}
-          {!workspaces.data?.length ? <EmptyState icon={GitBranch} title="No workspaces yet" body="Create one to open agents in it." /> : null}
+          {!workspaces.data?.length ? <EmptyState icon={GitBranch} title="No worktrees yet" body="Create one to open agents in it." /> : null}
         </Section>
       </Screen>
       <NewWorkspaceSheet projectId={projectId} open={creating} onClose={() => setCreating(false)} />

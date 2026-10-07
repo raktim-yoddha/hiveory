@@ -59,7 +59,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   }, [focusPaneId])
 
   if (!project || (workspaces.length > 0 && !workspace)) {
-    return <EmptyState icon={<FolderX />} title="Workspace not found" description="It may have been deleted." />
+    return <EmptyState icon={<FolderX />} title="Worktree not found" description="It may have been deleted." />
   }
   if (!workspace) return null
 
@@ -68,7 +68,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const editorById = new Map(editors.map((e) => [e.id, e]))
 
   return (
-    <section className={styles.screen} aria-label={`${workspace.name} workspace`}>
+    <section className={styles.screen} aria-label={`${workspace.name} worktree`}>
       <div className={styles.body}>
         {agents && list.length === 0 && editors.length === 0 ? (
           <div className={styles.emptySurface}>

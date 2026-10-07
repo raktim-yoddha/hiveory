@@ -70,12 +70,12 @@ const setup = (runtimeOverrides: Record<string, CliRuntimeDetails> = {}) => {
 }
 
 describe('agent tools', () => {
-  it('lists project agents with status and marks the caller', async () => {
+  it('lists workspace agents with status and marks the caller', async () => {
     const { tools } = setup({ a2: { status: 'waiting-for-you', running: true, waitingReason: 'permission' } })
     const { text } = await tools.call('list_agents', {})
-    expect(text).toContain('Project "demo" has 4 agent(s)')
-    expect(text).toContain('Milo — Claude Code · workspace "Main" · idle · this is you')
-    expect(text).toContain('Luna — Codex · workspace "Main" · waiting-for-you (permission)')
+    expect(text).toContain('Workspace "demo" has 4 agent(s)')
+    expect(text).toContain('Milo — Claude Code · worktree "Main" · idle · this is you')
+    expect(text).toContain('Luna — Codex · worktree "Main" · waiting-for-you (permission)')
   })
 
   it('exposes only installed CLIs as open_agent choices', () => {
@@ -88,7 +88,7 @@ describe('agent tools', () => {
     const { tools } = setup()
     const result = await tools.call('read_agent', { agent: 'Lunaa' })
     expect(result.isError).toBe(true)
-    expect(result.text).toBe('No agent named "Lunaa". Agents in this project: Milo, Luna, Kai, Ivy.')
+    expect(result.text).toBe('No agent named "Lunaa". Agents in this workspace: Milo, Luna, Kai, Ivy.')
   })
 
   it('reads another agent case-insensitively', async () => {
@@ -125,11 +125,11 @@ describe('agent tools', () => {
     expect((await tools.call('open_agent', { cli: 'gemini' })).text).toBe('"gemini" is not an installed CLI. Installed: claude, codex.')
   })
 
-  it('arranges panes in the caller workspace and rejects other workspaces', async () => {
+  it('arranges panes in the caller worktree and rejects other worktrees', async () => {
     const { tools, deps } = setup()
     await tools.call('arrange_panes', { mode: 'focus', focus: 'Luna' })
     expect(deps.layouts.apply).toHaveBeenCalledWith('w1', ['a1', 'a2'], { type: 'arrange', mode: 'focus', focusPaneId: 'a2' })
-    expect((await tools.call('arrange_panes', { mode: 'focus', focus: 'Kai' })).text).toMatch(/another workspace/)
+    expect((await tools.call('arrange_panes', { mode: 'focus', focus: 'Kai' })).text).toMatch(/another worktree/)
     expect((await tools.call('arrange_panes', { mode: 'spiral' })).text).toMatch(/equal, focus, columns/)
   })
 

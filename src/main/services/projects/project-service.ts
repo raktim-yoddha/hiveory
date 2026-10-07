@@ -38,7 +38,7 @@ export class ProjectService {
 
   get(projectId: string): Project {
     const project = this.store.state.projects.find((p) => p.id === projectId)
-    if (!project) fail('NOT_FOUND', 'Project not found.')
+    if (!project) fail('NOT_FOUND', 'Workspace not found.')
     return project!
   }
 
@@ -52,7 +52,7 @@ export class ProjectService {
     try {
       if (!statSync(path).isDirectory()) throw new Error('not a directory')
     } catch {
-      fail('NOT_FOUND', 'That folder does not exist.', { operation: 'Open project' })
+      fail('NOT_FOUND', 'That folder does not exist.', { operation: 'Open workspace' })
     }
     return this.add(path, name)
   }
@@ -65,8 +65,8 @@ export class ProjectService {
     const kit = await this.kits.kit(host)
     const raw = folder.trim()
     const path = posix.normalize(raw === '~' || raw.startsWith('~/') ? posix.join(kit.home, raw.slice(1)) : raw).replace(/(.)\/+$/, '$1')
-    if (!posix.isAbsolute(path)) fail('INVALID_INPUT', 'Use a full path on that machine, like /home/me/app or ~/app.', { operation: 'Open project' })
-    if (!(await kit.fs.isDirectory(path))) fail('NOT_FOUND', `${path} is not a folder on ${host.destination}.`, { operation: 'Open project' })
+    if (!posix.isAbsolute(path)) fail('INVALID_INPUT', 'Use a full path on that machine, like /home/me/app or ~/app.', { operation: 'Open workspace' })
+    if (!(await kit.fs.isDirectory(path))) fail('NOT_FOUND', `${path} is not a folder on ${host.destination}.`, { operation: 'Open workspace' })
     return this.add(path, name, host)
   }
 
@@ -203,8 +203,8 @@ export class ProjectService {
     // Its Main workspace would share a checkout another project already runs agents in (ADR 0021).
     const owner = entry.workspaces.some((w) => w.kind === 'main') ? mainTreeOwner(this.store.state, project) : undefined
     if (owner) {
-      fail('INVALID_INPUT', `${project.name}'s Main workspace uses the same checkout as the ${owner.workspace.name} workspace of ${owner.project.name}.`, {
-        operation: 'Restore project',
+      fail('INVALID_INPUT', `${project.name}'s Main worktree uses the same checkout as the ${owner.workspace.name} worktree of ${owner.project.name}.`, {
+        operation: 'Restore workspace',
         hint: `Agents run in one place per checkout. Remove ${owner.workspace.name} from ${owner.project.name} (nothing on disk changes), then restore.`
       })
     }

@@ -56,7 +56,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   const onGitChange = useCallback((choice: GitChoice) => setGit(choice), [])
 
   const suggest = (): void =>
-    void runAction('Suggest workspace name', async () => {
+    void runAction('Suggest worktree name', async () => {
       setSuggested(await api('workspaces.suggestName', { projectId }))
       setTyped(null)
     })
@@ -66,12 +66,12 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   }, [projectId, loadWorkspaces])
 
   useEffect(() => {
-    void runAction('Suggest workspace name', async () => setSuggested(await api('workspaces.suggestName', { projectId })))
+    void runAction('Suggest worktree name', async () => setSuggested(await api('workspaces.suggestName', { projectId })))
   }, [projectId])
 
   const create = async (withAgents: boolean): Promise<void> => {
     setBusy(withAgents ? 'full' : 'empty')
-    const workspace = await runAction('Create workspace', () =>
+    const workspace = await runAction('Create worktree', () =>
       api('workspaces.create', {
         projectId,
         kind,
@@ -97,7 +97,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   return (
     <Modal
       open
-      title="Create workspace"
+      title="Create worktree"
       onClose={onClose}
       width="lg"
       footer={
@@ -114,12 +114,12 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
       <div className={styles.form}>
         <div className={styles.association}>
           <span className={styles.label}>Where agents work</span>
-          <div className={styles.kinds} role="radiogroup" aria-label="Workspace type">
+          <div className={styles.kinds} role="radiogroup" aria-label="Worktree type">
             <KindOption
               selected={kind === 'main'}
               disabled={hasMain}
-              title="Project folder"
-              description={hasMain ? 'This project already has a main workspace.' : 'Agents work directly in the project folder.'}
+              title="Workspace folder"
+              description={hasMain ? 'This workspace already has a main worktree.' : 'Agents work directly in the workspace folder.'}
               onSelect={() => setKind('main')}
             />
             <KindOption
@@ -132,7 +132,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
           </div>
         </div>
         <TextField
-          label="Workspace name"
+          label="Worktree name"
           value={name}
           onChange={setTyped}
           maxLength={60}

@@ -75,7 +75,7 @@ export function SettingsScreen({ notifications }: { notifications?: ReactNode })
           </View>
           <Text variant="label" tone="muted">
             This app talks only to the computers you paired, over your own Tailscale network. No Hiveory server sits in between. Phones can watch and steer
-            agents; deleting projects and changing settings stay on the computer.
+            agents; deleting workspaces and changing settings stay on the computer.
           </Text>
         </Card>
       </Section>

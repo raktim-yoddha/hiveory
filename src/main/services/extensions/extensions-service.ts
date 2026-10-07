@@ -168,7 +168,7 @@ export class ExtensionsService {
     const root = this.roots.find((r) => r.id === rootId)
     if (!root) fail('INVALID_INPUT', `Unknown skills folder: ${rootId}`)
     const dir = rootPath(root!, scope)
-    if (!dir) fail('INVALID_INPUT', `${root!.label} reads project skills from the shared folder. Use Shared (.agents).`)
+    if (!dir) fail('INVALID_INPUT', `${root!.label} reads workspace skills from the shared folder. Use Shared (.agents).`)
     return join(base, ...dir!.split('/'))
   }
 
@@ -176,7 +176,7 @@ export class ExtensionsService {
   copySkill(skillPath: string, rootId: SkillRoot['id'], projectPath?: string): string {
     const skill = this.known(skillPath)
     const base = skill.scope === 'user' ? this.home : projectPath
-    if (!base) fail('INVALID_INPUT', 'Open the project this skill belongs to first.')
+    if (!base) fail('INVALID_INPUT', 'Open the workspace this skill belongs to first.')
     const target = join(this.rootDir(rootId, base!, skill.scope), skill.folder)
     if (resolve(target) === resolve(skill.path)) return target
     if (existsSync(target)) fail('INVALID_INPUT', `${this.roots.find((r) => r.id === rootId)?.label} already has a skill named "${skill.folder}".`)

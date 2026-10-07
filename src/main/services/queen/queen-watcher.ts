@@ -45,7 +45,7 @@ export class QueenWatcher {
       cliName: this.deps.cliName(agent.cliId),
       projectId: agent.projectId,
       workspaceId: agent.workspaceId,
-      workspaceName: this.deps.workspaceName(agent.workspaceId) ?? 'its workspace'
+      workspaceName: this.deps.workspaceName(agent.workspaceId) ?? 'its worktree'
     }
     if (prev.running && !runtime.running) {
       if (runtime.error) this.deps.emit({ ...base, kind: 'stopped', reason: runtime.error.slice(0, 200) })

@@ -33,7 +33,7 @@ export function NewWorkspaceSheet({ projectId, open, onClose }: { projectId: str
   return (
     <Sheet
       open={open}
-      title="New workspace"
+      title="New worktree"
       onClose={onClose}
       footer={<Button label="Create" variant="primary" icon={Plus} block loading={create.isPending} disabled={!name.trim()} onPress={submit} />}
     >

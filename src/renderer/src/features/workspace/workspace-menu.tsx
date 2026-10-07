@@ -40,12 +40,12 @@ export const workspaceMenuEntries = (workspace: WorkspaceView, onDelete: () => v
           id: 'repair',
           label: 'Repair folder',
           icon: <Wrench />,
-          onSelect: () => void runAction('Repair workspace', () => api('workspaces.repair', { workspaceId: workspace.id }))
+          onSelect: () => void runAction('Repair worktree', () => api('workspaces.repair', { workspaceId: workspace.id }))
         }
       ]
     : []),
   { type: 'separator' },
   workspace.kind === 'main'
-    ? { type: 'item', id: 'remove', label: 'Remove workspace', icon: <X />, danger: true, onSelect: onDelete }
-    : { type: 'item', id: 'delete', label: 'Delete workspace', icon: <Trash2 />, danger: true, onSelect: onDelete }
+    ? { type: 'item', id: 'remove', label: 'Remove worktree', icon: <X />, danger: true, onSelect: onDelete }
+    : { type: 'item', id: 'delete', label: 'Delete worktree', icon: <Trash2 />, danger: true, onSelect: onDelete }
 ]

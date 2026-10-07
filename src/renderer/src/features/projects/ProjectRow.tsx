@@ -56,8 +56,8 @@ export function ProjectRow({ project }: { project: Project }) {
           context
           label={`${project.name} actions`}
           items={[
-            { type: 'item', id: 'open', label: 'Open project', icon: <LayoutGrid />, onSelect: open },
-            { type: 'item', id: 'new', label: 'New workspace…', icon: <Plus />, onSelect: () => setCreating(true) },
+            { type: 'item', id: 'open', label: 'Open workspace', icon: <LayoutGrid />, onSelect: open },
+            { type: 'item', id: 'new', label: 'New worktree…', icon: <Plus />, onSelect: () => setCreating(true) },
             { type: 'separator' },
             {
               type: 'item',
@@ -74,7 +74,7 @@ export function ProjectRow({ project }: { project: Project }) {
               onSelect: () => void runAction('Copy path', () => api('clipboard.writeText', { text: project.path }))
             },
             { type: 'separator' },
-            { type: 'item', id: 'remove', label: 'Remove project…', icon: <X />, danger: true, onSelect: () => setRemoving(true) }
+            { type: 'item', id: 'remove', label: 'Remove workspace…', icon: <X />, danger: true, onSelect: () => setRemoving(true) }
           ]}
           trigger={(props) => (
             <button {...props} type="button" className={styles.rowButton} onClick={open} title={project.path}>
@@ -85,7 +85,7 @@ export function ProjectRow({ project }: { project: Project }) {
         />
         <IconButton
           className={styles.rowAction}
-          label={`New workspace in ${project.name}`}
+          label={`New worktree in ${project.name}`}
           icon={<Plus />}
           onClick={() => setCreating(true)}
         />
@@ -127,7 +127,7 @@ export function ProjectRow({ project }: { project: Project }) {
             <li>
               <button type="button" className={cx(styles.childRow, styles.ghostRow)} onClick={() => setCreating(true)}>
                 <Plus className={styles.childIcon} aria-hidden />
-                <span className={styles.rowText}>New workspace</span>
+                <span className={styles.rowText}>New worktree</span>
               </button>
             </li>
           )}

@@ -175,7 +175,7 @@ One bar and one reply card, no history (ADR 0019).
 - **Waveform mark:** five bars in her accent chip, scaled by the live loudness (≈20 updates a
   second from a timer, only while audio flows); a gentle breathing while she transcribes.
 - **Receipts:** small, secondary text with an accent check.
-- **Report rows:** status dot, name, CLI and workspace, wait time.
+- **Report rows:** status dot, name, CLI and worktree, wait time.
 - **An agent's own words:** an inset block captioned "On its screen", mono text, so it is
   never mistaken for Queen Bee's.
 
@@ -190,14 +190,14 @@ All icon buttons require accessible labels/tooltips.
 
 ## Sidebar
 
-The left navigation is a single Projects sidebar in Workspace mode.
+The left navigation is a single Workspaces sidebar in Work mode.
 
 It contains:
 
-- Projects heading
+- Workspaces heading
 - sort control
-- add/create/open project control
-- project list
+- add/create/open workspace control
+- workspace list
 
 The sidebar should feel like the BridgeMind reference: compact, dark, subtle, and not visually heavy.
 
@@ -217,9 +217,9 @@ Do not add Agent mode.
 
 Do not add additional top-level modes.
 
-## Project Page
+## Workspace Page
 
-The Project page is project-level.
+The Workspace page is workspace-level (its worktrees, tasks, pull requests and settings).
 
 Conceptual layout:
 
@@ -242,9 +242,9 @@ Do NOT show:
 
 on this page.
 
-## Empty Workspace
+## Empty Worktree
 
-An empty Workspace is different.
+An empty Worktree is different.
 
 ```text
 ┌───────────────────────────────────────────────────────────────┐
@@ -259,7 +259,7 @@ An empty Workspace is different.
 └───────────────────────────────────────────────────────────────┘
 ```
 
-## Workspace Agent Panes
+## Worktree Agent Panes
 
 When populated:
 
@@ -295,13 +295,13 @@ Plus, maximize and close are always visible, at any pane width; the name truncat
 status detail drops first. Pane actions (restart, move, close) open from a right-click on the
 name.
 
-There is no Workspace header bar above the panes (ADR 0011).
+There is no Worktree header bar above the panes (ADR 0011).
 
 Avoid unnecessary text.
 
 ## Kanban
 
-The Project's Task view is a three-column board:
+The Workspace's Task view is a three-column board:
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐

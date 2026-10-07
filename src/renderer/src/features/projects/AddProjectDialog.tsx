@@ -122,7 +122,7 @@ export function AddProjectDialog() {
   const submit = (): void => {
     if (!ready || busy) return
     setBusy(true)
-    const label = where === 'remote' ? 'Add remote project' : { folder: 'Add project', create: 'Create repository', clone: 'Clone repository', previous: 'Restore project' }[mode]
+    const label = where === 'remote' ? 'Add remote workspace' : { folder: 'Add workspace', create: 'Create repository', clone: 'Clone repository', previous: 'Restore workspace' }[mode]
     const custom = name.trim() || undefined
     void runAction(label, async (): Promise<Project> => {
       if (where === 'remote') return api('projects.add', { mode: 'remote', destination: destination.trim(), path: remoteFolder.trim(), name: custom })
@@ -160,12 +160,12 @@ export function AddProjectDialog() {
     </div>
     )
 
-  const submitLabel = where === 'remote' ? 'Add project' : { folder: 'Add project', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore workspaces' : 'Restore' }[mode]
+  const submitLabel = where === 'remote' ? 'Add workspace' : { folder: 'Add workspace', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore worktrees' : 'Restore' }[mode]
 
   return (
     <Modal
       open={open}
-      title="Add project"
+      title="Add workspace"
       width="lg"
       onClose={close}
       footer={
@@ -187,15 +187,15 @@ export function AddProjectDialog() {
         <div className={styles.top}>
           <TextInput
             className={styles.name}
-            aria-label="Project name"
-            placeholder={suggested || 'Project name'}
+            aria-label="Workspace name"
+            placeholder={suggested || 'Workspace name'}
             value={name}
             onChange={setName}
             disabled={mode === 'previous' && where === 'local'}
           />
           <div className={styles.where}>
             <Select
-              label="Where the project lives"
+              label="Where the workspace lives"
               hideLabel
               value={where}
               options={[
@@ -254,25 +254,25 @@ export function AddProjectDialog() {
                     </div>
                   )}
                 </div>
-                {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
+                {pathRow('Workspace directory', parentDir, 'Choose where it goes', 'parent')}
               </>
             )}
 
             {mode === 'clone' && (
               <>
                 <TextField label="Repository URL" value={url} onChange={setUrl} placeholder="https://github.com/owner/repo.git" />
-                {pathRow('Project directory', parentDir, 'Choose where it goes', 'parent')}
+                {pathRow('Workspace directory', parentDir, 'Choose where it goes', 'parent')}
               </>
             )}
 
             {mode === 'previous' && (
               <div className={styles.previous}>
                 <span className={styles.note}>
-                  Projects you removed come back whole: workspaces, agents (resuming their conversations), layouts and open files. Workspace folders found
-                  on disk come back as workspaces.
+                  Workspaces you removed come back whole: worktrees, agents (resuming their conversations), layouts and open files. Worktree folders found
+                  on disk come back as worktrees.
                 </span>
                 {previous === null ? null : previous.length === 0 ? (
-                  <p className={styles.none}>Nothing to restore. Removed projects and leftover workspace folders show up here.</p>
+                  <p className={styles.none}>Nothing to restore. Removed workspaces and leftover worktree folders show up here.</p>
                 ) : (
                   <ul className={styles.list} role="radiogroup" aria-label="Restore which">
                     {previous.map((p) => (

@@ -20,15 +20,15 @@ import styles from './ProjectScreen.module.css'
 const TABS: Array<{ value: ProjectTab; label: string }> = [
   { value: 'tasks', label: 'Tasks' },
   { value: 'pull-requests', label: 'Pull Requests' },
-  { value: 'workspaces', label: 'Workspaces' },
+  { value: 'workspaces', label: 'Worktrees' },
   { value: 'settings', label: 'Settings' }
 ]
 
 const REGION: Record<ProjectTab, string> = {
   tasks: 'Kanban board',
   'pull-requests': 'Pull requests',
-  workspaces: 'Workspaces',
-  settings: 'Project settings'
+  workspaces: 'Worktrees',
+  settings: 'Workspace settings'
 }
 
 /**
@@ -44,7 +44,7 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
     void api('projects.touch', { projectId }).catch(() => undefined)
   }, [projectId])
 
-  if (!project) return <EmptyState icon={<FolderGit2 />} title="Project not found" description="It may have been removed." />
+  if (!project) return <EmptyState icon={<FolderGit2 />} title="Workspace not found" description="It may have been removed." />
 
   return (
     <section className={styles.screen} aria-label={project.name}>
@@ -57,11 +57,11 @@ export function ProjectScreen({ projectId, tab }: { projectId: string; tab: Proj
         </div>
       </header>
       <div className={styles.tabs}>
-        <Tabs label="Project sections" options={TABS} value={tab} onChange={(next) => openProject(projectId, next)} />
+        <Tabs label="Workspace sections" options={TABS} value={tab} onChange={(next) => openProject(projectId, next)} />
         <div className={styles.actions}>
           {project.host && <PortsMenu projectId={projectId} host={project.host.destination} />}
           <Button size="sm" variant="primary" icon={<Plus />} onClick={() => setCreating(true)}>
-            New workspace
+            New worktree
           </Button>
         </div>
       </div>

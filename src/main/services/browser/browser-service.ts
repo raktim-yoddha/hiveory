@@ -477,7 +477,7 @@ export class BrowserService {
       const page = this.pages.get(pageId)
       if (!page || page.scope !== agent.workspaceId) {
         const ids = this.pagesIn(agent.workspaceId).map((p) => p.id)
-        return fail('NOT_FOUND', `No page "${pageId}" in your workspace. Pages: ${ids.join(', ') || 'none'}.`)
+        return fail('NOT_FOUND', `No page "${pageId}" in your worktree. Pages: ${ids.join(', ') || 'none'}.`)
       }
       this.current.set(agent.id, page.id)
       return this.withCursor(this.touch(agent.id, page))

@@ -43,7 +43,7 @@ export class WorktreeService {
           hint: 'Pick a different branch, or close the other checkout first.'
         })
       }
-      throw gitFailure('Could not create the workspace folder.', error, 'Check the details below, then try again.')
+      throw gitFailure('Could not create the worktree folder.', error, 'Check the details below, then try again.')
     }
   }
 
@@ -55,7 +55,7 @@ export class WorktreeService {
       if (error instanceof GitCommandError && isDirtyWorktreeError(error.stderr)) {
         throw new AppException({
           code: 'WORKTREE_DIRTY',
-          message: 'This workspace has uncommitted changes.',
+          message: 'This worktree has uncommitted changes.',
           hint: 'Commit or discard them first, or delete anyway to lose them.'
         })
       }
@@ -63,7 +63,7 @@ export class WorktreeService {
         await this.prune(repoRoot)
         return
       }
-      throw gitFailure('Could not remove the workspace folder.', error)
+      throw gitFailure('Could not remove the worktree folder.', error)
     }
   }
 

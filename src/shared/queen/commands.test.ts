@@ -58,7 +58,7 @@ const CASES: Array<[string, QueenAction[]]> = [
 
   // Status: everything, one CLI, one agent.
   ['status of everything', [{ type: 'report', focus: 'all', everywhere: true }]],
-  ['what is happening across projects', [{ type: 'report', focus: 'all', everywhere: true }]],
+  ['what is happening across workspaces', [{ type: 'report', focus: 'all', everywhere: true }]],
   ['who is waiting', [{ type: 'report', focus: 'waiting-for-you' }]],
   ['codex status', [{ type: 'agent-detail', agentId: 'a2' }]],
   ['how is codex doing', [{ type: 'agent-detail', agentId: 'a2' }]],
@@ -80,7 +80,7 @@ const CASES: Array<[string, QueenAction[]]> = [
   ['talk to me', [{ type: 'speak', on: true }]],
   ['jade theme', [{ type: 'set-theme', theme: 'jade' }]],
   ['switch to dark mode', [{ type: 'set-theme', theme: 'dark' }]],
-  ['create a workspace called login-fix', [{ type: 'create-workspace', name: 'login-fix', projectId: 'p1' }]],
+  ['create a worktree called login-fix', [{ type: 'create-workspace', name: 'login-fix', projectId: 'p1' }]],
 
   // Still commands, even when they start with a CLI name.
   ['codex aur claude kholo', [

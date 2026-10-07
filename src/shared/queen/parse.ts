@@ -58,9 +58,9 @@ const matchName = <T extends { name: string }>(wanted: string, items: T[]): Matc
 
 /** "… in feature-x" / "… on main": the named workspace of the current project. */
 const targetWorkspace = (clause: string, ctx: QueenContext): { id: string } | { ask: QueenParse } | null => {
-  const m = /\b(?:in|on|inside|into|at) (?:workspace )?(.+)$/.exec(clause)
+  const m = /\b(?:in|on|inside|into|at) (?:worktree |workspace )?(.+)$/.exec(clause)
   if (m) {
-    const name = m[1]!.replace(/\b(workspace|branch)\b/g, '').trim()
+    const name = m[1]!.replace(/\b(worktree|workspace|branch)\b/g, '').trim()
     const found = name === 'main' ? ctx.workspaces.filter((w) => w.kind === 'main').map((w) => ({ ...w })) : null
     const match = found?.length === 1 ? { one: found[0]! } : matchName(name, ctx.workspaces)
     if (match && 'one' in match) return { id: match.one.id }
@@ -70,7 +70,7 @@ const targetWorkspace = (clause: string, ctx: QueenContext): { id: string } | { 
         kind: 'ask',
         ...(match ? {} : { soft: true }),
         question: {
-          text: match ? `Which workspace do you mean?` : `There's no workspace called "${name}".`,
+          text: match ? `Which worktree do you mean?` : `There's no worktree called "${name}".`,
           choices: options.slice(0, 4).map((w) => ({ label: w.name, command: `${clause.slice(0, m.index).trim()} in ${w.name}` }))
         }
       }
@@ -103,7 +103,7 @@ const QUALIFIED = /^(.+?) (?:of|in|from|on|for) (.+)$/
 function findPlace(target: string, ctx: QueenContext, projectOnly: boolean): { navigate: QueenAction } | { ask: QueenParse } | null {
   const here: Workspace[] = ctx.projectId ? ctx.workspaces.map((w) => ({ ...w, projectId: ctx.projectId! })) : []
   const others: Workspace[] = ctx.otherWorkspaces ?? []
-  const projectName = (id: string) => ctx.projects.find((p) => p.id === id)?.name ?? 'another project'
+  const projectName = (id: string) => ctx.projects.find((p) => p.id === id)?.name ?? 'another workspace'
   const go = (w: Workspace) => ({ navigate: { type: 'navigate', to: 'workspace', projectId: w.projectId, workspaceId: w.id } as QueenAction })
   const choose = (list: Workspace[], text: string) => ({
     ask: {
@@ -118,24 +118,24 @@ function findPlace(target: string, ctx: QueenContext, projectOnly: boolean): { n
     if (project && 'one' in project) {
       const match = pickWorkspace(qualified[1]!, [...here, ...others].filter((w) => w.projectId === project.one.id))
       if (match && 'one' in match) return go(match.one)
-      if (match && 'many' in match) return choose(match.many, 'Which workspace?')
-      return { ask: { kind: 'ask', soft: true, question: { text: `${project.one.name} has no workspace called "${qualified[1]}".` } } }
+      if (match && 'many' in match) return choose(match.many, 'Which worktree?')
+      return { ask: { kind: 'ask', soft: true, question: { text: `${project.one.name} has no worktree called "${qualified[1]}".` } } }
     }
   }
   if (!projectOnly) {
     const match = pickWorkspace(target, here)
     if (match && 'one' in match) return go(match.one)
-    if (match && 'many' in match) return choose(match.many, 'Which workspace?')
+    if (match && 'many' in match) return choose(match.many, 'Which worktree?')
   }
   const project = matchName(target, ctx.projects)
   if (project && 'one' in project) return { navigate: { type: 'navigate', to: 'project', projectId: project.one.id } }
   if (project && 'many' in project) {
-    return { ask: { kind: 'ask', question: { text: 'Which project?', choices: project.many.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name} project` })) } } }
+    return { ask: { kind: 'ask', question: { text: 'Which workspace?', choices: project.many.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name} workspace` })) } } }
   }
   if (projectOnly) return null
   const elsewhere = pickWorkspace(target, others)
   if (elsewhere && 'one' in elsewhere) return go(elsewhere.one)
-  if (elsewhere && 'many' in elsewhere) return choose(elsewhere.many, norm(target) === 'main' ? "Which project's Main?" : `Which project's ${target}?`)
+  if (elsewhere && 'many' in elsewhere) return choose(elsewhere.many, norm(target) === 'main' ? "Which workspace's Main?" : `Which workspace's ${target}?`)
   return null
 }
 
@@ -156,7 +156,7 @@ const STATUS_WORDS =
   /\b(status|report|summary|summarize|progress|overview|update me|catch me up|whats (left|done|happening|going on|up|pending)|what is (left|done|happening|pending)|who(s| is) (waiting|working|idle|stuck|free|busy)|anyone (waiting|stuck)|any agents? (waiting|stuck|working|idle)|how are (agents|things|we doing)|what are (agents|they|all agents) doing|stuck)\b/
 /** Questions about one agent: "what is Bruno doing", "is Bruno done", "how's Bruno". */
 const DETAIL_WORDS = /\b(doing|up to|working on|done|finished|stuck|status|how is|hows|saying|said|say|output|screen|progress|busy|free)\b/
-const EVERYWHERE = /\b(everything|everywhere|all projects|every project|across projects|overall|whole app)\b/
+const EVERYWHERE = /\b(everything|everywhere|all projects|every project|across projects|all workspaces|every workspace|across workspaces|overall|whole app)\b/
 
 const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string | null): { result: QueenParse; verb: string | null } => {
   // Verb-last word order (Hindi, "settings show"): bring the verb to the front.
@@ -223,7 +223,7 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
       return (match ? ask : soft)(match ? 'Which preset?' : name ? `There's no preset called "${name}".` : 'Which preset?', (match && 'many' in match ? match.many : ctx.presets).slice(0, 4).map((p) => ({ label: p.name, command: `load preset ${p.name}` })))
     }
     const ws = targetWorkspace(clause, ctx)
-    if (!ws) return ask('Open a workspace first, then load the preset.')
+    if (!ws) return ask('Open a worktree first, then load the preset.')
     if ('ask' in ws) return { result: ws.ask, verb: null }
     return done([{ type: 'apply-preset', presetId: match.one.id, workspaceId: ws.id, projectId: ctx.projectId! }])
   }
@@ -295,16 +295,16 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
     if (clis.length) {
       const total = clis.reduce((n, c) => n + c.count, 0)
       if (total > MAX_OPEN_PER_COMMAND) return ask(`That's ${total} agents. I open at most ${MAX_OPEN_PER_COMMAND} per command.`)
-      if (!ctx.projectId) return ask('Open a project first.', ctx.projects.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name}` })))
+      if (!ctx.projectId) return ask('Open a workspace first.', ctx.projects.slice(0, 4).map((p) => ({ label: p.name, command: `go ${p.name}` })))
       const ws = targetWorkspace(clause, ctx)
-      if (!ws) return ask('Which workspace should they open in?', ctx.workspaces.slice(0, 4).map((w) => ({ label: w.name, command: `${clause} in ${w.name}` })))
+      if (!ws) return ask('Which worktree should they open in?', ctx.workspaces.slice(0, 4).map((w) => ({ label: w.name, command: `${clause} in ${w.name}` })))
       if ('ask' in ws) return { result: ws.ask, verb: null }
       return done(clis.map((c) => ({ type: 'open-agents', cliId: c.cliId, count: c.count, workspaceId: ws.id, projectId: ctx.projectId! })), 'open')
     }
     // A workspace or project by name: "go to main", "main of api", "open the api project".
-    const target = clause.replace(/^(go|show|open|focus|find|view|display|visit)\b/, '').replace(/\b(workspace|project)\b/g, '').trim()
+    const target = clause.replace(/^(go|show|open|focus|find|view|display|visit)\b/, '').replace(/\b(worktree|workspace|project)\b/g, '').trim()
     if (target) {
-      const place = findPlace(target, ctx, /\bproject\b/.test(clause) && !QUALIFIED.test(target))
+      const place = findPlace(target, ctx, /\b(workspace|project)\b/.test(clause) && !QUALIFIED.test(target))
       if (place) return 'navigate' in place ? done([place.navigate], verb) : { result: place.ask, verb: null }
     }
     if (verb === 'open' && /\b(agents?|cli|terminal)\b/.test(clause)) {
@@ -337,7 +337,7 @@ const HELP = /^(help|what can you do|what do you do|what can i say|commands|show
 const MUTE = /^(mute|be quiet|quiet|shut up|stop talking|silence|no voice|voice off|talkback off|sound off|chup|chup raho)$/
 const UNMUTE = /^(unmute|speak|talk|talk to me|speak up|voice on|talkback on|sound on|bolo|bol ke batao)$/
 const THEME_WORDS = new Set(['go', 'use', 'set', 'change', 'apply', 'switch', 'to', 'theme', 'mode', 'color', 'colors', 'colour', 'colours', 'a', 'on', 'turn'])
-const NEW_WORKSPACE =/^\s*(?:please\s+)?(?:create|new|make|add|start|open)\s+(?:a\s+)?(?:new\s+)?workspace\s+(?:called\s+|named\s+|for\s+)?["“']?([^"”']+?)["”']?\s*$/i
+const NEW_WORKSPACE =/^\s*(?:please\s+)?(?:create|new|make|add|start|open)\s+(?:a\s+)?(?:new\s+)?(?:worktree|branch)\s+(?:called\s+|named\s+|for\s+)?["“']?([^"”']+?)["”']?\s*$/i
 
 /** One-liners: help, talkback, theme, a new workspace. */
 function parseQuick(input: string, ctx: QueenContext): QueenParse | null {
@@ -354,7 +354,7 @@ function parseQuick(input: string, ctx: QueenContext): QueenParse | null {
   if (theme) return { kind: 'actions', actions: [{ type: 'set-theme', theme: theme.id as ThemeId }] }
   const ws = NEW_WORKSPACE.exec(input)
   if (ws) {
-    if (!ctx.projectId) return { kind: 'ask', question: { text: 'Open a project first, then I can add a workspace to it.' } }
+    if (!ctx.projectId) return { kind: 'ask', question: { text: 'Open a workspace first, then I can add a worktree to it.' } }
     return { kind: 'actions', actions: [{ type: 'create-workspace', name: ws[1]!.trim().slice(0, 60), projectId: ctx.projectId }] }
   }
   return null

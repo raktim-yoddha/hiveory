@@ -21,7 +21,7 @@
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
-Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010).
+Expanding a workspace in the sidebar lists its Worktrees for navigation (ADR 0010).
 
 ### Bots mode (ADR 0022)
 
@@ -56,9 +56,9 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
 - Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)" and "A new agent in a
-  Work workspace" (Project, Workspace, CLI). Below the instructions: the routine's files (chips) and "Add files
+  Work worktree" (Workspace, Worktree, CLI). Below the instructions: the routine's files (chips) and "Add files
   for every run". Chat's sidebar header: Schedule a chat (calendar icon) beside
-  New chat. A workspace's menu: Schedule a routine…
+  New chat. A worktree's menu: Schedule a routine…
 - Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
   as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting
   messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
@@ -171,7 +171,7 @@ panels fold ⌖ ✎ </> into ⋯.
 ```
 
 Drag a tab into the lower half to open the bottom area ("Show below" preview); the browser page
-steps aside while a tab is dragged. ⋯ on a session: Resume in <workspace>, Copy session ID.
+steps aside while a tab is dragged. ⋯ on a session: Resume in <worktree>, Copy session ID.
 
 ### Settings › Skills, MCP & Apps (ADR 0017, 0023)
 
@@ -226,7 +226,7 @@ image; Transparency · Blur · Dim sliders when a wallpaper is set.
 Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
 agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
 
-## Add project (ADR 0020)
+## Add workspace (ADR 0020)
 
 ```text
 ┌ Add project ───────────────────────────────────────── × ┐
@@ -239,12 +239,12 @@ agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
 └──────────────────────────────────────────────────────────┘
 ```
 
-New repository: name, "Also create it on GitHub" (owner, visibility), project directory.
-Clone: repository URL, project directory. Restore previous: removed projects (workspaces,
-agents, "Removed 2 days ago") and workspace folders found on disk ("Open now" adds them to
-the open project).
+New repository: name, "Also create it on GitHub" (owner, visibility), workspace directory.
+Clone: repository URL, workspace directory. Restore previous: removed workspaces (worktrees,
+agents, "Removed 2 days ago") and worktree folders found on disk ("Open now" adds them to
+the open workspace).
 
-## Project
+## Workspace
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
@@ -258,7 +258,7 @@ the open project).
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Project Kanban
+## Workspace Kanban
 
 ```text
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -278,7 +278,7 @@ the open project).
 └──────────────────────┴──────────────────────┴─────────────────────────────┘
 ```
 
-## Empty Workspace
+## Empty Worktree
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
@@ -298,7 +298,7 @@ the open project).
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Populated Workspace
+## Populated Worktree
 
 No header bar: panes fill the area (ADR 0011). ⤢ = maximize / restore. Right-click a
 pane's name for restart, move and close (ADR 0018).
@@ -317,7 +317,7 @@ pane's name for restart, move and close (ADR 0018).
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-## Workspace Creation
+## Worktree Creation
 
 ```text
 ┌───────────────────────────────────────────────┐

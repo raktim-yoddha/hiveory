@@ -125,7 +125,7 @@ app.whenReady().then(async () => {
   const failed: string[] = []
   const report = (what: string) => () => failed.push(what)
   const notice = c.store.load()
-  guard(log, 'Main workspace adoption', () => c.workspaceRepo.adoptImplicitMainWorkspaces())
+  guard(log, 'Main worktree adoption', () => c.workspaceRepo.adoptImplicitMainWorkspaces())
   guard(log, 'Chat history', () => c.chatStore.load(), report('Chat history'))
   guard(log, 'Routines', () => c.routines.start(), report('Routines'))
   void c.triggers.start()

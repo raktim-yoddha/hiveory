@@ -96,7 +96,7 @@ export function GitOptions({ projectId, suggestedBranch, onChange }: GitOptionsP
         <div className={styles.gitSetupText}>
           <span className={styles.kindTitle}>{info.isRepo ? 'This repository has no commits yet' : 'This folder is not a Git repository'}</span>
           <span className={styles.kindText}>
-            Isolated workspaces are Git branches. Hiveory can {info.isRepo ? 'record a first commit' : 'initialize Git and record a first commit'} of the
+            Isolated worktrees are Git branches. Hiveory can {info.isRepo ? 'record a first commit' : 'initialize Git and record a first commit'} of the
             current files for you.
           </span>
         </div>

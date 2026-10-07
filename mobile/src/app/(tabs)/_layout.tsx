@@ -35,7 +35,7 @@ export default function TabsLayout() {
           tabBarAccessibilityLabel: needsYou ? `Inbox, ${needsYou} need you` : 'Inbox'
         }}
       />
-      <Tabs.Screen name="projects" options={{ title: 'Projects', tabBarIcon: ({ color, size }) => <FolderKanban color={color} size={size} /> }} />
+      <Tabs.Screen name="projects" options={{ title: 'Workspaces', tabBarIcon: ({ color, size }) => <FolderKanban color={color} size={size} /> }} />
       <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: ({ color, size }) => <Settings color={color} size={size} /> }} />
     </Tabs>
   )

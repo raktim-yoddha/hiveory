@@ -428,7 +428,7 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
         : a.type === 'open-and-message' && !verbatim(a.text, utterance)
           ? [`Open ${ctx.clis.find((c) => c.id === a.cliId)?.displayName ?? a.cliId} and send ${quote(a.text)}?`]
           : a.type === 'create-workspace'
-            ? [`Create the workspace “${a.name}”?`]
+            ? [`Create the worktree “${a.name}”?`]
             : a.type === 'message-bot' && !verbatim(a.text, utterance)
               ? [`Send to ${ctx.bots?.find((b) => b.id === a.botId)?.name ?? 'the bot'}: ${quote(a.text)}?`]
               : a.type === 'new-chat' && a.text && !verbatim(a.text, utterance)
@@ -458,6 +458,7 @@ export function systemPrompt(persona: { name: string; tagline: string; text?: st
     '- open-url {url}: a page in the side browser; open-file {query}: a file of this workspace by name; arrange {layout: equal|columns}: tidy the panes.',
     '- git-status: branch and changes here; pull-requests: open PRs of this project; resume-session {cliId}: reopen its latest conversation.',
     '- new-chat {cliId?, text?}: a chat in Chat mode; message-bot {botId, text}: send the user\'s exact words to a bot. switch-automation {automationId, on}: pause or resume a routine or trigger.',
+    'Words: the user says "workspace" for a STATE project and "worktree" (or branch) for a STATE workspace; say it their way in `question`/`reply`.',
     'Rules: use ids or exact names from STATE only. workspaceId/projectId default to the current page. Ambiguous or unknown → no actions, set `question` (e.g. a workspace name several projects share: ask which project).',
     'Small talk (greetings, thanks, how are you, who are you, how to use Hiveory) → no actions; a short, friendly `reply` in character.',
     'Other requests outside Hiveory (writing code, facts, the web, files) → no actions; `reply` that an agent can do it, e.g. "tell Bruno to …". Never do or answer it yourself.',

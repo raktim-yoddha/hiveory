@@ -20,9 +20,9 @@ export function KanbanBoard({ projectId }: { projectId: string }) {
     <div className={styles.page}>
       {board && total === 0 && (
         <div className={styles.hint}>
-          <p>Every agent in this project's workspaces shows up here, sorted by what it is doing right now.</p>
+          <p>Every agent in this workspace's worktrees shows up here, sorted by what it is doing right now.</p>
           <Button size="sm" onClick={() => openProject(projectId, 'workspaces')}>
-            Go to workspaces
+            Go to worktrees
           </Button>
         </div>
       )}

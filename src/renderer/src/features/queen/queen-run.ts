@@ -184,7 +184,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   /** The agent's own last words, shown labelled under the reply. */
   let quote: string | undefined
   const nav = useNavigation.getState
-  const workspaceName = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? [])].find((w) => w.id === id)?.name ?? 'this workspace'
+  const workspaceName = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? [])].find((w) => w.id === id)?.name ?? 'this worktree'
   const agent = (id: string) => {
     const card = cards.find((c) => c.instanceId === id)
     if (!card) throw new QueenError('that agent is no longer open.')
@@ -200,7 +200,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     for (const action of actions) {
       switch (action.type) {
         case 'open-agents': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that workspace no longer exists.')
+          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
             remember()
             nav().openWorkspace(action.projectId, action.workspaceId)
@@ -247,7 +247,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'open-and-message': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that workspace no longer exists.')
+          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
             remember()
             nav().openWorkspace(action.projectId, action.workspaceId)
@@ -350,7 +350,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
             outcomes.push({ kind: 'navigated', place: `Settings › ${action.section === 'queen' ? 'Queen Bee' : action.section.charAt(0).toUpperCase() + action.section.slice(1)}` })
           } else if (action.to === 'project') {
             const project = ctx.projects.find((x) => x.id === action.projectId)
-            if (!project) throw new QueenError('that project is no longer open.')
+            if (!project) throw new QueenError('that workspace is no longer open.')
             nav().openProject(project.id)
             outcomes.push({ kind: 'navigated', place: project.name })
           } else if (action.to === 'bots') {
@@ -372,7 +372,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'side-panel': {
-          if (action.open && nav().view.type !== 'workspace') throw new QueenError('the side panel is only in workspaces. Open one first.')
+          if (action.open && nav().view.type !== 'workspace') throw new QueenError('the side panel is only in worktrees. Open one first.')
           if (nav().panelOpen !== action.open) nav().togglePanel()
           undos.push(() => {
             if (nav().panelOpen === action.open) nav().togglePanel()
@@ -382,7 +382,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'open-panel-tab': {
           const scope = selectedWorkspaceId(nav().view)
-          if (!scope) throw new QueenError('the side panel is only in workspaces. Open one first.')
+          if (!scope) throw new QueenError('the side panel is only in worktrees. Open one first.')
           if (!nav().panelOpen) nav().togglePanel()
           if (action.kind === 'browser') {
             if (!(await openBrowserTab(scope))) throw new QueenError('the browser did not open.')
@@ -435,7 +435,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'open-url': {
-          if (selectedWorkspaceId(nav().view) !== action.workspaceId) throw new QueenError('the browser opens in a workspace. Open one first.')
+          if (selectedWorkspaceId(nav().view) !== action.workspaceId) throw new QueenError('the browser opens in a worktree. Open one first.')
           if (!nav().panelOpen) nav().togglePanel()
           const page = await api('browser.open', { scope: action.workspaceId, url: action.url })
           nav().addPanelTab(action.workspaceId, 'browser', page.id, true, 'top')
@@ -572,7 +572,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'resume-session': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that workspace no longer exists.')
+          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           const sessions = await api('sessions.list', { scope: 'workspace', workspaceId: action.workspaceId })
           const latest = sessions.filter((s) => s.cliId === action.cliId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
           if (!latest) throw new QueenError(`there's no earlier ${cliName(action.cliId)} conversation here.`)

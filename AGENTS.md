@@ -15,6 +15,13 @@ Read in this order:
 
 If implementation and documentation disagree, do not silently choose one. Determine whether the documentation is stale, then update the appropriate documentation/ADR.
 
+## Vocabulary (ADR 0033)
+
+Users see **Workspace** (a folder/repository in the sidebar) and **Worktree** (the main checkout or
+an isolated branch folder inside it). Code keeps the older entity names: `Project` is the user's
+Workspace, `Workspace` is the user's Worktree. All UI text and docs use the user's words; earlier
+ADRs and code identifiers use the code names.
+
 ## Non-Negotiable Rules
 
 ### 1. Reuse Before Creating
@@ -90,11 +97,11 @@ Cards move according to actual CLI state.
 
 Do not implement drag-and-drop as a way to change CLI status.
 
-### 8. Project Scope
+### 8. Workspace Scope
 
-The Kanban board is scoped to the selected Project.
+The Kanban board is scoped to the selected Workspace.
 
-Never display agents from another Project.
+Never display agents from another Workspace.
 
 ### 9. No Work History
 
@@ -102,40 +109,40 @@ Do not add a Done/history column.
 
 When work finishes, the CLI returns to Idle.
 
-### 10. Workspace and Task
+### 10. Worktree and Task
 
 There is no separate user-facing Task entity.
 
-The user's development unit is Workspace.
+The user's development unit is Worktree.
 
-### 11. Empty Project ≠ Empty Workspace
-
-Empty Project:
-
-- no child work yet
+### 11. Empty Workspace ≠ Empty Worktree
 
 Empty Workspace:
 
-- Workspace exists
+- no child work yet
+
+Empty Worktree:
+
+- Worktree exists
 - no CLI panes yet
 - shows `Open agent` and `Load preset`
 
-Never put the empty Workspace actions on the Project page.
+Never put the empty Worktree actions on the Workspace page.
 
-### 12. Main Workspace
+### 12. Main Worktree
 
-The main Workspace:
+The main Worktree:
 
-- maps to the original project directory/main working tree
+- maps to the original workspace directory/main working tree
 - is never deleted from disk; the user may only *remove* it from Hiveory, which forgets the record and its agents and leaves the folder untouched (ADR 0013)
 
-Linked isolated Workspaces can use Git linked worktrees and local branches.
+Linked isolated Worktrees can use Git linked worktrees and local branches.
 
 ### 13. Git Is Infrastructure
 
 Do not force users to manually manage worktrees.
 
-Workspace creation should automate the required Git operations.
+Worktree creation should automate the required Git operations.
 
 ### 14. Presets
 
@@ -218,7 +225,7 @@ Add tests for:
 
 - status normalization
 - pet-name uniqueness/generation
-- workspace creation logic
+- worktree creation logic
 - preset serialization
 - Git/worktree orchestration
 - pane layout operations
@@ -313,7 +320,7 @@ The shipped product knows nothing about the people who build it or use it.
 
 - Never put a real person's data (names, emails, usernames, home paths, accounts, keys) in
   source, tests, fixtures, defaults or prompts. Use neutral placeholders (`Alex`, `/home/me`).
-- Queen Bee and every model call see only app state (project, workspace, agent and CLI names
+- Queen Bee and every model call see only app state (workspace, worktree, agent and CLI names
   and statuses), the request and the user's own notes. Never files, terminal output, paths,
   environment variables, credentials or OS identity.
 - Model output is data: it can only pick from the closed action set, and its text is shown as

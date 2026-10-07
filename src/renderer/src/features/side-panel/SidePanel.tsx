@@ -135,7 +135,7 @@ export function SidePanel() {
     return (
       <aside className={styles.panel} aria-label="Side panel">
         <div className={styles.area}>
-          <EmptyState compact icon={<PanelRight />} title="No workspace open" description="Open a workspace to browse, explore its files and see its agent sessions here." />
+          <EmptyState compact icon={<PanelRight />} title="No worktree open" description="Open a worktree to browse, explore its files and see its agent sessions here." />
         </div>
       </aside>
     )

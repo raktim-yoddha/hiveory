@@ -9,7 +9,7 @@ const MAX_VISIBLE = 4
 
 const ROOT: Record<NonNullable<PathRoot> | 'none', { icon: typeof House; label: string }> = {
   home: { icon: House, label: 'Home folder' },
-  workspaces: { icon: Layers, label: 'Hiveory workspace folder' },
+  workspaces: { icon: Layers, label: 'Hiveory worktree folder' },
   none: { icon: HardDrive, label: 'Drive' }
 }
 

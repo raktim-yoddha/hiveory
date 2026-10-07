@@ -20,7 +20,7 @@ export function WorkspaceScreen({ workspaceId, projectId }: { workspaceId: strin
 
   return (
     <>
-      <Stack.Screen options={{ title: workspace?.name ?? 'Workspace' }} />
+      <Stack.Screen options={{ title: workspace?.name ?? 'Worktree' }} />
       <Screen
         refreshing={refreshing}
         onRefresh={() => {
@@ -43,7 +43,7 @@ export function WorkspaceScreen({ workspaceId, projectId }: { workspaceId: strin
             ))}
           </Section>
         ) : (
-          <EmptyState icon={Bot} title="No agents here yet" body="Open one, or apply a preset, to start working in this workspace." />
+          <EmptyState icon={Bot} title="No agents here yet" body="Open one, or apply a preset, to start working in this worktree." />
         )}
       </Screen>
       <OpenAgentSheet workspaceId={workspaceId} projectId={projectId} open={opening} onClose={() => setOpening(false)} />

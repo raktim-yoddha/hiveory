@@ -85,7 +85,7 @@ export function PullRequestsTab({ projectId }: { projectId: string }) {
       <header className={styles.header}>
         <div>
           <h2 className={styles.title}>{status.repository}</h2>
-          <p className={styles.muted}>Open pull requests and your workspace branches.</p>
+          <p className={styles.muted}>Open pull requests and your worktree branches.</p>
         </div>
         <Button size="sm" icon={<RefreshCw />} onClick={() => void load()}>
           Refresh
@@ -93,8 +93,8 @@ export function PullRequestsTab({ projectId }: { projectId: string }) {
       </header>
 
       <section className={styles.group}>
-        <h3 className={styles.groupTitle}>Workspace branches</h3>
-        {branches.length === 0 && <p className={styles.empty}>Create a New branch workspace to open pull requests from it.</p>}
+        <h3 className={styles.groupTitle}>Worktree branches</h3>
+        {branches.length === 0 && <p className={styles.empty}>Create a New branch worktree to open pull requests from it.</p>}
         <ul className={styles.list}>
           {branches.map((w) => {
             const pr = prFor(w.git?.branch)

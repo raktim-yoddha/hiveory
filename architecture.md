@@ -1,5 +1,8 @@
 # Architecture
 
+> Vocabulary (ADR 0033): this document uses the code entity names. `Project` is what users see as a
+> **Workspace**; `Workspace` is what users see as a **Worktree**.
+
 ## Goals
 
 The architecture must support:

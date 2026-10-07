@@ -72,7 +72,7 @@ export class PortForwards {
     const existing = this.forwards.get(key)
     if (existing) return existing.localPort
     const kit = await this.kitFor(host)
-    if (!kit.remote) fail('INVALID_INPUT', 'Ports are forwarded from remote projects only.')
+    if (!kit.remote) fail('INVALID_INPUT', 'Ports are forwarded from remote workspaces only.')
     // `localhost` on the remote reaches servers bound to 127.0.0.1, ::1 or every address.
     const tunnel = await kit.forward('localhost', port, port < 1024 ? port + 10000 : port)
     this.forwards.set(key, { localPort: tunnel.port, close: tunnel.close })

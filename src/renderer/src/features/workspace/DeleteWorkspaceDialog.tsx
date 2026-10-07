@@ -37,7 +37,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
       onClose()
     } catch (error) {
       if (error instanceof HiveoryError && error.error.code === 'WORKTREE_DIRTY') setForce(true)
-      else reportError(error, isMain ? 'Remove workspace' : 'Delete workspace')
+      else reportError(error, isMain ? 'Remove worktree' : 'Delete worktree')
     } finally {
       setBusy(false)
     }
@@ -50,13 +50,13 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
         danger
         busy={busy}
         title={`Remove ${workspace.name}?`}
-        confirmLabel="Remove workspace"
+        confirmLabel="Remove worktree"
         onConfirm={() => void confirm()}
         onClose={onClose}
       >
         <p>
-          Its agents will stop and close. The project folder and its files are not touched — you can create the main
-          workspace again at any time.
+          Its agents will stop and close. The workspace folder and its files are not touched — you can create the main
+          worktree again at any time.
         </p>
       </ConfirmDialog>
     )
@@ -68,7 +68,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
       danger
       busy={busy}
       title={force ? 'Discard uncommitted changes?' : `Delete ${workspace.name}?`}
-      confirmLabel={force ? 'Delete anyway' : 'Delete workspace'}
+      confirmLabel={force ? 'Delete anyway' : 'Delete worktree'}
       onConfirm={() => void confirm()}
       onClose={onClose}
     >
@@ -79,7 +79,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
       ) : (
         <p>
           Its agents will stop and its folder will be removed. The branch{' '}
-          <code>{workspace.git?.branch ?? 'for this workspace'}</code> is deleted only if fully merged.
+          <code>{workspace.git?.branch ?? 'for this worktree'}</code> is deleted only if fully merged.
         </p>
       )}
     </ConfirmDialog>

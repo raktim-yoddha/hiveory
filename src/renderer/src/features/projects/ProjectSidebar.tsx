@@ -48,11 +48,11 @@ export function ProjectSidebar() {
   const addProject = (): void => useAddProject.getState().show()
 
   return (
-    <nav className={styles.sidebar} aria-label="Projects">
+    <nav className={styles.sidebar} aria-label="Workspaces">
       <div className={styles.header}>
-        <h2 className={styles.heading}>Projects</h2>
+        <h2 className={styles.heading}>Workspaces</h2>
         <Menu
-          label="Sort projects"
+          label="Sort workspaces"
           align="end"
           items={(['recent', 'name'] as const).map((value) => ({
             type: 'item' as const,
@@ -61,9 +61,9 @@ export function ProjectSidebar() {
             icon: sort === value ? <Check /> : null,
             onSelect: () => chooseSort(value)
           }))}
-          trigger={(props) => <IconButton {...props} label="Sort projects" icon={<ListFilter />} />}
+          trigger={(props) => <IconButton {...props} label="Sort workspaces" icon={<ListFilter />} />}
         />
-        <IconButton label="Add project" icon={<FolderPlus />} onClick={addProject} />
+        <IconButton label="Add workspace" icon={<FolderPlus />} onClick={addProject} />
       </div>
       {projects.length > 0 && (
         <ul className={styles.list}>
@@ -74,9 +74,9 @@ export function ProjectSidebar() {
       )}
       {loaded && projects.length === 0 && (
         <div className={styles.empty}>
-          <p>No projects yet.</p>
+          <p>No workspaces yet.</p>
           <button type="button" className={styles.link} onClick={addProject}>
-            Add a project
+            Add a workspace
           </button>
         </div>
       )}

@@ -31,7 +31,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   if (!agent) {
     return (
       <Screen>
-        <EmptyState icon={SearchX} title="This agent is closed" body="It was closed on the computer, or its workspace was removed." />
+        <EmptyState icon={SearchX} title="This agent is closed" body="It was closed on the computer, or its worktree was removed." />
       </Screen>
     )
   }

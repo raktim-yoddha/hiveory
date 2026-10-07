@@ -38,11 +38,11 @@ export const SUPPORTED_PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05']
 
 export const SERVER_INSTRUCTIONS = [
   'You are one of several coding agents running side by side in Hiveory.',
-  'These tools let you see and coordinate the other agents in this project:',
+  'These tools let you see and coordinate the other agents in this workspace:',
   'call list_agents first to learn their names and live status (idle / working / waiting-for-you);',
   'read_agent shows what an agent currently displays; send_message types a message into it;',
-  'wait_for_agent blocks until it finishes; open_agent / close_agent / arrange_panes change the workspace;',
-  'run_in_terminal runs a shell command in this workspace terminal and returns its output.',
+  'wait_for_agent blocks until it finishes; open_agent / close_agent / arrange_panes change the worktree;',
+  'run_in_terminal runs a shell command in this worktree terminal and returns its output.',
   "browser_* tools drive Hiveory's built-in browser (it works even when the user's browser panel is closed):",
   'browser_navigate or browser_snapshot returns the page as compact text whose interactive elements carry refs like [@12];',
   'pass a ref as `target` to browser_click / browser_fill / browser_drag; every action returns a fresh snapshot, so do not snapshot again;',

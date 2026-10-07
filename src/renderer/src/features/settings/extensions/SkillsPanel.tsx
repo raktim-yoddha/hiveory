@@ -110,7 +110,7 @@ export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
                 <div className={settings.listMain}>
                   <span className={styles.skillName}>
                     <span className={settings.listTitle}>{group.name}</span>
-                    {group.scope === 'project' && <span className={styles.badge}>{botId ? 'This bot' : 'Project'}</span>}
+                    {group.scope === 'project' && <span className={styles.badge}>{botId ? 'This bot' : 'Workspace'}</span>}
                   </span>
                   <span className={styles.description} title={group.description}>
                     {group.description ?? 'No description'}

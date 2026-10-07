@@ -22,8 +22,8 @@ export function ProjectsScreen() {
   )
   const [refreshing, setRefreshing] = useState(false)
 
-  if (projects.isLoading) return <Loading label="Loading projects…" />
-  if (!list.length) return <EmptyState icon={FolderOpen} title="No projects yet" body="Add a project in Hiveory on your computer; it appears here right away." />
+  if (projects.isLoading) return <Loading label="Loading workspaces…" />
+  if (!list.length) return <EmptyState icon={FolderOpen} title="No workspaces yet" body="Add a workspace in Hiveory on your computer; it appears here right away." />
 
   return (
     <Screen

@@ -11,7 +11,7 @@ import { cliAliases, norm } from './words'
 const LEAD = /^\s*(?:(?:hey|hi|ok|okay)\s+)?(?:queen(?:\s+bee)?[\s,]+)?(?:please\s+)?(?:can you\s+|could you\s+)?/i
 const actions = (...list: QueenAction[]): QueenParse => ({ kind: 'actions', actions: list })
 const ask = (text: string, choices?: Array<{ label: string; command: string }>): QueenParse => ({ kind: 'ask', question: { text, choices } })
-const needWorkspace = (what: string): QueenParse => ask(`Open a workspace first, then I can ${what}.`)
+const needWorkspace = (what: string): QueenParse => ask(`Open a worktree first, then I can ${what}.`)
 
 const SETTING_WORDS: Array<[RegExp, QueenSetting]> = [
   [/\b(agent tools?|coordination tools?|agent coordination)\b/, 'agent-tools'],
@@ -53,7 +53,7 @@ export function parseAppCommand(raw: string, ctx: QueenContext): QueenParse | nu
     return ws ? actions({ type: 'git-status', workspaceId: ws }) : needWorkspace('check its changes')
   }
   if (/\b(pull requests?|prs?|merge requests?)\b/.test(text) && /^(show|list|any|open|what|which|how many|check|are there|my)\b|\bopen (pull requests?|prs?)\b/.test(text)) {
-    return ctx.projectId ? actions({ type: 'pull-requests', projectId: ctx.projectId }) : ask('Open a project first, then I can list its pull requests.')
+    return ctx.projectId ? actions({ type: 'pull-requests', projectId: ctx.projectId }) : ask('Open a workspace first, then I can list its pull requests.')
   }
 
   // Apps and updates.
@@ -65,7 +65,7 @@ export function parseAppCommand(raw: string, ctx: QueenContext): QueenParse | nu
   }
 
   // Projects.
-  if (/^(add|open|new|import) (a )?(new )?project( folder)?$/.test(text)) return actions({ type: 'add-project' })
+  if (/^(add|open|new|import) (a )?(new )?(project|workspace)( folder)?$/.test(text)) return actions({ type: 'add-project' })
 
   // Panes.
   if (/^(arrange|tidy|tidy up|organi[sz]e|even out|equali[sz]e|line up|reset|clean up)\b.*\b(panes?|agents?|windows?|layout|terminals?)\b/.test(text) || /^(arrange|tidy up)$/.test(text)) {

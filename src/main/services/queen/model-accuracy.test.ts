@@ -72,7 +72,7 @@ describe('Queen Bee model plans: repaired, never guessed', () => {
     expect(planFromToolArgs({ actions: [{ type: 'message-agent', agentId: 'Bruno', text: 'Please execute the unit test suite.' }] }, ctx, said)).toMatchObject({
       confirm: 'Send to Bruno: “Please execute the unit test suite.”?'
     })
-    expect(planFromToolArgs({ actions: [{ type: 'create-workspace', name: 'login-fix' }] }, ctx)).toMatchObject({ confirm: 'Create the workspace “login-fix”?' })
+    expect(planFromToolArgs({ actions: [{ type: 'create-workspace', name: 'login-fix' }] }, ctx)).toMatchObject({ confirm: 'Create the worktree “login-fix”?' })
   })
 
   it('reads JSON out of a text answer (thinking blocks and fences dropped)', () => {

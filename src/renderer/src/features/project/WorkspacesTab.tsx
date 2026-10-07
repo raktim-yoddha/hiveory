@@ -20,8 +20,8 @@ export function WorkspacesTab({ projectId }: { projectId: string }) {
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <div>
-          <h2 className={styles.sectionTitle}>Workspaces</h2>
-          <p className={styles.muted}>Each workspace gets its own folder and branch, so agents never collide.</p>
+          <h2 className={styles.sectionTitle}>Worktrees</h2>
+          <p className={styles.muted}>Each worktree gets its own folder and branch, so agents never collide.</p>
         </div>
       </div>
       <div className={styles.grid}>

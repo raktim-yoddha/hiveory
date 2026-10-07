@@ -158,7 +158,7 @@ export function receipt(o: QueenOutcome): string {
     case 'talkback':
       return o.on ? 'Talkback on' : 'Talkback off'
     case 'workspace':
-      return `Created workspace ${o.name}`
+      return `Created worktree ${o.name}`
     case 'setting':
       return `${o.name}: ${o.on ? 'on' : 'off'}`
     case 'switched':
@@ -176,7 +176,7 @@ export function receipt(o: QueenOutcome): string {
     case 'resumed':
       return `Resumed ${o.cliName}: ${o.title}`
     case 'project':
-      return `Added project ${o.name}`
+      return `Added workspace ${o.name}`
   }
 }
 
@@ -282,7 +282,7 @@ export function reportLine(r: QueenReport, prefs: QueenPrefs): string {
   const waitText = top?.waitingMinutes !== undefined ? ` for ${formatWait(top.waitingMinutes)}` : ''
   const name = p.callMe ? `${p.callMe}, ` : ''
   if (r.total === 0) {
-    return { ada: `There are no agents in this project${address(p)}.`, sunny: 'No agents yet. Open a few and let the hive buzz!', frankie: 'No agents running. Nothing ships by itself.' }[p.persona]
+    return { ada: `There are no agents in this workspace${address(p)}.`, sunny: 'No agents yet. Open a few and let the hive buzz!', frankie: 'No agents running. Nothing ships by itself.' }[p.persona]
   }
   if (r.focus === 'waiting-for-you' && !r.waiting.length) {
     return { ada: `No agent is waiting for you${address(p)}.`, sunny: "Nobody's waiting on you. All clear!", frankie: "Nothing's blocked on you. No excuses, then." }[p.persona]

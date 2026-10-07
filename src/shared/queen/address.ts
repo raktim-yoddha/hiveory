@@ -89,7 +89,7 @@ function send(target: Target, text: string, ctx: QueenContext): QueenParse {
       ...(isShell(ctx, target.cliId) ? [] : [{ label: `All ${pool.length}`, command: `@all ${target.cliId} ${text}` }])
     ])
   }
-  if (!ctx.workspaceId) return ask(`No ${target.name} is open. Open a workspace first.`)
+  if (!ctx.workspaceId) return ask(`No ${target.name} is open. Open a worktree first.`)
   return ask(`No ${target.name} is open here. Open one and send it?`, [{ label: `Open ${target.name} and send`, command: `open ${target.name} and send: ${text}` }])
 }
 
@@ -132,6 +132,6 @@ export function parseOpenAndSend(input: string, ctx: QueenContext): QueenParse |
   if (!cli) return null
   const text = m[2]!.replace(/^["“']|["”']$/g, '').trim()
   if (!text) return null
-  if (!ctx.projectId || !ctx.workspaceId) return ask('Open a workspace first, then I can start it there.')
+  if (!ctx.projectId || !ctx.workspaceId) return ask('Open a worktree first, then I can start it there.')
   return { kind: 'actions', actions: [{ type: 'open-and-message', cliId: cli.id, workspaceId: ctx.workspaceId, projectId: ctx.projectId, text }] }
 }

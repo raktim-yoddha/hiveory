@@ -21,7 +21,7 @@ export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
   const status = useGitStatus(workspace.id, workspace.healthy)
   const branch = status?.branch ?? workspace.git?.branch
 
-  const repair = (): void => void runAction('Repair workspace', () => api('workspaces.repair', { workspaceId: workspace.id }))
+  const repair = (): void => void runAction('Repair worktree', () => api('workspaces.repair', { workspaceId: workspace.id }))
 
   const actions = workspaceMenuEntries(workspace, onDelete)
 

@@ -8,15 +8,15 @@ import styles from './Settings.module.css'
 const MCP_CLIS = new Set(['claude', 'codex', 'opencode', 'kilocode', 'copilot'])
 
 const TOOLS: Array<[string, string]> = [
-  ['list_agents', 'Every agent in the project with its CLI, workspace and live status'],
+  ['list_agents', 'Every agent in the workspace with its CLI, worktree and live status'],
   ['read_agent', "What another agent's terminal currently shows"],
   ['send_message', 'Type a message into another agent and submit it'],
   ['ask_agent', 'Send, wait and read the reply — delegation in one call'],
   ['run_tools', 'Several tool calls in one round trip, in parallel'],
   ['wait_for_agent', 'Block until an agent finishes, then report its status'],
   ['open_agent / close_agent', 'Start or stop agents in new panes'],
-  ['arrange_panes', 'Equal, focus or columns layout for the workspace'],
-  ['run_in_terminal / read_terminal', "Run commands in the workspace's side-panel terminal"],
+  ['arrange_panes', 'Equal, focus or columns layout for the worktree'],
+  ['run_in_terminal / read_terminal', "Run commands in the worktree's side-panel terminal"],
   ['browser_*', 'Drive the built-in browser — see Settings › Browser'],
   ['computer_*', 'Mouse, keyboard, windows and screen of this computer (when Computer use is on)']
 ]
@@ -30,13 +30,13 @@ export function AgentsSection() {
   return (
     <SettingsPage
       title="Agents"
-      description="Defaults for new workspaces and presets, and the tools agents get to coordinate each other."
+      description="Defaults for new worktrees and presets, and the tools agents get to coordinate each other."
     >
       <div className={styles.group}>
         <div className={styles.groupTitle}>Defaults</div>
         <SettingRow
           title="Auto-approve permissions"
-          description="Start with auto-approve on when creating a workspace or preset. You can still turn it off each time."
+          description="Start with auto-approve on when creating a worktree or preset. You can still turn it off each time."
           control={
             <Toggle
               label="Auto-approve permissions by default"

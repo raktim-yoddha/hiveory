@@ -48,7 +48,7 @@ export function ServerConnection() {
     return (
       <SettingRow
         title={`Using the Hiveory server ${status.server ?? ''}`}
-        description={status.connected ? 'Projects, agents and bots run there; this window shows them.' : 'Not reachable right now — reconnecting on its own.'}
+        description={status.connected ? 'Workspaces, agents and bots run there; this window shows them.' : 'Not reachable right now — reconnecting on its own.'}
         control={
           <Button variant="secondary" icon={<Unplug />} onClick={() => void runAction('Disconnect', () => api('client.disconnect'))}>
             Disconnect

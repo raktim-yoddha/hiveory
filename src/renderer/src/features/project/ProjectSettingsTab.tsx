@@ -9,7 +9,7 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
 
   return (
     <div className={styles.section}>
-      <h2 className={styles.sectionTitle}>Project</h2>
+      <h2 className={styles.sectionTitle}>Workspace</h2>
       <dl className={styles.facts}>
         <dt>Folder</dt>
         <dd title={project.path}>{project.path}</dd>
@@ -19,7 +19,7 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
       <div className={styles.danger}>
         <div>
           <p>Remove from Hiveory</p>
-          <p className={styles.muted}>Stops this project's agents. Files on disk are not touched.</p>
+          <p className={styles.muted}>Stops this workspace's agents. Files on disk are not touched.</p>
         </div>
         <Button variant="danger" onClick={() => setConfirming(true)}>
           Remove

@@ -50,7 +50,7 @@ export function QueenProviders() {
     <>
       <div className={styles.group}>
         <p className={styles.groupNote}>
-          Optional. Commands the built-in rules understand never use a model. Anything else goes to the first enabled account below, with project, workspace and agent
+          Optional. Commands the built-in rules understand never use a model. Anything else goes to the first enabled account below, with workspace, worktree and agent
           names only — never files, code or terminal output. If it fails, the next one takes over. A model can only choose Queen Bee&apos;s actions, and closing or messaging
           an agent still asks you first.
         </p>

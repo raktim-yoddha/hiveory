@@ -45,12 +45,12 @@ describe('Queen Bee small talk', () => {
   })
 })
 
-describe('Queen Bee workspaces across projects', () => {
-  it("asks which project's Main when several projects have one", () => {
+describe('Queen Bee worktrees across workspaces', () => {
+  it("asks which workspace's Main when several workspaces have one", () => {
     const parsed = parseCommand('go to main', ctx)
     expect(parsed.kind).toBe('ask')
     if (parsed.kind !== 'ask') return
-    expect(parsed.question.text).toBe("Which project's Main?")
+    expect(parsed.question.text).toBe("Which workspace's Main?")
     expect(parsed.question.choices?.map((c) => c.label)).toEqual(['api · Main', 'web · Main'])
     // Each choice parses straight to that project's Main.
     expect(parseCommand(parsed.question.choices![1]!.command, ctx)).toEqual({
@@ -59,7 +59,7 @@ describe('Queen Bee workspaces across projects', () => {
     })
   })
 
-  it("expects the current project's workspace when you are in one", () => {
+  it("expects the current workspace's worktree when you are in one", () => {
     const here: QueenContext = { ...ctx, projectId: 'p1', workspaces: [{ id: 'm1', name: 'Main', kind: 'main' }], otherWorkspaces: ctx.otherWorkspaces!.filter((w) => w.projectId !== 'p1') }
     expect(parseCommand('go to main', here)).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'workspace', projectId: 'p1', workspaceId: 'm1' }] })
     // A name only another project has goes there.

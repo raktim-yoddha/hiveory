@@ -158,7 +158,7 @@ export const wallpaperSchema = z.string().regex(/^$|^image:[A-Za-z0-9_-]{1,64}\.
 const pageId = z.string().regex(/^b\d{1,9}$/)
 const skillPath = z.string().min(1).max(1000)
 /** The folder files live in: a workspace, or a project when no workspace is open. */
-const fileScope = z.object({ workspaceId: id.optional(), projectId: id.optional() }).refine((s) => Boolean(s.workspaceId || s.projectId), 'A workspace or project is required.')
+const fileScope = z.object({ workspaceId: id.optional(), projectId: id.optional() }).refine((s) => Boolean(s.workspaceId || s.projectId), 'A worktree or workspace is required.')
 const relPath = z.string().max(1000).refine((p) => !p.includes('\0'), 'Invalid path.')
 const fileName = z.string().min(1).max(1000)
 /** `agents` or the id of a CLI that has its own skills folder (checked against the registry's roots in main). */

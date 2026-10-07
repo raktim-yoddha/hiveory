@@ -14,15 +14,15 @@ export function HomeScreen() {
     <div className={styles.surface}>
       <EmptyState
         media={<AppLogo size="lg" />}
-        title={hasProjects ? 'Select a project' : 'Welcome to Hiveory'}
+        title={hasProjects ? 'Select a workspace' : 'Welcome to Hiveory'}
         description={
           hasProjects
-            ? 'Choose a project from the sidebar to see its agents and workspaces.'
-            : 'Add a project — a folder, a new repository or a clone — to run coding agents side by side.'
+            ? 'Choose a workspace from the sidebar to see its agents and worktrees.'
+            : 'Add a workspace — a folder, a new repository or a clone — to run coding agents side by side.'
         }
         actions={
           <Button variant="primary" size="lg" icon={<FolderPlus />} onClick={() => useAddProject.getState().show()}>
-            Add project
+            Add workspace
           </Button>
         }
       />

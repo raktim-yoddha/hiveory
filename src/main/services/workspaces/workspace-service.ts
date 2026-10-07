@@ -72,12 +72,12 @@ export class WorkspaceService {
   private createMain(input: RequestOf<'workspaces.create'>): WorkspaceView {
     const project = this.repo.project(input.projectId)
     if (this.repo.main(project)) {
-      fail('INVALID_INPUT', 'This project already has a main workspace.', { operation: 'Create workspace' })
+      fail('INVALID_INPUT', 'This workspace already has a main worktree.', { operation: 'Create worktree' })
     }
     const owner = this.repo.mainTreeOwner(project)
     if (owner) {
-      fail('INVALID_INPUT', `This folder's checkout is already the ${owner.workspace.name} workspace of ${owner.project.name}.`, {
-        operation: 'Create workspace',
+      fail('INVALID_INPUT', `This folder's checkout is already the ${owner.workspace.name} worktree of ${owner.project.name}.`, {
+        operation: 'Create worktree',
         hint: `Agents run in one place per checkout. Use it in ${owner.project.name}, or remove it there first (nothing on disk changes).`
       })
     }
@@ -101,21 +101,21 @@ export class WorkspaceService {
   }
 
   private async createIsolated(input: RequestOf<'workspaces.create'>): Promise<WorkspaceView> {
-    const operation = 'Create workspace'
+    const operation = 'Create worktree'
     const project = this.repo.project(input.projectId)
     const kit = await this.kitOf(project)
     const git = kit.git
     const repoRoot = await this.repoRootOf(project, kit)
     if (!repoRoot) {
-      fail('NOT_A_REPOSITORY', 'Isolated workspaces need a Git repository.', {
+      fail('NOT_A_REPOSITORY', 'Isolated worktrees need a Git repository.', {
         operation,
-        hint: 'Initialize Git in this project, or use the Main workspace.'
+        hint: 'Initialize Git in this workspace, or use the Main worktree.'
       })
     }
     if (!(await git.hasCommits(repoRoot!))) {
       fail('NO_COMMITS', 'This repository has no commits yet.', {
         operation,
-        hint: 'Make an initial commit, then create the workspace.'
+        hint: 'Make an initial commit, then create the worktree.'
       })
     }
     const slug = slugify(input.name)
@@ -325,17 +325,17 @@ export class WorkspaceService {
     const workspace = this.repo.get(workspaceId)
     const worktreePath = workspace.git?.worktreePath
     const branch = workspace.git?.branch
-    if (workspace.kind !== 'isolated' || !worktreePath || !branch) fail('INVALID_INPUT', 'Only isolated workspaces can be repaired.')
+    if (workspace.kind !== 'isolated' || !worktreePath || !branch) fail('INVALID_INPUT', 'Only isolated worktrees can be repaired.')
     const project = this.repo.project(workspace.projectId)
     const kit = await this.kitOf(project)
     const repoRoot = await this.repoRootOf(project, kit)
-    if (!repoRoot) fail('NOT_A_REPOSITORY', 'The project is no longer a Git repository.')
+    if (!repoRoot) fail('NOT_A_REPOSITORY', 'The workspace is no longer a Git repository.')
     if (await kit.fs.exists(worktreePath!)) {
       await kit.worktrees.repairLink(repoRoot!, worktreePath!)
     } else {
       if (!(await kit.git.localBranchExists(repoRoot!, branch!))) {
-        fail('NOT_FOUND', `Branch ${branch} no longer exists, so the workspace cannot be rebuilt.`, {
-          hint: 'Delete this workspace and create a new one.'
+        fail('NOT_FOUND', `Branch ${branch} no longer exists, so the worktree cannot be rebuilt.`, {
+          hint: 'Delete this worktree and create a new one.'
         })
       }
       await kit.worktrees.recreate(repoRoot!, worktreePath!, branch!)

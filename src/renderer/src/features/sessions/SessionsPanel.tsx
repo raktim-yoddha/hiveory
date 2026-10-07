@@ -16,8 +16,8 @@ import styles from './Sessions.module.css'
 
 const PAGE = 40
 const SCOPES: Array<{ value: SessionScope; label: string }> = [
-  { value: 'workspace', label: 'Workspace' },
-  { value: 'project', label: 'Project' },
+  { value: 'workspace', label: 'Worktree' },
+  { value: 'project', label: 'Workspace' },
   { value: 'all', label: 'All' }
 ]
 
@@ -120,7 +120,7 @@ export function SessionsPanel({ projectId, workspaceId }: { projectId?: string; 
         {error ? (
           <EmptyState compact icon={<History />} title="Couldn’t read the history" description={error} />
         ) : !sessions ? null : scope === 'workspace' && !workspaceId ? (
-          <EmptyState compact icon={<History />} title="No workspace open" description="Open a workspace, or switch to Project or All." />
+          <EmptyState compact icon={<History />} title="No worktree open" description="Open a worktree, or switch to Workspace or All." />
         ) : filtered.length === 0 ? (
           <EmptyState
             compact
@@ -150,7 +150,7 @@ export function SessionsPanel({ projectId, workspaceId }: { projectId?: string; 
                     const home = homeOf(s)
                     const cli = clis.find((c) => c.id === s.cliId)
                     const canResume = Boolean(home && cli?.available && cli.resumesById)
-                    const why = !cli?.available ? `${cli?.displayName ?? s.cliId} isn’t installed` : !home ? 'Ran in a folder outside this project' : undefined
+                    const why = !cli?.available ? `${cli?.displayName ?? s.cliId} isn’t installed` : !home ? 'Ran in a folder outside this workspace' : undefined
                     return (
                       <article key={key} className={cx(styles.row, open === key && styles.open)}>
                         <button type="button" className={styles.rowMain} aria-expanded={open === key} onClick={() => setOpen(open === key ? null : key)}>

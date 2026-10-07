@@ -1,6 +1,6 @@
 # Hiveory for phones
 
-Watch and steer your agents from your phone: what needs you, every project's board, live
+Watch and steer your agents from your phone: what needs you, every workspace's board, live
 terminals, answering prompts, and push notifications. The app talks only to your own computers,
 over your own Tailscale network (ADR 0025, 0027).
 

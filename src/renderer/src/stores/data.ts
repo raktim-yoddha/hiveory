@@ -48,7 +48,7 @@ interface ProjectState {
 export const useProjects = create<ProjectState>((set) => ({
   projects: [],
   loaded: false,
-  load: () => load('Load projects', () => api('projects.list'), (projects) => set({ projects, loaded: true }))
+  load: () => load('Load workspaces', () => api('projects.list'), (projects) => set({ projects, loaded: true }))
 }))
 
 interface WorkspaceState {
@@ -60,7 +60,7 @@ export const useWorkspaces = create<WorkspaceState>((set) => ({
   byProject: {},
   load: (projectId) =>
     load(
-      'Load workspaces',
+      'Load worktrees',
       () => api('workspaces.list', { projectId }),
       (list) => set((s) => ({ byProject: { ...s.byProject, [projectId]: list } }))
     )

@@ -192,7 +192,7 @@ function EditorDialog({ target }: { target: Target }) {
           : draft.doer !== 'bot' && !runsOn
             ? draft.doer === 'chat'
               ? 'Pick the CLI for the chat.'
-              : 'Pick the project, workspace and CLI.'
+              : 'Pick the workspace, worktree and CLI.'
             : draft.doer === 'bot' && !bot
             ? 'Assign a bot.'
             : bot && !bot.routines
@@ -349,22 +349,22 @@ function EditorDialog({ target }: { target: Target }) {
             options={[
               ...bots.map((b) => ({ value: b.id, label: b.name, group: 'A bot' })),
               { value: 'chat', label: 'A new chat (Chat mode)', group: 'Without a bot' },
-              { value: 'workspace', label: 'A new agent in a Work workspace', group: 'Without a bot' }
+              { value: 'workspace', label: 'A new agent in a Work worktree', group: 'Without a bot' }
             ]}
             onChange={(v) => (v === 'chat' || v === 'workspace' ? setDraft((d) => ({ ...d, doer: v, cliId: '' })) : setDraft((d) => ({ ...d, doer: 'bot', botId: v })))}
           />
           {draft.doer === 'workspace' && (
             <div className={styles.row}>
               <Select
-                label="Project"
+                label="Workspace"
                 value={draft.projectId}
-                options={[{ value: '', label: 'Pick a project', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+                options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
                 onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: '' }))}
               />
               <Select
-                label="Workspace"
+                label="Worktree"
                 value={draft.workspaceId}
-                options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+                options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
                 onChange={(v) => set('workspaceId', v)}
               />
             </div>
@@ -375,7 +375,7 @@ function EditorDialog({ target }: { target: Target }) {
               <p className={styles.note}>
                 {draft.doer === 'chat'
                   ? 'Each run starts a new chat in Chat mode and sends these instructions. It works read-only, like any new chat.'
-                  : 'Each run opens a new agent in that workspace and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.'}
+                  : 'Each run opens a new agent in that worktree and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.'}
               </p>
             </>
           )}

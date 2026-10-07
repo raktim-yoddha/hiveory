@@ -61,7 +61,7 @@ export const generateWorkspaceName = (taken: Iterable<string>, random: RandomSou
     if (!used.has(name.toLowerCase())) return name
   }
   for (let suffix = 2; ; suffix++) {
-    const name = `Workspace ${suffix}`
+    const name = `Worktree ${suffix}`
     if (!used.has(name.toLowerCase())) return name
   }
 }

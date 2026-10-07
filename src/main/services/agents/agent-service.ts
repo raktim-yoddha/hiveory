@@ -143,7 +143,7 @@ export class AgentService {
   applyPreset(workspaceId: string, selections: CliSelection[], autoApprove: boolean, chatUi = false): void {
     const workspace = this.workspaces.get(workspaceId)
     if (this.countInWorkspace(workspaceId) > 0) {
-      fail('FORBIDDEN', 'Presets can only be loaded into an empty workspace.', {
+      fail('FORBIDDEN', 'Presets can only be loaded into an empty worktree.', {
         hint: 'Close the open agents first.'
       })
     }
@@ -280,9 +280,9 @@ export class AgentService {
       return
     }
     if (!existsSync(workspace.path)) {
-      const message = 'The workspace folder is missing.'
+      const message = 'The worktree folder is missing.'
       this.runtime.markFailed(instance, message)
-      fail('NOT_FOUND', message, { hint: 'Delete this workspace and create a new one.' })
+      fail('NOT_FOUND', message, { hint: 'Delete this worktree and create a new one.' })
     }
     if (instance.chatUi) return this.chats.ensureAgentChat(instance, workspace.path)
     const soleOfCli = this.instances(workspace.id).filter((i) => i.cliId === instance.cliId && !i.chatUi).length === 1

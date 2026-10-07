@@ -62,7 +62,7 @@ export class AgentTools implements ToolHost {
     const wanted = name.trim().toLowerCase()
     const match = agents.find((a) => a.petName.toLowerCase() === wanted || a.id === name.trim())
     if (!match) {
-      throw new ToolError(`No agent named "${name}". Agents in this project: ${agents.map((a) => a.petName).join(', ') || 'none'}.`)
+      throw new ToolError(`No agent named "${name}". Agents in this workspace: ${agents.map((a) => a.petName).join(', ') || 'none'}.`)
     }
     return match
   }
@@ -79,9 +79,9 @@ export class AgentTools implements ToolHost {
   private describe(agent: CliInstance): string {
     const runtime = this.deps.agents.details(agent)
     const cli = this.deps.registry.displayName(agent.cliId)
-    const workspace = this.deps.workspaces.find(agent.workspaceId)?.name ?? 'unknown workspace'
+    const workspace = this.deps.workspaces.find(agent.workspaceId)?.name ?? 'unknown worktree'
     const status = !runtime.running ? 'not running' : runtime.status + (runtime.waitingReason ? ` (${runtime.waitingReason})` : '')
-    return `${agent.petName} — ${cli} · workspace "${workspace}" · ${status}${agent.id === this.callerId ? ' · this is you' : ''}`
+    return `${agent.petName} — ${cli} · worktree "${workspace}" · ${status}${agent.id === this.callerId ? ' · this is you' : ''}`
   }
 
   list(): ToolDefinition[] {
@@ -98,7 +98,7 @@ export class AgentTools implements ToolHost {
     return [
       {
         name: 'list_agents',
-        description: 'List every agent in this project with its CLI, workspace and live status. Call this first.',
+        description: 'List every agent in this workspace with its CLI, worktree and live status. Call this first.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false }
       },
       {
@@ -172,7 +172,7 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'open_agent',
-        description: 'Open a new agent in a new pane. It joins your workspace unless placed beside an agent in another one.',
+        description: 'Open a new agent in a new pane. It joins your worktree unless placed beside an agent in another one.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -191,7 +191,7 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'arrange_panes',
-        description: 'Rearrange every pane in your workspace: equal grid, focus (one agent takes half), or columns.',
+        description: 'Rearrange every pane in your worktree: equal grid, focus (one agent takes half), or columns.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -204,7 +204,7 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'run_in_terminal',
-        description: "Run a shell command in your workspace's terminal (the side panel) and return its recent output.",
+        description: "Run a shell command in your worktree's terminal (the side panel) and return its recent output.",
         inputSchema: {
           type: 'object',
           properties: {
@@ -217,7 +217,7 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'read_terminal',
-        description: "Read your workspace terminal's latest output.",
+        description: "Read your worktree terminal's latest output.",
         inputSchema: {
           type: 'object',
           properties: { lines: { type: 'integer', minimum: 1, maximum: MAX_READ_LINES, default: 60 } },
@@ -286,7 +286,7 @@ export class AgentTools implements ToolHost {
       case 'list_agents': {
         const project = workspaces.project(this.caller.projectId)
         const lines = this.projectAgents().map((a) => `- ${this.describe(a)}`)
-        return `Project "${project.name}" has ${lines.length} agent(s):\n${lines.join('\n')}`
+        return `Workspace "${project.name}" has ${lines.length} agent(s):\n${lines.join('\n')}`
       }
       case 'read_agent': {
         const agent = this.resolve(str(args, 'agent'))
@@ -342,7 +342,7 @@ export class AgentTools implements ToolHost {
         const focusName = str(args, 'focus', false)
         const focus = focusName ? this.resolve(focusName) : this.caller
         const workspaceId = this.caller.workspaceId
-        if (focus.workspaceId !== workspaceId) throw new ToolError(`${focus.petName} is in another workspace.`)
+        if (focus.workspaceId !== workspaceId) throw new ToolError(`${focus.petName} is in another worktree.`)
         layouts.apply(workspaceId, agents.paneIds(workspaceId), { type: 'arrange', mode, focusPaneId: focus.id })
         return `Arranged panes: ${mode}${mode === 'focus' ? ` on ${focus.petName}` : ''}.`
       }
@@ -369,7 +369,7 @@ export class AgentTools implements ToolHost {
       case 'read_terminal': {
         const workspace = workspaces.get(this.caller.workspaceId)
         const id = `shell-${workspace.id}`
-        if (!shells.has(id)) return 'The workspace terminal has not been opened yet. Use run_in_terminal to start it.'
+        if (!shells.has(id)) return 'The worktree terminal has not been opened yet. Use run_in_terminal to start it.'
         return shells.screenText(id, int(args, 'lines', 60, 1, MAX_READ_LINES)) || '(terminal is empty)'
       }
       default:

@@ -147,7 +147,7 @@ export class BrowserTools {
         },
         ['steps']
       ),
-      tool('browser_pages', 'List the browser pages in your workspace, open a new one, switch your current page, or close one you opened.', {
+      tool('browser_pages', 'List the browser pages in your worktree, open a new one, switch your current page, or close one you opened.', {
         action: { type: 'string', enum: ['list', 'new', 'select', 'close'], default: 'list' },
         page: { type: 'string', description: 'For select/close.' },
         url: { type: 'string', description: 'For new.' },
@@ -342,7 +342,7 @@ export class BrowserTools {
       case 'browser_annotations': {
         const notes = browser.annotationsIn(agent.workspaceId)
         if (args.clear === true) browser.deleteAnnotations(undefined, agent.workspaceId)
-        if (!notes.length) return { text: 'The user has not annotated anything in your workspace.' }
+        if (!notes.length) return { text: 'The user has not annotated anything in your worktree.' }
         return {
           text: notes
             .map((a, i) => `${i + 1}. page ${a.pageId} · ${a.url}\n   element: ${a.element.role} "${a.element.name}" ref ${a.element.ref} · selector ${a.element.selector}\n   note: ${a.note}`)
@@ -433,7 +433,7 @@ export class BrowserTools {
     if (action === 'close') {
       const id = str(args, 'page')
       const view = browser.pagesIn(agent.workspaceId).find((p) => p.id === id)
-      if (!view) throw new ToolError(`No page "${id}" in your workspace.`)
+      if (!view) throw new ToolError(`No page "${id}" in your worktree.`)
       if (view.ownerAgentId !== agent.id) throw new ToolError(`Page ${id} is not yours; only the user (or its owner) can close it.`)
       browser.close(id)
       return `Closed page ${id}.`

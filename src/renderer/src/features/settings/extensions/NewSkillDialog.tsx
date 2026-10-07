@@ -86,7 +86,7 @@ export function NewSkillDialog({ open, roots, projectId, botId, onClose, onCreat
               onChange={(v) => setScope(v as 'user' | 'project')}
               options={[
                 { value: 'user', label: 'Everywhere (your home folder)' },
-                { value: 'project', label: botId ? 'This bot only' : 'This project only' }
+                { value: 'project', label: botId ? 'This bot only' : 'This workspace only' }
               ]}
             />
           ) : (

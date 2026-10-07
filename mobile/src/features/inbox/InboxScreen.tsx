@@ -50,10 +50,10 @@ export function InboxScreen({ aside }: { aside?: ReactNode }) {
             icon={Coffee}
             title="All quiet"
             body={`No agent needs you${idle ? ` and ${idle} ${idle === 1 ? 'is' : 'are'} idle` : ''}. When one needs you, it shows up here first.`}
-            action={<Button label="Open a project" icon={FolderOpen} onPress={() => router.push(routes.projects)} />}
+            action={<Button label="Open a workspace" icon={FolderOpen} onPress={() => router.push(routes.projects)} />}
           />
         ) : (
-          <EmptyState icon={FolderOpen} title="No projects yet" body="Add a project in Hiveory on your computer; it appears here right away." />
+          <EmptyState icon={FolderOpen} title="No workspaces yet" body="Add a workspace in Hiveory on your computer; it appears here right away." />
         )
       ) : null}
     </Screen>

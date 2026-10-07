@@ -26,12 +26,12 @@ stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in
 never asked. The request waits in its thread and on the work board for Allow or Decline, and is
 declined after 15 minutes. A trigger's read-only run can't change or send anything in apps.
 Routines can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
-a new agent in a Work workspace (a workspace's "Schedule a routine…"), whose card then moves on the
+a new agent in a Work worktree (a worktree's "Schedule a routine…"), whose card then moves on the
 Kanban by its real state like any agent.
 While a chat or bot is answering, the user can type the **next message**: it waits above the box and
 goes in when the reply ends (Stop drops it). **Saved prompts** (the bookmark in every message box) are
 reusable text the user inserts, saves or removes (ADR 0031). Bots never appear on a
-project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
+workspace's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which
 computers its threads may use: Auto (the browser, plus its Linux computer when one is set up;
@@ -56,12 +56,12 @@ Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the
 first message. Chats keep running while the user is in Work.
 
-## Project Lifecycle
+## Workspace Lifecycle
 
-Add project (ADR 0020) is one dialog: a name, Local (Remote is listed but not available yet), and
+Add workspace (ADR 0020) is one dialog: a name, Local (Remote is listed but not available yet), and
 Pick directory · New repository (optionally also on GitHub) · Clone repository · Restore previous.
-Removing a project archives it: adding the folder again, or Restore previous, brings back its
-workspaces and agents. Workspace folders left on disk come back as workspaces.
+Removing a workspace archives it: adding the folder again, or Restore previous, brings back its
+worktrees and agents. Worktree folders left on disk come back as worktrees.
 
 ```text
 Open/Create Project
@@ -75,13 +75,13 @@ Open/Create Project
         └── Settings
 ```
 
-Opening a Project does not create a Workspace.
+Opening a Workspace does not create a Worktree.
 
-The Projects sidebar's "Recent activity" order moves a project up only for real work there:
-an agent starting a turn, an agent opening, a workspace being created (ADR 0024). Clicking a
-project to look at it does not move it.
+The Workspaces sidebar's "Recent activity" order moves a workspace up only for real work there:
+an agent starting a turn, an agent opening, a worktree being created (ADR 0024). Clicking a
+workspace to look at it does not move it.
 
-## Workspace Lifecycle
+## Worktree Lifecycle
 
 ```text
 Project
@@ -98,7 +98,7 @@ Project
               Workspace
 ```
 
-## Empty Workspace
+## Empty Worktree
 
 ```text
 Workspace exists
@@ -109,7 +109,7 @@ Workspace exists
               └── Load preset
 ```
 
-## Workspace Creation Configuration
+## Worktree Creation Configuration
 
 The configuration surface supports:
 
@@ -134,7 +134,7 @@ Codex             [-] 1 [+]
 Gemini            [-] 1 [+]
 ```
 
-Launching the Workspace starts the requested number of independent instances.
+Launching the Worktree starts the requested number of independent instances.
 
 If count = 2:
 
@@ -143,9 +143,9 @@ Claude logo   Milo
 Claude logo   Luna
 ```
 
-## Project Kanban
+## Workspace Kanban
 
-The Project Tasks view is:
+The Workspace Tasks view is:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
@@ -188,7 +188,7 @@ Working → Idle
 
 There is no history board.
 
-## Workspace Pane Behavior
+## Worktree Pane Behavior
 
 Each CLI has a pane.
 
@@ -230,27 +230,27 @@ Auto-approve
 
 Presets do not store layout.
 
-Selecting a preset replaces the current CLI configuration when the Workspace is in the appropriate empty/configuration state.
+Selecting a preset replaces the current CLI configuration when the Worktree is in the appropriate empty/configuration state.
 
-## Main Workspace
+## Main Worktree
 
-Main Workspace:
+Main Worktree:
 
-- is created by the user ("Create workspace" → "Project folder"), at most one per Project (ADR 0011)
-- one checkout hosts one workspace app-wide: if two projects share a repository (root and subfolder, or a linked worktree opened as a project), only one of them can have the Main workspace (ADR 0021)
-- maps to the original project folder
+- is created by the user ("Create worktree" → "Workspace folder"), at most one per Workspace (ADR 0011)
+- one checkout hosts one worktree app-wide: if two workspaces share a repository (root and subfolder, or a linked worktree opened as a workspace), only one of them can have the Main worktree (ADR 0021)
+- maps to the original workspace folder
 - is never deleted from disk; it can be removed from Hiveory (agents close, folder untouched) and created again (ADR 0013)
 - can run CLI instances
-- participates in the same Kanban as isolated Workspaces
+- participates in the same Kanban as isolated Worktrees
 
-## Isolated Workspace
+## Isolated Worktree
 
-Isolated Workspace:
+Isolated Worktree:
 
 - uses a linked worktree
 - uses a local branch
 - can run multiple CLI instances
-- can be deleted according to workspace lifecycle rules
+- can be deleted according to worktree lifecycle rules
 
 ## Built-in Browser
 
@@ -258,7 +258,7 @@ The side panel's Browser tab is a real browser (ADR 0015):
 
 - toolbar: back, forward, reload, address bar (bare hosts and searches work), pick element, annotate element, viewport sizes, developer tools, and a menu with profiles, cookie import/export/clear and Browser settings
 - agents drive it through `browser_*` MCP tools with a visible cursor; it is on by default and works while the panel is closed
-- pages an agent opens appear as tabs in its workspace's side panel, named after the agent
+- pages an agent opens appear as tabs in its worktree's side panel, named after the agent
 - profiles keep separate cookies and logins; viewports emulate phones, tablets and desktops
 - Settings › Browser: browser use, agent cursor, home page, default profile, profiles, custom viewport sizes
 - device mode: a toolbar above the page with 22 devices, editable width × height, pixel ratio, rotate and drag handles (ADR 0016); agents use the same
@@ -284,7 +284,7 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in workspaces (never Home, project pages, Chat or Settings; ADR 0021). It holds browsers and one Explorer per workspace: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in worktrees (never Home, workspace pages, Chat or Settings; ADR 0021). It holds browsers and one Explorer per worktree: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)
@@ -293,9 +293,9 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   and a bottom area, each with its own tabs and "+"; a divider sets their heights. Keyboard:
   Ctrl+Shift+← → reorders, Ctrl+Shift+↓ ↑ moves a tab between the areas.
 - **Sessions** tab: every Claude Code, Codex and Gemini CLI conversation on this computer, read
-  from the CLIs' own history (so it survives restarts and reboots). Workspace · Project · All,
+  from the CLIs' own history (so it survives restarts and reboots). Worktree · Workspace · All,
   search, grouped by folder, newest first; title, last words, CLI, time and model. A session
-  that ran in one of the project's workspaces resumes there as a new agent pane.
+  that ran in one of the workspace's worktrees resumes there as a new agent pane.
 
 ## Queen Bee (ADR 0019)
 
@@ -304,14 +304,14 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   side panel, always visible, taking no room.
 - Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
   her and holds to talk.
-- Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),
+- Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
   close agents (always after a yes), restart, jump to an agent, load a preset, switch
-  Work/Chat, open Home, a project, a workspace or a Settings section, show or hide the
+  Work/Chat, open Home, a workspace, a worktree or a Settings section, show or hide the
   side panel, and open a browser or the Explorer. In Bots: open the work board, Routines,
   Triggers or the team map, and pause or resume a routine or trigger by its name ("pause
   Morning brief"; a model's plan asks first).
 - Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
-  live state. The current project, or every project from Home.
+  live state. The current workspace, or every workspace from Home.
 - She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of
   a command is unclear, and offers Undo for opens and navigation.
 - Personalities Ada, Sunny, Frankie and a custom one change wording only. Settings › Queen Bee holds:
@@ -331,13 +331,13 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   - a page in the side browser ("open localhost:3000"), a file in an editor
     ("open README.md");
   - the panes tidied ("tidy up the panes", "side by side");
-  - the workspace's branch and changes ("what changed"), the project's open pull requests;
+  - the worktree's branch and changes ("what changed"), the workspace's open pull requests;
   - connected apps, a Hiveory update check;
   - the current agents saved as a preset ("save this as preset Backend");
   - a new chat with a CLI and a first message;
   - a message to a bot ("ask Scout to …");
   - a CLI's last conversation resumed;
-  - a new project;
+  - a new workspace;
   - "restart all".
 - Voice (Settings › Queen Bee › Voice): local speech packs downloaded on request and
   verified.
@@ -359,30 +359,30 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   claude to …", "open codex and send: …" (exact words, no model needed).
 - "stop Bruno" interrupts without closing; "status of everything", "codex status", "what is
   Bruno doing", "take me to whoever needs me", "close idle agents", "jade theme", "create a
-  workspace called …", "help", "again".
+  worktree called …", "help", "again".
 - Live updates: she tells you (and says) when an agent finishes, needs you or crashes,
   whether or not she started the work.
 - Her reply card hovers above the panes; it never moves them.
 - Her mark is a waveform that moves with your voice while you hold her shortcut and with hers
   while she answers. There is no mic button: the shortcut is how you talk.
 - Small talk works with no model: greetings, thanks, "how are you", "who are you".
-- "Go to main" means the current project's Main; from Home, or for a name several projects
-  share, she asks which project's ("main of api" names it directly).
+- "Go to main" means the current workspace's Main; from Home, or for a name several workspaces
+  share, she asks which workspace's ("main of api" names it directly).
 
 ## Remote hosts (ADR 0022)
 
-- Add project › Remote (SSH): an SSH host and a folder there (typed, or browsed). The host is
+- Add workspace › Remote (SSH): an SSH host and a folder there (typed, or browsed). The host is
   picked from the user's Tailscale devices and ~/.ssh/config hosts, or typed (ADR 0026). The
-  project's files, git, worktrees and agents all stay on that machine; its sidebar row and page
+  workspace's files, git, worktrees and agents all stay on that machine; its sidebar row and page
   show the host with a live link dot. Agent menus list the CLIs installed on that machine. Remote
-  workspaces use terminal view.
+  worktrees use terminal view.
 - When ssh needs a password, key passphrase, one-time code or the OK for a new host's fingerprint,
   Hiveory asks in a dialog. Passwords are kept in memory until quit, never on disk; a changed host
   key is always refused. A machine without Node 20+ gets Hiveory's own (checksum-pinned) Node.
 - Losing the connection keeps that machine's agents running there: Hiveory reconnects on its own
   for 5 minutes and the same terminals continue with what they printed meanwhile. Only after that
   do they stop (with a notice); opening them again reconnects.
-- A remote project's Ports button lists what listens on that machine and forwards a port to this
+- A remote workspace's Ports button lists what listens on that machine and forwards a port to this
   computer (same number when free) and opens it in the browser.
 - Hiveory can run as a server (`hiveory --serve 7788`, no window, loopback only by default) so agents
   and bots keep working while this computer is off. Settings › Remote › Use a Hiveory server pairs
@@ -409,13 +409,13 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
   no Hiveory server sits in between. Pairing: scan "Connect your phone" (Settings › Remote ›
   Share this computer), open its `hiveory://pair` link, or type the computer's Tailscale name.
   Same Tailscale account = no code.
-- A phone may do everyday things only: watch every project and agent, open agents and presets,
-  type in terminals, send messages, interrupt, restart and close agents, create workspaces, chat,
+- A phone may do everyday things only: watch every workspace and agent, open agents and presets,
+  type in terminals, send messages, interrupt, restart and close agents, create worktrees, chat,
   answer the computer's SSH questions. Deleting, settings, accounts and resizing a desktop
   terminal stay on the computer (enforced by the server). Paired devices show as Phone or Desktop.
-- Tabs: **Inbox** (agents that need you across projects, then those working; badge on the tab),
-  **Projects** (each with live counts; a project's board one status at a time, most urgent first,
-  and its workspaces), **Settings** (computers, notifications, theme, privacy).
+- Tabs: **Inbox** (agents that need you across workspaces, then those working; badge on the tab),
+  **Workspaces** (each with live counts; a workspace's board one status at a time, most urgent first,
+  and its worktrees), **Settings** (computers, notifications, theme, privacy).
 - An agent screen shows its terminal exactly as on the computer (never resized), a bar that says
   why it waits with Esc and Enter, the keys a phone lacks, and a message box.
 - Notifications (opt-in): "An agent needs you." through Expo push, at most once a minute per
@@ -436,8 +436,8 @@ Initial version does not include:
 
 - free-form agent-to-agent chat (Work agents coordinate through agent tools; bots through the Chief of Staff, ADR 0022)
 - remote collaboration (planned as one host layer for Work and Bots, ADR 0022)
-- global Kanban across projects
+- global Kanban across workspaces
 - task history in Work (Bots keeps a bounded run log for routines, ADR 0028)
 - Done Kanban column
 - user-controlled manual Kanban status
-- multiple user-facing Tasks inside a Workspace
+- multiple user-facing Tasks inside a Worktree

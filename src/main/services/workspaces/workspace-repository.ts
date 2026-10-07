@@ -53,7 +53,7 @@ export class WorkspaceRepository {
 
   project(projectId: string): Project {
     const project = this.store.state.projects.find((p) => p.id === projectId)
-    if (!project) fail('NOT_FOUND', 'Project not found.')
+    if (!project) fail('NOT_FOUND', 'Workspace not found.')
     return project!
   }
 
@@ -76,7 +76,7 @@ export class WorkspaceRepository {
 
   get(workspaceId: string): Workspace {
     const workspace = this.find(workspaceId)
-    if (!workspace) fail('NOT_FOUND', 'Workspace not found.')
+    if (!workspace) fail('NOT_FOUND', 'Worktree not found.')
     return workspace!
   }
 

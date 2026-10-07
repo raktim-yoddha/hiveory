@@ -38,7 +38,7 @@ const actions = (text: string) => {
 }
 
 describe('Queen Bee rule parser', () => {
-  it('opens agents with counts, aliases and workspaces', () => {
+  it('opens agents with counts, aliases and worktrees', () => {
     expect(actions('open two claude')).toEqual([{ type: 'open-agents', cliId: 'claude', count: 2, workspaceId: 'w1', projectId: 'p1' }])
     expect(actions('Hey queen, please spin up 3 Codex in feature-x')).toEqual([{ type: 'open-agents', cliId: 'codex', count: 3, workspaceId: 'w2', projectId: 'p1' }])
     expect(actions('launch a claude code and a kimi')).toEqual([
@@ -50,7 +50,7 @@ describe('Queen Bee rule parser', () => {
   })
 
   it('asks instead of guessing', () => {
-    expect(parseCommand('open claude in feature', ctx)).toMatchObject({ kind: 'ask', question: { text: 'Which workspace do you mean?' } })
+    expect(parseCommand('open claude in feature', ctx)).toMatchObject({ kind: 'ask', question: { text: 'Which worktree do you mean?' } })
     expect(parseCommand('open claude in nowhere', ctx)).toMatchObject({ kind: 'ask' })
     expect(parseCommand('open 12 codex', ctx)).toMatchObject({ kind: 'ask' })
     expect(parseCommand('close', ctx)).toMatchObject({ kind: 'ask', question: { choices: [{ command: 'close Bruno' }, { command: 'close Luna' }] } })
@@ -64,7 +64,7 @@ describe('Queen Bee rule parser', () => {
     expect(parseCommand('close everyone', ctx)).toMatchObject({ actions: [{ type: 'close-agents', agentIds: ['a1', 'a2'] }] })
   })
 
-  it('finds agents, workspaces, projects and pages', () => {
+  it('finds agents, worktrees, workspaces and pages', () => {
     expect(actions('go to poppy')).toEqual([{ type: 'focus-agent', agentId: 'a3', workspaceId: 'w2', projectId: 'p1' }])
     expect(actions('show me Bruno')[0]).toMatchObject({ type: 'focus-agent', agentId: 'a1' })
     expect(actions('restart luna')).toEqual([{ type: 'restart-agent', agentId: 'a2' }])

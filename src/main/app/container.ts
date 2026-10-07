@@ -220,7 +220,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
         const cli = registry.list().find((c) => c.id === target.cliId)?.displayName ?? target.cliId
         if (target.kind === 'chat') return `${cli} in a new chat`
         const workspace = workspaceRepo.find(target.workspaceId)
-        return workspace ? `${cli} in ${workspaceRepo.project(target.projectId).name} · ${workspace.name}` : `${cli} in a removed workspace`
+        return workspace ? `${cli} in ${workspaceRepo.project(target.projectId).name} · ${workspace.name}` : `${cli} in a removed worktree`
       },
       chat: (target, title, prompt, files) => {
         const chat = chats.create()
@@ -239,7 +239,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
         return chat.id
       },
       workspace: (target, prompt) => {
-        if (!workspaceRepo.find(target.workspaceId)) throw new Error('That workspace no longer exists.')
+        if (!workspaceRepo.find(target.workspaceId)) throw new Error('That worktree no longer exists.')
         return startWorkRun({ agents, runtime, chats }, target, prompt)
       }
     }
