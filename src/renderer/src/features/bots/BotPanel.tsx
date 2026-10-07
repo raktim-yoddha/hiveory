@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react'
-import { Globe, Monitor, X } from 'lucide-react'
+import { CalendarClock, Globe, Monitor, X } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { useBots, type BotPanelTab } from '../../stores/bots'
 import { BrowserTab } from './BrowserTab'
 import { ComputerTab } from './ComputerTab'
+import { RoutinesTab } from './RoutinesTab'
 import styles from './Bots.module.css'
 
-// Routines joins these with the scheduler (docs/plans/bots-ui-wiring.md §3.3).
 const TABS: Array<{ value: BotPanelTab; label: string; icon: ReactNode }> = [
   { value: 'computer', label: 'Computer', icon: <Monitor aria-hidden /> },
+  { value: 'routines', label: 'Routines', icon: <CalendarClock aria-hidden /> },
   { value: 'browser', label: 'Browser', icon: <Globe aria-hidden /> }
 ]
 
@@ -24,7 +25,7 @@ export function BotPanel() {
         <Tabs label={`${bot.name} panel`} options={TABS} value={panelTab} onChange={setPanelTab} variant="segmented" />
         <IconButton label="Close panel" icon={<X />} onClick={() => setPanelOpen(false)} />
       </header>
-      {panelTab === 'computer' ? <ComputerTab bot={bot} /> : <BrowserTab bot={bot} />}
+      {panelTab === 'computer' ? <ComputerTab bot={bot} /> : panelTab === 'routines' ? <RoutinesTab bot={bot} /> : <BrowserTab bot={bot} />}
     </aside>
   )
 }

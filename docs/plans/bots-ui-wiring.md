@@ -223,7 +223,8 @@ routines per bot).
    profile via `BrowserService`'s `profileFor`, `BotService.browserProfile`).
 3. ✔ (2026-10-07) A1: the routine model, scheduler, keep-awake, IPC, tests (ADR 0028). Results
    posting ("Post results to") and attachments come with the editor in step 4.
-4. RoutineEditor + Routines tab + run log; then the calendar page (A2).
+4. ✔ (2026-10-07) RoutineEditor + Routines tab + run log + the Routines page (Week · List · Run logs)
+   and results posting (A2). Attachments, Day view, mini month and drag-a-bot are still to do.
 5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat stays hidden until rooms exist.
 6. Teams (§7) + the team map with team cards.
 

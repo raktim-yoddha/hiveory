@@ -410,6 +410,16 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return this.runs.has(chatId)
   }
 
+  /** Adds a message to a chat without starting a turn: a routine's dated result in its results thread (ADR 0028). */
+  note(chatId: string, text: string): void {
+    const chat = this.get(chatId)
+    const message: ChatMessage = { id: randomUUID(), role: 'assistant', parts: [{ kind: 'text', text }], createdAt: nowIso() }
+    chat.messages.push(message)
+    chat.updatedAt = message.createdAt
+    this.store.save(chat)
+    this.broadcast('chat.event', { chatId, message: structuredClone(message), summary: this.summary(chat) })
+  }
+
   /** The latest assistant message as text (tool calls as "[tool name]"), or '' when there is none. */
   lastReply(chatId: string): string {
     const last = [...this.get(chatId).messages].reverse().find((m) => m.role === 'assistant')

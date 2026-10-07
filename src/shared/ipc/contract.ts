@@ -109,6 +109,9 @@ const routineFields = z.object({
   timezone: z.string().min(1).max(64),
   endsAt: isoDate.optional(),
   timeoutMinutes: z.number().int().min(1).max(1440).optional(),
+  results: z.enum(['thread', 'none']).optional(),
+  /** Post into this thread of the bot instead of a dedicated one. */
+  resultsThreadId: id.optional(),
   enabled: z.boolean().optional()
 })
 const folderPath = z.string().min(1).max(1000)
@@ -522,7 +525,8 @@ export const requestSchemas = {
   'routines.update': routineFields.partial().extend({
     routineId: id,
     endsAt: isoDate.nullable().optional(),
-    timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional()
+    timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+    resultsThreadId: id.nullable().optional()
   }),
   'routines.delete': z.object({ routineId: id }),
   'routines.runNow': z.object({ routineId: id }),

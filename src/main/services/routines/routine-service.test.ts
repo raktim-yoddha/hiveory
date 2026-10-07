@@ -30,12 +30,20 @@ class FakeChats extends EventEmitter<{ run: [chatId: string, running: boolean] }
     this.stopped.push(chatId)
     this.emit('run', chatId, false)
   }
+  readonly notes: Array<{ chatId: string; text: string }> = []
   find(chatId: string): ChatSession | undefined {
     return this.sessions.get(chatId)
   }
-  end(chatId: string, error?: string): void {
+  note(chatId: string, text: string): void {
+    this.notes.push({ chatId, text })
+  }
+  lastReply(chatId: string): string {
+    const last = [...this.sessions.get(chatId)!.messages].reverse()[0] as unknown as { parts: Array<{ text: string }> } | undefined
+    return last?.parts.map((p) => p.text).join('\n') ?? ''
+  }
+  end(chatId: string, error?: string, reply = 'Done.'): void {
     const chat = this.sessions.get(chatId)!
-    chat.messages.push({ role: 'assistant', parts: [], ...(error ? { error } : {}) } as unknown as ChatSession['messages'][number])
+    chat.messages.push({ role: 'assistant', parts: [{ kind: 'text', text: reply }], ...(error ? { error } : {}) } as unknown as ChatSession['messages'][number])
     this.emit('run', chatId, false)
   }
 }
@@ -109,8 +117,26 @@ describe('routines', () => {
     expect(runs()[0]!.status).toBe('completed')
     advance(24 * HOUR)
     expect(chats.sent).toHaveLength(2)
-    chats.end('t2', 'Rate limited.')
+    chats.end('t3', 'Rate limited.') // t2 is the results thread
     expect(runs()[0]).toMatchObject({ status: 'failed', detail: 'Rate limited.' })
+  })
+
+  it('posts each finished run into one results thread, or nowhere when asked', () => {
+    const { service, chats, advance, daily9 } = setup()
+    const r = service.create(daily9())
+    advance(HOUR)
+    chats.end('t1', undefined, 'Inbox: 3 new, 1 urgent.')
+    expect(service.get(r.id).resultsThreadId).toBe('t2')
+    expect(chats.sessions.get('t2')!.title).toBe('Morning report · results')
+    expect(chats.notes).toEqual([{ chatId: 't2', text: '**Morning report** · Wed, Oct 7, 09:00\n\nInbox: 3 new, 1 urgent.' }])
+    advance(24 * HOUR)
+    chats.end('t3', 'Rate limited.')
+    expect(chats.notes[1]).toMatchObject({ chatId: 't2' })
+    expect(chats.notes[1]!.text).toContain('It failed: Rate limited.')
+    service.update(r.id, { results: 'none' })
+    advance(24 * HOUR)
+    chats.end('t4')
+    expect(chats.notes).toHaveLength(2)
   })
 
   it('catches up one run missed less than 12 hours ago, and logs older ones as missed', () => {
@@ -175,7 +201,7 @@ describe('routines', () => {
     expect(runs()[0]).toMatchObject({ status: 'failed', detail: 'Stopped after 10 minutes, its time limit.' })
     chats.failSend = true
     advance(24 * HOUR)
-    expect(runs()[0]).toMatchObject({ status: 'failed', threadId: 't2' })
+    expect(runs()[0]).toMatchObject({ status: 'failed', threadId: 't3' }) // t2 holds the first run's result
     expect(runs()[0]!.detail).toContain('could not start: Choose a CLI first.')
   })
 

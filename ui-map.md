@@ -40,12 +40,28 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Header: avatar, name, role and engine, status, Computer and browser (opens the bot panel), settings (opens the bot editor).
 - Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
   first thread opens on its own.
-- Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Memory (edit mode).
-- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Computer · Browser):
+- Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Runs on a schedule, Memory (edit mode).
+- Sidebar footer: **Routines** opens the Routines page (ADR 0028).
+- Routines page: header (Routines, ‹ › week, "October 5 – 11, 2026", Today, Week · List · Run logs,
+  bot filter, New routine); the keep-awake switch with its explanation; Week: Mon–Sun columns,
+  hour rows (opening at 07:00), today shaded, a now line, past runs coloured by outcome and upcoming
+  runs from each schedule (same-time runs side by side); click an empty hour for a new routine there,
+  click a run to edit its routine. List: routine rows. Run logs: status, routine, bot, when, by you
+  or the schedule, duration, why it failed, and Open thread.
+- Routine editor (modal): Title; Starts (date, time, this computer's timezone); Repeat (Does not
+  repeat · Every X minutes · Daily · Every weekday · Weekly on <day> · Selected weekdays (day chips) ·
+  Monthly on day N · Monthly on the last day · Yearly · Custom cron); the next three runs; when
+  routines run; Advanced (stop a run after N minutes, last day); Assign a bot (with "allow it to run
+  on a schedule" inline); Post results to (a dedicated results thread · one of the bot's threads ·
+  only each run's own thread); Instructions. Editing adds Delete and Run now.
+- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Computer · Routines · Browser):
   - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is
     shown) with Start/Stop and Take control; **Works on** cards: Auto · Linux computer · Server
     computer (SSH host field) · This computer · Browser · Off; a "Can use … now" line and, when a
     Settings switch blocks the choice, the reason with Open settings.
+  - **Routines**: count, "allow it to run on a schedule" when it can't yet, Run logs, Create
+    schedule, the bot's routine rows (name, schedule in words, next run, last failure, Run now, Edit,
+    on/off), and Open schedules → (the Routines page filtered to this bot).
   - **Browser**: the pages all the bot's threads share, as tabs with close and "+"; the built-in
     browser pane below. Pages open in the bot's own profile ("Bot · <name>", made on first use), so
     the user can sign in to sites for the bot here and its logins stay apart from theirs. A note

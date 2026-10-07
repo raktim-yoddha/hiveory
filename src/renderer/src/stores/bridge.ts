@@ -8,6 +8,7 @@ import { useEditors } from './editors'
 import { useHostLinks, useSshPrompts } from './hosts'
 import { useNotices } from './notices'
 import { useVoice } from '../features/queen/voice'
+import { useRoutines } from './routines'
 
 /** Events arriving within this window trigger one reload per cache key. */
 const COALESCE_MS = 24
@@ -37,6 +38,7 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'settings') reload('settings', () => useSettings.getState().load())
       if (topic === 'chats') reload('chats', () => useChat.getState().loadList())
       if (topic === 'bots') reload('bots', () => useBots.getState().load())
+      if (topic === 'routines') reload('routines', () => useRoutines.getState().load())
       if (topic === 'chats' && useBots.getState().activeBotId) {
         const botId = useBots.getState().activeBotId!
         reload(`bot-threads:${botId}`, () => useBots.getState().loadThreads(botId))

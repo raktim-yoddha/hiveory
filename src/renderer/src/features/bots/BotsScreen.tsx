@@ -10,6 +10,8 @@ import { useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
 import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
+import { RoutineEditor } from '../routines/RoutineEditor'
+import { RoutinesPage } from '../routines/RoutinesPage'
 import { BotEditor, useBotEditor } from './BotEditor'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
@@ -22,7 +24,7 @@ const EMPTY: never[] = []
  * the user is in Work or Chat.
  */
 export function BotsScreen() {
-  const { bots, activeBotId, load, newThread, openThread, panelOpen, setPanelOpen } = useBots()
+  const { bots, activeBotId, load, newThread, openThread, panelOpen, setPanelOpen, page } = useBots()
   /** undefined until loaded, so "no threads yet" is never confused with "not loaded yet". */
   const loadedThreads = useBots((s) => (activeBotId ? s.threads[activeBotId] : undefined))
   const threads = loadedThreads ?? EMPTY
@@ -44,6 +46,15 @@ export function BotsScreen() {
     starting.current.add(activeBotId)
     void newThread(activeBotId).finally(() => starting.current.delete(activeBotId))
   }, [activeBotId, loadedThreads, newThread])
+
+  if (page === 'routines') {
+    return (
+      <>
+        <RoutinesPage />
+        <RoutineEditor />
+      </>
+    )
+  }
 
   if (!bot) {
     return (
@@ -129,6 +140,7 @@ export function BotsScreen() {
         <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
       )}
       <BotEditor />
+      <RoutineEditor />
     </section>
   )
 }

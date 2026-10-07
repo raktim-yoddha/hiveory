@@ -28,6 +28,10 @@ export interface Routine {
   endsAt?: string
   /** Stops a run that takes longer. Absent = no limit. */
   timeoutMinutes?: number
+  /** "thread": each finished run posts a dated summary into a results thread; "none": it stays in the run's own thread. */
+  results: 'thread' | 'none'
+  /** The results thread: one the user picked, or the dedicated one made on the first result. */
+  resultsThreadId?: string
   enabled: boolean
   /** Occurrences up to here are handled (run, skipped or missed); nothing before it runs again. */
   checkedThrough: string

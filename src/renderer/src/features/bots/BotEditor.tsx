@@ -27,6 +27,7 @@ interface Draft {
   autoApprove: boolean
   chief: boolean
   messaging: boolean
+  routines: boolean
   memory: string[]
 }
 
@@ -37,6 +38,7 @@ const draftOf = (bot: BotView | undefined, firstBot: boolean): Draft => ({
   autoApprove: bot?.autoApprove ?? false,
   chief: bot?.chief ?? firstBot,
   messaging: bot?.messaging ?? true,
+  routines: bot?.routines ?? false,
   memory: bot?.memory ?? []
 })
 
@@ -76,7 +78,7 @@ function EditorDialog({ target }: { target: string }) {
   const save = async (): Promise<void> => {
     if (!draft.name.trim()) return
     setBusy(true)
-    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging }
+    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines }
     if (bot) await update(bot.id, { ...fields, memory: draft.memory })
     else await createBot(fields)
     setBusy(false)
@@ -143,6 +145,13 @@ function EditorDialog({ target }: { target: string }) {
               <span className={styles.switchHint}>May consult other bots, and be consulted. The Chief of Staff can always reach it.</span>
             </span>
             <Toggle label="Team messaging" checked={draft.messaging} onChange={(v) => set('messaging', v)} />
+          </div>
+          <div className={styles.switchRow}>
+            <span className={styles.switchText}>
+              <span className={styles.switchTitle}>Runs on a schedule</span>
+              <span className={styles.switchHint}>May have routines: work it starts on its own at the times you set. Off: it only works when asked.</span>
+            </span>
+            <Toggle label="Runs on a schedule" checked={draft.routines} onChange={(v) => set('routines', v)} />
           </div>
           {bot && (
             <>

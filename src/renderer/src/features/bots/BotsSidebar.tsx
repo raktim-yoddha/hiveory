@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Crown, Pencil, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { CalendarClock, Crown, Pencil, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
 import { BotAvatar } from '../../components/brand/BotAvatar'
 import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
@@ -12,7 +12,7 @@ import styles from './Bots.module.css'
 
 /** Bots mode's sidebar: the team like a contact list, the Chief of Staff first. Right-click a bot for its actions. */
 export function BotsSidebar() {
-  const { bots, activeBotId, load, select, update, remove } = useBots()
+  const { bots, activeBotId, load, select, update, remove, page, showRoutines } = useBots()
   const openEditor = useBotEditor((s) => s.open)
 
   useEffect(() => {
@@ -48,10 +48,10 @@ export function BotsSidebar() {
                 <button
                   {...props}
                   type="button"
-                  className={cx(chat.chatRow, bot.id === activeBotId && chat.chatActive)}
+                  className={cx(chat.chatRow, page === 'bot' && bot.id === activeBotId && chat.chatActive)}
                   onClick={() => void select(bot.id)}
                   onDoubleClick={() => openEditor(bot.id)}
-                  aria-current={bot.id === activeBotId ? 'page' : undefined}
+                  aria-current={page === 'bot' && bot.id === activeBotId ? 'page' : undefined}
                 >
                   <BotAvatar id={bot.id} name={bot.name} size="sm" />
                   <span className={chat.chatText}>
@@ -69,6 +69,17 @@ export function BotsSidebar() {
         ))}
         {bots.length === 0 && <li className={chat.sidebarEmpty}>No bots yet.</li>}
       </ul>
+      <div className={styles.sidebarFooter}>
+        <button
+          type="button"
+          className={cx(chat.chatRow, page === 'routines' && chat.chatActive)}
+          aria-current={page === 'routines' ? 'page' : undefined}
+          onClick={() => showRoutines()}
+        >
+          <CalendarClock aria-hidden className={styles.footerIcon} />
+          <span className={chat.chatTitle}>Routines</span>
+        </button>
+      </div>
     </nav>
   )
 }

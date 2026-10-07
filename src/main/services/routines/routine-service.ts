@@ -17,8 +17,12 @@ import type { Emit } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
 export type RoutineInput = Pick<Routine, 'name' | 'botId' | 'prompt' | 'schedule' | 'startsAt' | 'timezone'> &
-  Partial<Pick<Routine, 'endsAt' | 'timeoutMinutes' | 'enabled'>>
-export type RoutinePatch = Partial<Omit<RoutineInput, 'endsAt' | 'timeoutMinutes'>> & { endsAt?: string | null; timeoutMinutes?: number | null }
+  Partial<Pick<Routine, 'endsAt' | 'timeoutMinutes' | 'enabled' | 'results' | 'resultsThreadId'>>
+export type RoutinePatch = Partial<Omit<RoutineInput, 'endsAt' | 'timeoutMinutes' | 'resultsThreadId'>> & {
+  endsAt?: string | null
+  timeoutMinutes?: number | null
+  resultsThreadId?: string | null
+}
 
 interface Timers {
   set(fn: () => void, ms: number): unknown
@@ -31,6 +35,8 @@ export interface RoutineDeps {
   chats: {
     send(chatId: string, text: string): void
     stop(chatId: string): void
+    note(chatId: string, text: string): void
+    lastReply(chatId: string): string
     find(chatId: string): ChatSession | undefined
     on(event: 'run', listener: (chatId: string, running: boolean) => void): unknown
   }
@@ -44,6 +50,8 @@ export interface RoutineDeps {
 
 /** The scheduler sleeps at most this long, so sleep, clock changes and a slow timer cost minutes, not hours. */
 const MAX_SLEEP_MS = 5 * 60 * 1000
+/** A result posted into the results thread is cut here; the whole run stays in its own thread. */
+const MAX_RESULT_CHARS = 6000
 
 const iso = (ms: number): string => new Date(ms).toISOString()
 const timingChanged = (patch: RoutinePatch): boolean =>
@@ -126,6 +134,8 @@ export class RoutineService {
       timezone: input.timezone,
       ...(input.endsAt ? { endsAt: input.endsAt } : {}),
       ...(input.timeoutMinutes ? { timeoutMinutes: input.timeoutMinutes } : {}),
+      results: input.results ?? 'thread',
+      ...(input.resultsThreadId ? { resultsThreadId: input.resultsThreadId } : {}),
       enabled: input.enabled ?? true,
       checkedThrough: now,
       createdAt: now,
@@ -141,13 +151,11 @@ export class RoutineService {
 
   update(routineId: string, patch: RoutinePatch): RoutineView {
     const current = this.get(routineId)
-    const next: Routine = { ...current, ...patch, endsAt: undefined, timeoutMinutes: undefined } as Routine
-    const endsAt = patch.endsAt === undefined ? current.endsAt : patch.endsAt
-    const timeoutMinutes = patch.timeoutMinutes === undefined ? current.timeoutMinutes : patch.timeoutMinutes
-    if (endsAt) next.endsAt = endsAt
-    else delete next.endsAt
-    if (timeoutMinutes) next.timeoutMinutes = timeoutMinutes
-    else delete next.timeoutMinutes
+    const next = { ...current, ...patch } as Routine
+    // null clears an optional field.
+    for (const key of ['endsAt', 'timeoutMinutes', 'resultsThreadId'] as const) if (next[key] === null || next[key] === undefined) delete next[key]
+    // Another bot's thread can't hold this routine's results: the new bot gets a dedicated one.
+    if (patch.botId && patch.botId !== current.botId && patch.resultsThreadId === undefined) delete next.resultsThreadId
     if (patch.botId && patch.botId !== current.botId) {
       const bot = this.d.bots.find(patch.botId) ?? fail('NOT_FOUND', 'Bot not found.')
       if (!bot.routines) fail('INVALID_INPUT', `Allow ${bot.name} to run on a schedule first.`)
@@ -276,7 +284,38 @@ export class RoutineService {
       const run = s.routineRuns.find((r) => r.id === runId)
       if (run) Object.assign(run, { status, endedAt: iso(this.now()), ...(detail ? { detail } : {}) })
     })
+    const run = this.d.store.state.routineRuns.find((r) => r.id === runId)
+    if (run) {
+      try {
+        this.postResult(run)
+      } catch (error) {
+        this.d.log.warn(`Could not post the result of "${run.routineName}"`, error)
+      }
+    }
     this.changed()
+  }
+
+  /** A finished run's dated summary goes into the routine's results thread (made on the first result). */
+  private postResult(run: RoutineRun): void {
+    const routine = this.d.store.state.routines.find((r) => r.id === run.routineId)
+    if (!routine || routine.results !== 'thread' || !run.threadId) return
+    let threadId = routine.resultsThreadId
+    if (!threadId || !this.d.chats.find(threadId)) {
+      threadId = this.d.bots.newThread(routine.botId, `${routine.name} · results`).id
+      this.d.store.update((s) => {
+        const r = s.routines.find((x) => x.id === routine.id)
+        if (r) r.resultsThreadId = threadId
+      })
+    }
+    const outcome = run.status === 'completed' ? this.clip(this.d.chats.lastReply(run.threadId)) : `It failed: ${run.detail ?? 'no reason given.'}`
+    this.d.chats.note(threadId, `**${routine.name}** · ${this.label(Date.parse(run.scheduledFor), routine.timezone)}
+
+${outcome || '(No reply.)'}`)
+  }
+
+  private clip(text: string): string {
+    return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}
+…(the full run is in its own thread)` : text
   }
 
   private receipt(routine: Routine, when: number, trigger: RunTrigger, status: RoutineRun['status'], detail?: string): RoutineRun {

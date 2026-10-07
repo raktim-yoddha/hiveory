@@ -1,0 +1,354 @@
+/* Routines (ADR 0028): the editor, rows, run log and the week calendar. */
+
+.spacer {
+  flex: 1;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.problem {
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+}
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.day {
+  min-width: var(--control-lg);
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.dayOn {
+  border-color: var(--color-accent);
+  background: var(--fill-accent-soft);
+  color: var(--color-text);
+}
+
+.advanced {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.advanced > summary {
+  cursor: pointer;
+  padding: var(--space-2) 0;
+}
+
+.advanced[open] > summary {
+  margin-bottom: var(--space-5);
+}
+
+.allow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+}
+
+/* Rows and the run log */
+.list,
+.runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-6) var(--chat-gutter);
+  overflow-y: auto;
+  list-style: none;
+}
+
+.routineRow,
+.run {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.routineMain {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.routineName {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.runText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.status {
+  flex: none;
+  min-width: calc(var(--control-lg) * 2);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--fill-icon);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-align: center;
+}
+
+.status.running,
+.event.running {
+  background: var(--color-working-soft);
+  color: var(--color-working);
+}
+
+.status.completed,
+.event.completed {
+  background: var(--color-working-soft);
+  color: var(--color-success);
+}
+
+.status.failed,
+.event.failed {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.status.missed,
+.status.skipped,
+.event.missed,
+.event.skipped {
+  background: var(--color-waiting-soft);
+  color: var(--color-waiting);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.count {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Page */
+.pageHeader {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--chat-gutter);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.weekNav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.range {
+  margin: 0 var(--space-4);
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.awake {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-7);
+  padding: var(--space-5) var(--chat-gutter);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.awake strong {
+  color: var(--color-text);
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Week calendar */
+.week {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.weekHead,
+.weekBody {
+  display: grid;
+  grid-template-columns: var(--calendar-gutter-width) repeat(7, minmax(0, 1fr));
+}
+
+.weekHead {
+  flex: none;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.weekBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.zone {
+  align-self: center;
+  overflow: hidden;
+  padding: 0 var(--space-3);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dayHead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) 0;
+}
+
+.dayName {
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.dayNumber {
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.today .dayName,
+.today .dayNumber {
+  color: var(--color-accent);
+}
+
+.hours {
+  display: flex;
+  flex-direction: column;
+}
+
+.hourLabel {
+  height: var(--calendar-hour-height);
+  padding-right: var(--space-4);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  text-align: right;
+  transform: translateY(calc(var(--text-2xs) / -2));
+}
+
+.dayColumn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.todayColumn {
+  background: var(--color-surface-hover);
+}
+
+.slot {
+  flex: none;
+  height: var(--calendar-hour-height);
+  padding: 0;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+  background: transparent;
+}
+
+.slot:hover {
+  background: var(--color-surface-hover);
+}
+
+.event {
+  position: absolute;
+  min-height: calc(var(--calendar-hour-height) / 2);
+  overflow: hidden;
+  padding: var(--space-1) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--fill-accent-soft);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventTime {
+  font-weight: var(--weight-semibold);
+}
+
+.nowLine {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: var(--border-width-strong);
+  background: var(--color-danger);
+  pointer-events: none;
+}

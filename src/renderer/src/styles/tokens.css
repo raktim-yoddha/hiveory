@@ -193,6 +193,9 @@
   /* Defaults; the shell overrides both with the user's resized widths. */
   --sidebar-width: 248px;
   --side-panel-width: 420px;
+  /* Routines week calendar: the height of one hour. */
+  --calendar-hour-height: 48px;
+  --calendar-gutter-width: 56px;
   --pane-header-height: 30px;
   --pane-min-width: 240px;
   --pane-min-height: 140px;

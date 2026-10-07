@@ -314,6 +314,8 @@ export const routineSchema: z.ZodType<Routine> = z.object({
   timezone: z.string().min(1).max(64),
   endsAt: isoDate.optional().catch(undefined),
   timeoutMinutes: z.number().int().positive().optional().catch(undefined),
+  results: z.enum(['thread', 'none']).catch('thread'),
+  resultsThreadId: str.optional().catch(undefined),
   enabled: z.boolean().catch(false),
   checkedThrough: isoDate,
   createdAt: str,

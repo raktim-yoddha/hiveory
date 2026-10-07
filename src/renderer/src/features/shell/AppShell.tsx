@@ -49,7 +49,7 @@ export function AppShell() {
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
   // The right column: a workspace's side panel (never on Home, a project page or Settings), or the open bot's panel.
-  const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null)
+  const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null && s.page === 'bot')
   const setBotPanelOpen = useBots((s) => s.setPanelOpen)
   const showBotPanel = botPanelOpen && mode === 'bots' && !inSettings
   const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && view.type === 'workspace')

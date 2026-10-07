@@ -8,7 +8,7 @@ import { reportError, runAction } from './notices'
 
 type BotInput = RequestOf<'bots.create'>
 type BotPatch = Omit<RequestOf<'bots.update'>, 'botId'>
-export type BotPanelTab = 'computer' | 'browser'
+export type BotPanelTab = 'computer' | 'routines' | 'browser'
 
 interface BotsState {
   bots: BotView[]
@@ -21,8 +21,14 @@ interface BotsState {
   /** The bot panel in the right column, and its tab. */
   panelOpen: boolean
   panelTab: BotPanelTab
+  /** What Bots mode shows: a bot's conversation, or the Routines page (filtered to one bot, or all). */
+  page: 'bot' | 'routines'
+  routinesFilter?: string
   setPanelOpen(open: boolean): void
   setPanelTab(tab: BotPanelTab): void
+  showRoutines(botId?: string): void
+  /** Opens a bot's thread, e.g. a routine run's, from anywhere in Bots mode. */
+  openBotThread(botId: string, threadId: string): Promise<void>
   load(): Promise<void>
   loadThreads(botId: string): Promise<void>
   select(botId: string): Promise<void>
@@ -44,9 +50,16 @@ export const useBots = create<BotsState>((set, get) => ({
   activeThread: {},
   panelOpen: false,
   panelTab: 'computer',
+  page: 'bot',
 
   setPanelOpen: (panelOpen) => set({ panelOpen }),
   setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
+  showRoutines: (routinesFilter) => set({ page: 'routines', routinesFilter }),
+
+  openBotThread: async (botId, threadId) => {
+    await get().select(botId)
+    await get().openThread(botId, threadId)
+  },
 
   load: async () => {
     try {
@@ -74,7 +87,7 @@ export const useBots = create<BotsState>((set, get) => ({
   },
 
   select: async (botId) => {
-    set({ activeBotId: botId })
+    set({ activeBotId: botId, page: 'bot' })
     await get().loadThreads(botId)
     const threads = get().threads[botId] ?? []
     const current = get().activeThread[botId]

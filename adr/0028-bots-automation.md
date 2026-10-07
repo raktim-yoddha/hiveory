@@ -45,7 +45,22 @@ Bot, OpenAI dots, Claude Cowork, OpenClaw, Hermes Agent, Lindy).
 - **IPC:** `routines.list | create | update | delete | runNow | runs` (all remote-allowed), and
   `state.changed` with topic `routines`.
 
+## Routines UI and results (built: phase A2)
+
+- **Results:** a routine posts a dated summary of each finished run (its last reply, cut at 6,000
+  characters, or why it failed) into a results thread: a dedicated "<name> · results" thread made on
+  the first result, or a bot thread the user picks; or nowhere ("only each run's own thread").
+  `ChatService.note()` adds the message without starting a turn, so posting never wakes the bot.
+- **Editor:** times are this computer's timezone; a routine saved in another zone moves to this one
+  when it is saved (zones are compared by their current offset, so aliases such as Asia/Calcutta and
+  Asia/Kolkata count as the same). Presets compile to cron at the chosen time; a preset rule's own
+  hour and minute are what the editor shows and what runs.
+- **Screens:** the Routines page (Week · List · Run logs, bot filter, keep-awake switch), the bot
+  panel's Routines tab, and the "Runs on a schedule" switch in the bot editor. Layout in `ui-map.md`.
+- **Not yet:** attachments on a routine, the Day view, the mini month and dragging a bot onto the
+  calendar.
+
 ## Next
 
-Routine editor, the bot panel's Routines tab and the run log (A2); a bot proposing a routine through
-a confirm card, and Queen Bee actions (A3); triggers (T1); teams and the team map (M2); the work board (K1).
+A bot proposing a routine through a confirm card, and Queen Bee actions (A3); triggers (T1); teams and
+the team map (M2); the work board (K1).
