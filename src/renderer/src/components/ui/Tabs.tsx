@@ -59,7 +59,7 @@ export function Tabs<T extends string>({ label, options, value, onChange, varian
             onClick={() => onChange(option.value)}
           >
             {option.icon}
-            {option.label}
+            <span className={styles.label}>{option.label}</span>
             {option.badge}
           </button>
         )

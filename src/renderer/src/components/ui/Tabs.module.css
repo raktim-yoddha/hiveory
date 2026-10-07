@@ -35,6 +35,11 @@
     background var(--duration-fast) var(--ease-out);
 }
 
+/* Trim the font's uneven ascender/descender space so the letters, not the line box, sit centred. */
+.label {
+  text-box: trim-both cap alphabetic;
+}
+
 .tab svg {
   width: var(--icon-sm);
   height: var(--icon-sm);
