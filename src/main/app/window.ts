@@ -16,8 +16,9 @@ export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string
   jade: { background: '#040706', symbols: '#a6b7ae' },
   rose: { background: '#080608', symbols: '#bcadb3' }
 }
+export type WindowChrome = { background: string; symbols: string }
 /** Over a wallpaper the window controls sit on the picture, not on a solid strip. */
-const overlayColor = (theme: ThemeId, wallpaper: boolean): string => (wallpaper ? '#00000000' : THEME_CHROME[theme].background)
+const overlayColor = (chrome: WindowChrome, wallpaper: boolean): string => (wallpaper ? '#00000000' : chrome.background)
 export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
 export const TITLE_BAR_HEIGHT = 44
 
@@ -28,9 +29,10 @@ export interface WindowTargets {
 }
 
 /** Creates the hardened main window (Electron security checklist). */
-export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark', wallpaper = false): BrowserWindow => {
+/** `custom`: an applied VS Code theme's chrome (ADR 0034), which wins over the built-in theme's. */
+export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark', wallpaper = false, custom?: WindowChrome | null): BrowserWindow => {
   const isMac = process.platform === 'darwin'
-  const chrome = THEME_CHROME[theme]
+  const chrome = custom ?? THEME_CHROME[theme]
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -44,7 +46,7 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 16, y: 15 } }
-      : { titleBarOverlay: { color: overlayColor(theme, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
+      : { titleBarOverlay: { color: overlayColor(chrome, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: targets.preload,
       contextIsolation: true,
@@ -105,12 +107,12 @@ export const rendererTargets = (baseDir: string): WindowTargets => ({
 })
 
 /** Repaints native chrome to match the theme. */
-export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId, wallpaper = false): void => {
-  const chrome = THEME_CHROME[theme]
+export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId, wallpaper = false, custom?: WindowChrome | null): void => {
+  const chrome = custom ?? THEME_CHROME[theme]
   window.setBackgroundColor(chrome.background)
   if (process.platform !== 'darwin') {
     try {
-      window.setTitleBarOverlay({ color: overlayColor(theme, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
+      window.setTitleBarOverlay({ color: overlayColor(chrome, wallpaper), symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
     } catch {
       // Overlay unavailable on this platform/window.
     }

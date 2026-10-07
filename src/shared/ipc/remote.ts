@@ -35,7 +35,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
  */
 export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
   'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
-  'updates.status', 'voice.status', 'browser.state', 'wallpapers.list'
+  'updates.status', 'voice.status', 'browser.state', 'wallpapers.list', 'themes.installed'
 ])
 
 /** The server's wire format: a call, and one event on the event stream. */

@@ -71,6 +71,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'voice.status': () => [],
     'browser.state': () => ({ pages: [], profiles: [], annotations: [] }),
     'wallpapers.list': () => [],
+    'themes.installed': () => [],
     'client.status': () => ({ mode: 'client' as const, server, connected: backend.isConnected }),
     'client.connect': async (input) => {
       const next = await connectAndSave(input, ssh, tailscale, paths.clientFile, safeStorage)

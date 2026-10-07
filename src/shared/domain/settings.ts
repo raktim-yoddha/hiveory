@@ -39,6 +39,8 @@ export interface AppSettings {
   wallpaperBlur: number
   /** Darkens the wallpaper so text stays readable (0–0.8). */
   wallpaperDim: number
+  /** Applied VS Code color theme (`<extension>/<slug>`, ADR 0034); '' = the built-in `theme`. */
+  vscodeTheme: string
   /** Queen Bee's personality (ADR 0019). */
   queenPersona: 'ada' | 'sunny' | 'frankie' | 'custom'
   /** Custom personality: her name (never an agent pet name). */
@@ -106,6 +108,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,
   wallpaperDim: 0.25,
+  vscodeTheme: '',
   queenPersona: 'ada',
   queenCustomName: 'Zara',
   queenCustomPersona: '',

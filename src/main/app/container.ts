@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeImage, Notification, powerMonitor, powerSaveB
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
+import { ThemeService } from '../services/appearance/theme-service'
 import { EditorService } from '../services/editors/editor-service'
 import { FileService } from '../services/files/file-service'
 import { ConnectionService } from '../services/connections/connection-service'
@@ -329,6 +330,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   guard(log, 'Model tracker', () => models.start())
   const extensions = new ExtensionsService(log, homedir(), (path) => shell.trashItem(path))
   const wallpapers = new WallpaperService(paths.wallpapersDir, nativeImage)
+  const themes = new ThemeService(paths.themesDir)
   const files = new FileService((path) => shell.trashItem(path), (scope, changed) => emit('files.changed', { scope, paths: changed }))
   hosts = new HostRegistry(
     localKit({
@@ -437,6 +439,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     sessions,
     repositories,
     wallpapers,
+    themes,
     files,
     editors,
     connections,

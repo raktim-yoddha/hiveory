@@ -9,7 +9,7 @@ import { useBrowser } from './stores/browser'
 import { installEventBridge } from './stores/bridge'
 import { applyLook } from './features/shell/appearance'
 import { useConnections } from './stores/connections'
-import { useApp, useClis, useSettings } from './stores/data'
+import { findTheme, useApp, useClis, useSettings, useThemes } from './stores/data'
 import { reportError } from './stores/notices'
 import { useVoice } from './features/queen/voice'
 
@@ -21,12 +21,14 @@ window.addEventListener('error', (event) => {
 
 function App() {
   const settings = useSettings((s) => s.settings)
-  const { theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim } = settings
+  const { theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim, vscodeTheme } = settings
+  const custom = useThemes((s) => findTheme(s.installed, vscodeTheme))
   useEffect(() => {
     const uninstall = installEventBridge()
     void useApp.getState().load()
     void useClis.getState().load()
     void useSettings.getState().load()
+    void useThemes.getState().load()
     void useBrowser.getState().load()
     // Queen Bee's speech packs: the mic button and hold-to-talk need to know what's installed.
     void useVoice.getState().load()
@@ -34,8 +36,8 @@ function App() {
     return uninstall
   }, [])
   useEffect(() => {
-    applyLook({ theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim })
-  }, [theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim])
+    applyLook({ theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim }, custom)
+  }, [theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim, custom])
   return <AppShell />
 }
 

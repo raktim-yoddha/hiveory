@@ -104,6 +104,9 @@ theme. A border is reserved for keyboard focus and the active pane (ADR 0018).
 Themes set opaque `--base-*` surfaces; components use `--color-surface*`, which
 become translucent over a wallpaper — one `--surface-alpha` for every surface. Dialogs use
 `--color-surface-solid`. Third-party brand marks sit on `--color-logo-tile`.
+VS Code color themes map onto these same tokens (plus `--syntax-*` for the editor and
+`--shadow-tint`), layered over the built-in theme (ADR 0034) — a new color need is a new token,
+never a component special case.
 The app logo is shown flat — no glow, shadow or gradient (ADR 0017).
 
 Do not scatter literal colors across components.

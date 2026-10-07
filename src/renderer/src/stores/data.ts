@@ -9,6 +9,8 @@ import type {
   LayoutNode,
   LayoutOperation,
   Project,
+  VsCodeTheme,
+  VsCodeThemeExtension,
   WorkspaceView
 } from '@shared/domain'
 import { DEFAULT_SETTINGS } from '@shared/domain'
@@ -182,6 +184,23 @@ export const useSettings = create<SettingsState>((set) => ({
     await load('Save settings', () => api('settings.update', patch), (settings) => set({ settings }))
   }
 }))
+
+interface ThemesState {
+  /** Installed VS Code theme extensions (ADR 0034). */
+  installed: VsCodeThemeExtension[]
+  load(): Promise<void>
+  set(installed: VsCodeThemeExtension[]): void
+}
+
+export const useThemes = create<ThemesState>((set) => ({
+  installed: [],
+  load: () => load('Load themes', () => api('themes.installed'), (installed) => set({ installed })),
+  set: (installed) => set({ installed })
+}))
+
+/** The installed VS Code theme with this id, or null ('' = the built-in theme). */
+export const findTheme = (installed: VsCodeThemeExtension[], id: string): VsCodeTheme | null =>
+  id ? (installed.find((e) => id.startsWith(`${e.id}/`))?.themes.find((t) => t.id === id) ?? null) : null
 
 interface UpdatesState {
   status: UpdateStatus

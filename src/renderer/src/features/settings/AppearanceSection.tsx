@@ -7,12 +7,14 @@ import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useSettings } from '../../stores/data'
 import { runAction } from '../../stores/notices'
-import { crossFadeTheme, setLookVariable } from '../shell/appearance'
+import { crossFadeLook, setLookVariable } from '../shell/appearance'
 import { SettingsPage } from './SettingsScreen'
+import { ThemeCard, type ThemePreview } from './ThemeCard'
+import { VsCodeThemes } from './VsCodeThemes'
 import styles from './Settings.module.css'
 
 /** Literal swatches: each card previews its own theme regardless of the active one. */
-const PREVIEW: Record<ThemeId, { bg: string; panel: string; pane: string; line: string; accent: string }> = {
+const PREVIEW: Record<ThemeId, ThemePreview> = {
   dark: { bg: '#000000', panel: '#0d0d0d', pane: '#151515', line: '#2a2a2a', accent: '#e0e0e0' },
   bronze: { bg: '#080706', panel: '#14110e', pane: '#1b1814', line: '#2e2820', accent: 'linear-gradient(180deg, #f1e9dc, #bba98c)' },
   silver: { bg: '#070809', panel: '#121418', pane: '#191b1f', line: '#2a2e35', accent: 'linear-gradient(180deg, #f5f7fa, #aeb5c0)' },
@@ -38,9 +40,9 @@ export function AppearanceSection() {
   }, [])
 
   const chooseTheme = (theme: ThemeId): void => {
-    if (theme === settings.theme) return
-    crossFadeTheme(theme)
-    void update({ theme })
+    if (theme === settings.theme && !settings.vscodeTheme) return
+    crossFadeLook({ ...settings, theme }, null)
+    void update({ theme, vscodeTheme: '' })
   }
 
   const addImage = (): void =>
@@ -81,45 +83,19 @@ export function AppearanceSection() {
   )
 
   return (
-    <SettingsPage title="Appearance" description="Choose the finish for Hiveory. Terminals and window chrome follow the theme.">
+    <SettingsPage title="Appearance" description="Choose the finish for Hiveory, or install a VS Code theme. Terminals, the editor and window chrome follow the theme.">
       <div className={styles.themes} role="radiogroup" aria-label="Theme">
-        {THEMES.map((theme, index) => {
-          const p = PREVIEW[theme.id]
-          const selected = settings.theme === theme.id
-          return (
-            <button
-              key={theme.id}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              className={styles.themeCard}
-              style={{ '--i': index } as CSSProperties}
-              onClick={() => chooseTheme(theme.id)}
-            >
-              <span className={styles.themePreview} style={{ background: p.bg }} aria-hidden>
-                <span className={styles.previewSide} style={{ background: p.panel }}>
-                  <span style={{ background: p.line }} />
-                  <span style={{ background: p.line }} />
-                  <span style={{ background: p.line }} />
-                </span>
-                <span className={styles.previewPane} style={{ background: p.pane }}>
-                  <span className={styles.previewLine} style={{ background: p.line }} />
-                  <span className={styles.previewLine} style={{ background: p.line, width: '62%' }} />
-                  <span className={styles.previewBar} style={{ background: p.accent }} />
-                </span>
-              </span>
-              <span className={styles.themeMeta}>
-                <span className={styles.themeText}>
-                  <span className={styles.themeName}>{theme.name}</span>
-                  <span className={styles.themeDescription}>{theme.description}</span>
-                </span>
-                <span className={cx(styles.check, selected && styles.checkOn)} aria-hidden>
-                  <Check />
-                </span>
-              </span>
-            </button>
-          )
-        })}
+        {THEMES.map((theme, index) => (
+          <ThemeCard
+            key={theme.id}
+            name={theme.name}
+            description={theme.description}
+            preview={PREVIEW[theme.id]}
+            selected={!settings.vscodeTheme && settings.theme === theme.id}
+            index={index}
+            onSelect={() => chooseTheme(theme.id)}
+          />
+        ))}
       </div>
 
       <div className={styles.group}>
@@ -179,6 +155,8 @@ export function AppearanceSection() {
           </div>
         )}
       </div>
+
+      <VsCodeThemes />
     </SettingsPage>
   )
 }

@@ -280,6 +280,8 @@ Settings › Skills, MCP & Apps has three tabs (ADR 0017, 0023):
 
 Six flat themes, three per row. A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
 
+VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A VS Code theme recolors every panel, the terminals, the editor and the window chrome; the wallpaper, transparency, blur and dim still apply on top. Choosing a built-in theme switches back.
+
 ## Terminals, Explorer and editor panes (ADR 0018)
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side

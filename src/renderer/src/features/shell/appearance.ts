@@ -1,4 +1,4 @@
-import type { AppSettings, ThemeId } from '@shared/domain'
+import { THEME_COLOR, type AppSettings, type VsCodeTheme } from '@shared/domain'
 import { refreshTerminalTheme } from '../terminal/terminal-registry'
 
 export const wallpaperUrl = (file: string): string => `hv-wallpaper://img/${file}`
@@ -11,10 +11,40 @@ export const wallpaperBackground = (wallpaper: string): string | null => {
 
 type Look = Pick<AppSettings, 'theme' | 'wallpaper' | 'surfaceOpacity' | 'wallpaperBlur' | 'wallpaperDim'>
 
-/** Puts the theme and wallpaper on <html>: tokens.css reads `data-theme`, `data-wallpaper` and the variables. */
-export const applyLook = (look: Look): void => {
+const STYLE_ID = 'hv-vscode-theme'
+const TOKEN_NAME = /^[a-z0-9-]{1,40}$/
+
+/**
+ * A VS Code theme (ADR 0034) as one stylesheet over the built-in theme's tokens. Only
+ * token names and hex colors are written, so a theme file can never inject CSS.
+ */
+const applyCustomTheme = (custom: VsCodeTheme | null): void => {
+  const root = document.documentElement
+  document.getElementById(STYLE_ID)?.remove()
+  if (!custom) {
+    delete root.dataset.customTheme
+    return
+  }
+  const vars = Object.entries(custom.tokens)
+    .filter(([name, value]) => TOKEN_NAME.test(name) && THEME_COLOR.test(value))
+    .map(([name, value]) => `--${name}: ${value};`)
+    .join('')
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  // [data-theme][data-custom-theme] outranks each built-in `:root[data-theme='…']` block.
+  style.textContent = `:root[data-theme][data-custom-theme] { color-scheme: ${custom.kind === 'light' ? 'light' : 'dark'}; ${vars} }`
+  document.head.append(style)
+  root.dataset.customTheme = custom.kind
+}
+
+/**
+ * Puts the theme and wallpaper on <html>: tokens.css reads `data-theme`, `data-wallpaper` and
+ * the variables. `custom` is the applied VS Code theme, layered over the built-in one.
+ */
+export const applyLook = (look: Look, custom: VsCodeTheme | null = null): void => {
   const root = document.documentElement
   root.dataset.theme = look.theme
+  applyCustomTheme(custom)
   const background = wallpaperBackground(look.wallpaper)
   if (background) {
     root.dataset.wallpaper = ''
@@ -38,11 +68,8 @@ export const setLookVariable = (key: 'surfaceOpacity' | 'wallpaperBlur' | 'wallp
 }
 
 /** Switches theme with a cross-fade of the whole window (one snapshot, composited — no per-element transitions). */
-export const crossFadeTheme = (theme: ThemeId): void => {
-  const swap = (): void => {
-    document.documentElement.dataset.theme = theme
-    refreshTerminalTheme()
-  }
+export const crossFadeLook = (look: Look, custom: VsCodeTheme | null): void => {
+  const swap = (): void => applyLook(look, custom)
   if (typeof document.startViewTransition === 'function' && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     document.startViewTransition(swap)
   } else swap()

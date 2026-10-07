@@ -7,6 +7,7 @@ import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
+import { VSCODE_THEME_ID } from '@shared/domain/vscode-theme'
 import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
@@ -132,6 +133,7 @@ export const emptyState = (): PersistedState => ({
 
 const settingsSchema = z.object({
   theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']).catch(DEFAULT_SETTINGS.theme),
+  vscodeTheme: z.union([z.literal(''), z.string().regex(VSCODE_THEME_ID)]).catch(DEFAULT_SETTINGS.vscodeTheme),
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
   defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),

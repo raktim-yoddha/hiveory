@@ -209,7 +209,10 @@ New skill uses the same checklist. MCP: "In Hiveory · every agent"
 ### Settings › Appearance
 
 Theme cards three per row; Background: None, six presets, added images, Add
-image; Transparency · Blur · Dim sliders when a wallpaper is set.
+image; Transparency · Blur · Dim sliders when a wallpaper is set. VS Code themes (ADR 0034):
+each installed extension's themes as cards (Remove per extension), then a search field and the
+Open VSX catalog (icon, name, publisher · installs, description, Install / Installed, Show more).
+Installing applies the extension's first theme.
 
 ### Side panel Explorer (ADR 0018)
 

@@ -44,6 +44,7 @@ export interface WallpaperImage {
 }
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
 import type { Discovery, ShareStatus, RemotePort, SshHostSuggestion, SshPrompt, TailnetStatus } from '../domain/tailnet'
+import { THEME_EXTENSION_ID, THEME_SEGMENT, VSCODE_THEME_ID, type ThemeListing, type VsCodeThemeExtension } from '../domain/vscode-theme'
 
 /**
  * The complete renderer ↔ main contract. Main validates every payload against
@@ -373,6 +374,7 @@ export const requestSchemas = {
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),
       wallpaperDim: z.number().min(0).max(0.8),
+      vscodeTheme: z.union([z.literal(''), z.string().regex(VSCODE_THEME_ID)]),
       queenPersona: z.enum(['ada', 'sunny', 'frankie', 'custom']),
       queenCustomName: z.string().trim().max(20).refine((s) => customNameProblem(s) === null, 'Pick another name.'),
       queenCustomPersona: z.string().max(500),
@@ -403,6 +405,11 @@ export const requestSchemas = {
   /** Opens a file picker; the chosen image is downscaled and copied in. */
   'wallpapers.add': none,
   'wallpapers.remove': z.object({ file: z.string().regex(/^[A-Za-z0-9_-]{1,64}\.(?:jpg|jpeg|png|webp|gif|avif)$/) }),
+  /** VS Code color themes (ADR 0034): searched on Open VSX, installed as Hiveory tokens. */
+  'themes.search': z.object({ query: z.string().trim().max(100), offset: z.number().int().min(0).max(10_000) }),
+  'themes.installed': none,
+  'themes.install': z.object({ namespace: z.string().regex(THEME_SEGMENT), name: z.string().regex(THEME_SEGMENT) }),
+  'themes.remove': z.object({ id: z.string().regex(THEME_EXTENSION_ID) }),
   'updates.status': none,
   'updates.check': none,
   'updates.download': none,
@@ -792,6 +799,10 @@ export interface ResponseMap {
   'wallpapers.list': WallpaperImage[]
   'wallpapers.add': WallpaperImage | null
   'wallpapers.remove': void
+  'themes.search': { total: number; items: ThemeListing[] }
+  'themes.installed': VsCodeThemeExtension[]
+  'themes.install': VsCodeThemeExtension
+  'themes.remove': void
   'browser.state': BrowserState
   'browser.open': BrowserPageView
   'browser.close': void

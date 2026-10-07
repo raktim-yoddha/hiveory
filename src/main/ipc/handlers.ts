@@ -391,6 +391,14 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.wallpapers.remove(file)
   },
 
+  'themes.search': ({ query, offset }) => c.themes.search(query, offset),
+  'themes.installed': () => c.themes.list(),
+  'themes.install': ({ namespace, name }) => c.themes.install(namespace, name),
+  'themes.remove': ({ id }) => {
+    if (c.settings.get().vscodeTheme.startsWith(`${id}/`)) c.settings.update({ vscodeTheme: '' })
+    c.themes.remove(id)
+  },
+
   'browser.state': () => c.browser.state(),
   'browser.open': ({ scope, url, profileId }) => c.browser.open({ scope, url, profileId }),
   'browser.close': ({ pageId }) => c.browser.close(pageId),

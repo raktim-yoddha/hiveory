@@ -8,17 +8,17 @@ import { EditorView, keymap } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import styles from './Editor.module.css'
 
-/** Colors come from the theme's terminal palette, so code reads the same as the CLIs beside it. */
+/** Colors come from the `--syntax-*` tokens: the terminal palette, or a VS Code theme's own token colors. */
 const highlight = HighlightStyle.define([
-  { tag: [t.keyword, t.modifier, t.operatorKeyword, t.controlKeyword], color: 'var(--term-magenta)' },
-  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--term-green)' },
-  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--term-yellow)' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: 'var(--term-blue)' },
-  { tag: [t.typeName, t.className, t.namespace], color: 'var(--term-cyan)' },
-  { tag: [t.propertyName, t.attributeName], color: 'var(--term-bright-blue)' },
-  { tag: [t.tagName, t.heading], color: 'var(--term-red)', fontWeight: '600' },
-  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--color-text-muted)', fontStyle: 'italic' },
-  { tag: [t.link, t.url], color: 'var(--term-cyan)', textDecoration: 'underline' },
+  { tag: [t.keyword, t.modifier, t.operatorKeyword, t.controlKeyword], color: 'var(--syntax-keyword)' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: 'var(--syntax-string)' },
+  { tag: [t.number, t.bool, t.null, t.atom], color: 'var(--syntax-number)' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: 'var(--syntax-function)' },
+  { tag: [t.typeName, t.className, t.namespace], color: 'var(--syntax-type)' },
+  { tag: [t.propertyName, t.attributeName], color: 'var(--syntax-property)' },
+  { tag: [t.tagName, t.heading], color: 'var(--syntax-tag)', fontWeight: '600' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: 'var(--syntax-comment)', fontStyle: 'italic' },
+  { tag: [t.link, t.url], color: 'var(--syntax-link)', textDecoration: 'underline' },
   { tag: t.strong, fontWeight: '700' },
   { tag: t.emphasis, fontStyle: 'italic' },
   { tag: t.invalid, color: 'var(--color-danger)' }

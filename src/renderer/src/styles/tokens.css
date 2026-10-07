@@ -137,6 +137,17 @@
   --term-bright-cyan: #a2dfda;
   --term-bright-white: #f7f2ea;
 
+  /* Syntax (the file editor): the terminal palette, unless a VS Code theme sets its own (ADR 0034). */
+  --syntax-keyword: var(--term-magenta);
+  --syntax-string: var(--term-green);
+  --syntax-number: var(--term-yellow);
+  --syntax-function: var(--term-blue);
+  --syntax-type: var(--term-cyan);
+  --syntax-property: var(--term-bright-blue);
+  --syntax-tag: var(--term-red);
+  --syntax-comment: var(--color-text-muted);
+  --syntax-link: var(--term-cyan);
+
   /* Typography */
   --font-ui: 'Inter Variable', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'Cascadia Mono', Consolas, monospace;
@@ -224,12 +235,13 @@
   --gutter: 10px;
   --page-padding: 10px;
 
-  /* Elevation: restrained, warm-tinted */
-  --shadow-popover: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 14px 36px rgb(0 0 0 / 0.6),
+  /* Elevation: restrained, warm-tinted. Light VS Code themes lighten the tint. */
+  --shadow-tint: rgb(0 0 0 / 0.6);
+  --shadow-popover: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 14px 36px var(--shadow-tint),
     0 0 0 var(--hairline) var(--color-border);
-  --shadow-dialog: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 28px 70px rgb(0 0 0 / 0.72),
+  --shadow-dialog: inset 0 var(--hairline) 0 var(--color-sheen-strong), 0 28px 70px var(--shadow-tint),
     0 0 0 var(--hairline) var(--color-border);
-  --shadow-drag: 0 12px 32px rgb(0 0 0 / 0.6);
+  --shadow-drag: 0 12px 32px var(--shadow-tint);
   --shadow-logo-tile: inset 0 0 0 var(--hairline) rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.4);
   --blur-glass: blur(18px) saturate(1.2);
 

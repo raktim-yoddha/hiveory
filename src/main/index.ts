@@ -87,7 +87,7 @@ const emit: Emit = (event, payload) => {
 
 const openWindow = (): void => {
   const s = container?.settings.get()
-  window = createMainWindow(targets, log, s?.theme, Boolean(s?.wallpaper))
+  window = createMainWindow(targets, log, s?.theme, Boolean(s?.wallpaper), s && container?.themes.theme(s.vscodeTheme)?.chrome)
   window.on('closed', () => (window = null))
   // Closing keeps the agents running: the window hides into the tray (unless that setting is off).
   window.on('close', (event) => {
@@ -144,9 +144,10 @@ app.whenReady().then(async () => {
   const share = (on: boolean) => c.sharing.apply(on ? { port: DEFAULT_SERVER_PORT, hosts: ['127.0.0.1'], tailnet: true, handlers: serverHandlers } : null)
   // Every reaction is guarded on its own, so one broken feature never skips the others or fails the save.
   c.settings.on('changed', (next, previous) => {
-    if (next.theme !== previous.theme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
+    if (next.theme !== previous.theme || next.vscodeTheme !== previous.vscodeTheme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
       guard(log, 'Window theme', () => {
-        for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, Boolean(next.wallpaper))
+        const custom = c.themes.theme(next.vscodeTheme)?.chrome
+        for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, Boolean(next.wallpaper), custom)
       })
     }
     if (next.autoCheckUpdates !== previous.autoCheckUpdates) guard(log, 'Update checks', () => c.updates.setAutoCheck(next.autoCheckUpdates))
