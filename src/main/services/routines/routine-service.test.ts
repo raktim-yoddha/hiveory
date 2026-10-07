@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Bot } from '@shared/domain/bot'
 import type { ChatSession } from '@shared/domain/chat'
+import type { Trigger } from '@shared/domain/trigger'
 import { MAX_ROUTINE_RUNS, type RoutineRun } from '@shared/domain/routine'
 import { parseState } from '../persistence/schema'
 import { StateStore } from '../persistence/state-store'
@@ -76,8 +77,8 @@ const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: '
     outcome: (run) => told.push(`${run.routineName}:${run.status}`),
     bots: {
       find: (id) => bots.find((b) => b.id === id) as Bot | undefined,
-      newThread: (botId, title) => {
-        const chat = { id: `t${++n}`, botId, title: title ?? '', messages: [] } as unknown as ChatSession
+      newThread: (botId, title, _delegation, options) => {
+        const chat = { id: `t${++n}`, botId, title: title ?? '', messages: [], readOnly: options?.readOnly ?? false } as unknown as ChatSession
         chats.sessions.set(chat.id, chat)
         return chat
       }
@@ -369,5 +370,21 @@ describe('bots and their routines', () => {
     expect(runNotice({ ...run, status: 'completed' }, 'Scout')).toEqual({ title: 'Morning report is done', body: 'Scout finished this run. Its report is in the thread.' })
     expect(runNotice({ ...run, status: 'failed', detail: 'Rate limited.' }).title).toBe('Morning report failed')
     expect(runNotice({ ...run, status: 'failed', detail: 'x'.repeat(500) }).body).toHaveLength(140)
+  })
+})
+
+describe('runs started by outside events', () => {
+  it('runs each event read-only, at most three of one trigger at once', () => {
+    const { service, chats, runs } = setup()
+    const trigger = { id: 'tr1', name: 'New issues', botId: 'b1', prompt: 'Triage it.', triggerName: 'New issue' } as Trigger
+    const first = service.runEvent(trigger, { title: 'Crash' })
+    expect(first).toMatchObject({ trigger: 'event', status: 'running', routineName: 'New issues' })
+    expect((chats.sessions.get(first.threadId!) as unknown as { readOnly: boolean }).readOnly).toBe(true)
+    expect(chats.sent[0]!.text).toContain('<event>')
+    service.runEvent(trigger, {})
+    service.runEvent(trigger, {})
+    expect(service.runEvent(trigger, {})).toMatchObject({ status: 'skipped' })
+    chats.end(first.threadId!)
+    expect(runs().find((r) => r.id === first.id)!.status).toBe('completed')
   })
 })

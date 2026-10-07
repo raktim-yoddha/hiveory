@@ -8,8 +8,9 @@ Bot, OpenAI dots, Claude Cowork, OpenClaw, Hermes Agent, Lindy).
 
 1. **History in Bots only, capped.** Run logs (and later usage and change journals) are allowed in
    Bots mode, bounded. Rule 9 and the "task history" non-feature still hold for Work's Kanban.
-2. **Triggers arrive through Composio first**, then a link on the tailnet or a Hiveory server, then
-   `gh` polling. Trigger runs start read-only and treat their payload as untrusted data.
+2. **Triggers arrive through Composio**, delivered to a **public link over Tailscale Funnel** (decided
+   2026-10-08, after finding that Composio supports only HTTPS webhook delivery; its no-URL stream is
+   prototype-only). Trigger runs are read-only and treat their payload as untrusted data.
 3. **Real teams** (one Chief per team) replace ADR 0022's single Chief, with a team map of team cards.
 4. **Bots first.** Workspace routines (Work) and scheduled chats (Chat) follow on the same scheduler.
 5. **`croner`** is the one date engine, for the editor's preview and the scheduler.
@@ -124,6 +125,34 @@ importing whole teams comes later.
   Skills panel takes a bot as its scope (`extensions.scan | createSkill | importSkill` accept `botId`);
   a new or imported skill goes into the bot's own folder unless the user picks "Everywhere".
 
+## Triggers (built: phase T1)
+
+- **Delivery:** Composio posts each event to the project's one webhook subscription. Hiveory points it
+  at `https://<this computer>.ts.net/hiveory/<32 random hex>`, published with Tailscale Funnel to a
+  listener on 127.0.0.1 only (`TriggerIngress`): POST to that path only, 256 KB at most, 60 a minute.
+  The link is re-published at each start (new port) and taken down on quit.
+- **Trust:** every delivery is checked against Composio's signature (HMAC-SHA256 over
+  `id.timestamp.body` with the subscription secret, sealed at rest) and must be under five minutes
+  old; repeats (by webhook id) are dropped; unknown or paused triggers are ignored.
+- **The project's webhook is the user's.** Composio allows one subscription per project and shows its
+  secret only at creation or rotation. Hiveory creates it when there is none; if the project already
+  sends its webhook elsewhere, Hiveory stops and says so, and repoints it (rotating the secret) only
+  when the user confirms.
+- **A run:** `RoutineService.runEvent` opens a fresh, **read-only** thread on the trigger's bot (whatever
+  its default access) with the event fenced in `<event>…</event>` as data it must never take orders
+  from (cut at 8,000 characters; a closing tag inside is defused), then the user's instructions. At most
+  three runs of one trigger at once; more are logged as skipped. Runs share the run log and the
+  notifications with routines. A bot must be allowed to work on its own ("Runs on a schedule").
+- **Triggers** (`PersistedState.triggers`): name, bot, instructions, app and account, Composio's event
+  type and its settings (the type's config schema as simple fields), and its trigger instance; on/off and
+  delete go to Composio too. A deleted bot's triggers are deleted.
+- **UI:** the Triggers page (sidebar footer): the event link card (on, off, what is wrong and the page
+  that fixes it, taking over the project webhook), "When [account] [event] → [bot] should [instructions]"
+  with the event's fields, and the list. IPC `triggers.*`; publishing the link stays local (not a
+  remote channel), and `triggers.openFix` opens only a tailscale.com page main chose.
+- **Not verified live:** a real Funnel and a real Composio delivery (this machine has no Tailscale);
+  covered by tests, including deliveries over a real loopback socket.
+
 ## Next
 
-Triggers (T1); the work board (K1); Queen Bee actions for routines.
+The work board (K1); Queen Bee actions for routines and triggers.

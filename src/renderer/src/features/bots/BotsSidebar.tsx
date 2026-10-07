@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot as BotIcon, CalendarClock, ChevronDown, LayoutTemplate, Network, Plus, Users } from 'lucide-react'
+import { Bot as BotIcon, CalendarClock, ChevronDown, LayoutTemplate, Network, Plus, Users, Zap } from 'lucide-react'
 import type { BotView } from '@shared/domain/bot'
 import { BotAvatar } from '../../components/brand/BotAvatar'
 import { IconButton } from '../../components/ui/Button'
@@ -17,7 +17,7 @@ import styles from './Bots.module.css'
 
 /** Bots mode's sidebar: the bots like a contact list, grouped by team (each Chief first). Right-click a bot for its actions. */
 export function BotsSidebar() {
-  const { bots, teams, activeBotId, load, select, page, showRoutines, showTeamMap } = useBots()
+  const { bots, teams, activeBotId, load, select, page, showRoutines, showTriggers, showTeamMap } = useBots()
   const openEditor = useBotEditor((s) => s.open)
   const openTeam = useTeamDialog((s) => s.open)
   const actions = useBotActions()
@@ -123,6 +123,15 @@ export function BotsSidebar() {
         >
           <CalendarClock aria-hidden className={styles.footerIcon} />
           <span className={chat.chatTitle}>Routines</span>
+        </button>
+        <button
+          type="button"
+          className={cx(chat.chatRow, page === 'triggers' && chat.chatActive)}
+          aria-current={page === 'triggers' ? 'page' : undefined}
+          onClick={showTriggers}
+        >
+          <Zap aria-hidden className={styles.footerIcon} />
+          <span className={chat.chatTitle}>Triggers</span>
         </button>
         <button
           type="button"

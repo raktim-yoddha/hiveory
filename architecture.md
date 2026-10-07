@@ -622,6 +622,8 @@ bot thread CLI ──MCP /mcp/<chatId>──▶ BotTools ─▶ BotService
 RoutineService (ADR 0028; PersistedState.routines + routineRuns)
   one timer ─▶ due run ─▶ BotService.newThread + ChatService.send ─▶ 'run' end ─▶ run completed/failed
   activity(running, nextDue) ─▶ KeepAwake (powerSaveBlocker, mains power only)
+Composio ─HTTPS─▶ Tailscale Funnel (/hiveory/<random>) ─▶ TriggerIngress (127.0.0.1) ─▶ TriggerService
+  (signature, freshness, dedupe) ─▶ RoutineService.runEvent ─▶ read-only bot thread, event fenced as data
 ```
 
 ### Phone app (ADR 0027)

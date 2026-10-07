@@ -174,7 +174,8 @@ export class BotService {
     this.changed()
   }
 
-  newThread(botId: string, title?: string, delegation?: ChatSession['delegation']): ChatSession {
+  /** A new thread with the bot's defaults; `readOnly` holds it to reading and answering (a trigger's run). */
+  newThread(botId: string, title?: string, delegation?: ChatSession['delegation'], options: { readOnly?: boolean } = {}): ChatSession {
     const bot = this.get(botId)
     return this.chats.createThread({
       botId,
@@ -182,7 +183,7 @@ export class BotService {
       cliId: bot.cliId,
       model: bot.model,
       effort: bot.effort,
-      autoApprove: bot.autoApprove,
+      autoApprove: options.readOnly ? false : bot.autoApprove,
       title,
       delegation
     })

@@ -39,7 +39,8 @@ export interface Routine {
   updatedAt: string
 }
 
-export type RunTrigger = 'schedule' | 'manual'
+/** What started a run: its schedule, the user's Run now, or an outside event (a trigger, ADR 0028). */
+export type RunTrigger = 'schedule' | 'manual' | 'event'
 export type RunStatus = 'running' | 'completed' | 'failed' | 'missed' | 'skipped'
 
 /** One run of a routine, kept as it happened even if the routine is edited or deleted. */

@@ -128,6 +128,7 @@ app.whenReady().then(async () => {
   guard(log, 'Main workspace adoption', () => c.workspaceRepo.adoptImplicitMainWorkspaces())
   guard(log, 'Chat history', () => c.chatStore.load(), report('Chat history'))
   guard(log, 'Routines', () => c.routines.start(), report('Routines'))
+  void c.triggers.start()
   // Waking up, or plugging in or out, re-checks what is due and whether to keep the computer awake.
   const recheckRoutines = (): void => void guard(log, 'Routines', () => c.routines.tick())
   powerMonitor.on('resume', recheckRoutines)
@@ -220,6 +221,7 @@ app.on('before-quit', () => {
   guard(log, 'Port forwards shutdown', () => c.ports.closeAll())
   guard(log, 'Bot computer tunnels', () => c.computers.closeAll())
   guard(log, 'Routine scheduler shutdown', () => c.routines.dispose())
+  guard(log, 'Trigger link shutdown', () => void c.triggers.close())
   guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())
   guard(log, 'State flush', () => c.store.flush())

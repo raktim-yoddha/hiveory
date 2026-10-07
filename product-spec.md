@@ -36,6 +36,10 @@ when it is back, and every run is kept in a run log. A bot can save routines for
 or is missed while the user is elsewhere, a desktop notification opens its thread. Each bot's
 Overview says in plain words what it does, what it can reach and what it won't do, shows the exact
 prompt it starts from, and lists its own skills; notifications can be turned off per bot.
+**Triggers** start a bot's work when something happens in a connected app (a new email, a GitHub
+issue…): Composio delivers the event over a public link that Tailscale Funnel gives one random path of
+this computer. Every event is signature-checked, and its run is read-only, treating the event as data,
+never as orders.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the

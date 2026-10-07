@@ -116,4 +116,22 @@ export class Tailscale {
       return ''
     }
   }
+
+  /**
+   * Publishes one path of this computer on the internet over Tailscale Funnel (HTTPS on 443), to a local
+   * target, or takes it down (`target` null). Only that path is published (ADR 0028: trigger events).
+   * Fails with Tailscale's own words, which say how to allow Funnel when the tailnet does not yet.
+   */
+  funnel(path: string, target: string | null): Promise<void> {
+    const binary = this.locate()
+    if (!binary) return Promise.reject(new Error('Tailscale is not installed on this computer.'))
+    const args = ['funnel', `--set-path=${path}`, ...(target ? ['--bg', target] : ['off'])]
+    return new Promise((resolve, reject) =>
+      execFile(binary, args, { timeout: 20_000, windowsHide: true }, (error, stdout, stderr) => {
+        if (!error) return resolve()
+        const said = `${stderr.toString()}\n${stdout.toString()}`.trim()
+        reject(new Error(said || error.message))
+      })
+    )
+  }
 }

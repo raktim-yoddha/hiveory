@@ -46,7 +46,12 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
   Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
   Create team opens a name dialog. New group chat joins the menu when group chats are built.
-- Sidebar footer: **Routines** opens the Routines page; **Team map** opens the team map (ADR 0028).
+- Sidebar footer: **Routines** opens the Routines page; **Triggers** the Triggers page; **Team map** the team map (ADR 0028).
+- Triggers page: the event link card (off / on with its address / needs attention, with the reason, a
+  button to the page that fixes it, and "Use this project's webhook for Hiveory" when the Composio
+  project's webhook goes elsewhere); then "⚡ When [app · account] [event] → [bot] should", the event's
+  fields, "What it should do with each event", Create trigger; then YOUR TRIGGERS (name, app → bot,
+  last event, instructions, delete, on/off). Without a Composio key or connected app: a pointer to Apps.
 - Team map: header (bot and team count, Create team); a card per team (name, count, ⋯ Rename /
   Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
   drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to

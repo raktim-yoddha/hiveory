@@ -41,6 +41,7 @@ import { RoutineService } from '../services/routines/routine-service'
 import { RoutineTools } from '../services/routines/routine-tools'
 import { replyNotice, runNotice } from '../services/routines/run-notice'
 import { TeamService } from '../services/bots/team-service'
+import { TriggerService } from '../services/triggers/trigger-service'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -217,6 +218,17 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     if (!chat || !bot?.notify || chat.delegation || routines.isRunThread(chatId)) return
     notifyDesktop(replyNotice(bot.name, chats.lastReply(chatId)), bot.id, chatId)
   })
+  // Outside events start read-only runs (ADR 0028): Composio's webhook, over Tailscale Funnel, to a loopback listener.
+  const triggers = new TriggerService({
+    store,
+    emit,
+    log,
+    composio: (path, options) => appService.request(path, options),
+    tailscale,
+    secrets,
+    bots: { find: (id) => bots?.find(id) },
+    run: (trigger, data) => void routines.runEvent(trigger, data)
+  })
   // A bot allowed to run on a schedule can see its routines and save new ones, always paused.
   const routineTools = new RoutineTools(() => routines, (chatId) => chats.find(chatId)?.botId)
   chats.on('run', (chatId, running) => {
@@ -386,6 +398,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     bots,
     teams,
     routines,
+    triggers,
     computers,
     browser,
     computer,

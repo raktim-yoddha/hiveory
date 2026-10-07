@@ -7,6 +7,7 @@ import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
 import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
+import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
@@ -36,6 +37,17 @@ export interface PersistedState {
   routines: Routine[]
   /** The run log, newest first, at most MAX_ROUTINE_RUNS. */
   routineRuns: RoutineRun[]
+  /** Outside events that start bot runs (ADR 0028). */
+  triggers: Trigger[]
+  /** The public link trigger events arrive by: its Funnel path and the Composio webhook (secret sealed). */
+  triggerLink?: TriggerLink
+}
+
+export interface TriggerLink {
+  enabled: boolean
+  path: string
+  subscriptionId?: string
+  secret?: string
 }
 
 /** A removed project with everything that was in it: its workspaces, agents (to resume), layouts and open files. */
@@ -109,7 +121,8 @@ export const emptyState = (): PersistedState => ({
   bots: [],
   teams: [{ ...GENERAL_TEAM }],
   routines: [],
-  routineRuns: []
+  routineRuns: [],
+  triggers: []
 })
 
 const settingsSchema = z.object({
@@ -329,12 +342,36 @@ export const routineSchema: z.ZodType<Routine> = z.object({
   updatedAt: str
 })
 
+export const triggerSchema: z.ZodType<Trigger> = z.object({
+  id: str,
+  name: z.string().min(1).max(MAX_TRIGGER_NAME),
+  botId: str,
+  prompt: z.string().max(MAX_TRIGGER_PROMPT).catch(''),
+  appId: str,
+  accountId: str,
+  triggerSlug: str,
+  triggerName: str,
+  config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).catch({}),
+  instanceId: str,
+  enabled: z.boolean().catch(false),
+  lastEventAt: str.optional(),
+  createdAt: str,
+  updatedAt: str
+})
+
+const triggerLinkSchema: z.ZodType<TriggerLink> = z.object({
+  enabled: z.boolean(),
+  path: z.string().regex(/^\/hiveory\/[a-f0-9]{32}$/),
+  subscriptionId: str.optional(),
+  secret: str.optional()
+})
+
 export const routineRunSchema: z.ZodType<RoutineRun> = z.object({
   id: str,
   routineId: str,
   routineName: str,
   botId: str,
-  trigger: z.enum(['schedule', 'manual']),
+  trigger: z.enum(['schedule', 'manual', 'event']),
   prompt: str,
   scheduledFor: str,
   startedAt: str.optional(),
@@ -411,7 +448,9 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       teams,
       bots: botsIn(list(input.bots, botSchema), teams),
       routines: list(input.routines, routineSchema),
-      routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS)
+      routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS),
+      triggers: list(input.triggers, triggerSchema),
+      ...(triggerLinkSchema.safeParse(input.triggerLink).success ? { triggerLink: triggerLinkSchema.parse(input.triggerLink) } : {})
     },
     rejected
   }

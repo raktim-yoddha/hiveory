@@ -23,6 +23,7 @@ import type {
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
+import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger, type TriggerLinkStatus, type TriggerType } from '../domain/trigger'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
@@ -535,6 +536,33 @@ export const requestSchemas = {
   'bots.handoffs': none,
   /** What a new thread of this bot is told before its first turn (the Overview's prompt preview). */
   'bots.preview': z.object({ botId: id }),
+  // Triggers (ADR 0028): an event in a connected app starts a read-only bot run.
+  'triggers.status': none,
+  /** Publishes the event link (Tailscale Funnel + the Composio webhook). takeOver: the user agreed to repoint their project's webhook. */
+  'triggers.enableLink': z.object({ takeOver: z.boolean().optional() }),
+  'triggers.disableLink': none,
+  /** Opens the page that fixes the link (a tailscale.com page main chose; never a URL from the renderer). */
+  'triggers.openFix': none,
+  'triggers.list': none,
+  'triggers.types': z.object({ appId: appIdSchema }),
+  'triggers.create': z.object({
+    name: z.string().trim().min(1).max(MAX_TRIGGER_NAME),
+    botId: id,
+    prompt: z.string().max(MAX_TRIGGER_PROMPT),
+    appId: appIdSchema,
+    accountId: z.string().min(1).max(100).regex(/^[\w-]+$/),
+    triggerSlug: z.string().min(1).max(120).regex(/^[A-Za-z0-9_]+$/),
+    triggerName: z.string().min(1).max(200),
+    config: z.record(z.string().max(100), z.union([z.string().max(2000), z.number(), z.boolean()]))
+  }),
+  'triggers.update': z.object({
+    triggerId: id,
+    name: z.string().trim().min(1).max(MAX_TRIGGER_NAME).optional(),
+    prompt: z.string().max(MAX_TRIGGER_PROMPT).optional(),
+    enabled: z.boolean().optional(),
+    botId: id.optional()
+  }),
+  'triggers.delete': z.object({ triggerId: id }),
   // Routines (ADR 0028): a bot's scheduled work, and the run log.
   'routines.list': z.object({ botId: id.optional() }),
   'routines.create': routineFields,
@@ -779,6 +807,15 @@ export interface ResponseMap {
   'teams.delete': void
   'bots.handoffs': Handoff[]
   'bots.preview': string
+  'triggers.status': TriggerLinkStatus
+  'triggers.enableLink': TriggerLinkStatus
+  'triggers.disableLink': TriggerLinkStatus
+  'triggers.openFix': void
+  'triggers.list': Trigger[]
+  'triggers.types': TriggerType[]
+  'triggers.create': Trigger
+  'triggers.update': Trigger
+  'triggers.delete': void
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView
@@ -825,7 +862,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }

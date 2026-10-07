@@ -60,8 +60,8 @@ export class AppService {
     private readonly apiUrl: string = process.env.HIVEORY_COMPOSIO_API || COMPOSIO.apiUrl
   ) {}
 
-  /** Calls Composio's REST API; null for a 404 when `missingOk`. */
-  private async request<T>(path: string, options: { method?: string; body?: unknown; key?: string; missingOk?: boolean } = {}): Promise<T | null> {
+  /** Calls Composio's REST API; null for a 404 when `missingOk`. Triggers use it too (ADR 0028). */
+  async request<T>(path: string, options: { method?: string; body?: unknown; key?: string; missingOk?: boolean } = {}): Promise<T | null> {
     const key = options.key ?? this.connections.composioKey()
     if (!key) fail('INVALID_INPUT', 'Add your Composio API key first.')
     let res: Response

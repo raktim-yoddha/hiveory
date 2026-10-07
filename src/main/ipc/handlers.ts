@@ -448,9 +448,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'bots.list': () => c.bots.list(),
   'bots.create': (input) => c.bots.create(input),
   'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),
-  'bots.delete': ({ botId }) => {
+  'bots.delete': async ({ botId }) => {
     c.bots.delete(botId)
     c.routines.removeForBot(botId)
+    await c.triggers.removeForBot(botId)
   },
   'bots.threads': ({ botId }) => {
     c.bots.get(botId)
@@ -485,6 +486,18 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'teams.delete': ({ teamId }) => c.teams.delete(teamId),
   'bots.handoffs': () => c.bots.handoffs(),
   'bots.preview': ({ botId }) => c.bots.preview(botId),
+  'triggers.status': () => c.triggers.status(),
+  'triggers.enableLink': ({ takeOver }) => c.triggers.enableLink(takeOver ?? false),
+  'triggers.disableLink': () => c.triggers.disableLink(),
+  'triggers.openFix': async () => {
+    const url = c.triggers.status().fixUrl
+    if (url && /^https:\/\/(login\.)?tailscale\.com\//.test(url)) await shell.openExternal(url)
+  },
+  'triggers.list': () => c.triggers.list(),
+  'triggers.types': ({ appId }) => c.triggers.types(appId),
+  'triggers.create': (input) => c.triggers.create(input),
+  'triggers.update': ({ triggerId, ...patch }) => c.triggers.update(triggerId, patch),
+  'triggers.delete': ({ triggerId }) => c.triggers.delete(triggerId),
   'routines.list': ({ botId }) => c.routines.list(botId),
   'routines.create': (input) => c.routines.create(input),
   'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),
