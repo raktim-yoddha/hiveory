@@ -225,7 +225,8 @@ routines per bot).
    posting ("Post results to") and attachments come with the editor in step 4.
 4. ✔ (2026-10-07) RoutineEditor + Routines tab + run log + the Routines page (Week · List · Run logs)
    and results posting (A2). Attachments, Day view, mini month and drag-a-bot are still to do.
-5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat stays hidden until rooms exist.
+5. ✔ (2026-10-07) "+" menu: New Bot + `Ctrl N`, Templates (six starter bots). Group chat stays hidden
+   until rooms exist; Create team arrives with step 6.
 6. Teams (§7) + the team map with team cards.
 
 ## 7. Teams (M2, approved 2026-10-07)

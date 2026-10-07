@@ -1,12 +1,14 @@
-import { useEffect } from 'react'
-import { CalendarClock, Crown, Pencil, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Bot as BotIcon, CalendarClock, Crown, LayoutTemplate, Pencil, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
 import { BotAvatar } from '../../components/brand/BotAvatar'
 import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
+import { useApp } from '../../stores/data'
 import { useBotEditor } from './BotEditor'
+import { TemplatesDialog } from './TemplatesDialog'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
@@ -14,6 +16,20 @@ import styles from './Bots.module.css'
 export function BotsSidebar() {
   const { bots, activeBotId, load, select, update, remove, page, showRoutines } = useBots()
   const openEditor = useBotEditor((s) => s.open)
+  const mac = useApp((s) => s.info?.platform === 'darwin')
+  const [templates, setTemplates] = useState(false)
+
+  // New bot: Ctrl N (⌘N), while the bots sidebar is shown. Bots mode has no terminals to take the key from.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key.toLowerCase() !== 'n' || e.altKey || e.shiftKey || !(mac ? e.metaKey : e.ctrlKey)) return
+      if (document.querySelector('dialog[open]')) return
+      e.preventDefault()
+      useBotEditor.getState().open('new')
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mac])
 
   useEffect(() => {
     void load()
@@ -23,7 +39,15 @@ export function BotsSidebar() {
     <nav className={chat.sidebar} aria-label="Bots">
       <div className={chat.sidebarHeader}>
         <h2 className={chat.sidebarHeading}>Bots</h2>
-        <IconButton label="New bot" icon={<Plus />} onClick={() => openEditor('new')} />
+        <Menu
+          label="New"
+          align="end"
+          items={[
+            { type: 'item', id: 'bot', label: 'New bot', icon: <BotIcon />, hint: mac ? '⌘N' : 'Ctrl N', onSelect: () => openEditor('new') },
+            { type: 'item', id: 'templates', label: 'Templates', icon: <LayoutTemplate />, onSelect: () => setTemplates(true) }
+          ]}
+          trigger={(props) => <IconButton {...props} label="New bot or template" icon={<Plus />} />}
+        />
       </div>
       <ul className={chat.chatList}>
         {bots.map((bot) => (
@@ -80,6 +104,14 @@ export function BotsSidebar() {
           <span className={chat.chatTitle}>Routines</span>
         </button>
       </div>
+      <TemplatesDialog
+        open={templates}
+        onClose={() => setTemplates(false)}
+        onPick={(template) => {
+          setTemplates(false)
+          openEditor('new', template)
+        }}
+      />
     </nav>
   )
 }

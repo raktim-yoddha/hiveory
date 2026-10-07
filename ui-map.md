@@ -41,6 +41,10 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
   first thread opens on its own.
 - Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Runs on a schedule, Memory (edit mode).
+- Sidebar "+": New bot (Ctrl N, ⌘N on Mac, while the bots sidebar is shown) and Templates: a
+  gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
+  Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
+  New group chat and Create team join the menu when those are built.
 - Sidebar footer: **Routines** opens the Routines page (ADR 0028).
 - Routines page: header (Routines, ‹ › week, "October 5 – 11, 2026", Today, Week · List · Run logs,
   bot filter, New routine); the keep-awake switch with its explanation; Week: Mon–Sun columns,

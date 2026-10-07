@@ -60,6 +60,15 @@ Bot, OpenAI dots, Claude Cowork, OpenClaw, Hermes Agent, Lindy).
 - **Not yet:** attachments on a routine, the Day view, the mini month and dragging a bot onto the
   calendar.
 
+## New bot menu (built)
+
+The bots sidebar's "+" is a menu: New bot (Ctrl N / ⌘N, listened for only while the bots sidebar is
+mounted, never inside an open dialog) and Templates. Templates are starter bots shipped in code
+(`features/bots/bot-templates.ts`): a name, a brief that says what it owns and when it stops, its
+Works on choice and whether it is meant for a schedule. Picking one opens the bot editor filled in;
+nothing is created until the user saves. They name no real person or account (rule 27). Sharing and
+importing whole teams comes later.
+
 ## Next
 
 A bot proposing a routine through a confirm card, and Queen Bee actions (A3); triggers (T1); teams and

@@ -11,13 +11,14 @@ import { Toggle } from '../../components/ui/Toggle'
 import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
+import type { BotTemplate } from './bot-templates'
 import styles from './Bots.module.css'
 
-/** Which bot the editor is open for: 'new', a bot id, or closed. */
-export const useBotEditor = create<{ target: string | null; open(target: string): void; close(): void }>((set) => ({
+/** Which bot the editor is open for: 'new' (maybe from a template), a bot id, or closed. */
+export const useBotEditor = create<{ target: string | null; template?: BotTemplate; open(target: string, template?: BotTemplate): void; close(): void }>((set) => ({
   target: null,
-  open: (target) => set({ target }),
-  close: () => set({ target: null })
+  open: (target, template) => set({ target, template }),
+  close: () => set({ target: null, template: undefined })
 }))
 
 interface Draft {
@@ -31,14 +32,14 @@ interface Draft {
   memory: string[]
 }
 
-const draftOf = (bot: BotView | undefined, firstBot: boolean): Draft => ({
-  name: bot?.name ?? '',
-  brief: bot?.brief ?? '',
+const draftOf = (bot: BotView | undefined, firstBot: boolean, template?: BotTemplate): Draft => ({
+  name: bot?.name ?? template?.name ?? '',
+  brief: bot?.brief ?? template?.brief ?? '',
   cliId: bot?.cliId ?? '',
   autoApprove: bot?.autoApprove ?? false,
   chief: bot?.chief ?? firstBot,
   messaging: bot?.messaging ?? true,
-  routines: bot?.routines ?? false,
+  routines: bot?.routines ?? template?.routines ?? false,
   memory: bot?.memory ?? []
 })
 
@@ -55,11 +56,12 @@ export function BotEditor() {
 
 function EditorDialog({ target }: { target: string }) {
   const close = useBotEditor((s) => s.close)
+  const template = useBotEditor((s) => s.template)
   const { bots, create: createBot, update, remove } = useBots()
   const chatClis = useChat((s) => s.clis)
   const clis = useClis((s) => s.clis)
   const bot = target !== 'new' ? bots.find((b) => b.id === target) : undefined
-  const [draft, setDraft] = useState<Draft>(() => draftOf(bot, bots.length === 0))
+  const [draft, setDraft] = useState<Draft>(() => draftOf(bot, bots.length === 0, template))
   const [fact, setFact] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -80,7 +82,7 @@ function EditorDialog({ target }: { target: string }) {
     setBusy(true)
     const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines }
     if (bot) await update(bot.id, { ...fields, memory: draft.memory })
-    else await createBot(fields)
+    else await createBot({ ...fields, ...(template ? { worksOn: template.worksOn } : {}) })
     setBusy(false)
     close()
   }
