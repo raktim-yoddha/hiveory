@@ -284,6 +284,7 @@ export const botSchema: z.ZodType<Bot> = z.object({
     .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
     .optional()
     .catch(undefined),
+  browserProfileId: str.optional().catch(undefined),
   createdAt: str,
   updatedAt: str
 })

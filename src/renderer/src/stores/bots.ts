@@ -8,6 +8,7 @@ import { reportError, runAction } from './notices'
 
 type BotInput = RequestOf<'bots.create'>
 type BotPatch = Omit<RequestOf<'bots.update'>, 'botId'>
+export type BotPanelTab = 'computer' | 'browser'
 
 interface BotsState {
   bots: BotView[]
@@ -17,9 +18,11 @@ interface BotsState {
   threads: Record<string, ChatSummary[]>
   /** The thread open for each bot. */
   activeThread: Record<string, string>
-  /** The bot panel beside the conversation (Computer for now). */
+  /** The bot panel in the right column, and its tab. */
   panelOpen: boolean
+  panelTab: BotPanelTab
   setPanelOpen(open: boolean): void
+  setPanelTab(tab: BotPanelTab): void
   load(): Promise<void>
   loadThreads(botId: string): Promise<void>
   select(botId: string): Promise<void>
@@ -40,8 +43,10 @@ export const useBots = create<BotsState>((set, get) => ({
   threads: {},
   activeThread: {},
   panelOpen: false,
+  panelTab: 'computer',
 
   setPanelOpen: (panelOpen) => set({ panelOpen }),
+  setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
 
   load: async () => {
     try {

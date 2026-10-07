@@ -218,7 +218,9 @@ routines per bot).
 
 1. ✔ (2026-10-07) `botReach` (shared, so the tools and the panel agree) + `worksOn` + Computer tab
    (`ComputerMenu` folded in, `bots.screen`). Step 1 has a one-tab panel; resize comes with step 2.
-2. Bot panel shell (Tabs, resize, state) + Browser tab (scope `bot-<id>`, per-bot profile).
+2. ✔ (2026-10-07) The bot panel moves into AppShell's right column (the Work side panel's resize
+   handle and saved width) with Computer · Browser tabs; Browser tab (scope `bot-<id>`, per-bot
+   profile via `BrowserService`'s `profileFor`, `BotService.browserProfile`).
 3. A1: the routine model, scheduler, keep-awake, IPC, tests.
 4. RoutineEditor + Routines tab + run log; then the calendar page (A2).
 5. "+" menu: New Bot + `Ctrl N`, Templates (preset bots). Group chat stays hidden until rooms exist.

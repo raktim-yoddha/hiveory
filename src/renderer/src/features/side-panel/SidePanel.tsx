@@ -24,6 +24,7 @@ import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
 import { openBrowserTab } from './panel-actions'
 import styles from './SidePanel.module.css'
+import { pageTitle } from '../browser/page-title'
 
 const EMPTY: PanelTab[] = []
 const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History }
@@ -78,14 +79,7 @@ export function SidePanel() {
     if (tab.kind !== 'browser') return tab.title
     const page = pages.find((p) => p.id === tab.id)
     if (!page) return tab.title
-    let title = page.title
-    if (!title || title === page.url) {
-      try {
-        title = page.url && page.url !== 'about:blank' ? new URL(page.url).host : 'New tab'
-      } catch {
-        title = 'New tab'
-      }
-    }
+    const title = pageTitle(page)
     return page.ownerName ? `${page.ownerName} · ${title}` : title
   }
 

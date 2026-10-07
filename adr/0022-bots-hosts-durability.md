@@ -6,7 +6,9 @@
 > and the bot panel shows the same answer. Auto never reaches the user's screen. Bots saved before
 > this load as Auto, so they keep the browser and their Docker computer but no longer get the
 > user's screen until "This computer" is chosen. The Computer choice moved from the bot editor to
-> the bot panel, which replaces the header's Computer menu.
+> the bot panel, which replaces the header's Computer menu. Bot threads use the browser scope
+> `bot-<botId>` (shared by all its threads) and open pages in the bot's own profile, made on first
+> use and kept when the bot is deleted (the user clears logins in Settings › Browser).
 >
 > Amended by ADR 0026: ssh now asks for passwords, codes and new host keys in Hiveory (memory only,
 > never on disk), brings its own Node, and remote terminals survive a dropped link for 5 minutes.

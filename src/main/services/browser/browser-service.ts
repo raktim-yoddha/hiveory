@@ -99,7 +99,9 @@ export class BrowserService {
     private readonly store: StateStore,
     private readonly settings: SettingsService,
     private readonly emit: Emit,
-    private readonly log: Logger
+    private readonly log: Logger,
+    /** The profile new pages in a scope open in when none is asked for (a bot's own logins). */
+    private readonly profileFor: (scope: string) => string | undefined = () => undefined
   ) {}
 
   // ---------- window hosting ----------
@@ -272,7 +274,7 @@ export class BrowserService {
 
   open(input: { scope: string; url?: string; profileId?: string; owner?: AgentRef }): BrowserPageView {
     const settings = this.settings.get()
-    const wanted = input.profileId ?? settings.browserDefaultProfile
+    const wanted = input.profileId ?? this.profileFor(input.scope) ?? settings.browserDefaultProfile
     const profileId = this.profiles().some((p) => p.id === wanted) ? wanted : DEFAULT_BROWSER_PROFILE.id
     const view = new WebContentsView({
       webPreferences: {

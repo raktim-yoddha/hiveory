@@ -4,8 +4,10 @@ import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
 import { SshPromptDialog } from './SshPromptDialog'
 import { cx } from '../../lib/cx'
+import { useBots } from '../../stores/bots'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
+import { BotPanel } from '../bots/BotPanel'
 import { BotsScreen } from '../bots/BotsScreen'
 import { BotsSidebar } from '../bots/BotsSidebar'
 import { ChatScreen } from '../chat/ChatScreen'
@@ -46,8 +48,12 @@ export function AppShell() {
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
-  // The side panel belongs to workspaces only: never on Home, a project page or Settings.
-  const showPanel = panelOpen && mode === 'workspace' && view.type === 'workspace'
+  // The right column: a workspace's side panel (never on Home, a project page or Settings), or the open bot's panel.
+  const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null)
+  const setBotPanelOpen = useBots((s) => s.setPanelOpen)
+  const showBotPanel = botPanelOpen && mode === 'bots' && !inSettings
+  const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && view.type === 'workspace')
+  const maximized = panelMaximized && !showBotPanel
   const workView = view.type === 'settings' ? view.returnTo : view
   const viewKey = workView.type === 'home' ? 'home' : workView.type === 'project' ? `p:${workView.projectId}` : `w:${workView.workspaceId}`
   const widths = { '--sidebar-width': `${sidebarWidth}px`, '--side-panel-width': `${panelWidth}px` } as CSSProperties
@@ -58,7 +64,7 @@ export function AppShell() {
       <ErrorBoundary region="Title bar" compact>
         <TitleBar />
       </ErrorBoundary>
-      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel, showPanel && panelMaximized && styles.covered)} style={widths}>
+      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel, showPanel && maximized && styles.covered)} style={widths}>
         {showSidebar && (
           <aside className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
@@ -118,8 +124,8 @@ export function AppShell() {
           </ErrorBoundary>
         </main>
         {showPanel && (
-          <div className={cx(styles.panel, panelMaximized && styles.panelMaximized)}>
-            {!panelMaximized && (
+          <div className={cx(styles.panel, maximized && styles.panelMaximized)}>
+            {!maximized && (
               <ResizeHandle
                 label="Resize side panel"
                 className={styles.panelHandle}
@@ -129,11 +135,11 @@ export function AppShell() {
                 initial={PANEL_WIDTH.initial}
                 direction={-1}
                 onChange={setPanelWidth}
-                onCollapse={togglePanel}
+                onCollapse={showBotPanel ? () => setBotPanelOpen(false) : togglePanel}
               />
             )}
-            <ErrorBoundary region="Side panel" compact>
-              <SidePanel />
+            <ErrorBoundary key={showBotPanel ? 'bot' : 'side'} region={showBotPanel ? 'Bot panel' : 'Side panel'} compact>
+              {showBotPanel ? <BotPanel /> : <SidePanel />}
             </ErrorBoundary>
           </div>
         )}

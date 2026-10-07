@@ -34,6 +34,7 @@ import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
 import { PortForwards } from '../services/hosts/ports'
 import { hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
+import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
@@ -241,7 +242,11 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // Remote projects' ports, forwarded to this computer on request (ADR 0025).
   const ports = new PortForwards((host) => hosts!.kit(host))
   const editors = new EditorService(store, layouts, (workspaceId) => agents.paneIds(workspaceId), emit)
-  const browser = new BrowserService(store, settings, emit, log)
+  // A bot's pages open in its own profile (made on first use), so its logins stay apart from the user's.
+  const browser: BrowserService = new BrowserService(store, settings, emit, log, (scope) => {
+    const bot = scope.startsWith(botScope('')) ? bots?.find(scope.slice(botScope('').length)) : undefined
+    return bot ? bots!.browserProfile(bot.id, { list: () => browser.profiles(), create: (name) => browser.createProfile(name) }) : undefined
+  })
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
   const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
   // Apps and Hiveory's MCP servers come through the gateway (ADR 0017, 0023).
@@ -265,12 +270,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     // A Chat-mode chat, or any agent while coordination tools are off: browser, computer and apps only.
     const chat = agent ? null : chatStore.get(instanceId)
     if (!agent && !chat) return refuse('This agent is no longer registered in Hiveory.')
+    // A bot's thread: it reaches the computers its "Works on" choice allows, within the app's own switches.
+    const bot = chat?.botId ? bots?.find(chat.botId) : undefined
     const caller = agent
       ? { id: agent.id, workspaceId: agent.workspaceId, petName: agent.petName }
-      : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
+      : bot
+        ? // Every thread of a bot shares its browser pages (the bot panel's Browser tab).
+          { id: chat!.id, workspaceId: botScope(bot.id), petName: bot.name }
+        : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
     const browserFamily = { handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }
-    // A bot reaches the computers its "Works on" choice allows, within the app's own switches.
-    const bot = chat?.botId ? bots?.find(chat.botId) : undefined
     const reach = bot ? botReach(bot, { browser: settings.get().browserUse, computer: settings.get().computerUse && computer.supported }) : []
     const families = bot
       ? [botTools, ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]), gateway]

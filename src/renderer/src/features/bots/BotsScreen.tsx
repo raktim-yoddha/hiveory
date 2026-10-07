@@ -11,7 +11,6 @@ import { useClis } from '../../stores/data'
 import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
 import { BotEditor, useBotEditor } from './BotEditor'
-import { BotPanel } from './BotPanel'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
@@ -65,74 +64,71 @@ export function BotsScreen() {
   }
 
   return (
-    <div className={styles.layout}>
-      <section className={chat.surface} aria-label={bot.name}>
-        <header className={chat.chatHeader}>
-          <BotAvatar id={bot.id} name={bot.name} />
-          <div className={chat.headerText}>
-            <h1 className={chat.chatHeading}>{bot.name}</h1>
-            <span className={chat.headerMeta}>
-              {bot.chief ? 'Chief of Staff · ' : ''}
-              {cliName ? `Powered by ${cliName}` : 'No engine yet: choose one in its settings'}
-            </span>
-          </div>
-          <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
-          <IconButton label="Computer" icon={<Monitor />} active={panelOpen} aria-pressed={panelOpen} onClick={() => setPanelOpen(!panelOpen)} />
-          <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
-        </header>
-        <div className={styles.threads} role="tablist" aria-label={`${bot.name} threads`}>
-          {threads.map((t) => (
-            <Menu
-              key={t.id}
-              context
-              label={`${t.title} actions`}
-              items={[
-                {
-                  type: 'item',
-                  id: 'delete',
-                  label: 'Delete thread',
-                  icon: <Trash2 />,
-                  danger: true,
-                  onSelect: () => void removeThread(t.id).then(() => useBots.getState().select(bot.id))
-                }
-              ]}
-              trigger={(props) => (
-                <button
-                  {...props}
-                  type="button"
-                  role="tab"
-                  aria-selected={t.id === threadId}
-                  className={styles.threadTab}
-                  title={t.title}
-                  onClick={() => void openThread(bot.id, t.id)}
-                >
-                  {t.running && <StatusDot status="working" />}
-                  <span className={styles.threadTitle}>{t.title}</span>
-                </button>
-              )}
-            />
-          ))}
-          <IconButton label="New thread" icon={<Plus />} onClick={() => void newThread(bot.id)} />
+    <section className={chat.surface} aria-label={bot.name}>
+      <header className={chat.chatHeader}>
+        <BotAvatar id={bot.id} name={bot.name} />
+        <div className={chat.headerText}>
+          <h1 className={chat.chatHeading}>{bot.name}</h1>
+          <span className={chat.headerMeta}>
+            {bot.chief ? 'Chief of Staff · ' : ''}
+            {cliName ? `Powered by ${cliName}` : 'No engine yet: choose one in its settings'}
+          </span>
         </div>
-        {thread ? (
-          <>
-            <ChatMessages
-              chat={thread}
-              welcome={{
-                title: 'What should we work on?',
-                text: thread.delegation
-                  ? 'Another bot opened this thread to hand over work.'
-                  : `Give ${bot.name} a task. It keeps its brief and memory in every thread.`
-              }}
-            />
-            <ChatComposer chat={thread} folder={false} placeholder={`Message ${bot.name}…`} />
-          </>
-        ) : (
-          <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
-        )}
-        <BotEditor />
-      </section>
-      {panelOpen && <BotPanel bot={bot} />}
-    </div>
+        <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
+        <IconButton label="Computer and browser" icon={<Monitor />} active={panelOpen} aria-pressed={panelOpen} onClick={() => setPanelOpen(!panelOpen)} />
+        <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
+      </header>
+      <div className={styles.threads} role="tablist" aria-label={`${bot.name} threads`}>
+        {threads.map((t) => (
+          <Menu
+            key={t.id}
+            context
+            label={`${t.title} actions`}
+            items={[
+              {
+                type: 'item',
+                id: 'delete',
+                label: 'Delete thread',
+                icon: <Trash2 />,
+                danger: true,
+                onSelect: () => void removeThread(t.id).then(() => useBots.getState().select(bot.id))
+              }
+            ]}
+            trigger={(props) => (
+              <button
+                {...props}
+                type="button"
+                role="tab"
+                aria-selected={t.id === threadId}
+                className={styles.threadTab}
+                title={t.title}
+                onClick={() => void openThread(bot.id, t.id)}
+              >
+                {t.running && <StatusDot status="working" />}
+                <span className={styles.threadTitle}>{t.title}</span>
+              </button>
+            )}
+          />
+        ))}
+        <IconButton label="New thread" icon={<Plus />} onClick={() => void newThread(bot.id)} />
+      </div>
+      {thread ? (
+        <>
+          <ChatMessages
+            chat={thread}
+            welcome={{
+              title: 'What should we work on?',
+              text: thread.delegation
+                ? 'Another bot opened this thread to hand over work.'
+                : `Give ${bot.name} a task. It keeps its brief and memory in every thread.`
+            }}
+          />
+          <ChatComposer chat={thread} folder={false} placeholder={`Message ${bot.name}…`} />
+        </>
+      ) : (
+        <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
+      )}
+      <BotEditor />
+    </section>
   )
 }

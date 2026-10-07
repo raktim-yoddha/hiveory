@@ -8,6 +8,7 @@ import {
   type Bot,
   type BotView
 } from '@shared/domain/bot'
+import type { BrowserProfile } from '@shared/domain/browser'
 import type { ChatSession } from '@shared/domain/chat'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
@@ -20,7 +21,7 @@ import type { StateStore } from '../persistence/state-store'
 export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn'>> & {
   computer?: Bot['computer'] | null
 }
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn'>> & {
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId'>> & {
   /** null takes the computer away from the bot (its container stays, as the user's). */
   computer?: Bot['computer'] | null
 }
@@ -31,6 +32,8 @@ export const ASK_TIMEOUT_MS = 10 * 60 * 1000
 const MAX_RESULT_CHARS = 8000
 /** Delegations and consultations one thread may start per hour (a runaway loop stops here). */
 const MAX_CALLS_PER_HOUR = 20
+/** Browser profile names are at most 40 characters; this leaves room for a " 99" suffix. */
+const MAX_PROFILE_BASE = 36
 
 interface Pending {
   fromChatId: string
@@ -167,6 +170,24 @@ export class BotService {
       title,
       delegation
     })
+  }
+
+  /**
+   * The browser profile the bot's pages open in, made the first time it is needed (and again if the
+   * user deleted it), so a bot's logins never mix with the user's. Deleting the bot keeps it: those
+   * logins are the user's to clear in Settings › Browser.
+   */
+  browserProfile(botId: string, profiles: { list(): BrowserProfile[]; create(name: string): BrowserProfile }): string {
+    const bot = this.get(botId)
+    const existing = profiles.list()
+    if (bot.browserProfileId && existing.some((p) => p.id === bot.browserProfileId)) return bot.browserProfileId
+    const taken = new Set(existing.map((p) => p.name.toLowerCase()))
+    const base = `Bot · ${bot.name}`.slice(0, MAX_PROFILE_BASE)
+    let name = base
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} ${n}`
+    const profile = profiles.create(name)
+    this.update(botId, { browserProfileId: profile.id })
+    return profile.id
   }
 
   remember(botId: string, fact: string): string[] {

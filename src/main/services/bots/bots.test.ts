@@ -99,6 +99,20 @@ describe('bots', () => {
     expect(bots.update(bot.id, { worksOn: 'browser', computer: null }).computer).toBeUndefined()
   })
 
+  it('gives a bot its own browser profile once, and a fresh one if the user deleted it', () => {
+    const { bots } = setup()
+    const made: Array<{ id: string; name: string; createdAt: string }> = [{ id: 'p0', name: 'Bot · Scout', createdAt: '' }]
+    let n = 0
+    const profiles = { list: () => made, create: (name: string) => (made.push({ id: `p${++n}`, name, createdAt: '' }), made.at(-1)!) }
+    const bot = bots.create({ name: 'Scout' })
+    const first = bots.browserProfile(bot.id, profiles)
+    expect(made.find((p) => p.id === first)?.name).toBe('Bot · Scout 2')
+    expect(bots.browserProfile(bot.id, profiles)).toBe(first)
+    expect(bots.get(bot.id).browserProfileId).toBe(first)
+    made.splice(made.findIndex((p) => p.id === first), 1)
+    expect(bots.browserProfile(bot.id, profiles)).not.toBe(first)
+  })
+
   it('opens threads in the bot folder with its defaults, and briefs the first turn', () => {
     const { bots } = setup()
     const bot = bots.create({ name: 'Writer', brief: 'Draft release notes.', cliId: 'codex', autoApprove: true })

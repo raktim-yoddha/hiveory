@@ -23,7 +23,8 @@ and the user can take control from the bot panel. Each bot's **Works on** choice
 computers its threads may use: Auto (the browser, plus its Linux computer when one is set up;
 never the user's screen), its Linux computer, this computer (the user's screen, chosen on purpose),
 the browser only, or none. Settings' Browser use and Computer use still switch those off for every
-agent.
+agent. A bot's threads share one set of browser pages in the bot's own browser profile; the user
+signs in to sites for it in the bot panel's Browser tab, never by putting a password in a chat.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the

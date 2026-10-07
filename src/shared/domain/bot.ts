@@ -28,6 +28,8 @@ export interface Bot {
   worksOn: WorksOn
   /** The bot's own Linux computer: a Docker container here, or on an SSH host (ADR 0022). Absent = none set up. */
   computer?: BotComputer
+  /** The browser profile its pages open in, so its logins stay apart from the user's. Made on first use. */
+  browserProfileId?: string
   createdAt: string
   updatedAt: string
 }
@@ -64,6 +66,9 @@ export interface BotView extends Bot {
   running: number
   lastActivity?: string
 }
+
+/** The browser scope all of a bot's threads share: its pages, shown in the bot panel's Browser tab. */
+export const botScope = (botId: string): string => `bot-${botId}`
 
 export const MAX_BOT_NAME = 60
 export const MAX_BOT_BRIEF = 4000
