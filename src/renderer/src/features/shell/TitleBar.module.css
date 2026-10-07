@@ -1,20 +1,24 @@
 .bar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   height: var(--titlebar-height);
   padding: 0 var(--space-6);
   -webkit-app-region: drag;
 }
 
-/* Native window controls occupy the right edge on Windows/Linux, traffic lights the left on macOS. */
-.bar[data-platform='win32'],
-.bar[data-platform='linux'] {
-  padding-right: var(--titlebar-controls-width);
+/*
+ * Native window controls occupy the right edge on Windows/Linux, traffic lights the left on macOS.
+ * The inset goes on the side columns, not the bar, so both 1fr columns stay equal and the modes
+ * sit at the window's true centre.
+ */
+.bar[data-platform='win32'] .end,
+.bar[data-platform='linux'] .end {
+  padding-right: calc(var(--titlebar-controls-width) - var(--space-6));
 }
 
-.bar[data-platform='darwin'] {
-  padding-left: calc(var(--space-11) + var(--space-8));
+.bar[data-platform='darwin'] .start {
+  padding-left: calc(var(--space-11) + var(--space-8) - var(--space-6));
 }
 
 .start {
