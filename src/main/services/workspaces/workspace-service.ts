@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join, relative, resolve, sep } from 'node:path'
-import { mainWorkspaceId, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
+import { mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
 import type { GitStatus } from '../git/git-commands'
 import { AppException, fail } from '@shared/errors'
@@ -85,7 +85,7 @@ export class WorkspaceService {
     const workspace: Workspace = {
       id: mainWorkspaceId(project.id),
       projectId: project.id,
-      name: input.name.trim(),
+      name: PRIMARY_NAME,
       kind: 'main',
       path: project.path,
       association: input.association,

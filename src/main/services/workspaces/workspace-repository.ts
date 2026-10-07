@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { hostKey, mainWorkspaceId, type Project, type Workspace } from '@shared/domain'
+import { hostKey, mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { PersistedState } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
@@ -117,16 +117,16 @@ export class WorkspaceRepository {
       const id = mainWorkspaceId(p.id)
       return !workspaces.some((w) => w.id === id) && (instances.some((i) => i.workspaceId === id) || layouts[id])
     })
-    // The main worktree's default name was "Main" before it became "Primary" (ADR 0033).
-    const renamed = [...workspaces, ...this.store.state.archive.flatMap((a) => a.workspaces)].some((w) => w.kind === 'main' && w.name === 'Main')
-    if (missing.length === 0 && !renamed) return
+    // The main Workspace is always named Primary; older ones were "Main" or a name the user typed (ADR 0033).
+    const misnamed = (w: Workspace): boolean => w.kind === 'main' && w.name !== PRIMARY_NAME
+    if (missing.length === 0 && ![...workspaces, ...this.store.state.archive.flatMap((a) => a.workspaces)].some(misnamed)) return
     this.store.update((s) => {
-      for (const w of [...s.workspaces, ...s.archive.flatMap((a) => a.workspaces)]) if (w.kind === 'main' && w.name === 'Main') w.name = 'Primary'
+      for (const w of [...s.workspaces, ...s.archive.flatMap((a) => a.workspaces)]) if (misnamed(w)) w.name = PRIMARY_NAME
       for (const p of missing) {
         s.workspaces.push({
           id: mainWorkspaceId(p.id),
           projectId: p.id,
-          name: 'Primary',
+          name: PRIMARY_NAME,
           kind: 'main',
           path: p.path,
           autoApprove: false,

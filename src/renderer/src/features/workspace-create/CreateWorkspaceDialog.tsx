@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Dices } from 'lucide-react'
-import type { WorkspaceAssociation, WorkspaceKind } from '@shared/domain'
+import { PRIMARY_NAME, type WorkspaceAssociation, type WorkspaceKind } from '@shared/domain'
 import { totalInstances } from '@shared/presets'
 import { AgentConfigFields, type AgentConfig } from '../../components/cli/AgentConfigFields'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -25,8 +25,6 @@ interface CreateWorkspaceDialogProps {
 
 type ConfigTab = 'agents' | 'presets'
 
-const MAIN_NAME = 'Primary'
-
 /**
  * "Create Workspace". A Workspace is either the project folder itself (Main,
  * at most one) or an isolated copy on its own branch — Git worktree and branch
@@ -42,7 +40,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   const [suggested, setSuggested] = useState('')
   /** null until the user types, so switching kinds can swap in the right default name. */
   const [typed, setTyped] = useState<string | null>(null)
-  const name = typed ?? (kind === 'main' ? MAIN_NAME : suggested)
+  const name = kind === 'main' ? PRIMARY_NAME : (typed ?? suggested)
   const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>('issue')
   const [associationRef, setAssociationRef] = useState('')
   // Toggles start from the defaults chosen in Settings → Agents.
@@ -135,6 +133,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
           label="Worktree name"
           value={name}
           onChange={setTyped}
+          readOnly={kind === 'main'}
           maxLength={60}
           adornment={
             kind === 'isolated' && <IconButton label="Suggest another name" icon={<Dices />} size="lg" onClick={suggest} />

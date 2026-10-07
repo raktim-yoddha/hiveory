@@ -38,3 +38,6 @@ export interface WorkspaceView extends Workspace {
 
 /** Id of a Project's main Workspace. Deterministic: a Project has at most one, created by the user (ADR 0011). */
 export const mainWorkspaceId = (projectId: string): string => `${projectId}--main`
+
+/** The main Workspace's fixed name; it cannot be changed (ADR 0033). */
+export const PRIMARY_NAME = 'Primary'

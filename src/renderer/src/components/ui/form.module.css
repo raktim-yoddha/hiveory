@@ -44,6 +44,15 @@
   border-color: var(--color-focus);
 }
 
+.input:read-only {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.input:read-only:hover {
+  border-color: transparent;
+}
+
 .toggle {
   position: relative;
   flex: none;

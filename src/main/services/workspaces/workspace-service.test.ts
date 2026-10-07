@@ -108,14 +108,15 @@ describe('workspace creation', () => {
     expect(repo.find(mainWorkspaceId(project.id))).toMatchObject({ kind: 'main', path: '/repo', name: 'Primary' })
   })
 
-  it('renames a main worktree still called "Main" to "Primary", keeping custom names', async () => {
+  it('always names the main worktree Primary, renaming older names on startup', async () => {
     const { service, repo } = setup()
-    const main = await service.create({ ...input, kind: 'main', name: 'Main' })
-    repo.adoptImplicitMainWorkspaces()
-    expect(repo.find(main.id)?.name).toBe('Primary')
-    repo.save({ ...repo.get(main.id), name: 'Trunk' })
-    repo.adoptImplicitMainWorkspaces()
-    expect(repo.find(main.id)?.name).toBe('Trunk')
+    const main = await service.create({ ...input, kind: 'main', name: 'Typed' })
+    expect(main.name).toBe('Primary')
+    for (const old of ['Main', 'Trunk']) {
+      repo.save({ ...repo.get(main.id), name: old })
+      repo.adoptImplicitMainWorkspaces()
+      expect(repo.find(main.id)?.name).toBe('Primary')
+    }
   })
 
   it('creates a linked worktree on a new local branch from the default branch', async () => {
