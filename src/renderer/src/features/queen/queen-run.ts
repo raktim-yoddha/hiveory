@@ -21,11 +21,13 @@ import {
   type QueenOutcome,
   type QueenPrefs
 } from '@shared/queen/personas'
-import { MAX_NOTES, MODE_LABEL, QUEEN_SETTINGS } from '@shared/queen/actions'
+import { BOTS_PAGE_LABEL, MAX_NOTES, MODE_LABEL, QUEEN_SETTINGS } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
 import { api, HiveoryError } from '../../lib/api'
 import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
+import { useRoutines } from '../../stores/routines'
+import { useTriggers } from '../../stores/triggers'
 import { useAgents, useClis, useLayouts, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
@@ -103,11 +105,15 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
   const clis = useClis.getState()
   const presets = usePresets.getState()
   const bots = useBots.getState()
-  const [projectList, cliList, presetList, botList] = await Promise.all([
+  const routines = useRoutines.getState()
+  const triggers = useTriggers.getState()
+  const [projectList, cliList, presetList, botList, routineList, triggerList] = await Promise.all([
     ensure(projects.loaded, projects.load, () => useProjects.getState().projects),
     ensure(clis.loaded, () => clis.load(), () => useClis.getState().clis),
     ensure(presets.loaded, presets.load, () => usePresets.getState().presets),
-    ensure(bots.loaded, bots.load, () => useBots.getState().bots).catch(() => [])
+    ensure(bots.loaded, bots.load, () => useBots.getState().bots).catch(() => []),
+    ensure(routines.loaded, routines.load, () => useRoutines.getState().routines).catch(() => []),
+    ensure(triggers.loaded, triggers.load, () => useTriggers.getState().triggers).catch(() => [])
   ])
   let workspaces = projectId ? useWorkspaces.getState().byProject[projectId] : undefined
   if (projectId && !workspaces) {
@@ -132,6 +138,10 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName, kind: c.kind })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name })),
       bots: botList.map((b) => ({ id: b.id, name: b.name })),
+      automations: [
+        ...routineList.map((r) => ({ id: r.id, name: r.name, kind: 'routine' as const, on: r.enabled })),
+        ...triggerList.map((t) => ({ id: t.id, name: t.name, kind: 'trigger' as const, on: t.enabled }))
+      ],
       ...(useSettings.getState().settings.queenPersona === 'custom' ? { queenName: personaInfo(useSettings.getState().settings).name } : {})
     }
   }
@@ -343,6 +353,11 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
             if (!project) throw new QueenError('that project is no longer open.')
             nav().openProject(project.id)
             outcomes.push({ kind: 'navigated', place: project.name })
+          } else if (action.to === 'bots') {
+            nav().setMode('bots')
+            const bots = useBots.getState()
+            ;({ work: bots.showWorkBoard, routines: () => bots.showRoutines(), triggers: bots.showTriggers, 'team-map': bots.showTeamMap })[action.page]()
+            outcomes.push({ kind: 'navigated', place: BOTS_PAGE_LABEL[action.page] })
           } else {
             nav().openWorkspace(action.projectId, action.workspaceId)
             const project = action.projectId !== ctx.projectId ? ctx.projects.find((x) => x.id === action.projectId)?.name : undefined
@@ -537,6 +552,23 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           const thread = useBots.getState().activeThread[bot.id]
           if (!thread || !(await useChat.getState().send(thread, action.text))) throw new QueenError(`${bot.name} did not get the message.`)
           outcomes.push({ kind: 'messaged', name: bot.name })
+          break
+        }
+        case 'switch-automation': {
+          const item = ctx.automations?.find((x) => x.id === action.automationId)
+          if (!item) throw new QueenError('that routine or trigger no longer exists.')
+          const flip = async (enabled: boolean): Promise<void> => {
+            if (item.kind === 'routine') {
+              await api('routines.update', { routineId: item.id, enabled })
+              await useRoutines.getState().load()
+            } else {
+              await api('triggers.update', { triggerId: item.id, enabled })
+              await useTriggers.getState().load()
+            }
+          }
+          await flip(action.on)
+          undos.push(() => flip(item.on))
+          outcomes.push({ kind: 'switched', name: item.name, on: action.on })
           break
         }
         case 'resume-session': {

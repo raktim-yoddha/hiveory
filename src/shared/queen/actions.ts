@@ -5,6 +5,11 @@ import type { SmallTalk } from './chat'
 export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'queen', 'remote', 'updates', 'guide', 'about'] as const
 export type QueenSettingsSection = (typeof QUEEN_SETTINGS_SECTIONS)[number]
 
+/** Bots mode's pages beyond a bot's conversation (ADR 0028). */
+export const QUEEN_BOTS_PAGES = ['work', 'routines', 'triggers', 'team-map'] as const
+export type QueenBotsPage = (typeof QUEEN_BOTS_PAGES)[number]
+export const BOTS_PAGE_LABEL: Record<QueenBotsPage, string> = { work: 'Work board', routines: 'Routines', triggers: 'Triggers', 'team-map': 'Team map' }
+
 /**
  * Everything Queen Bee can do: a closed set. The rule parser and (later) a model
  * both emit these; only the executor turns them into app operations, after
@@ -22,6 +27,7 @@ export type QueenAction =
   | { type: 'navigate'; to: 'settings'; section: QueenSettingsSection }
   | { type: 'navigate'; to: 'project'; projectId: string }
   | { type: 'navigate'; to: 'workspace'; projectId: string; workspaceId: string }
+  | { type: 'navigate'; to: 'bots'; page: QueenBotsPage }
   | { type: 'set-mode'; mode: 'workspace' | 'bots' | 'chatspace' }
   | { type: 'side-panel'; open: boolean }
   | { type: 'open-panel-tab'; kind: 'browser' | 'explorer' }
@@ -71,6 +77,8 @@ export type QueenAction =
   | { type: 'new-chat'; cliId?: string; text?: string; projectId?: string }
   /** Sends a message to a bot in a new thread (Bots mode). */
   | { type: 'message-bot'; botId: string; text: string }
+  /** Turns a bot's routine or trigger on or off (ADR 0028). */
+  | { type: 'switch-automation'; automationId: string; on: boolean }
   /** Reopens a CLI's latest conversation in this workspace. */
   | { type: 'resume-session'; cliId: string; workspaceId: string; projectId: string }
   /** Adds a project folder (the folder picker opens). */
@@ -107,6 +115,8 @@ export interface QueenContext {
   presets: Array<{ id: string; name: string }>
   /** The user's bots (Bots mode), so "ask Scout to …" reaches one. */
   bots?: Array<{ id: string; name: string }>
+  /** Bots' routines and triggers, by the user's own names (never their instructions), so "pause Morning brief" reaches one. */
+  automations?: Array<{ id: string; name: string; kind: 'routine' | 'trigger'; on: boolean }>
   /** A custom personality's name, so "Zara, open Codex" parses like "Queen, open Codex". */
   queenName?: string
 }

@@ -111,6 +111,8 @@ export type QueenOutcome =
   | { kind: 'talkback'; on: boolean }
   | { kind: 'workspace'; name: string }
   | { kind: 'setting'; name: string; on: boolean }
+  /** A routine or trigger, by the user's own name. */
+  | { kind: 'switched'; name: string; on: boolean }
   | { kind: 'page'; host: string }
   | { kind: 'file'; name: string }
   | { kind: 'arranged'; layout: 'equal' | 'columns' }
@@ -159,6 +161,8 @@ export function receipt(o: QueenOutcome): string {
       return `Created workspace ${o.name}`
     case 'setting':
       return `${o.name}: ${o.on ? 'on' : 'off'}`
+    case 'switched':
+      return `${o.name}: ${o.on ? 'on' : 'paused'}`
     case 'page':
       return `Opened ${o.host} in the browser`
     case 'file':
@@ -212,6 +216,8 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return `${o.name} is ready`
     case 'setting':
       return `${o.name.toLowerCase()} is ${o.on ? 'on' : 'off'}`
+    case 'switched':
+      return `${o.name} is ${o.on ? 'on' : 'paused'}`
     case 'page':
       return `${o.host} is open`
     case 'file':
@@ -427,6 +433,8 @@ export const HELP_EXAMPLES = [
   'new chat with codex about the API',
   'which apps are connected',
   'turn off browser use',
+  'pause Morning brief',
+  'open the work board',
   'save this as preset Backend',
   'jade theme',
   'mute'

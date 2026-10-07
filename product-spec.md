@@ -298,7 +298,9 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - Typed commands run app actions: open N agents of a CLI (optionally "in <workspace>"),
   close agents (always after a yes), restart, jump to an agent, load a preset, switch
   Work/Chat, open Home, a project, a workspace or a Settings section, show or hide the
-  side panel, and open a browser or the Explorer.
+  side panel, and open a browser or the Explorer. In Bots: open the work board, Routines,
+  Triggers or the team map, and pause or resume a routine or trigger by its name ("pause
+  Morning brief"; a model's plan asks first).
 - Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
   live state. The current project, or every project from Home.
 - She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of

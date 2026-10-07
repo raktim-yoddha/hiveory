@@ -200,6 +200,8 @@ const parseClause = (sentence: string, ctx: QueenContext, previousVerb: string |
   if (/^(go |open |show )?(chat|chats|chat mode|chatspace)$/.test(clause)) return done([{ type: 'set-mode', mode: 'chatspace' }])
   if (/^(go |open |show )?(work|work mode|workspace mode|terminals)$/.test(clause)) return done([{ type: 'set-mode', mode: 'workspace' }])
   if (/^(go |open |show )?(bots|bots mode|my bots|the bots)$/.test(clause)) return done([{ type: 'set-mode', mode: 'bots' }])
+  const botsPage = /^(go |open |show )?(the |my )?(work board|routines|triggers|team map)( page)?$/.exec(clause)?.[3]
+  if (botsPage) return done([{ type: 'navigate', to: 'bots', page: botsPage === 'work board' ? 'work' : botsPage === 'team map' ? 'team-map' : (botsPage as 'routines' | 'triggers') }])
   if (/^(go )?(home|home page|start page)$/.test(clause)) return done([{ type: 'navigate', to: 'home' }])
 
   // Settings.

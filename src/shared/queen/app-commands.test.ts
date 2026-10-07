@@ -103,4 +103,34 @@ describe('Queen Bee app commands', () => {
     expect(planFromToolArgs({ actions: [{ type: 'set-setting', setting: 'computer-use', on: 'true' }] }, ctx)).toMatchObject({ confirm: 'Turn computer use on?' })
     expect(planFromToolArgs({ actions: [{ type: 'open-url', url: 'javascript:alert(1)' }] }, ctx)).toEqual({ kind: 'unknown' })
   })
+
+  it('opens Bots pages and pauses or resumes routines and triggers by name', () => {
+    const withAutomations: QueenContext = {
+      ...ctx,
+      automations: [
+        { id: 'r1', name: 'Morning brief', kind: 'routine', on: true },
+        { id: 't1', name: 'New issue', kind: 'trigger', on: false },
+        { id: 'r2', name: 'Digest', kind: 'routine', on: true },
+        { id: 't2', name: 'Digest', kind: 'trigger', on: true },
+        { id: 'r3', name: 'Bruno', kind: 'routine', on: true }
+      ]
+    }
+    expect(actions('open the work board')).toEqual([{ type: 'navigate', to: 'bots', page: 'work' }])
+    expect(actions('go to routines')).toEqual([{ type: 'navigate', to: 'bots', page: 'routines' }])
+    expect(actions('show the team map')).toEqual([{ type: 'navigate', to: 'bots', page: 'team-map' }])
+    expect(actions('pause Morning brief', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: false }])
+    expect(actions('resume the morning brief routine', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: true }])
+    expect(actions('turn the New issue trigger back on', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't1', on: true }])
+    expect(actions('pause digest trigger', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't2', on: false }])
+    expect(parseCommand('pause digest', withAutomations)).toMatchObject({ kind: 'ask', question: { choices: [{ command: 'pause Digest routine' }, { command: 'pause Digest trigger' }] } })
+    // An agent with the same name wins.
+    expect(actions('stop Bruno', withAutomations)).toEqual([{ type: 'interrupt-agent', agentId: 'a1' }])
+    // A model may switch them too, but only ids it was shown, and only after a yes.
+    expect(planFromToolArgs({ actions: [{ type: 'switch-automation', automationId: 'Morning brief', on: false }] }, withAutomations)).toMatchObject({
+      actions: [{ type: 'switch-automation', automationId: 'r1', on: false }],
+      confirm: 'Turn Morning brief off?'
+    })
+    expect(planFromToolArgs({ actions: [{ type: 'switch-automation', automationId: 'Ghost', on: true }] }, withAutomations)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'navigate', page: 'triggers' }] }, ctx)).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'bots', page: 'triggers' }] })
+  })
 })

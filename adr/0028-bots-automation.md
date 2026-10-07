@@ -162,6 +162,18 @@ importing whole teams comes later.
 - Each row: who asked (a bot, a routine or a trigger) → the bot, the title, when; it opens its thread.
 - K2 (queued requests dropped on a bot) is not built.
 
+## Queen Bee (built)
+
+- `navigate {to: 'bots', page}` opens the work board, Routines, Triggers or the team map ("open the
+  work board", "go to routines").
+- `switch-automation {automationId, on}` pauses or resumes a routine or trigger by the user's own name
+  ("pause Morning brief", "turn the New issue trigger back on"); a routine and a trigger with one name
+  get a question, and an agent with that name wins ("stop Bruno"). Her context lists names, kinds and
+  on/off only, never instructions (rule 27). A model's plan asks first; Undo flips it back. Main's own
+  checks still apply (a past one-off can't be turned on).
+
 ## Next
 
-Queen Bee actions for routines and triggers.
+Nothing planned. Deferred: routine attachments; the calendar's day view, mini month and drag-a-bot;
+container gaps against OpenMausBot (Podman, a pinned image, accessibility-tree control, shared seats);
+approval levels and the sending-on-your-behalf gate; K2 queued requests; Work and Chat routines.
