@@ -89,6 +89,16 @@ describe('bots', () => {
     expect(bots.update(a.id, { memory: ['  Likes  tea ', 'likes tea', ''] }).memory).toEqual(['Likes tea'])
   })
 
+  it('starts on Auto, and refuses "its Linux computer" until one is set up', () => {
+    const { bots } = setup()
+    const bot = bots.create({ name: 'Scout' })
+    expect(bot.worksOn).toBe('auto')
+    expect(() => bots.update(bot.id, { worksOn: 'container' })).toThrow('Linux computer')
+    expect(bots.update(bot.id, { worksOn: 'container', computer: { kind: 'docker' } }).worksOn).toBe('container')
+    expect(() => bots.update(bot.id, { computer: null })).toThrow('Linux computer')
+    expect(bots.update(bot.id, { worksOn: 'browser', computer: null }).computer).toBeUndefined()
+  })
+
   it('opens threads in the bot folder with its defaults, and briefs the first turn', () => {
     const { bots } = setup()
     const bot = bots.create({ name: 'Writer', brief: 'Draft release notes.', cliId: 'codex', autoApprove: true })

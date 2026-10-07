@@ -21,7 +21,7 @@ import type {
   HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, type BotComputerStatus, type BotView } from '../domain/bot'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON, type BotComputerStatus, type BotView } from '../domain/bot'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
@@ -78,6 +78,8 @@ const botFields = z.object({
   chief: z.boolean().optional(),
   messaging: z.boolean().optional(),
   pinned: z.boolean().optional(),
+  /** Where the bot may use a computer (the bot panel's "Works on"). */
+  worksOn: z.enum(WORKS_ON).optional(),
   /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
   computer: z
     .union([
@@ -493,6 +495,8 @@ export const requestSchemas = {
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
   'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
+  /** A screenshot of the bot's running Linux computer (base64 PNG) for the bot panel; null while it is not running. */
+  'bots.screen': z.object({ botId: id }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
   'hosts.check': z.object({ destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }),
   /** The SSH picker's hosts: Tailscale devices and ~/.ssh/config aliases (ADR 0025). */
@@ -716,6 +720,7 @@ export interface ResponseMap {
   'bots.threads': ChatSummary[]
   'bots.newThread': ChatSession
   'bots.computer': BotComputerStatus
+  'bots.screen': string | null
   'hosts.check': { platform: string; arch: string; node: string; installed: boolean; nodeInstalled: boolean; protocol: number }
   'hosts.suggest': { tailscale: TailnetStatus['state']; hosts: SshHostSuggestion[] }
   'hosts.status': Record<string, HostLinkStatus>

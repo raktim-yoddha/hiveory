@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Bot as BotIcon, Plus, Settings2, Trash2 } from 'lucide-react'
+import { Bot as BotIcon, Monitor, Plus, Settings2, Trash2 } from 'lucide-react'
 import { BotAvatar } from '../../components/brand/BotAvatar'
 import { Button, IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -11,7 +11,7 @@ import { useClis } from '../../stores/data'
 import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
 import { BotEditor, useBotEditor } from './BotEditor'
-import { ComputerMenu } from './ComputerMenu'
+import { BotPanel } from './BotPanel'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
@@ -23,7 +23,7 @@ const EMPTY: never[] = []
  * the user is in Work or Chat.
  */
 export function BotsScreen() {
-  const { bots, activeBotId, load, newThread, openThread } = useBots()
+  const { bots, activeBotId, load, newThread, openThread, panelOpen, setPanelOpen } = useBots()
   /** undefined until loaded, so "no threads yet" is never confused with "not loaded yet". */
   const loadedThreads = useBots((s) => (activeBotId ? s.threads[activeBotId] : undefined))
   const threads = loadedThreads ?? EMPTY
@@ -65,71 +65,74 @@ export function BotsScreen() {
   }
 
   return (
-    <section className={chat.surface} aria-label={bot.name}>
-      <header className={chat.chatHeader}>
-        <BotAvatar id={bot.id} name={bot.name} />
-        <div className={chat.headerText}>
-          <h1 className={chat.chatHeading}>{bot.name}</h1>
-          <span className={chat.headerMeta}>
-            {bot.chief ? 'Chief of Staff · ' : ''}
-            {cliName ? `Powered by ${cliName}` : 'No engine yet: choose one in its settings'}
-          </span>
+    <div className={styles.layout}>
+      <section className={chat.surface} aria-label={bot.name}>
+        <header className={chat.chatHeader}>
+          <BotAvatar id={bot.id} name={bot.name} />
+          <div className={chat.headerText}>
+            <h1 className={chat.chatHeading}>{bot.name}</h1>
+            <span className={chat.headerMeta}>
+              {bot.chief ? 'Chief of Staff · ' : ''}
+              {cliName ? `Powered by ${cliName}` : 'No engine yet: choose one in its settings'}
+            </span>
+          </div>
+          <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
+          <IconButton label="Computer" icon={<Monitor />} active={panelOpen} aria-pressed={panelOpen} onClick={() => setPanelOpen(!panelOpen)} />
+          <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
+        </header>
+        <div className={styles.threads} role="tablist" aria-label={`${bot.name} threads`}>
+          {threads.map((t) => (
+            <Menu
+              key={t.id}
+              context
+              label={`${t.title} actions`}
+              items={[
+                {
+                  type: 'item',
+                  id: 'delete',
+                  label: 'Delete thread',
+                  icon: <Trash2 />,
+                  danger: true,
+                  onSelect: () => void removeThread(t.id).then(() => useBots.getState().select(bot.id))
+                }
+              ]}
+              trigger={(props) => (
+                <button
+                  {...props}
+                  type="button"
+                  role="tab"
+                  aria-selected={t.id === threadId}
+                  className={styles.threadTab}
+                  title={t.title}
+                  onClick={() => void openThread(bot.id, t.id)}
+                >
+                  {t.running && <StatusDot status="working" />}
+                  <span className={styles.threadTitle}>{t.title}</span>
+                </button>
+              )}
+            />
+          ))}
+          <IconButton label="New thread" icon={<Plus />} onClick={() => void newThread(bot.id)} />
         </div>
-        <StatusDot status={bot.running > 0 ? 'working' : 'idle'} detail={bot.running > 0 ? `${bot.running} working` : 'Ready'} />
-        {bot.computer && <ComputerMenu botId={bot.id} />}
-        <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />
-      </header>
-      <div className={styles.threads} role="tablist" aria-label={`${bot.name} threads`}>
-        {threads.map((t) => (
-          <Menu
-            key={t.id}
-            context
-            label={`${t.title} actions`}
-            items={[
-              {
-                type: 'item',
-                id: 'delete',
-                label: 'Delete thread',
-                icon: <Trash2 />,
-                danger: true,
-                onSelect: () => void removeThread(t.id).then(() => useBots.getState().select(bot.id))
-              }
-            ]}
-            trigger={(props) => (
-              <button
-                {...props}
-                type="button"
-                role="tab"
-                aria-selected={t.id === threadId}
-                className={styles.threadTab}
-                title={t.title}
-                onClick={() => void openThread(bot.id, t.id)}
-              >
-                {t.running && <StatusDot status="working" />}
-                <span className={styles.threadTitle}>{t.title}</span>
-              </button>
-            )}
-          />
-        ))}
-        <IconButton label="New thread" icon={<Plus />} onClick={() => void newThread(bot.id)} />
-      </div>
-      {thread ? (
-        <>
-          <ChatMessages
-            chat={thread}
-            welcome={{
-              title: 'What should we work on?',
-              text: thread.delegation
-                ? 'Another bot opened this thread to hand over work.'
-                : `Give ${bot.name} a task. It keeps its brief and memory in every thread.`
-            }}
-          />
-          <ChatComposer chat={thread} folder={false} placeholder={`Message ${bot.name}…`} />
-        </>
-      ) : (
-        <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
-      )}
-      <BotEditor />
-    </section>
+        {thread ? (
+          <>
+            <ChatMessages
+              chat={thread}
+              welcome={{
+                title: 'What should we work on?',
+                text: thread.delegation
+                  ? 'Another bot opened this thread to hand over work.'
+                  : `Give ${bot.name} a task. It keeps its brief and memory in every thread.`
+              }}
+            />
+            <ChatComposer chat={thread} folder={false} placeholder={`Message ${bot.name}…`} />
+          </>
+        ) : (
+          <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
+        )}
+        <BotEditor />
+      </section>
+      {panelOpen && <BotPanel bot={bot} />}
+    </div>
   )
 }

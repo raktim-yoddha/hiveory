@@ -1,5 +1,13 @@
 # ADR 0022 — Bots mode, one remote host layer, durability
 
+> Amended 2026-10-07 (`docs/plans/bots-ui-wiring.md` §3.2): each bot has a **Works on** choice
+> (`auto | container | this-computer | browser | off`); `botReach()` in `src/shared/domain/bot-reach.ts`
+> turns it, with the Browser use and Computer use switches, into the tool families its threads get,
+> and the bot panel shows the same answer. Auto never reaches the user's screen. Bots saved before
+> this load as Auto, so they keep the browser and their Docker computer but no longer get the
+> user's screen until "This computer" is chosen. The Computer choice moved from the bot editor to
+> the bot panel, which replaces the header's Computer menu.
+>
 > Amended by ADR 0026: ssh now asks for passwords, codes and new host keys in Hiveory (memory only,
 > never on disk), brings its own Node, and remote terminals survive a dropped link for 5 minutes.
 

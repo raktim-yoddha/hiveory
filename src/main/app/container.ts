@@ -34,6 +34,7 @@ import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
 import { PortForwards } from '../services/hosts/ports'
 import { hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
+import { botReach } from '@shared/domain/bot-reach'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -267,12 +268,13 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const caller = agent
       ? { id: agent.id, workspaceId: agent.workspaceId, petName: agent.petName }
       : { id: chat!.id, workspaceId: chat!.projectId ?? `chat-${chat!.id}`, petName: 'Chat' }
-    const families = [
-      ...(chat?.botId ? [botTools] : []),
-      ...(chat?.botId && bots?.find(chat.botId)?.computer ? [desktopTools] : []),
-      ...(settings.get().browserUse ? [{ handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }] : []),
-      ...extraTools()
-    ]
+    const browserFamily = { handles: (n: string) => n.startsWith('browser_'), definitions: () => browserTools.definitions(), call: browserTools.call.bind(browserTools) }
+    // A bot reaches the computers its "Works on" choice allows, within the app's own switches.
+    const bot = chat?.botId ? bots?.find(chat.botId) : undefined
+    const reach = bot ? botReach(bot, { browser: settings.get().browserUse, computer: settings.get().computerUse && computer.supported }) : []
+    const families = bot
+      ? [botTools, ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]), gateway]
+      : [...(settings.get().browserUse ? [browserFamily] : []), ...extraTools()]
     return handleBody(body, {
       list: () => families.flatMap((f) => f.definitions()),
       call: (name, args) => {

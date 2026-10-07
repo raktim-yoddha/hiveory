@@ -28,9 +28,6 @@ interface Draft {
   chief: boolean
   messaging: boolean
   memory: string[]
-  /** none · Docker on this computer · Docker on an SSH host */
-  computer: 'none' | 'local' | 'ssh'
-  computerHost: string
 }
 
 const draftOf = (bot: BotView | undefined, firstBot: boolean): Draft => ({
@@ -40,12 +37,8 @@ const draftOf = (bot: BotView | undefined, firstBot: boolean): Draft => ({
   autoApprove: bot?.autoApprove ?? false,
   chief: bot?.chief ?? firstBot,
   messaging: bot?.messaging ?? true,
-  memory: bot?.memory ?? [],
-  computer: !bot?.computer ? 'none' : bot.computer.host ? 'ssh' : 'local',
-  computerHost: bot?.computer?.host?.destination ?? ''
+  memory: bot?.memory ?? []
 })
-
-const SSH_HOST = /^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/
 
 /** Create or edit a bot: name, brief, engine, permissions, its role and its memory. */
 export function BotEditor() {
@@ -83,13 +76,7 @@ function EditorDialog({ target }: { target: string }) {
   const save = async (): Promise<void> => {
     if (!draft.name.trim()) return
     setBusy(true)
-    const computer =
-      draft.computer === 'none'
-        ? null
-        : draft.computer === 'local'
-          ? { kind: 'docker' as const }
-          : { kind: 'docker' as const, host: { kind: 'ssh' as const, destination: draft.computerHost.trim() } }
-    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, computer }
+    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging }
     if (bot) await update(bot.id, { ...fields, memory: draft.memory })
     else await createBot(fields)
     setBusy(false)
@@ -114,7 +101,7 @@ function EditorDialog({ target }: { target: string }) {
             <Button variant="ghost" onClick={close} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={() => void save()} loading={busy} disabled={!draft.name.trim() || (draft.computer === 'ssh' && !SSH_HOST.test(draft.computerHost.trim()))}>
+            <Button variant="primary" onClick={() => void save()} loading={busy} disabled={!draft.name.trim()}>
               {bot ? 'Save' : 'Create bot'}
             </Button>
           </>
@@ -157,25 +144,6 @@ function EditorDialog({ target }: { target: string }) {
             </span>
             <Toggle label="Team messaging" checked={draft.messaging} onChange={(v) => set('messaging', v)} />
           </div>
-          <Select
-            label="Computer"
-            value={draft.computer}
-            options={[
-              { value: 'none', label: 'None' },
-              { value: 'local', label: 'Its own Linux desktop in Docker on this computer' },
-              { value: 'ssh', label: 'Its own Linux desktop in Docker on an SSH host' }
-            ]}
-            onChange={(v) => set('computer', v as Draft['computer'])}
-          />
-          {draft.computer === 'ssh' && (
-            <TextField label="SSH host for its computer" value={draft.computerHost} placeholder="devbox or me@vps.example.com" onChange={(v) => set('computerHost', v)} />
-          )}
-          {draft.computer !== 'none' && (
-            <span className={styles.switchHint}>
-              A sandboxed desktop with a terminal and Chromium, started on first use. The first start builds the image (a few minutes).
-              {draft.computer === 'ssh' ? ' Docker on that machine is root-equivalent there: use a machine dedicated to bots.' : ''}
-            </span>
-          )}
           {bot && (
             <>
               <span className={styles.sectionLabel}>Memory</span>

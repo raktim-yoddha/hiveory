@@ -143,3 +143,170 @@
 .footerSpacer {
   flex: 1;
 }
+
+/* The conversation and the bot panel side by side, with the app's gutter between them. */
+.layout {
+  display: flex;
+  gap: var(--gutter);
+  height: 100%;
+  min-width: 0;
+}
+
+.layout > section {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Bot panel (docs/plans/bots-ui-wiring.md §3) */
+.panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--side-panel-width);
+  min-height: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-surface), var(--color-surface);
+  box-shadow: var(--shadow-surface);
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.tabBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  padding: var(--space-7);
+  overflow-y: auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-7);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.choice:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.choiceOn,
+.choiceOn:hover {
+  border-color: var(--color-accent);
+  background: var(--fill-accent-soft);
+  color: var(--color-text);
+}
+
+.choiceTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.choiceTitle svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.choiceHint {
+  font-size: var(--text-sm);
+}
+
+.hostRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.rowEnd {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-4);
+}
+
+.reach {
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.blocked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: 0;
+  color: var(--color-warning);
+  font-size: var(--text-sm);
+}
+
+.screenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.screenHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.screen {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+}
+
+.screenImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

@@ -19,7 +19,11 @@ consults them. Bots that allow messaging may consult each other. Delegation is b
 Chief delegates, at most two levels deep, 20 handoffs an hour per thread). Bots never appear on a
 project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
-and the user can take control from the bot's Computer menu.
+and the user can take control from the bot panel. Each bot's **Works on** choice decides which
+computers its threads may use: Auto (the browser, plus its Linux computer when one is set up;
+never the user's screen), its Linux computer, this computer (the user's screen, chosen on purpose),
+the browser only, or none. Settings' Browser use and Computer use still switch those off for every
+agent.
 
 Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
 then an effort level when that model supports one. The CLI locks after the

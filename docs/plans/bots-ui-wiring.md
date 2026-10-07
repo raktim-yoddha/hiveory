@@ -76,7 +76,7 @@ the Docker spec it already has:
 // src/shared/domain/bot.ts
 type WorksOn = 'auto' | 'container' | 'this-computer' | 'browser' | 'off'
 interface Bot {
-  worksOn: WorksOn                 // migrate: computer ? 'container' : 'browser'
+  worksOn: WorksOn                 // migrate: missing → 'auto' (keeps the browser and its Docker computer)
   computer?: BotComputer           // unchanged: Docker here, or on an SSH host
   browserProfileId?: string        // its own logins (created on first use)
 }
@@ -216,8 +216,8 @@ routines per bot).
 
 ## 6. Order
 
-1. `bot-reach.ts` + `worksOn` migration + Computer tab (moves `ComputerMenu` in). Small, and it fixes
-   today's coupling to global switches.
+1. ✔ (2026-10-07) `botReach` (shared, so the tools and the panel agree) + `worksOn` + Computer tab
+   (`ComputerMenu` folded in, `bots.screen`). Step 1 has a one-tab panel; resize comes with step 2.
 2. Bot panel shell (Tabs, resize, state) + Browser tab (scope `bot-<id>`, per-bot profile).
 3. A1: the routine model, scheduler, keep-awake, IPC, tests.
 4. RoutineEditor + Routines tab + run log; then the calendar page (A2).

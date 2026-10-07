@@ -474,6 +474,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     }
     return c.computers.status(botId)
   },
+  'bots.screen': async ({ botId }) => ((await c.computers.status(botId)).state === 'running' ? c.computers.screenshot(botId) : null),
   'hosts.listDir': async ({ destination, port, path }) => {
     const kit = await c.hosts.kit({ kind: 'ssh', destination, ...(port ? { port } : {}) })
     const dir = !path || path === '~' ? kit.home : path.startsWith('~/') ? kit.paths.join(kit.home, path.slice(2)) : path

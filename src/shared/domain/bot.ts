@@ -24,11 +24,21 @@ export interface Bot {
   /** Durable facts the bot carries into every new thread. The user can read and edit them. */
   memory: string[]
   pinned: boolean
-  /** The bot's own Linux computer: a Docker container here, or on an SSH host (ADR 0022). Absent = none. */
+  /** Where the bot may use a computer (the bot panel's "Works on"). Which tools its threads get follows from it: see bot-reach. */
+  worksOn: WorksOn
+  /** The bot's own Linux computer: a Docker container here, or on an SSH host (ADR 0022). Absent = none set up. */
   computer?: BotComputer
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * auto: the built-in browser, plus its Linux computer when one is set up (never the user's screen) ·
+ * container: only its Linux computer · this-computer: only the user's real screen, chosen on purpose ·
+ * browser: only the built-in browser · off: chat and apps only.
+ */
+export const WORKS_ON = ['auto', 'container', 'this-computer', 'browser', 'off'] as const
+export type WorksOn = (typeof WORKS_ON)[number]
 
 export interface BotComputer {
   kind: 'docker'

@@ -15,6 +15,7 @@ const bot = (computer?: Bot['computer']): Bot => ({
   messaging: true,
   memory: [],
   pinned: false,
+  worksOn: 'auto',
   ...(computer ? { computer } : {}),
   createdAt: '',
   updatedAt: ''
@@ -105,5 +106,17 @@ describe('bot computers', () => {
       ]
     })
     expect(state.bots.map((b) => b.computer)).toEqual([{ kind: 'docker', host: { kind: 'ssh', destination: 'vps' } }, undefined])
+  })
+
+  it('gives bots saved before "Works on" the browser and their Linux computer, and drops an unknown choice', () => {
+    const base = { name: 'B', brief: '', autoApprove: false, chief: false, messaging: true, memory: [], pinned: false, createdAt: '', updatedAt: '' }
+    const { state } = parseState({
+      bots: [
+        { ...base, id: 'a' },
+        { ...base, id: 'b', worksOn: 'this-computer' },
+        { ...base, id: 'c', worksOn: 'cloud' }
+      ]
+    })
+    expect(state.bots.map((b) => b.worksOn)).toEqual(['auto', 'this-computer', 'auto'])
   })
 })

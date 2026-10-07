@@ -17,10 +17,10 @@ import type { Emit } from '../events'
 import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned'>> & {
+export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn'>> & {
   computer?: Bot['computer'] | null
 }
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory'>> & {
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn'>> & {
   /** null takes the computer away from the bot (its container stays, as the user's). */
   computer?: Bot['computer'] | null
 }
@@ -36,6 +36,11 @@ interface Pending {
   fromChatId: string
   /** delegate: the result is delivered into `fromChatId` as a new message; ask: a waiter resolves. */
   resolve?: (text: string) => void
+}
+
+/** "Works on: its Linux computer" needs one set up: here, or on an SSH host. */
+const needsComputer = (worksOn: Bot['worksOn'] | undefined, computer: Bot['computer'] | null | undefined): void => {
+  if (worksOn === 'container' && !computer) fail('INVALID_INPUT', 'Choose where its Linux computer runs: here, or on an SSH host.')
 }
 
 const clip = (text: string, max: number): string => (text.length > max ? `${text.slice(0, max)}\n…(cut)` : text)
@@ -92,6 +97,7 @@ export class BotService {
   }
 
   create(input: BotInput): BotView {
+    needsComputer(input.worksOn, input.computer)
     const name = this.uniqueName(input.name)
     const now = nowIso()
     const bot: Bot = {
@@ -107,6 +113,7 @@ export class BotService {
       messaging: input.messaging ?? true,
       memory: [],
       pinned: input.pinned ?? false,
+      worksOn: input.worksOn ?? 'auto',
       ...(input.computer ? { computer: input.computer } : {}),
       createdAt: now,
       updatedAt: now
@@ -121,6 +128,7 @@ export class BotService {
 
   update(botId: string, patch: BotPatch): BotView {
     const bot = this.get(botId)
+    needsComputer(patch.worksOn ?? bot.worksOn, patch.computer === undefined ? bot.computer : patch.computer)
     if (patch.name !== undefined && patch.name.trim().toLowerCase() !== bot.name.toLowerCase()) patch.name = this.uniqueName(patch.name, botId)
     if (patch.memory) patch.memory = this.cleanMemory(patch.memory)
     this.store.update((s) => {

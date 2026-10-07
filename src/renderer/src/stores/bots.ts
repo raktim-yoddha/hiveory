@@ -17,6 +17,9 @@ interface BotsState {
   threads: Record<string, ChatSummary[]>
   /** The thread open for each bot. */
   activeThread: Record<string, string>
+  /** The bot panel beside the conversation (Computer for now). */
+  panelOpen: boolean
+  setPanelOpen(open: boolean): void
   load(): Promise<void>
   loadThreads(botId: string): Promise<void>
   select(botId: string): Promise<void>
@@ -36,6 +39,9 @@ export const useBots = create<BotsState>((set, get) => ({
   activeBotId: null,
   threads: {},
   activeThread: {},
+  panelOpen: false,
+
+  setPanelOpen: (panelOpen) => set({ panelOpen }),
 
   load: async () => {
     try {

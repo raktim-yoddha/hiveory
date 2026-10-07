@@ -37,10 +37,15 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 
 - Sidebar: the team, Chief of Staff first, then pinned, then by name. Right-click: Edit, Make
   Chief of Staff, Pin, Delete. Double-click edits. A working dot shows running threads.
-- Header: avatar, name, role and engine, status, settings (opens the bot editor).
+- Header: avatar, name, role and engine, status, Computer (opens the bot panel), settings (opens the bot editor).
 - Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
   first thread opens on its own.
 - Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Memory (edit mode).
+- Bot panel (right, beside the conversation; tabs join it as they are built: Computer now):
+  - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is
+    shown) with Start/Stop and Take control; **Works on** cards: Auto · Linux computer · Server
+    computer (SSH host field) · This computer · Browser · Off; a "Can use … now" line and, when a
+    Settings switch blocks the choice, the reason with Open settings.
 
 ### Queen Bee (ADR 0019)
 

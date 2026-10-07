@@ -6,7 +6,7 @@ import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY } from '@shared/domain/bot'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON } from '@shared/domain/bot'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
@@ -278,6 +278,8 @@ export const botSchema: z.ZodType<Bot> = z.object({
   messaging: z.boolean().catch(true),
   memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).catch([]),
   pinned: z.boolean().catch(false),
+  // Bots saved before "Works on" existed keep the browser and their Linux computer.
+  worksOn: z.enum(WORKS_ON).catch('auto'),
   computer: z
     .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
     .optional()
