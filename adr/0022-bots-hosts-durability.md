@@ -1,5 +1,8 @@
 # ADR 0022 — Bots mode, one remote host layer, durability
 
+> Amended by ADR 0028: bots are in teams, with one Chief of Staff **per team** (not one in all), and
+> reach follows teams. The rest of this ADR's Chief rules (bounded delegation) are unchanged.
+>
 > Amended 2026-10-07 (`docs/plans/bots-ui-wiring.md` §3.2): each bot has a **Works on** choice
 > (`auto | container | this-computer | browser | off`); `botReach()` in `src/shared/domain/bot-reach.ts`
 > turns it, with the Browser use and Computer use switches, into the tool families its threads get,

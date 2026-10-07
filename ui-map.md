@@ -35,8 +35,9 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 └────────────────┘└──────────────────────────────────────────┘
 ```
 
-- Sidebar: the team, Chief of Staff first, then pinned, then by name. Right-click: Edit, Make
-  Chief of Staff, Pin, Delete. Double-click edits. A working dot shows running threads.
+- Sidebar: the bots, grouped by team when there is more than one (foldable headings with a count),
+  Chief of Staff first, then pinned, then by name. Right-click: Edit, Make
+  Chief of Staff, Pin, Move to <team>, Delete. Double-click edits. A working dot shows running threads.
 - Header: avatar, name, role and engine, status, Computer and browser (opens the bot panel), settings (opens the bot editor).
 - Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
   first thread opens on its own.
@@ -44,8 +45,12 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Sidebar "+": New bot (Ctrl N, ⌘N on Mac, while the bots sidebar is shown) and Templates: a
   gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
   Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
-  New group chat and Create team join the menu when those are built.
-- Sidebar footer: **Routines** opens the Routines page (ADR 0028).
+  Create team opens a name dialog. New group chat joins the menu when group chats are built.
+- Sidebar footer: **Routines** opens the Routines page; **Team map** opens the team map (ADR 0028).
+- Team map: header (bot and team count, Create team); a card per team (name, count, ⋯ Rename /
+  Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
+  drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to
+  <team>" included. Below: Handoffs, "From → To · thread · Working / Done · when", each opening its thread.
 - Routines page: header (Routines, ‹ › week, "October 5 – 11, 2026", Today, Week · List · Run logs,
   bot filter, New routine); the keep-awake switch with its explanation; Week: Mon–Sun columns,
   hour rows (opening at 07:00), today shaded, a now line, past runs coloured by outcome and upcoming

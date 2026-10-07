@@ -33,7 +33,7 @@ export class BotTools implements ToolFamily {
     return [
       tool('remember', 'Save a lasting fact to your memory; every new conversation of yours starts with it.', { fact: FACT }, ['fact']),
       tool('forget', 'Remove a note from your memory (pass its exact text).', { fact: FACT }, ['fact']),
-      tool('list_bots', "The teammates you can reach: name, id, role, brief and whether they're busy."),
+      tool('list_bots', "The teammates you can reach: name, id, team, role, brief and whether they're busy."),
       tool(
         'delegate_bot',
         'Chief of Staff only. Assign work to a teammate in a new conversation of theirs. Returns at once; their result arrives in this conversation as a new message and wakes you. Give a clear, self-contained brief.',
@@ -67,7 +67,7 @@ export class BotTools implements ToolFamily {
         const busy = new Set(this.bots.list().filter((b) => b.running > 0).map((b) => b.id))
         return {
           text: team
-            .map((b) => `- ${b.name} (id ${b.id})${b.chief ? ' · Chief of Staff' : ''} · ${busy.has(b.id) ? 'busy' : 'free'}${b.cliId ? '' : ' · no engine set'}\n  ${b.brief.split('\n')[0]?.slice(0, 200) || '(no brief)'}`)
+            .map((b) => `- ${b.name} (id ${b.id}) · ${this.bots.teamName(b.teamId)} team${b.chief ? ' · Chief of Staff' : ''} · ${busy.has(b.id) ? 'busy' : 'free'}${b.cliId ? '' : ' · no engine set'}\n  ${b.brief.split('\n')[0]?.slice(0, 200) || '(no brief)'}`)
             .join('\n')
         }
       }

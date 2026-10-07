@@ -38,6 +38,7 @@ import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
 import { RoutineService } from '../services/routines/routine-service'
+import { TeamService } from '../services/bots/team-service'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
@@ -164,6 +165,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const kits = { kit: (host?: HostRef) => hosts!.kit(host) }
   bots = new BotService(store, chats, paths.botsDir, emit, log)
   const botTools = new BotTools(bots, chats)
+  const teams = new TeamService(store, emit, (botId) => chats.threads(botId).some((t) => t.running))
   // Each bot's own Linux computer, in Docker here or on an SSH host (ADR 0022).
   const computers = new BotComputers((id) => bots!.get(id), kits, (id) => bots!.home(id), log)
   const desktopTools = new DesktopTools(computers, chats)
@@ -350,6 +352,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     chatStore,
     chats,
     bots,
+    teams,
     routines,
     computers,
     browser,

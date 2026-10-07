@@ -15,10 +15,12 @@ export interface Bot {
   /** Default permission for new threads: full access (edits files, runs commands) or read-only. */
   autoApprove: boolean
   /**
-   * Chief of Staff: the team's head and the user's single contact. It can list the
-   * team, delegate work to bots and consult them, and receives their results. At most one.
+   * Chief of Staff: its team's head and the user's contact for that team. It can list the
+   * team, delegate work to its bots and consult them, and receives their results. One per team (ADR 0028).
    */
   chief: boolean
+  /** The team it belongs to (General unless moved). */
+  teamId: string
   /** May consult other bots (and be consulted). The Chief can always reach every bot. */
   messaging: boolean
   /** Durable facts the bot carries into every new thread. The user can read and edit them. */
@@ -67,6 +69,37 @@ export interface BotView extends Bot {
   threads: number
   running: number
   lastActivity?: string
+}
+
+/** A named group of bots with its own Chief of Staff (ADR 0028). General always exists. */
+export interface Team {
+  id: string
+  name: string
+  createdAt: string
+}
+
+export const GENERAL_TEAM: Team = { id: 'general', name: 'General', createdAt: '1970-01-01T00:00:00.000Z' }
+export const MAX_TEAM_NAME = 40
+
+/** Work one bot handed another (a delegated or consulted thread): the team map's live lines. */
+export interface Handoff {
+  fromBotId: string
+  toBotId: string
+  threadId: string
+  title: string
+  running: boolean
+  updatedAt: string
+}
+
+/** At most one Chief per team: the first one found keeps it (a hand-edited file, a merged team). */
+export function oneChiefPerTeam<B extends Pick<Bot, 'chief' | 'teamId'>>(bots: B[]): B[] {
+  const led = new Set<string>()
+  return bots.map((b) => {
+    if (!b.chief) return b
+    if (led.has(b.teamId)) return { ...b, chief: false }
+    led.add(b.teamId)
+    return b
+  })
 }
 
 /** The browser scope all of a bot's threads share: its pages, shown in the bot panel's Browser tab. */

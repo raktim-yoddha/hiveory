@@ -69,6 +69,28 @@ Works on choice and whether it is meant for a schedule. Picking one opens the bo
 nothing is created until the user saves. They name no real person or account (rule 27). Sharing and
 importing whole teams comes later.
 
+## Teams and the team map (built: phase M2)
+
+- **Model:** `PersistedState.teams` (`Team { id, name, createdAt }`), General (`id: general`) always
+  first and never deleted (it can be renamed). `Bot.teamId`; bots saved before teams, or of a missing
+  team, load into General.
+- **One Chief per team** (`oneChiefPerTeam`, used by the file loader and team deletion). The first bot
+  in a team leads it; making a bot Chief clears only its own team's Chief; a bot that moves leads its
+  new team only if that team has none (a Chief moving into a led team steps down).
+- **Reach** (`BotService.reachable`): a Chief reaches its own team; Chiefs reach General's Chief and
+  General's Chief reaches them, so work crosses teams Chief to Chief. A bot that allows messaging
+  reaches other such bots in any team, and its own team's Chief. Delegation limits are unchanged.
+  `list_bots` names each teammate's team, and a Chief's preamble names the team it leads.
+- **Deleting a team** moves its bots to General (its Chief steps down if General has one), and is
+  refused while any of its bots has a conversation running.
+- **UI:** "+" › Create team; sidebar grouped by team (foldable headings when there is more than one
+  team); a bot's right-click menu has "Move to <team>" (the keyboard way to move, on the map too);
+  the bot editor has a Team choice; the team map (sidebar footer) shows a card per team, Chief
+  first with engine and status, drag a bot onto another card to move it, rename or delete a team from
+  its card, and a Handoffs list (delegated or consulted threads going now or in the last day; click
+  to open). IPC: `teams.list | create | rename | delete`, `bots.handoffs`.
+- **Not yet:** a free-form canvas with zoom, arranging bots inside a card, and drawn lines between bots.
+
 ## Next
 
 A bot proposing a routine through a confirm card, and Queen Bee actions (A3); triggers (T1); teams and

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { create } from 'zustand'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, type BotView } from '@shared/domain/bot'
+import { GENERAL_TEAM, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, type BotView } from '@shared/domain/bot'
 import { Button, IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Modal } from '../../components/ui/Modal'
@@ -29,6 +29,7 @@ interface Draft {
   chief: boolean
   messaging: boolean
   routines: boolean
+  teamId: string
   memory: string[]
 }
 
@@ -40,6 +41,7 @@ const draftOf = (bot: BotView | undefined, firstBot: boolean, template?: BotTemp
   chief: bot?.chief ?? firstBot,
   messaging: bot?.messaging ?? true,
   routines: bot?.routines ?? template?.routines ?? false,
+  teamId: bot?.teamId ?? GENERAL_TEAM.id,
   memory: bot?.memory ?? []
 })
 
@@ -57,11 +59,11 @@ export function BotEditor() {
 function EditorDialog({ target }: { target: string }) {
   const close = useBotEditor((s) => s.close)
   const template = useBotEditor((s) => s.template)
-  const { bots, create: createBot, update, remove } = useBots()
+  const { bots, teams, create: createBot, update, remove } = useBots()
   const chatClis = useChat((s) => s.clis)
   const clis = useClis((s) => s.clis)
   const bot = target !== 'new' ? bots.find((b) => b.id === target) : undefined
-  const [draft, setDraft] = useState<Draft>(() => draftOf(bot, bots.length === 0, template))
+  const [draft, setDraft] = useState<Draft>(() => draftOf(bot, !bots.some((b) => b.chief && b.teamId === GENERAL_TEAM.id), template))
   const [fact, setFact] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -80,7 +82,7 @@ function EditorDialog({ target }: { target: string }) {
   const save = async (): Promise<void> => {
     if (!draft.name.trim()) return
     setBusy(true)
-    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines }
+    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines, teamId: draft.teamId }
     if (bot) await update(bot.id, { ...fields, memory: draft.memory })
     else await createBot({ ...fields, ...(template ? { worksOn: template.worksOn } : {}) })
     setBusy(false)
@@ -134,10 +136,21 @@ function EditorDialog({ target }: { target: string }) {
             </span>
             <Toggle label="Full access" checked={draft.autoApprove} onChange={(v) => set('autoApprove', v)} />
           </div>
+          {teams.length > 1 && (
+            <Select
+              label="Team"
+              value={draft.teamId}
+              options={teams.map((t) => ({ value: t.id, label: t.name }))}
+              onChange={(teamId) =>
+                // A new bot leads a team that has no Chief yet, as the first bot in a team does.
+                setDraft((d) => ({ ...d, teamId, ...(bot ? {} : { chief: !bots.some((b) => b.chief && b.teamId === teamId) }) }))
+              }
+            />
+          )}
           <div className={styles.switchRow}>
             <span className={styles.switchText}>
               <span className={styles.switchTitle}>Chief of Staff</span>
-              <span className={styles.switchHint}>Leads the team: your main contact, hands work to other bots and brings the results back. One bot at a time.</span>
+              <span className={styles.switchHint}>Leads its team: your main contact for it, hands work to its bots and brings the results back. One per team.</span>
             </span>
             <Toggle label="Chief of Staff" checked={draft.chief} onChange={(v) => set('chief', v)} />
           </div>

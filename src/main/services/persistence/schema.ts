@@ -6,7 +6,7 @@ import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON } from '@shared/domain/bot'
+import { GENERAL_TEAM, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
@@ -30,6 +30,8 @@ export interface PersistedState {
   archive: ArchivedProject[]
   /** Bots mode teammates (ADR 0022); their threads are chats in the chats folder. */
   bots: Bot[]
+  /** Bots' teams, General first (ADR 0028). */
+  teams: Team[]
   /** Bots' scheduled work (ADR 0028). */
   routines: Routine[]
   /** The run log, newest first, at most MAX_ROUTINE_RUNS. */
@@ -105,6 +107,7 @@ export const emptyState = (): PersistedState => ({
   queenBrains: [],
   archive: [],
   bots: [],
+  teams: [{ ...GENERAL_TEAM }],
   routines: [],
   routineRuns: []
 })
@@ -283,6 +286,8 @@ export const botSchema: z.ZodType<Bot> = z.object({
   effort: str.optional(),
   autoApprove: z.boolean().catch(false),
   chief: z.boolean().catch(false),
+  // Bots saved before teams existed are in General.
+  teamId: str.catch(GENERAL_TEAM.id),
   messaging: z.boolean().catch(true),
   memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).catch([]),
   pinned: z.boolean().catch(false),
@@ -337,15 +342,23 @@ export const routineRunSchema: z.ZodType<RoutineRun> = z.object({
   detail: str.optional()
 })
 
-/** At most one Chief of Staff survives a hand-edited or corrupt file: the first one. */
-const oneChief = (bots: Bot[]): Bot[] => {
-  let seen = false
-  return bots.map((b) => {
-    if (!b.chief) return b
-    if (seen) return { ...b, chief: false }
-    seen = true
-    return b
+const teamSchema: z.ZodType<Team> = z.object({ id: str, name: z.string().trim().min(1).max(MAX_TEAM_NAME), createdAt: str })
+
+/** Saved teams with General always first (a file without it, or from before teams, gets it back). */
+const teamsOf = (raw: unknown): Team[] => {
+  const teams = (Array.isArray(raw) ? raw : []).flatMap((t) => {
+    const parsed = teamSchema.safeParse(t)
+    return parsed.success ? [parsed.data] : []
   })
+  const general = teams.find((t) => t.id === GENERAL_TEAM.id) ?? { ...GENERAL_TEAM }
+  const seen = new Set<string>()
+  return [general, ...teams.filter((t) => t.id !== GENERAL_TEAM.id)].filter((t) => !seen.has(t.id) && seen.add(t.id))
+}
+
+/** Bots of a missing team go to General, and each team keeps at most one Chief: the first. */
+const botsIn = (bots: Bot[], teams: Team[]): Bot[] => {
+  const ids = new Set(teams.map((t) => t.id))
+  return oneChiefPerTeam(bots.map((b) => (ids.has(b.teamId) ? b : { ...b, teamId: GENERAL_TEAM.id })))
 }
 
 /**
@@ -370,6 +383,7 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
     if (parsed.success) layouts[key] = parsed.data
     else rejected++
   }
+  const teams = teamsOf(input.teams)
   return {
     state: {
       version: 1,
@@ -392,7 +406,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),
-      bots: oneChief(list(input.bots, botSchema)),
+      teams,
+      bots: botsIn(list(input.bots, botSchema), teams),
       routines: list(input.routines, routineSchema),
       routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS)
     },

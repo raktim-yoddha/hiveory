@@ -13,6 +13,7 @@ import { ChatMessages } from '../chat/ChatMessages'
 import { RoutineEditor } from '../routines/RoutineEditor'
 import { RoutinesPage } from '../routines/RoutinesPage'
 import { BotEditor, useBotEditor } from './BotEditor'
+import { TeamMapPage } from './TeamMapPage'
 import chat from '../chat/Chat.module.css'
 import styles from './Bots.module.css'
 
@@ -46,6 +47,15 @@ export function BotsScreen() {
     starting.current.add(activeBotId)
     void newThread(activeBotId).finally(() => starting.current.delete(activeBotId))
   }, [activeBotId, loadedThreads, newThread])
+
+  if (page === 'team-map') {
+    return (
+      <>
+        <TeamMapPage />
+        <BotEditor />
+      </>
+    )
+  }
 
   if (page === 'routines') {
     return (

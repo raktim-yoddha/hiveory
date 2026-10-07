@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { BotView } from '@shared/domain/bot'
+import type { BotView, Team } from '@shared/domain/bot'
 import type { ChatSummary } from '@shared/domain/chat'
 import type { RequestOf } from '@shared/ipc/contract'
 import { api } from '../lib/api'
@@ -12,6 +12,8 @@ export type BotPanelTab = 'computer' | 'routines' | 'browser'
 
 interface BotsState {
   bots: BotView[]
+  /** Teams, General first (ADR 0028). */
+  teams: Team[]
   loaded: boolean
   activeBotId: string | null
   /** Each bot's threads, newest first. */
@@ -21,12 +23,16 @@ interface BotsState {
   /** The bot panel in the right column, and its tab. */
   panelOpen: boolean
   panelTab: BotPanelTab
-  /** What Bots mode shows: a bot's conversation, or the Routines page (filtered to one bot, or all). */
-  page: 'bot' | 'routines'
+  /** What Bots mode shows: a bot's conversation, the Routines page (filtered to one bot, or all), or the team map. */
+  page: 'bot' | 'routines' | 'team-map'
   routinesFilter?: string
   setPanelOpen(open: boolean): void
   setPanelTab(tab: BotPanelTab): void
   showRoutines(botId?: string): void
+  showTeamMap(): void
+  createTeam(name: string): Promise<Team | undefined>
+  renameTeam(teamId: string, name: string): Promise<void>
+  deleteTeam(teamId: string): Promise<void>
   /** Opens a bot's thread, e.g. a routine run's, from anywhere in Bots mode. */
   openBotThread(botId: string, threadId: string): Promise<void>
   load(): Promise<void>
@@ -44,6 +50,7 @@ interface BotsState {
 /** Bots mode state. Bots and their threads live in main; thread messages share the chat store. */
 export const useBots = create<BotsState>((set, get) => ({
   bots: [],
+  teams: [],
   loaded: false,
   activeBotId: null,
   threads: {},
@@ -55,6 +62,23 @@ export const useBots = create<BotsState>((set, get) => ({
   setPanelOpen: (panelOpen) => set({ panelOpen }),
   setPanelTab: (panelTab) => set({ panelTab, panelOpen: true }),
   showRoutines: (routinesFilter) => set({ page: 'routines', routinesFilter }),
+  showTeamMap: () => set({ page: 'team-map' }),
+
+  createTeam: async (name) => {
+    const team = await runAction('Create team', () => api('teams.create', { name }))
+    await get().load()
+    return team
+  },
+
+  renameTeam: async (teamId, name) => {
+    await runAction('Rename team', () => api('teams.rename', { teamId, name }))
+    await get().load()
+  },
+
+  deleteTeam: async (teamId) => {
+    await runAction('Delete team', () => api('teams.delete', { teamId }))
+    await get().load()
+  },
 
   openBotThread: async (botId, threadId) => {
     await get().select(botId)
@@ -63,9 +87,10 @@ export const useBots = create<BotsState>((set, get) => ({
 
   load: async () => {
     try {
-      const bots = await api('bots.list')
+      const [bots, teams] = await Promise.all([api('bots.list'), api('teams.list')])
       set((s) => ({
         bots,
+        teams,
         loaded: true,
         activeBotId: s.activeBotId && bots.some((b) => b.id === s.activeBotId) ? s.activeBotId : (bots[0]?.id ?? null)
       }))

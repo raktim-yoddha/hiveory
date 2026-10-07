@@ -477,6 +477,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     }
     return c.computers.status(botId)
   },
+  'teams.list': () => c.teams.list(),
+  'teams.create': ({ name }) => c.teams.create(name),
+  'teams.rename': ({ teamId, name }) => c.teams.rename(teamId, name),
+  'teams.delete': ({ teamId }) => c.teams.delete(teamId),
+  'bots.handoffs': () => c.bots.handoffs(),
   'routines.list': ({ botId }) => c.routines.list(botId),
   'routines.create': (input) => c.routines.create(input),
   'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),

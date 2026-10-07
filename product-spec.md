@@ -13,10 +13,13 @@ Chatspace (Chat)
 Bots (ADR 0022): a roster of global teammates. Each bot has a name, a brief, a default engine,
 model and permission, and a memory it carries into every new conversation. Its conversations are
 threads: tabs under the bot, each running on the chat engine in the bot's own folder, and they
-keep running while the user is elsewhere. One bot is the **Chief of Staff**: the user's main
-contact, who hands work to teammates (their results come back into its thread and wake it) and
-consults them. Bots that allow messaging may consult each other. Delegation is bounded (only the
-Chief delegates, at most two levels deep, 20 handoffs an hour per thread). Bots never appear on a
+keep running while the user is elsewhere. Bots are grouped into **teams** (General always exists;
+ADR 0028), and each team has one **Chief of Staff**: the user's main contact for that team, who
+hands work to its bots (their results come back into its thread and wake it) and consults them.
+Chiefs reach General's Chief, so work crosses teams Chief to Chief. Bots that allow messaging may
+consult each other in any team. Delegation is bounded (only Chiefs delegate, at most two levels
+deep, 20 handoffs an hour per thread). The team map shows each team and the work bots are handing
+each other; dragging a bot onto another team moves it there. Bots never appear on a
 project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

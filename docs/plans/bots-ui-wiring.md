@@ -227,7 +227,8 @@ routines per bot).
    and results posting (A2). Attachments, Day view, mini month and drag-a-bot are still to do.
 5. ✔ (2026-10-07) "+" menu: New Bot + `Ctrl N`, Templates (six starter bots). Group chat stays hidden
    until rooms exist; Create team arrives with step 6.
-6. Teams (§7) + the team map with team cards.
+6. ✔ (2026-10-07) Teams (§7) + the team map with team cards and a handoffs list (ADR 0028). Free
+   canvas, in-card arrangement and drawn lines are left out.
 
 ## 7. Teams (M2, approved 2026-10-07)
 

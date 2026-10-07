@@ -9,6 +9,7 @@ import { parseState } from '../persistence/schema'
 import { StateStore } from '../persistence/state-store'
 import { BotService } from './bot-service'
 import { BotTools } from './bot-tools'
+import { TeamService } from './team-service'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 
@@ -236,5 +237,82 @@ describe('bots', () => {
     const { state, rejected } = parseState({ bots: [bot('a', true), bot('b', true), { id: 'broken' }] })
     expect(state.bots.map((b) => [b.id, b.chief])).toEqual([['a', true], ['b', false]])
     expect(rejected).toBe(1)
+  })
+})
+
+describe('teams', () => {
+  const withTeams = () => {
+    const s = setup()
+    const teams = new TeamService(s.store, () => undefined, (botId) => s.chats.threads(botId).some((t) => t.running))
+    return { ...s, teams }
+  }
+
+  it('gives each team its own Chief, and a bot that moves leads only a team without one', () => {
+    const { bots, teams } = withTeams()
+    const sales = teams.create('Sales')
+    const lead = bots.create({ name: 'Lead', cliId: 'claude' })
+    const closer = bots.create({ name: 'Closer', cliId: 'claude', teamId: sales.id })
+    const scout = bots.create({ name: 'Scout', cliId: 'claude', teamId: sales.id })
+    expect([lead.chief, closer.chief, scout.chief]).toEqual([true, true, false])
+    bots.update(scout.id, { chief: true })
+    expect(bots.list().filter((b) => b.chief).map((b) => b.name).sort()).toEqual(['Lead', 'Scout'])
+    // Moving a Chief into a team that has one: it steps down there.
+    expect(bots.update(lead.id, { teamId: sales.id }).chief).toBe(false)
+    // Into a team without one: it leads.
+    expect(bots.update(closer.id, { teamId: 'general' }).chief).toBe(true)
+    expect(() => bots.update(scout.id, { teamId: 'nowhere' })).toThrow('Team not found')
+  })
+
+  it('lets a Chief reach its own team, and Chiefs reach each other through General', () => {
+    const { bots, teams } = withTeams()
+    const sales = teams.create('Sales')
+    const ops = teams.create('Ops')
+    bots.create({ name: 'Boss', cliId: 'claude' })
+    const salesChief = bots.create({ name: 'Seller', cliId: 'claude', teamId: sales.id })
+    bots.create({ name: 'Rep', cliId: 'claude', teamId: sales.id, messaging: false })
+    // Runner does not allow messaging: only Chiefs reach it, and only through General.
+    bots.create({ name: 'Runner', cliId: 'claude', teamId: ops.id, messaging: false })
+    const reach = (id: string) => bots.reachable(bots.newThread(id).id).map((b) => b.name).sort()
+    expect(reach(bots.list().find((b) => b.name === 'Boss')!.id)).toEqual(['Runner', 'Seller'])
+    expect(reach(salesChief.id)).toEqual(['Boss', 'Rep'])
+  })
+
+  it('names teams uniquely, keeps General, and moves bots home when a team goes', () => {
+    const { bots, teams, chats } = withTeams()
+    const sales = teams.create('Sales')
+    expect(() => teams.create(' sales ')).toThrow('already a team')
+    expect(teams.rename(sales.id, 'Revenue').name).toBe('Revenue')
+    expect(() => teams.delete('general')).toThrow("can't be deleted")
+    bots.create({ name: 'Boss', cliId: 'claude' })
+    const seller = bots.create({ name: 'Seller', cliId: 'claude', teamId: sales.id })
+    const thread = bots.newThread(seller.id)
+    chats.running.add(thread.id)
+    expect(() => teams.delete(sales.id)).toThrow('running work')
+    chats.running.delete(thread.id)
+    teams.delete(sales.id)
+    expect(bots.get(seller.id)).toMatchObject({ teamId: 'general', chief: false })
+    expect(teams.list().map((t) => t.name)).toEqual(['General'])
+  })
+
+  it('lists work bots handed each other for the team map', async () => {
+    const { bots, tools } = withTeams()
+    const chief = bots.create({ name: 'Chief', cliId: 'claude' })
+    const member = bots.create({ name: 'Member', cliId: 'claude' })
+    await tools.call({ id: bots.newThread(chief.id).id }, 'delegate_bot', { bot: 'Member', brief: 'Draft the notes.' })
+    expect(bots.handoffs()).toMatchObject([{ fromBotId: chief.id, toBotId: member.id, running: true }])
+  })
+
+  it('puts bots saved before teams into General and keeps one Chief per team', () => {
+    const bot = (id: string, chief: boolean, teamId?: string) => ({ id, name: id, brief: '', autoApprove: false, chief, messaging: true, memory: [], pinned: false, createdAt: 'x', updatedAt: 'x', ...(teamId ? { teamId } : {}) })
+    const { state } = parseState({
+      teams: [{ id: 't1', name: 'Sales', createdAt: 'x' }],
+      bots: [bot('a', true), bot('b', true, 't1'), bot('c', true, 'gone')]
+    })
+    expect(state.teams.map((t) => t.id)).toEqual(['general', 't1'])
+    expect(state.bots.map((b) => [b.id, b.teamId, b.chief])).toEqual([
+      ['a', 'general', true],
+      ['b', 't1', true],
+      ['c', 'general', false]
+    ])
   })
 })

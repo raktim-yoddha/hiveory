@@ -21,7 +21,7 @@ import type {
   HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, WORKS_ON, type BotComputerStatus, type BotView } from '../domain/bot'
+import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
@@ -83,6 +83,8 @@ const botFields = z.object({
   worksOn: z.enum(WORKS_ON).optional(),
   /** May run on a schedule (ADR 0028). */
   routines: z.boolean().optional(),
+  /** Its team; moving it there makes it Chief only if that team has none (ADR 0028). */
+  teamId: id.optional(),
   /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
   computer: z
     .union([
@@ -94,6 +96,7 @@ const botFields = z.object({
     ])
     .optional()
 })
+const teamName = z.string().trim().min(1).max(MAX_TEAM_NAME)
 const isoDate = z.string().datetime({ offset: true })
 /** A routine's editable fields; the service checks the timezone, the cron rule and that a run is left. */
 const routineFields = z.object({
@@ -519,6 +522,12 @@ export const requestSchemas = {
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
   'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
+  // Teams of bots, each with its own Chief (ADR 0028), and the work bots hand each other.
+  'teams.list': none,
+  'teams.create': z.object({ name: teamName }),
+  'teams.rename': z.object({ teamId: id, name: teamName }),
+  'teams.delete': z.object({ teamId: id }),
+  'bots.handoffs': none,
   // Routines (ADR 0028): a bot's scheduled work, and the run log.
   'routines.list': z.object({ botId: id.optional() }),
   'routines.create': routineFields,
@@ -757,6 +766,11 @@ export interface ResponseMap {
   'bots.newThread': ChatSession
   'bots.computer': BotComputerStatus
   'bots.screen': string | null
+  'teams.list': Team[]
+  'teams.create': Team
+  'teams.rename': Team
+  'teams.delete': void
+  'bots.handoffs': Handoff[]
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView

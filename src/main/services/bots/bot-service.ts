@@ -2,11 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  GENERAL_TEAM,
   MAX_BOT_MEMORY,
   MAX_DELEGATION_DEPTH,
   MAX_MEMORY_ENTRY,
   type Bot,
-  type BotView
+  type BotView,
+  type Handoff,
+  type Team
 } from '@shared/domain/bot'
 import type { BrowserProfile } from '@shared/domain/browser'
 import type { ChatSession } from '@shared/domain/chat'
@@ -18,10 +21,10 @@ import type { Emit } from '../events'
 import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines'>> & {
+export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines' | 'teamId'>> & {
   computer?: Bot['computer'] | null
 }
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines'>> & {
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines' | 'teamId'>> & {
   /** null takes the computer away from the bot (its container stays, as the user's). */
   computer?: Bot['computer'] | null
 }
@@ -34,6 +37,8 @@ const MAX_RESULT_CHARS = 8000
 const MAX_CALLS_PER_HOUR = 20
 /** Browser profile names are at most 40 characters; this leaves room for a " 99" suffix. */
 const MAX_PROFILE_BASE = 36
+/** Lines the team map draws at most. */
+const MAX_HANDOFFS = 50
 
 interface Pending {
   fromChatId: string
@@ -101,6 +106,7 @@ export class BotService {
 
   create(input: BotInput): BotView {
     needsComputer(input.worksOn, input.computer)
+    const teamId = this.team(input.teamId ?? GENERAL_TEAM.id).id
     const name = this.uniqueName(input.name)
     const now = nowIso()
     const bot: Bot = {
@@ -111,8 +117,9 @@ export class BotService {
       model: input.model || undefined,
       effort: input.effort || undefined,
       autoApprove: input.autoApprove ?? false,
-      // The first bot leads the team until the user picks another Chief.
-      chief: input.chief ?? !this.store.state.bots.some((b) => b.chief),
+      // The first bot in a team leads it until the user picks another Chief.
+      chief: input.chief ?? !this.store.state.bots.some((b) => b.chief && b.teamId === teamId),
+      teamId,
       messaging: input.messaging ?? true,
       memory: [],
       pinned: input.pinned ?? false,
@@ -123,7 +130,7 @@ export class BotService {
       updatedAt: now
     }
     this.store.update((s) => {
-      if (bot.chief) for (const b of s.bots) b.chief = false
+      if (bot.chief) for (const b of s.bots) if (b.teamId === teamId) b.chief = false
       s.bots.push(bot)
     })
     this.changed()
@@ -133,13 +140,18 @@ export class BotService {
   update(botId: string, patch: BotPatch): BotView {
     const bot = this.get(botId)
     needsComputer(patch.worksOn ?? bot.worksOn, patch.computer === undefined ? bot.computer : patch.computer)
+    if (patch.teamId !== undefined) this.team(patch.teamId)
     if (patch.name !== undefined && patch.name.trim().toLowerCase() !== bot.name.toLowerCase()) patch.name = this.uniqueName(patch.name, botId)
     if (patch.memory) patch.memory = this.cleanMemory(patch.memory)
     this.store.update((s) => {
       const target = s.bots.find((b) => b.id === botId)
       if (!target) return
-      if (patch.chief) for (const b of s.bots) b.chief = false
+      const teamId = patch.teamId ?? target.teamId
+      const moving = teamId !== target.teamId
+      if (patch.chief) for (const b of s.bots) if (b.teamId === teamId) b.chief = false
       Object.assign(target, patch, { brief: (patch.brief ?? target.brief).trim(), updatedAt: nowIso() })
+      // A bot that moves leads its new team only if that team has no Chief yet.
+      if (moving && patch.chief === undefined) target.chief = !s.bots.some((b) => b.id !== botId && b.chief && b.teamId === teamId)
       if (patch.computer === null) delete target.computer
       if (patch.cliId === '') target.cliId = undefined
       if (patch.model === '') target.model = undefined
@@ -212,7 +224,10 @@ export class BotService {
   preamble(chat: ChatSession): string | undefined {
     const bot = chat.botId ? this.find(chat.botId) : undefined
     if (!bot) return undefined
-    const role = bot.chief ? ` You are the Chief of Staff: the user's main contact, who hands work to the right teammate and brings the results together.` : ''
+    const team = this.teamName(bot.teamId)
+    const role = bot.chief
+      ? ` You are the Chief of Staff of the ${team} team: the user's main contact for it, who hands work to the right teammate and brings the results together.`
+      : ''
     const memory = bot.memory.length ? bot.memory.map((m) => `- ${m}`).join('\n') : '- (nothing yet)'
     return [
       `You are "${bot.name}", one of the user's bots in Hiveory.${role}`,
@@ -225,10 +240,34 @@ export class BotService {
       .join('\n\n')
   }
 
-  /** Bots the bot behind `chatId` may contact: the Chief reaches everyone; others reach bots that allow messaging. */
+  /**
+   * Bots the bot behind `chatId` may contact (ADR 0028): a Chief reaches its own team, and Chiefs reach
+   * General's Chief (and it them), so work crosses teams Chief to Chief. A bot that allows messaging
+   * reaches other such bots in any team, and its own team's Chief.
+   */
   reachable(chatId: string): Bot[] {
     const self = this.botOf(chatId)
-    return this.store.state.bots.filter((b) => b.id !== self.id && (self.chief || (self.messaging && (b.messaging || b.chief))))
+    const general = GENERAL_TEAM.id
+    return this.store.state.bots.filter(
+      (b) =>
+        b.id !== self.id &&
+        ((self.chief && (b.teamId === self.teamId || (b.chief && (self.teamId === general || b.teamId === general)))) ||
+          (self.messaging && (b.messaging || (b.chief && b.teamId === self.teamId))))
+    )
+  }
+
+  /** Work bots handed each other that is going now or happened in the last day: the team map's lines. */
+  handoffs(): Handoff[] {
+    const since = Date.now() - 24 * 60 * 60 * 1000
+    const out: Handoff[] = []
+    for (const bot of this.store.state.bots) {
+      for (const t of this.chats.threads(bot.id)) {
+        const from = this.chats.find(t.id)?.delegation?.fromBotId
+        if (!from || (!t.running && Date.parse(t.updatedAt) < since)) continue
+        out.push({ fromBotId: from, toBotId: bot.id, threadId: t.id, title: t.title, running: t.running, updatedAt: t.updatedAt })
+      }
+    }
+    return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, MAX_HANDOFFS)
   }
 
   /** Hands work to a teammate in a new thread. Returns at once; the result arrives in `fromChatId` as a message. */
@@ -337,6 +376,14 @@ export class BotService {
   }
 
   /** Names stay unique (case-insensitive) so "ask Scout" is never ambiguous. */
+  teamName(teamId: string): string {
+    return this.store.state.teams.find((t) => t.id === teamId)?.name ?? GENERAL_TEAM.name
+  }
+
+  private team(teamId: string): Team {
+    return this.store.state.teams.find((t) => t.id === teamId) ?? fail('NOT_FOUND', 'Team not found.')
+  }
+
   private uniqueName(name: string, exceptId?: string): string {
     const base = name.replace(/\s+/g, ' ').trim()
     if (!base) fail('INVALID_INPUT', 'Give the bot a name.')
