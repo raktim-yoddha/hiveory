@@ -325,7 +325,13 @@ const isoDate = z.string().datetime({ offset: true })
 export const routineSchema: z.ZodType<Routine> = z.object({
   id: str,
   name: z.string().min(1).max(MAX_ROUTINE_NAME),
-  botId: str,
+  botId: str.optional(),
+  target: z
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('chat'), cliId: str, model: str.optional() }),
+      z.object({ kind: z.literal('workspace'), projectId: str, workspaceId: str, cliId: str })
+    ])
+    .optional(),
   prompt: z.string().min(1).max(MAX_ROUTINE_PROMPT),
   schedule: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('once') }),
@@ -372,7 +378,9 @@ export const routineRunSchema: z.ZodType<RoutineRun> = z.object({
   id: str,
   routineId: str,
   routineName: str,
-  botId: str,
+  botId: str.optional(),
+  where: str.optional(),
+  agentId: str.optional(),
   trigger: z.enum(['schedule', 'manual', 'event']),
   prompt: str,
   scheduledFor: str,

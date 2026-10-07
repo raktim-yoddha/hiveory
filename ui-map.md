@@ -55,6 +55,9 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Work board: four cards, Needs you (approval cards) · Working · Didn't finish · Done, each with a count; a row per handoff or
   routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
+- Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)" and "A new agent in a
+  Work workspace" (Project, Workspace, CLI). Chat's sidebar header: Schedule a chat (calendar icon) beside
+  New chat. A workspace's menu: Schedule a routine…
 - Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
   send or post as you / change something in your apps", the tool, "What it will send" (the arguments
   as plain text), Decline, Allow. The bot's dot turns to waiting while one is open.

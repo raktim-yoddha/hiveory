@@ -10,7 +10,7 @@ import { MAX_ROUTINE_RUNS, type RoutineRun } from '@shared/domain/routine'
 import { parseState } from '../persistence/schema'
 import { StateStore } from '../persistence/state-store'
 import { KEEP_AWAKE_LEAD_MS, KeepAwake, wantsAwake } from './keep-awake'
-import { RoutineService, type RoutineInput } from './routine-service'
+import { RoutineService, type RoutineDeps, type RoutineInput } from './routine-service'
 import { RoutineTools } from './routine-tools'
 import { replyNotice, runNotice } from './run-notice'
 
@@ -51,7 +51,7 @@ class FakeChats extends EventEmitter<{ run: [chatId: string, running: boolean] }
   }
 }
 
-const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: 'Scout', routines: true }]) => {
+const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: 'Scout', routines: true }], extra: Partial<RoutineDeps> = {}) => {
   const store = new StateStore(join(mkdtempSync(join(tmpdir(), 'hv-routines-')), 'state.json'), log)
   const chats = new FakeChats()
   let clock = T0
@@ -82,7 +82,8 @@ const setup = (bots: Array<Partial<Bot> & { id: string }> = [{ id: 'b1', name: '
         chats.sessions.set(chat.id, chat)
         return chat
       }
-    }
+    },
+    ...extra
   })
   /** Moves the clock and fires every live timer that is due, the way setTimeout would. */
   const advance = (ms: number): void => {
@@ -386,5 +387,65 @@ describe('runs started by outside events', () => {
     expect(service.runEvent(trigger, {})).toMatchObject({ status: 'skipped' })
     chats.end(first.threadId!)
     expect(runs().find((r) => r.id === first.id)!.status).toBe('completed')
+  })
+})
+
+describe('routines on a chat or a Work agent (ADR 0030)', () => {
+  const withTargets = () => {
+    let release: (r: { ok: boolean; detail?: string }) => void = () => undefined
+    const started: string[] = []
+    const ctx = setup([{ id: 'b1', name: 'Scout', routines: false }], {
+      targets: {
+        describe: (t) => (t.kind === 'chat' ? 'Codex in a new chat' : 'Claude Code in demo-app · main'),
+        chat: (_t, title, prompt) => {
+          started.push(`chat:${title}:${prompt.includes('Summarise the inbox.')}`)
+          ctx.chats.sessions.set('c1', { id: 'c1', messages: [] } as unknown as ChatSession)
+          return 'c1'
+        },
+        workspace: (t) => {
+          started.push(`work:${t.workspaceId}`)
+          return { agentId: 'a1', done: new Promise((r) => (release = r)) }
+        }
+      }
+    })
+    return { ...ctx, started, release: (r: { ok: boolean; detail?: string }) => release(r) }
+  }
+
+  it('runs a scheduled chat without any bot, and ends with the chat turn', () => {
+    const { service, chats, advance, daily9, runs, started } = withTargets()
+    const routine = service.create(daily9({ botId: undefined, target: { kind: 'chat', cliId: 'codex' }, results: 'thread' }))
+    expect(routine).toMatchObject({ target: { kind: 'chat', cliId: 'codex' }, results: 'none' })
+    expect(routine.botId).toBeUndefined()
+    advance(HOUR)
+    expect(started).toEqual(['chat:Morning report · Wed, Oct 7, 09:00:true'])
+    expect(runs()[0]).toMatchObject({ status: 'running', threadId: 'c1', where: 'Codex in a new chat' })
+    expect(runs()[0]!.botId).toBeUndefined()
+    chats.end('c1')
+    expect(runs()[0]!.status).toBe('completed')
+  })
+
+  it('runs in a Work workspace and finishes when the agent stops, once even after its time limit', async () => {
+    const { service, advance, daily9, runs, started, release } = withTargets()
+    service.create(daily9({ botId: undefined, target: { kind: 'workspace', projectId: 'p1', workspaceId: 'w1', cliId: 'claude' }, timeoutMinutes: 5 }))
+    advance(HOUR)
+    expect(started).toEqual(['work:w1'])
+    expect(runs()[0]).toMatchObject({ status: 'running', agentId: 'a1', where: 'Claude Code in demo-app · main' })
+    advance(5 * 60_000)
+    expect(runs()[0]).toMatchObject({ status: 'failed' })
+    expect(runs()[0]!.detail).toContain('still open in Work')
+    release({ ok: true })
+    await Promise.resolve()
+    expect(runs()[0]!.status).toBe('failed')
+  })
+
+  it('needs exactly one of a bot or a target, and moves between them', () => {
+    const { service, daily9 } = withTargets()
+    expect(() => service.create(daily9({ target: { kind: 'chat', cliId: 'codex' } }))).toThrow('Pick a bot, a chat or a Work agent.')
+    expect(() => service.create(daily9({ botId: undefined }))).toThrow('Pick a bot, a chat or a Work agent.')
+    const routine = service.create(daily9({ botId: undefined, target: { kind: 'chat', cliId: 'codex' } }))
+    // Scout isn't allowed to run on a schedule: moving the routine to it is refused.
+    expect(() => service.update(routine.id, { botId: 'b1', target: null })).toThrow('Allow Scout')
+    const moved = service.update(routine.id, { target: { kind: 'workspace', projectId: 'p1', workspaceId: 'w1', cliId: 'claude' } })
+    expect(moved.target).toMatchObject({ kind: 'workspace' })
   })
 })

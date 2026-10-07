@@ -1,8 +1,9 @@
-import { Copy, FolderOpen, Trash2, Wrench, X } from 'lucide-react'
+import { CalendarClock, Copy, FolderOpen, Trash2, Wrench, X } from 'lucide-react'
 import type { WorkspaceView } from '@shared/domain'
 import type { MenuEntry } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
+import { scheduleRoutine } from '../routines/open-run'
 
 /**
  * The one set of Workspace actions, shared by the sidebar's right-click menu and
@@ -24,6 +25,13 @@ export const workspaceMenuEntries = (workspace: WorkspaceView, onDelete: () => v
     label: 'Copy path',
     icon: <Copy />,
     onSelect: () => void runAction('Copy path', () => api('clipboard.writeText', { text: workspace.path }))
+  },
+  {
+    type: 'item',
+    id: 'schedule',
+    label: 'Schedule a routine…',
+    icon: <CalendarClock />,
+    onSelect: () => scheduleRoutine({ kind: 'workspace', projectId: workspace.projectId, workspaceId: workspace.id, cliId: '' })
   },
   ...(workspace.kind === 'isolated'
     ? [

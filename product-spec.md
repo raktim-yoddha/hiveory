@@ -24,7 +24,10 @@ and routine and trigger runs, as Working, Didn't finish or Done, by their real s
 stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in your apps** (ADR
 0029): by default before it sends or posts as you, or before any change, or never, per bot; reading is
 never asked. The request waits in its thread and on the work board for Allow or Decline, and is
-declined after 15 minutes. A trigger's read-only run can't change or send anything in apps. Bots never appear on a
+declined after 15 minutes. A trigger's read-only run can't change or send anything in apps.
+Routines can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
+a new agent in a Work workspace (a workspace's "Schedule a routine…"), whose card then moves on the
+Kanban by its real state like any agent. Bots never appear on a
 project's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

@@ -11,6 +11,7 @@ import { useRoutines } from '../../stores/routines'
 import { useRoutineEditor } from './RoutineEditor'
 import { RoutineRow } from './RoutineRow'
 import { RunLog } from './RunLog'
+import { useDoerName } from './use-doer'
 import { WeekCalendar, weekStartOf } from './WeekCalendar'
 import chat from '../chat/Chat.module.css'
 import styles from './Routines.module.css'
@@ -23,7 +24,7 @@ const VIEWS: Array<{ value: View; label: string }> = [
 ]
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-/** Every bot's routines on a week calendar (or as a list), with the run log and the keep-awake switch. */
+/** Every routine (bots', scheduled chats and Work's) on a week calendar (or as a list), with the run log and the keep-awake switch. */
 export function RoutinesPage() {
   const { routines, runs, loaded, load } = useRoutines()
   const { bots, routinesFilter, showRoutines } = useBots()
@@ -42,7 +43,7 @@ export function RoutinesPage() {
   const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6)
   const range = `${MONTHS[weekStart.getMonth()]} ${weekStart.getDate()} – ${weekEnd.getMonth() === weekStart.getMonth() ? '' : `${MONTHS[weekEnd.getMonth()]} `}${weekEnd.getDate()}, ${weekEnd.getFullYear()}`
   const move = (weeks: number): void => setWeekStart((w) => new Date(w.getFullYear(), w.getMonth(), w.getDate() + weeks * 7))
-  const botName = (id: string): string | undefined => bots.find((b) => b.id === id)?.name
+  const doer = useDoerName()
 
   return (
     <section className={chat.surface} aria-label="Routines">
@@ -65,10 +66,10 @@ export function RoutinesPage() {
           hideLabel
           size="sm"
           value={routinesFilter ?? ''}
-          options={[{ value: '', label: 'All bots' }, ...bots.map((b) => ({ value: b.id, label: b.name }))]}
+          options={[{ value: '', label: 'All routines' }, ...bots.map((b) => ({ value: b.id, label: b.name }))]}
           onChange={(v) => showRoutines(v || undefined)}
         />
-        <Button variant="primary" icon={<Plus />} onClick={() => open({ botId: routinesFilter })} disabled={bots.length === 0}>
+        <Button variant="primary" icon={<Plus />} onClick={() => open({ botId: routinesFilter })}>
           New routine
         </Button>
       </header>
@@ -79,17 +80,15 @@ export function RoutinesPage() {
         </span>
         <Toggle label="Keep this computer awake for routines" checked={settings.keepAwakeForRoutines} onChange={(keepAwakeForRoutines) => void updateSettings({ keepAwakeForRoutines })} />
       </div>
-      {bots.length === 0 ? (
-        <EmptyState icon={<CalendarClock />} title="No bots yet" description="Create a bot first: each routine is work a bot does on a schedule." />
-      ) : view === 'week' ? (
+      {view === 'week' ? (
         <WeekCalendar weekStart={weekStart} routines={shown} runs={shownRuns} onSlot={(at) => open({ botId: routinesFilter, startsAt: at.toISOString() })} onOpen={(routineId) => open({ routineId })} />
       ) : view === 'list' ? (
         shown.length === 0 ? (
-          <EmptyState icon={<CalendarClock />} title="No routines yet" description="Give a bot a job to do every morning, every hour or once next week." />
+          <EmptyState icon={<CalendarClock />} title="No routines yet" description="Give a bot, a new chat or a Work agent a job to do every morning, every hour or once next week." />
         ) : (
           <ul className={styles.list}>
             {shown.map((r) => (
-              <RoutineRow key={r.id} routine={r} botName={routinesFilter ? undefined : botName(r.botId)} />
+              <RoutineRow key={r.id} routine={r} botName={routinesFilter ? undefined : doer(r)} />
             ))}
           </ul>
         )

@@ -106,9 +106,15 @@ const botFields = z.object({
 const teamName = z.string().trim().min(1).max(MAX_TEAM_NAME)
 const isoDate = z.string().datetime({ offset: true })
 /** A routine's editable fields; the service checks the timezone, the cron rule and that a run is left. */
+const routineTarget = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('chat'), cliId: id, model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional() }),
+  z.object({ kind: z.literal('workspace'), projectId: id, workspaceId: id, cliId: id })
+])
 const routineFields = z.object({
   name: z.string().trim().min(1).max(MAX_ROUTINE_NAME),
-  botId: id,
+  /** A bot, or `target` (a new chat, a Work agent): exactly one of them (ADR 0030). */
+  botId: id.optional(),
+  target: routineTarget.optional(),
   prompt: z.string().trim().min(1).max(MAX_ROUTINE_PROMPT),
   schedule: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('once') }),
@@ -571,9 +577,11 @@ export const requestSchemas = {
   'triggers.delete': z.object({ triggerId: id }),
   // Routines (ADR 0028): a bot's scheduled work, and the run log.
   'routines.list': z.object({ botId: id.optional() }),
-  'routines.create': routineFields,
+  'routines.create': routineFields.refine((r) => Boolean(r.botId) !== Boolean(r.target), { message: 'Pick a bot, a chat or a Work agent.' }),
   'routines.update': routineFields.partial().extend({
     routineId: id,
+    botId: id.nullable().optional(),
+    target: routineTarget.nullable().optional(),
     endsAt: isoDate.nullable().optional(),
     timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional(),
     resultsThreadId: id.nullable().optional()

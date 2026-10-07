@@ -31,3 +31,46 @@ export async function deliverMessage(
   }
   return `Sent to ${agent.petName}${submit ? ' and submitted' : ' (not submitted)'}.`
 }
+
+/** Waits until an agent has stopped working, giving a just-messaged agent a moment to start. */
+export async function waitIdle(deps: { agents: AgentService; chats: ChatService }, agent: CliInstance, timeoutMs: number, settleMs = 1500): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  const settleUntil = Date.now() + settleMs
+  let sawWork = false
+  for (;;) {
+    const details = deps.agents.details(agent)
+    const busy = details.running && (details.status === 'working' || (agent.chatUi === true && deps.chats.isRunning(agent.id)))
+    if (busy) sawWork = true
+    // Once it has been seen working, done means done; otherwise give it the settle window to start.
+    if (!busy && (sawWork || Date.now() >= settleUntil)) return true
+    if (Date.now() >= deadline) return false
+    await sleep(150)
+  }
+}
+
+/**
+ * Waits until a just-opened agent can take a message: running, idle for 2 s and something on its
+ * screen (chat-view agents are ready once running). A question first (trust this folder?) stops the
+ * wait: typing into it would answer it.
+ */
+export async function waitReady(
+  deps: { agents: AgentService; runtime: CliRuntimeManager },
+  agent: CliInstance,
+  timeoutMs = 60_000
+): Promise<'ready' | 'waiting' | 'stopped' | 'timeout'> {
+  const started = Date.now()
+  let idleSince: number | null = null
+  for (;;) {
+    const details = deps.agents.details(agent)
+    const now = Date.now()
+    if (details.status === 'waiting-for-you') return 'waiting'
+    if (!details.running && now - started > 5000) return 'stopped'
+    if (details.running && agent.chatUi) return 'ready'
+    if (details.running && details.status === 'idle') {
+      idleSince ??= now
+      if (now - idleSince >= 2000 && now - started >= 3000 && deps.runtime.screenText(agent.id, 5).trim()) return 'ready'
+    } else idleSince = null
+    if (now - started > timeoutMs) return 'timeout'
+    await sleep(250)
+  }
+}

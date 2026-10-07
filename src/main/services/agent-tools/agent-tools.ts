@@ -8,7 +8,7 @@ import type { LayoutService } from '../layout/layout-service'
 import type { ShellService } from '../shell/shell-service'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { ToolDefinition, ToolHost, ToolResult } from './mcp-protocol'
-import { deliverMessage } from './deliver'
+import { deliverMessage, waitIdle } from './deliver'
 import { int, str, ToolError } from './tool-args'
 
 export interface AgentToolDeps {
@@ -280,22 +280,6 @@ export class AgentTools implements ToolHost {
     return { text: skipped ? `${text}\n\n(${skipped} call(s) not run after the failure)` : text, isError: results.some((r) => r.isError) }
   }
 
-  /** Waits until an agent has stopped working, giving a just-messaged agent a moment to start. */
-  private async waitIdle(agent: CliInstance, timeoutMs: number, settleMs = 1500): Promise<boolean> {
-    const deadline = Date.now() + timeoutMs
-    const settleUntil = Date.now() + settleMs
-    let sawWork = false
-    for (;;) {
-      const details = this.deps.agents.details(agent)
-      const busy = details.running && (details.status === 'working' || (agent.chatUi === true && this.deps.chats.isRunning(agent.id)))
-      if (busy) sawWork = true
-      // Once it has been seen working, done means done; otherwise give it the settle window to start.
-      if (!busy && (sawWork || Date.now() >= settleUntil)) return true
-      if (Date.now() >= deadline) return false
-      await sleep(150)
-    }
-  }
-
   private async dispatch(name: string, args: Record<string, unknown>): Promise<string> {
     const { agents, runtime, layouts, workspaces, registry, shells } = this.deps
     switch (name) {
@@ -321,14 +305,14 @@ export class AgentTools implements ToolHost {
       case 'wait_for_agent': {
         const agent = this.resolve(str(args, 'agent'))
         if (agent.id === this.callerId) throw new ToolError('You cannot wait for yourself.')
-        const done = await this.waitIdle(agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000)
+        const done = await waitIdle(this.deps, agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000)
         return `${done ? 'Done waiting.' : 'Timed out; still working.'} ${this.describe(agent)}`
       }
       case 'ask_agent': {
         const agent = this.resolve(str(args, 'agent'))
         if (agent.id === this.callerId) throw new ToolError('You cannot ask yourself.')
         const sent = await this.dispatch('send_message', { agent: agent.petName, message: str(args, 'message'), submit: true })
-        const done = await this.waitIdle(agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000, 2500)
+        const done = await waitIdle(this.deps, agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000, 2500)
         const lines = int(args, 'lines', 80, 1, MAX_READ_LINES)
         const reply = agent.chatUi ? this.deps.chats.lastReply(agent.id) : runtime.screenText(agent.id, lines)
         return `${sent} ${done ? 'It finished.' : 'Timed out while it was still working.'}\n--- ${agent.chatUi ? 'reply' : 'screen'} ---\n${reply || '(nothing yet)'}`

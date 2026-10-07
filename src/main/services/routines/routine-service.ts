@@ -7,6 +7,7 @@ import {
   MAX_ROUTINES_PER_BOT,
   type Routine,
   type RoutineRun,
+  type RoutineTarget,
   type RoutineView,
   type RunTrigger
 } from '@shared/domain/routine'
@@ -17,9 +18,12 @@ import type { Logger } from '../../app/logger'
 import type { Emit } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type RoutineInput = Pick<Routine, 'name' | 'botId' | 'prompt' | 'schedule' | 'startsAt' | 'timezone'> &
-  Partial<Pick<Routine, 'endsAt' | 'timeoutMinutes' | 'enabled' | 'results' | 'resultsThreadId'>>
-export type RoutinePatch = Partial<Omit<RoutineInput, 'endsAt' | 'timeoutMinutes' | 'resultsThreadId'>> & {
+export type RoutineInput = Pick<Routine, 'name' | 'prompt' | 'schedule' | 'startsAt' | 'timezone'> &
+  Partial<Pick<Routine, 'botId' | 'target' | 'endsAt' | 'timeoutMinutes' | 'enabled' | 'results' | 'resultsThreadId'>>
+export type RoutinePatch = Partial<Omit<RoutineInput, 'botId' | 'target' | 'endsAt' | 'timeoutMinutes' | 'resultsThreadId'>> & {
+  /** null clears it: a routine moves between a bot and a chat or Work target. */
+  botId?: string | null
+  target?: RoutineTarget | null
   endsAt?: string | null
   timeoutMinutes?: number | null
   resultsThreadId?: string | null
@@ -40,6 +44,15 @@ export interface RoutineDeps {
     lastReply(chatId: string): string
     find(chatId: string): ChatSession | undefined
     on(event: 'run', listener: (chatId: string, running: boolean) => void): unknown
+  }
+  /** Runs on someone other than a bot (ADR 0030). Without it, routines run only on bots. */
+  targets?: {
+    /** "Codex in a new chat", "Claude Code in demo-app · main": who did a run, for its receipt. */
+    describe(target: RoutineTarget): string
+    /** Starts a new chat with the target's CLI and sends the prompt; returns the chat's id (the run's thread). */
+    chat(target: Extract<RoutineTarget, { kind: 'chat' }>, title: string, prompt: string): string
+    /** Opens an agent in the workspace and gives it the prompt once it is ready; `done` settles when it stops working. */
+    workspace(target: Extract<RoutineTarget, { kind: 'workspace' }>, prompt: string): { agentId: string; done: Promise<{ ok: boolean; detail?: string }> }
   }
   emit: Emit
   log: Logger
@@ -179,24 +192,24 @@ export class RoutineService {
   }
 
   create(input: RoutineInput): RoutineView {
-    const bot = this.d.bots.find(input.botId) ?? fail('NOT_FOUND', 'Bot not found.')
-    if (!bot.routines) fail('INVALID_INPUT', `Allow ${bot.name} to run on a schedule first.`)
-    if (this.d.store.state.routines.filter((r) => r.botId === bot.id).length >= MAX_ROUTINES_PER_BOT) {
-      fail('INVALID_INPUT', `${bot.name} already has ${MAX_ROUTINES_PER_BOT} routines. Remove one first.`)
+    this.checkDoer(input)
+    if (this.d.store.state.routines.filter((r) => r.botId === input.botId).length >= MAX_ROUTINES_PER_BOT) {
+      fail('INVALID_INPUT', `${input.botId ? (this.d.bots.find(input.botId)?.name ?? 'This bot') : 'You'} already ${input.botId ? 'has' : 'have'} ${MAX_ROUTINES_PER_BOT} routines${input.botId ? '' : ' without a bot'}. Remove one first.`)
     }
     const now = iso(this.now())
     const routine: Routine = {
       id: randomUUID(),
       name: input.name.trim(),
-      botId: bot.id,
+      ...(input.target ? { target: input.target } : { botId: input.botId! }),
       prompt: input.prompt.trim(),
       schedule: input.schedule,
       startsAt: input.startsAt,
       timezone: input.timezone,
       ...(input.endsAt ? { endsAt: input.endsAt } : {}),
       ...(input.timeoutMinutes ? { timeoutMinutes: input.timeoutMinutes } : {}),
-      results: input.results ?? 'thread',
-      ...(input.resultsThreadId ? { resultsThreadId: input.resultsThreadId } : {}),
+      // A chat's or a Work agent's run has no bot to keep a results thread: each run is its own record.
+      results: input.target ? 'none' : (input.results ?? 'thread'),
+      ...(input.resultsThreadId && !input.target ? { resultsThreadId: input.resultsThreadId } : {}),
       enabled: input.enabled ?? true,
       checkedThrough: now,
       createdAt: now,
@@ -213,14 +226,18 @@ export class RoutineService {
   update(routineId: string, patch: RoutinePatch): RoutineView {
     const current = this.get(routineId)
     const next = { ...current, ...patch } as Routine
+    // A routine has a bot or a target, never both: setting one drops the other.
+    if (patch.target) delete next.botId
+    if (patch.botId) delete next.target
     // null clears an optional field.
-    for (const key of ['endsAt', 'timeoutMinutes', 'resultsThreadId'] as const) if (next[key] === null || next[key] === undefined) delete next[key]
+    for (const key of ['botId', 'target', 'endsAt', 'timeoutMinutes', 'resultsThreadId'] as const) if (next[key] === null || next[key] === undefined) delete next[key]
     // Another bot's thread can't hold this routine's results: the new bot gets a dedicated one.
     if (patch.botId && patch.botId !== current.botId && patch.resultsThreadId === undefined) delete next.resultsThreadId
-    if (patch.botId && patch.botId !== current.botId) {
-      const bot = this.d.bots.find(patch.botId) ?? fail('NOT_FOUND', 'Bot not found.')
-      if (!bot.routines) fail('INVALID_INPUT', `Allow ${bot.name} to run on a schedule first.`)
+    if (next.target) {
+      next.results = 'none'
+      delete next.resultsThreadId
     }
+    if (patch.botId !== undefined || patch.target !== undefined) this.checkDoer(next)
     const now = iso(this.now())
     // A new time (or switching it back on) starts from now: it never fires for times already past.
     if (timingChanged(patch)) next.checkedThrough = now
@@ -292,7 +309,8 @@ export class RoutineService {
   }
 
   private dispatch(routine: Routine, when: number, trigger: RunTrigger): RoutineRun {
-    const bot = this.d.bots.find(routine.botId)
+    if (routine.target) return this.dispatchTarget(routine, routine.target, when, trigger)
+    const bot = this.d.bots.find(routine.botId ?? '')
     if (!bot) return this.record(this.receipt(routine, when, trigger, 'failed', 'Its bot no longer exists.'))
     if (trigger === 'schedule' && !bot.routines) {
       return this.record(this.receipt(routine, when, trigger, 'skipped', `${bot.name} no longer runs on a schedule. Allow it in the bot's settings.`))
@@ -321,11 +339,50 @@ export class RoutineService {
     return run
   }
 
+  /** A run on a new chat or a Work agent (ADR 0030): the user's own routine, so no bot permission applies. */
+  private dispatchTarget(routine: Routine, target: RoutineTarget, when: number, trigger: RunTrigger): RoutineRun {
+    const targets = this.d.targets
+    const where = targets?.describe(target) ?? 'Nobody'
+    if (!targets) return this.record({ ...this.receipt(routine, when, trigger, 'failed', 'Routines run only on bots here.'), where })
+    if (this.d.store.state.routineRuns.some((r) => r.routineId === routine.id && r.status === 'running')) {
+      return this.record({ ...this.receipt(routine, when, trigger, 'skipped', 'The previous run was still going.'), where })
+    }
+    const label = this.label(when, routine.timezone)
+    const intro =
+      trigger === 'schedule'
+        ? `This is a scheduled run of the routine "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
+        : `The user started the routine "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
+    const prompt = `${intro}\n\n${routine.prompt}`
+    let run: RoutineRun
+    try {
+      if (target.kind === 'chat') {
+        const threadId = targets.chat(target, `${routine.name} · ${label}`, prompt)
+        run = this.record({ ...this.receipt(routine, when, trigger, 'running'), startedAt: iso(this.now()), threadId, where })
+      } else {
+        const { agentId, done } = targets.workspace(target, prompt)
+        run = this.record({ ...this.receipt(routine, when, trigger, 'running'), startedAt: iso(this.now()), agentId, where })
+        const runId = run.id
+        done.then(
+          (r) => this.finish(runId, r.ok ? 'completed' : 'failed', r.detail),
+          (error: unknown) => this.finish(runId, 'failed', error instanceof Error ? error.message : String(error))
+        )
+      }
+    } catch (error) {
+      const why = error instanceof Error ? error.message : String(error)
+      return this.record({ ...this.receipt(routine, when, trigger, 'failed', `${where} could not start: ${why}`), where })
+    }
+    if (routine.timeoutMinutes) {
+      const minutes = routine.timeoutMinutes
+      this.limits.set(run.id, this.timers.set(() => this.timeOut(run.id, minutes), minutes * 60_000))
+    }
+    return run
+  }
+
   private timeOut(runId: string, minutes: number): void {
     this.limits.delete(runId)
     const run = this.d.store.state.routineRuns.find((r) => r.id === runId)
     if (!run || run.status !== 'running') return
-    this.finish(runId, 'failed', `Stopped after ${minutes} minute${minutes === 1 ? '' : 's'}, its time limit.`)
+    this.finish(runId, 'failed', `Stopped after ${minutes} minute${minutes === 1 ? '' : 's'}, its time limit.${run.agentId ? ' The agent is still open in Work.' : ''}`)
     if (run.threadId) this.d.chats.stop(run.threadId)
   }
 
@@ -338,6 +395,8 @@ export class RoutineService {
   }
 
   private finish(runId: string, status: 'completed' | 'failed', detail?: string): void {
+    // A run ends once: a Work run that finishes after its time limit already ended it.
+    if (this.d.store.state.routineRuns.find((r) => r.id === runId)?.status !== 'running') return
     const limit = this.limits.get(runId)
     if (limit !== undefined) this.timers.clear(limit)
     this.limits.delete(runId)
@@ -368,7 +427,7 @@ export class RoutineService {
   /** A finished run's dated summary goes into the routine's results thread (made on the first result). */
   private postResult(run: RoutineRun): void {
     const routine = this.d.store.state.routines.find((r) => r.id === run.routineId)
-    if (!routine || routine.results !== 'thread' || !run.threadId) return
+    if (!routine?.botId || routine.results !== 'thread' || !run.threadId) return
     let threadId = routine.resultsThreadId
     if (!threadId || !this.d.chats.find(threadId)) {
       threadId = this.d.bots.newThread(routine.botId, `${routine.name} · results`).id
@@ -394,7 +453,7 @@ ${outcome || '(No reply.)'}`)
       id: randomUUID(),
       routineId: routine.id,
       routineName: routine.name,
-      botId: routine.botId,
+      ...(routine.botId ? { botId: routine.botId } : {}),
       trigger,
       prompt: routine.prompt,
       scheduledFor: iso(when),
@@ -411,6 +470,17 @@ ${outcome || '(No reply.)'}`)
     // A run that could not start, or was missed, is news too.
     if (run.status === 'failed' || run.status === 'missed') this.tell(run)
     return run
+  }
+
+  /** A routine runs on exactly one: a bot allowed to work on a schedule, or a chat or Work target. */
+  private checkDoer(r: { botId?: string | null; target?: RoutineTarget | null }): void {
+    if (Boolean(r.botId) === Boolean(r.target)) fail('INVALID_INPUT', 'Pick a bot, a chat or a Work agent.')
+    if (r.target) {
+      if (!this.d.targets) fail('INVALID_INPUT', 'Routines run only on bots here.')
+      return
+    }
+    const bot = this.d.bots.find(r.botId!) ?? fail('NOT_FOUND', 'Bot not found.')
+    if (!bot.routines) fail('INVALID_INPUT', `Allow ${bot.name} to run on a schedule first.`)
   }
 
   private check(routine: Routine): void {

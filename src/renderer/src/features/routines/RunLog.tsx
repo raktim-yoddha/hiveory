@@ -5,6 +5,8 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
 import { useRoutines } from '../../stores/routines'
+import { openRunChat } from './open-run'
+import { useDoerName } from './use-doer'
 import { when } from './routine-text'
 import styles from './Routines.module.css'
 
@@ -20,6 +22,7 @@ const duration = (run: RoutineRun): string => {
 export function RunLog({ botId }: { botId?: string }) {
   const runs = useRoutines((s) => s.runs)
   const { bots, openBotThread } = useBots()
+  const doer = useDoerName()
   const shown = botId ? runs.filter((r) => r.botId === botId) : runs
   if (shown.length === 0) return <EmptyState compact title="No runs yet" description="Each run of a routine is listed here, with how it went." />
   return (
@@ -30,15 +33,18 @@ export function RunLog({ botId }: { botId?: string }) {
           <span className={styles.runText}>
             <span className={styles.routineName}>{run.routineName}</span>
             <span className={styles.meta}>
-              {botId ? '' : `${bots.find((b) => b.id === run.botId)?.name ?? 'Deleted bot'} · `}
+              {botId ? '' : `${doer(run)} · `}
               {when(run.scheduledFor)}
               {run.trigger === 'manual' ? ' · run by you' : ''}
               {duration(run) ? ` · ${duration(run)}` : ''}
             </span>
             {run.detail && <span className={styles.meta}>{run.detail}</span>}
           </span>
-          {run.threadId && bots.some((b) => b.id === run.botId) && (
-            <IconButton label={`Open the thread of ${run.routineName}`} icon={<MessageSquare />} onClick={() => void openBotThread(run.botId, run.threadId!)} />
+          {run.threadId && run.botId && bots.some((b) => b.id === run.botId) && (
+            <IconButton label={`Open the thread of ${run.routineName}`} icon={<MessageSquare />} onClick={() => void openBotThread(run.botId!, run.threadId!)} />
+          )}
+          {run.threadId && !run.botId && (
+            <IconButton label={`Open the chat of ${run.routineName}`} icon={<MessageSquare />} onClick={() => openRunChat(run.threadId!)} />
           )}
         </li>
       ))}

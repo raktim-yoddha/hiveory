@@ -7,6 +7,7 @@ import { FileService } from '../services/files/file-service'
 import { ConnectionService } from '../services/connections/connection-service'
 import { McpGateway } from '../services/connections/mcp-gateway'
 import { ApprovalService } from '../services/bots/approval-service'
+import { startWorkRun } from '../services/routines/work-run'
 import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
@@ -206,8 +207,27 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       ),
     // A run that ended or was missed while the user is elsewhere: a desktop notification that opens its thread.
     outcome: (run) => {
-      const bot = bots?.find(run.botId)
-      if (bot?.notify !== false) notifyDesktop(runNotice(run, bot?.name), run.botId, run.threadId)
+      const bot = run.botId ? bots?.find(run.botId) : undefined
+      if (bot?.notify !== false) notifyDesktop(runNotice(run, bot?.name ?? run.where), run.botId ?? '', bot ? run.threadId : undefined)
+    },
+    // Scheduled chats and Work routines (ADR 0030).
+    targets: {
+      describe: (target) => {
+        const cli = registry.list().find((c) => c.id === target.cliId)?.displayName ?? target.cliId
+        if (target.kind === 'chat') return `${cli} in a new chat`
+        const workspace = workspaceRepo.find(target.workspaceId)
+        return workspace ? `${cli} in ${workspaceRepo.project(target.projectId).name} · ${workspace.name}` : `${cli} in a removed workspace`
+      },
+      chat: (target, title, prompt) => {
+        const chat = chats.create()
+        chats.update(chat.id, { cliId: target.cliId, ...(target.model ? { model: target.model } : {}), title })
+        chats.send(chat.id, prompt)
+        return chat.id
+      },
+      workspace: (target, prompt) => {
+        if (!workspaceRepo.find(target.workspaceId)) throw new Error('That workspace no longer exists.')
+        return startWorkRun({ agents, runtime, chats }, target, prompt)
+      }
     }
   })
   // A bot replied in a thread the user started, while they are elsewhere. Routine runs announce

@@ -7,6 +7,7 @@ import { useBots } from '../../stores/bots'
 import { useRoutines } from '../../stores/routines'
 import { when } from '../routines/routine-text'
 import { ApprovalCard } from './ApprovalCard'
+import { openRunChat } from '../routines/open-run'
 import { useHandoffs } from './use-handoffs'
 import { workBoard, type WorkColumn, type WorkItem } from './work-board'
 import chat from '../chat/Chat.module.css'
@@ -84,11 +85,16 @@ export function WorkBoardPage() {
                 ) : (
                   <ul className={styles.handoffList}>
                     {board[column.id].map((item) => {
-                      const open = item.threadId && bots.some((b) => b.id === item.botId) ? item.threadId : undefined
+                      const threadId = item.threadId
+                      const open = !threadId
+                        ? undefined
+                        : item.botId
+                          ? bots.some((b) => b.id === item.botId) && (() => void openBotThread(item.botId!, threadId))
+                          : () => openRunChat(threadId)
                       const body = (
                         <>
                           <span className={styles.handoffNames}>
-                            {from(item)} <ArrowRight aria-label="to" /> {name(item.botId)}
+                            {from(item)} <ArrowRight aria-label="to" /> {item.botId ? name(item.botId) : item.where}
                           </span>
                           <span className={styles.handoffTitle}>{item.title}</span>
                           <span className={cx(styles.handoffState, column.id === 'working' && styles.handoffRunning, column.id === 'unfinished' && styles.workProblem)}>
@@ -100,7 +106,7 @@ export function WorkBoardPage() {
                       return (
                         <li key={item.key}>
                           {open ? (
-                            <button type="button" className={cx(styles.handoff, styles.workItem)} onClick={() => void openBotThread(item.botId, open)}>
+                            <button type="button" className={cx(styles.handoff, styles.workItem)} onClick={open}>
                               {body}
                             </button>
                           ) : (

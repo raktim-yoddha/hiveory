@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Play, Trash2 } from 'lucide-react'
 import { create } from 'zustand'
-import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, type RepeatPreset, type RoutineSchedule, type RoutineView } from '@shared/domain/routine'
+import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, type RepeatPreset, type RoutineSchedule, type RoutineTarget, type RoutineView } from '@shared/domain/routine'
 import { compileRepeat, cronProblem, nextRuns } from '@shared/domain/routine-schedule'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -11,12 +11,14 @@ import { TextAreaField, TextField } from '../../components/ui/TextField'
 import { Toggle } from '../../components/ui/Toggle'
 import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
+import { useChat } from '../../stores/chat'
+import { useClis, useProjects, useWorkspaces } from '../../stores/data'
 import { useRoutines } from '../../stores/routines'
 import { cronDays, localZone, sameZone, when, WEEKDAYS } from './routine-text'
 import form from '../../components/ui/form.module.css'
 import styles from './Routines.module.css'
 
-type Target = { routineId: string } | { botId?: string; startsAt?: string }
+type Target = { routineId: string } | { botId?: string; startsAt?: string; target?: RoutineTarget }
 
 /** What the editor is open for: a routine, a new one (maybe for a bot or a time), or nothing. */
 export const useRoutineEditor = create<{ target: Target | null; open(target: Target): void; close(): void }>((set) => ({
@@ -27,9 +29,16 @@ export const useRoutineEditor = create<{ target: Target | null; open(target: Tar
 
 type Repeat = 'once' | 'interval' | RepeatPreset
 
+type Doer = 'bot' | 'chat' | 'workspace'
+
 interface Draft {
   name: string
+  /** Who does it (ADR 0030): a bot, a new chat or an agent in Work. */
+  doer: Doer
   botId: string
+  cliId: string
+  projectId: string
+  workspaceId: string
   prompt: string
   date: string
   time: string
@@ -57,9 +66,14 @@ const nextHour = (): Date => new Date(Math.ceil((Date.now() + 1) / 3_600_000) * 
 const draftOf = (routine: RoutineView | undefined, target: Target, firstBot: string): Draft => {
   const start = new Date(routine?.startsAt ?? ('startsAt' in target && target.startsAt ? target.startsAt : nextHour().toISOString()))
   const s = routine?.schedule
+  const doing = routine ? routine.target : 'target' in target ? target.target : undefined
   return {
     name: routine?.name ?? '',
+    doer: doing?.kind ?? 'bot',
     botId: routine?.botId ?? ('botId' in target && target.botId ? target.botId : firstBot),
+    cliId: doing?.cliId ?? '',
+    projectId: doing?.kind === 'workspace' ? doing.projectId : '',
+    workspaceId: doing?.kind === 'workspace' ? doing.workspaceId : '',
     prompt: routine?.prompt ?? '',
     date: dateOf(start),
     // A calendar rule's own hour and minute are what runs; the start date only says from when.
@@ -99,17 +113,39 @@ function EditorDialog({ target }: { target: Target }) {
   const close = useRoutineEditor((s) => s.close)
   const { routines, create: createRoutine, update, remove, runNow } = useRoutines()
   const { bots, threads, loadThreads, update: updateBot } = useBots()
+  const allClis = useClis((s) => s.clis)
+  const chatClis = useChat((s) => s.clis)
+  const loadChatClis = useChat((s) => s.loadClis)
+  const projects = useProjects((s) => s.projects)
+  const workspaces = useWorkspaces((s) => s.byProject)
+  const loadWorkspaces = useWorkspaces((s) => s.load)
   const routine = 'routineId' in target ? routines.find((r) => r.id === target.routineId) : undefined
   const [draft, setDraft] = useState<Draft>(() => draftOf(routine, target, bots[0]?.id ?? ''))
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const set = <K extends keyof Draft>(key: K, value: Draft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
-  const bot = bots.find((b) => b.id === draft.botId)
+  const bot = draft.doer === 'bot' ? bots.find((b) => b.id === draft.botId) : undefined
   const botThreads = threads[draft.botId]
   useEffect(() => {
-    if (draft.botId && !botThreads) void loadThreads(draft.botId)
-  }, [draft.botId, botThreads, loadThreads])
+    if (draft.doer === 'bot' && draft.botId && !botThreads) void loadThreads(draft.botId)
+  }, [draft.doer, draft.botId, botThreads, loadThreads])
+  useEffect(() => {
+    if (draft.doer === 'chat' && chatClis.length === 0) void loadChatClis()
+  }, [draft.doer, chatClis.length, loadChatClis])
+  useEffect(() => {
+    if (draft.doer === 'workspace' && draft.projectId && !workspaces[draft.projectId]) void loadWorkspaces(draft.projectId)
+  }, [draft.doer, draft.projectId, workspaces, loadWorkspaces])
+  const cliOptions = (draft.doer === 'chat' ? allClis.filter((c) => chatClis.includes(c.id)) : allClis.filter((c) => c.available && c.kind !== 'shell')).map((c) => ({
+    value: c.id,
+    label: c.displayName
+  }))
+  const runsOn: RoutineTarget | undefined =
+    draft.doer === 'chat' && draft.cliId
+      ? { kind: 'chat', cliId: draft.cliId }
+      : draft.doer === 'workspace' && draft.projectId && draft.workspaceId && draft.cliId
+        ? { kind: 'workspace', projectId: draft.projectId, workspaceId: draft.workspaceId, cliId: draft.cliId }
+        : undefined
 
   // Times are this computer's; a routine saved in another zone moves to this one when it is saved.
   const timezone = localZone()
@@ -130,11 +166,15 @@ function EditorDialog({ target }: { target: Target }) {
       : !draft.name.trim()
         ? 'Add a title.'
         : !draft.prompt.trim()
-          ? 'Add instructions for the bot.'
-          : !bot
+          ? 'Add instructions.'
+          : draft.doer !== 'bot' && !runsOn
+            ? draft.doer === 'chat'
+              ? 'Pick the CLI for the chat.'
+              : 'Pick the project, workspace and CLI.'
+            : draft.doer === 'bot' && !bot
             ? 'Assign a bot.'
-            : !bot.routines
-              ? `Allow ${bot.name} to run on a schedule.`
+            : bot && !bot.routines
+              ? `Allow ${bot!.name} to run on a schedule.`
               : preview.length === 0
                 ? draft.repeat === 'once'
                   ? 'Pick a time in the future.'
@@ -147,11 +187,19 @@ function EditorDialog({ target }: { target: Target }) {
     const results = draft.results === 'none' ? ('none' as const) : ('thread' as const)
     const thread = draft.results !== 'none' && draft.results !== 'dedicated' ? draft.results : undefined
     const timeout = Number(draft.timeoutMinutes) || undefined
-    const fields = { name: draft.name.trim(), botId: draft.botId, prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, results }
+    const fields = { name: draft.name.trim(), prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, results }
+    const doer = runsOn ? { target: runsOn } : { botId: draft.botId }
     const saved = routine
-      ? await update(routine.id, { ...fields, endsAt: endsAt?.toISOString() ?? null, timeoutMinutes: timeout ?? null, resultsThreadId: thread ?? null })
+      ? await update(routine.id, {
+          ...fields,
+          ...(runsOn ? { target: runsOn, botId: null } : { botId: draft.botId, target: null }),
+          endsAt: endsAt?.toISOString() ?? null,
+          timeoutMinutes: timeout ?? null,
+          resultsThreadId: thread ?? null
+        })
       : await createRoutine({
           ...fields,
+          ...doer,
           ...(endsAt ? { endsAt: endsAt.toISOString() } : {}),
           ...(timeout ? { timeoutMinutes: timeout } : {}),
           ...(thread ? { resultsThreadId: thread } : {})
@@ -273,17 +321,56 @@ function EditorDialog({ target }: { target: Target }) {
               </label>
             </div>
           </details>
-          <Select label="Assign a bot" value={draft.botId} options={bots.map((b) => ({ value: b.id, label: b.name }))} onChange={(v) => set('botId', v)} />
+          <Select
+            label="Who does it"
+            value={draft.doer === 'bot' ? draft.botId : draft.doer}
+            options={[
+              ...bots.map((b) => ({ value: b.id, label: b.name, group: 'A bot' })),
+              { value: 'chat', label: 'A new chat (Chat mode)', group: 'Without a bot' },
+              { value: 'workspace', label: 'A new agent in a Work workspace', group: 'Without a bot' }
+            ]}
+            onChange={(v) => (v === 'chat' || v === 'workspace' ? setDraft((d) => ({ ...d, doer: v, cliId: '' })) : setDraft((d) => ({ ...d, doer: 'bot', botId: v })))}
+          />
+          {draft.doer === 'workspace' && (
+            <div className={styles.row}>
+              <Select
+                label="Project"
+                value={draft.projectId}
+                options={[{ value: '', label: 'Pick a project', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+                onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: '' }))}
+              />
+              <Select
+                label="Workspace"
+                value={draft.workspaceId}
+                options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+                onChange={(v) => set('workspaceId', v)}
+              />
+            </div>
+          )}
+          {draft.doer !== 'bot' && (
+            <>
+              <Select label="CLI" value={draft.cliId} options={[{ value: '', label: 'Pick a CLI', disabled: true }, ...cliOptions]} onChange={(v) => set('cliId', v)} />
+              <p className={styles.note}>
+                {draft.doer === 'chat'
+                  ? 'Each run starts a new chat in Chat mode and sends these instructions. It works read-only, like any new chat.'
+                  : 'Each run opens a new agent in that workspace and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.'}
+              </p>
+            </>
+          )}
           {bot && !bot.routines && (
             <div className={styles.allow}>
               <span>{bot.name} doesn&rsquo;t run on a schedule yet.</span>
               <Toggle label={`Allow ${bot.name} to run on a schedule`} checked={false} onChange={() => void updateBot(bot.id, { routines: true })} />
             </div>
           )}
-          <Select label="Post results to" value={draft.results} options={resultOptions} onChange={(v) => set('results', v)} />
-          <p className={styles.note}>Each run starts with fresh context in its own thread; a dated summary of each run collects in the results thread.</p>
+          {draft.doer === 'bot' && (
+            <>
+              <Select label="Post results to" value={draft.results} options={resultOptions} onChange={(v) => set('results', v)} />
+              <p className={styles.note}>Each run starts with fresh context in its own thread; a dated summary of each run collects in the results thread.</p>
+            </>
+          )}
           <TextAreaField
-            label="Instructions for the bot"
+            label="Instructions"
             value={draft.prompt}
             maxLength={MAX_ROUTINE_PROMPT}
             rows={6}

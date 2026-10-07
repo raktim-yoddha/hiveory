@@ -1,7 +1,15 @@
 /**
- * Routines (ADR 0028): a bot's scheduled work. Each run opens a fresh thread on the bot with the
- * routine's instructions; a run is a receipt that outlives edits to the routine.
+ * Routines (ADR 0028): scheduled work. Each run opens a fresh thread on a bot, a new chat in Chat mode,
+ * or an agent in a Work workspace (ADR 0030) with the routine's instructions; a run is a receipt that
+ * outlives edits to the routine.
  */
+
+/** Who does a routine's work when it is not a bot (ADR 0030). */
+export type RoutineTarget =
+  /** A new chat in Chat mode with this CLI (a scheduled chat). */
+  | { kind: 'chat'; cliId: string; model?: string }
+  /** A new agent of this CLI in a Work workspace: its card moves on the Kanban by its real state. */
+  | { kind: 'workspace'; projectId: string; workspaceId: string; cliId: string }
 
 /** The editor's repeat choices. All but "once" and "every X minutes" are stored as cron. */
 export const REPEAT_PRESETS = ['daily', 'weekdays', 'weekly', 'selected-days', 'monthly', 'month-end', 'yearly', 'custom'] as const
@@ -16,7 +24,9 @@ export type RoutineSchedule =
 export interface Routine {
   id: string
   name: string
-  botId: string
+  /** The bot that does it; absent when `target` names a new chat or a Work agent. */
+  botId?: string
+  target?: RoutineTarget
   /** What the bot is asked to do on every run. */
   prompt: string
   schedule: RoutineSchedule
@@ -48,7 +58,12 @@ export interface RoutineRun {
   id: string
   routineId: string
   routineName: string
-  botId: string
+  /** The bot that did it; absent for a chat or Work run (see `where`). */
+  botId?: string
+  /** Who did a chat or Work run, as the user reads it: "Codex in a new chat", "Claude Code in demo-app · main". */
+  where?: string
+  /** A Work run's agent. */
+  agentId?: string
   trigger: RunTrigger
   prompt: string
   scheduledFor: string

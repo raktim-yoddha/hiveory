@@ -9,8 +9,10 @@ export type WorkColumn = 'working' | 'unfinished' | 'done'
 export interface WorkItem {
   key: string
   column: WorkColumn
-  /** The bot doing the work. */
-  botId: string
+  /** The bot doing the work; absent for a scheduled chat or a Work routine (see `where`). */
+  botId?: string
+  /** Who did it when it isn't a bot: "Codex in a new chat". */
+  where?: string
   /** Who asked for it: another bot, a routine or a trigger. */
   from: { kind: 'bot'; botId: string } | { kind: 'routine' | 'trigger'; name: string }
   title: string
@@ -43,7 +45,7 @@ export function workBoard(handoffs: Handoff[], runs: RoutineRun[], now: number):
       (r): WorkItem => ({
         key: `r-${r.id}`,
         column: runColumn(r),
-        botId: r.botId,
+        ...(r.botId ? { botId: r.botId } : { where: r.where ?? 'Nobody' }),
         from: { kind: r.trigger === 'event' ? 'trigger' : 'routine', name: r.routineName },
         title: r.routineName,
         at: r.status === 'running' ? (r.startedAt ?? r.scheduledFor) : (r.endedAt ?? r.scheduledFor),

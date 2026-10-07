@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
+import { CalendarClock, MessageSquarePlus, Pencil, Trash2 } from 'lucide-react'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { InlineEdit } from '../../components/ui/InlineEdit'
@@ -9,6 +9,7 @@ import { cx } from '../../lib/cx'
 import { useChat } from '../../stores/chat'
 import { useProjects } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
+import { scheduleRoutine } from '../routines/open-run'
 import styles from './Chat.module.css'
 
 /** Chat mode's sidebar: every chat, newest first. Right-click (or double-click) a chat to rename it. */
@@ -26,6 +27,7 @@ export function ChatSidebar() {
     <nav className={styles.sidebar} aria-label="Chats">
       <div className={styles.sidebarHeader}>
         <h2 className={styles.sidebarHeading}>Chats</h2>
+        <IconButton label="Schedule a chat" icon={<CalendarClock />} onClick={() => scheduleRoutine({ kind: 'chat', cliId: '' })} />
         <IconButton label="New chat" icon={<MessageSquarePlus />} onClick={() => void create(projectId)} />
       </div>
       <ul className={styles.chatList}>
