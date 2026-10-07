@@ -22,13 +22,27 @@ export const useSelectionBox = (container: RefObject<HTMLElement | null>, select
       const el = root.querySelector<HTMLElement>(selector)
       setBox((prev) => {
         if (!el) return null
-        const next = { x: el.offsetLeft, y: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight }
+        // Sub-pixel rects, not offset* (whole pixels): a container at a fractional position
+        // would otherwise leave the box up to a pixel off its label. Relative to the padding edge,
+        // where the absolutely positioned indicator starts. Divided by any scale (a dialog animating
+        // in) and shifted by the container's scroll so it matches layout coordinates.
+        const r = el.getBoundingClientRect()
+        const c = root.getBoundingClientRect()
+        const scale = root.offsetWidth ? c.width / root.offsetWidth || 1 : 1
+        const next = {
+          x: (r.left - c.left) / scale - root.clientLeft + root.scrollLeft,
+          y: (r.top - c.top) / scale - root.clientTop + root.scrollTop,
+          width: r.width / scale,
+          height: r.height / scale
+        }
         return prev && prev.x === next.x && prev.y === next.y && prev.width === next.width && prev.height === next.height ? prev : next
       })
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(root)
+    // An item can change width (a web font arriving) without the container resizing.
+    for (const child of root.children) observer.observe(child)
     return () => observer.disconnect()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
