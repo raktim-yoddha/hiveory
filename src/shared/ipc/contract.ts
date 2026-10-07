@@ -21,7 +21,7 @@ import type {
   HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
-import { MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
+import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
@@ -72,6 +72,9 @@ const botName = z.string().trim().min(1).max(MAX_BOT_NAME)
 /** A bot's editable fields; '' clears the engine, model or effort. */
 const botFields = z.object({
   brief: z.string().max(MAX_BOT_BRIEF).optional(),
+  blurb: z.string().trim().max(MAX_BOT_BLURB).optional(),
+  /** Desktop notifications for its replies and routines. */
+  notify: z.boolean().optional(),
   cliId: z.union([id, z.literal('')]).optional(),
   model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
   effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
@@ -394,7 +397,7 @@ export const requestSchemas = {
   'shell.open': z.object({ workspaceId: id.optional(), projectId: id.optional(), tab: z.string().regex(/^[a-z0-9]{1,12}$/).optional() }),
   'shell.restart': z.object({ id }),
   'shell.close': z.object({ id }),
-  'extensions.scan': z.object({ projectId: id.optional() }),
+  'extensions.scan': z.object({ projectId: id.optional(), botId: id.optional() }),
   /** Paths must come from the last scan; main re-validates. */
   'extensions.revealSkill': z.object({ path: skillPath }),
   /** Copies a scanned skill into another skills folder (same scope), so more CLIs load it. */
@@ -406,10 +409,12 @@ export const requestSchemas = {
     description: z.string().trim().min(1).max(1024),
     body: z.string().max(100_000),
     rootIds: z.array(skillRoot).min(1).max(40),
-    projectId: id.optional()
+    projectId: id.optional(),
+    /** A bot's own skills: its folder, which its engines read as their project (ADR 0028). */
+    botId: id.optional()
   }),
   /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
-  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional() }),
+  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional(), botId: id.optional() }),
   /** MCP servers and apps Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
   /** Explorer (ADR 0018): paths are relative to the scope's folder and re-checked in main. */
   'files.list': z.object({ scope: fileScope, dir: relPath }),
@@ -528,6 +533,8 @@ export const requestSchemas = {
   'teams.rename': z.object({ teamId: id, name: teamName }),
   'teams.delete': z.object({ teamId: id }),
   'bots.handoffs': none,
+  /** What a new thread of this bot is told before its first turn (the Overview's prompt preview). */
+  'bots.preview': z.object({ botId: id }),
   // Routines (ADR 0028): a bot's scheduled work, and the run log.
   'routines.list': z.object({ botId: id.optional() }),
   'routines.create': routineFields,
@@ -771,6 +778,7 @@ export interface ResponseMap {
   'teams.rename': Team
   'teams.delete': void
   'bots.handoffs': Handoff[]
+  'bots.preview': string
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView

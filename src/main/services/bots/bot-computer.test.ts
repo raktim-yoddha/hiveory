@@ -18,6 +18,7 @@ const bot = (computer?: Bot['computer']): Bot => ({
   worksOn: 'auto',
   routines: false,
   teamId: 'general',
+  notify: true,
   ...(computer ? { computer } : {}),
   createdAt: '',
   updatedAt: ''

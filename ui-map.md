@@ -41,7 +41,7 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Header: avatar, name, role and engine, status, Computer and browser (opens the bot panel), settings (opens the bot editor).
 - Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
   first thread opens on its own.
-- Bot editor: Name, Brief, Engine, Full access, Chief of Staff, Team messaging, Runs on a schedule, Memory (edit mode).
+- Bot editor: Name, Blurb, Brief, Engine, Full access, Chief of Staff, Team messaging, Runs on a schedule, Memory (edit mode).
 - Sidebar "+": New bot (Ctrl N, ⌘N on Mac, while the bots sidebar is shown) and Templates: a
   gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
   Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
@@ -63,7 +63,10 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
   routines run; Advanced (stop a run after N minutes, last day); Assign a bot (with "allow it to run
   on a schedule" inline); Post results to (a dedicated results thread · one of the bot's threads ·
   only each run's own thread); Instructions. Editing adds Delete and Run now.
-- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Computer · Routines · Browser):
+- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Overview · Computer · Routines · Browser):
+  - **Overview**: name and blurb; Does; Can reach; Won't; Notifications switch; Prompt preview
+    (bytes ≈ tokens, expands to the exact text); Skills (the shared Skills panel, scoped to the bot:
+    its own skills marked "This bot").
   - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is
     shown) with Start/Stop and Take control; **Works on** cards: Auto · Linux computer · Server
     computer (SSH host field) · This computer · Browser · Off; a "Can use … now" line and, when a

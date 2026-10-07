@@ -15,6 +15,7 @@ interface Props {
   open: boolean
   roots: SkillRoot[]
   projectId?: string
+  botId?: string
   onClose: () => void
   onCreated: () => Promise<void>
 }
@@ -30,12 +31,13 @@ const slug = (text: string): string =>
 const TEMPLATE = '# When to use\n\nDescribe the situations this skill is for.\n\n# Steps\n\n1. …\n'
 
 /** Writes a new SKILL.md into each chosen skills folder, so every CLI reading those folders gets it at once. */
-export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: Props) {
+export function NewSkillDialog({ open, roots, projectId, botId, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [body, setBody] = useState(TEMPLATE)
   const [targets, setTargets] = useState<SkillRoot['id'][]>(['agents', 'claude'])
-  const [scope, setScope] = useState<'user' | 'project'>('user')
+  // A bot's new skill is its own unless the user says otherwise.
+  const [scope, setScope] = useState<'user' | 'project'>(botId ? 'project' : 'user')
   const [busy, setBusy] = useState(false)
 
   const cleanName = name.replace(/-+$/, '')
@@ -50,7 +52,8 @@ export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: P
         description: description.trim(),
         body,
         rootIds: targets,
-        projectId: scope === 'project' ? projectId : undefined
+        projectId: scope === 'project' ? projectId : undefined,
+        ...(scope === 'project' && botId ? { botId } : {})
       })
       await onCreated()
     }).finally(() => setBusy(false))
@@ -76,14 +79,14 @@ export function NewSkillDialog({ open, roots, projectId, onClose, onCreated }: P
       <div className={styles.form}>
         <div className={styles.formRow}>
           <TextField label="Name" value={name} onChange={(v) => setName(slug(v))} placeholder="release-notes" autoFocus />
-          {projectId ? (
+          {projectId || botId ? (
             <Select
               label="Where"
               value={scope}
               onChange={(v) => setScope(v as 'user' | 'project')}
               options={[
                 { value: 'user', label: 'Everywhere (your home folder)' },
-                { value: 'project', label: 'This project only' }
+                { value: 'project', label: botId ? 'This bot only' : 'This project only' }
               ]}
             />
           ) : (

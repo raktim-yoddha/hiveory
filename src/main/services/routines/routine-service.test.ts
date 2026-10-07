@@ -11,7 +11,7 @@ import { StateStore } from '../persistence/state-store'
 import { KEEP_AWAKE_LEAD_MS, KeepAwake, wantsAwake } from './keep-awake'
 import { RoutineService, type RoutineInput } from './routine-service'
 import { RoutineTools } from './routine-tools'
-import { runNotice } from './run-notice'
+import { replyNotice, runNotice } from './run-notice'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const HOUR = 60 * 60 * 1000
@@ -353,6 +353,15 @@ describe('bots and their routines', () => {
     expect(told).toContain('Morning report:completed')
     expect(told).toContain('Morning report:missed')
     expect(told.some((t) => t.endsWith(':skipped'))).toBe(false)
+  })
+
+  it('words a reply notice from its first real line, and knows which threads are runs', () => {
+    expect(replyNotice('Scout', '[tool browser_open]\n\n  Found 3 sources.\nMore…')).toEqual({ title: 'Scout replied', body: 'Found 3 sources.' })
+    expect(replyNotice('Scout', '').body).toBe('It finished its turn.')
+    const { service, advance, daily9 } = setup()
+    service.create(daily9())
+    advance(HOUR)
+    expect([service.isRunThread('t1'), service.isRunThread('elsewhere')]).toEqual([true, false])
   })
 
   it('words notifications plainly', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { create } from 'zustand'
-import { GENERAL_TEAM, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, type BotView } from '@shared/domain/bot'
+import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, type BotView } from '@shared/domain/bot'
 import { Button, IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Modal } from '../../components/ui/Modal'
@@ -23,6 +23,7 @@ export const useBotEditor = create<{ target: string | null; template?: BotTempla
 
 interface Draft {
   name: string
+  blurb: string
   brief: string
   cliId: string
   autoApprove: boolean
@@ -35,6 +36,7 @@ interface Draft {
 
 const draftOf = (bot: BotView | undefined, firstBot: boolean, template?: BotTemplate): Draft => ({
   name: bot?.name ?? template?.name ?? '',
+  blurb: bot?.blurb ?? template?.summary ?? '',
   brief: bot?.brief ?? template?.brief ?? '',
   cliId: bot?.cliId ?? '',
   autoApprove: bot?.autoApprove ?? false,
@@ -82,7 +84,7 @@ function EditorDialog({ target }: { target: string }) {
   const save = async (): Promise<void> => {
     if (!draft.name.trim()) return
     setBusy(true)
-    const fields = { name: draft.name.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines, teamId: draft.teamId }
+    const fields = { name: draft.name.trim(), blurb: draft.blurb.trim(), brief: draft.brief, cliId, autoApprove: draft.autoApprove, chief: draft.chief, messaging: draft.messaging, routines: draft.routines, teamId: draft.teamId }
     if (bot) await update(bot.id, { ...fields, memory: draft.memory })
     else await createBot({ ...fields, ...(template ? { worksOn: template.worksOn } : {}) })
     setBusy(false)
@@ -115,6 +117,13 @@ function EditorDialog({ target }: { target: string }) {
       >
         <div className={styles.form}>
           <TextField label="Name" value={draft.name} maxLength={MAX_BOT_NAME} placeholder="Release notes editor" onChange={(v) => set('name', v)} autoFocus />
+          <TextField
+            label="Blurb"
+            value={draft.blurb}
+            maxLength={MAX_BOT_BLURB}
+            placeholder="One line on what it is for: shown in the sidebar and to other bots"
+            onChange={(v) => set('blurb', v)}
+          />
           <TextAreaField
             label="Brief"
             value={draft.brief}

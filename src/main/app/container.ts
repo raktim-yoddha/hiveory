@@ -39,7 +39,7 @@ import { botReach } from '@shared/domain/bot-reach'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
 import { RoutineService } from '../services/routines/routine-service'
 import { RoutineTools } from '../services/routines/routine-tools'
-import { runNotice } from '../services/routines/run-notice'
+import { replyNotice, runNotice } from '../services/routines/run-notice'
 import { TeamService } from '../services/bots/team-service'
 import { inProcessPty } from '../services/pty/pty-backend'
 import { CliRegistry } from '../services/cli/registry'
@@ -171,6 +171,20 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // Each bot's own Linux computer, in Docker here or on an SSH host (ADR 0022).
   const computers = new BotComputers((id) => bots!.get(id), kits, (id) => bots!.home(id), log)
   const desktopTools = new DesktopTools(computers, chats)
+  /** A desktop notification, only while no Hiveory window is focused; clicking it opens the bot's thread. */
+  const notifyDesktop = (notice: { title: string; body: string }, botId: string, threadId?: string): void => {
+    const window = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    if (!window || BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
+    const shown = new Notification(notice)
+    shown.on('click', () => {
+      if (window.isDestroyed()) return
+      if (window.isMinimized()) window.restore()
+      window.show()
+      window.focus()
+      if (threadId) emit('bots.open', { botId, threadId })
+    })
+    shown.show()
+  }
   // Bots' scheduled work (ADR 0028); while plugged in, the computer stays awake around due runs.
   const keepAwake = new KeepAwake({ start: () => powerSaveBlocker.start('prevent-app-suspension'), stop: (id) => powerSaveBlocker.stop(id) })
   const routines = new RoutineService({
@@ -190,18 +204,18 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       ),
     // A run that ended or was missed while the user is elsewhere: a desktop notification that opens its thread.
     outcome: (run) => {
-      const window = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-      if (!window || BrowserWindow.getFocusedWindow() || !Notification.isSupported()) return
-      const notice = new Notification(runNotice(run, bots?.find(run.botId)?.name))
-      notice.on('click', () => {
-        if (window.isDestroyed()) return
-        if (window.isMinimized()) window.restore()
-        window.show()
-        window.focus()
-        if (run.threadId) emit('bots.open', { botId: run.botId, threadId: run.threadId })
-      })
-      notice.show()
+      const bot = bots?.find(run.botId)
+      if (bot?.notify !== false) notifyDesktop(runNotice(run, bot?.name), run.botId, run.threadId)
     }
+  })
+  // A bot replied in a thread the user started, while they are elsewhere. Routine runs announce
+  // themselves above; handed-down work goes back to the bot that asked, not to the user.
+  chats.on('run', (chatId, running) => {
+    if (running) return
+    const chat = chats.find(chatId)
+    const bot = chat?.botId ? bots?.find(chat.botId) : undefined
+    if (!chat || !bot?.notify || chat.delegation || routines.isRunThread(chatId)) return
+    notifyDesktop(replyNotice(bot.name, chats.lastReply(chatId)), bot.id, chatId)
   })
   // A bot allowed to run on a schedule can see its routines and save new ones, always paused.
   const routineTools = new RoutineTools(() => routines, (chatId) => chats.find(chatId)?.botId)

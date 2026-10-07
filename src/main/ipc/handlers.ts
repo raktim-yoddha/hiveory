@@ -47,8 +47,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   const projectPathOf = (projectId?: string, skillPath?: string): string | undefined => {
     if (projectId) return c.workspaceRepo.project(projectId).path
     if (!skillPath) return undefined
-    return c.projects.list().map((p) => p.path).find((root) => skillPath.startsWith(root))
+    // A bot's folder is its project: its engines read skills there (ADR 0028).
+    return [...c.projects.list().map((p) => p.path), ...c.bots.list().map((b) => b.home)].find((root) => skillPath.startsWith(root))
   }
+  /** The project-level skills folder's owner: a project, or a bot's own folder. */
+  const placePath = (projectId?: string, botId?: string): string | undefined => (botId ? c.bots.home(botId) : projectPathOf(projectId))
 
   /** A scope's folder (workspace, else project) and the id its events use. */
   const folderOf = (scope: { workspaceId?: string; projectId?: string }): { root: string; key: string; projectId: string } =>
@@ -286,8 +289,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'shell.restart': ({ id }) => c.shells.restart(id),
   'shell.close': ({ id }) => c.shells.close(id),
 
-  'extensions.scan': ({ projectId }) =>
-    c.extensions.scan(projectId ? c.workspaceRepo.project(projectId).path : undefined),
+  'extensions.scan': ({ projectId, botId }) => c.extensions.scan(placePath(projectId, botId)),
   'extensions.revealSkill': async ({ path }) => {
     const error = await shell.openPath(c.extensions.skillFolder(path))
     if (error) fail('NOT_FOUND', 'Could not open the folder.', { detail: error })
@@ -296,13 +298,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.extensions.copySkill(path, rootId, projectPathOf(undefined, path))
   },
   'extensions.removeSkill': ({ path }) => c.extensions.removeSkill(path),
-  'extensions.createSkill': ({ projectId, ...input }) => {
-    c.extensions.createSkill(input, projectPathOf(projectId))
+  'extensions.createSkill': ({ projectId, botId, ...input }) => {
+    c.extensions.createSkill(input, placePath(projectId, botId))
   },
-  'extensions.importSkill': async ({ rootIds, projectId }, event) => {
+  'extensions.importSkill': async ({ rootIds, projectId, botId }, event) => {
     const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })
     if (!folder) return false
-    c.extensions.importSkill(folder, rootIds, projectPathOf(projectId))
+    c.extensions.importSkill(folder, rootIds, placePath(projectId, botId))
     return true
   },
 
@@ -482,6 +484,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'teams.rename': ({ teamId, name }) => c.teams.rename(teamId, name),
   'teams.delete': ({ teamId }) => c.teams.delete(teamId),
   'bots.handoffs': () => c.bots.handoffs(),
+  'bots.preview': ({ botId }) => c.bots.preview(botId),
   'routines.list': ({ botId }) => c.routines.list(botId),
   'routines.create': (input) => c.routines.create(input),
   'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),

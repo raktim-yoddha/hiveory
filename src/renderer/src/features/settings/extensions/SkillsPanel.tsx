@@ -27,6 +27,8 @@ interface SkillGroup {
 interface Props {
   inventory: ExtensionsInventory | null
   projectId?: string
+  /** A bot's own skills: its folder, which its engines read as their project (ADR 0028). */
+  botId?: string
   onChanged: () => Promise<void>
 }
 
@@ -34,7 +36,7 @@ interface Props {
  * Agent Skills across CLIs. Each skills folder is read by different CLIs;
  * lighting a folder copies the skill there so those CLIs load it too.
  */
-export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
+export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
   const clis = useClis((s) => s.clis)
   const installed = useMemo(() => new Set(clis.filter((c) => c.available).map((c) => c.id)), [clis])
   const [query, setQuery] = useState('')
@@ -73,7 +75,8 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
 
   const importFolder = (): void =>
     void runAction('Import skill', async () => {
-      if (await api('extensions.importSkill', { rootIds: ['agents', 'claude'], projectId: undefined })) await onChanged()
+      // A bot's imports go into its own folder; elsewhere, into the home folder for every project.
+      if (await api('extensions.importSkill', { rootIds: ['agents', 'claude'], projectId: undefined, ...(botId ? { botId } : {}) })) await onChanged()
     })
 
   return (
@@ -107,7 +110,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
                 <div className={settings.listMain}>
                   <span className={styles.skillName}>
                     <span className={settings.listTitle}>{group.name}</span>
-                    {group.scope === 'project' && <span className={styles.badge}>Project</span>}
+                    {group.scope === 'project' && <span className={styles.badge}>{botId ? 'This bot' : 'Project'}</span>}
                   </span>
                   <span className={styles.description} title={group.description}>
                     {group.description ?? 'No description'}
@@ -155,6 +158,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
         open
         roots={roots}
         projectId={projectId}
+        botId={botId}
         onClose={() => setCreating(false)}
         onCreated={async () => {
           setCreating(false)

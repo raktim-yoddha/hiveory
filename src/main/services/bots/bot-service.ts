@@ -21,10 +21,10 @@ import type { Emit } from '../events'
 import { nowIso } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
-export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines' | 'teamId'>> & {
+export type BotInput = Pick<Bot, 'name'> & Partial<Pick<Bot, 'brief' | 'blurb' | 'notify' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'worksOn' | 'routines' | 'teamId'>> & {
   computer?: Bot['computer'] | null
 }
-export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines' | 'teamId'>> & {
+export type BotPatch = Partial<Pick<Bot, 'name' | 'brief' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'chief' | 'messaging' | 'pinned' | 'memory' | 'worksOn' | 'browserProfileId' | 'routines' | 'teamId' | 'blurb' | 'notify'>> & {
   /** null takes the computer away from the bot (its container stays, as the user's). */
   computer?: Bot['computer'] | null
 }
@@ -113,6 +113,8 @@ export class BotService {
       id: randomUUID(),
       name,
       brief: input.brief?.trim() ?? '',
+      ...(input.blurb?.trim() ? { blurb: input.blurb.trim() } : {}),
+      notify: input.notify ?? true,
       cliId: input.cliId || undefined,
       model: input.model || undefined,
       effort: input.effort || undefined,
@@ -153,6 +155,7 @@ export class BotService {
       // A bot that moves leads its new team only if that team has no Chief yet.
       if (moving && patch.chief === undefined) target.chief = !s.bots.some((b) => b.id !== botId && b.chief && b.teamId === teamId)
       if (patch.computer === null) delete target.computer
+      if (patch.blurb !== undefined && !patch.blurb.trim()) delete target.blurb
       if (patch.cliId === '') target.cliId = undefined
       if (patch.model === '') target.model = undefined
       if (patch.effort === '') target.effort = undefined
@@ -238,6 +241,12 @@ export class BotService {
     ]
       .filter(Boolean)
       .join('\n\n')
+  }
+
+  /** What a new thread of this bot is told first: its identity, brief and memory. */
+  preview(botId: string): string {
+    this.get(botId)
+    return this.preamble({ botId } as ChatSession) ?? ''
   }
 
   /**

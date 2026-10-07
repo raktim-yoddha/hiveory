@@ -316,3 +316,15 @@ describe('teams', () => {
     ])
   })
 })
+
+describe('bot overview data', () => {
+  it('keeps a one-line blurb for rosters, notifies by default, and previews the first-turn prompt', async () => {
+    const { bots, tools } = setup()
+    const bot = bots.create({ name: 'Scout', cliId: 'claude', brief: 'Owns research.', blurb: '  Finds sources fast.  ' })
+    expect(bot).toMatchObject({ blurb: 'Finds sources fast.', notify: true })
+    const other = bots.create({ name: 'Other', cliId: 'claude' })
+    expect((await tools.call({ id: bots.newThread(other.id).id }, 'list_bots', {})).text).toContain('Finds sources fast.')
+    expect(bots.preview(bot.id)).toContain('Owns research.')
+    expect(bots.update(bot.id, { blurb: '' }).blurb).toBeUndefined()
+  })
+})

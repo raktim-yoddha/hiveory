@@ -8,7 +8,7 @@ import { reportError, runAction } from './notices'
 
 type BotInput = RequestOf<'bots.create'>
 type BotPatch = Omit<RequestOf<'bots.update'>, 'botId'>
-export type BotPanelTab = 'computer' | 'routines' | 'browser'
+export type BotPanelTab = 'overview' | 'computer' | 'routines' | 'browser'
 
 interface BotsState {
   bots: BotView[]
@@ -56,7 +56,7 @@ export const useBots = create<BotsState>((set, get) => ({
   threads: {},
   activeThread: {},
   panelOpen: false,
-  panelTab: 'computer',
+  panelTab: 'overview',
   page: 'bot',
 
   setPanelOpen: (panelOpen) => set({ panelOpen }),

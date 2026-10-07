@@ -107,6 +107,23 @@ importing whole teams comes later.
 - **Fix:** croner's `startAt` left out a run at exactly the start time (the first run a user picks).
   The scheduler no longer passes it and applies the start itself.
 
+## Overview, blurb, notifications and skills per bot (built)
+
+- **Overview tab** (first in the bot panel): **Does** (team role, routines on or paused and the next
+  run, memory), **Can reach** (from `botReach`, so it matches the tools; apps; its folder; who it can
+  contact; full access) and **Won't** (no edits without approval, no schedule, not your screen, no
+  messages), plus a **prompt preview** (`bots.preview`: the exact first-turn preamble, with its size)
+  and the bot's **skills**.
+- **Blurb** (`Bot.blurb`, at most 140 characters): one line shown in the sidebar and given to other bots
+  by `list_bots` instead of the brief's first line. Templates fill it from their summary.
+- **Notifications** (`Bot.notify`, on by default): a desktop notification when the bot replies in a
+  thread the user started, or when one of its routines ends or is missed, only while no Hiveory window
+  is focused. Delegated threads report to the bot that asked, not to the user; routine run threads
+  are announced once, as runs.
+- **Skills:** a bot's folder is its engines' project, so its CLIs already load skills from there. The
+  Skills panel takes a bot as its scope (`extensions.scan | createSkill | importSkill` accept `botId`);
+  a new or imported skill goes into the bot's own folder unless the user picks "Everywhere".
+
 ## Next
 
 Triggers (T1); the work board (K1); Queen Bee actions for routines.

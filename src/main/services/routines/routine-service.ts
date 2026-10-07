@@ -115,6 +115,11 @@ export class RoutineService {
     return this.d.store.state.routines.find((r) => r.id === routineId) ?? fail('NOT_FOUND', 'Routine not found.')
   }
 
+  /** Whether a thread was opened by a routine run (its outcome is announced by the routine, not as a reply). */
+  isRunThread(threadId: string): boolean {
+    return this.d.store.state.routineRuns.some((r) => r.threadId === threadId)
+  }
+
   runs(filter: { botId?: string; routineId?: string } = {}): RoutineRun[] {
     return this.d.store.state.routineRuns.filter((r) => (!filter.botId || r.botId === filter.botId) && (!filter.routineId || r.routineId === filter.routineId))
   }

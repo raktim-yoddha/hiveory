@@ -568,3 +568,29 @@
 .handoffRunning {
   color: var(--color-working);
 }
+
+/* Overview tab */
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding-left: var(--space-7);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.prompt {
+  max-height: calc(var(--calendar-hour-height) * 8);
+  margin: var(--space-4) 0 0;
+  overflow: auto;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+details.card > summary {
+  cursor: pointer;
+}

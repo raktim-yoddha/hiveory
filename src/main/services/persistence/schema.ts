@@ -6,7 +6,7 @@ import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
-import { GENERAL_TEAM, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
+import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
@@ -281,6 +281,8 @@ export const botSchema: z.ZodType<Bot> = z.object({
   id: str,
   name: z.string().min(1).max(MAX_BOT_NAME),
   brief: z.string().max(MAX_BOT_BRIEF).catch(''),
+  blurb: z.string().max(MAX_BOT_BLURB).optional().catch(undefined),
+  notify: z.boolean().catch(true),
   cliId: str.optional(),
   model: str.optional(),
   effort: str.optional(),

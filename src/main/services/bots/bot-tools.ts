@@ -67,7 +67,7 @@ export class BotTools implements ToolFamily {
         const busy = new Set(this.bots.list().filter((b) => b.running > 0).map((b) => b.id))
         return {
           text: team
-            .map((b) => `- ${b.name} (id ${b.id}) · ${this.bots.teamName(b.teamId)} team${b.chief ? ' · Chief of Staff' : ''} · ${busy.has(b.id) ? 'busy' : 'free'}${b.cliId ? '' : ' · no engine set'}\n  ${b.brief.split('\n')[0]?.slice(0, 200) || '(no brief)'}`)
+            .map((b) => `- ${b.name} (id ${b.id}) · ${this.bots.teamName(b.teamId)} team${b.chief ? ' · Chief of Staff' : ''} · ${busy.has(b.id) ? 'busy' : 'free'}${b.cliId ? '' : ' · no engine set'}\n  ${b.blurb || b.brief.split('\n')[0]?.slice(0, 200) || '(no brief)'}`)
             .join('\n')
         }
       }

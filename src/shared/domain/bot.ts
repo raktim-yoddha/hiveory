@@ -8,6 +8,10 @@ export interface Bot {
   name: string
   /** What the bot owns, the standards it keeps and when it stops to ask. */
   brief: string
+  /** One line on what it is for: shown in the sidebar, on the team map and to other bots. */
+  blurb?: string
+  /** A desktop notification when it replies or a routine of its ends while the user is elsewhere. */
+  notify: boolean
   /** Default engine and model for new threads; each thread may pick its own before it starts. */
   cliId?: string
   model?: string
@@ -107,6 +111,7 @@ export const botScope = (botId: string): string => `bot-${botId}`
 
 export const MAX_BOT_NAME = 60
 export const MAX_BOT_BRIEF = 4000
+export const MAX_BOT_BLURB = 140
 export const MAX_BOT_MEMORY = 50
 export const MAX_MEMORY_ENTRY = 300
 /** A delegated thread may delegate once more, never deeper: no loops between bots. */

@@ -69,7 +69,7 @@ export function BotsSidebar() {
                 <span>{bot.name}</span>
                 {bot.chief && <span className={styles.badge}>Chief</span>}
               </span>
-              <span className={chat.chatMeta}>{bot.brief.split('\n')[0] || 'No brief yet'}</span>
+              <span className={chat.chatMeta}>{bot.blurb || bot.brief.split('\n')[0] || 'No brief yet'}</span>
             </span>
             {bot.running > 0 && <StatusDot status="working" detail={`${bot.running} working`} />}
           </button>

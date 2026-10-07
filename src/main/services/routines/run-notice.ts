@@ -10,3 +10,9 @@ export function runNotice(run: RoutineRun, botName = 'The bot'): { title: string
   if (run.status === 'missed') return { title: `${run.routineName} was missed`, body: clip(why || 'Hiveory was closed or asleep at that time.') }
   return { title: `${run.routineName} failed`, body: clip(why || `${botName} could not finish this run.`) }
 }
+
+/** A bot's reply in a thread the user started, while they are elsewhere: its first line. */
+export function replyNotice(botName: string, reply: string): { title: string; body: string } {
+  const first = reply.replace(/\[tool [^\]]*\]/g, '').split('\n').map((l) => l.trim()).find(Boolean) ?? 'It finished its turn.'
+  return { title: `${botName} replied`, body: first.length > MAX_BODY ? `${first.slice(0, MAX_BODY - 1)}…` : first }
+}
