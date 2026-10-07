@@ -25,7 +25,7 @@ interface CreateWorkspaceDialogProps {
 
 type ConfigTab = 'agents' | 'presets'
 
-const MAIN_NAME = 'Main'
+const MAIN_NAME = 'Primary'
 
 /**
  * "Create Workspace". A Workspace is either the project folder itself (Main,
@@ -119,7 +119,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
               selected={kind === 'main'}
               disabled={hasMain}
               title="Workspace folder"
-              description={hasMain ? 'This workspace already has a main worktree.' : 'Agents work directly in the workspace folder.'}
+              description={hasMain ? 'This workspace already has a primary worktree.' : 'Agents work directly in the workspace folder.'}
               onSelect={() => setKind('main')}
             />
             <KindOption

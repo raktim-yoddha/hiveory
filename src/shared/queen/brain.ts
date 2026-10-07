@@ -289,7 +289,7 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
   if (a.agentId !== undefined) a.agentId = find(a.agentId, ctx.agents, (x) => [x.petName])
   if (Array.isArray(a.agentIds)) a.agentIds = a.agentIds.map((x) => find(x, ctx.agents, (y) => [y.petName]))
   if (a.type === 'close-agents' && a.agentIds === undefined && a.agentId !== undefined) a.agentIds = [a.agentId]
-  if (a.workspaceId !== undefined) a.workspaceId = lower(a.workspaceId) === 'main' ? (ctx.workspaces.find((w) => w.kind === 'main')?.id ?? a.workspaceId) : find(a.workspaceId, ctx.workspaces, (w) => [w.name])
+  if (a.workspaceId !== undefined) a.workspaceId = /^(main|primary)$/.test(lower(a.workspaceId)) ? (ctx.workspaces.find((w) => w.kind === 'main')?.id ?? a.workspaceId) : find(a.workspaceId, ctx.workspaces, (w) => [w.name])
   // Navigation may lead into another project's workspace (by id only: names there are ambiguous).
   const elsewhere = ctx.otherWorkspaces?.find((w) => w.id === a.workspaceId)
   if (a.projectId !== undefined) a.projectId = find(a.projectId, ctx.projects, (p) => [p.name])
@@ -479,9 +479,9 @@ export function stateMessage(ctx: QueenContext, utterance: string, notes: string
     'STATE',
     `page: ${page}; mode: ${MODE_LABEL[ctx.mode]}`,
     `projects: ${ctx.projects.map((p) => `${p.id} ${p.name}`).join('; ') || 'none'}`,
-    `workspaces: ${ctx.workspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [main]' : ''}`).join('; ') || 'none'}`,
+    `workspaces: ${ctx.workspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [primary]' : ''}`).join('; ') || 'none'}`,
     ...(ctx.otherWorkspaces?.length
-      ? [`other projects' workspaces (navigate only): ${ctx.otherWorkspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [main]' : ''} (project ${w.projectId})`).join('; ')}`]
+      ? [`other projects' workspaces (navigate only): ${ctx.otherWorkspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [primary]' : ''} (project ${w.projectId})`).join('; ')}`]
       : []),
     `agents: ${ctx.agents.map((a) => `${a.id} ${a.petName} (cli ${a.cliId}, workspace ${a.workspaceId}${a.status ? `, ${STATUS_WORD[a.status]}` : ''})`).join('; ') || 'none'}`,
     `clis: ${ctx.clis.map((c) => `${c.id} = ${c.displayName}`).join('; ') || 'none'}`,

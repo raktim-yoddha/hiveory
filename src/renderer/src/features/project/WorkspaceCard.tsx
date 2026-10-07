@@ -36,7 +36,7 @@ export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
             <span className={styles.top}>
               {isMain ? <House className={styles.kindIcon} aria-hidden /> : <GitBranch className={styles.kindIcon} aria-hidden />}
               <span className={styles.name}>{workspace.name}</span>
-              {isMain && <span className={styles.badge}>Main</span>}
+              {isMain && <span className={styles.badge}>Primary</span>}
             </span>
             {branch && <span className={styles.branch}>{branch}</span>}
             <span className={styles.stats}>

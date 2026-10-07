@@ -117,13 +117,16 @@ export class WorkspaceRepository {
       const id = mainWorkspaceId(p.id)
       return !workspaces.some((w) => w.id === id) && (instances.some((i) => i.workspaceId === id) || layouts[id])
     })
-    if (missing.length === 0) return
+    // The main worktree's default name was "Main" before it became "Primary" (ADR 0033).
+    const renamed = [...workspaces, ...this.store.state.archive.flatMap((a) => a.workspaces)].some((w) => w.kind === 'main' && w.name === 'Main')
+    if (missing.length === 0 && !renamed) return
     this.store.update((s) => {
+      for (const w of [...s.workspaces, ...s.archive.flatMap((a) => a.workspaces)]) if (w.kind === 'main' && w.name === 'Main') w.name = 'Primary'
       for (const p of missing) {
         s.workspaces.push({
           id: mainWorkspaceId(p.id),
           projectId: p.id,
-          name: 'Main',
+          name: 'Primary',
           kind: 'main',
           path: p.path,
           autoApprove: false,

@@ -19,7 +19,9 @@ Every user-facing word changes:
 
 This covers the desktop UI, the phone app, error messages, notifications, the in-app guide, agent
 tool descriptions, Queen Bee's replies and the docs (`product-spec.md`, `ui-map.md`, `design.md`,
-`AGENTS.md`). The main worktree is still the original folder ("Workspace folder" in Create worktree).
+`AGENTS.md`). The main worktree is still the original folder ("Workspace folder" in Create worktree) and is named
+**Primary** (was "Main"); worktrees still named "Main" are renamed on startup, custom names are kept.
+Queen Bee accepts "primary" and "main" for it.
 
 Code keeps its names: types (`Project`, `Workspace`), ids (`projectId`, `workspaceId`), IPC channels
 (`projects.*`, `workspaces.*`), stores, persisted data and the folder Hiveory keeps worktrees in.

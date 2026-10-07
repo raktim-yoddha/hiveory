@@ -67,7 +67,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
             <ListRow
               key={w.id}
               title={w.name}
-              subtitle={[w.kind === 'main' ? 'Main folder' : w.git?.branch, `${w.agentCount} ${w.agentCount === 1 ? 'agent' : 'agents'}`, w.healthy ? null : 'folder missing'].filter(Boolean).join(' · ')}
+              subtitle={[w.kind === 'main' ? 'Primary folder' : w.git?.branch, `${w.agentCount} ${w.agentCount === 1 ? 'agent' : 'agents'}`, w.healthy ? null : 'folder missing'].filter(Boolean).join(' · ')}
               leading={w.kind === 'main' ? <FolderGit2 size={18} color={colors.textMuted} /> : <GitBranch size={18} color={colors.brand} />}
               onPress={() => router.push(routes.workspace(w.id, projectId))}
             />

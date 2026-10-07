@@ -203,7 +203,7 @@ export class ProjectService {
     // Its Main workspace would share a checkout another project already runs agents in (ADR 0021).
     const owner = entry.workspaces.some((w) => w.kind === 'main') ? mainTreeOwner(this.store.state, project) : undefined
     if (owner) {
-      fail('INVALID_INPUT', `${project.name}'s Main worktree uses the same checkout as the ${owner.workspace.name} worktree of ${owner.project.name}.`, {
+      fail('INVALID_INPUT', `${project.name}'s Primary worktree uses the same checkout as the ${owner.workspace.name} worktree of ${owner.project.name}.`, {
         operation: 'Restore workspace',
         hint: `Agents run in one place per checkout. Remove ${owner.workspace.name} from ${owner.project.name} (nothing on disk changes), then restore.`
       })

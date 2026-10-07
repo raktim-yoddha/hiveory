@@ -55,7 +55,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
         onClose={onClose}
       >
         <p>
-          Its agents will stop and close. The workspace folder and its files are not touched — you can create the main
+          Its agents will stop and close. The workspace folder and its files are not touched — you can create the primary
           worktree again at any time.
         </p>
       </ConfirmDialog>

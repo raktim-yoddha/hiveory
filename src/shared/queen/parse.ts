@@ -61,7 +61,7 @@ const targetWorkspace = (clause: string, ctx: QueenContext): { id: string } | { 
   const m = /\b(?:in|on|inside|into|at) (?:worktree |workspace )?(.+)$/.exec(clause)
   if (m) {
     const name = m[1]!.replace(/\b(worktree|workspace|branch)\b/g, '').trim()
-    const found = name === 'main' ? ctx.workspaces.filter((w) => w.kind === 'main').map((w) => ({ ...w })) : null
+    const found = /^(main|primary)$/.test(name) ? ctx.workspaces.filter((w) => w.kind === 'main').map((w) => ({ ...w })) : null
     const match = found?.length === 1 ? { one: found[0]! } : matchName(name, ctx.workspaces)
     if (match && 'one' in match) return { id: match.one.id }
     const options = match && 'many' in match ? match.many : ctx.workspaces
@@ -83,7 +83,7 @@ type Workspace = QueenContext['workspaces'][number] & { projectId: string }
 
 /** "main" means the Main workspace; any other name matches exactly, then by a unique prefix or substring. */
 const pickWorkspace = (name: string, list: Workspace[]): Match<Workspace> => {
-  if (norm(name) === 'main') {
+  if (/^(main|primary)$/.test(norm(name))) {
     const mains = list.filter((w) => w.kind === 'main')
     if (mains.length === 1) return { one: mains[0]! }
     if (mains.length > 1) return { many: mains }
@@ -135,7 +135,7 @@ function findPlace(target: string, ctx: QueenContext, projectOnly: boolean): { n
   if (projectOnly) return null
   const elsewhere = pickWorkspace(target, others)
   if (elsewhere && 'one' in elsewhere) return go(elsewhere.one)
-  if (elsewhere && 'many' in elsewhere) return choose(elsewhere.many, norm(target) === 'main' ? "Which workspace's Main?" : `Which workspace's ${target}?`)
+  if (elsewhere && 'many' in elsewhere) return choose(elsewhere.many, /^(main|primary)$/.test(norm(target)) ? "Which workspace's Primary?" : `Which workspace's ${target}?`)
   return null
 }
 

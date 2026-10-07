@@ -129,9 +129,9 @@ Empty Worktree:
 
 Never put the empty Worktree actions on the Workspace page.
 
-### 12. Main Worktree
+### 12. Primary Worktree
 
-The main Worktree:
+The primary Worktree (shown as "Primary"):
 
 - maps to the original workspace directory/main working tree
 - is never deleted from disk; the user may only *remove* it from Hiveory, which forgets the record and its agents and leaves the folder untouched (ADR 0013)

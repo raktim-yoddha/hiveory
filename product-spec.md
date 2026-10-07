@@ -64,14 +64,14 @@ Removing a workspace archives it: adding the folder again, or Restore previous, 
 worktrees and agents. Worktree folders left on disk come back as worktrees.
 
 ```text
-Open/Create Project
+Open/Create Workspace
         │
         ▼
-    Project Page
+    Workspace Page
         │
         ├── Tasks / Kanban
         ├── Pull Requests
-        ├── Workspaces
+        ├── Worktrees
         └── Settings
 ```
 
@@ -84,24 +84,24 @@ workspace to look at it does not move it.
 ## Worktree Lifecycle
 
 ```text
-Project
+Workspace
    │
-   ├── Main Workspace
+   ├── Primary Worktree
    │
-   └── Create Workspace
+   └── Create Worktree
           │
           ├── Create empty
           │
           └── Configure CLIs
                    │
                    ▼
-              Workspace
+              Worktree
 ```
 
 ## Empty Worktree
 
 ```text
-Workspace exists
+Worktree exists
       │
       └── zero CLI instances
               │
@@ -114,14 +114,14 @@ Workspace exists
 The configuration surface supports:
 
 ```text
-Workspace name
+Worktree name
 Issue / PR association
 CLI selection
 Add all CLIs
 CLI instance count
 Auto-approve permissions
 Preset
-Create empty Workspace
+Create empty Worktree
 ```
 
 ## CLI Configuration
@@ -151,10 +151,10 @@ The Workspace Tasks view is:
 ┌──────────────────────────────────────────────────────────────┐
 │ Idle             │ Working          │ Waiting for You       │
 ├──────────────────┼──────────────────┼───────────────────────┤
-│ Workspace 1      │ Workspace 2      │ Workspace 1           │
+│ Worktree 1       │ Worktree 2       │ Worktree 1            │
 │ [CLI logo] Milo  │ [CLI logo] Luna  │ [CLI logo] Kai        │
 │                  │                  │                       │
-│ Workspace 3      │ Workspace 1      │ Workspace 4           │
+│ Worktree 3       │ Worktree 1       │ Worktree 4            │
 │ [CLI logo] Ruby  │ [CLI logo] Max   │ [CLI logo] Nova       │
 └──────────────────┴──────────────────┴───────────────────────┘
 ```
@@ -232,12 +232,12 @@ Presets do not store layout.
 
 Selecting a preset replaces the current CLI configuration when the Worktree is in the appropriate empty/configuration state.
 
-## Main Worktree
+## Primary Worktree
 
-Main Worktree:
+Primary Worktree:
 
 - is created by the user ("Create worktree" → "Workspace folder"), at most one per Workspace (ADR 0011)
-- one checkout hosts one worktree app-wide: if two workspaces share a repository (root and subfolder, or a linked worktree opened as a workspace), only one of them can have the Main worktree (ADR 0021)
+- one checkout hosts one worktree app-wide: if two workspaces share a repository (root and subfolder, or a linked worktree opened as a workspace), only one of them can have the Primary worktree (ADR 0021)
 - maps to the original workspace folder
 - is never deleted from disk; it can be removed from Hiveory (agents close, folder untouched) and created again (ADR 0013)
 - can run CLI instances
@@ -366,8 +366,8 @@ Six flat themes, three per row. A background wallpaper (any image the user adds)
 - Her mark is a waveform that moves with your voice while you hold her shortcut and with hers
   while she answers. There is no mic button: the shortcut is how you talk.
 - Small talk works with no model: greetings, thanks, "how are you", "who are you".
-- "Go to main" means the current workspace's Main; from Home, or for a name several workspaces
-  share, she asks which workspace's ("main of api" names it directly).
+- "Go to primary" (or "main") means the current workspace's Primary; from Home, or for a name several workspaces
+  share, she asks which workspace's ("primary of api" names it directly).
 
 ## Remote hosts (ADR 0022)
 

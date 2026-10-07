@@ -109,7 +109,7 @@ export class WorkspaceService {
     if (!repoRoot) {
       fail('NOT_A_REPOSITORY', 'Isolated worktrees need a Git repository.', {
         operation,
-        hint: 'Initialize Git in this workspace, or use the Main worktree.'
+        hint: 'Initialize Git in this workspace, or use the Primary worktree.'
       })
     }
     if (!(await git.hasCommits(repoRoot!))) {

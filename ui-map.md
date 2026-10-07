@@ -7,16 +7,16 @@
 │                       Work | Bots | Chat                         │
 ├──────────────┬───────────────────────────────────────────────────┤
 │              │                                                   │
-│   Projects   │                 Current Screen                    │
+│  Workspaces  │                 Current Screen                    │
 │              │                                                   │
 │   + Add      │                                                   │
 │   Sort       │                                                   │
 │              │                                                   │
-│ ▾ Project A +│                                                   │
-│     Main     │                                                   │
+│▾ Workspace A+│                                                   │
+│   Primary    │                                                   │
 │     Amber    │                                                   │
-│ ▸ Project B  │                                                   │
-│   Project C  │                                                   │
+│ ▸ Workspace B│                                                   │
+│   Workspace C│                                                   │
 │              │                                                   │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
@@ -106,7 +106,7 @@ Expanding a workspace in the sidebar lists its Worktrees for navigation (ADR 001
 
 ```text
 ┌──────────────┬───────────────────────────────────────────────────┐
-│   Projects   │                 Current Screen                    │
+│  Workspaces  │                 Current Screen                    │
 │              │            (lifts to make room)                   │
 │              │ ┌───────────────────────────────────────────────┐ │
 │              │ │ Reply card: answer, report rows, receipts, Undo│ │
@@ -156,7 +156,7 @@ panels fold ⌖ ✎ </> into ⋯.
 ```text
 ┌ [Explorer ×] [Sessions ×] [+] ─────────────────── ⤢ ┐
 │ Agent sessions                                    ⟳ │
-│ ( Workspace | Project | All )                       │
+│ ( Worktree | Workspace | All )                      │
 │ ( Search sessions                                 ) │
 │ 207 sessions                          Last updated  │
 │ ▾ hiveory                                       12  │
@@ -229,13 +229,13 @@ agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
 ## Add workspace (ADR 0020)
 
 ```text
-┌ Add project ───────────────────────────────────────── × ┐
-│  Project name                              [ Local ▾ ]  │
+┌ Add workspace ─────────────────────────────────────── × ┐
+│  Workspace name                            [ Local ▾ ]  │
 │ [Pick directory] [New repository] [Clone] [Restore prev]│
 │ Directory                                                │
 │ [📁 ~/code/app                              ( Choose )] │
 ├──────────────────────────────────────────────────────────┤
-│                                     [ Add project Ctrl⏎ ]│
+│                                   [ Add workspace Ctrl⏎ ]│
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -248,12 +248,12 @@ the open workspace).
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│ Project A                                                        │
+│ Workspace A                                                      │
 ├──────────────────────────────────────────────────────────────────┤
-│ Tasks │ Pull Requests │ Workspaces │ Settings                   │
+│ Tasks │ Pull Requests │ Worktrees │ Settings                    │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│                        Project content                           │
+│                        Workspace content                         │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -268,12 +268,12 @@ the open workspace).
 ├──────────────────────┼──────────────────────┼─────────────────────────────┤
 │ ┌──────────────────┐ │ ┌──────────────────┐ │ ┌─────────────────────────┐ │
 │ │ [logo] Milo      │ │ │ [logo] Luna      │ │ │ [logo] Kai              │ │
-│ │ Workspace 1      │ │ │ Workspace 2      │ │ │ Workspace 1             │ │
+│ │ Worktree 1       │ │ │ Worktree 2       │ │ │ Worktree 1              │ │
 │ └──────────────────┘ │ └──────────────────┘ │ │                         │ │
 │                      │                      │ └─────────────────────────┘ │
 │ ┌──────────────────┐ │ ┌──────────────────┐ │                             │
 │ │ [logo] Ruby      │ │ │ [logo] Max       │ │                             │
-│ │ Workspace 3      │ │ │ Workspace 1      │ │                             │
+│ │ Worktree 3       │ │ │ Worktree 1       │ │                             │
 │ └──────────────────┘ │ └──────────────────┘ │                             │
 └──────────────────────┴──────────────────────┴─────────────────────────────┘
 ```
@@ -282,10 +282,10 @@ the open workspace).
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│ Workspace 1                                                     │
+│ Worktree 1                                                      │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                  │
-│                         Empty Workspace                          │
+│                         Empty Worktree                           │
 │                                                                  │
 │                    ┌──────────────────┐                          │
 │                    │   Open agent     │                          │
@@ -321,10 +321,10 @@ pane's name for restart, move and close (ADR 0018).
 
 ```text
 ┌───────────────────────────────────────────────┐
-│ Create Workspace                              │
+│ Create Worktree                               │
 ├───────────────────────────────────────────────┤
-│ ( Project folder )  ( New branch )            │
-│ Workspace name              [Random name]     │
+│ ( Workspace folder ) ( New branch )           │
+│ Worktree name               [Random name]     │
 │                                               │
 │ Issue / Pull Request       [optional]         │
 │                                               │
@@ -391,8 +391,8 @@ Result:
 ## Phone app (ADR 0027)
 
 ```text
-Tabs ─ Inbox (Needs you · Working)  ─ Projects ─ Settings
-Projects › Project (Needs you | Working | Idle tabs, Workspaces, + New) › Workspace (Open an agent sheet) › Agent
+Tabs ─ Inbox (Needs you · Working)  ─ Workspaces ─ Settings
+Workspaces › Workspace (Needs you | Working | Idle tabs, Worktrees, + New) › Worktree (Open an agent sheet) › Agent
 Agent: header (pet name, status pill, ⋯ actions) · terminal · needs-you bar (Esc / Enter) · key row · message box
 Welcome (3 steps) › Pair (QR scanner · or address + code)
 App-wide: SSH question sheet · notices · notification taps
