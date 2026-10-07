@@ -61,6 +61,8 @@ export interface ChatSession {
   delegation?: { fromChatId: string; fromBotId: string; depth: number }
   /** Held to reading and answering (a trigger's run, ADR 0028): no full access, no app changes. */
   readOnly?: boolean
+  /** Messages typed while it was answering: each goes in as the next turn, in order (ADR 0031). */
+  queued?: string[]
   /** The CLI's own session/thread id, used to resume the conversation. */
   providerSessionId?: string
   messages: ChatMessage[]
@@ -79,6 +81,8 @@ export interface ChatSummary {
   agentId?: string
   /** A bot thread (listed under its bot in Bots mode, never in Chat mode). */
   botId?: string
+  /** Messages waiting for the current turn to end (ADR 0031). */
+  queued?: string[]
 }
 
 /** CLIs that can drive a chat (headless mode with parseable output). Antigravity is excluded on purpose. */

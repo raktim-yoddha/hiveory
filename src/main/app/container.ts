@@ -8,6 +8,7 @@ import { ConnectionService } from '../services/connections/connection-service'
 import { McpGateway } from '../services/connections/mcp-gateway'
 import { ApprovalService } from '../services/bots/approval-service'
 import { startWorkRun } from '../services/routines/work-run'
+import { PromptLibrary } from '../services/chat/prompt-library'
 import { AppService } from '../services/connections/app-service'
 import { SecretBox } from '../services/connections/secret-box'
 import { AgentTools } from '../services/agent-tools/agent-tools'
@@ -239,6 +240,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     if (!chat || !bot?.notify || chat.delegation || routines.isRunThread(chatId)) return
     notifyDesktop(replyNotice(bot.name, chats.lastReply(chatId)), bot.id, chatId)
   })
+  const prompts = new PromptLibrary(store, emit)
   // A bot's app calls wait here for the user's yes when its approval level asks (ADR 0029).
   const approvals = new ApprovalService({
     changed: () => emit('state.changed', { topic: 'approvals' }),
@@ -434,6 +436,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     routines,
     triggers,
     approvals,
+    prompts,
     computers,
     browser,
     computer,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, Check, ChevronDown, Eye, FolderClosed, LockOpen, Paperclip, RefreshCw, Search, Square } from 'lucide-react'
+import { ArrowUp, Check, ChevronDown, Eye, FolderClosed, ListPlus, LockOpen, Paperclip, RefreshCw, Search, Square, X } from 'lucide-react'
 import type { ChatModel, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
@@ -10,6 +10,7 @@ import { useChat } from '../../stores/chat'
 import { useClis, useProjects } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { EffortIcon } from './EffortIcon'
+import { PromptsMenu } from './PromptsMenu'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
 import styles from './Chat.module.css'
 
@@ -33,7 +34,7 @@ interface ChatComposerProps {
  * chosen model supports it. Shared by Chat mode and Work agents in chat view.
  */
 export function ChatComposer({ chat, agent = false, folder = true, placeholder }: ChatComposerProps) {
-  const { send, stop, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
+  const { send, stop, queue, unqueue, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
   const clis = useClis((s) => s.clis)
   const projects = useProjects((s) => s.projects)
   const [text, setText] = useState('')
@@ -49,6 +50,8 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   const update = (patch: Parameters<typeof updateChat>[1]): Promise<void> => updateChat(chat.id, patch)
   const cliName = clis.find((c) => c.id === chat.cliId)?.displayName
   const canSend = Boolean(chat.cliId) && !chat.running && files.ready && (text.trim().length > 0 || files.attachments.length > 0)
+  // While it answers, text (not files) waits as the next turn (ADR 0031).
+  const canQueue = Boolean(chat.cliId) && chat.running && text.trim().length > 0 && files.items.length === 0
 
   useEffect(() => {
     if (chat.cliId) void loadCatalog(chat.cliId)
@@ -69,6 +72,12 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   }, [text])
 
   const submit = async (): Promise<void> => {
+    if (canQueue) {
+      const value = text.trim()
+      setText('')
+      if (!(await queue(chat.id, value))) setText(value)
+      return
+    }
     if (!canSend) return
     const value = text.trim()
     const attachments = files.attachments
@@ -120,6 +129,17 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
+        {chat.queued?.length ? (
+          <ol className={styles.queued} aria-label="Waiting to be sent">
+            {chat.queued.map((q, i) => (
+              <li key={`${i}-${q}`} className={styles.queuedItem}>
+                <span className={styles.queuedLabel}>{i === 0 ? 'Next' : 'Then'}</span>
+                <span className={styles.queuedText}>{q}</span>
+                <IconButton label={`Remove "${q.slice(0, 40)}" from the queue`} icon={<X />} size="sm" onClick={() => void unqueue(chat.id, i)} />
+              </li>
+            ))}
+          </ol>
+        ) : null}
         <AttachmentChips
           items={files.items.map((item) => ({ ...item, pending: !item.attachment }))}
           onRemove={files.remove}
@@ -128,7 +148,7 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
           ref={inputRef}
           className={styles.input}
           rows={1}
-          placeholder={chat.cliId ? (placeholder ?? `Ask ${cliName ?? 'the agent'} anything…`) : 'Choose a CLI below to start'}
+          placeholder={chat.cliId ? (chat.running ? 'Type the next message: it goes in when this reply ends' : (placeholder ?? `Ask ${cliName ?? 'the agent'} anything…`)) : 'Choose a CLI below to start'}
           value={text}
           disabled={!chat.cliId}
           onChange={(e) => setText(e.target.value)}
@@ -149,6 +169,7 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
             disabled={!chat.cliId}
             onClick={() => fileRef.current?.click()}
           />
+          <PromptsMenu text={text} disabled={!chat.cliId} onInsert={(value) => setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${value}` : value))} />
           <input
             ref={fileRef}
             type="file"
@@ -271,6 +292,9 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
               </button>
             )}
           />
+          {chat.running && (
+            <IconButton label="Queue as the next message" icon={<ListPlus />} size="md" disabled={!canQueue} onClick={() => void submit()} />
+          )}
           {chat.running ? (
             <button type="button" className={styles.send} onClick={() => void stop(chat.id)} aria-label="Stop">
               <Square aria-hidden />

@@ -22,6 +22,7 @@ import type {
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
 import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
+import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
 import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger, type TriggerLinkStatus, type TriggerType } from '../domain/trigger'
@@ -524,6 +525,12 @@ export const requestSchemas = {
   /** Registers a file the user dropped or pasted from disk (by path; nothing is copied). */
   'chat.attachPath': z.object({ chatId: id, path: z.string().min(1).max(1000) }),
   'chat.stop': z.object({ chatId: id }),
+  /** Sends, or lines the message up while the chat is answering (ADR 0031). */
+  'chat.queue': z.object({ chatId: id, text: z.string().trim().min(1).max(MAX_SAVED_PROMPT_TEXT) }),
+  'chat.unqueue': z.object({ chatId: id, index: z.number().int().min(0).max(MAX_QUEUED) }),
+  'prompts.list': none,
+  'prompts.save': z.object({ id: id.optional(), title: z.string().trim().max(MAX_PROMPT_TITLE).optional(), text: z.string().trim().min(1).max(MAX_SAVED_PROMPT_TEXT) }),
+  'prompts.delete': z.object({ promptId: id }),
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
   // Bots mode (ADR 0022). A bot's threads are chats: send, stop, attach and delete them through chat.*.
   'bots.list': none,
@@ -806,6 +813,11 @@ export interface ResponseMap {
   'chat.attach': ChatAttachment
   'chat.attachPath': ChatAttachment
   'chat.stop': void
+  'chat.queue': void
+  'chat.unqueue': void
+  'prompts.list': SavedPrompt[]
+  'prompts.save': SavedPrompt
+  'prompts.delete': void
   'chat.catalog': ChatCatalog
   'bots.list': BotView[]
   'bots.create': BotView
@@ -878,7 +890,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals' | 'prompts'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }

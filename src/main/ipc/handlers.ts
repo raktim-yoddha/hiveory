@@ -444,6 +444,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return c.chats.delete(chatId)
   },
   'chat.send': ({ chatId, text, attachments }) => c.chats.send(chatId, text, attachments ?? []),
+  'chat.queue': ({ chatId, text }) => c.chats.enqueue(chatId, text),
+  'chat.unqueue': ({ chatId, index }) => c.chats.unqueue(chatId, index),
+  'prompts.list': () => c.prompts.list(),
+  'prompts.save': (input) => c.prompts.save(input),
+  'prompts.delete': ({ promptId }) => c.prompts.delete(promptId),
   'chat.attach': ({ chatId, name, mime, data }) => c.chats.attach(chatId, name, mime, data),
   'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
   'chat.stop': ({ chatId }) => {

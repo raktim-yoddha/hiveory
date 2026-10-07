@@ -58,6 +58,9 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
 - Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)" and "A new agent in a
   Work workspace" (Project, Workspace, CLI). Chat's sidebar header: Schedule a chat (calendar icon) beside
   New chat. A workspace's menu: Schedule a routine…
+- Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
+  as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting
+  messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 - Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
   send or post as you / change something in your apps", the tool, "What it will send" (the arguments
   as plain text), Decline, Allow. The bot's dot turns to waiting while one is open.

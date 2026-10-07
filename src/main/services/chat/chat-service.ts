@@ -1,5 +1,6 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { MAX_QUEUED } from '@shared/domain/prompt'
 import { EventEmitter } from 'node:events'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -397,9 +398,37 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     }
   }
 
+  /** Sends now, or, while the chat is still answering, lines it up as the next turn (ADR 0031). */
+  enqueue(chatId: string, text: string): void {
+    if (!this.runs.has(chatId)) return this.send(chatId, text)
+    const chat = this.get(chatId)
+    const message = text.trim()
+    if (!message) fail('INVALID_INPUT', 'Type a message first.')
+    if ((chat.queued?.length ?? 0) >= MAX_QUEUED) fail('INVALID_INPUT', `At most ${MAX_QUEUED} messages can wait. Remove one first.`)
+    chat.queued = [...(chat.queued ?? []), message]
+    this.store.save(chat)
+    this.broadcast('state.changed', { topic: 'chats' })
+  }
+
+  /** Takes a waiting message back out. */
+  unqueue(chatId: string, index: number): void {
+    const chat = this.get(chatId)
+    if (!chat.queued?.[index]) return
+    chat.queued = chat.queued.filter((_, i) => i !== index)
+    if (!chat.queued.length) delete chat.queued
+    this.store.save(chat)
+    this.broadcast('state.changed', { topic: 'chats' })
+  }
+
   stop(chatId: string): void {
     const run = this.runs.get(chatId)
     if (!run) return
+    // Stop means stop: what was waiting is dropped too.
+    const chat = this.store.get(chatId)
+    if (chat?.queued) {
+      delete chat.queued
+      this.store.save(chat)
+    }
     run.stopped = true
     killTree(run.child)
   }
@@ -438,6 +467,24 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     this.broadcast('chat.event', { chatId: chat.id, message: structuredClone(reply), summary: this.summary(chat) })
     this.broadcast('state.changed', { topic: 'chats' })
     this.emit('run', chat.id, false)
+    this.sendQueued(chat.id, Boolean(error))
+  }
+
+  /** The next waiting message goes in once a turn ends well; after an error the queue waits for the user. */
+  private sendQueued(chatId: string, failed: boolean): void {
+    const chat = this.store.get(chatId)
+    const next = chat?.queued?.[0]
+    // A listener of 'run' may already have started a turn (a delegated result): the queue waits for that one.
+    if (!chat || next === undefined || failed || this.runs.has(chatId)) return
+    chat.queued = chat.queued!.slice(1)
+    if (!chat.queued.length) delete chat.queued
+    this.store.save(chat)
+    try {
+      this.send(chatId, next)
+    } catch {
+      chat.queued = [next, ...(chat.queued ?? [])]
+      this.store.save(chat)
+    }
   }
 
   private summary(chat: ChatSession): ChatSummary {
@@ -449,7 +496,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       updatedAt: chat.updatedAt,
       running: this.runs.has(chat.id),
       agentId: chat.agentId,
-      ...(chat.botId ? { botId: chat.botId } : {})
+      ...(chat.botId ? { botId: chat.botId } : {}),
+      ...(chat.queued?.length ? { queued: [...chat.queued] } : {})
     }
   }
 }

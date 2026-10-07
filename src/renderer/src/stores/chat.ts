@@ -21,6 +21,9 @@ interface ChatState {
   update(chatId: string, patch: Omit<RequestOf<'chat.update'>, 'chatId'>): Promise<void>
   send(chatId: string, text: string, attachments?: ChatAttachment[]): Promise<boolean>
   stop(chatId: string): Promise<void>
+  /** Lines a message up while the chat is answering (ADR 0031), or takes one back out. */
+  queue(chatId: string, text: string): Promise<boolean>
+  unqueue(chatId: string, index: number): Promise<void>
   remove(chatId: string): Promise<void>
   rename(chatId: string, title: string): Promise<void>
   loadCatalog(cliId: string, refresh?: boolean): Promise<void>
@@ -69,6 +72,20 @@ export const useChat = create<ChatState>((set, get) => ({
     if (!chat) return
     set((s) => ({ activeId: chat.id, chats: { ...s.chats, [chat.id]: { ...chat, running: false } } }))
     void get().loadList()
+  },
+
+  queue: async (id, text) => {
+    const ok = await runAction('Queue message', async () => {
+      await api('chat.queue', { chatId: id, text })
+      return true
+    })
+    await get().load(id)
+    return ok === true
+  },
+
+  unqueue: async (id, index) => {
+    await runAction('Remove queued message', () => api('chat.unqueue', { chatId: id, index }))
+    await get().load(id)
   },
 
   update: async (id, patch) => {
@@ -130,6 +147,6 @@ export const useChat = create<ChatState>((set, get) => ({
       if (!chat) return { summaries }
       const index = chat.messages.findIndex((m) => m.id === message.id)
       const messages = index >= 0 ? chat.messages.map((m, i) => (i === index ? message : m)) : [...chat.messages, message]
-      return { summaries, chats: { ...s.chats, [chatId]: { ...chat, messages, running: summary.running, title: summary.title } } }
+      return { summaries, chats: { ...s.chats, [chatId]: { ...chat, messages, running: summary.running, title: summary.title, queued: summary.queued } } }
     })
 }))

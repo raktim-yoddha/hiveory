@@ -9,6 +9,7 @@ import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
 import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
+import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
@@ -42,6 +43,8 @@ export interface PersistedState {
   triggers: Trigger[]
   /** The public link trigger events arrive by: its Funnel path and the Composio webhook (secret sealed). */
   triggerLink?: TriggerLink
+  /** The user's saved prompts, newest first (ADR 0031). */
+  savedPrompts: SavedPrompt[]
 }
 
 export interface TriggerLink {
@@ -123,7 +126,8 @@ export const emptyState = (): PersistedState => ({
   teams: [{ ...GENERAL_TEAM }],
   routines: [],
   routineRuns: [],
-  triggers: []
+  triggers: [],
+  savedPrompts: []
 })
 
 const settingsSchema = z.object({
@@ -367,6 +371,13 @@ export const triggerSchema: z.ZodType<Trigger> = z.object({
   updatedAt: str
 })
 
+const savedPromptSchema: z.ZodType<SavedPrompt> = z.object({
+  id: str,
+  title: z.string().min(1).max(MAX_PROMPT_TITLE),
+  text: z.string().min(1).max(MAX_SAVED_PROMPT_TEXT),
+  createdAt: str
+})
+
 const triggerLinkSchema: z.ZodType<TriggerLink> = z.object({
   enabled: z.boolean(),
   path: z.string().regex(/^\/hiveory\/[a-f0-9]{32}$/),
@@ -460,6 +471,7 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       routines: list(input.routines, routineSchema),
       routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS),
       triggers: list(input.triggers, triggerSchema),
+      savedPrompts: list(input.savedPrompts, savedPromptSchema).slice(0, MAX_SAVED_PROMPTS),
       ...(triggerLinkSchema.safeParse(input.triggerLink).success ? { triggerLink: triggerLinkSchema.parse(input.triggerLink) } : {})
     },
     rejected

@@ -11,6 +11,7 @@ import { useVoice } from '../features/queen/voice'
 import { useRoutines } from './routines'
 import { useTriggers } from './triggers'
 import { useApprovals } from './approvals'
+import { usePrompts } from './prompts'
 import { useNavigation } from './navigation'
 
 /** Events arriving within this window trigger one reload per cache key. */
@@ -44,6 +45,7 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'routines') reload('routines', () => useRoutines.getState().load())
       if (topic === 'triggers') reload('triggers', () => useTriggers.getState().load())
       if (topic === 'approvals') reload('approvals', () => useApprovals.getState().load())
+      if (topic === 'prompts') reload('prompts', () => usePrompts.getState().load())
       if (topic === 'chats' && useBots.getState().activeBotId) {
         const botId = useBots.getState().activeBotId!
         reload(`bot-threads:${botId}`, () => useBots.getState().loadThreads(botId))
