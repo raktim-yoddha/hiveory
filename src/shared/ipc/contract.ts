@@ -100,6 +100,8 @@ const botFields = z.object({
         kind: z.literal('docker'),
         host: z.object({ kind: z.literal('ssh'), destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }).optional()
       }),
+      /** A seat on another bot's computer (ADR 0032). */
+      z.object({ kind: z.literal('shared'), botId: id }),
       z.null()
     ])
     .optional()
@@ -548,7 +550,7 @@ export const requestSchemas = {
   'bots.delete': z.object({ botId: id }),
   'bots.threads': z.object({ botId: id }),
   'bots.newThread': z.object({ botId: id }),
-  'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl']) }),
+  'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl', 'rebuild']) }),
   // Teams of bots, each with its own Chief (ADR 0028), and the work bots hand each other.
   'teams.list': none,
   'teams.create': z.object({ name: teamName }),

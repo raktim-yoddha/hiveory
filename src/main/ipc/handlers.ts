@@ -484,6 +484,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'bots.computer': async ({ botId, action }) => {
     if (action === 'start') await c.computers.ensure(botId)
     if (action === 'stop') await c.computers.stop(botId)
+    if (action === 'rebuild') await c.computers.rebuild(botId)
     if (action === 'takeControl') {
       // A loopback noVNC address Hiveory built itself (never a URL from the bot).
       const url = await c.computers.takeControl(botId)

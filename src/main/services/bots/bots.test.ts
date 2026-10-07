@@ -331,3 +331,16 @@ describe('bot overview data', () => {
     expect(bots.update(bot.id, { blurb: '' }).blurb).toBeUndefined()
   })
 })
+
+describe('shared computers (ADR 0032)', () => {
+  it("seats a bot only on a bot with its own computer, and keeps owners from moving away under their seats", () => {
+    const { bots } = setup()
+    const owner = bots.create({ name: 'Owner', worksOn: 'container', computer: { kind: 'docker' } })
+    const plain = bots.create({ name: 'Plain' })
+    const seat = bots.create({ name: 'Seat', worksOn: 'container', computer: { kind: 'shared', botId: owner.id } })
+    expect(seat.computer).toEqual({ kind: 'shared', botId: owner.id })
+    expect(() => bots.update(plain.id, { computer: { kind: 'shared', botId: plain.id } })).toThrow('its own computer')
+    expect(() => bots.update(plain.id, { computer: { kind: 'shared', botId: seat.id } })).toThrow('no Linux computer of its own')
+    expect(() => bots.update(owner.id, { computer: { kind: 'shared', botId: plain.id } })).toThrow()
+  })
+})

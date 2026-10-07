@@ -124,3 +124,89 @@ describe('bot computers', () => {
     expect(state.bots.map((b) => b.worksOn)).toEqual(['auto', 'this-computer', 'auto'])
   })
 })
+
+describe('bot computers: engines, seats and rebuilds (ADR 0032)', () => {
+  /** A kit per engine: `engines` answer their check, `files` records the engine of every call. */
+  const kitWith = (engines: Record<string, 'running' | 'stopped' | 'absent'>, answer: (args: string[]) => { code: number | null; stdout?: string; stderr?: string } = () => ({ code: 0 })) => {
+    const calls: string[][] = []
+    const stdins: string[] = []
+    const kit = {
+      remote: false,
+      label: 'This computer',
+      exec: async ({ file, args, stdin }: { file: string; args: string[]; stdin?: string }) => {
+        calls.push([file, ...args])
+        if (stdin) stdins.push(stdin)
+        const state = engines[file] ?? 'absent'
+        if (state === 'absent') return { code: null, stdout: '', stderr: `spawn ${file} ENOENT` }
+        if (args[0] === 'version' || args[0] === 'info') return state === 'running' ? { code: 0, stdout: '1', stderr: '' } : { code: 1, stdout: '', stderr: 'cannot connect' }
+        const r = answer(args)
+        return { code: r.code, stdout: r.stdout ?? '', stderr: r.stderr ?? '' }
+      }
+    } as unknown as HostKit
+    return { kit, calls, stdins }
+  }
+
+  it('uses Podman when Docker is not installed, building from stdin with an empty context folder', async () => {
+    const { kit, calls, stdins } = kitWith({ podman: 'running' }, (args) => (args[0] === 'image' ? { code: 1 } : args[0] === 'inspect' ? { code: 0, stdout: 'true b1 2' } : { code: 0 }))
+    await new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => kit }, () => '/bots/b1', log).ensure('b1')
+    const build = calls.find((c) => c[1] === 'build')!
+    expect(build.slice(0, 6)).toEqual(['podman', 'build', '-t', COMPUTER_IMAGE, '-f', '-'])
+    expect(build[6]).toBeTruthy()
+    expect(stdins).toEqual([COMPUTER_DOCKERFILE])
+    expect(calls.filter((c) => c[0] === 'docker').length).toBe(1)
+  })
+
+  it('says which engine to start, or that neither is installed', async () => {
+    const stopped = kitWith({ docker: 'stopped' })
+    expect(await new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => stopped.kit }, () => '', log).status('b1')).toMatchObject({ state: 'unavailable', detail: 'Docker is not running.' })
+    const none = kitWith({})
+    expect(await new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => none.kit }, () => '', log).status('b1')).toMatchObject({ detail: 'Neither Docker nor Podman is installed.' })
+  })
+
+  it("seats a bot on another bot's computer: same container, one conversation across both", async () => {
+    const owner = { ...bot({ kind: 'docker' }), id: 'owner', name: 'Owner' }
+    const seat = { ...bot({ kind: 'shared', botId: 'owner' }), id: 'seat', name: 'Seat' }
+    const bots: Record<string, Bot> = { owner, seat }
+    const { kit, calls } = kitWith({ docker: 'running' }, (args) => (args[0] === 'inspect' ? { code: 0, stdout: 'true owner 2' } : { code: 0, stdout: 'aGk=' }))
+    const computers = new BotComputers((id) => bots[id]!, { kit: async () => kit }, (id) => `/bots/${id}`, log)
+    expect(await computers.status('seat')).toMatchObject({ state: 'running', sharedFrom: 'owner', engine: 'docker' })
+    await computers.screenshot('seat')
+    expect(calls.some((c) => c.includes(containerName('owner')) && c.includes('exec'))).toBe(true)
+    computers.claim('owner', 't1', () => 'Owner thread')
+    expect(() => computers.claim('seat', 't2', (id) => (id === 't1' ? 'Owner thread' : undefined))).toThrow('Owner thread')
+  })
+
+  it('offers a rebuild for an older image, and rebuilds only its own container', async () => {
+    let removed = false
+    const { kit, calls } = kitWith({ docker: 'running' }, (args) => {
+      if (args[0] === 'inspect' && args[2]!.startsWith('{{index')) return { code: 0, stdout: 'b1' }
+      if (args[0] === 'inspect') return { code: 0, stdout: removed ? 'true b1 2' : 'true b1 1' }
+      if (args[0] === 'rm') removed = true
+      return { code: 0 }
+    })
+    const computers = new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => kit }, () => '/bots/b1', log)
+    expect(await computers.status('b1')).toMatchObject({ state: 'running', outdated: true })
+    await computers.rebuild('b1')
+    expect(calls.find((c) => c[1] === 'rm')).toEqual(['docker', 'rm', '-f', containerName('b1')])
+    expect(await computers.status('b1')).not.toHaveProperty('outdated')
+  })
+
+  it('reads the UI tree, and asks for a rebuild when the image has no reader', async () => {
+    let reader = true
+    const { kit } = kitWith({ docker: 'running' }, (args) =>
+      args[0] === 'inspect' ? { code: 0, stdout: 'true b1 2' } : args.some((x) => x.includes('hiveory-ui-tree')) ? (reader ? { code: 0, stdout: 'push button "Save" at 640,400' } : { code: 127, stderr: 'hiveory-ui-tree: not found' }) : { code: 0 }
+    )
+    const computers = new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => kit }, () => '', log)
+    expect(await computers.uiTree('b1')).toBe('push button "Save" at 640,400')
+    reader = false
+    await expect(computers.uiTree('b1')).rejects.toThrow('rebuild it')
+  })
+
+  it('opens a page with the address as an argument, never as shell text', async () => {
+    const { kit, calls } = kitWith({ docker: 'running' }, (args) => (args[0] === 'inspect' ? { code: 0, stdout: 'true b1 2' } : { code: 0 }))
+    await new BotComputers(() => bot({ kind: 'docker' }), { kit: async () => kit }, () => '', log).openUrl('b1', 'https://example.com/?q=$(id)')
+    const open = calls.find((c) => c.includes('--force-renderer-accessibility'))!
+    expect(open.at(-1)).toBe('https://example.com/?q=$(id)')
+    expect(open.find((a) => a.includes('exec chromium'))).not.toContain('example.com')
+  })
+})

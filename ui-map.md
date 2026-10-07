@@ -89,8 +89,10 @@ Expanding a project in the sidebar lists its Workspaces for navigation (ADR 0010
     (bytes ≈ tokens, expands to the exact text); Skills (the shared Skills panel, scoped to the bot:
     its own skills marked "This bot").
   - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is
-    shown) with Start/Stop and Take control; **Works on** cards: Auto · Linux computer · Server
-    computer (SSH host field) · This computer · Browser · Off; a "Can use … now" line and, when a
+    shown) with Start/Stop, Take control and Rebuild (confirmed; "older desktop image" note when due),
+    and where it runs (this computer, the SSH host or "<bot>'s computer", Docker or Podman); **Works on**
+    cards: Auto · Linux computer · Server computer (SSH host field) · Share a computer (Whose computer) ·
+    This computer · Browser · Off; a "Can use … now" line and, when a
     Settings switch blocks the choice, the reason with Open settings.
   - **Routines**: count, "allow it to run on a schedule" when it can't yet, Run logs, Create
     schedule, the bot's routine rows (name, schedule in words, next run, last failure, Run now, Edit,

@@ -316,7 +316,10 @@ export const botSchema: z.ZodType<Bot> = z.object({
   routines: z.boolean().catch(false),
   approvals: z.enum(APPROVAL_LEVELS).catch(DEFAULT_APPROVAL_LEVEL),
   computer: z
-    .object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() })
+    .discriminatedUnion('kind', [
+      z.object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() }),
+      z.object({ kind: z.literal('shared'), botId: str })
+    ])
     .optional()
     .catch(undefined),
   browserProfileId: str.optional().catch(undefined),

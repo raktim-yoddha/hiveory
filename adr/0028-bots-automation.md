@@ -174,6 +174,6 @@ importing whole teams comes later.
 
 ## Next
 
-The calendar's day view, mini month and drag-a-bot are built (Routines page), and routine files (ADR 0030). Deferred:
-container gaps against OpenMausBot (Podman, a pinned image, accessibility-tree control, shared seats);
-approval levels and the sending-on-your-behalf gate; K2 queued requests; Work and Chat routines.
+Everything this ADR deferred is built: approvals and the sending gate (ADR 0029), Work and Chat routines
+and routine files (ADR 0030), queued messages and saved prompts (ADR 0031), the calendar's day view,
+mini month and drag-a-bot (Routines page), and the bot computer gaps (ADR 0032).

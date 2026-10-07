@@ -36,6 +36,10 @@ export class DesktopTools implements ToolFamily {
         timeout_seconds: { type: 'number', description: 'Up to 600; default 120.' }
       }, ['command']),
       tool('desktop_screenshot', `See your computer's screen (${SCREEN.width}×${SCREEN.height}).`),
+      tool(
+        'desktop_ui',
+        'Read the screen as UI elements from the accessibility tree: each line is a role, its name and its centre point. Click one with desktop_click at that point. Faster and more exact than a screenshot; pages opened with desktop_open_url are included.'
+      ),
       tool('desktop_click', 'Click at a point of the last screenshot.', {
         x: { type: 'number' },
         y: { type: 'number' },
@@ -69,6 +73,8 @@ export class DesktopTools implements ToolFamily {
         const result = await this.computers.run(botId, str(args, 'command'), int(args, 'timeout_seconds', 120, 1, 600) * 1000)
         return { text: `exit ${result.code ?? 'timeout'}\n${result.output || '(no output)'}`, isError: result.code !== 0 }
       }
+      case 'desktop_ui':
+        return { text: await this.computers.uiTree(botId) }
       case 'desktop_screenshot':
         return { text: `Screen ${SCREEN.width}×${SCREEN.height}`, image: { data: await this.computers.screenshot(botId), mimeType: 'image/png' } }
       case 'desktop_click': {

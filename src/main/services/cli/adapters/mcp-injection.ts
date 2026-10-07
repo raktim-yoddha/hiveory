@@ -47,7 +47,7 @@ export const appsPrompt = (apps: string[]): string =>
 /** A bot's thread: memory always; the team for the Chief of Staff (delegates) and for bots allowed to message (consult). */
 /** A bot's own Linux computer (a Docker container): terminal first, the desktop when a page or app needs eyes. */
 export const DESKTOP_PROMPT =
-  'You have your own Linux computer: desktop_run runs shell commands in /workspace (your files), desktop_open_url opens Chromium, ' +
+  'You have your own Linux computer: desktop_run runs shell commands in /workspace (your files), desktop_open_url opens Chromium, desktop_ui reads the screen as UI elements, ' +
   'desktop_screenshot shows the screen and desktop_click / desktop_type / desktop_key / desktop_scroll operate it. Prefer desktop_run for terminal work.'
 
 export const botPrompt = (role: NonNullable<McpEndpoint['bot']>, computer = false): string =>

@@ -1,8 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Box, Globe, Monitor, MonitorPlay, Play, Power, Server, Sparkles, Square } from 'lucide-react'
+import { Box, Globe, Monitor, MonitorPlay, Play, Power, RefreshCw, Server, Sparkles, Square, Users } from 'lucide-react'
 import type { BotComputerStatus, BotView, WorksOn } from '@shared/domain/bot'
 import { botReach, type ReachFamily } from '@shared/domain/bot-reach'
 import { Button } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
+import { Select } from '../../components/ui/Select'
 import { cx } from '../../lib/cx'
 import { api } from '../../lib/api'
 import { useBots } from '../../stores/bots'
@@ -13,7 +15,7 @@ import { SshHostField } from '../projects/SshHostField'
 import styles from './Bots.module.css'
 
 /** The cards: "container" is split by where its Linux computer runs. */
-type Choice = Exclude<WorksOn, 'container'> | 'local' | 'server'
+type Choice = Exclude<WorksOn, 'container'> | 'local' | 'server' | 'shared'
 
 const CHOICES: Array<{
   id: Choice
@@ -40,6 +42,12 @@ const CHOICES: Array<{
     icon: <Server aria-hidden />
   },
   {
+    id: 'shared',
+    title: 'Share a computer',
+    hint: "A seat on another bot's Linux computer",
+    icon: <Users aria-hidden />
+  },
+  {
     id: 'this-computer',
     title: 'This computer',
     hint: 'Your screen and apps',
@@ -59,7 +67,10 @@ const CHOICES: Array<{
   }
 ]
 
-const choiceOf = (bot: BotView): Choice => (bot.worksOn === 'container' ? (bot.computer?.host ? 'server' : 'local') : bot.worksOn)
+/** Its own computer's SSH host, if it runs on one. */
+const hostOf = (bot: BotView): string | undefined => (bot.computer?.kind === 'docker' ? bot.computer.host?.destination : undefined)
+const choiceOf = (bot: BotView): Choice =>
+  bot.worksOn === 'container' ? (bot.computer?.kind === 'shared' ? 'shared' : hostOf(bot) ? 'server' : 'local') : bot.worksOn
 
 const NAMES: Record<ReachFamily, string> = {
   browser: 'the built-in browser',
@@ -84,22 +95,25 @@ export function ComputerTab({ bot }: { bot: BotView }) {
   const settings = useSettings((s) => s.settings)
   const platform = useApp((s) => s.info?.platform)
   const openSettings = useNavigation((s) => s.openSettings)
-  const [picking, setPicking] = useState(false)
-  const [host, setHost] = useState(bot.computer?.host?.destination ?? '')
+  const bots = useBots((s) => s.bots)
+  const [picking, setPicking] = useState<'server' | 'shared' | null>(null)
+  const [host, setHost] = useState(hostOf(bot) ?? '')
+  // Bots with a Linux computer of their own: the ones a seat can go on.
+  const owners = bots.filter((b) => b.id !== bot.id && b.computer?.kind === 'docker')
 
   const switches = {
     browser: settings.browserUse,
     computer: settings.computerUse && platform === 'win32'
   }
   const reach = botReach(bot, switches)
-  const selected: Choice = picking ? 'server' : choiceOf(bot)
+  const selected: Choice = picking ?? choiceOf(bot)
 
   const choose = (choice: Choice): void => {
-    if (choice === 'server') {
-      setPicking(true)
+    if (choice === 'server' || choice === 'shared') {
+      setPicking(choice)
       return
     }
-    setPicking(false)
+    setPicking(null)
     if (choice === 'local')
       void update(bot.id, {
         worksOn: 'container',
@@ -107,8 +121,12 @@ export function ComputerTab({ bot }: { bot: BotView }) {
       })
     else void update(bot.id, { worksOn: choice })
   }
+  const share = (ownerId: string): void => {
+    setPicking(null)
+    void update(bot.id, { worksOn: 'container', computer: { kind: 'shared', botId: ownerId } })
+  }
   const saveHost = (): void => {
-    setPicking(false)
+    setPicking(null)
     void update(bot.id, {
       worksOn: 'container',
       computer: {
@@ -118,7 +136,7 @@ export function ComputerTab({ bot }: { bot: BotView }) {
     })
   }
 
-  const canSave = host.trim() !== '' && host.trim() !== bot.computer?.host?.destination
+  const canSave = host.trim() !== '' && host.trim() !== hostOf(bot)
   const wantsBrowser = bot.worksOn === 'auto' || bot.worksOn === 'browser'
   return (
     <div className={styles.tabBody}>
@@ -159,6 +177,21 @@ export function ComputerTab({ bot }: { bot: BotView }) {
             </button>
           ))}
         </div>
+        {selected === 'shared' && (
+          <div className={styles.hostRow}>
+            {owners.length ? (
+              <Select
+                label="Whose computer"
+                value={bot.computer?.kind === 'shared' ? bot.computer.botId : ''}
+                options={[{ value: '', label: 'Pick a bot', disabled: true }, ...owners.map((b) => ({ value: b.id, label: `${b.name}'s computer` }))]}
+                onChange={share}
+              />
+            ) : (
+              <span className={styles.switchHint}>No bot has a Linux computer of its own yet. Give one a computer first.</span>
+            )}
+            <span className={styles.switchHint}>One desktop for both: one conversation uses it at a time, and they share its /workspace.</span>
+          </div>
+        )}
         {selected === 'server' && (
           <div className={styles.hostRow}>
             <SshHostField
@@ -205,9 +238,14 @@ export function ComputerTab({ bot }: { bot: BotView }) {
 function ComputerScreen({ bot }: { bot: BotView }) {
   const [status, setStatus] = useState<BotComputerStatus | null>(null)
   const [screen, setScreen] = useState<string | null>(null)
-  const where = bot.computer?.host ? bot.computer.host.destination : 'this computer'
+  const [rebuilding, setRebuilding] = useState<'ask' | 'busy' | null>(null)
+  const ownerId = bot.computer?.kind === 'shared' ? bot.computer.botId : status?.sharedFrom
+  const owner = useBots((s) => (ownerId ? s.bots.find((b) => b.id === ownerId) : undefined))
+  const where = [owner ? `${owner.name}'s computer` : (hostOf(bot) ?? 'this computer'), status?.engine === 'podman' ? 'Podman' : status?.engine === 'docker' ? 'Docker' : '']
+    .filter(Boolean)
+    .join(' · ')
 
-  const act = async (action: 'status' | 'start' | 'stop' | 'takeControl', label: string): Promise<void> => {
+  const act = async (action: 'status' | 'start' | 'stop' | 'takeControl' | 'rebuild', label: string): Promise<void> => {
     const next = await runAction(label, () => api('bots.computer', { botId: bot.id, action }))
     if (next) setStatus(next)
   }
@@ -220,7 +258,7 @@ function ComputerScreen({ bot }: { bot: BotView }) {
     return () => {
       alive = false
     }
-  }, [bot.id, bot.computer?.host?.destination])
+  }, [bot.id, bot.computer])
 
   const running = status?.state === 'running'
   useEffect(() => {
@@ -268,7 +306,26 @@ function ComputerScreen({ bot }: { bot: BotView }) {
         <Button variant="secondary" icon={<MonitorPlay />} onClick={() => void act('takeControl', 'Open the desktop')} disabled={!running}>
           Take control
         </Button>
+        {status && status.state !== 'off' && status.state !== 'unavailable' && status.state !== 'missing' && (
+          <Button variant="ghost" icon={<RefreshCw />} loading={rebuilding === 'busy'} onClick={() => setRebuilding('ask')}>
+            Rebuild
+          </Button>
+        )}
       </div>
+      {status?.outdated && <p className={styles.switchHint}>It runs an older desktop image. Rebuild it to get the current one (reading the screen as UI elements needs it).</p>}
+      <ConfirmDialog
+        open={rebuilding === 'ask'}
+        title={`Rebuild ${owner ? `${owner.name}'s` : `${bot.name}'s`} computer?`}
+        confirmLabel="Rebuild"
+        danger
+        onConfirm={() => {
+          setRebuilding('busy')
+          void act('rebuild', 'Rebuild the computer').finally(() => setRebuilding(null))
+        }}
+        onClose={() => setRebuilding(null)}
+      >
+        It is made again from the current image. Files in /workspace stay; programs installed elsewhere on it, and its open windows, are gone.
+      </ConfirmDialog>
     </section>
   )
 }

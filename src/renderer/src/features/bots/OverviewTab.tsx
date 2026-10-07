@@ -24,7 +24,7 @@ const tokens = (text: string): number => Math.round(text.length / 4)
 
 /** The bot at a glance: what it does, can reach and won't do, its prompt, notifications and its own skills. */
 export function OverviewTab({ bot }: { bot: BotView }) {
-  const { teams, update } = useBots()
+  const { teams, bots, update } = useBots()
   const { routines, loaded, load } = useRoutines()
   const settings = useSettings((s) => s.settings)
   const platform = useApp((s) => s.info?.platform)
@@ -59,7 +59,9 @@ export function OverviewTab({ bot }: { bot: BotView }) {
   }, [bot.id, bot.updatedAt])
 
   const team = teams.find((t) => t.id === bot.teamId)
+  const seatOn = bot.computer?.kind === 'shared' ? bots.find((b) => b.id === (bot.computer as { botId: string }).botId)?.name : undefined
   const o = botOverview(bot, {
+    seatOn,
     teamName: team?.name ?? 'General',
     teamCount: teams.length,
     routines: routines.filter((r) => r.botId === bot.id),

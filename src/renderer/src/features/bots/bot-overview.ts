@@ -15,7 +15,10 @@ const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' 
  * What a bot does, can reach and won't do, in plain sentences, worked out from its settings (and the same
  * botReach the tools use), so the Overview never claims more or less than the bot can actually do.
  */
-export function botOverview(bot: BotView, c: { teamName: string; teamCount: number; routines: RoutineView[]; switches: ReachSwitches }): BotOverview {
+export function botOverview(
+  bot: BotView,
+  c: { teamName: string; teamCount: number; routines: RoutineView[]; switches: ReachSwitches; /** The bot whose computer it shares, by name. */ seatOn?: string }
+): BotOverview {
   const does: string[] = []
   if (bot.chief) does.push(`Leads the ${c.teamName} team: hands work to its bots and brings the results back.`)
   else if (c.teamCount > 1) does.push(`Works in the ${c.teamName} team.`)
@@ -32,7 +35,14 @@ export function botOverview(bot: BotView, c: { teamName: string; teamCount: numb
   const reach: string[] = []
   for (const family of botReach(bot, c.switches)) {
     if (family === 'browser') reach.push('The built-in browser, signed in as itself.')
-    if (family === 'desktop') reach.push(bot.computer?.host ? `Its Linux computer on ${bot.computer.host.destination}.` : 'Its Linux computer, in Docker on this computer.')
+    if (family === 'desktop')
+      reach.push(
+        bot.computer?.kind === 'shared'
+          ? `A seat on ${c.seatOn ?? 'another bot'}'s Linux computer, one conversation at a time.`
+          : bot.computer?.host
+            ? `Its Linux computer on ${bot.computer.host.destination}.`
+            : 'Its Linux computer, in Docker or Podman on this computer.'
+      )
     if (family === 'computer') reach.push('Your screen and apps.')
   }
   reach.push('The apps and MCP servers you connected.')

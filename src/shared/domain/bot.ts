@@ -54,11 +54,14 @@ export interface Bot {
 export const WORKS_ON = ['auto', 'container', 'this-computer', 'browser', 'off'] as const
 export type WorksOn = (typeof WORKS_ON)[number]
 
-export interface BotComputer {
-  kind: 'docker'
-  /** Docker on another machine, reached through Hiveory's SSH host. Absent = this computer. */
-  host?: { kind: 'ssh'; destination: string; port?: number }
-}
+export type BotComputer =
+  | {
+      kind: 'docker'
+      /** Docker (or Podman) on another machine, reached through Hiveory's SSH host. Absent = this computer. */
+      host?: { kind: 'ssh'; destination: string; port?: number }
+    }
+  /** A seat on another bot's computer (ADR 0032): one desktop, one conversation at a time across both. */
+  | { kind: 'shared'; botId: string }
 
 export type BotComputerState = 'off' | 'unavailable' | 'missing' | 'stopped' | 'running'
 
@@ -68,6 +71,12 @@ export interface BotComputerStatus {
   detail?: string
   /** Where "take control" opens (loopback only). */
   url?: string
+  /** Made from an older image: Rebuild gives it the current one (ADR 0032). */
+  outdated?: boolean
+  /** Docker or Podman, once known. */
+  engine?: 'docker' | 'podman'
+  /** The bot whose computer this is, when it shares another bot's. */
+  sharedFrom?: string
 }
 
 /** A bot as the renderer sees it: its home folder and live thread counts. */

@@ -105,8 +105,21 @@ export class BotService {
     return dir
   }
 
+  /** A seat goes on a bot with a computer of its own (no chains, not itself), ADR 0032. */
+  private checkSeat(botId: string | undefined, computer: Bot['computer'] | null | undefined): void {
+    if (computer?.kind !== 'shared') return
+    if (computer.botId === botId) fail('INVALID_INPUT', 'A bot cannot share its own computer.')
+    const owner = this.find(computer.botId) ?? fail('NOT_FOUND', 'That bot no longer exists.')
+    if (owner.computer?.kind !== 'docker') fail('INVALID_INPUT', `${owner.name} has no Linux computer of its own to share.`)
+    // A bot others sit on can't move onto someone else's computer itself.
+    if (botId && this.store.state.bots.some((b) => b.computer?.kind === 'shared' && b.computer.botId === botId)) {
+      fail('INVALID_INPUT', 'Other bots use this computer. Move them first.')
+    }
+  }
+
   create(input: BotInput): BotView {
     needsComputer(input.worksOn, input.computer)
+    this.checkSeat(undefined, input.computer)
     const teamId = this.team(input.teamId ?? GENERAL_TEAM.id).id
     const name = this.uniqueName(input.name)
     const now = nowIso()
@@ -144,6 +157,7 @@ export class BotService {
   update(botId: string, patch: BotPatch): BotView {
     const bot = this.get(botId)
     needsComputer(patch.worksOn ?? bot.worksOn, patch.computer === undefined ? bot.computer : patch.computer)
+    this.checkSeat(botId, patch.computer)
     if (patch.teamId !== undefined) this.team(patch.teamId)
     if (patch.name !== undefined && patch.name.trim().toLowerCase() !== bot.name.toLowerCase()) patch.name = this.uniqueName(patch.name, botId)
     if (patch.memory) patch.memory = this.cleanMemory(patch.memory)
