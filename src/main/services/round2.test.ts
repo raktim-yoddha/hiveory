@@ -221,4 +221,26 @@ describe('update service', () => {
     expect(updater.quitAndInstall).toHaveBeenCalled()
     expect(emitted.length).toBeGreaterThan(0)
   })
+
+  it('auto-download follows the setting and fetches an update already found', async () => {
+    const handlers: Record<string, (...args: unknown[]) => void> = {}
+    const updater = {
+      autoDownload: false,
+      autoInstallOnAppQuit: false,
+      checkForUpdates: vi.fn(async () => handlers['update-available']!({ version: '0.3.0' })),
+      downloadUpdate: vi.fn(async () => handlers['update-downloaded']!({ version: '0.3.0' })),
+      quitAndInstall: vi.fn(),
+      on: (event: string, listener: (...args: unknown[]) => void) => {
+        handlers[event] = listener
+      }
+    }
+    const service = new UpdateService(updater as never, log, () => undefined)
+    await service.check()
+    expect(updater.downloadUpdate).not.toHaveBeenCalled()
+    service.setAutoDownload(true)
+    expect(updater.autoDownload).toBe(true)
+    await vi.waitFor(() => expect(service.current()).toMatchObject({ state: 'downloaded', version: '0.3.0' }))
+    service.setAutoDownload(false)
+    expect(updater.autoDownload).toBe(false)
+  })
 })

@@ -135,6 +135,7 @@ const settingsSchema = z.object({
   theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']).catch(DEFAULT_SETTINGS.theme),
   vscodeTheme: z.union([z.literal(''), z.string().regex(VSCODE_THEME_ID)]).catch(DEFAULT_SETTINGS.vscodeTheme),
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
+  autoDownloadUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoDownloadUpdates),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
   defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),
   defaultChatUi: z.boolean().catch(DEFAULT_SETTINGS.defaultChatUi),

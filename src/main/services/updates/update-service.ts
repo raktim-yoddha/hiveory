@@ -38,10 +38,11 @@ export class UpdateService {
       this.set({ state: 'available', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined })) as never)
     updater.on('update-not-available', () => this.set({ state: 'not-available', lastChecked: new Date().toISOString() }))
     updater.on('download-progress', ((p: { percent: number }) => {
-      const version = this.status.state === 'available' || this.status.state === 'downloading' ? this.status.version : ''
-      this.set({ state: 'downloading', version, percent: Math.round(p.percent) })
+      const { version, notes } = this.status.state === 'available' || this.status.state === 'downloading' ? this.status : { version: '', notes: undefined }
+      this.set({ state: 'downloading', version, percent: Math.round(p.percent), notes })
     }) as never)
-    updater.on('update-downloaded', ((info: { version: string }) => this.set({ state: 'downloaded', version: info.version })) as never)
+    updater.on('update-downloaded', ((info: { version: string; releaseNotes?: unknown }) =>
+      this.set({ state: 'downloaded', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined })) as never)
     updater.on('error', ((error: Error) => this.set({ state: 'error', message: error?.message ?? 'Update failed' })) as never)
   }
 
@@ -72,6 +73,13 @@ export class UpdateService {
 
   install(): void {
     if (this.updater && this.status.state === 'downloaded') this.updater.quitAndInstall()
+  }
+
+  /** When on, a found update downloads by itself; it still installs only on restart or quit. */
+  setAutoDownload(enabled: boolean): void {
+    if (!this.updater) return
+    this.updater.autoDownload = enabled
+    if (enabled && this.status.state === 'available') void this.download()
   }
 
   setAutoCheck(enabled: boolean): void {

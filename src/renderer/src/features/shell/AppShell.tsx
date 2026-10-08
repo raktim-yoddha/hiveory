@@ -18,6 +18,7 @@ import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { SettingsScreen } from '../settings/SettingsScreen'
+import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
@@ -176,6 +177,7 @@ export function AppShell() {
       </div>
       <AddProjectDialog />
       <SshPromptDialog />
+      <UpdatePrompt />
       <Toasts />
     </div>
   )

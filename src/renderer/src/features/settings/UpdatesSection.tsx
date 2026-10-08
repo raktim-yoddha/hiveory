@@ -99,12 +99,23 @@ export function UpdatesSection() {
       <div className={styles.group}>
         <SettingRow
           title="Check automatically"
-          description="On launch and every six hours. Nothing downloads without your click."
+          description="On launch and every six hours. A pop-up tells you when a new version is out."
           control={
             <Toggle
               label="Check for updates automatically"
               checked={settings.autoCheckUpdates}
               onChange={(autoCheckUpdates) => void update({ autoCheckUpdates })}
+            />
+          }
+        />
+        <SettingRow
+          title="Download automatically"
+          description="Fetch a new version in the background. It installs when you restart or quit Hiveory."
+          control={
+            <Toggle
+              label="Download updates automatically"
+              checked={settings.autoDownloadUpdates}
+              onChange={(autoDownloadUpdates) => void update({ autoDownloadUpdates })}
             />
           }
         />

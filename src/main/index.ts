@@ -151,6 +151,7 @@ app.whenReady().then(async () => {
       })
     }
     if (next.autoCheckUpdates !== previous.autoCheckUpdates) guard(log, 'Update checks', () => c.updates.setAutoCheck(next.autoCheckUpdates))
+    if (next.autoDownloadUpdates !== previous.autoDownloadUpdates) guard(log, 'Update downloads', () => c.updates.setAutoDownload(next.autoDownloadUpdates))
     // A headless server keeps the addresses it was started with.
     if (next.shareOnTailnet !== previous.shareOnTailnet && servePort === undefined) void guard(log, 'Sharing', () => share(next.shareOnTailnet))
     if (next.computerUse && !previous.computerUse) guard(log, 'Computer use', () => c.computer.warm())
@@ -160,6 +161,7 @@ app.whenReady().then(async () => {
     }
   })
   const startup = c.settings.get()
+  guard(log, 'Update downloads', () => c.updates.setAutoDownload(startup.autoDownloadUpdates))
   guard(log, 'Update checks', () => c.updates.setAutoCheck(startup.autoCheckUpdates))
   if (startup.computerUse) guard(log, 'Computer use', () => c.computer.warm(), report('Computer use'))
   if (startup.queenGlobalShortcut) guard(log, 'Queen Bee shortcut', () => c.hotkey.apply(true, startup.queenShortcut), report("Queen Bee's shortcut"))

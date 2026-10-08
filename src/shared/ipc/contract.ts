@@ -358,6 +358,7 @@ export const requestSchemas = {
     .object({
       theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']),
       autoCheckUpdates: z.boolean(),
+      autoDownloadUpdates: z.boolean(),
       agentTools: z.boolean(),
       defaultAutoApprove: z.boolean(),
       defaultChatUi: z.boolean(),

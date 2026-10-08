@@ -7,6 +7,8 @@ export interface AppSettings {
   theme: ThemeId
   /** Check GitHub releases for updates on launch and every few hours. */
   autoCheckUpdates: boolean
+  /** Download a found update in the background; it installs on restart or quit. */
+  autoDownloadUpdates: boolean
   /** Give agents Hiveory's tools (list/read/message/open/arrange agents, terminal) over MCP. */
   agentTools: boolean
   /** Starting value of "Auto-approve permissions" when creating workspaces and presets. */
@@ -92,6 +94,7 @@ export interface AppSettings {
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   autoCheckUpdates: true,
+  autoDownloadUpdates: false,
   agentTools: true,
   defaultAutoApprove: false,
   defaultChatUi: false,
@@ -150,6 +153,6 @@ export type UpdateStatus =
   | { state: 'checking' }
   | { state: 'available'; version: string; notes?: string }
   | { state: 'not-available'; lastChecked: string }
-  | { state: 'downloading'; version: string; percent: number }
-  | { state: 'downloaded'; version: string }
+  | { state: 'downloading'; version: string; percent: number; notes?: string }
+  | { state: 'downloaded'; version: string; notes?: string }
   | { state: 'error'; message: string }
