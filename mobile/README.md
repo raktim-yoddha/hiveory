@@ -61,6 +61,9 @@ Failure stays local:
 
 Look: the desktop's palettes, generated from `src/renderer/src/styles/tokens.css`, with sizes
 made for touch (`core/theme/tokens.ts`). Build screens from `core/ui`; don't style one-offs.
+The structure is each platform's own: the system tab bar (SF Symbols / Material icons), native
+stack headers (`useHeaderOptions`, `TabStack`), system switches and native touch feedback
+(`ripple` / `pressedFill`) — tinted with the desktop's colors.
 
 ## Notes
 
