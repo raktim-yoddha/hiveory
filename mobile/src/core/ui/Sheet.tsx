@@ -4,6 +4,7 @@ import { X } from 'lucide-react-native'
 import { space, useTheme } from '../theme'
 import { CustomSheet, type SheetProps } from './CustomSheet'
 import { IconButton } from './IconButton'
+import { SheetContent } from './SheetContent'
 import { Text } from './Text'
 
 export type { SheetProps }
@@ -20,7 +21,7 @@ const SIDE = 16
 export function Sheet(props: SheetProps) {
   const { open, title, onClose, children, footer, dismissable = true } = props
   const { colors } = useTheme()
-  const { width } = useWindowDimensions()
+  const { width, height } = useWindowDimensions()
   if (!dismissable) return <CustomSheet {...props} />
   return (
     <BottomSheet
@@ -31,26 +32,27 @@ export function Sheet(props: SheetProps) {
       containerColor={colors.surfaceRaised}
       scrimColor={colors.overlay}
     >
-      {/* The native sheet sizes React Native content to its own width, so it gets the sheet's width explicitly. */}
-      <View accessibilityViewIsModal style={[styles.sheet, { width: width - SIDE * 2 }]}>
-        <View style={styles.head}>
-          <Text variant="title" style={styles.title} accessibilityRole="header">
-            {title}
-          </Text>
-          <IconButton label="Close" icon={X} onPress={onClose} />
+      {/* Hosted so it gets touches in the sheet's own window; it sizes itself, so it gets the sheet's width. */}
+      <SheetContent>
+        <View accessibilityViewIsModal style={[styles.sheet, { width: width - SIDE * 2 }]}>
+          <View style={styles.head}>
+            <Text variant="title" style={styles.title} accessibilityRole="header">
+              {title}
+            </Text>
+            <IconButton label="Close" icon={X} onPress={onClose} />
+          </View>
+          <ScrollView style={{ maxHeight: height * 0.7 }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            {children}
+          </ScrollView>
+          {footer ? <View style={styles.footer}>{footer}</View> : null}
         </View>
-        <ScrollView style={styles.fill} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          {children}
-        </ScrollView>
-        {footer ? <View style={styles.footer}>{footer}</View> : null}
-      </View>
+      </SheetContent>
     </BottomSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  sheet: { flex: 1, paddingBottom: space[7] },
-  fill: { flex: 1 },
+  sheet: { paddingBottom: space[7] },
   head: { flexDirection: 'row', alignItems: 'center', gap: space[4] },
   title: { flex: 1 },
   body: { gap: space[5], paddingVertical: space[5] },

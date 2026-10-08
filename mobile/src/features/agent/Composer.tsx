@@ -4,7 +4,7 @@ import { SendHorizontal } from 'lucide-react-native'
 import { font, radius, space, useTheme } from '@/core/theme'
 import { IconButton } from '@/core/ui'
 
-/** Writes to the agent like typing in its prompt and pressing Enter (agents.sendMessage). */
+/** Writes to the agent like typing in its prompt and pressing Enter (agents.sendMessage), on Send. */
 export function Composer({ petName, onSend, busy }: { petName: string; onSend: (text: string) => Promise<unknown>; busy: boolean }) {
   const { colors } = useTheme()
   const [text, setText] = useState('')
@@ -22,11 +22,11 @@ export function Composer({ petName, onSend, busy }: { petName: string; onSend: (
         selectionColor={colors.accent}
         value={text}
         onChangeText={setText}
+        // Enter starts a new line, as in a phone's chat apps; Send sends (a multi-line message reaches the
+        // agent as one paste, so its lines don't submit one by one).
         multiline
+        submitBehavior="newline"
         style={[styles.input, { color: colors.text }]}
-        submitBehavior="blurAndSubmit"
-        returnKeyType="send"
-        onSubmitEditing={send}
       />
       <IconButton label="Send" icon={SendHorizontal} tone="accent" onPress={send} disabled={!text.trim() || busy} />
     </View>
