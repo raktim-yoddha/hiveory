@@ -10,6 +10,7 @@ import { ThemeProvider, useHeaderOptions, useTheme } from '@/core/theme'
 import { Toasts } from '@/core/ui'
 import { NotificationRouter } from '@/features/notifications'
 import { SshPromptSheet } from '@/features/ssh-prompts'
+import { UpdatePrompt } from '@/features/updates'
 
 export { RouteErrorBoundary as ErrorBoundary }
 
@@ -58,6 +59,9 @@ function Shell() {
       </LayerBoundary>
       <LayerBoundary name="Notification taps">
         <NotificationRouter />
+      </LayerBoundary>
+      <LayerBoundary name="Updates">
+        <UpdatePrompt />
       </LayerBoundary>
       <LayerBoundary name="Notices">
         <Toasts />

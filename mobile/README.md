@@ -2,7 +2,8 @@
 
 Watch and steer your agents from your phone: what needs you, every workspace's board, live
 terminals, answering prompts, and push notifications. The app talks only to your own computers,
-over your own Tailscale network (ADR 0025, 0027).
+over your own Tailscale network (ADR 0025, 0027). The one exception: the Android app asks GitHub for
+the latest release when it opens (Settings › Updates turns it off).
 
 ## Run it
 

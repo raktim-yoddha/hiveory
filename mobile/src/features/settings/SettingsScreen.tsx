@@ -12,10 +12,10 @@ import { Card, IconButton, ListRow, Screen, Section, StatusDot, Text, Button } f
 const THEME_LABEL: Record<string, string> = { dark: 'Dark', bronze: 'Bronze', silver: 'Silver', midnight: 'Midnight', jade: 'Jade', rose: 'Rose' }
 
 /**
- * The phone's settings. `notifications` is composed in by the route (the
- * notifications feature owns that switch), so neither feature imports the other.
+ * The phone's settings. `notifications` and `updates` are composed in by the route (their
+ * features own those controls), so no feature imports another.
  */
-export function SettingsScreen({ notifications }: { notifications?: ReactNode }) {
+export function SettingsScreen({ notifications, updates }: { notifications?: ReactNode; updates?: ReactNode }) {
   const { colors, name } = useTheme()
   const { status } = useConnection()
   const computers = useComputers((s) => s.computers)
@@ -59,6 +59,7 @@ export function SettingsScreen({ notifications }: { notifications?: ReactNode })
         })}
       </Section>
       {notifications ? <Section title="Notifications">{notifications}</Section> : null}
+      {updates ? <Section title="Updates">{updates}</Section> : null}
       <Section title="Appearance">
         <Card>
           <Text variant="lead">Theme: {THEME_LABEL[name] ?? name}</Text>
@@ -74,7 +75,7 @@ export function SettingsScreen({ notifications }: { notifications?: ReactNode })
             <Text variant="lead">Only your computers</Text>
           </View>
           <Text variant="label" tone="muted">
-            This app talks only to the computers you paired, over your own Tailscale network. No Hiveory server sits in between. Phones can watch and steer
+            This app talks only to the computers you paired, over your own Tailscale network. No Hiveory server sits in between. The only other request is the Android app asking GitHub for new releases, which you can turn off under Updates. Phones can watch and steer
             agents; deleting workspaces and changing settings stay on the computer.
           </Text>
         </Card>
