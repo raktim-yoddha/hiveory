@@ -12,9 +12,13 @@ const STATE_NOTE: Record<Exclude<Discovery['state'], 'running'>, string> = {
   stopped: 'Tailscale is off or signed out on this computer. Turn it on and refresh.'
 }
 
+/** Phones run no SSH and share no Hiveory: they pair from their own app, scanning this computer's code. */
+const isPhone = (d: DiscoveredDevice): boolean => /^(android|ios)$/i.test(d.os)
+
 const describe = (d: DiscoveredDevice): string => {
   const where = [d.dnsName || d.ip, d.os].filter(Boolean).join(' · ')
   if (!d.online) return `${where} · offline`
+  if (isPhone(d)) return `${where} · phone: open the Hiveory app there and scan “Connect your phone” under Share this computer`
   if (d.hiveory) return `${where} · Hiveory ${d.hiveory.version}${d.mine ? ' · yours, connects in one click' : ' · needs its pairing code'}`
   return `${where} · not sharing Hiveory (turn on “Share this computer” there, or use it over SSH)`
 }
@@ -117,7 +121,7 @@ export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) =
                   Connect
                 </Button>
               )}
-              {d.online && !d.hiveory && (
+              {d.online && !d.hiveory && !isPhone(d) && (
                 <Button size="sm" icon={<Terminal />} onClick={() => onUseSsh(d.dnsName || d.name)}>
                   Use over SSH
                 </Button>
