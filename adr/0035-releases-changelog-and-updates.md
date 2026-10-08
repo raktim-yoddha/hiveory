@@ -10,7 +10,7 @@ was empty, the desktop updater had no pop-up, and the phone app could not update
 
 ## Decision
 
-**Retroactive versions.** The history is split into 27 versions, v0.1.0 to v0.20.0, tagged on the
+**Retroactive versions.** The history is split into 26 versions, v0.1.0 to v0.20.0, tagged on the
 commit that ended each one (annotated tags dated with that commit). A run of `feat` commits is a minor
 version, a run of only fixes is a patch; a deliberate user-facing change made in `fix` commits (the
 Workspace/Worktree rename, v0.19.0) is a minor. Before 1.0 a breaking change bumps the minor
