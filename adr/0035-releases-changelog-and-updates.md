@@ -53,3 +53,12 @@ the user to confirm the install.
 - The phone's GitHub check is its only request outside the user's own computers; the privacy text
   says so.
 - Over-the-air JavaScript updates (expo-updates) need an Expo account and are not part of this.
+
+## Amendment (2026-10-09): the command is `release`
+
+Decided by the product owner. The user says "release" and the agent picks the version:
+`pnpm release next` reads the commits since the last tag and prints the next SemVer step and why
+(`suggestRelease` in `scripts/semver.mjs`: breaking → major, minor before 1.0; `feat` → minor; other
+user-facing commits → patch; docs, tests, CI and chores alone → nothing to release). The agent checks
+that against the commits, writes the changelog entry, then runs `pnpm release X.Y.Z --check` and
+`pnpm release X.Y.Z` as before. The steps live in AGENTS.md §26 only; the README no longer repeats them.

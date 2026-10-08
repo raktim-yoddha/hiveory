@@ -1,12 +1,12 @@
-// Release Hiveory: node scripts/release.mjs <version> [--check]
-// Validates the version against SemVer + project rules (scripts/semver.mjs) and that CHANGELOG.md has an
-// "## Unreleased — Title" entry with highlights. With --check it stops there. Otherwise it stamps that entry
-// with the version and date, bumps the desktop and phone versions, commits, tags vX.Y.Z and pushes. The
-// tag starts .github/workflows/release.yml, which builds every installer and publishes the GitHub release
+// Release Hiveory (AGENTS.md §26):
+//   pnpm release next               the next SemVer version from the commits since the last release, and why
+//   pnpm release <version> --check  validate it and the CHANGELOG.md "## Unreleased — Title" entry
+//   pnpm release <version>          stamp that entry, bump the desktop and phone versions, commit, tag vX.Y.Z, push
+// The tag starts .github/workflows/release.yml, which builds every installer and publishes the GitHub release
 // (which the in-app updaters read).
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { parse, validateRelease } from './semver.mjs'
+import { parse, suggestRelease, validateRelease } from './semver.mjs'
 
 const [requested, flag] = process.argv.slice(2)
 const checkOnly = flag === '--check'
@@ -16,8 +16,31 @@ const fail = (message) => {
   process.exit(1)
 }
 
-if (!requested) fail('usage: pnpm release <version> [--check]')
+if (!requested) fail('usage: pnpm release next | pnpm release <version> [--check]')
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
+
+if (requested === 'next') {
+  const last = `v${pkg.version}`
+  const range = run('git', ['tag', '--list', last]) ? `${last}..HEAD` : 'HEAD'
+  const SEP = '\u001e'
+  const commits = run('git', ['log', `--format=%h %s%n%b${SEP}`, range])
+    .split(SEP)
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((c) => {
+      const [first, ...body] = c.split(/\r?\n/)
+      return { sha: first.slice(0, first.indexOf(' ')), subject: first.slice(first.indexOf(' ') + 1), body: body.join('\n') }
+    })
+  const s = suggestRelease(pkg.version, commits)
+  if (s.kind === 'none') {
+    console.log(`Nothing to release since ${last}: ${s.reason}`)
+    process.exit(0)
+  }
+  console.log(`Next: ${s.version} (${s.kind}) after ${pkg.version} — ${s.reason}.`)
+  console.log(`Commits since ${last}:`)
+  for (const c of s.commits.slice().reverse()) console.log(`  ${c.sha} ${c.subject}`)
+  process.exit(0)
+}
 const localTags = run('git', ['tag', '--list', 'v*']).split(/\r?\n/).filter(Boolean)
 let remoteTags = []
 try {
@@ -40,7 +63,9 @@ if (checkOnly) process.exit(0)
 
 const branch = run('git', ['branch', '--show-current'])
 if (branch !== 'main') fail(`releases are cut from main (you are on "${branch}").`)
-if (run('git', ['status', '--porcelain'])) fail('the working tree has uncommitted changes. Commit or stash them first.')
+// The release notes just written into CHANGELOG.md go into the release commit; anything else must not.
+const dirty = run('git', ['status', '--porcelain']).split(/\r?\n/).filter((l) => l && !/ CHANGELOG\.md$/.test(l))
+if (dirty.length) fail(`the working tree has other uncommitted changes (${dirty.length}). Commit or stash them first.`)
 
 /** Android's versionCode must always grow: MAJOR MINOR PATCH, then 99 for a release or the prerelease number. */
 const androidVersionCode = (version) => {

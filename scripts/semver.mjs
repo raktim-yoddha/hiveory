@@ -76,3 +76,30 @@ export const validateRelease = (requested, current, existingTags = []) => {
   const kind = next.major !== cur.major ? 'major' : next.minor !== cur.minor ? 'minor' : next.patch !== cur.patch ? 'patch' : 'prerelease'
   return { valid: true, version: next.raw, kind, prerelease: next.prerelease.length > 0 }
 }
+
+const BREAKING = /^[a-z]+(\([^)]*\))?!:/
+const FEATURE = /^feat(\([^)]*\))?:/
+/** Commit types that change nothing a user gets: they alone never call for a release. */
+const NO_RELEASE = /^(docs|test|tests|ci|build|chore|style)(\([^)]*\))?:/
+
+/**
+ * The next version from the commits since the last release (Conventional Commits): a breaking change
+ * is major (minor before 1.0, SemVer §4), a feature is minor, anything else that reaches users is a
+ * patch. `commits` are `{ subject, body }`; release commits themselves are ignored.
+ */
+export const suggestRelease = (current, commits) => {
+  const relevant = commits.filter((c) => !/^chore\(release\):/.test(c.subject))
+  const breaking = relevant.filter((c) => BREAKING.test(c.subject) || /^BREAKING[ -]CHANGE:/m.test(c.body ?? ''))
+  const features = relevant.filter((c) => FEATURE.test(c.subject))
+  const userFacing = relevant.filter((c) => !NO_RELEASE.test(c.subject))
+  if (!userFacing.length && !breaking.length) return { kind: 'none', reason: 'No user-facing commits since the last release.', commits: relevant }
+  const next = nextVersions(current)
+  const preOne = parse(current).major === 0
+  const kind = breaking.length ? (preOne ? 'minor' : 'major') : features.length ? 'minor' : 'patch'
+  const reason = breaking.length
+    ? `${breaking.length} breaking change(s)${preOne ? ' (before 1.0 a breaking change is a minor step)' : ''}`
+    : features.length
+      ? `${features.length} feature(s)`
+      : `${userFacing.length} fix(es) or other user-facing change(s), no features`
+  return { kind, version: next[kind], reason, commits: relevant }
+}

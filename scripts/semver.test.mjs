@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compare, nextVersions, parse, validateRelease } from './semver.mjs'
+import { compare, nextVersions, parse, suggestRelease, validateRelease } from './semver.mjs'
 
 describe('semver parsing and precedence', () => {
   it('accepts valid versions and rejects invalid ones', () => {
@@ -38,5 +38,21 @@ describe('release validation', () => {
     expect(validateRelease('0.2.1', '0.1.0').reason).toMatch(/skips versions/)
     expect(validateRelease('0.1.1+build', '0.1.0').reason).toMatch(/build metadata/)
     expect(validateRelease('0.1.1', '0.1.0', ['v0.1.1']).reason).toMatch(/already released/)
+  })
+})
+
+describe('suggesting the next release', () => {
+  const c = (...subjects) => subjects.map((subject) => ({ subject, body: '' }))
+  it('steps by the most significant change', () => {
+    expect(suggestRelease('1.4.2', c('fix: a', 'docs: b'))).toMatchObject({ kind: 'patch', version: '1.4.3' })
+    expect(suggestRelease('1.4.2', c('fix: a', 'feat(ui): b'))).toMatchObject({ kind: 'minor', version: '1.5.0' })
+    expect(suggestRelease('1.4.2', c('feat!: drop keys'))).toMatchObject({ kind: 'major', version: '2.0.0' })
+    expect(suggestRelease('1.4.2', [{ subject: 'refactor: x', body: 'BREAKING CHANGE: new format' }])).toMatchObject({ kind: 'major' })
+  })
+  it('keeps breaking changes to a minor step before 1.0', () => {
+    expect(suggestRelease('0.21.1', c('feat(plugins)!: new accounts'))).toMatchObject({ kind: 'minor', version: '0.22.0' })
+  })
+  it('finds nothing to release when only docs, tests, CI or release commits landed', () => {
+    expect(suggestRelease('0.21.1', c('docs: x', 'test: y', 'ci: z', 'chore(release): v0.21.1')).kind).toBe('none')
   })
 })

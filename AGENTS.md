@@ -1,6 +1,10 @@
-# AGENTS.md — Engineering Contract
+# Engineering Contract (AGENTS.md = CLAUDE.md)
 
 This file is mandatory for every coding agent working in this repository.
+
+**`AGENTS.md` and `CLAUDE.md` are one document in two files** (Claude reads `CLAUDE.md`, other agents
+read `AGENTS.md`). Whenever you change either one, make the identical change to the other in the
+same commit; a test fails when they differ. Never let them drift.
 
 ## Source of Truth
 
@@ -291,34 +295,42 @@ Before declaring work complete:
 
 ### 26. Releases & Semantic Versioning
 
-Hiveory follows [Semantic Versioning 2.0.0](https://semver.org): `MAJOR.MINOR.PATCH`.
+Hiveory always follows [Semantic Versioning 2.0.0](https://semver.org): `MAJOR.MINOR.PATCH`.
+Desktop and phone share one version (ADR 0035).
 
 - **PATCH** — bug fixes only, no behavior change.
-- **MINOR** — new features, backwards compatible.
-- **MAJOR** — breaking changes (data format, removed behavior).
+- **MINOR** — new features, or a deliberate user-visible change (even one made in `fix` commits).
+- **MAJOR** — breaking changes (data format, removed behavior). Before 1.0 a breaking change is a
+  MINOR step (SemVer §4).
 - Prereleases: `1.4.0-beta.1`, `1.4.0-rc.1` (lower precedence than `1.4.0`).
 - Build metadata (`+…`) is never used for releases.
-- Before 1.0, a breaking change bumps MINOR (SemVer §4).
 
-Release text lives in `CHANGELOG.md` (ADR 0035). Keep an `## Unreleased — Title` entry at the top with
-two to six `- ` highlights: what changed for the user, in app words, no code names, no marketing.
+**The command is `release`.** When the user says "release" (in any wording: "release", "cut a
+release", "ship a release"), the agent decides the version itself and releases, with no further
+confirmation — the word is the approval:
 
-When the user says **"release X.Y.Z"** (or "release vX.Y.Z"), the agent must:
+1. Run `pnpm release next`. It reads the commits since the last tag and prints the next version
+   and why (breaking → MAJOR, `feat` → MINOR, other user-facing commits → PATCH; docs, tests, CI and
+   chores alone → nothing to release). If it says there is nothing to release, tell the user and stop.
+2. Check its suggestion against the commits: a `fix` that deliberately changes what users see is a
+   MINOR step. Never skip a number; the result is always exactly one step after `package.json`.
+3. Write the release notes at the top of `CHANGELOG.md` as `## Unreleased — Title`: a title of up to
+   ~10 words naming the biggest changes, then two to six `- ` highlights. Highlights say what changed
+   for the user, in app words (Workspace, Worktree, Queen Bee…), present tense, no code names, file
+   names or ADR numbers, no marketing; a fix is described as the problem that is gone; a breaking
+   change comes first and starts with "Breaking:".
+4. Run `pnpm release X.Y.Z --check`. If it fails, do **not** release: tell the user the exact reason
+   it printed and the valid next versions.
+5. Run `pnpm release X.Y.Z` on `main`. Other uncommitted work is never included: stash it
+   (`git stash push -- <paths>`) and restore it afterwards. The script stamps the changelog entry,
+   bumps `package.json` and the phone app (`mobile/package.json`, `mobile/app.json` and its Android
+   `versionCode`), commits `chore(release): vX.Y.Z`, tags `vX.Y.Z` and pushes.
+6. The tag starts `.github/workflows/release.yml`: it builds the Windows, macOS, Linux and Android
+   installers and publishes the GitHub release (read by the in-app updaters) once the desktop builds
+   pass. Watch the run; report the release URL, or the failing step verbatim and fix it (a fix ships
+   as the next PATCH).
 
-1. Run `pnpm release X.Y.Z --check`. This applies `scripts/semver.mjs`: valid SemVer, strictly greater
-   than `package.json`'s version, needs the Unreleased changelog entry, no skipped versions (exactly one patch, minor or major step, or a
-   prerelease of one), and not already tagged locally or on origin.
-2. If the check fails: do **not** release. Tell the user the exact reason the script printed and the
-   valid next versions (patch / minor / major).
-3. If the check passes: run `pnpm release X.Y.Z` directly (no extra confirmation needed — the user's
-   "release" instruction is the approval). It must be on `main` with a clean tree; it bumps
-   `package.json` and the phone app (`mobile/package.json`, `mobile/app.json` and its Android
-   `versionCode`), stamps the Unreleased entry with the version and date, commits
-   `chore(release): vX.Y.Z`, tags `vX.Y.Z` and pushes. The tag starts `.github/workflows/release.yml`,
-   which builds the Windows, macOS, Linux and Android installers and publishes the GitHub release
-   (read by the in-app updaters) once every build passes.
-4. Report the release URL and the Actions run, or the failing step verbatim if any step fails.
-
+If the user names a version ("release 1.4.0"), use it only if `--check` accepts it.
 Never edit the version by hand, never reuse a tag, and never skip the check.
 
 ### 27. Privacy: No Personal Data Ships
