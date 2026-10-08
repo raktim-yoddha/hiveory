@@ -1,10 +1,10 @@
 import { Platform } from 'react-native'
 import Constants from 'expo-constants'
 import * as Device from 'expo-device'
-import * as Notifications from 'expo-notifications'
 import { create } from 'zustand'
 import { setPushToken, type Computer } from '@/core/api'
 import { secureStore } from '@/core/storage/secure'
+import { Notifications } from './notifications-module'
 
 const ENABLED_KEY = 'hiveory.push'
 export const AGENTS_CHANNEL = 'agents'
@@ -17,7 +17,7 @@ export const PUSH_UNAVAILABLE = 'Notifications need the installed Hiveory app on
 /** This phone's Expo push token, after asking permission; null when the user said no or push is unavailable here. */
 const pushToken = async (): Promise<{ token: string } | { status: 'denied' | 'unavailable' }> => {
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId
-  if (!Device.isDevice || !projectId) return { status: 'unavailable' }
+  if (!Notifications || !Device.isDevice || !projectId) return { status: 'unavailable' }
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync(AGENTS_CHANNEL, { name: 'Agents that need you', importance: Notifications.AndroidImportance.HIGH })
   }
