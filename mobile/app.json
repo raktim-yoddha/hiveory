@@ -3,7 +3,7 @@
     "name": "Hiveory",
     "slug": "hiveory",
     "scheme": "hiveory",
-    "version": "0.21.0",
+    "version": "0.21.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "app.hiveory.mobile",
-      "versionCode": 210099,
+      "versionCode": 210199,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",

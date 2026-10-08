@@ -6,7 +6,9 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
-## Unreleased — Windows installer
+## v0.21.1 — Windows installer
+_2026-10-08_
+
 - The Windows installer is back: v0.21.0's Windows build failed, so this release adds it. Nothing else changes.
 
 ## v0.21.0 — Update pop-up, Android updates, terminal zoom, steadier panes
