@@ -15,6 +15,7 @@ import type {
 } from '@shared/domain'
 import { DEFAULT_SETTINGS } from '@shared/domain'
 import type { AppInfo } from '@shared/ipc/contract'
+import { applyOperation } from '@shared/layout/operations'
 import { api } from '../lib/api'
 import { reportError } from './notices'
 
@@ -139,21 +140,25 @@ interface LayoutState {
   apply(workspaceId: string, operation: LayoutOperation): Promise<void>
 }
 
-export const useLayouts = create<LayoutState>((set) => ({
-  byWorkspace: {},
-  load: (workspaceId) =>
-    load(
-      'Load layout',
-      () => api('layout.get', { workspaceId }),
-      (tree) => set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: tree } }))
-    ),
-  apply: (workspaceId, operation) =>
-    load(
-      'Rearrange panes',
-      () => api('layout.apply', { workspaceId, operation }),
-      (tree) => set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: tree } }))
-    )
-}))
+export const useLayouts = create<LayoutState>((set, get) => {
+  const setTree = (workspaceId: string, tree: LayoutNode | null): void =>
+    set((s) => ({ byWorkspace: { ...s.byWorkspace, [workspaceId]: tree } }))
+  return {
+    byWorkspace: {},
+    load: (workspaceId) => load('Load layout', () => api('layout.get', { workspaceId }), (tree) => setTree(workspaceId, tree)),
+    apply: async (workspaceId, operation) => {
+      // Optimistic: main runs the same shared operation, so panes land in the frame the user lets
+      // go (a released divider would otherwise snap back to the old layout until main answers).
+      setTree(workspaceId, applyOperation(get().byWorkspace[workspaceId] ?? null, operation))
+      try {
+        setTree(workspaceId, await api('layout.apply', { workspaceId, operation }))
+      } catch (error) {
+        reportError(error, 'Rearrange panes')
+        await get().load(workspaceId)
+      }
+    }
+  }
+})
 
 interface PresetState {
   presets: AgentPreset[]
