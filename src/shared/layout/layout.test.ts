@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { LayoutNode } from '../domain/layout'
 import { arrangeBarRects, resolveDropTarget } from './drop'
-import { computeGeometry, dragDivider, minSizeOf, neighborOf, relativeGeometry, resolveSpan } from './geometry'
+import { computeGeometry, dragDivider, fitToMinimums, minSizeOf, neighborOf, relativeGeometry, resolveSpan } from './geometry'
 import { arrange, focusRest } from './presets'
 import {
   applyOperation,
@@ -258,5 +258,55 @@ describe('relative geometry (panes follow a resizing layout in the same frame)',
       })
     }
     expect(relativeGeometry(null, 10)).toEqual({ panes: {}, dividers: [] })
+  })
+})
+
+describe('pane minimums hold whatever squeezes the layout', () => {
+  const bounds = (width: number, height = 400) => ({ x: 0, y: 0, width, height })
+  const widths = (tree: LayoutNode | null, width: number, min: Parameters<typeof fitToMinimums>[3]) =>
+    computeGeometry(fitToMinimums(tree, bounds(width), 10, min), bounds(width), 10, min).panes
+  const min = { width: 200, height: 100 }
+
+  it('keeps the stored ratios when every pane already has its minimum', () => {
+    const tree = h(p('a'), p('b'))
+    expect(fitToMinimums(tree, bounds(1010), 10, min)).toBe(tree)
+  })
+
+  it('raises a pane below its minimum, taking the space from panes that have room', () => {
+    const tree: LayoutNode = { type: 'split', direction: 'horizontal', children: [p('a'), p('b'), p('c')], ratios: [0.1, 0.45, 0.45] }
+    const panes = widths(tree, 1020, min)
+    expect(panes.a!.width).toBeCloseTo(200)
+    expect(panes.b!.width).toBeCloseTo(400)
+    expect(panes.c!.width).toBeCloseTo(400)
+  })
+
+  it('holds a whole nested group at its minimum, and each pane inside it', () => {
+    const column: LayoutNode = { type: 'split', direction: 'vertical', children: [h(p('b'), p('c')), p('d')], ratios: [0.5, 0.5] }
+    const tree: LayoutNode = { type: 'split', direction: 'horizontal', children: [p('a'), column], ratios: [0.8, 0.2] }
+    const panes = widths(tree, 1000, min)
+    expect(panes.b!.width).toBeGreaterThanOrEqual(200 - 1e-6)
+    expect(panes.c!.width).toBeGreaterThanOrEqual(200 - 1e-6)
+    expect(panes.a!.width).toBeCloseTo(1000 - 10 - 410)
+  })
+
+  it('honours a pane that needs more than the shared minimum', () => {
+    const wide = (id: string) => ({ width: id === 'a' ? 320 : 200, height: 100 })
+    const panes = widths(h(p('a'), p('b')), 610, wide)
+    expect(panes.a!.width).toBeCloseTo(320)
+    expect(panes.b!.width).toBeCloseTo(280)
+  })
+
+  it('shrinks panes in proportion to their minimums when the window cannot hold them all', () => {
+    const wide = (id: string) => ({ width: id === 'a' ? 300 : 100, height: 100 })
+    const tree: LayoutNode = { type: 'split', direction: 'horizontal', children: [p('a'), p('b')], ratios: [0.1, 0.9] }
+    const panes = widths(tree, 210, wide)
+    expect(panes.a!.width).toBeCloseTo(150)
+    expect(panes.b!.width).toBeCloseTo(50)
+  })
+
+  it('applies to heights as well', () => {
+    const tree: LayoutNode = { type: 'split', direction: 'vertical', children: [p('a'), p('b')], ratios: [0.9, 0.1] }
+    const panes = computeGeometry(fitToMinimums(tree, bounds(500, 410), 10, min), bounds(500, 410), 10, min).panes
+    expect(panes.b!.height).toBeCloseTo(100)
   })
 })

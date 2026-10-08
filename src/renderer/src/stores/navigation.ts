@@ -48,6 +48,8 @@ interface NavigationState {
   activePanelTab: Record<string, string>
   /** Height share of the top area while the panel is split (0.2–0.8). */
   panelSplit: number
+  /** Smallest width the open Worktree's panes fit in (each at its minimum); the sidebars give way first. */
+  workMinWidth: number
   setMode(mode: AppMode): void
   openSettings(section?: SettingsSection): void
   closeSettings(): void
@@ -55,6 +57,7 @@ interface NavigationState {
   togglePanelMaximized(): void
   setSidebarWidth(width: number): void
   setPanelWidth(width: number): void
+  setWorkMinWidth(width: number): void
   /** Adds (or, for an existing id, selects) a tab. Browser tabs pass their page id. */
   addPanelTab(scope: string, kind: PanelTab['kind'], id?: string, select?: boolean, group?: PanelGroup): PanelTab
   closePanelTab(scope: string, tabId: string): void
@@ -126,6 +129,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   panelTabs: {},
   activePanelTab: {},
   panelSplit: initialWidths.split,
+  workMinWidth: 0,
   setMode: (mode) => set((s) => ({ mode, view: s.view.type === 'settings' ? s.view.returnTo : s.view })),
   openSettings: (section = 'appearance') =>
     set((s) => ({ view: { type: 'settings', section, returnTo: s.view.type === 'settings' ? s.view.returnTo : s.view } })),
@@ -141,6 +145,9 @@ export const useNavigation = create<NavigationState>((set, get) => ({
     const panelWidth = clamp(width, PANEL_WIDTH)
     set({ panelWidth })
     saveWidths(get())
+  },
+  setWorkMinWidth: (width) => {
+    if (width !== get().workMinWidth) set({ workMinWidth: width })
   },
   setPanelSplit: (share) => {
     set({ panelSplit: Math.min(PANEL_SPLIT.max, Math.max(PANEL_SPLIT.min, share)) })

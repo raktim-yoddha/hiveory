@@ -91,6 +91,52 @@ export const computeGeometry = (
   return geometry
 }
 
+/**
+ * Sizes along a split for `available` px: the ratios' sizes, except that no child goes below its
+ * minimum while the others have room to give (they give in proportion to their share). When the
+ * space cannot hold every minimum (a window smaller than the layout needs), children shrink in
+ * proportion to their minimums, so none collapses while another keeps its size.
+ */
+const fitSizes = (ratios: number[], mins: number[], available: number): number[] => {
+  const needed = mins.reduce((s, m) => s + m, 0)
+  if (needed >= available) return mins.map((m) => (needed > 0 ? (m * available) / needed : available / mins.length))
+  const sizes = ratios.map((r) => r * available)
+  const fixed = new Set<number>()
+  // Each round pins the children below their minimum; at most one round per child.
+  for (let round = 0; round < sizes.length; round++) {
+    const short = sizes.map((s, i) => (!fixed.has(i) && s < mins[i]! ? i : -1)).filter((i) => i >= 0)
+    if (short.length === 0) break
+    for (const i of short) fixed.add(i)
+    const pinned = [...fixed].reduce((s, i) => s + mins[i]!, 0)
+    const free = sizes.map((_, i) => i).filter((i) => !fixed.has(i))
+    const share = free.reduce((s, i) => s + (ratios[i] ?? 0), 0)
+    for (const i of fixed) sizes[i] = mins[i]!
+    for (const i of free) sizes[i] = share > 0 ? ((ratios[i] ?? 0) / share) * (available - pinned) : (available - pinned) / free.length
+  }
+  return sizes
+}
+
+/**
+ * The tree with every split's ratios fitted to `bounds` so no pane is smaller than its minimum
+ * while the space allows (see fitSizes). The stored ratios stay the user's; this is what is shown.
+ * Unchanged splits keep their identity.
+ */
+export const fitToMinimums = (tree: LayoutNode | null, bounds: Rect, gutter: number, min: PaneMinimum): LayoutNode | null => {
+  if (!tree || bounds.width <= 0 || bounds.height <= 0) return tree
+  const fit = (node: LayoutNode, width: number, height: number): LayoutNode => {
+    if (node.type === 'pane') return node
+    const horizontal = node.direction === 'horizontal'
+    const axis = horizontal ? 'width' : 'height'
+    const available = Math.max(0, (horizontal ? width : height) - gutter * (node.children.length - 1))
+    const sizes = fitSizes(node.ratios, node.children.map((c) => minSizeOf(c, min, gutter)[axis]), available)
+    const ratios = available > 0 ? sizes.map((s) => s / available) : node.ratios
+    const children = node.children.map((c, i) => fit(c, horizontal ? sizes[i]! : width, horizontal ? height : sizes[i]!))
+    const same = ratios.every((r, i) => Math.abs(r - (node.ratios[i] ?? 0)) < 1e-9) && children.every((c, i) => c === node.children[i])
+    return same ? node : { ...node, ratios, children }
+  }
+  return fit(tree, bounds.width, bounds.height)
+}
+
 /** A length that follows the container: `share` of its size plus fixed `px` (the gutters). */
 export interface Span {
   share: number

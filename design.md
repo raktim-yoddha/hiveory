@@ -286,6 +286,14 @@ When populated:
 
 The gap between panes is intentional.
 
+Every pane keeps its minimum size (`--pane-min-width` / `--pane-min-height`, or more for a CLI
+that needs wider terminals), and a group of panes keeps the sum of its panes'. Nothing outside
+the layout takes that space: the sidebar and side panel give way first — their handles stop at
+the panes' minimum, and a shrinking window narrows them down to their own minimums before any
+pane. Inside the layout, a pane below its minimum (after a split, or a window growing back) takes
+the space back from neighbours that have room. Only a window too small for everything shrinks
+panes, all in proportion to their minimums.
+
 A terminal sits close to its pane's edges (a few px of inset; the scrollbar is the right gutter).
 A narrow pane zooms its terminal text out — 13px down to 8px, snapped to whole device pixels —
 so a CLI keeps about 50 columns, or the columns it needs (the registry's `minColumns`), instead

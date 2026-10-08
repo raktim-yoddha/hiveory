@@ -51,10 +51,19 @@
   }
 }
 
+/*
+ * The main column never gets narrower than the open Worktree's panes need (--work-min-width):
+ * the sidebars give way first, down to their own minimums, whether they are dragged, opened or
+ * the window shrinks. Only a window too small for all of them squeezes the panes, and then only
+ * by what the sidebars at their minimum (--side-reserve) leave.
+ */
 .main {
+  --side-reserve: 0px;
+  --work-min: min(var(--work-min-width, 0px), 100% - var(--side-reserve));
+
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(var(--work-min), 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: var(--gutter);
   min-height: 0;
@@ -62,15 +71,23 @@
 }
 
 .withSidebar {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  --side-reserve: calc(var(--sidebar-min) + var(--gutter));
+
+  grid-template-columns: minmax(var(--sidebar-min), var(--sidebar-width)) minmax(var(--work-min), 1fr);
 }
 
 .withPanel {
-  grid-template-columns: minmax(0, 1fr) var(--side-panel-width);
+  --side-reserve: calc(var(--side-panel-min) + var(--gutter));
+
+  grid-template-columns: minmax(var(--work-min), 1fr) minmax(var(--side-panel-min), var(--side-panel-width));
 }
 
 .withSidebar.withPanel {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--side-panel-width);
+  --side-reserve: calc(var(--sidebar-min) + var(--side-panel-min) + 2 * var(--gutter));
+
+  grid-template-columns:
+    minmax(var(--sidebar-min), var(--sidebar-width)) minmax(var(--work-min), 1fr)
+    minmax(var(--side-panel-min), var(--side-panel-width));
 }
 
 .sidebar,

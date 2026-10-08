@@ -1,6 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { LayoutNode, LayoutOperation } from '@shared/domain'
-import { computeGeometry, dragDivider, neighborOf, relativeGeometry, type Divider, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
+import { computeGeometry, dragDivider, fitToMinimums, minSizeOf, neighborOf, relativeGeometry, type Divider, type MinPaneSize, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
 import { resizeSplit } from '@shared/layout/operations'
 import { cx } from '../../lib/cx'
 import { PaneDropPreview } from './PaneDropPreview'
@@ -29,6 +29,8 @@ interface PaneLayoutProps {
   onOperation: (operation: LayoutOperation) => void
   /** A pane that needs to stay wider than the shared minimum (px); dividers stop there. */
   paneMinWidth?: (paneId: string) => number | undefined
+  /** The smallest size the whole layout can take (every pane at its minimum, plus gutters). */
+  onMinSizeChange?: (size: MinPaneSize) => void
 }
 
 const readPx = (el: HTMLElement, token: string, fallback: number): number => {
@@ -52,7 +54,7 @@ const dividerKey = (d: Divider): string => `${d.path.join('.')}:${d.index}`
  * (architecture.md "Pane Layout"). Panes are absolutely positioned from the
  * tree so a pane's DOM node — and its terminal — survives rearrangement.
  */
-export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth }: PaneLayoutProps) {
+export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinSizeChange }: PaneLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [bounds, setBounds] = useState<Rect>({ x: 0, y: 0, width: 0, height: 0 })
   const [metrics, setMetrics] = useState({ gutter: 10, minWidth: 240, minHeight: 140 })
@@ -82,11 +84,16 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth }: Pane
     () => (paneId: string) => ({ width: Math.max(minSize.width, paneMinWidth?.(paneId) ?? 0), height: minSize.height }),
     [minSize, paneMinWidth]
   )
-  const geometry = useMemo(
-    () => computeGeometry(activeTree, bounds, metrics.gutter, minFor),
-    [activeTree, bounds, metrics.gutter, minFor]
-  )
-  const relative = useMemo(() => relativeGeometry(activeTree, metrics.gutter), [activeTree, metrics.gutter])
+  // What is shown: the ratios fitted so no pane is below its minimum while the space allows.
+  const shownTree = useMemo(() => fitToMinimums(activeTree, bounds, metrics.gutter, minFor), [activeTree, bounds, metrics.gutter, minFor])
+  const geometry = useMemo(() => computeGeometry(shownTree, bounds, metrics.gutter, minFor), [shownTree, bounds, metrics.gutter, minFor])
+  const relative = useMemo(() => relativeGeometry(shownTree, metrics.gutter), [shownTree, metrics.gutter])
+  const minWidth = tree ? minSizeOf(tree, minFor, metrics.gutter).width : 0
+  const minHeight = tree ? minSizeOf(tree, minFor, metrics.gutter).height : 0
+  useEffect(() => {
+    onMinSizeChange?.({ width: minWidth, height: minHeight })
+    return () => onMinSizeChange?.({ width: 0, height: 0 })
+  }, [minWidth, minHeight, onMinSizeChange])
   const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation })
   // Falls back to the normal layout if the maximized pane was closed.
   const maximized = maximizedId && geometry.panes[maximizedId] ? maximizedId : null

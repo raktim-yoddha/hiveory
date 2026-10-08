@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { FolderX } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
 import { useEditors } from '../../stores/editors'
+import { useNavigation } from '../../stores/navigation'
 import { EditorPane } from '../editor/EditorPane'
 import { AgentPane } from '../agents/AgentPane'
 import { PaneLayout } from '../panes/PaneLayout'
@@ -35,8 +36,12 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
+  const setWorkMinWidth = useNavigation((s) => s.setWorkMinWidth)
   const [clearedHighlight, setClearedHighlight] = useState<string>()
   const highlight = focusPaneId !== clearedHighlight ? focusPaneId : undefined
+
+  // Panes set the Work area's minimum width: the sidebars give way to it.
+  const onMinSizeChange = useCallback(({ width }: { width: number }) => setWorkMinWidth(width), [setWorkMinWidth])
 
   useEffect(() => {
     void loadWorkspaces(projectId)
@@ -80,6 +85,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
             <PaneLayout
               tree={tree}
               onOperation={(operation) => void apply(workspaceId, operation)}
+              onMinSizeChange={onMinSizeChange}
               paneMinWidth={(paneId) => {
                 // A CLI whose terminal breaks (or crashes) when too narrow locks its pane's width.
                 const agent = byId.get(paneId)

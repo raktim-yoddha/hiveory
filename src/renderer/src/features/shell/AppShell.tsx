@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
@@ -42,7 +42,8 @@ export function AppShell() {
     panelWidth,
     setPanelWidth,
     togglePanel,
-    panelMaximized
+    panelMaximized,
+    workMinWidth
   } = useNavigation()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const queenPlacement = useQueen((s) => s.placement)
@@ -56,7 +57,36 @@ export function AppShell() {
   const maximized = panelMaximized && !showBotPanel
   const workView = view.type === 'settings' ? view.returnTo : view
   const viewKey = workView.type === 'home' ? 'home' : workView.type === 'project' ? `p:${workView.projectId}` : `w:${workView.workspaceId}`
-  const widths = { '--sidebar-width': `${sidebarWidth}px`, '--side-panel-width': `${panelWidth}px` } as CSSProperties
+  // The open Worktree's panes keep their minimum width: the sidebars give way (see .main).
+  const workMin = !inSettings && mode === 'workspace' && workView.type === 'workspace' ? workMinWidth : 0
+  const widths = {
+    '--sidebar-width': `${sidebarWidth}px`,
+    '--sidebar-min': `${SIDEBAR_WIDTH.min}px`,
+    '--side-panel-width': `${panelWidth}px`,
+    '--side-panel-min': `${PANEL_WIDTH.min}px`,
+    '--work-min-width': `${workMin}px`
+  } as CSSProperties
+  // Rendered widths: a sidebar's handle starts from what is shown (the grid may have narrowed it)
+  // and stops where the panes would go below their minimum.
+  const sidebarRef = useRef<HTMLElement>(null)
+  const contentRef = useRef<HTMLElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [shown, setShown] = useState({ sidebar: 0, content: 0, panel: 0 })
+  useLayoutEffect(() => {
+    const measure = (): void =>
+      setShown({
+        sidebar: sidebarRef.current?.offsetWidth ?? 0,
+        content: contentRef.current?.offsetWidth ?? 0,
+        panel: panelRef.current?.offsetWidth ?? 0
+      })
+    measure()
+    const observer = new ResizeObserver(measure)
+    for (const el of [sidebarRef.current, contentRef.current, panelRef.current]) if (el) observer.observe(el)
+    return () => observer.disconnect()
+  }, [showSidebar, showPanel])
+  const slack = Math.max(0, shown.content - workMin)
+  const sidebarMax = Math.max(SIDEBAR_WIDTH.min, Math.min(SIDEBAR_WIDTH.max, shown.sidebar + slack))
+  const panelMax = Math.max(PANEL_WIDTH.min, Math.min(PANEL_WIDTH.max, shown.panel + slack))
 
   return (
     <div className={styles.app}>
@@ -66,24 +96,24 @@ export function AppShell() {
       </ErrorBoundary>
       <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel, showPanel && maximized && styles.covered)} style={widths}>
         {showSidebar && (
-          <aside className={styles.sidebar}>
+          <aside ref={sidebarRef} className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
               {mode === 'chatspace' ? <ChatSidebar /> : mode === 'bots' ? <BotsSidebar /> : <ProjectSidebar />}
             </ErrorBoundary>
             <ResizeHandle
               label="Resize sidebar"
               className={styles.sidebarHandle}
-              value={sidebarWidth}
+              value={shown.sidebar || sidebarWidth}
               min={SIDEBAR_WIDTH.min}
-              max={SIDEBAR_WIDTH.max}
+              max={sidebarMax}
               initial={SIDEBAR_WIDTH.initial}
               direction={1}
-              onChange={setSidebarWidth}
+              onChange={(width) => setSidebarWidth(Math.min(width, sidebarMax))}
               onCollapse={toggleSidebar}
             />
           </aside>
         )}
-        <main className={styles.content}>
+        <main ref={contentRef} className={styles.content}>
           <div className={styles.stage}>
           {inSettings && (
             <ErrorBoundary region="Settings">
@@ -124,17 +154,17 @@ export function AppShell() {
           </ErrorBoundary>
         </main>
         {showPanel && (
-          <div className={cx(styles.panel, maximized && styles.panelMaximized)}>
+          <div ref={panelRef} className={cx(styles.panel, maximized && styles.panelMaximized)}>
             {!maximized && (
               <ResizeHandle
                 label="Resize side panel"
                 className={styles.panelHandle}
-                value={panelWidth}
+                value={shown.panel || panelWidth}
                 min={PANEL_WIDTH.min}
-                max={PANEL_WIDTH.max}
+                max={panelMax}
                 initial={PANEL_WIDTH.initial}
                 direction={-1}
-                onChange={setPanelWidth}
+                onChange={(width) => setPanelWidth(Math.min(width, panelMax))}
                 onCollapse={showBotPanel ? () => setBotPanelOpen(false) : togglePanel}
               />
             )}
