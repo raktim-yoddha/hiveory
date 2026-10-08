@@ -1,8 +1,8 @@
 # Publishes a release when `pnpm release X.Y.Z` pushes the tag vX.Y.Z:
 #   1. a draft GitHub release with the text from CHANGELOG.md and git (scripts/release-notes.mjs)
 #   2. installers built on each OS in parallel and uploaded to the draft
-#   3. the draft published and marked Latest, only when every build passed, so the in-app
-#      updaters never see a half-uploaded release.
+#   3. the draft published and marked Latest once every desktop build passed, so the in-app
+#      updaters never see a half-uploaded release (the APK is added even if its job is re-run later).
 name: Release
 
 on:
@@ -91,8 +91,8 @@ jobs:
       - name: Sign with the Hiveory key and upload
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; the APK cannot be signed."
-            exit 1
+            echo "::warning::No Android signing key (ANDROID_KEYSTORE_BASE64); this release ships without an APK. Add the secret and re-run this job."
+            exit 0
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/hiveory.p12"
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
@@ -107,6 +107,8 @@ jobs:
   publish:
     name: Publish
     needs: [desktop, android]
+    # The desktop installers decide; a failed APK build is fixed by re-running that job later.
+    if: ${{ !cancelled() && needs.desktop.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       # A prerelease (v1.4.0-beta.1) is published as one and never becomes Latest.
