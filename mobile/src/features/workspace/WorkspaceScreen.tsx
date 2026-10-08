@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Stack, router } from 'expo-router'
-import { Bot, Plus } from 'lucide-react-native'
+import { Plus, SquareTerminal } from 'lucide-react-native'
 import { useCall, useCliIcons } from '@/core/api'
 import { routes } from '@/core/routes'
 import { AgentCard, Button, EmptyState, Loading, Screen, Section, STATUS_ORDER } from '@/core/ui'
@@ -43,7 +43,7 @@ export function WorkspaceScreen({ workspaceId, projectId }: { workspaceId: strin
             ))}
           </Section>
         ) : (
-          <EmptyState icon={Bot} title="No agents here yet" body="Open one, or apply a preset, to start working in this worktree." />
+          <EmptyState icon={SquareTerminal} title="No agents here yet" body="Open one, or apply a preset, to start working in this worktree." />
         )}
       </Screen>
       <OpenAgentSheet workspaceId={workspaceId} projectId={projectId} open={opening} onClose={() => setOpening(false)} />
