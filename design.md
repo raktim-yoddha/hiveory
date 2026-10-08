@@ -286,6 +286,12 @@ When populated:
 
 The gap between panes is intentional.
 
+A terminal sits close to its pane's edges (a few px of inset; the scrollbar is the right gutter).
+A narrow pane zooms its terminal text out — 13px down to 8px, snapped to whole device pixels —
+so a CLI keeps about 50 columns, or the columns it needs (the registry's `minColumns`), instead
+of wrapping its logo, prompt box and folder footer; widening the pane zooms back in. Only a
+window too small for a CLI's minimum goes below 8px, never clipping its columns.
+
 ## Pane Header
 
 A pane header may contain:

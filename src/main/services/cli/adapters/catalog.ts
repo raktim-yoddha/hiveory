@@ -100,8 +100,8 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'OpenCode',
     icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
-    // Measured: its footer and prompt collapse into one-word columns below ~46 columns.
-    minColumns: 50,
+    // Measured: it crashed at 36 columns; below 60 its folder footer wraps into a one-word column.
+    minColumns: 60,
     // Full-screen TUI breaks in small panes; the mini interface reflows and replays history on resize.
     args: ['--mini', '--replay-limit', '100000'],
     autoApproveArgs: ['--auto'],
@@ -218,8 +218,9 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Kilo Code CLI',
     icon: officialIcon('kilocode', 'KI'),
     executables: ['kilo', 'kilocode'],
-    // Measured: OpenCode's TUI underneath; its logo is cut and the footer collapses below ~46 columns.
-    minColumns: 50,
+    // Measured: OpenCode's TUI underneath; its 50-column logo touches the edges and the model line
+    // and folder footer wrap into one-letter columns below 60.
+    minColumns: 60,
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),

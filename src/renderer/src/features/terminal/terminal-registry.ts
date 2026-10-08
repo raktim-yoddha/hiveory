@@ -4,6 +4,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { api, subscribe } from '../../lib/api'
 import { createDarkBackgroundFilter } from './dark-backgrounds'
+import { adaptiveFontSize, FONT_SIZE } from './terminal-font'
 
 /**
  * Keeps one xterm per agent instance alive outside React, so moving a pane
@@ -26,7 +27,9 @@ const readTheme = (): ITheme => {
     foreground: token('fg'),
     cursor: token('cursor'),
     cursorAccent: token('bg'),
-    selectionBackground: token('selection')
+    selectionBackground: token('selection'),
+    // The overview ruler only sizes the scrollbar; its 1px edge line would show as a stray border.
+    overviewRulerBorder: 'rgba(0, 0, 0, 0)'
   }
   for (const key of ANSI_KEYS) (theme as Record<string, string>)[key] = token(key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`))
   return theme
@@ -41,17 +44,10 @@ const MIN_COLS = 20
 const MIN_ROWS = 5
 
 const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
-const FONT_SIZE = 13
-/** Smallest font a narrow pane shrinks to so a CLI still gets its `minColumns`. */
-const MIN_FONT_SIZE = 9
-/** A monospace cell's width per px of font size (JetBrains Mono's advance is 600/1000 em). */
-const CELL_WIDTH_PER_PX = 0.6
-/** Pane width around the grid: the terminal's insets, the pane border and xterm's scrollbar. */
-const TERMINAL_CHROME_PX = 30
+/** Matches the visible scrollbar (TerminalView.module.css), so fitting reserves no wider gutter. */
+const SCROLLBAR_PX = 6
 
-/** Narrowest pane that still gives a CLI `minColumns` at the smallest font: the layout won't drag below it. */
-export const terminalMinWidth = (minColumns: number): number =>
-  Math.ceil(minColumns * MIN_FONT_SIZE * CELL_WIDTH_PER_PX) + TERMINAL_CHROME_PX
+export { terminalMinWidth } from './terminal-font'
 
 interface Entry {
   term: Terminal
@@ -128,6 +124,8 @@ const create = (instanceId: string, minColumns: number): Entry => {
     rescaleOverlappingGlyphs: true,
     allowProposedApi: true,
     allowTransparency: true,
+      // The scrollbar's width; fitting reserves this (14px by default) beside the grid.
+    overviewRuler: { width: SCROLLBAR_PX },
     theme
   })
   const fit = new FitAddon()
@@ -213,18 +211,14 @@ const enableWebgl = (term: Terminal): void => {
 export const fitTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)
   if (!entry?.opened || !entry.element.isConnected) return
-  let proposed = entry.fit.proposeDimensions()
-  // A CLI whose layout breaks below `minColumns` gets a smaller font in a narrow pane instead
-  // (down to MIN_FONT_SIZE); columns grow as the font shrinks.
-  if (proposed && Number.isFinite(proposed.cols) && proposed.cols > 0) {
-    const current = entry.term.options.fontSize ?? FONT_SIZE
-    const atFull = (proposed.cols * current) / FONT_SIZE
-    const size = entry.minColumns && atFull < entry.minColumns ? Math.max(MIN_FONT_SIZE, Math.floor((FONT_SIZE * atFull * 2) / entry.minColumns) / 2) : FONT_SIZE
-    if (size !== current) {
-      entry.term.options.fontSize = size
-      proposed = entry.fit.proposeDimensions()
-    }
+  // A narrow pane zooms its font out so the CLI keeps a comfortable width — or the width it
+  // needs — instead of squeezing its layout; a wide pane zooms back in.
+  const width = entry.element.clientWidth - SCROLLBAR_PX
+  if (width > 0) {
+    const size = adaptiveFontSize(width, entry.minColumns, window.devicePixelRatio || 1)
+    if (size !== entry.term.options.fontSize) entry.term.options.fontSize = size
   }
+  const proposed = entry.fit.proposeDimensions()
   // A hidden, collapsing or minimizing host can report a sliver; never squeeze a TUI into it.
   if (!proposed || !Number.isFinite(proposed.cols) || !Number.isFinite(proposed.rows) || proposed.cols < MIN_COLS || proposed.rows < MIN_ROWS) return
   // Never hand such a CLI fewer columns than it needs, even when the window itself squeezes the

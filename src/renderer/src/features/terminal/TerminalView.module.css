@@ -1,6 +1,7 @@
 .host {
   position: absolute;
-  inset: var(--space-3) var(--space-2) var(--space-2) var(--space-5);
+  /* Tight, even gutters (the scrollbar adds its own on the right): narrow panes keep their columns. */
+  inset: var(--space-2) var(--space-1) var(--space-2) var(--space-3);
   user-select: text;
 }
 
