@@ -32,8 +32,11 @@ export interface TextProps extends RNTextProps {
   tone?: Tone
 }
 
-/** Every piece of text in the app: one type scale, theme colors only. */
+/**
+ * Every piece of text in the app: one type scale, theme colors only. Lines break balanced (Android's
+ * balanced strategy, iOS's push-out), so wrapped text never leaves one word alone on its last line.
+ */
 export function Text({ variant = 'body', tone = 'default', style, ...rest }: TextProps) {
   const { colors } = useTheme()
-  return <RNText {...rest} style={[VARIANTS[variant], { color: toneColor(colors, tone) }, style]} />
+  return <RNText textBreakStrategy="balanced" lineBreakStrategyIOS="push-out" {...rest} style={[VARIANTS[variant], { color: toneColor(colors, tone) }, style]} />
 }

@@ -49,9 +49,10 @@ export function InboxScreen({ aside }: { aside?: ReactNode }) {
       {!waiting.length && !working.length ? (
         projectCount ? (
           <EmptyState
+            compact
             icon={Coffee}
             title="All quiet"
-            body="When an agent needs you, it shows up here first."
+            body="What needs you shows up here."
             action={<Button label="Open a workspace" icon={FolderOpen} onPress={() => router.push(routes.projects)} />}
           />
         ) : (

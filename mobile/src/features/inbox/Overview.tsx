@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native'
-import { space } from '@/core/theme'
+import { space, useTheme } from '@/core/theme'
 import { Card, StatusDot, Text } from '@/core/ui'
 
 interface Props {
@@ -9,42 +9,55 @@ interface Props {
   workspaces: number
 }
 
-const TILES = [
+const COLUMNS = [
   { key: 'waiting', status: 'waiting-for-you', label: 'Needs you', tone: 'waiting' },
   { key: 'working', status: 'working', label: 'Working', tone: 'working' },
-  { key: 'idle', status: 'idle', label: 'Idle', tone: 'muted' }
+  { key: 'idle', status: 'idle', label: 'Idle', tone: 'default' }
 ] as const
 
-/** Every agent on the computer at a glance: how many need you, work, or wait idle, across all workspaces. */
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/** Every agent on the computer at a glance: one card, three counts, across all workspaces. */
 export function Overview({ waiting, working, idle, workspaces }: Props) {
+  const { colors } = useTheme()
   const counts = { waiting, working, idle }
+  const total = waiting + working + idle
   return (
-    <View style={styles.wrap} accessible accessibilityLabel={`${waiting} need you, ${working} working, ${idle} idle, across ${workspaces} workspaces`}>
+    <Card tone={waiting > 0 ? 'waiting' : 'default'}>
+      <View
+        accessible
+        accessibilityLabel={`${plural(total, 'agent', 'agents')} in ${plural(workspaces, 'workspace', 'workspaces')}: ${waiting} need you, ${working} working, ${idle} idle`}
+        style={styles.card}
+      >
+      <Text variant="label" tone="muted" numberOfLines={1}>
+        {plural(total, 'agent', 'agents')} · {plural(workspaces, 'workspace', 'workspaces')}
+      </Text>
       <View style={styles.row}>
-        {TILES.map((t) => (
-          <Card key={t.key} tone={t.key === 'waiting' && waiting > 0 ? 'waiting' : 'default'} style={styles.tile}>
-            <Text variant="title" tone={counts[t.key] > 0 ? t.tone : 'muted'}>
-              {counts[t.key]}
-            </Text>
-            <View style={styles.label}>
-              <StatusDot status={t.status} />
-              <Text variant="label" tone="muted" numberOfLines={1}>
-                {t.label}
+        {COLUMNS.map((c, i) => (
+          <View key={c.key} style={[styles.column, i === 0 ? styles.first : { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border }]}>
+            <View style={styles.figure}>
+              <Text variant="display" tone={counts[c.key] > 0 ? c.tone : 'muted'} style={styles.count}>
+                {counts[c.key]}
               </Text>
+              <StatusDot status={c.status} />
             </View>
-          </Card>
+            {/* The label has the column to itself; very narrow phones shrink it a little rather than cut it. */}
+            <Text variant="label" tone="secondary" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {c.label}
+            </Text>
+          </View>
         ))}
       </View>
-      <Text variant="caption" tone="muted">
-        Across {workspaces} {workspaces === 1 ? 'workspace' : 'workspaces'}
-      </Text>
-    </View>
+      </View>
+    </Card>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { gap: space[3] },
-  row: { flexDirection: 'row', gap: space[4] },
-  tile: { flex: 1, gap: space[2], padding: space[6] },
-  label: { flexDirection: 'row', alignItems: 'center', gap: space[2] }
+  card: { gap: space[5] },
+  row: { flexDirection: 'row' },
+  column: { flex: 1, gap: space[1], paddingHorizontal: space[4] },
+  first: { paddingLeft: 0 },
+  count: { fontVariant: ['tabular-nums'] },
+  figure: { flexDirection: 'row', alignItems: 'center', gap: space[3] }
 })
