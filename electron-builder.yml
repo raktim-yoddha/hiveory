@@ -28,8 +28,7 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: resources/icon.png
-  uninstallerIcon: resources/icon.png
+  # Installer icons come from the app icon (electron-builder converts it to .ico; NSIS rejects .png).
   shortcutName: Hiveory
 mac:
   # The build machine's architecture: native modules (PTY, speech) install for the host only.
