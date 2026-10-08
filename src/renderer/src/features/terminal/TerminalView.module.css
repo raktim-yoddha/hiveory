@@ -5,6 +5,30 @@
   user-select: text;
 }
 
+/* The terminal's own element: a TUI's grid can be taller than the pane, scrolled by transform. */
+.host > div {
+  overflow: hidden;
+}
+
+/* The grid's clipped edges fade out (the cut row almost fully), so it reads as more content. */
+.host > div[data-clip='top'] {
+  mask-image: linear-gradient(to bottom, transparent var(--space-2), #000 var(--space-7));
+}
+
+.host > div[data-clip='bottom'] {
+  mask-image: linear-gradient(to top, transparent var(--space-2), #000 var(--space-7));
+}
+
+.host > div[data-clip='both'] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent var(--space-2),
+    #000 var(--space-7),
+    #000 calc(100% - var(--space-7)),
+    transparent calc(100% - var(--space-2))
+  );
+}
+
 .host :global(.xterm-viewport) {
   background-color: transparent !important;
 }

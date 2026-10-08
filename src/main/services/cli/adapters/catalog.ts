@@ -18,6 +18,8 @@ interface CliSpec {
   args?: string[]
   /** Columns its TUI needs before the layout breaks (see CliAdapter.minColumns). */
   minColumns?: number
+  /** Rows its TUI needs before parts overlap (see CliAdapter.minRows). */
+  minRows?: number
   autoApproveArgs?: string[]
   autoApproveEnv?: Record<string, string>
   waitingPatterns?: Array<{ pattern: RegExp; reason: WaitingReason }>
@@ -52,6 +54,7 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   executables: spec.executables,
   supportsAutoApprove: Boolean(spec.autoApproveArgs || spec.autoApproveEnv),
   ...(spec.minColumns ? { minColumns: spec.minColumns } : {}),
+  ...(spec.minRows ? { minRows: spec.minRows } : {}),
   injectMcp: Boolean(spec.mcp),
   ...(spec.skills ? { skills: spec.skills } : {}),
   ...(spec.session?.start && spec.session.resume
@@ -102,6 +105,9 @@ export const CATALOG: CliAdapter[] = [
     executables: ['opencode'],
     // Measured: it crashed at 36 columns; below 60 its folder footer wraps into a one-word column.
     minColumns: 60,
+    // Measured: below 14 rows its footer is drawn over the prompt; 17 leaves room for a two-line
+    // placeholder and a two-line folder footer.
+    minRows: 17,
     // Full-screen TUI breaks in small panes; the mini interface reflows and replays history on resize.
     args: ['--mini', '--replay-limit', '100000'],
     autoApproveArgs: ['--auto'],
@@ -221,6 +227,9 @@ export const CATALOG: CliAdapter[] = [
     // Measured: OpenCode's TUI underneath; its 50-column logo touches the edges and the model line
     // and folder footer wrap into one-letter columns below 60.
     minColumns: 60,
+    // Measured in Hiveory (two-line folder footer): below 28 rows its tips and team notice are
+    // drawn over the footer or squashed into one garbled line, at every height.
+    minRows: 28,
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),

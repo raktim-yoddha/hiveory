@@ -43,6 +43,7 @@ export class CliRegistry {
         supportsAutoApprove: adapter.supportsAutoApprove,
         resumesById: Boolean(adapter.adoptSession),
         ...(adapter.minColumns ? { minColumns: adapter.minColumns } : {}),
+        ...(adapter.minRows ? { minRows: adapter.minRows } : {}),
         supportsChat: (CHAT_CLI_IDS as readonly string[]).includes(adapter.id),
         available: Boolean(executable),
         executable

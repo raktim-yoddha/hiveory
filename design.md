@@ -292,6 +292,12 @@ so a CLI keeps about 50 columns, or the columns it needs (the registry's `minCol
 of wrapping its logo, prompt box and folder footer; widening the pane zooms back in. Only a
 window too small for a CLI's minimum goes below 8px, never clipping its columns.
 
+Height works the same way. A full-screen TUI (OpenCode, Kilo Code) draws its parts over each
+other when too short, so it always gets the rows it needs (the registry's `minRows`): a short
+pane zooms out one step at most, then shows the part of the taller grid that matters — the
+bottom, or the rows at the cursor when that is where the user types (a home screen's centered
+prompt) — and fades the cut edges. The same pane size always gives the same font, grid and view.
+
 ## Pane Header
 
 A pane header may contain:

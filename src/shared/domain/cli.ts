@@ -37,6 +37,8 @@ export interface CliDescriptor {
   resumesById: boolean
   /** Columns its full-screen TUI needs before the layout breaks; a narrower pane shrinks the font instead. */
   minColumns?: number
+  /** Rows its full-screen TUI needs before parts overlap; a shorter pane zooms out, then shows the part around the cursor. */
+  minRows?: number
   available: boolean
   /** Resolved executable path when available. */
   executable?: string

@@ -84,6 +84,8 @@ export interface CliAdapter {
   supportsAutoApprove: boolean
   /** Columns its full-screen TUI needs before the layout breaks (measured; absent: it adapts to any width). */
   minColumns?: number
+  /** Rows its full-screen TUI needs before parts overlap (measured; absent: it adapts to any height). */
+  minRows?: number
   /** Agent Skills folders this CLI reads (Settings › Skills); absent: it has no skills support. */
   skills?: SkillFolders
   /** Keys that stop the current task without quitting. Default: Esc for agents, Ctrl+C for shells. */
