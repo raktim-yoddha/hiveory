@@ -6,6 +6,11 @@ This file is mandatory for every coding agent working in this repository.
 read `AGENTS.md`). Whenever you change either one, make the identical change to the other in the
 same commit; a test fails when they differ. Never let them drift.
 
+**This contract is the hub.** Every rule and process an agent must follow lives here: releases
+(rule 26), privacy (27), the phone app (28), ADRs (29) and the rest. Other docs (design, architecture,
+product spec, ADRs, READMEs) explain and record; they never add a rule an agent must follow. A new
+rule goes here first, in both files.
+
 ## Source of Truth
 
 Read in this order:
@@ -15,7 +20,7 @@ Read in this order:
 3. `architecture.md`
 4. `product-spec.md`
 5. `ui-map.md`
-6. relevant `adr/*.md`
+6. relevant `adr/*.md` (how and when to write one: rule 29)
 
 If implementation and documentation disagree, do not silently choose one. Determine whether the documentation is stale, then update the appropriate documentation/ADR.
 
@@ -243,7 +248,7 @@ If a requirement is ambiguous and materially affects architecture or UX:
 - inspect existing docs
 - inspect existing implementation
 - check relevant ADRs
-- if still unresolved, create/update an ADR or ask for clarification
+- if still unresolved, ask for clarification; record the answer as an ADR (rule 29)
 
 Do not invent product behavior.
 
@@ -291,6 +296,8 @@ Before declaring work complete:
 [ ] Typecheck passes
 [ ] Lint passes
 [ ] Documentation is still consistent
+[ ] ADR written or amended when rule 29 requires it
+[ ] AGENTS.md and CLAUDE.md are still identical
 ```
 
 ### 26. Releases & Semantic Versioning
@@ -361,6 +368,53 @@ with `pnpm mobile:check`. Its rules (see `mobile/README.md`, enforced by its lin
 - The phone's colors are generated from the desktop's `tokens.css` (`pnpm mobile sync:theme`);
   never hand-edit `mobile/src/core/theme/palettes.ts`.
 - Rules 1–27 apply to the phone app as well (reuse, accessibility, privacy, the exact status model).
+
+### 29. Architecture Decision Records (ADRs)
+
+`adr/` is the project's memory of *why*. Every agent writes ADRs; this rule is the only place the
+process is described.
+
+**An ADR is required when a change:**
+
+- carries a product decision the user made (what the product does, what it never does)
+- adds or changes behavior users see (a feature, a removed option, a new default)
+- adds or widens a permission, an IPC channel, a phone channel (`MOBILE_CHANNELS`) or a server endpoint
+- changes stored data, a file format, a protocol or the shared contract (`src/shared`)
+- adds a dependency, a tool, a build or release step, or a CI workflow
+- changes or adds a rule in this contract
+
+**Not needed for:** bug fixes that restore intended behavior, refactors with no behavior change,
+styling within the design tokens, tests, and typo-level docs.
+
+**How:**
+
+1. Read the related ADRs first (search `adr/` for the subsystem). If one already covers the
+   subject, add an `## Amendment (YYYY-MM-DD): …` section to it instead of writing a new one.
+2. Otherwise create `adr/NNNN-short-kebab-name.md` with the next free number (highest + 1).
+3. Use this shape:
+
+   ```markdown
+   # ADR NNNN — Title in plain words
+
+   Builds on ADR XXXX (if any). Decided by the product owner, YYYY-MM-DD.
+
+   ## Context
+   What was wrong or missing, in a few sentences.
+
+   ## Decision
+   What we do now: concrete, in user words for behavior and code names for mechanics.
+
+   ## Consequences
+   What it costs, what it rules out, what is left for later.
+   ```
+
+4. Never rewrite the decision of an existing ADR. A changed decision is an Amendment, or a new ADR
+   that says "Supersedes ADR XXXX".
+5. Commit the ADR in the same commit (or PR) as the change it explains, and mention its number
+   in the code comment where the rule is enforced (`// ADR 0036`).
+
+`scripts/adr.test.mjs` fails on a bad file name, a wrong or duplicate number, a title that doesn't
+match, or (from ADR 0037 on) a missing section or decision line.
 
 ## Documentation Graph
 

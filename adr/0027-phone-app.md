@@ -1,4 +1,4 @@
-# ADR 0027: The phone app
+# ADR 0027 — The phone app
 
 Builds on ADR 0022 (Hiveory as a server), ADR 0025 (devices over Tailscale) and ADR 0026
 (remote SSH).

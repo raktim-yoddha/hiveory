@@ -1,4 +1,4 @@
-# ADR 0026: Remote SSH, on par with Orca
+# ADR 0026 — Remote SSH, on par with Orca
 
 Builds on ADR 0022 (remote hosts over SSH) and ADR 0025 (devices over Tailscale). Parts of
 ADR 0022 are superseded; they are listed at the end.

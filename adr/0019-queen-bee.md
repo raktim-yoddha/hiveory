@@ -1,4 +1,4 @@
-# ADR 0019: Queen Bee, the app operator
+# ADR 0019 — Queen Bee, the app operator
 
 ## Status
 Accepted. All five phases are built (see "Phases").
