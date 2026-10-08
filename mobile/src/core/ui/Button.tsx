@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View, type PressableProps } from 'react-native'
 import { radius, space, touch, useTheme, type Palette } from '../theme'
+import { pressedFill, ripple } from './press'
 import { Text } from './Text'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'waiting'
@@ -37,9 +38,10 @@ export function Button({ label, variant = 'secondary', size = 'md', icon: Icon, 
       accessibilityState={{ disabled: Boolean(disabled || loading), busy: Boolean(loading) }}
       disabled={disabled || loading}
       hitSlop={size === 'sm' ? 5 : 0}
+      android_ripple={ripple(l.pressed)}
       style={({ pressed }) => [
         styles.base,
-        { height, backgroundColor: pressed ? l.pressed : l.bg, opacity: disabled ? 0.45 : 1, paddingHorizontal: size === 'md' ? space[8] : space[6] },
+        { height, backgroundColor: pressedFill(pressed, l.pressed, l.bg), opacity: disabled ? 0.45 : 1, paddingHorizontal: size === 'md' ? space[8] : space[6] },
         block && styles.block
       ]}
       {...rest}
@@ -55,7 +57,7 @@ export function Button({ label, variant = 'secondary', size = 'md', icon: Icon, 
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.md },
+  base: { alignItems: 'center', justifyContent: 'center', borderRadius: radius.md, overflow: 'hidden' },
   block: { alignSelf: 'stretch' },
   row: { flexDirection: 'row', alignItems: 'center', gap: space[4] }
 })

@@ -1,42 +1,44 @@
-import { Redirect, Tabs } from 'expo-router'
-import { FolderKanban, Inbox, Settings } from 'lucide-react-native'
+import { Redirect } from 'expo-router'
+import { NativeTabs } from 'expo-router/unstable-native-tabs'
 import { RouteErrorBoundary } from '@/core/boundary'
 import { useComputers } from '@/core/computers'
-import { font, useTheme } from '@/core/theme'
+import { useTheme } from '@/core/theme'
 import { useNeedsYouCount } from '@/features/inbox'
 
 export { RouteErrorBoundary as ErrorBoundary }
 
-/** The three places of the phone app: what needs you, projects, settings. Unpaired phones go to the welcome screen. */
+/**
+ * The three places of the phone app: what needs you, workspaces, settings. The platform's own tab bar
+ * (UITabBar with SF Symbols on iOS, Material navigation with Material icons on Android) in the
+ * computer's theme. Each tab has its own native stack. Unpaired phones go to the welcome screen.
+ */
 export default function TabsLayout() {
   const { colors } = useTheme()
   const paired = useComputers((s) => s.computers.length > 0)
   const needsYou = useNeedsYouCount()
   if (!paired) return <Redirect href="/welcome" />
   return (
-    <Tabs
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerTitleStyle: { color: colors.text, fontSize: font.size.lead, fontWeight: font.weight.semibold },
-        headerShadowVisible: false,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.textMuted,
-        sceneStyle: { backgroundColor: colors.bg }
-      }}
+    <NativeTabs
+      backgroundColor={colors.surface}
+      iconColor={{ default: colors.textMuted, selected: colors.accent }}
+      labelStyle={{ default: { color: colors.textMuted }, selected: { color: colors.accent } }}
+      indicatorColor={colors.brandSoft}
+      badgeBackgroundColor={colors.waiting}
+      badgeTextColor={colors.accentContrast}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Inbox',
-          tabBarIcon: ({ color, size }) => <Inbox color={color} size={size} />,
-          tabBarBadge: needsYou || undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.waiting, color: colors.accentContrast },
-          tabBarAccessibilityLabel: needsYou ? `Inbox, ${needsYou} need you` : 'Inbox'
-        }}
-      />
-      <Tabs.Screen name="projects" options={{ title: 'Workspaces', tabBarIcon: ({ color, size }) => <FolderKanban color={color} size={size} /> }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings', tabBarIcon: ({ color, size }) => <Settings color={color} size={size} /> }} />
-    </Tabs>
+      <NativeTabs.Trigger name="(inbox)">
+        <NativeTabs.Trigger.Icon sf={{ default: 'tray', selected: 'tray.fill' }} md="inbox" />
+        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        {needsYou > 0 && <NativeTabs.Trigger.Badge>{String(needsYou)}</NativeTabs.Trigger.Badge>}
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="projects">
+        <NativeTabs.Trigger.Icon sf={{ default: 'folder', selected: 'folder.fill' }} md="folder" />
+        <NativeTabs.Trigger.Label>Workspaces</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} md="settings" />
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   )
 }

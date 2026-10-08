@@ -6,7 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { ConnectionProvider, createQueryClient, useCall } from '@/core/api'
 import { LayerBoundary, RouteErrorBoundary } from '@/core/boundary'
 import { useComputers } from '@/core/computers'
-import { font, ThemeProvider, useTheme } from '@/core/theme'
+import { ThemeProvider, useHeaderOptions, useTheme } from '@/core/theme'
 import { Toasts } from '@/core/ui'
 import { NotificationRouter } from '@/features/notifications'
 import { SshPromptSheet } from '@/features/ssh-prompts'
@@ -43,19 +43,11 @@ function ThemeFromComputer({ children }: { children: React.ReactNode }) {
 
 function Shell() {
   const { colors } = useTheme()
+  const header = useHeaderOptions()
   return (
     <View style={[styles.fill, { backgroundColor: colors.bg }]}>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.bg },
-          headerTintColor: colors.accent,
-          headerTitleStyle: { color: colors.text, fontSize: font.size.lead, fontWeight: font.weight.semibold },
-          headerShadowVisible: false,
-          headerBackButtonDisplayMode: 'minimal',
-          contentStyle: { backgroundColor: colors.bg }
-        }}
-      >
+      <Stack screenOptions={header}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="pair" options={{ title: 'Connect a computer', presentation: 'modal' }} />

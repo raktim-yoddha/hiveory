@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { radius, space, useTheme } from '../theme'
+import { pressedFill, ripple } from './press'
 import { Text } from './Text'
 
 export interface ListRowProps {
@@ -40,7 +41,8 @@ export function ListRow({ title, subtitle, leading, trailing, onPress, label }: 
       accessibilityRole="button"
       accessibilityLabel={label ?? [title, subtitle].filter(Boolean).join(', ')}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? colors.surfaceHover : colors.surface }]}
+      android_ripple={ripple(colors.surfaceActive)}
+      style={({ pressed }) => [styles.row, { backgroundColor: pressedFill(pressed, colors.surfaceHover, colors.surface) }]}
     >
       {body}
     </Pressable>
@@ -48,7 +50,7 @@ export function ListRow({ title, subtitle, leading, trailing, onPress, label }: 
 }
 
 const styles = StyleSheet.create({
-  row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space[6], paddingHorizontal: space[7], paddingVertical: space[5], borderRadius: radius.lg },
+  row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: space[6], paddingHorizontal: space[7], paddingVertical: space[5], borderRadius: radius.lg, overflow: 'hidden' },
   main: { flex: 1, minWidth: 0, gap: space[1] },
   title: { fontSize: 16 }
 })

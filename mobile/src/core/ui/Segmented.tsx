@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import * as Haptics from 'expo-haptics'
 import { radius, space, useTheme } from '../theme'
+import { ripple } from './press'
 import { Text } from './Text'
 
 export interface SegmentOption<T extends string> {
@@ -27,6 +28,7 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
               void Haptics.selectionAsync()
               onChange(o.value)
             }}
+            android_ripple={ripple(colors.surfaceActive)}
             style={[styles.option, on && { backgroundColor: colors.surfaceRaised }]}
           >
             <Text variant="label" tone={on ? 'default' : 'muted'} numberOfLines={1}>
@@ -46,5 +48,5 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
 
 const styles = StyleSheet.create({
   track: { flexDirection: 'row', padding: space[1], borderRadius: radius.md, gap: space[1] },
-  option: { flex: 1, minHeight: 36, flexDirection: 'row', gap: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: space[4] }
+  option: { flex: 1, minHeight: 36, flexDirection: 'row', gap: space[3], alignItems: 'center', justifyContent: 'center', borderRadius: radius.sm, paddingHorizontal: space[4], overflow: 'hidden' }
 })

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, type PressableProps } from 'react-native'
 import { radius, touch, useTheme } from '../theme'
 import type { IconComponent } from './Button'
+import { pressedFill, ripple } from './press'
 
 export interface IconButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   /** Required: an icon alone must still say what it does (AGENTS.md rule 20). */
@@ -18,7 +19,8 @@ export function IconButton({ label, icon: Icon, tone = 'default', filled, ...res
       accessibilityRole="button"
       accessibilityLabel={label}
       hitSlop={4}
-      style={({ pressed }) => [styles.base, { backgroundColor: pressed ? colors.surfaceActive : filled ? colors.surfaceRaised : 'transparent' }]}
+      android_ripple={ripple(colors.surfaceActive, true)}
+      style={({ pressed }) => [styles.base, { backgroundColor: pressedFill(pressed, colors.surfaceActive, filled ? colors.surfaceRaised : 'transparent') }]}
       {...rest}
     >
       <Icon size={20} color={color} strokeWidth={2} />
