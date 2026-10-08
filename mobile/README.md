@@ -62,8 +62,10 @@ Failure stays local:
 Look: the desktop's palettes, generated from `src/renderer/src/styles/tokens.css`, with sizes
 made for touch (`core/theme/tokens.ts`). Build screens from `core/ui`; don't style one-offs.
 The structure is each platform's own: the system tab bar (SF Symbols / Material icons), native
-stack headers (`useHeaderOptions`, `TabStack`), system switches and native touch feedback
-(`ripple` / `pressedFill`) — tinted with the desktop's colors.
+stack headers (`useHeaderOptions`, `TabStack`), native sheets (`Sheet`: SwiftUI on iOS, Material 3
+on Android, via `@expo/ui`), iOS action sheets, system switches and native touch feedback
+(`ripple` / `pressedFill`) — tinted with the desktop's colors. The screens themselves (cards, rows,
+buttons, the segmented control) stay the desktop's design on both platforms.
 
 ## Notes
 
