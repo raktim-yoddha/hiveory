@@ -8,6 +8,18 @@ import { computerName, NeedsCodeError, pairWith, parsePairingLink } from './comp
 import { createComputersStore } from './computers/store'
 import { memoryStore } from './storage/secure'
 import { mergeChunk } from './terminal/merge'
+import { svgFromDataUri } from './ui/svg-data'
+
+describe('CLI marks', () => {
+  it('reads SVG data URIs (base64 and percent-encoded), and leaves other images alone', () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1z"/></svg>'
+    expect(svgFromDataUri(`data:image/svg+xml;base64,${btoa(svg)}`)).toBe(svg)
+    expect(svgFromDataUri(`data:image/svg+xml,${encodeURIComponent(svg)}`)).toBe(svg)
+    expect(svgFromDataUri(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`)).toBe(svg)
+    expect(svgFromDataUri('data:image/png;base64,iVBORw0KGgo=')).toBeNull()
+    expect(svgFromDataUri('data:image/svg+xml,%E0%A4%A')).toBeNull()
+  })
+})
 
 describe('the phone and the computer agree', () => {
   it('calls only channels the computer lets a phone use', () => {

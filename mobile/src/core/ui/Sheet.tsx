@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { BottomSheet } from '@expo/ui'
 import { X } from 'lucide-react-native'
 import { space, useTheme } from '../theme'
@@ -7,6 +7,9 @@ import { IconButton } from './IconButton'
 import { Text } from './Text'
 
 export type { SheetProps }
+
+/** The native sheet's side padding; its content spans the rest. */
+const SIDE = 16
 
 /**
  * A bottom sheet: choices and short forms open from where the thumb is. The platform's own sheet
@@ -17,10 +20,19 @@ export type { SheetProps }
 export function Sheet(props: SheetProps) {
   const { open, title, onClose, children, footer, dismissable = true } = props
   const { colors } = useTheme()
+  const { width } = useWindowDimensions()
   if (!dismissable) return <CustomSheet {...props} />
   return (
-    <BottomSheet isPresented={open} onDismiss={onClose} snapPoints={['half', 'full']} containerColor={colors.surfaceRaised} scrimColor={colors.overlay}>
-      <View accessibilityViewIsModal style={styles.sheet}>
+    <BottomSheet
+      isPresented={open}
+      onDismiss={onClose}
+      snapPoints={['half', 'full']}
+      contentPadding={{ left: SIDE, right: SIDE }}
+      containerColor={colors.surfaceRaised}
+      scrimColor={colors.overlay}
+    >
+      {/* The native sheet sizes React Native content to its own width, so it gets the sheet's width explicitly. */}
+      <View accessibilityViewIsModal style={[styles.sheet, { width: width - SIDE * 2 }]}>
         <View style={styles.head}>
           <Text variant="title" style={styles.title} accessibilityRole="header">
             {title}
