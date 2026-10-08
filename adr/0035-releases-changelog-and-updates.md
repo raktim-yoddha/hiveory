@@ -32,6 +32,11 @@ Silicon dmg + zip) and Linux (AppImage + deb) installers and the signed Android 
 publishes the draft as Latest only when all of them pass. `.github/workflows/ci.yml` runs typecheck,
 lint and tests on all three desktop OSes and the phone checks on every push and pull request.
 
+**One version for desktop and phone.** The phone app carries the desktop's version (decided by the
+product owner): both talk through `src/shared`, so one number says which builds work together, and
+the phone's update check compares itself with the same release tags. A release with no phone
+changes still moves the phone's version.
+
 **Updates.** The desktop shows a pop-up when an update is found (highlights, Download, then Restart
 and update; Later installs on quit) and Settings › Updates gains "Download automatically" (off by
 default) next to "Check automatically" (on). The Android app asks GitHub for the latest release when
