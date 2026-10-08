@@ -1,6 +1,6 @@
 {
   "name": "@hiveory/mobile",
-  "version": "0.1.0",
+  "version": "0.20.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.16",

@@ -1,7 +1,7 @@
 {
   "name": "hiveory",
   "productName": "Hiveory",
-  "version": "0.1.0",
+  "version": "0.20.0",
   "private": true,
   "description": "Local-first AI Development Environment",
   "main": "./out/main/index.js",
