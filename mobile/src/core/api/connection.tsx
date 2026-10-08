@@ -65,8 +65,12 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
   }, [computerId, token, emitter, queryClient])
 
   useEffect(() => {
+    // Only a real return from the background starts fresh. "active" also follows Control Center,
+    // permission and Face ID prompts (and focus changes on web), where the stream is still alive.
+    let previous = AppState.currentState
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') stream.current?.retry()
+      if (previous === 'background' && state === 'active') stream.current?.retry()
+      previous = state
     })
     return () => sub.remove()
   }, [])

@@ -1,4 +1,4 @@
-import { createElement, forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react'
+import { createElement, forwardRef, useCallback, useImperativeHandle, useLayoutEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Loading } from '../ui'
 import type { TerminalHandle } from './TerminalView'
@@ -15,7 +15,8 @@ export const TerminalView = forwardRef<TerminalHandle, { instanceId: string }>(f
   const { onPageMessage } = feed
   useImperativeHandle(ref, () => ({ reload: feed.reload }), [feed.reload])
 
-  useEffect(() => {
+  // A layout effect listens before the iframe can run: its "ready" would otherwise come first and be missed.
+  useLayoutEffect(() => {
     const onMessage = (e: MessageEvent): void => {
       if (e.source === frame.current?.contentWindow && typeof e.data === 'string') onPageMessage(e.data)
     }
