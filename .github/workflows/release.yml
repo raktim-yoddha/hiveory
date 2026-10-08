@@ -1,0 +1,115 @@
+# Publishes a release when `pnpm release X.Y.Z` pushes the tag vX.Y.Z:
+#   1. a draft GitHub release with the text from CHANGELOG.md and git (scripts/release-notes.mjs)
+#   2. installers built on each OS in parallel and uploaded to the draft
+#   3. the draft published and marked Latest, only when every build passed, so the in-app
+#      updaters never see a half-uploaded release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.ref_name }}
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  draft:
+    name: Draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Write the release text
+        run: |
+          node scripts/release-notes.mjs "$TAG" > notes.txt
+          head -n 1 notes.txt | sed 's/^title: //' > title.txt
+          tail -n +2 notes.txt > body.md
+      - name: Create the draft
+        run: gh release create "$TAG" --draft --verify-tag --title "$(cat title.txt)" --notes-file body.md
+
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-14, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      # No Apple Developer certificate yet: build unsigned instead of searching the keychain.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Linux build headers (system-wide shortcut hook)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev libxt-dev libxkbfile-dev libxrandr-dev libxinerama-dev
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Build and upload installers
+        run: pnpm exec electron-builder --publish always
+        shell: bash
+
+  android:
+    name: Android APK
+    needs: draft
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: pnpm --dir mobile install --frozen-lockfile
+      - name: Generate the native Android project
+        working-directory: mobile
+        run: npx expo prebuild --platform android --no-install
+      - name: Build the release APK
+        working-directory: mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Sign with the Hiveory key and upload
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; the APK cannot be signed."
+            exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/hiveory.p12"
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n 1)
+          APK="Hiveory-${TAG#v}.apk"
+          "$BUILD_TOOLS/apksigner" sign --ks "$RUNNER_TEMP/hiveory.p12" --ks-type PKCS12 --ks-key-alias hiveory \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out "$APK" mobile/android/app/build/outputs/apk/release/app-release.apk
+          "$BUILD_TOOLS/apksigner" verify "$APK"
+          rm "$RUNNER_TEMP/hiveory.p12"
+          gh release upload "$TAG" "$APK"
+
+  publish:
+    name: Publish
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      # A prerelease (v1.4.0-beta.1) is published as one and never becomes Latest.
+      - run: |
+          if [[ "$TAG" == *-* ]]; then KIND=--prerelease; else KIND=--latest; fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false $KIND

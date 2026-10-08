@@ -33,7 +33,8 @@ nsis:
   shortcutName: Hiveory
 mac:
   # The build machine's architecture: native modules (PTY, speech) install for the host only.
-  target: [dmg]
+  # The zip is what the in-app updater downloads on macOS; the dmg is for first installs.
+  target: [dmg, zip]
   category: public.app-category.developer-tools
   hardenedRuntime: true
   entitlements: resources/entitlements.mac.plist
@@ -41,7 +42,7 @@ mac:
   extendInfo:
     NSMicrophoneUsageDescription: Hiveory listens only while you hold Queen Bee's talk shortcut, and transcribes on this computer.
 dmg:
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
   target: [AppImage, deb]
   category: Development
