@@ -111,19 +111,9 @@ export function SidePanel() {
     />
   )
 
-  /** Dragging over the panel's lower half offers the bottom area (and the upper half the top one). */
-  const onBodyDragOver = (e: DragEvent<HTMLDivElement>): void => {
-    if (!dragging) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    const box = bodyRef.current!.getBoundingClientRect()
-    const below = split ? e.clientY > box.top + box.height * panelSplit : e.clientY > box.top + box.height / 2
-    setDropArea(below ? 'bottom' : 'top')
-  }
-  const onBodyDrop = (e: DragEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    const id = e.dataTransfer.getData(TAB_TYPE) || dragging
-    if (id && dropArea) movePanelTab(scope, id, dropArea)
+  /** A tab dropped on an area's pages moves to that area (see PanelArea's drop zone). */
+  const dropInArea = (id: string, area: PanelGroup): void => {
+    movePanelTab(scope, id, area)
     endDrag()
   }
   const endDrag = (): void => {
@@ -156,6 +146,10 @@ export function SidePanel() {
             dragging={dragging}
             onDragStart={setDragging}
             onDragEnd={endDrag}
+            split={split}
+            dropArea={dropArea}
+            onDropAreaChange={setDropArea}
+            onDropInArea={dropInArea}
             addMenu={addMenu(group)}
             workspaceId={workspaceId}
             projectId={projectId}
@@ -185,17 +179,12 @@ export function SidePanel() {
             onChange={(px) => setPanelSplit(px / Math.max(1, height))}
           />
         )}
-        {dragging && (
-          // While a tab is dragged the browser page steps aside, so this layer can show where it lands.
-          <div className={styles.dropLayer} data-steps-aside onDragOver={onBodyDragOver} onDragLeave={() => setDropArea(null)} onDrop={onBodyDrop}>
-            {dropArea && (
-              <div
-                className={cx(styles.dropPreview, dropArea === 'bottom' && styles.dropBottom)}
-                style={{ '--split': split ? panelSplit : 0.5 } as CSSProperties}
-              >
-                <span>{dropArea === 'bottom' ? 'Show below' : 'Show above'}</span>
-              </div>
-            )}
+        {dragging && dropArea && (
+          // Shows where a dragged tab lands; the drop zones that take it are in each area's pages.
+          <div className={styles.dropLayer} aria-hidden>
+            <div className={cx(styles.dropPreview, dropArea === 'bottom' && styles.dropBottom)} style={{ '--split': split ? panelSplit : 0.5 } as CSSProperties}>
+              <span>{dropArea === 'bottom' ? 'Show below' : 'Show above'}</span>
+            </div>
           </div>
         )}
       </div>
@@ -213,6 +202,11 @@ interface PanelAreaProps {
   dragging: string | null
   onDragStart(id: string): void
   onDragEnd(): void
+  /** Whether the panel has a bottom area yet (unsplit, the lower half of the pages offers one). */
+  split: boolean
+  dropArea: PanelGroup | null
+  onDropAreaChange(area: PanelGroup | null): void
+  onDropInArea(id: string, area: PanelGroup): void
   addMenu: ReactNode
   actions: ReactNode
   workspaceId?: string
@@ -220,7 +214,25 @@ interface PanelAreaProps {
 }
 
 /** One area of the side panel: its tab strip (drag to reorder) and its pages, each kept mounted. */
-function PanelArea({ scope, group, tabs, title, isAgentPage, onClose, dragging, onDragStart, onDragEnd, addMenu, actions, workspaceId, projectId }: PanelAreaProps) {
+function PanelArea({
+  scope,
+  group,
+  tabs,
+  title,
+  isAgentPage,
+  onClose,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  split,
+  dropArea,
+  onDropAreaChange,
+  onDropInArea,
+  addMenu,
+  actions,
+  workspaceId,
+  projectId
+}: PanelAreaProps) {
   const activeId = useNavigation((s) => s.activePanelTab[panelGroupKey(scope, group)])
   const all = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
   const { selectPanelTab, movePanelTab } = useNavigation()
@@ -255,6 +267,13 @@ function PanelArea({ scope, group, tabs, title, isAgentPage, onClose, dragging, 
     if (id) movePanelTab(scope, id, group, before || nextOutside(all, tabs.at(-1)))
     setBefore(null)
     onDragEnd()
+  }
+
+  /** Over this area's pages: this area, or (unsplit) the lower half offers a new bottom area. */
+  const areaAt = (e: DragEvent<HTMLDivElement>): PanelGroup => {
+    if (split) return group
+    const box = e.currentTarget.getBoundingClientRect()
+    return e.clientY > box.top + box.height / 2 ? 'bottom' : 'top'
   }
 
   return (
@@ -319,6 +338,29 @@ function PanelArea({ scope, group, tabs, title, isAgentPage, onClose, dragging, 
         {actions && <div className={styles.actions}>{actions}</div>}
       </header>
       <div className={styles.body}>
+        {dragging && (
+          // Covers only this area's pages (never a tab strip: a new element under the dragged tab would
+          // cancel the drag); the browser page steps aside while it is there.
+          <div
+            className={styles.dropZone}
+            data-steps-aside
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'move'
+              const area = areaAt(e)
+              if (area !== dropArea) onDropAreaChange(area)
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onDropAreaChange(null)
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              const id = e.dataTransfer.getData(TAB_TYPE) || dragging
+              if (id) onDropInArea(id, areaAt(e))
+              else onDragEnd()
+            }}
+          />
+        )}
         {tabs.length === 0 ? (
           <EmptyState compact icon={<Plus />} title="Nothing open" description="Add a browser, the Explorer for this folder's files, or the agent session history." actions={addMenu} />
         ) : (

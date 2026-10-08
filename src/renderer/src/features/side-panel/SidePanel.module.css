@@ -33,10 +33,18 @@
   top: calc(var(--split) * (100% - var(--gutter)));
 }
 
-/* While a tab is dragged: covers the pages (not the top tab strip) and previews where it lands. */
+/* While a tab is dragged: previews where it lands (below the top tab strip; takes no events). */
 .dropLayer {
   position: absolute;
   inset: calc(var(--pane-header-height) + var(--space-2)) 0 0;
+  z-index: var(--z-pane-overlay);
+  pointer-events: none;
+}
+
+/* While a tab is dragged: takes the drop over one area's pages. */
+.dropZone {
+  position: absolute;
+  inset: 0;
   z-index: var(--z-pane-overlay);
 }
 
