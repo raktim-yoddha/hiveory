@@ -10,7 +10,7 @@ import { parse, validateRelease } from './semver.mjs'
 
 const [requested, flag] = process.argv.slice(2)
 const checkOnly = flag === '--check'
-const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim()
+const run = (cmd, args, opts = {}) => (execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...opts }) ?? '').trim()
 const fail = (message) => {
   console.error(`✗ Not released: ${message}`)
   process.exit(1)
