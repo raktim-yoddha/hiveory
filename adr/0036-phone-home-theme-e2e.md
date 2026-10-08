@@ -13,9 +13,9 @@ look, and no overview of every agent. The app had logic tests but no test that d
 - **Home is an overview.** The first tab is **Home** (was Inbox): counts of agents that need you,
   are working and are idle across every workspace, then the agents that need you and those at
   work. Its badge still counts what needs you.
-- **The phone picks its own theme.** Settings › Appearance › Theme offers "Same as computer"
-  (the default, as before) or any palette. Only the phone changes; the computer's settings stay
-  read-only for phones.
+- **The phone picks its own theme.** Settings › Appearance › Theme offers any palette or "Same as
+  computer". The phone opens in **Silver** until the user picks; the desktop's default stays Dark.
+  Only the phone changes; the computer's settings stay read-only for phones.
 - **Workspaces are still added on the computer.** A phone creates worktrees inside existing
   workspaces, not workspaces (adding a folder stays desktop-only, as ADR 0027 decided).
 - **Push says up front when it cannot work.** In Expo Go, the web build, simulators or a build

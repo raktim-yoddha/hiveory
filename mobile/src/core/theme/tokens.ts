@@ -4,7 +4,8 @@ import { PALETTES } from './palettes'
 export type ThemeName = keyof typeof PALETTES
 export type Palette = (typeof PALETTES)[ThemeName]
 export const THEME_NAMES = Object.keys(PALETTES) as ThemeName[]
-export const DEFAULT_THEME: ThemeName = 'dark'
+/** The phone opens in Silver until the user picks another theme (the desktop's default stays Dark). */
+export const DEFAULT_THEME: ThemeName = 'silver'
 
 /**
  * The phone's scale (ADR 0027). Colors are the desktop's own; sizes are the

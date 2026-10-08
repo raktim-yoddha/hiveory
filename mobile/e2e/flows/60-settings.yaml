@@ -12,3 +12,7 @@ name: Settings — alerts, theme, updates
 - tapOn: Theme
 - tapOn: "Same as computer.*"
 - assertVisible: "Same as computer.*"
+# Back to the phone's default.
+- tapOn: Theme
+- tapOn: Silver
+- assertVisible: Silver
