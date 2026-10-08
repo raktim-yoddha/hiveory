@@ -17,8 +17,14 @@ export interface PairTarget {
   code?: string
 }
 
-/** How this computer is shown: its tailnet machine name (devbox.tail1234.ts.net → devbox). */
-export const computerName = (address: string): string => (/^[\d.:]+$/.test(address) ? address : (address.split('.')[0] ?? address))
+/**
+ * How this computer is shown: its tailnet machine name (devbox.tail1234.ts.net → devbox), with the
+ * port when it is not the default, so two Hiveory servers on one machine never look the same.
+ */
+export const computerName = (address: string, port = DEFAULT_SERVER_PORT): string => {
+  const base = /^[\d.:]+$/.test(address) ? address : (address.split('.')[0] ?? address)
+  return port === DEFAULT_SERVER_PORT ? base : `${base}:${port}`
+}
 
 /**
  * Pairs with a computer that shares Hiveory (ADR 0025, 0027). The phone asks
@@ -43,7 +49,7 @@ export const pairWith = async (target: PairTarget, deviceName: string, post: typ
   })
   const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string; needsCode?: boolean }
   if (res.ok && body.token) {
-    return { computer: { id: `${target.address}:${target.port}`, name: computerName(target.address), address: target.address, port: target.port }, token: body.token }
+    return { computer: { id: `${target.address}:${target.port}`, name: computerName(target.address, target.port), address: target.address, port: target.port }, token: body.token }
   }
   if (body.needsCode && !target.code) throw new NeedsCodeError()
   throw new HiveoryError({ code: 'FORBIDDEN', message: body.error ?? 'The computer refused to pair.' })

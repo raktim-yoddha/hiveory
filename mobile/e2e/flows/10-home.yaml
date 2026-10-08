@@ -1,0 +1,10 @@
+appId: host.exp.exponent
+name: Home shows every agent and what needs you
+---
+- tapOn: Home
+- assertVisible: Needs you
+- assertVisible: Working
+- assertVisible: Idle
+- assertVisible: "Across 1 workspace"
+- assertVisible: "(?i)needs you · 1"
+- assertVisible: "demo-app · Primary"

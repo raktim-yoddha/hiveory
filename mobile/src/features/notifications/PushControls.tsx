@@ -11,13 +11,13 @@ const paired = () => {
 }
 
 const NOTE = {
-  off: 'Your phone tells you when an agent needs you, even when Hiveory is closed. Only that it needs you is sent, never names or code.',
-  on: 'On. Your phone tells you when an agent needs you.',
-  denied: 'Notifications are turned off for Hiveory in the phone’s settings.',
+  off: 'Even with the app closed. No names or code are sent.',
+  on: 'On, even with the app closed.',
+  denied: 'Turned off for Hiveory in the phone’s settings.',
   unavailable: PUSH_UNAVAILABLE
 }
 
-/** The on/off switch for "needs you" notifications (Settings). */
+/** The on/off switch for "needs you" notifications (Settings); no switch where push can't work. */
 export function PushToggle() {
   const { colors } = useTheme()
   const status = usePush((s) => s.status)
@@ -25,18 +25,22 @@ export function PushToggle() {
     <Card>
       <View style={styles.row}>
         <View style={styles.text}>
-          <Text variant="lead">Notify me when an agent needs me</Text>
-          <Text variant="label" tone="muted">
+          <Text variant="lead" numberOfLines={1}>
+            Needs-you alerts
+          </Text>
+          <Text variant="label" tone="muted" numberOfLines={2}>
             {NOTE[status]}
           </Text>
         </View>
-        <Switch
-          accessibilityLabel="Notify me when an agent needs me"
-          value={status === 'on'}
-          trackColor={{ true: colors.brand, false: colors.surfaceActive }}
-          thumbColor={colors.text}
-          onValueChange={(on) => void (on ? usePush.getState().enable(paired()) : usePush.getState().disable(paired()))}
-        />
+        {status === 'unavailable' ? null : (
+          <Switch
+            accessibilityLabel="Needs-you alerts"
+            value={status === 'on'}
+            trackColor={{ true: colors.brand, false: colors.surfaceActive }}
+            thumbColor={colors.text}
+            onValueChange={(on) => void (on ? usePush.getState().enable(paired()) : usePush.getState().disable(paired()))}
+          />
+        )}
       </View>
     </Card>
   )

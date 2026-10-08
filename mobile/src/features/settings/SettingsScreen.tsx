@@ -1,22 +1,23 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Alert, StyleSheet, View } from 'react-native'
 import Constants from 'expo-constants'
 import { router } from 'expo-router'
-import { Check, Monitor, Plus, ShieldCheck, Trash2 } from 'lucide-react-native'
-import { useConnection } from '@/core/api'
+import { Check, ChevronRight, Monitor, Palette, Plus, ShieldCheck, Trash2 } from 'lucide-react-native'
+import { useCall, useConnection } from '@/core/api'
 import { useComputers } from '@/core/computers'
 import { routes } from '@/core/routes'
 import { space, useTheme } from '@/core/theme'
-import { Card, IconButton, ListRow, Screen, Section, StatusDot, Text, Button } from '@/core/ui'
-
-const THEME_LABEL: Record<string, string> = { dark: 'Dark', bronze: 'Bronze', silver: 'Silver', midnight: 'Midnight', jade: 'Jade', rose: 'Rose' }
+import { IconButton, ListRow, Screen, Section, StatusDot, Text, Button } from '@/core/ui'
+import { ThemeSheet, themeLabel } from './ThemeSheet'
 
 /**
  * The phone's settings. `notifications` and `updates` are composed in by the route (their
  * features own those controls), so no feature imports another.
  */
 export function SettingsScreen({ notifications, updates }: { notifications?: ReactNode; updates?: ReactNode }) {
-  const { colors, name } = useTheme()
+  const { colors, choice } = useTheme()
+  const [picking, setPicking] = useState(false)
+  const computerTheme = useCall('settings.get', undefined).data?.theme
   const { status } = useConnection()
   const computers = useComputers((s) => s.computers)
   const activeId = useComputers((s) => s.activeId)
@@ -61,25 +62,20 @@ export function SettingsScreen({ notifications, updates }: { notifications?: Rea
       {notifications ? <Section title="Notifications">{notifications}</Section> : null}
       {updates ? <Section title="Updates">{updates}</Section> : null}
       <Section title="Appearance">
-        <Card>
-          <Text variant="lead">Theme: {THEME_LABEL[name] ?? name}</Text>
-          <Text variant="label" tone="muted">
-            Follows the theme you picked in Hiveory on your computer.
-          </Text>
-        </Card>
+        <ListRow
+          title="Theme"
+          subtitle={themeLabel(choice, computerTheme)}
+          leading={<Palette size={18} color={colors.textMuted} />}
+          trailing={<ChevronRight size={18} color={colors.textMuted} />}
+          onPress={() => setPicking(true)}
+        />
       </Section>
-      <Section title="Privacy">
-        <Card>
-          <View style={styles.trailing}>
-            <ShieldCheck size={18} color={colors.working} />
-            <Text variant="lead">Only your computers</Text>
-          </View>
-          <Text variant="label" tone="muted">
-            This app talks only to the computers you paired, over your own Tailscale network. No Hiveory server sits in between. The only other request is the Android app asking GitHub for new releases, which you can turn off under Updates. Phones can watch and steer
-            agents; deleting workspaces and changing settings stay on the computer.
-          </Text>
-        </Card>
-      </Section>
+      <ListRow
+        title="Only your computers"
+        subtitle="Over your Tailscale network. No Hiveory server in between."
+        leading={<ShieldCheck size={18} color={colors.working} />}
+      />
+      <ThemeSheet open={picking} onClose={() => setPicking(false)} computerTheme={computerTheme} />
       <Text variant="caption" tone="muted" style={styles.version}>
         Hiveory for phones {Constants.expoConfig?.version ?? ''}
       </Text>

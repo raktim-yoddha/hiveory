@@ -1,0 +1,11 @@
+appId: host.exp.exponent
+name: The workspace board shows agents by status
+---
+- tapOn: Workspaces
+- tapOn: ${PROJECT}
+- tapOn: "Needs you, 1"
+- assertVisible: Asks you to confirm
+- tapOn: "Idle, 1"
+- assertVisible: Primary
+- tapOn: Home
+- assertVisible: "(?i)needs you · 1"

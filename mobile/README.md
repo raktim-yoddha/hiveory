@@ -36,6 +36,31 @@ pnpm mobile:check
 This runs typecheck, lint (including the architecture rules below) and the Vitest logic tests.
 After changing the desktop's `tokens.css`, run `pnpm mobile sync:theme`.
 
+## End-to-end tests (Android)
+
+Maestro drives the app in Expo Go on a real Android phone against a throwaway Hiveory server with a
+stand-in agent (ADR 0036). Your own agents, workspaces and settings are never touched.
+
+One-time setup:
+
+1. On the phone: Developer options › **Wireless debugging** on, then **Pair device with pairing code**.
+2. On the computer: `adb pair <ip:port>` (type the code), then `adb connect <ip:port>` from the top
+   of the Wireless debugging screen. `adb devices` must list exactly one phone.
+3. Java 17 and Maestro, by default in `%LOCALAPPDATA%\hiveory-e2e` (or set `JAVA_HOME` and `MAESTRO`).
+
+Each run (Metro must be running):
+
+```bash
+pnpm build
+```
+
+```bash
+pnpm mobile e2e
+```
+
+`pnpm mobile e2e <name>` runs only the flows whose file name contains it; `--serve-only` starts just
+the seeded server to try the app by hand. The flows live in `e2e/flows`.
+
 ## Architecture
 
 | Folder | What lives there | May import |

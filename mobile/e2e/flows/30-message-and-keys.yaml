@@ -1,0 +1,21 @@
+appId: host.exp.exponent
+name: Send a message and keys to an agent
+---
+# Still on the agent screen from the previous flow.
+- tapOn: "Message .*"
+- inputText: hello from phone
+- tapOn: Send
+- extendedWaitUntil:
+    visible: Idle
+    timeout: 20000
+# Key row: each key reaches the agent's terminal (checked on the server after the run).
+- tapOn: Press Enter
+- tapOn: Press Tab
+- tapOn: Press Up
+- tapOn: Actions for .*
+- assertVisible: Interrupt what it is doing
+- assertVisible: "Restart (resumes its conversation)"
+- assertVisible: Redraw the terminal
+- assertVisible: Close agent
+- tapOn: Redraw the terminal
+- back

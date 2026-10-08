@@ -8,7 +8,7 @@ import { useNeedsYouCount } from '@/features/inbox'
 export { RouteErrorBoundary as ErrorBoundary }
 
 /**
- * The three places of the phone app: what needs you, workspaces, settings. The platform's own tab bar
+ * The three places of the phone app: home (every agent, what needs you), workspaces, settings. The platform's own tab bar
  * (UITabBar with SF Symbols on iOS, Material navigation with Material icons on Android) in the
  * computer's theme. Each tab has its own native stack. Unpaired phones go to the welcome screen.
  */
@@ -27,8 +27,8 @@ export default function TabsLayout() {
       badgeTextColor={colors.accentContrast}
     >
       <NativeTabs.Trigger name="(inbox)">
-        <NativeTabs.Trigger.Icon sf={{ default: 'tray', selected: 'tray.fill' }} md="inbox" />
-        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
         {needsYou > 0 && <NativeTabs.Trigger.Badge>{String(needsYou)}</NativeTabs.Trigger.Badge>}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="projects">

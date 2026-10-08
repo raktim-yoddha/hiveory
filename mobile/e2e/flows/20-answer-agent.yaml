@@ -1,0 +1,15 @@
+appId: host.exp.exponent
+name: Answer the waiting agent from the phone
+---
+- tapOn: Home
+- tapOn: Asks you to confirm
+- assertVisible: "Enter ⏎"
+- assertVisible: "Press Control C"
+- tapOn: "Message .*"
+- inputText: y
+- tapOn: Send
+# The stand-in prints "Applied: y", works briefly, then waits at its prompt.
+- extendedWaitUntil:
+    visible: Idle
+    timeout: 20000
+- assertNotVisible: Asks you to confirm

@@ -1,0 +1,23 @@
+appId: host.exp.exponent
+name: Create a worktree and open an agent in it
+---
+- tapOn: Workspaces
+- tapOn: ${PROJECT}
+- assertVisible: "(?i)worktrees"
+- assertVisible: Primary
+- tapOn: New
+- assertVisible: New worktree
+# The computer suggests a name; Create makes the branch and folder and opens the worktree.
+- tapOn: Create
+- extendedWaitUntil:
+    visible: Open an agent
+    timeout: 30000
+- assertVisible: No agents here yet
+- tapOn: Open an agent
+- tapOn: Aider
+- extendedWaitUntil:
+    visible: Asks you to confirm
+    timeout: 30000
+- back
+- back
+- assertVisible: "(?i)worktrees"

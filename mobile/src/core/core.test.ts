@@ -23,6 +23,7 @@ describe('the phone and the computer agree', () => {
     expect(parsePairingLink('hiveory://pair?a=bad host&p=7788')).toBeNull()
     expect(computerName('devbox.tail1.ts.net')).toBe('devbox')
     expect(computerName('100.64.0.2')).toBe('100.64.0.2')
+    expect(computerName('devbox.tail1.ts.net', 7790)).toBe('devbox:7790')
   })
 })
 

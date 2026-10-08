@@ -1,0 +1,7 @@
+appId: host.exp.exponent
+name: Forget the test computer (only it; its name carries the test port)
+---
+- tapOn: Settings
+- tapOn: "Forget ${ADDRESS}:${PORT}"
+- tapOn: Forget
+- assertNotVisible: "${ADDRESS}:${PORT}"

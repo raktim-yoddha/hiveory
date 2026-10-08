@@ -1,0 +1,13 @@
+appId: host.exp.exponent
+name: Pair with the test computer from its pairing link
+---
+# Expo Go opens the app at the pair route with the test server's address and one-time code.
+- openLink: ${METRO}/--/pair?a=${ADDRESS}&p=${PORT}&c=${CODE}
+# Expo Go's first-run developer menu, if it shows.
+- tapOn:
+    text: Continue
+    optional: true
+- extendedWaitUntil:
+    visible: Home
+    timeout: 120000
+- assertVisible: Asks you to confirm

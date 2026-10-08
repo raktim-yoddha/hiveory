@@ -1,0 +1,14 @@
+appId: host.exp.exponent
+name: Settings — alerts, theme, updates
+---
+- tapOn: Settings
+- assertVisible: Needs-you alerts
+# Expo Go cannot receive push: one line says so, and there is no dead switch.
+- assertVisible: "Needs the installed Hiveory app, not Expo Go."
+- assertVisible: Expo Go loads the newest version itself.
+- tapOn: Theme
+- tapOn: Jade
+- assertVisible: Jade
+- tapOn: Theme
+- tapOn: "Same as computer.*"
+- assertVisible: "Same as computer.*"

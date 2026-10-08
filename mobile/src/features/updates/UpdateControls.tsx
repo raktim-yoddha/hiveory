@@ -1,4 +1,5 @@
-import { StyleSheet, Switch, View } from 'react-native'
+import { Platform, StyleSheet, Switch, View } from 'react-native'
+import Constants, { ExecutionEnvironment } from 'expo-constants'
 import { RefreshCw } from 'lucide-react-native'
 import { space, useTheme } from '@/core/theme'
 import { Button, Card, Text } from '@/core/ui'
@@ -28,8 +29,8 @@ export function UpdateControls() {
   if (!UPDATES_SUPPORTED) {
     return (
       <Card>
-        <Text variant="label" tone="muted">
-          Updates come through the App Store or Expo here. The Android app checks GitHub releases.
+        <Text variant="label" tone="muted" numberOfLines={1}>
+          {Platform.OS === 'ios' && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient ? 'Updates come through the App Store.' : 'Expo Go loads the newest version itself.'}
         </Text>
       </Card>
     )
