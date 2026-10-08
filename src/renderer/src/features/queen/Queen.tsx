@@ -12,7 +12,8 @@ import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { cancelQueen, runQueen } from './queen-run'
-import { useQueen, type QueenCard } from './useQueen'
+import { QUEEN_SPOTS, useQueen, type QueenCard } from './useQueen'
+import { useMarkGestures } from './useMarkGestures'
 import { useQueenShortcut } from './useQueenShortcut'
 import { useQueenUpdates } from './useQueenUpdates'
 import { stopSpeaking, useVoice } from './voice'
@@ -31,15 +32,18 @@ export function QueenDock() {
 }
 
 /**
- * Queen Bee floating: a fixed-size bar fixed to the bottom centre of the window —
- * it never moves or resizes with the main area — always visible, taking no room
- * (the panes don't lift for it). Her card opens above it.
+ * Queen Bee floating: a fixed-size bar over the bottom of the window — it never moves or
+ * resizes with the main area — always visible, taking no room (the panes don't lift for it).
+ * Drag her mark to the left, middle or right; double-tap it to shrink the bar to just the mark.
+ * Her card opens above it.
  */
 export function QueenFloating() {
   useQueenShortcut()
   useQueenUpdates()
+  const spot = useQueen((s) => s.spot)
+  const compact = useQueen((s) => s.compact)
   return (
-    <div className={styles.floating}>
+    <div className={styles.floating} data-queen-floating data-spot={spot} data-compact={compact || undefined}>
       <QueenCardView />
       <QueenBar />
     </div>
@@ -70,7 +74,10 @@ function QueenWave() {
 }
 
 function QueenBar() {
-  const { placement, setPlacement, busy, card, show, focusTick, setSettingsTab } = useQueen()
+  const { placement, setPlacement, busy, card, show, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
+  const floating = placement === 'floating'
+  const small = floating && compact
+  const gestures = useMarkGestures(floating)
   const persona = useSettings((s) => s.settings.queenPersona)
   const customName = useSettings((s) => s.settings.queenCustomName)
   const talkback = useSettings((s) => s.settings.queenTalkback)
@@ -100,17 +107,41 @@ function QueenBar() {
     void runQueen(command)
   }
 
+  const mark = (
+    <button
+      type="button"
+      className={styles.mark}
+      onPointerDown={gestures.onPointerDown}
+      onClick={(e) => {
+        if (gestures.wasDrag()) return
+        // Shrunk, a tap waits for its double; Enter or Space (a click with no pointer) opens it.
+        if (small) {
+          if (e.detail === 0) setCompact(false)
+          return
+        }
+        input.current?.focus()
+      }}
+      onDoubleClick={() => floating && setCompact(!compact)}
+      onKeyDown={(e) => {
+        if (!floating || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
+        e.preventDefault()
+        const next = QUEEN_SPOTS[QUEEN_SPOTS.indexOf(spot) + (e.key === 'ArrowLeft' ? -1 : 1)]
+        if (next) setSpot(next)
+      }}
+      aria-label={small ? 'Queen Bee (shrunk): press Enter to open' : 'Ask Queen Bee'}
+      title={[
+        voiceReady ? `Queen Bee: hold ${keys} to talk` : `Queen Bee (${keys})`,
+        ...(floating ? [`Drag to move · double-click to ${small ? 'open' : 'shrink'}`] : [])
+      ].join(' · ')}
+    >
+      <QueenWave />
+    </button>
+  )
+  if (small) return <div className={cx(styles.bar, styles.small)}>{mark}</div>
+
   return (
     <div className={styles.bar}>
-      <button
-        type="button"
-        className={styles.mark}
-        onClick={() => input.current?.focus()}
-        aria-label="Ask Queen Bee"
-        title={voiceReady ? `Queen Bee: hold ${keys} to talk` : `Queen Bee (${keys})`}
-      >
-        <QueenWave />
-      </button>
+      {mark}
       <span className={styles.persona}>{info.name}</span>
       <input
         ref={input}
@@ -172,6 +203,21 @@ function QueenBar() {
             onSelect: () => void update({ queenPersona: id })
           })),
           { type: 'separator' },
+          ...(floating
+            ? [
+                { type: 'label' as const, label: 'Position' },
+                ...QUEEN_SPOTS.map((s) => ({
+                  type: 'item' as const,
+                  id: `spot-${s}`,
+                  label: s[0]!.toUpperCase() + s.slice(1),
+                  checked: spot === s,
+                  keepOpen: true,
+                  onSelect: () => setSpot(s)
+                })),
+                { type: 'item' as const, id: 'shrink', label: 'Shrink to icon', hint: 'Double-click her mark', onSelect: () => setCompact(true) },
+                { type: 'separator' as const }
+              ]
+            : []),
           {
             type: 'item',
             id: 'talkback',

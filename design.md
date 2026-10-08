@@ -172,9 +172,12 @@ One bar and one reply card, no history (ADR 0019).
 - **Docked:** the bar shares the main area's surface. The card hovers above the panes on
   a solid raised surface with the popover shadow; it never pushes them. Replies fade
   out after 10 s (20 s with Undo) unless hovered; questions stay.
-- **Floating:** a fixed width (`--queen-bar-width`), centred over the bottom of the main area and
-  always visible, on a solid raised surface with the popover shadow, so terminal text never shows
-  through.
+- **Floating:** a fixed width (`--queen-bar-width`) over the bottom of the window, always visible,
+  on a solid raised surface with the popover shadow, so terminal text never shows through. It sits
+  left, centred or right (`--page-padding` + `--space-4` from the edge), at full width or small
+  (just the mark chip). While her mark is dragged the bar follows the pointer, slightly faded, with
+  a grabbing cursor; it snaps on release with no animation. Her card stays the full bar's width,
+  aligned to the bar's side.
 - **Waveform mark:** five bars in her accent chip, scaled by the live loudness (≈20 updates a
   second from a timer, only while audio flows); a gentle breathing while she transcribes.
 - **Receipts:** small, secondary text with an accent check.

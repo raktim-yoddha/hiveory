@@ -121,8 +121,16 @@ The reply card hovers over the panes (it never pushes them); only the bar takes 
 opens Settings › Queen Bee › Voice until a speech pack is installed. ▁ switches docked ↔
 floating. ⋯ holds Personality, Talk back and Configure….
 
-Floating: the same bar at a fixed width, centred over the bottom of the main area, always
-there; the panes don't lift for it.
+Floating: the same bar at a fixed width over the bottom of the window, always there; the panes
+don't lift for it. Drag ∿ to the left, middle or right; double-click ∿ to shrink to just ∿ (or
+open again). Six modes: full/small × left/middle/right.
+
+```text
+Full left    [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
+Full middle                 [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
+Full right                                [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
+Small        [∿]            [∿]                                              [∿]
+```
 
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
 - Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,

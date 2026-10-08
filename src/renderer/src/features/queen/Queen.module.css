@@ -24,13 +24,44 @@
  * area). Always there, taking no room. Only a window narrower than the bar caps it.
  */
 .floating {
+  --queen-edge: calc(var(--page-padding) + var(--space-4));
   position: fixed;
-  bottom: calc(var(--page-padding) + var(--space-4));
+  bottom: var(--queen-edge);
   left: 50%;
   z-index: var(--z-panel);
   width: var(--queen-bar-width);
   max-width: calc(100vw - var(--space-8));
-  transform: translateX(-50%);
+  /* --drag-x: how far her mark has been dragged (set while dragging, see useMarkGestures). */
+  transform: translateX(calc(-50% + var(--drag-x, 0px)));
+}
+
+/* Dragged by her mark, the bar snaps to the left or right edge of the window, or stays centred. */
+.floating[data-spot='left'] {
+  left: var(--queen-edge);
+  transform: translateX(var(--drag-x, 0px));
+}
+
+.floating[data-spot='right'] {
+  right: var(--queen-edge);
+  left: auto;
+  transform: translateX(var(--drag-x, 0px));
+}
+
+/* Shrunk (double-tap her mark): only the mark is left. */
+.floating[data-compact] {
+  width: auto;
+}
+
+.floating[data-dragging] {
+  opacity: 0.85;
+}
+
+.floating[data-dragging] .mark {
+  cursor: grabbing;
+}
+
+.small {
+  padding: 0 var(--space-3);
 }
 
 .floating .bar {
@@ -41,11 +72,25 @@
 
 .floating .card {
   position: absolute;
-  right: 0;
   bottom: calc(100% + var(--space-3));
-  left: 0;
+  left: 50%;
+  /* Her card keeps the full bar's width, lined up with the bar's side (a shrunk bar is narrower). */
+  width: var(--queen-bar-width);
+  max-width: calc(100vw - var(--space-8));
+  margin-left: calc(min(var(--queen-bar-width), 100vw - var(--space-8)) / -2);
   background: var(--color-surface-raised-solid);
   box-shadow: var(--shadow-popover);
+}
+
+.floating[data-spot='left'] .card {
+  left: 0;
+  margin-left: 0;
+}
+
+.floating[data-spot='right'] .card {
+  right: 0;
+  left: auto;
+  margin-left: 0;
 }
 
 .bar {
@@ -109,6 +154,12 @@
 
 .mark:active {
   transform: scale(0.94);
+}
+
+/* Floating, her mark is also the bar's handle. */
+.floating .mark {
+  cursor: grab;
+  touch-action: none;
 }
 
 .persona {

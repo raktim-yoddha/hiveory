@@ -25,8 +25,15 @@ export type QueenSettingsTab = 'personality' | 'providers' | 'voice' | 'bar'
 /** Docked under the main area (it lifts the screens), or floating over its bottom at a fixed size. */
 export type QueenPlacement = 'docked' | 'floating'
 
+/** Where the floating bar sits along the bottom of the window: dragged by her mark, it snaps to one of three. */
+export type QueenSpot = 'left' | 'middle' | 'right'
+export const QUEEN_SPOTS: QueenSpot[] = ['left', 'middle', 'right']
+
 interface QueenState {
   placement: QueenPlacement
+  /** Floating only: the bar's spot, and whether it is shrunk to just her mark (double-tap it). */
+  spot: QueenSpot
+  compact: boolean
   card: QueenCard | null
   busy: boolean
   /** Bumped to move focus into the input (shortcut, menu). */
@@ -35,6 +42,8 @@ interface QueenState {
   settingsTab: QueenSettingsTab
   setSettingsTab(tab: QueenSettingsTab): void
   setPlacement(placement: QueenPlacement): void
+  setSpot(spot: QueenSpot): void
+  setCompact(compact: boolean): void
   show(card: QueenCard | null): void
   setBusy(busy: boolean): void
   focus(): void
@@ -42,18 +51,32 @@ interface QueenState {
 
 const KEY = 'hiveory.queen'
 
+type Saved = Pick<QueenState, 'placement' | 'spot' | 'compact'>
+
 /** Placement is a per-viewer convenience: storage may be missing, defaults always work. A saved "auto-hide" floats now. */
-const readPlacement = (): QueenPlacement => {
+const readSaved = (): Saved => {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { placement?: unknown }
-    return raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'floating' : 'docked'
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { placement?: unknown; spot?: unknown; compact?: unknown }
+    return {
+      placement: raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'floating' : 'docked',
+      spot: QUEEN_SPOTS.includes(raw.spot as QueenSpot) ? (raw.spot as QueenSpot) : 'middle',
+      compact: raw.compact === true
+    }
   } catch {
-    return 'docked'
+    return { placement: 'docked', spot: 'middle', compact: false }
   }
 }
 
-export const useQueen = create<QueenState>((set) => ({
-  placement: readPlacement(),
+const save = (state: Saved): void => {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ placement: state.placement, spot: state.spot, compact: state.compact }))
+  } catch {
+    // It still applies for this session.
+  }
+}
+
+export const useQueen = create<QueenState>((set, get) => ({
+  ...readSaved(),
   card: null,
   busy: false,
   focusTick: 0,
@@ -61,13 +84,21 @@ export const useQueen = create<QueenState>((set) => ({
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setPlacement: (placement) => {
     set({ placement })
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ placement }))
-    } catch {
-      // Placement still applies for this session.
-    }
+    save(get())
+  },
+  setSpot: (spot) => {
+    set({ spot })
+    save(get())
+  },
+  setCompact: (compact) => {
+    set({ compact })
+    save(get())
   },
   show: (card) => set({ card }),
   setBusy: (busy) => set({ busy }),
-  focus: () => set((s) => ({ focusTick: s.focusTick + 1 }))
+  // Her shortcut or menu wants the input: a shrunk bar opens up first.
+  focus: () => {
+    if (get().compact) get().setCompact(false)
+    set((s) => ({ focusTick: s.focusTick + 1 }))
+  }
 }))

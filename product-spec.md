@@ -302,8 +302,13 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 ## Queen Bee (ADR 0019)
 
 - A bar docked under the main area (Work, Chat and Settings), or floating: a fixed-size bar
-  fixed to the bottom centre of the window that never moves or resizes with the sidebars or
-  side panel, always visible, taking no room.
+  over the bottom of the window that never moves or resizes with the sidebars or side panel,
+  always visible, taking no room.
+- Floating has six modes: full or small (just her mark), at the left, middle or right. Hold her
+  mark and drag to move the bar; it snaps to the third of the window it is let go in. Double-click
+  the mark to shrink or open the bar; a single click on the small mark does nothing (Enter opens
+  it, ← → move it; ⋯ also has Position and Shrink). Her shortcut opens a small bar. Her card keeps
+  the full bar's width, lined up with the bar's side. The mode is remembered.
 - Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
   her and holds to talk.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
