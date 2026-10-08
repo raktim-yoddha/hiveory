@@ -6,7 +6,9 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
-## Unreleased — Update pop-up, Android updates, terminal zoom, steadier panes
+## v0.21.0 — Update pop-up, Android updates, terminal zoom, steadier panes
+_2026-10-08_
+
 - When a new version is out, a pop-up shows what changed and offers Download, then Restart and update. Settings › Updates can also download updates automatically.
 - The Android app checks for new versions when it opens and offers the new APK.
 - Terminal text zooms with pane width, for every CLI.
