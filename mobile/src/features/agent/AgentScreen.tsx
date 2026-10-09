@@ -12,6 +12,7 @@ import { AgentActions } from './AgentActions'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 import { KeyBar } from './KeyBar'
+import { ModelBar } from './ModelBar'
 
 /**
  * One agent, live (ADR 0027): its terminal (or chat) exactly as on the computer, a bar to
@@ -70,7 +71,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
             </View>
           ) : null}
           {/* A chat-view agent has no terminal to press keys into. */}
-          {agent.chatUi ? null : <KeyBar onKey={key} />}
+          {agent.chatUi ? <ModelBar chatId={instanceId} /> : <KeyBar onKey={key} />}
           <Composer petName={agent.petName} busy={message.isPending} onSend={(text) => message.mutateAsync({ instanceId, message: text })} />
         </View>
       </KeyboardAvoidingView>

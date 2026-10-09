@@ -7,12 +7,14 @@ import type { PhoneChannel, ServerEvent } from './contract'
 export const staleChannels = (event: ServerEvent): PhoneChannel[] => {
   switch (event.event) {
     case 'state.changed': {
-      const topic = (event as ServerEvent<'state.changed'>).payload.topic
+      const { topic, chatId } = (event as ServerEvent<'state.changed'>).payload
       if (topic === 'projects') return ['projects.list', 'kanban.board']
       if (topic === 'workspaces') return ['workspaces.list', 'kanban.board']
       if (topic === 'agents') return ['agents.list', 'workspaces.list', 'kanban.board']
       if (topic === 'presets') return ['presets.list']
       if (topic === 'settings') return ['settings.get']
+      // A chat's model or effort changed (maybe on the computer): the open chat reloads.
+      if (topic === 'chats' && chatId) return ['chat.get']
       return []
     }
     case 'runtime.changed':

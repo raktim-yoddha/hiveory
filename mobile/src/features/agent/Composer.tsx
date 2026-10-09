@@ -11,7 +11,9 @@ export function Composer({ petName, onSend, busy }: { petName: string; onSend: (
   const send = (): void => {
     const message = text.trim()
     if (!message || busy) return
-    void onSend(message).then(() => setText(''))
+    // Cleared at once, so the message leaves the box the moment it is sent; it comes back if sending fails.
+    setText('')
+    onSend(message).catch(() => setText((current) => current || message))
   }
   return (
     <View style={[styles.row, { backgroundColor: colors.surfaceInset }]}>

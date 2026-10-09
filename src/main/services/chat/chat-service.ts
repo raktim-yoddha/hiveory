@@ -231,7 +231,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 80) || chat.title
     chat.updatedAt = nowIso()
     this.store.save(chat)
-    this.broadcast('state.changed', { topic: 'chats' })
+    // Every window and phone showing this chat picks up the change (it may come from the phone).
+    this.broadcast('state.changed', { topic: 'chats', chatId })
     return chat
   }
 

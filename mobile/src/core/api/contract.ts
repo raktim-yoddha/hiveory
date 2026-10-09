@@ -24,6 +24,8 @@ export const PHONE_CHANNELS = [
   'kanban.board',
   'settings.get',
   'chat.get',
+  'chat.catalog',
+  'chat.setModel',
   'hosts.status',
   'ssh.pending',
   'ssh.answer'

@@ -521,6 +521,12 @@ export const requestSchemas = {
     autoApprove: z.boolean().optional(),
     title: z.string().max(200).optional()
   }),
+  /** Only the model and effort ('' = the CLI's default): what a phone may change on a chat (ADR 0027). */
+  'chat.setModel': z.object({
+    chatId: id,
+    model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/),
+    effort: z.string().max(40).regex(/^[\w-]*$/)
+  }),
   'chat.delete': z.object({ chatId: id }),
   'chat.send': z.object({
     chatId: id,
@@ -829,6 +835,7 @@ export interface ResponseMap {
   'chat.get': ChatSession & { running: boolean }
   'chat.create': ChatSession
   'chat.update': ChatSession
+  'chat.setModel': ChatSession
   'chat.delete': void
   'chat.send': void
   'chat.attach': ChatAttachment
@@ -924,7 +931,8 @@ export interface EventMap {
   /** An agent finished, needs you, or stopped (Queen Bee's live updates). */
   'queen.update': QueenUpdate
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
-  'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string }
+  /** `chatId`: that chat's settings changed (model, effort, permissions), so open views reload it. */
+  'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string; chatId?: string }
   'app.notice': { level: 'info' | 'warning' | 'error'; message: string }
   'updates.changed': UpdateStatus
   /** Snapshot of the assistant message being streamed (or just finished). */

@@ -5,7 +5,7 @@ import { MessageSquareText } from 'lucide-react-native'
 import type { ChatMessage } from '@shared/domain/chat'
 import { useCall, useConnection, useServerEvent, type Response } from '@/core/api'
 import { pageX, radius, space, useTheme } from '@/core/theme'
-import { EmptyState, Loading, Text } from '@/core/ui'
+import { EmptyState, Loading, Markdown, Text } from '@/core/ui'
 
 /**
  * A chat-view agent's conversation, live: the chat behind the agent shares its id. The question
@@ -65,9 +65,7 @@ function Message({ message }: { message: ChatMessage }) {
     <View style={styles.assistant}>
       {message.parts.map((part, i) =>
         part.kind === 'text' ? (
-          <Text key={i} selectable>
-            {part.text}
-          </Text>
+          <Markdown key={i} text={part.text} />
         ) : part.kind === 'tool' ? (
           <Text key={i} variant="caption" tone={part.status === 'error' ? 'danger' : 'muted'} numberOfLines={1}>
             {part.name}

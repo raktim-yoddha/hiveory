@@ -36,11 +36,12 @@ export const installEventBridge = (): (() => void) => {
   }
 
   const offs = [
-    subscribe('state.changed', ({ topic, projectId, workspaceId }) => {
+    subscribe('state.changed', ({ topic, projectId, workspaceId, chatId }) => {
       if (topic === 'projects') reload('projects', () => useProjects.getState().load())
       if (topic === 'presets') reload('presets', () => usePresets.getState().load())
       if (topic === 'settings') reload('settings', () => useSettings.getState().load())
       if (topic === 'chats') reload('chats', () => useChat.getState().loadList())
+      if (topic === 'chats' && chatId && useChat.getState().chats[chatId]) reload(`chat:${chatId}`, () => useChat.getState().load(chatId))
       if (topic === 'bots') reload('bots', () => useBots.getState().load())
       if (topic === 'routines') reload('routines', () => useRoutines.getState().load())
       if (topic === 'triggers') reload('triggers', () => useTriggers.getState().load())

@@ -158,3 +158,17 @@ Decided by the product owner, 2026-10-09.
 - A sent message shows at once on every screen, whoever sent it (the phone, Queen Bee, another
   agent): main now broadcasts the user's message as a `chat.event` before the reply starts.
 - The terminal key bar gains `/` after Tab, since slash commands start every CLI's commands.
+
+## Amendment (2026-10-09): the phone's chat view matches the computer's
+
+Decided by the product owner, 2026-10-09.
+
+- Replies render as markdown (headings, bold, lists, code, quotes, tables, links), like the
+  computer. The phone parses with `marked` (the desktop's own parser, now a phone dependency) and
+  draws native text; raw HTML is shown as text, never run, and only web links open.
+- A chat-view agent's model and reasoning effort can be picked on the phone. The new channel
+  `chat.setModel` (in `MOBILE_CHANNELS`) changes only those two; permissions and everything else in
+  `chat.update` stay on the computer.
+- A chat's settings change announces itself (`state.changed` with `chatId`), so the computer and
+  the phone both show the new model at once, whichever changed it.
+- The message box empties the moment Send is tapped and refills if sending fails.
