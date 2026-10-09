@@ -6,6 +6,7 @@ export const KEYS = {
   enter: '\r',
   escape: '\x1b',
   tab: '\t',
+  slash: '/',
   up: '\x1b[A',
   down: '\x1b[B',
   left: '\x1b[D',

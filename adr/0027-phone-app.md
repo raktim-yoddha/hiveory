@@ -146,3 +146,15 @@ The product owner decided:
   `mobile/`. Metro never reads that folder (it watches `mobile/` and `src/shared` only).
 - **Next:** chat-view agents (they get a message box and a note for now), Queen Bee, Bots, and
   store icons and screenshots.
+
+## Amendment (2026-10-09): chat-view agents on the phone
+
+Decided by the product owner, 2026-10-09.
+
+- A chat-view agent opens on the phone as its conversation: the user's messages and the agent's
+  replies, live, with "Working…" while it answers. The phone reads it with `chat.get` (already in
+  `MOBILE_CHANNELS`) and follows `chat.event`. Its key bar is hidden: there is no terminal to press
+  keys into.
+- A sent message shows at once on every screen, whoever sent it (the phone, Queen Bee, another
+  agent): main now broadcasts the user's message as a `chat.event` before the reply starts.
+- The terminal key bar gains `/` after Tab, since slash commands start every CLI's commands.

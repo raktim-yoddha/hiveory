@@ -71,3 +71,21 @@ describe('queued messages (ADR 0031)', () => {
     expect(store.get(id)?.queued).toBeUndefined()
   })
 })
+
+describe('sending', () => {
+  it('shows the question everywhere at once, before the reply starts', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hv-send-'))
+    const store = new ChatStore(join(dir, 'chats'), log)
+    store.load()
+    const events: { event: string; payload: unknown }[] = []
+    const registry = { executable: () => process.execPath, displayName: () => 'Claude' } as unknown as CliRegistry
+    const chats = new ChatService(store, registry, {} as WorkspaceRepository, log, (event, payload) => void events.push({ event, payload }), join(dir, 'attachments'))
+    const chat = chats.create()
+    store.save({ ...store.get(chat.id)!, cliId: 'claude', cwd: dir })
+    chats.send(chat.id, 'hello')
+    chats.stop(chat.id)
+    const messages = events.filter((e) => e.event === 'chat.event').map((e) => (e.payload as { message: { role: string; parts: unknown[] } }).message)
+    expect(messages[0]).toMatchObject({ role: 'user', parts: [{ kind: 'text', text: 'hello' }] })
+    expect(messages[1]?.role).toBe('assistant')
+  })
+})

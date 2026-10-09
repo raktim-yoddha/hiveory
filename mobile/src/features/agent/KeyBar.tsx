@@ -7,6 +7,7 @@ import { Text } from '@/core/ui'
 const KEY_ROW: { key: keyof typeof KEYS; label: string; spoken: string }[] = [
   { key: 'escape', label: 'Esc', spoken: 'Escape' },
   { key: 'tab', label: 'Tab', spoken: 'Tab' },
+  { key: 'slash', label: '/', spoken: 'Slash' },
   { key: 'up', label: '↑', spoken: 'Up' },
   { key: 'down', label: '↓', spoken: 'Down' },
   { key: 'left', label: '←', spoken: 'Left' },

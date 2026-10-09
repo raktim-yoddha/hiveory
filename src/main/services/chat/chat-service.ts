@@ -292,18 +292,21 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
         .join('\n')
     }))
     const now = nowIso()
-    chat.messages.push({
+    const asked: ChatMessage = {
       id: randomUUID(),
       role: 'user',
       parts: prompt ? [{ kind: 'text', text: prompt }] : [],
       ...(attachments.length ? { attachments } : {}),
       createdAt: now
-    })
+    }
+    chat.messages.push(asked)
     const reply: ChatMessage = { id: randomUUID(), role: 'assistant', parts: [], createdAt: now, streaming: true }
     chat.messages.push(reply)
     if (chat.title === 'New chat') chat.title = (prompt || attachments[0]!.name).replace(/\s+/g, ' ').slice(0, 60)
     chat.updatedAt = now
     this.store.save(chat)
+    // Every window and phone shows the question at once, whoever sent it (the phone, Queen Bee, another agent).
+    this.broadcast('chat.event', { chatId, message: structuredClone(asked), summary: this.summary(chat) })
 
     // A bot's identity goes ahead of its first turn; providers without resume get it every turn with the transcript.
     const intro = this.preamble(chat)

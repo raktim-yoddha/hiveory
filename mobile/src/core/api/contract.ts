@@ -23,6 +23,7 @@ export const PHONE_CHANNELS = [
   'presets.list',
   'kanban.board',
   'settings.get',
+  'chat.get',
   'hosts.status',
   'ssh.pending',
   'ssh.answer'

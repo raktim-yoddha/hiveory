@@ -3,17 +3,18 @@ import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Ellipsis, MessageSquareText, SearchX } from 'lucide-react-native'
+import { Ellipsis, SearchX } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
 import { KEYS, TerminalView, type TerminalHandle } from '@/core/terminal'
 import { space, useTheme } from '@/core/theme'
 import { agentLine, Button, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
 import { AgentActions } from './AgentActions'
+import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
 import { KeyBar } from './KeyBar'
 
 /**
- * One agent, live (ADR 0027): its terminal exactly as on the computer, a bar to
+ * One agent, live (ADR 0027): its terminal (or chat) exactly as on the computer, a bar to
  * answer it when it needs the user, the keys a phone lacks, and a message box.
  */
 export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; workspaceId: string }) {
@@ -54,9 +55,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
       />
       <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={headerHeight}>
         {agent.chatUi ? (
-          <Screen>
-            <EmptyState icon={MessageSquareText} title="This agent uses the chat view" body="Chat agents come to the phone next. Meanwhile, send it a message below." />
-          </Screen>
+          <ChatThread instanceId={instanceId} petName={agent.petName} />
         ) : (
           <TerminalView ref={terminal} instanceId={instanceId} />
         )}
@@ -70,7 +69,8 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
               <Button label="Enter ⏎" size="sm" variant="waiting" onPress={() => key(KEYS.enter)} />
             </View>
           ) : null}
-          <KeyBar onKey={key} />
+          {/* A chat-view agent has no terminal to press keys into. */}
+          {agent.chatUi ? null : <KeyBar onKey={key} />}
           <Composer petName={agent.petName} busy={message.isPending} onSend={(text) => message.mutateAsync({ instanceId, message: text })} />
         </View>
       </KeyboardAvoidingView>
