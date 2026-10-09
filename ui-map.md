@@ -235,7 +235,8 @@ Installing applies the extension's first theme.
 ```
 
 Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
-agents. Pane "+": `( → Right | ↓ Bottom )`, search, Terminals, Agents.
+agents. Pane "+": `( → Right | ↓ Bottom )`, `( Terminal | Chat )` (starts from the Workspace's
+setting, ADR 0037), search, Terminals, Agents.
 
 ## Add workspace (ADR 0020)
 
@@ -268,6 +269,10 @@ the open workspace).
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+Settings tab (ADR 0037): General (Name, Folder, Repository) · Agents (New agents open as:
+Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and
+effort per chat CLI) · New worktrees (Branch prefix, Start from) · Remove from Hiveory.
 
 ## Workspace Kanban
 
@@ -403,8 +408,9 @@ Result:
 
 ```text
 Tabs ─ Inbox (Needs you · Working)  ─ Workspaces ─ Settings
-Workspaces › Workspace (Needs you | Working | Idle tabs, Worktrees, + New) › Worktree (Open an agent sheet) › Agent
-Agent: header (pet name, status pill, ⋯ actions) · terminal · needs-you bar (Esc / Enter) · key row · message box
+Workspaces › Workspace (header: Pull requests · Settings; Needs you | Working | Idle tabs, Worktrees, + New) › Worktree (branch and changes, Open an agent sheet with Terminal | Chat) › Agent
+Workspace › Pull requests (worktree branches with Create PR, open pull requests) · Workspace › Settings (the computer's Settings tab, ADR 0037)
+Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat (markdown) · needs-you bar (Esc / Enter) · key row (terminal) or model and effort (chat) · message box
 Welcome (3 steps) › Pair (QR scanner · or address + code)
 App-wide: SSH question sheet · notices · notification taps
 ```

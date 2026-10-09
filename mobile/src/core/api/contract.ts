@@ -7,6 +7,13 @@ import type { Channel, EventMap, RequestOf, ResponseOf } from '@shared/ipc/contr
  */
 export const PHONE_CHANNELS = [
   'projects.list',
+  'projects.update',
+  'git.info',
+  'github.status',
+  'github.pullRequests',
+  'github.createPullRequest',
+  'workspaces.gitStatus',
+  'chat.clis',
   'workspaces.list',
   'workspaces.create',
   'workspaces.suggestName',

@@ -157,6 +157,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'projects.remove': ({ projectId }) => c.projects.remove(projectId),
   'projects.touch': ({ projectId }) => c.projects.touch(projectId),
+  'projects.update': ({ projectId, ...patch }) => c.projects.update(projectId, patch),
 
   'workspaces.list': ({ projectId }) => c.workspaces.list(projectId),
   'workspaces.suggestName': ({ projectId }) => c.workspaces.suggestName(projectId),
@@ -173,8 +174,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'agents.list': ({ workspaceId }) => c.agents.list(workspaceId),
-  'agents.open': async ({ workspaceId, cliId, placement, resumeSession }) => {
-    const opened = await c.agents.open(workspaceId, cliId, placement, resumeSession)
+  'agents.open': async ({ workspaceId, cliId, placement, resumeSession, chatUi }) => {
+    const opened = await c.agents.open(workspaceId, cliId, placement, resumeSession, chatUi)
     c.projects.markActive(opened.agent.projectId)
     return opened
   },

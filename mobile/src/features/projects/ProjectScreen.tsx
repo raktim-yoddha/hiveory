@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { Stack, router } from 'expo-router'
-import { CheckCheck, CirclePause, FolderGit2, GitBranch, Moon, Plus, type LucideIcon } from 'lucide-react-native'
+import { CheckCheck, CirclePause, FolderGit2, GitBranch, GitPullRequest, Moon, Plus, Settings2, type LucideIcon } from 'lucide-react-native'
 import type { CliStatus } from '@shared/domain/cli'
 import { useCall, useCliIcons } from '@/core/api'
 import { routes } from '@/core/routes'
-import { useTheme } from '@/core/theme'
-import { AgentCard, Button, EmptyState, ListRow, Loading, Screen, Section, Segmented, STATUS_LABEL, STATUS_ORDER } from '@/core/ui'
+import { space, useTheme } from '@/core/theme'
+import { AgentCard, Button, EmptyState, IconButton, ListRow, Loading, Screen, Section, Segmented, STATUS_LABEL, STATUS_ORDER } from '@/core/ui'
 import { NewWorkspaceSheet } from './NewWorkspaceSheet'
 
 /** What an empty status tab says: nothing waiting is good news, nothing working is a pause, nothing idle is asleep. */
@@ -18,6 +19,7 @@ const EMPTY: Record<CliStatus, { icon: LucideIcon; title: string }> = {
 /**
  * One workspace: its worktrees first (they stay put; tap the heading to fold them), then its board
  * as tabs (the desktop's three Kanban columns, one at a time on a phone, what needs the user first).
+ * The header opens its pull requests and its settings, as the computer's tabs do (ADR 0037).
  */
 export function ProjectScreen({ projectId }: { projectId: string }) {
   const { colors } = useTheme()
@@ -39,7 +41,17 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
 
   return (
     <>
-      <Stack.Screen options={{ title: project?.name ?? 'Workspace' }} />
+      <Stack.Screen
+        options={{
+          title: project?.name ?? 'Workspace',
+          headerRight: () => (
+            <View style={styles.header}>
+              {project?.repositoryRoot ? <IconButton label="Pull requests" icon={GitPullRequest} onPress={() => router.push(routes.pullRequests(projectId))} /> : null}
+              <IconButton label="Workspace settings" icon={Settings2} onPress={() => router.push(routes.projectSettings(projectId))} />
+            </View>
+          )
+        }}
+      />
       <Screen
         refreshing={refreshing}
         onRefresh={() => {
@@ -92,3 +104,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'center', gap: space[1] }
+})

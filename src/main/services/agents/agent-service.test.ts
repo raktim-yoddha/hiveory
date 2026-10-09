@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { CliInstance, CliRuntimeDetails, Workspace } from '@shared/domain'
+import type { CliInstance, CliRuntimeDetails, ProjectSettings, Workspace } from '@shared/domain'
 import type { ChatService } from '../chat/chat-service'
 import type { CliRegistry } from '../cli/registry'
 import type { CliRuntimeManager } from '../cli/runtime/runtime-manager'
@@ -14,7 +14,7 @@ import { AgentService } from './agent-service'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 
-const setup = (workspacePatch: Partial<Workspace> = {}) => {
+const setup = (workspacePatch: Partial<Workspace> = {}, settings?: ProjectSettings) => {
   const dir = mkdtempSync(join(tmpdir(), 'hiveory-agents-'))
   const folder = join(dir, 'repo')
   mkdirSync(folder)
@@ -24,7 +24,7 @@ const setup = (workspacePatch: Partial<Workspace> = {}) => {
     createdAt: '', updatedAt: '', ...workspacePatch
   }
   store.update((s) => {
-    s.projects.push({ id: 'p1', name: 'demo', path: folder, createdAt: '', updatedAt: '', lastOpenedAt: '' })
+    s.projects.push({ id: 'p1', name: 'demo', path: folder, createdAt: '', updatedAt: '', lastOpenedAt: '', settings })
     s.workspaces.push(workspace)
   })
   const details = new Map<string, CliRuntimeDetails>()
@@ -74,7 +74,7 @@ describe('agents in chat view', () => {
     const antigravity = agents.open('w1', 'antigravity').agent
     expect(claude.chatUi).toBe(true)
     expect(antigravity.chatUi).toBe(false)
-    expect(chats.ensureAgentChat).toHaveBeenCalledWith(expect.objectContaining({ id: claude.id }), expect.any(String))
+    expect(chats.ensureAgentChat).toHaveBeenCalledWith(expect.objectContaining({ id: claude.id }), expect.any(String), undefined)
     expect(runtime.launch).toHaveBeenCalledTimes(1)
     expect(runtime.launch).toHaveBeenCalledWith(expect.objectContaining({ id: antigravity.id }), expect.any(String), { soleOfCli: true })
   })
@@ -88,6 +88,17 @@ describe('agents in chat view', () => {
     expect(agents.list('w1')[0]!.runtime).toMatchObject({ status: 'working', running: true })
     expect(emitted.at(-1)).toEqual(['runtime.changed', expect.objectContaining({ instanceId: agent.id, runtime: expect.objectContaining({ status: 'working' }) })])
     expect(agents.find(agent.id)!.hasConversation).toBe(true)
+  })
+
+  it("follows the Workspace's view over the Worktree's, lets each open choose, and starts chats on its defaults (ADR 0037)", () => {
+    const { agents, chats } = setup({ chatUi: false }, { agentView: 'chat', chatDefaults: { claude: { model: 'opus', effort: 'high' } } })
+    const chat = agents.open('w1', 'claude').agent
+    expect(chat.chatUi).toBe(true)
+    expect(chats.ensureAgentChat).toHaveBeenCalledWith(expect.objectContaining({ id: chat.id }), expect.any(String), { model: 'opus', effort: 'high' })
+    expect(agents.open('w1', 'claude', undefined, undefined, false).agent.chatUi).toBe(false)
+    const terminalFirst = setup({ chatUi: true }, { agentView: 'terminal' })
+    expect(terminalFirst.agents.open('w1', 'codex').agent.chatUi).toBe(false)
+    expect(terminalFirst.agents.open('w1', 'codex', undefined, undefined, true).agent.chatUi).toBe(true)
   })
 
   it('deletes the chat when the agent closes', () => {

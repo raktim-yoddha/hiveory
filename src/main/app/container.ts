@@ -286,7 +286,11 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     cliName: (cliId) => registry.displayName(cliId),
     workspaceName: (id) => workspaceRepo.find(id)?.name,
     excerpt: (agent) => lastWords(agent.chatUi ? chats.lastReply(agent.id) : runtime.screenText(agent.id, 60)),
-    emit: (update) => emit('queen.update', update)
+    // A Workspace with alerts off stays quiet: no Queen Bee update, no phone push (ADR 0037).
+    emit: (update) => {
+      if (workspaceRepo.findProject(update.projectId)?.settings?.alerts === false) return
+      emit('queen.update', update)
+    }
   })
   const agentEmit: Emit = (event, payload) => {
     emit(event, payload)

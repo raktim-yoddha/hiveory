@@ -28,9 +28,15 @@ export function ChatThread({ instanceId, petName }: { instanceId: string; petNam
     })
   })
 
-  if (chat.isLoading) return <Loading />
   const messages = chat.data?.messages ?? []
-  if (!messages.length) return <EmptyState icon={MessageSquareText} title={`Chat with ${petName}`} body="Send a message below; the answer shows here and on the computer." />
+  // Loading and empty fill the screen too, so the message box stays at the bottom.
+  if (chat.isLoading || !messages.length) {
+    return (
+      <View style={styles.fill}>
+        {chat.isLoading ? <Loading /> : <EmptyState icon={MessageSquareText} title={`Chat with ${petName}`} body="Send a message below; the answer shows here and on the computer." />}
+      </View>
+    )
+  }
 
   return (
     <ScrollView
@@ -91,6 +97,7 @@ function Message({ message }: { message: ChatMessage }) {
 }
 
 const styles = StyleSheet.create({
+  fill: { flex: 1, justifyContent: 'center' },
   list: { gap: space[7], paddingHorizontal: pageX, paddingVertical: space[7] },
   user: { alignSelf: 'flex-end', maxWidth: '85%', gap: space[2], paddingHorizontal: space[6], paddingVertical: space[5], borderRadius: radius.lg },
   assistant: { gap: space[4] },

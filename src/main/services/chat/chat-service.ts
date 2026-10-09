@@ -5,7 +5,7 @@ import { EventEmitter } from 'node:events'
 import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
-import type { CliInstance } from '@shared/domain'
+import type { ChatChoice, CliInstance } from '@shared/domain'
 import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary } from '@shared/domain/chat'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
@@ -182,8 +182,11 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return chat
   }
 
-  /** The chat behind a Work agent in chat view. Its CLI and folder follow the agent and never change. */
-  ensureAgentChat(instance: CliInstance, cwd: string): void {
+  /**
+   * The chat behind a Work agent in chat view. Its CLI and folder follow the agent and never change;
+   * a new one starts on `defaults` (its Workspace's model and effort for that CLI).
+   */
+  ensureAgentChat(instance: CliInstance, cwd: string, defaults?: ChatChoice): void {
     const existing = this.store.get(instance.id)
     if (existing) {
       if (existing.cwd !== cwd) this.store.save({ ...existing, cwd })
@@ -197,6 +200,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       projectId: instance.projectId,
       cwd,
       cliId: instance.cliId,
+      ...(defaults?.model ? { model: defaults.model } : {}),
+      ...(defaults?.effort ? { effort: defaults.effort } : {}),
       autoApprove: instance.autoApprove,
       messages: [],
       createdAt: now,

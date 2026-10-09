@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import type { CliInstance, CliInstanceView, CliRuntimeDetails, CliSelection, LayoutNode, Side, Workspace } from '@shared/domain'
+import { opensAsChat, type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { AppException, fail } from '@shared/errors'
 import { buildGridLayout, dockPane, insertBeside, listPanes } from '@shared/layout/operations'
@@ -107,11 +107,13 @@ export class AgentService {
     return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id)]
   }
 
-  open(workspaceId: string, cliId: string, placement?: Placement, resumeSession?: string): { agent: CliInstanceView; layout: LayoutNode | null } {
+  open(workspaceId: string, cliId: string, placement?: Placement, resumeSession?: string, chatUi?: boolean): { agent: CliInstanceView; layout: LayoutNode | null } {
     const workspace = this.workspaces.get(workspaceId)
     const adapter = this.registry.adapter(cliId)
     if (!adapter) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
-    const [instance] = this.build(workspace, [{ cliId, count: 1 }])
+    // The user's pick for this agent, else the Workspace's setting, else the Worktree's own (ADR 0037).
+    const view = chatUi ?? opensAsChat(this.workspaces.findProject(workspace.projectId), workspace)
+    const [instance] = this.build({ ...workspace, chatUi: view }, [{ cliId, count: 1 }])
     // From the Sessions tab: the new agent continues that conversation (the adapter says where its id goes).
     if (resumeSession) {
       if (!adapter!.adoptSession) fail('INVALID_INPUT', `${adapter!.displayName} can't resume a session by id.`)
@@ -284,7 +286,8 @@ export class AgentService {
       this.runtime.markFailed(instance, message)
       fail('NOT_FOUND', message, { hint: 'Delete this worktree and create a new one.' })
     }
-    if (instance.chatUi) return this.chats.ensureAgentChat(instance, workspace.path)
+    // A new chat agent starts on its Workspace's model and effort for that CLI (ADR 0037).
+    if (instance.chatUi) return this.chats.ensureAgentChat(instance, workspace.path, this.workspaces.findProject(workspace.projectId)?.settings?.chatDefaults?.[instance.cliId])
     const soleOfCli = this.instances(workspace.id).filter((i) => i.cliId === instance.cliId && !i.chatUi).length === 1
     if (instance.hasConversation) this.resumed.add(instance.id)
     else this.resumed.delete(instance.id)

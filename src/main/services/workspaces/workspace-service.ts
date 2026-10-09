@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join, relative, resolve, sep } from 'node:path'
-import { mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
+import { branchPrefixOf, DEFAULT_BRANCH_PREFIX, mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
 import type { GitStatus } from '../git/git-commands'
 import { AppException, fail } from '@shared/errors'
@@ -13,7 +13,7 @@ import { nowIso, type Emit } from '../events'
 import type { HostKit } from '../hosts/host-kit'
 import type { WorkspaceRepository } from './workspace-repository'
 
-export const BRANCH_PREFIX = 'hiveory/'
+export const BRANCH_PREFIX = DEFAULT_BRANCH_PREFIX
 
 const key = (path: string): string => (process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path))
 const inside = (path: string, folder: string): boolean => key(path).startsWith(key(folder) + sep)
@@ -90,7 +90,7 @@ export class WorkspaceService {
       path: project.path,
       association: input.association,
       autoApprove: input.autoApprove,
-      chatUi: input.chatUi ?? false,
+      chatUi: input.chatUi ?? project.settings?.agentView === 'chat',
       createdAt: now,
       updatedAt: now
     }
@@ -129,7 +129,8 @@ export class WorkspaceService {
       }
       branch = input.branch!
     } else {
-      baseRef = input.baseRef || (await git.defaultBranch(repoRoot!))
+      // The Workspace's own base branch, then the repository's default (ADR 0037).
+      baseRef = input.baseRef || project.settings?.baseRef || (await git.defaultBranch(repoRoot!))
       if (!baseRef) fail('GIT_FAILED', 'Could not determine the base branch.', { operation })
       if (!(await git.refExists(repoRoot!, baseRef!))) {
         fail('INVALID_INPUT', `Base branch ${baseRef} was not found.`, { operation, hint: 'Pick a branch from the list.' })
@@ -146,7 +147,7 @@ export class WorkspaceService {
         branch = input.branch
       } else {
         const usedBranches = new Set(this.repo.isolated(project.id).map((w) => w.git?.branch))
-        branch = await this.firstFreeBranch(kit, repoRoot!, `${BRANCH_PREFIX}${slug}`, usedBranches)
+        branch = await this.firstFreeBranch(kit, repoRoot!, `${branchPrefixOf(project)}${slug}`, usedBranches)
       }
     }
     // Paths follow the host's rules (POSIX on a Linux server even when Hiveory runs on Windows).
@@ -173,7 +174,7 @@ export class WorkspaceService {
       git: { worktreePath, branch, baseRef, createdBranch: !input.useExistingBranch },
       association: input.association,
       autoApprove: input.autoApprove,
-      chatUi: input.chatUi ?? false,
+      chatUi: input.chatUi ?? project.settings?.agentView === 'chat',
       createdAt: now,
       updatedAt: now
     }

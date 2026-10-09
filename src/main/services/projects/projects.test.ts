@@ -158,3 +158,22 @@ describe('project activity (ADR 0024)', () => {
     projects.markActive(undefined)
   })
 })
+
+describe('Workspace settings (ADR 0037)', () => {
+  it('renames, merges and clears settings, and new worktrees follow them', async () => {
+    const { repo, projects, workspaces } = setup()
+    const project = await projects.open(repo)
+    git(repo, 'branch', 'develop')
+    projects.update(project.id, { name: '  Shop  ', settings: { agentView: 'chat', branchPrefix: 'feat/', baseRef: 'develop', alerts: false } })
+    const updated = projects.update(project.id, { settings: { alerts: null } })
+    expect(updated.name).toBe('Shop')
+    expect(updated.settings).toEqual({ agentView: 'chat', branchPrefix: 'feat/', baseRef: 'develop' })
+
+    const ws = await workspaces.create({ projectId: project.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
+    expect(ws.git).toMatchObject({ branch: 'feat/amber', baseRef: 'develop' })
+    expect(ws.chatUi).toBe(true)
+
+    const cleared = projects.update(project.id, { settings: { agentView: null, branchPrefix: null, baseRef: null } })
+    expect(cleared.settings).toBeUndefined()
+  })
+})

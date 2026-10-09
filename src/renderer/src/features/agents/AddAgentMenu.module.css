@@ -142,3 +142,10 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* "terminal only": this CLI has no chat mode, so Chat still opens its terminal. */
+.note {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

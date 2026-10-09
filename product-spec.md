@@ -284,7 +284,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 ## Terminals, Explorer and editor panes (ADR 0018)
 
-- A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side
+- A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; Terminal and Chat side by side, starting from the Workspace's "New agents open as" setting (ADR 0037)
 - Terminal panes are not agents: no Kanban card
 - The side panel exists only in worktrees (never Home, workspace pages, Chat or Settings; ADR 0021). It holds browsers and one Explorer per worktree: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk

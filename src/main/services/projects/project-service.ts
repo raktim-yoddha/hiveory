@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { basename, posix, resolve } from 'node:path'
-import { hostKey, type HostRef, type Project } from '@shared/domain'
+import { hostKey, type HostRef, type Project, type ProjectSettings } from '@shared/domain'
+import type { RequestOf } from '@shared/ipc/contract'
 import { AppException, fail } from '@shared/errors'
 import type { AgentService } from '../agents/agent-service'
 import type { Emit } from '../events'
@@ -121,6 +122,30 @@ export class ProjectService {
     this.store.update((s) => {
       const p = s.projects.find((x) => x.id === projectId)
       if (p) p.lastOpenedAt = now
+    })
+    this.emit('state.changed', { topic: 'projects' })
+    return this.get(projectId)
+  }
+
+  /**
+   * Renames a Workspace or changes its settings (ADR 0037). Sent settings replace the stored ones;
+   * null puts one back to the app's default.
+   */
+  update(projectId: string, { name, settings }: Omit<RequestOf<'projects.update'>, 'projectId'>): Project {
+    this.get(projectId)
+    this.store.update((s) => {
+      const p = s.projects.find((x) => x.id === projectId)
+      if (!p) return
+      if (name !== undefined) p.name = name.trim()
+      if (settings) {
+        const next: Record<string, unknown> = { ...p.settings }
+        for (const [key, value] of Object.entries(settings)) {
+          if (value === null) delete next[key]
+          else if (value !== undefined) next[key] = value
+        }
+        p.settings = Object.keys(next).length ? (next as ProjectSettings) : undefined
+      }
+      p.updatedAt = nowIso()
     })
     this.emit('state.changed', { topic: 'projects' })
     return this.get(projectId)

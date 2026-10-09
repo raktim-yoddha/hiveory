@@ -4,10 +4,10 @@ import { Stack } from 'expo-router'
 import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ellipsis, SearchX } from 'lucide-react-native'
-import { useAction, useCall } from '@/core/api'
+import { useAction, useCall, useCliIcons } from '@/core/api'
 import { KEYS, TerminalView, type TerminalHandle } from '@/core/terminal'
 import { space, useTheme } from '@/core/theme'
-import { agentLine, Button, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
+import { agentLine, Button, CliLogo, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
 import { AgentActions } from './AgentActions'
 import { ChatThread } from './ChatThread'
 import { Composer } from './Composer'
@@ -24,6 +24,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   const headerHeight = useHeaderHeight()
   const agents = useCall('agents.list', { workspaceId })
   const agent = agents.data?.find((a) => a.id === instanceId)
+  const icons = useCliIcons(agent?.projectId)
   const write = useAction('terminal.write', { quiet: true })
   const message = useAction('agents.sendMessage')
   const terminal = useRef<TerminalHandle>(null)
@@ -46,6 +47,15 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
       <Stack.Screen
         options={{
           title: agent.petName,
+          // Which CLI this is, before its name, as in the computer's pane header.
+          headerTitle: () => (
+            <View style={styles.title}>
+              <CliLogo icon={icons.get(agent.cliId)} size={22} />
+              <Text variant="lead" numberOfLines={1}>
+                {agent.petName}
+              </Text>
+            </View>
+          ),
           headerRight: () => (
             <View style={styles.headerRight}>
               <StatusPill status={agent.runtime.status} />
@@ -83,6 +93,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space[2] },
+  title: { flexDirection: 'row', alignItems: 'center', gap: space[4], flexShrink: 1 },
   dock: { gap: space[4], paddingTop: space[4] },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: space[4], marginHorizontal: space[5], padding: space[4], borderRadius: 12 },
   waitingText: { flex: 1 }

@@ -23,6 +23,8 @@ interface GitOptionsProps {
   projectId: string
   /** Suggested branch name (from the workspace name), shown until the user edits it. */
   suggestedBranch: string
+  /** The Workspace's own base branch (ADR 0037), when it exists in this repository. */
+  defaultBase?: string
   onChange: (choice: GitChoice) => void
 }
 
@@ -31,7 +33,7 @@ interface GitOptionsProps {
  * existing branch. Folders that are not Git repositories yet get a one-click
  * "Initialize Git" so isolation is always reachable.
  */
-export function GitOptions({ projectId, suggestedBranch, onChange }: GitOptionsProps) {
+export function GitOptions({ projectId, suggestedBranch, defaultBase, onChange }: GitOptionsProps) {
   const [info, setInfo] = useState<GitInfo | null>(null)
   const [baseRef, setBaseRef] = useState<string | null>(null)
   const [typedBranch, setTypedBranch] = useState<string | null>(null)
@@ -53,7 +55,7 @@ export function GitOptions({ projectId, suggestedBranch, onChange }: GitOptionsP
   }, [projectId])
 
   const branch = typedBranch ?? suggestedBranch
-  const base = baseRef ?? info?.defaultBranch ?? info?.branches[0] ?? ''
+  const base = baseRef ?? (defaultBase && info?.branches.includes(defaultBase) ? defaultBase : undefined) ?? info?.defaultBranch ?? info?.branches[0] ?? ''
   const free = info?.branches.filter((b) => !info.branchesInUse.includes(b)) ?? []
   const chosenExisting = existing ?? free[0] ?? ''
   const ready = Boolean(info?.isRepo && info.hasCommits)

@@ -191,7 +191,18 @@ export const projectSchema: z.ZodType<Project> = z.object({
   createdAt: str,
   updatedAt: str,
   lastOpenedAt: str,
-  lastActiveAt: str.optional()
+  lastActiveAt: str.optional(),
+  // A damaged settings object is dropped, never the Workspace (ADR 0037).
+  settings: z
+    .object({
+      agentView: z.enum(['terminal', 'chat']).optional(),
+      chatDefaults: z.record(str, z.object({ model: str, effort: str })).optional(),
+      branchPrefix: str.optional(),
+      baseRef: str.optional(),
+      alerts: z.boolean().optional()
+    })
+    .optional()
+    .catch(undefined)
 })
 
 export const workspaceSchema: z.ZodType<Workspace> = z.object({

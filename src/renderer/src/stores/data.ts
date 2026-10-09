@@ -14,7 +14,7 @@ import type {
   WorkspaceView
 } from '@shared/domain'
 import { DEFAULT_SETTINGS } from '@shared/domain'
-import type { AppInfo } from '@shared/ipc/contract'
+import type { AppInfo, RequestOf } from '@shared/ipc/contract'
 import { applyOperation } from '@shared/layout/operations'
 import { api } from '../lib/api'
 import { reportError } from './notices'
@@ -46,12 +46,20 @@ interface ProjectState {
   projects: Project[]
   loaded: boolean
   load(): Promise<void>
+  /** Renames a Workspace or changes its settings (ADR 0037). */
+  update(projectId: string, patch: Omit<RequestOf<'projects.update'>, 'projectId'>): Promise<void>
 }
 
 export const useProjects = create<ProjectState>((set) => ({
   projects: [],
   loaded: false,
-  load: () => load('Load workspaces', () => api('projects.list'), (projects) => set({ projects, loaded: true }))
+  load: () => load('Load workspaces', () => api('projects.list'), (projects) => set({ projects, loaded: true })),
+  update: (projectId, patch) =>
+    load(
+      'Save workspace settings',
+      () => api('projects.update', { projectId, ...patch }),
+      (project) => set((s) => ({ projects: s.projects.map((p) => (p.id === projectId ? project : p)) }))
+    )
 }))
 
 interface WorkspaceState {

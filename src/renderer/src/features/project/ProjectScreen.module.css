@@ -124,3 +124,46 @@
   align-items: center;
   gap: var(--space-3);
 }
+
+/* Settings tab (ADR 0037) */
+.mono {
+  font-family: var(--font-mono);
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+
+.chatDefaultsWrap {
+  padding: 0 var(--space-7) var(--space-6);
+}
+
+.chatDefaults {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* CLI | model | effort, aligned across rows. */
+.chatDefault {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.chatDefaultName {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  font-size: var(--text-md);
+}
+
+/* A text setting inside a settings group (whose inset fill would hide the field's own). */
+.field {
+  width: var(--kanban-column-min);
+  background: var(--color-surface);
+  border-color: var(--color-border-subtle);
+}

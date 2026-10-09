@@ -217,6 +217,22 @@ const gitRef = z
   .regex(/^[A-Za-z0-9._/-]+$/)
   .refine((v) => !v.startsWith('-'))
 
+/** A chat CLI's model and effort ('' = the CLI's default); never shell syntax. */
+const chatModel = z.string().max(200).regex(/^[\w.:/@[\]-]*$/)
+const chatEffort = z.string().max(40).regex(/^[\w-]*$/)
+
+/**
+ * A Workspace's own settings (ADR 0037). Sent fields replace the stored ones; null clears a field
+ * back to the app's default.
+ */
+export const projectSettingsPatchSchema = z.object({
+  agentView: z.enum(['terminal', 'chat']).nullable().optional(),
+  chatDefaults: z.record(id, z.object({ model: chatModel, effort: chatEffort })).nullable().optional(),
+  branchPrefix: z.string().max(40).regex(/^([A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/).refine((v) => !v.startsWith('-') && !v.includes('..')).nullable().optional(),
+  baseRef: gitRef.nullable().optional(),
+  alerts: z.boolean().nullable().optional()
+})
+
 export const createWorkspaceSchema = z.object({
   projectId: id,
   /** `main` uses the project folder itself; `isolated` gets a linked worktree + branch. */
@@ -275,6 +291,8 @@ export const requestSchemas = {
   'projects.restore': z.object({ path: folderPath }),
   'projects.remove': z.object({ projectId: id }),
   'projects.touch': z.object({ projectId: id }),
+  /** Rename a Workspace or change its settings (ADR 0037). */
+  'projects.update': z.object({ projectId: id, name: projectName.optional(), settings: projectSettingsPatchSchema.optional() }),
   'workspaces.list': z.object({ projectId: id }),
   'workspaces.suggestName': z.object({ projectId: id }),
   'workspaces.create': createWorkspaceSchema,
@@ -287,7 +305,9 @@ export const requestSchemas = {
     cliId: id,
     placement: z.object({ targetPaneId: id, side }).optional(),
     /** Continue this conversation from the CLI's history (Sessions tab) instead of starting a new one. */
-    resumeSession: z.string().regex(SESSION_ID).optional()
+    resumeSession: z.string().regex(SESSION_ID).optional(),
+    /** Chat view or terminal for this one agent; absent = the Workspace's or Worktree's default (ADR 0037). */
+    chatUi: z.boolean().optional()
   }),
   /** The agent CLIs' own conversation history on this computer, for a workspace, a project or everything. */
   'sessions.list': z.object({ scope: z.enum(['workspace', 'project', 'all']), workspaceId: id.optional(), projectId: id.optional() }),
@@ -522,11 +542,7 @@ export const requestSchemas = {
     title: z.string().max(200).optional()
   }),
   /** Only the model and effort ('' = the CLI's default): what a phone may change on a chat (ADR 0027). */
-  'chat.setModel': z.object({
-    chatId: id,
-    model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/),
-    effort: z.string().max(40).regex(/^[\w-]*$/)
-  }),
+  'chat.setModel': z.object({ chatId: id, model: chatModel, effort: chatEffort }),
   'chat.delete': z.object({ chatId: id }),
   'chat.send': z.object({
     chatId: id,
@@ -720,6 +736,7 @@ export interface ResponseMap {
   'projects.restore': Project
   'projects.remove': void
   'projects.touch': Project
+  'projects.update': Project
   'workspaces.list': WorkspaceView[]
   'workspaces.suggestName': string
   'workspaces.create': WorkspaceView

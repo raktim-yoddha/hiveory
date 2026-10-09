@@ -8,7 +8,7 @@ import type { Channel } from './contract'
  * remote until it is added here on purpose.
  */
 export const REMOTE_CHANNELS = new Set<Channel>([
-  'projects.list', 'projects.add', 'projects.addDefaults', 'projects.previous', 'projects.restore', 'projects.remove', 'projects.touch',
+  'projects.list', 'projects.add', 'projects.addDefaults', 'projects.previous', 'projects.restore', 'projects.remove', 'projects.touch', 'projects.update',
   'workspaces.list', 'workspaces.suggestName', 'workspaces.create', 'workspaces.delete', 'workspaces.gitStatus', 'workspaces.repair',
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot',
@@ -57,12 +57,13 @@ export const DEFAULT_SERVER_PORT = 7788
 
 /**
  * What a paired phone may do (ADR 0027): everyday control. It watches and steers
- * agents, terminals, chats and SSH questions, and opens workspaces. Deleting,
- * settings, accounts and anything that resizes a desktop terminal stay on the
- * desktop. A subset of REMOTE_CHANNELS (a test checks).
+ * agents, terminals, chats and SSH questions, and opens workspaces. A Workspace's own
+ * settings and its pull requests are reachable too (ADR 0037). Deleting, app settings,
+ * accounts and anything that resizes a desktop terminal stay on the desktop. A subset of
+ * REMOTE_CHANNELS (a test checks).
  */
 export const MOBILE_CHANNELS = new Set<Channel>([
-  'projects.list', 'workspaces.list', 'workspaces.create', 'workspaces.suggestName', 'workspaces.gitStatus',
+  'projects.list', 'projects.update', 'github.status', 'github.pullRequests', 'github.createPullRequest', 'workspaces.list', 'workspaces.create', 'workspaces.suggestName', 'workspaces.gitStatus',
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'terminal.write', 'terminal.snapshot', 'presets.list', 'kanban.board', 'settings.get', 'sessions.list',
   'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.send', 'chat.stop', 'chat.catalog', 'chat.setModel',

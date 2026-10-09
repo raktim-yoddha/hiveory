@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Plus, Search } from 'lucide-react'
-import type { CliDescriptor } from '@shared/domain'
+import { ArrowDown, ArrowRight, MessageSquareText, Plus, Search, SquareTerminal } from 'lucide-react'
+import { opensAsChat, type CliDescriptor } from '@shared/domain'
+import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
 import { cx } from '../../lib/cx'
-import { useHostClis } from '../../stores/data'
+import { useHostClis, useProjects, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { agentActions } from './agent-actions'
 import styles from './AddAgentMenu.module.css'
@@ -19,9 +20,10 @@ interface AddAgentMenuProps {
 }
 
 /**
- * The pane header "+": where (Right | Bottom, side by side), then what — a
- * terminal (PowerShell, Command Prompt, Git Bash) or a detected agent CLI —
- * with search. Nothing is hardcoded: entries come from the CLI registry.
+ * The pane header "+": where (Right | Bottom, side by side), how (Terminal | Chat,
+ * starting from the Workspace's setting, ADR 0037), then what — a terminal
+ * (PowerShell, Command Prompt, Git Bash) or a detected agent CLI — with search.
+ * Nothing is hardcoded: entries come from the CLI registry.
  */
 export function AddAgentMenu({ workspaceId, paneId, fits }: AddAgentMenuProps) {
   return (
@@ -34,6 +36,12 @@ export function AddAgentMenu({ workspaceId, paneId, fits }: AddAgentMenuProps) {
 function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps & { onDone: () => void }) {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const { clis, loaded, load } = useHostClis(projectId)
+  const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
+  const worktree = useWorkspaces((s) => (projectId ? s.byProject[projectId] : undefined)?.find((w) => w.id === workspaceId))
+  // Chat view runs the CLI headless on this computer, so remote Workspaces only get terminals.
+  const chatPossible = !project?.host
+  const [chosenView, setView] = useState<boolean | null>(null)
+  const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree))
   const [preferred, setSide] = useState<'right' | 'bottom'>('right')
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -57,7 +65,7 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
 
   const open = (cli: CliDescriptor): void => {
     onDone()
-    void agentActions.open(workspaceId, cli.id, side ? { targetPaneId: paneId, side } : undefined)
+    void agentActions.open(workspaceId, cli.id, side ? { targetPaneId: paneId, side } : undefined, undefined, cli.kind === 'shell' ? false : chat)
   }
 
   const items = (): HTMLButtonElement[] => [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])]
@@ -91,6 +99,21 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
         {placement('right', 'Right', <ArrowRight aria-hidden />, 'Too narrow')}
         {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
       </div>
+      {chatPossible && (
+        <div className={styles.sides} role="radiogroup" aria-label="Open agents as">
+          {(
+            [
+              [false, 'Terminal', <SquareTerminal key="t" aria-hidden />],
+              [true, 'Chat', <MessageSquareText key="c" aria-hidden />]
+            ] as const
+          ).map(([value, label, icon]) => (
+            <button key={label} type="button" role="radio" aria-checked={chat === value} className={cx(styles.side, chat === value && styles.sideOn)} onClick={() => setView(value)}>
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <label className={styles.search} htmlFor={searchId}>
         <Search aria-hidden />
         <input
@@ -124,6 +147,7 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
               <button key={cli.id} type="button" role="menuitem" className={styles.item} onClick={() => open(cli)}>
                 <CliLogo cliId={cli.id} size="sm" />
                 <span>{cli.displayName}</span>
+                {chat && cli.kind !== 'shell' && !(CHAT_CLI_IDS as readonly string[]).includes(cli.id) && <span className={styles.note}>terminal only</span>}
               </button>
             ))}
           </div>

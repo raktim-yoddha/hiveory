@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Dices } from 'lucide-react'
-import { PRIMARY_NAME, type WorkspaceAssociation, type WorkspaceKind } from '@shared/domain'
+import { branchPrefixOf, PRIMARY_NAME, type WorkspaceAssociation, type WorkspaceKind } from '@shared/domain'
 import { totalInstances } from '@shared/presets'
 import { AgentConfigFields, type AgentConfig } from '../../components/cli/AgentConfigFields'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -9,7 +9,7 @@ import { Tabs } from '../../components/ui/Tabs'
 import { TextField, TextInput } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { slugify } from '@shared/naming/names'
-import { useSettings, useWorkspaces } from '../../stores/data'
+import { useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { PresetPicker } from '../presets/PresetPicker'
@@ -43,10 +43,12 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   const name = kind === 'main' ? PRIMARY_NAME : (typed ?? suggested)
   const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>('issue')
   const [associationRef, setAssociationRef] = useState('')
-  // Toggles start from the defaults chosen in Settings → Agents.
+  const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
+  // Toggles start from the defaults chosen in Settings → Agents; the Workspace's own view wins (ADR 0037).
   const [config, setConfig] = useState<AgentConfig>(() => {
     const { defaultAutoApprove, defaultChatUi } = useSettings.getState().settings
-    return { cliSelections: [], autoApprove: defaultAutoApprove, chatUi: defaultChatUi }
+    const view = useProjects.getState().projects.find((p) => p.id === projectId)?.settings?.agentView
+    return { cliSelections: [], autoApprove: defaultAutoApprove, chatUi: view ? view === 'chat' : defaultChatUi }
   })
   const [tab, setTab] = useState<ConfigTab>('agents')
   const [busy, setBusy] = useState<'empty' | 'full' | null>(null)
@@ -140,7 +142,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
           }
         />
         {kind === 'isolated' && (
-          <GitOptions projectId={projectId} suggestedBranch={`hiveory/${slugify(name)}`} onChange={onGitChange} />
+          <GitOptions projectId={projectId} suggestedBranch={`${branchPrefixOf(project)}${slugify(name)}`} defaultBase={project?.settings?.baseRef} onChange={onGitChange} />
         )}
         <div className={styles.association}>
           <span className={styles.label}>Issue / Pull request</span>
