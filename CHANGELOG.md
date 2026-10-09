@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.22.0 — Workspace settings, chat or terminal per agent, phone chat
+_2026-10-09_
+
+- Each Workspace has its own settings: its name, whether new agents open as a chat or a terminal, the model and effort chat agents start with, how new worktree branches are named and where they start, and whether its agents send updates and phone alerts.
+- Opening an agent, on the computer or the phone, offers Terminal or Chat every time.
+- Chat agents work on the phone: your message shows at once on every screen, replies stream in with formatting, and you can pick the model and effort.
+- The phone gets each Workspace's settings and pull requests, a Worktree's branch and changes, the CLI's logo next to an agent's name, and a slash key above the keyboard.
+- The phone's Home is calmer: one overview card, worktrees first, and the Silver theme by default.
+- Phone sheets, buttons and the live connection work reliably on Android and iOS, also after switching apps.
+
 ## v0.21.1 — Windows installer
 _2026-10-08_
 
