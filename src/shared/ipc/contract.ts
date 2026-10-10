@@ -936,7 +936,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals' | 'prompts'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals' | 'prompts' | 'themes'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }

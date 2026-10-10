@@ -1,7 +1,9 @@
 import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join, posix } from 'node:path'
 import {
+  readableTokens,
   THEME_EXTENSION_ID,
+  THEME_MAPPING,
   THEME_SEGMENT,
   themeKind,
   themeSlug,
@@ -99,7 +101,10 @@ export class ThemeService {
       .filter((f) => f.endsWith('.json') && THEME_EXTENSION_ID.test(f.slice(0, -5)))
       .flatMap((f) => {
         try {
-          return [JSON.parse(readFileSync(join(this.dir, f), 'utf8')) as VsCodeThemeExtension]
+          const extension = JSON.parse(readFileSync(join(this.dir, f), 'utf8')) as VsCodeThemeExtension
+          // Mapped by an older version: readable now, mapped again by refresh() when Open VSX is reachable (ADR 0038).
+          if (extension.mapping === THEME_MAPPING) return [extension]
+          return [{ ...extension, themes: extension.themes.map((t) => ({ ...t, tokens: readableTokens(t.tokens, t.kind) })) }]
         } catch {
           return []
         }
@@ -135,6 +140,17 @@ export class ThemeService {
     return extension
   }
 
+  /** Downloads again and remaps every installed theme an older mapping produced. Returns how many changed. */
+  async refresh(): Promise<number> {
+    let changed = 0
+    for (const extension of this.list().filter((e) => e.mapping !== THEME_MAPPING)) {
+      const name = extension.id.slice(extension.publisher.length + 1)
+      if (!name || !extension.id.startsWith(`${extension.publisher}.`)) continue
+      if (await this.install(extension.publisher, name).then(() => true, () => false)) changed++
+    }
+    return changed
+  }
+
   /** Reads every color theme a .vsix contributes; icon and product-icon themes are not color themes. */
   fromVsix(bytes: Buffer, info: Omit<VsCodeThemeExtension, 'themes'>): VsCodeThemeExtension {
     const zip = readZip(bytes)
@@ -163,7 +179,7 @@ export class ThemeService {
       }
     }
     if (!themes.length) fail('INVALID_INPUT', 'This extension has no color themes Hiveory can read (it may be an icon theme).')
-    return { ...info, themes }
+    return { ...info, themes, mapping: THEME_MAPPING }
   }
 
   /** A theme file with its `include` chain resolved: the including file's colors win. */

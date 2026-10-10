@@ -58,6 +58,9 @@
   --color-focus: #b39b78;
   /* Component fills (the Dark theme flattens every one of them to a single color). */
 
+  /* Text over a picture's dark scrim (wallpaper names): white in every theme. */
+  --color-on-media: #ffffff;
+
   /* Third-party brand marks sit on a light tile in every theme, so official colors keep their contrast. */
   --color-logo-tile: #f4f4f5;
 

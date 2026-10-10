@@ -27,7 +27,12 @@ export interface VsCodeThemeExtension {
   publisher: string
   version: string
   themes: VsCodeTheme[]
+  /** Which `themeTokens` mapped it (`THEME_MAPPING`); older ones are mapped again (ADR 0038). */
+  mapping?: number
 }
+
+/** Bumped when `themeTokens` changes what it produces, so installed themes are mapped again. */
+export const THEME_MAPPING = 2
 
 /** A search result from the Open VSX theme catalog. */
 export interface ThemeListing {
@@ -75,7 +80,27 @@ const mix = (a: Rgba, b: Rgba, t: number): Rgba => [a[0] * t + b[0] * (1 - t), a
 /** A translucent color composited over an opaque one. */
 const over = (c: Rgba, base: Rgba): Rgba => mix(c, base, c[3])
 const alpha = (c: Rgba, a: number): Rgba => [c[0], c[1], c[2], a]
-const luminance = ([r, g, b]: Rgba): number => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+/** WCAG relative luminance and contrast ratio (1–21). */
+const relative = ([r, g, b]: Rgba): number => {
+  const f = (v: number): number => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+const contrastRatio = (a: Rgba, b: Rgba): number => {
+  const [x, y] = [relative(a), relative(b)].sort((m, n) => n - m) as [number, number]
+  return (x + 0.05) / (y + 0.05)
+}
+/**
+ * `c` moved toward `toward` just far enough to read at `min`:1 against `bg`. Themes pick colors for
+ * VS Code's own surfaces; Hiveory also uses them as text (accent labels, status words, the mark), so
+ * a button color that is nearly the panel's color would vanish (ADR 0038).
+ */
+const readable = (c: Rgba, bg: Rgba, min: number, toward: Rgba): Rgba => {
+  for (let t = 0; t <= 1.0001; t += 0.05) {
+    const m = mix(toward, c, t)
+    if (contrastRatio(m, bg) >= min) return m
+  }
+  return toward
+}
 const distance = (a: Rgba, b: Rgba): number => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
 const BLACK: Rgba = [0, 0, 0, 1]
 const WHITE: Rgba = [255, 255, 255, 1]
@@ -163,13 +188,24 @@ export const themeTokens = (colors: Record<string, unknown>, tokenColors: TokenC
   const inset = solid(surface, 'input.background') ?? mix(BLACK, surface, dark ? 0.25 : 0.035)
   const header = solid(surface, 'editorGroupHeader.tabsBackground', 'tab.inactiveBackground') ?? mix(bg, surface, 0.5)
   const border = solid(surface, 'panel.border', 'editorGroup.border', 'sideBar.border', 'contrastBorder') ?? lift(0.14)
-  const accent = over(get('button.background', 'focusBorder', 'textLink.foreground') ?? parse(dark ? '#0e639c' : '#005fb8')!, surface)
-  const accentContrast = over(get('button.foreground') ?? (luminance(accent) > 0.55 ? BLACK : WHITE), accent)
-  const brand = over(get('textLink.foreground', 'focusBorder') ?? accent, surface)
-  const focus = over(get('focusBorder') ?? accent, surface)
-  const muted = over(get('descriptionForeground') ?? lift(0.55), surface)
+  // Away from the background: toward white on a dark theme, black on a light one (keeps the hue).
+  const far = dark ? WHITE : BLACK
+  // The accent is a fill (buttons) and a text color (labels, selection): the first theme color that
+  // reads against the panel, so a gray button color (One Dark Pro) gives way to its link blue.
+  const accentCandidates = ['button.background', 'textLink.foreground', 'focusBorder', 'activityBarBadge.background', 'terminal.ansiBlue']
+    .map((key) => get(key))
+    .filter((c): c is Rgba => Boolean(c && c[3] > 0))
+    .map((c) => over(c, surface))
+  const accent =
+    accentCandidates.find((c) => contrastRatio(c, surface) >= 3) ??
+    readable(accentCandidates[0] ?? parse(dark ? '#0e639c' : '#005fb8')!, surface, 3, far)
+  const buttonText = over(get('button.foreground') ?? WHITE, accent)
+  const accentContrast = contrastRatio(buttonText, accent) >= 4.5 ? buttonText : contrastRatio(BLACK, accent) > contrastRatio(WHITE, accent) ? BLACK : WHITE
+  const brand = readable(over(get('textLink.foreground', 'focusBorder') ?? accent, surface), surface, 3, far)
+  const focus = readable(over(get('focusBorder') ?? accent, surface), surface, 3, far)
+  const muted = readable(over(get('descriptionForeground') ?? lift(0.55), surface), surface, 3.5, text)
   const defaults = STATUS_DEFAULTS[kind]
-  const status = (fallback: string, ...keys: string[]): Rgba => over(get(...keys) ?? parse(fallback)!, surface)
+  const status = (fallback: string, ...keys: string[]): Rgba => readable(over(get(...keys) ?? parse(fallback)!, surface), surface, 3, far)
   const working = status(defaults.working, 'gitDecoration.addedResourceForeground', 'terminal.ansiGreen')
   const waiting = status(defaults.waiting, 'editorWarning.foreground', 'list.warningForeground', 'terminal.ansiYellow')
   const danger = status(defaults.danger, 'errorForeground', 'editorError.foreground', 'terminal.ansiRed')
@@ -190,11 +226,11 @@ export const themeTokens = (colors: Record<string, unknown>, tokenColors: TokenC
     'color-border': border,
     'color-border-strong': mix(text, border, 0.16),
     'color-text': text,
-    'color-text-secondary': lift(0.78),
+    'color-text-secondary': readable(lift(0.78), surface, 4.5, text),
     'color-text-muted': muted,
     'color-text-faint': lift(0.34),
     'color-accent': accent,
-    'color-accent-hover': over(get('button.hoverBackground') ?? mix(text, accent, 0.15), surface),
+    'color-accent-hover': accent === accentCandidates[0] ? over(get('button.hoverBackground') ?? mix(text, accent, 0.15), surface) : mix(text, accent, 0.15),
     'color-accent-contrast': accentContrast,
     'color-bronze': brand,
     'color-bronze-soft': alpha(brand, 0.15),
@@ -212,7 +248,7 @@ export const themeTokens = (colors: Record<string, unknown>, tokenColors: TokenC
     'color-drop': alpha(accent, 0.08),
     'color-drop-border': alpha(accent, 0.5),
     'term-bg': surface,
-    'term-fg': over(get('terminal.foreground') ?? text, surface),
+    'term-fg': readable(over(get('terminal.foreground') ?? text, surface), surface, 4.5, text),
     'term-cursor': over(get('terminalCursor.foreground', 'editorCursor.foreground') ?? accent, surface),
     'term-selection': get('terminal.selectionBackground', 'editor.selectionBackground') ?? alpha(accent, 0.3)
   }
@@ -222,7 +258,7 @@ export const themeTokens = (colors: Record<string, unknown>, tokenColors: TokenC
   }
   for (const [name, scopes] of Object.entries(SYNTAX)) {
     const c = scopes.map((s) => scopeColor(tokenColors, s)).find(Boolean)
-    if (c) t[`syntax-${name}`] = over(c, surface)
+    if (c) t[`syntax-${name}`] = readable(over(c, surface), surface, name === 'comment' ? 2.5 : 3, far)
   }
 
   const tokens = Object.fromEntries(Object.entries(t).map(([k, v]) => [k, hex(v)]))
@@ -231,6 +267,32 @@ export const themeTokens = (colors: Record<string, unknown>, tokenColors: TokenC
     tokens: { ...tokens, 'shadow-tint': hex(alpha(BLACK, shadow)) },
     chrome: { background: hex(bg), symbols: hex(lift(0.78)) }
   }
+}
+
+/**
+ * Tokens stored by an older mapping, made readable without the theme file: every text-like color
+ * reaches the contrast `themeTokens` gives new installs. Until the theme is mapped again it keeps
+ * its own accent hue, lightened or darkened as needed.
+ */
+export const readableTokens = (tokens: Record<string, string>, kind: ThemeKind): Record<string, string> => {
+  const surface = parse(tokens['base-surface'])
+  const text = parse(tokens['color-text'])
+  if (!surface || !text) return tokens
+  const far = kind === 'dark' ? WHITE : BLACK
+  const out = { ...tokens }
+  const fix = (key: string, min: number, toward: Rgba): void => {
+    const c = parse(out[key])
+    if (c) out[key] = hex(readable(c, surface, min, toward))
+  }
+  for (const key of ['color-accent', 'color-bronze', 'color-focus', 'color-working', 'color-success', 'color-waiting', 'color-warning', 'color-danger']) fix(key, 3, far)
+  fix('color-text-muted', 3.5, text)
+  fix('color-text-secondary', 4.5, text)
+  fix('term-fg', 4.5, text)
+  for (const key of Object.keys(out)) if (key.startsWith('syntax-')) fix(key, key === 'syntax-comment' ? 2.5 : 3, far)
+  const accent = parse(out['color-accent'])
+  const label = parse(out['color-accent-contrast'])
+  if (accent && (!label || contrastRatio(label, accent) < 4.5)) out['color-accent-contrast'] = hex(contrastRatio(BLACK, accent) > contrastRatio(WHITE, accent) ? BLACK : WHITE)
+  return out
 }
 
 export const themeSlug = (label: string): string =>

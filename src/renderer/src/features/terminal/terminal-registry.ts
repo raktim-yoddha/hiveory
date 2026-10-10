@@ -36,6 +36,17 @@ const readTheme = (): ITheme => {
 }
 
 /**
+ * CLIs are written for dark terminals; on a light VS Code theme their pale grays and whites would
+ * vanish, so xterm lifts low-contrast text there, as VS Code's own terminal does (ADR 0038).
+ */
+const minimumContrast = (): number => (document.documentElement.dataset.customTheme === 'light' ? 4.5 : 1)
+/** The WebGL renderer draws dark-on-light strokes thin; a step heavier reads like the dark themes. */
+const fontWeight = (): 'normal' | '500' => (document.documentElement.dataset.customTheme === 'light' ? '500' : 'normal')
+
+/** Only a wallpaper needs a see-through terminal; an opaque one draws crisper text (dark-on-light above all). */
+const transparent = (): boolean => 'wallpaper' in document.documentElement.dataset
+
+/**
  * Smallest grid sent to a CLI: a narrower host is a transient layout state; a shorter pane keeps
  * MIN_ROWS and shows the rows around the cursor. Some TUIs crash on tiny grids (OpenCode's native renderer segfaults near 2×1), so the
  * floor matches main's `terminal.resize` validation.
@@ -129,9 +140,11 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
     // Wide glyphs (emoji, CJK) never overlap their neighbours.
     rescaleOverlappingGlyphs: true,
     allowProposedApi: true,
-    allowTransparency: true,
+    allowTransparency: transparent(),
       // The scrollbar's width; fitting reserves this (14px by default) beside the grid.
     overviewRuler: { width: SCROLLBAR_PX },
+    minimumContrastRatio: minimumContrast(),
+    fontWeight: fontWeight(),
     theme
   })
   const fit = new FitAddon()
@@ -321,5 +334,13 @@ export const disposeTerminal = (instanceId: string): void => {
 /** Applies the current theme tokens to every open terminal (after a theme switch). */
 export const refreshTerminalTheme = (): void => {
   theme = readTheme()
-  for (const entry of entries.values()) entry.term.options.theme = theme
+  const contrast = minimumContrast()
+  for (const entry of entries.values()) {
+    entry.term.options.theme = theme
+    entry.term.options.minimumContrastRatio = contrast
+    entry.term.options.allowTransparency = transparent()
+    entry.term.options.fontWeight = fontWeight()
+    // The WebGL renderer caches glyphs per color; drawn for the old theme they stay pale.
+    entry.term.clearTextureAtlas()
+  }
 }

@@ -1,5 +1,5 @@
 import { subscribe } from '../lib/api'
-import { useAgents, useLayouts, usePresets, useProjects, useSettings, useUpdates, useWorkspaces } from './data'
+import { useAgents, useLayouts, usePresets, useProjects, useSettings, useThemes, useUpdates, useWorkspaces } from './data'
 import { useBots } from './bots'
 import { useBrowser } from './browser'
 import { useChat } from './chat'
@@ -47,6 +47,7 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'triggers') reload('triggers', () => useTriggers.getState().load())
       if (topic === 'approvals') reload('approvals', () => useApprovals.getState().load())
       if (topic === 'prompts') reload('prompts', () => usePrompts.getState().load())
+      if (topic === 'themes') reload('themes', () => useThemes.getState().load())
       if (topic === 'chats' && useBots.getState().activeBotId) {
         const botId = useBots.getState().activeBotId!
         reload(`bot-threads:${botId}`, () => useBots.getState().loadThreads(botId))

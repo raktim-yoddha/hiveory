@@ -202,6 +202,14 @@ app.whenReady().then(async () => {
     }
   }
   void guard(log, 'Worktree sync', syncWorktrees)
+  // VS Code themes mapped by an older version are mapped again, then the window repaints (ADR 0038).
+  void guard(log, 'Theme refresh', async () => {
+    if (!(await c.themes.refresh())) return
+    emit('state.changed', { topic: 'themes' })
+    const look = c.settings.get()
+    const custom = c.themes.theme(look.vscodeTheme)?.chrome
+    for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, look.theme, Boolean(look.wallpaper), custom)
+  })
   setInterval(() => void guard(log, 'Worktree sync', syncWorktrees), WORKTREE_SYNC_MS).unref()
   app.on('browser-window-focus', () => void guard(log, 'Worktree sync', syncWorktrees))
   const notices = [

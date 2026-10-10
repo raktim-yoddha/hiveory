@@ -66,6 +66,21 @@ the Workspace's choice, else its Worktree's (picked when it was created in the d
 app's: `opensAsChat(project, worktree, appDefault)`. Worktrees Hiveory finds in Git and the
 Primary have no choice of their own, so they follow the Workspace and then the app.
 
+### VS Code themes stay readable (amends ADR 0034)
+- The accent is a fill and a text color, so it is the first of `button.background`,
+  `textLink.foreground`, `focusBorder`, `activityBarBadge.background`, `terminal.ansiBlue` that
+  reaches 3:1 against the panel (One Dark Pro's gray button gave way to its link blue); its label
+  color reaches 4.5:1. Secondary and muted text, status colors, the terminal foreground and syntax
+  colors are lifted to a minimum contrast (WCAG ratio) when the theme's own fall short.
+- `VsCodeThemeExtension.mapping` records which mapping produced a stored theme (`THEME_MAPPING`).
+  Older ones are made readable when read, and at startup they are downloaded and mapped again;
+  the window repaints through the new `themes` state topic.
+- Terminals on a light VS Code theme use xterm's minimum contrast 4.5 (as VS Code does) and a
+  heavier weight; without a wallpaper the terminal is opaque, for crisper text. The WebGL glyph
+  cache is cleared on every theme change.
+- The Kanban columns' inset shadow follows `--shadow-tint`; wallpaper names use the new
+  `--color-on-media` token instead of the theme's text color.
+
 ## Consequences
 
 - Updates are easier to miss: the dot and the optional spoken update are the only signals.
