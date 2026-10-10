@@ -39,7 +39,8 @@ export async function adoptLoginShellPath(log: Logger): Promise<void> {
   const fromShell = await new Promise<string | null>((resolve) => {
     execFile(
       shell,
-      ['-ilc', `printf '${MARK}%s${MARK}' "$PATH"`],
+      // bash -l skips ~/.bashrc, where nvm and conda put their PATH lines.
+      ['-ilc', `[ -n "$BASH_VERSION" ] && [ -r ~/.bashrc ] && . ~/.bashrc >/dev/null 2>&1; printf '${MARK}%s${MARK}' "$PATH"`],
       // Keep rc files from prompting or auto-updating while they run headless.
       { timeout: 5000, env: { ...process.env, DISABLE_AUTO_UPDATE: 'true', ZSH_DISABLE_COMPFIX: 'true' }, maxBuffer: 1024 * 1024 },
       (error, stdout) => {

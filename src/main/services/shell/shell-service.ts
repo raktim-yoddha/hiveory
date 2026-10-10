@@ -1,6 +1,9 @@
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { fail } from '@shared/errors'
+import { BASH_RC, bashArgs } from '../cli/adapters/shells'
 import { sanitizeEnv } from '../pty/env'
 import { PtySession } from '../pty/pty-session'
 import { inProcessPty, type PtyBackend } from '../pty/pty-backend'
@@ -25,7 +28,17 @@ export const defaultShell = (env: NodeJS.ProcessEnv = process.env): { file: stri
     if (existsSync(pwsh)) return { file: pwsh, args: COMPACT_POWERSHELL }
     return { file: 'powershell.exe', args: COMPACT_POWERSHELL }
   }
-  return { file: env.SHELL || '/bin/bash', args: ['-l'] }
+  const file = env.SHELL || '/bin/bash'
+  if (basename(file) !== 'bash') return { file, args: ['-l'] }
+  // bash -l skips ~/.bashrc; start from Hiveory's rc file, which reads both (see BASH_RC).
+  const rcFile = join(tmpdir(), 'hiveory', 'bashrc')
+  try {
+    mkdirSync(join(tmpdir(), 'hiveory'), { recursive: true })
+    writeFileSync(rcFile, BASH_RC, 'utf8')
+    return { file, args: bashArgs(rcFile) }
+  } catch {
+    return { file, args: ['-l'] }
+  }
 }
 
 /**

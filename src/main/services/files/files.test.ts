@@ -1,9 +1,10 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { listPanes } from '@shared/layout/operations'
-import { locateGitBash } from '../cli/adapters/shells'
+import { BASH_RC, bashArgs, locateGitBash } from '../cli/adapters/shells'
 import { EditorService } from '../editors/editor-service'
 import { LayoutService } from '../layout/layout-service'
 import { StateStore } from '../persistence/state-store'
@@ -111,5 +112,20 @@ describe('shells', () => {
     expect(locateGitBash(env, (p) => p.toLowerCase() === 'c:\\git\\bin\\bash.exe')?.toLowerCase()).toBe('c:\\git\\bin\\bash.exe')
     expect(locateGitBash(env, () => false)).toBeUndefined()
     expect(locateGitBash({ ...env, platform: 'linux' }, () => true)).toBeUndefined()
+  })
+
+  // Windows' bash.exe may be WSL; the rc file is for macOS and Linux shells.
+  it.skipIf(process.platform === 'win32')('reads ~/.bashrc once, beside the login profile', () => {
+    const home = mkdtempSync(join(tmpdir(), 'hv-bash-'))
+    const rc = join(home, 'hiveory-rc')
+    writeFileSync(rc, BASH_RC)
+    writeFileSync(join(home, '.bashrc'), 'N=$((N+1)); greet() { echo hi; }\n')
+    const run = (): string => execFileSync('bash', ['--norc', '--noprofile', '-c', `. ${rc}; greet; echo $N`], { env: { HOME: home, PATH: process.env.PATH }, encoding: 'utf8' })
+    writeFileSync(join(home, '.bash_profile'), 'export P=1\n')
+    expect(run()).toBe('hi\n1\n')
+    writeFileSync(join(home, '.bash_profile'), '. ~/.bashrc\n')
+    expect(run()).toBe('hi\n1\n')
+    expect(bashArgs(rc)).toEqual(['--rcfile', rc, '-i'])
+    rmSync(home, { recursive: true, force: true })
   })
 })
