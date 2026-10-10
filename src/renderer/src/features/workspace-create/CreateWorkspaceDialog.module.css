@@ -69,18 +69,6 @@
   background: var(--color-surface-inset);
 }
 
-.gitToggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.gitToggle svg {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  vertical-align: middle;
-}
-
 .gitRow {
   display: grid;
   grid-template-columns: 1fr 1.4fr;

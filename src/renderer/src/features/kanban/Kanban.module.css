@@ -184,3 +184,25 @@
   color: var(--color-text-muted);
 }
 
+
+/* Narrow (the side panel, ADR 0038): the three columns stack, each as tall as its cards. */
+.page {
+  container-type: inline-size;
+}
+
+@container (max-width: 640px) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    overflow-y: auto;
+  }
+
+  .cards {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+.scope {
+  align-self: flex-start;
+}

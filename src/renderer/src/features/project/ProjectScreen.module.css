@@ -1,19 +1,22 @@
+/* The Workspace page inside the side panel (ADR 0038): the panel draws the card around it. */
 .screen {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--gradient-surface), var(--color-surface);
-  box-shadow: var(--shadow-surface);
 }
 
 .header {
   display: flex;
   align-items: center;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-8) var(--space-6);
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7) var(--space-4);
+}
+
+.headerMark {
+  flex: none;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 .titles {
@@ -25,28 +28,17 @@
 }
 
 .title {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.01em;
-}
-
-.path {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: text;
 }
 
 .tabs {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
   height: calc(var(--control-lg) + var(--space-3));
-  padding: 0 var(--space-8);
+  padding: 0 var(--space-7);
+  overflow-x: auto;
   border-bottom: var(--border-width) solid var(--color-border-subtle);
 }
 
@@ -85,28 +77,6 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--kanban-column-min), 1fr));
   gap: var(--gutter);
-}
-
-.facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: var(--space-4) var(--space-8);
-  margin: 0;
-  font-size: var(--text-md);
-}
-
-.facts dt {
-  color: var(--color-text-muted);
-}
-
-.facts dd {
-  margin: 0;
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  user-select: text;
 }
 
 .danger {
@@ -166,4 +136,50 @@
   width: var(--kanban-column-min);
   background: var(--color-surface);
   border-color: var(--color-border-subtle);
+}
+
+/* Settings › Icon and color: two rows of small round choices (ADR 0038). */
+.look {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.lookRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.lookOption {
+  display: grid;
+  place-items: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.lookOption:hover {
+  background: var(--color-surface-hover);
+}
+
+.lookOption svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+/* Selected reads as a tinted fill, never an outline (design.md "Selection"). */
+.lookOn,
+.lookOn:hover {
+  background: var(--fill-selected);
+}
+
+.swatch {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: var(--radius-pill);
 }

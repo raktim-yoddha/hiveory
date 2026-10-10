@@ -10,7 +10,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
-import { useApp, useProjects } from '../../stores/data'
+import { useApp, useProjects, useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { RemoteFolderPicker, SSH_DESTINATION } from './RemoteFolderPicker'
@@ -115,7 +115,7 @@ export function AddProjectDialog() {
     })
       .then(async (project) => {
         if (!project) return
-        await useProjects.getState().load()
+        await Promise.all([useProjects.getState().load(), useWorkspaces.getState().load(project.id)])
         useNavigation.getState().openProject(project.id)
         close()
       })

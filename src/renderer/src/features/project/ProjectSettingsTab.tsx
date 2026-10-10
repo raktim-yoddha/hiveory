@@ -10,6 +10,7 @@ import { useProjects } from '../../stores/data'
 import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 import { SettingRow } from '../settings/SettingsScreen'
 import { ChatDefaults } from './ChatDefaults'
+import { WorkspaceLook } from './WorkspaceLook'
 import settings from '../settings/Settings.module.css'
 import styles from './ProjectScreen.module.css'
 
@@ -38,6 +39,11 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
           title="Name"
           description="How this workspace is called in the sidebar, on the board and on the phone."
           control={<CommitField key={project.name} label="Workspace name" value={project.name} onCommit={(name) => name && void update(project.id, { name })} />}
+        />
+        <SettingRow
+          title="Icon and color"
+          description="Its mark in the sidebar. Click the mark there to fold its worktrees."
+          control={<WorkspaceLook project={project} />}
         />
         <SettingRow title="Folder" description={<span className={styles.mono}>{project.path}</span>} control={null} />
         <SettingRow

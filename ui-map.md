@@ -12,16 +12,21 @@
 │   + Add      │                                                   │
 │   Sort       │                                                   │
 │              │                                                   │
-│▾ Workspace A+│                                                   │
-│   Primary    │                                                   │
-│     Amber    │                                                   │
-│ ▸ Workspace B│                                                   │
-│   Workspace C│                                                   │
-│              │                                                   │
+│◆ Workspace A+│                                                   │
+│  ⌂ app Primary│                                                  │
+│     main     │                                                   │
+│  ⑂ Amber     │                                                   │
+│     hiveory/a│                                                   │
+│◆ Workspace B │                                                   │
+│  ../amber ⑂ x│                                                   │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
-Expanding a workspace in the sidebar lists its Worktrees for navigation (ADR 0010).
+The sidebar (ADR 0038): ◆ is the workspace's mark (icon and color from its Settings); clicking it
+folds or unfolds its Worktrees. The workspace row does nothing while unfolded; folded, it shows the
+last-opened Worktree's folder and branch and clicking it opens that Worktree. Each Worktree shows its
+name and branch; the Primary shows the workspace folder's name with a Primary tag. "+" offers New
+branch · Existing branch · Remote branch. A workspace whose folder is gone shows a warning mark.
 
 ### Bots mode (ADR 0022)
 
@@ -258,19 +263,25 @@ Git knows (ADR 0038).
 
 ## Workspace
 
+The Workspace page is a tab of the side panel beside the open Worktree (ADR 0038), added from the
+panel's "+" or from a workspace's right-click › Workspace settings. It has no New worktree button.
+
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ Workspace A                                                      │
-├──────────────────────────────────────────────────────────────────┤
-│ Tasks │ Pull Requests │ Worktrees │ Settings                    │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│                        Workspace content                         │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+┌ [▦ Workspace ×] + ───────────────── ⤢ ┐
+│ ◆ Workspace A                         │
+│   ⌂ … › app  ⧉ 📁                     │
+│ Tasks │ Pull Requests │ Worktrees │ Settings
+├────────────────────────────────────────┤
+│ [ All | Here ]                         │
+│ ● IDLE                              2  │
+│ ● WORKING                           1  │
+│ ● WAITING FOR YOU                   0  │
+└────────────────────────────────────────┘
 ```
 
-Settings tab (ADR 0037): General (Name, Folder, Repository) · Agents (New agents open as:
+Tasks: All = every Worktree's agents; Here = only the open Worktree's. Narrow, the columns stack.
+
+Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
 Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and
 effort per chat CLI) · New worktrees (Branch prefix, Start from) · Remove from Hiveory.
 
@@ -337,10 +348,10 @@ pane's name for restart, move and close (ADR 0018).
 
 ```text
 ┌───────────────────────────────────────────────┐
-│ Create Worktree                               │
+│ New worktree                                  │
 ├───────────────────────────────────────────────┤
-│ ( Workspace folder ) ( New branch )           │
 │ Worktree name               [Random name]     │
+│ Base branch [main ▾]   New branch [hiveory/x] │
 │                                               │
 │ Issue / Pull Request       [optional]         │
 │                                               │

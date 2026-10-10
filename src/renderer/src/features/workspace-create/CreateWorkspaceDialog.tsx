@@ -13,12 +13,14 @@ import { useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { PresetPicker } from '../presets/PresetPicker'
-import { GitOptions, type GitChoice } from './GitOptions'
+import { GitOptions, type GitChoice, type WorktreeSource } from './GitOptions'
 import { IssuePicker } from './IssuePicker'
 import styles from './CreateWorkspaceDialog.module.css'
 
 interface CreateWorkspaceDialogProps {
   projectId: string
+  /** New branch (default), an existing local branch, or a remote branch (ADR 0038). */
+  source?: WorktreeSource
   /** The dialog is mounted only while open, so every opening starts fresh. */
   onClose: () => void
 }
@@ -29,7 +31,13 @@ type ConfigTab = 'agents' | 'presets'
  * "Create worktree": an isolated copy on its own branch — Git worktree and branch creation happen
  * behind this one action (AGENTS.md rule 13). The Primary always exists already (ADR 0038).
  */
-export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDialogProps) {
+const TITLES: Record<WorktreeSource, string> = {
+  new: 'New worktree',
+  existing: 'Worktree from an existing branch',
+  remote: 'Worktree from a remote branch'
+}
+
+export function CreateWorkspaceDialog({ projectId, source = 'new', onClose }: CreateWorkspaceDialogProps) {
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const loadWorkspaces = useWorkspaces((s) => s.load)
   const [suggested, setSuggested] = useState('')
@@ -77,7 +85,8 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
         chatUi: config.chatUi,
         baseRef: git.baseRef,
         branch: git.branch,
-        useExistingBranch: git.useExistingBranch
+        useExistingBranch: git.useExistingBranch,
+        remoteBranch: git.remoteBranch
       })
     )
     setBusy(null)
@@ -93,7 +102,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   return (
     <Modal
       open
-      title="Create worktree"
+      title={TITLES[source]}
       onClose={onClose}
       width="lg"
       footer={
@@ -115,7 +124,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
           maxLength={60}
           adornment={<IconButton label="Suggest another name" icon={<Dices />} size="lg" onClick={suggest} />}
         />
-        <GitOptions projectId={projectId} suggestedBranch={`${branchPrefixOf(project)}${slugify(name)}`} defaultBase={project?.settings?.baseRef} onChange={onGitChange} />
+        <GitOptions projectId={projectId} source={source} suggestedBranch={`${branchPrefixOf(project)}${slugify(name)}`} defaultBase={project?.settings?.baseRef} onChange={onGitChange} />
         <div className={styles.association}>
           <span className={styles.label}>Issue / Pull request</span>
           <div className={styles.associationRow}>

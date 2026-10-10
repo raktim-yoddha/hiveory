@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { FolderTree, Globe, History, Maximize2, Minimize2, PanelRight, Plus, X } from 'lucide-react'
+import { FolderTree, Globe, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -22,17 +22,19 @@ import {
 import { BrowserPane } from '../browser/BrowserPane'
 import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
+import { ProjectScreen } from '../project/ProjectScreen'
 import { openBrowserTab } from './panel-actions'
 import styles from './SidePanel.module.css'
 import { pageTitle } from '../browser/page-title'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History }
+const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History, workspace: LayoutDashboard }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
- * Right side panel for the workspace in view (never a project page): browser tabs (any number), the folder's
- * Explorer and the agent session history, added from "+". Tabs drag to reorder;
+ * Right side panel for the Worktree in view: browser tabs (any number), the folder's Explorer, the
+ * agent session history and the Workspace page (board, pull requests, worktrees, settings; ADR 0038),
+ * added from "+". Tabs drag to reorder;
  * dragging one into the lower half splits the panel into a top and a bottom area,
  * each with its own tabs (a divider sets their heights). Browser pages live in
  * main; pages agents open in this workspace appear here as tabs on their own.
@@ -99,6 +101,15 @@ export function SidePanel() {
         },
         {
           type: 'item',
+          id: 'workspace',
+          label: 'Workspace',
+          icon: <LayoutDashboard />,
+          disabled: !scope,
+          hint: tabs.some((t) => t.kind === 'workspace') ? 'Open' : 'Board and settings',
+          onSelect: () => addPanelTab(scope, 'workspace', undefined, true, group)
+        },
+        {
+          type: 'item',
           id: 'sessions',
           label: 'Sessions',
           icon: <History />,
@@ -107,7 +118,7 @@ export function SidePanel() {
           onSelect: () => addPanelTab(scope, 'sessions', undefined, true, group)
         }
       ]}
-      trigger={(props) => <IconButton {...props} label="Add browser, explorer or sessions" icon={<Plus />} className={styles.add} />}
+      trigger={(props) => <IconButton {...props} label="Add browser, explorer, workspace or sessions" icon={<Plus />} className={styles.add} />}
     />
   )
 
@@ -362,7 +373,13 @@ function PanelArea({
           />
         )}
         {tabs.length === 0 ? (
-          <EmptyState compact icon={<Plus />} title="Nothing open" description="Add a browser, the Explorer for this folder's files, or the agent session history." actions={addMenu} />
+          <EmptyState
+            compact
+            icon={<Plus />}
+            title="Nothing open"
+            description="Add a browser, the Explorer for this folder's files, the Workspace's board and settings, or the agent session history."
+            actions={addMenu}
+          />
         ) : (
           // Every tab stays mounted so pages and the Explorer keep their state; only the active one is visible.
           tabs.map((tab) => (
@@ -372,6 +389,8 @@ function PanelArea({
                   <Explorer key={scope} workspaceId={scope} />
                 ) : tab.kind === 'browser' ? (
                   <BrowserPane pageId={tab.id} visible={tab.id === active?.id} />
+                ) : tab.kind === 'workspace' ? (
+                  projectId && <ProjectScreen key={scope} projectId={projectId} workspaceId={scope} />
                 ) : (
                   <SessionsPanel key={scope} projectId={projectId} workspaceId={workspaceId} />
                 )}

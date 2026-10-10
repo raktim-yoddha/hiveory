@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { WorkspaceView } from '@shared/domain'
+import { mainWorkspaceId, type WorkspaceView } from '@shared/domain'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { api, HiveoryError } from '../../lib/api'
 import { useProjects } from '../../stores/data'
@@ -21,7 +21,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
   const [force, setForce] = useState(false)
   const [busy, setBusy] = useState(false)
   const view = useNavigation((s) => s.view)
-  const openProject = useNavigation((s) => s.openProject)
+  const openWorkspace = useNavigation((s) => s.openWorkspace)
   const isMain = workspace.kind === 'main'
   const project = useProjects((s) => s.projects.find((p) => p.id === workspace.projectId))
 
@@ -29,7 +29,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
     setBusy(true)
     try {
       const result = await api('workspaces.delete', { workspaceId: workspace.id, force })
-      if (view.type === 'workspace' && view.workspaceId === workspace.id) openProject(workspace.projectId, 'workspaces')
+      if (view.type === 'workspace' && view.workspaceId === workspace.id) openWorkspace(workspace.projectId, mainWorkspaceId(workspace.projectId))
       if (result.keptBranch) {
         useNotices.getState().push({
           level: 'info',

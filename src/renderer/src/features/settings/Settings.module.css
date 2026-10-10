@@ -975,3 +975,16 @@
   top: var(--space-3);
   right: var(--space-3);
 }
+
+/* A narrow container (the side panel's Workspace settings, ADR 0038): the control goes under its text. */
+.group {
+  container-type: inline-size;
+}
+
+@container (max-width: 520px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-4);
+  }
+}

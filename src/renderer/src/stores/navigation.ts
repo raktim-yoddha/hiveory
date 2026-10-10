@@ -1,4 +1,6 @@
 import { create } from 'zustand'
+import { mainWorkspaceId } from '@shared/domain'
+import { useWorkspaces } from './data'
 
 export type AppMode = 'workspace' | 'bots' | 'chatspace'
 export type ProjectTab = 'tasks' | 'pull-requests' | 'workspaces' | 'settings'
@@ -8,7 +10,6 @@ export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions'
 export type View =
   | { type: 'home' }
   | { type: 'settings'; section: SettingsSection; returnTo: Exclude<View, { type: 'settings' }> }
-  | { type: 'project'; projectId: string; tab: ProjectTab }
   | { type: 'workspace'; projectId: string; workspaceId: string; focusPaneId?: string }
 
 /**
@@ -17,7 +18,7 @@ export type View =
  */
 export interface PanelTab {
   id: string
-  kind: 'browser' | 'explorer' | 'sessions'
+  kind: 'browser' | 'explorer' | 'sessions' | 'workspace'
   title: string
   /** The side panel splits into a top and a bottom area; tabs sit in the top one unless moved down. */
   group?: PanelGroup
@@ -50,6 +51,11 @@ interface NavigationState {
   panelSplit: number
   /** Smallest width the open Worktree's panes fit in (each at its minimum); the sidebars give way first. */
   workMinWidth: number
+  /** The Worktree last opened in each Workspace: a folded Workspace opens it when clicked (ADR 0038). */
+  lastWorktree: Record<string, string>
+  /** The section the side panel's Workspace tab shows (board, pull requests, worktrees, settings). */
+  workspaceTab: ProjectTab
+  setWorkspaceTab(tab: ProjectTab): void
   setMode(mode: AppMode): void
   openSettings(section?: SettingsSection): void
   closeSettings(): void
@@ -65,6 +71,7 @@ interface NavigationState {
   /** Moves a tab within or between the top and bottom areas, before `beforeId` (or to the end). */
   movePanelTab(scope: string, tabId: string, group: PanelGroup, beforeId?: string | null): void
   setPanelSplit(share: number): void
+  /** A Workspace's page lives in the side panel (ADR 0038): opens its last Worktree with that tab on `tab`. */
   openProject(projectId: string, tab?: ProjectTab): void
   openWorkspace(projectId: string, workspaceId: string, focusPaneId?: string): void
   goHome(): void
@@ -130,6 +137,9 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   activePanelTab: {},
   panelSplit: initialWidths.split,
   workMinWidth: 0,
+  lastWorktree: {},
+  workspaceTab: 'tasks',
+  setWorkspaceTab: (workspaceTab) => set({ workspaceTab }),
   setMode: (mode) => set((s) => ({ mode, view: s.view.type === 'settings' ? s.view.returnTo : s.view })),
   openSettings: (section = 'appearance') =>
     set((s) => ({ view: { type: 'settings', section, returnTo: s.view.type === 'settings' ? s.view.returnTo : s.view } })),
@@ -155,7 +165,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   },
   addPanelTab: (scope, kind, id, select = true, group = 'top') => {
     const tabs = get().panelTabs[scope] ?? []
-    // Only one Explorer (and one Sessions list) per folder: asking again selects it.
+    // Only one Explorer (and one Sessions list, one Workspace page) per folder: asking again selects it.
     const tabId = kind === 'browser' ? id : kind
     const existing = tabId ? tabs.find((t) => t.id === tabId) : undefined
     if (existing) {
@@ -163,7 +173,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = kind === 'explorer' ? 'Explorer' : kind === 'sessions' ? 'Sessions' : 'Browser'
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Workspace', browser: 'Browser' }[kind]
     const tab: PanelTab = { id: tabId ?? `t${++tabCounter}`, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({
@@ -205,9 +215,20 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       const next = at < 0 ? [...rest, moved] : [...rest.slice(0, at), moved, ...rest.slice(at)]
       return { panelTabs: { ...s.panelTabs, [scope]: next }, activePanelTab: fixActive(scope, next, s.activePanelTab, { [group]: tabId }) }
     }),
-  openProject: (projectId, tab = 'tasks') => set({ mode: 'workspace', view: { type: 'project', projectId, tab } }),
+  openProject: (projectId, tab = 'tasks') => {
+    const list = useWorkspaces.getState().byProject[projectId] ?? []
+    const remembered = get().lastWorktree[projectId]
+    const workspaceId = list.find((w) => w.id === remembered)?.id ?? list.find((w) => w.kind === 'main')?.id ?? list[0]?.id ?? remembered ?? mainWorkspaceId(projectId)
+    get().openWorkspace(projectId, workspaceId)
+    get().addPanelTab(workspaceId, 'workspace')
+    set({ panelOpen: true, workspaceTab: tab })
+  },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
-    set({ mode: 'workspace', view: { type: 'workspace', projectId, workspaceId, focusPaneId } }),
+    set((s) => ({
+      mode: 'workspace',
+      view: { type: 'workspace', projectId, workspaceId, focusPaneId },
+      lastWorktree: { ...s.lastWorktree, [projectId]: workspaceId }
+    })),
   goHome: () => set({ view: { type: 'home' } }),
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed }))
 }))

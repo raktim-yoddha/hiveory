@@ -1,26 +1,31 @@
 import { useEffect, useState } from 'react'
-import { GitBranch, GitCommitHorizontal } from 'lucide-react'
+import { GitCommitHorizontal } from 'lucide-react'
 import type { GitInfo } from '@shared/domain/github'
 import { Button } from '../../components/ui/Button'
 import { Select } from '../../components/ui/Select'
 import { TextField } from '../../components/ui/TextField'
-import { Toggle } from '../../components/ui/Toggle'
 import formStyles from '../../components/ui/form.module.css'
 import { api } from '../../lib/api'
 import { useProjects } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import styles from './CreateWorkspaceDialog.module.css'
 
+/** Where a new worktree's branch comes from (ADR 0038): a new branch, one you have, or one on the remote. */
+export type WorktreeSource = 'new' | 'existing' | 'remote'
+
 export interface GitChoice {
   baseRef?: string
   branch?: string
   useExistingBranch: boolean
+  /** A remote branch (origin/x) to check out as a local branch following it. */
+  remoteBranch?: string
   /** Repository can host an isolated workspace and the inputs are valid. */
   ready: boolean
 }
 
 interface GitOptionsProps {
   projectId: string
+  source: WorktreeSource
   /** Suggested branch name (from the workspace name), shown until the user edits it. */
   suggestedBranch: string
   /** The Workspace's own base branch (ADR 0037), when it exists in this repository. */
@@ -29,55 +34,62 @@ interface GitOptionsProps {
 }
 
 /**
- * Branch options for an isolated workspace: base branch, branch name, or an
- * existing branch. Folders that are not Git repositories yet get a one-click
- * "Initialize Git" so isolation is always reachable.
+ * Branch options for a new worktree, by source: a base branch and a new branch name, an existing
+ * local branch, or a remote branch (fetched first). Folders that are not Git repositories yet get
+ * a one-click "Initialize Git" so isolation is always reachable.
  */
-export function GitOptions({ projectId, suggestedBranch, defaultBase, onChange }: GitOptionsProps) {
+export function GitOptions({ projectId, source, suggestedBranch, defaultBase, onChange }: GitOptionsProps) {
   const [info, setInfo] = useState<GitInfo | null>(null)
   const [baseRef, setBaseRef] = useState<string | null>(null)
   const [typedBranch, setTypedBranch] = useState<string | null>(null)
-  const [useExisting, setUseExisting] = useState(false)
+  const useExisting = source === 'existing'
   const [existing, setExisting] = useState<string | null>(null)
+  const [remote, setRemote] = useState<string | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [initializing, setInitializing] = useState(false)
   const loadProjects = useProjects((s) => s.load)
 
+  // Remote branches are fetched first, so the list matches what is on GitHub now.
   const refresh = (): Promise<void> =>
-    runAction('Read repository', () => api('git.info', { projectId })).then((next) => {
+    runAction('Read repository', () => api('git.info', { projectId, fetch: source === 'remote' })).then((next) => {
       if (next) setInfo(next)
     })
 
   useEffect(() => {
-    void runAction('Read repository', () => api('git.info', { projectId })).then((next) => {
+    void runAction('Read repository', () => api('git.info', { projectId, fetch: source === 'remote' })).then((next) => {
       if (next) setInfo(next)
     })
-  }, [projectId])
+  }, [projectId, source])
 
   const branch = typedBranch ?? suggestedBranch
   const base = baseRef ?? (defaultBase && info?.branches.includes(defaultBase) ? defaultBase : undefined) ?? info?.defaultBranch ?? info?.branches[0] ?? ''
   const free = info?.branches.filter((b) => !info.branchesInUse.includes(b)) ?? []
   const chosenExisting = existing ?? free[0] ?? ''
+  // A remote branch whose local copy is checked out elsewhere can't get a second worktree.
+  const remotes = info?.remoteBranches.filter((r) => !info.branchesInUse.includes(r.slice(r.indexOf('/') + 1))) ?? []
+  const chosenRemote = remote ?? remotes[0] ?? ''
   const ready = Boolean(info?.isRepo && info.hasCommits)
 
   // Validate a new branch name against Git itself, debounced.
   useEffect(() => {
-    if (!ready || useExisting) return
+    if (!ready || source !== 'new') return
     const timer = setTimeout(() => {
       void api('git.validateBranch', { projectId, name: branch })
         .then((r) => setProblem(r.problem))
         .catch(() => setProblem(null))
     }, 250)
     return () => clearTimeout(timer)
-  }, [projectId, branch, ready, useExisting])
+  }, [projectId, branch, ready, source])
 
   useEffect(() => {
     onChange(
-      useExisting
-        ? { useExistingBranch: true, branch: chosenExisting || undefined, ready: ready && Boolean(chosenExisting) }
-        : { useExistingBranch: false, baseRef: base || undefined, branch: branch || undefined, ready: ready && !problem && Boolean(branch) }
+      source === 'remote'
+        ? { useExistingBranch: false, remoteBranch: chosenRemote || undefined, ready: ready && Boolean(chosenRemote) }
+        : useExisting
+          ? { useExistingBranch: true, branch: chosenExisting || undefined, ready: ready && Boolean(chosenExisting) }
+          : { useExistingBranch: false, baseRef: base || undefined, branch: branch || undefined, ready: ready && !problem && Boolean(branch) }
     )
-  }, [useExisting, chosenExisting, base, branch, problem, ready, onChange])
+  }, [source, useExisting, chosenExisting, chosenRemote, base, branch, problem, ready, onChange])
 
   const init = async (): Promise<void> => {
     setInitializing(true)
@@ -111,13 +123,27 @@ export function GitOptions({ projectId, suggestedBranch, defaultBase, onChange }
 
   return (
     <div className={styles.gitOptions}>
-      <div className={styles.gitToggle}>
-        <span className={styles.kindText}>
-          <GitBranch aria-hidden /> Use an existing branch
-        </span>
-        <Toggle label="Use an existing branch" checked={useExisting} onChange={setUseExisting} />
-      </div>
-      {useExisting ? (
+      {source === 'remote' ? (
+        <>
+          <Select
+            label="Remote branch"
+            value={chosenRemote}
+            onChange={setRemote}
+            options={
+              remotes.length
+                ? remotes.map((b) => ({ value: b, label: b }))
+                : [{ value: '', label: info.remoteBranches.length ? 'Every remote branch is already checked out here' : 'No remote branches', disabled: true }]
+            }
+          />
+          <span className={formStyles.fieldHint}>
+            {info.fetchFailed
+              ? info.remoteBranches.length
+                ? 'Could not reach the remote; showing the branches Git knew already.'
+                : 'This repository has no remote Hiveory could reach (origin).'
+              : 'Checked out as a local branch of the same name that follows it.'}
+          </span>
+        </>
+      ) : useExisting ? (
         <Select
           label="Branch to check out"
           value={chosenExisting}

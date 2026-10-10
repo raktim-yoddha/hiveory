@@ -12,7 +12,6 @@ import { BotsScreen } from '../bots/BotsScreen'
 import { BotsSidebar } from '../bots/BotsSidebar'
 import { ChatScreen } from '../chat/ChatScreen'
 import { ChatSidebar } from '../chat/ChatSidebar'
-import { ProjectScreen } from '../project/ProjectScreen'
 import { QueenDock, QueenFloating } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
@@ -50,14 +49,14 @@ export function AppShell() {
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
   const showSidebar = !inSettings && !sidebarCollapsed
-  // The right column: a workspace's side panel (never on Home, a project page or Settings), or the open bot's panel.
+  // The right column: a worktree's side panel (never on Home or Settings), or the open bot's panel.
   const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null && s.page === 'bot')
   const setBotPanelOpen = useBots((s) => s.setPanelOpen)
   const showBotPanel = botPanelOpen && mode === 'bots' && !inSettings
   const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && view.type === 'workspace')
   const maximized = panelMaximized && !showBotPanel
   const workView = view.type === 'settings' ? view.returnTo : view
-  const viewKey = workView.type === 'home' ? 'home' : workView.type === 'project' ? `p:${workView.projectId}` : `w:${workView.workspaceId}`
+  const viewKey = workView.type === 'home' ? 'home' : `w:${workView.workspaceId}`
   // The open Worktree's panes keep their minimum width: the sidebars give way (see .main).
   const workMin = !inSettings && mode === 'workspace' && workView.type === 'workspace' ? workMinWidth : 0
   const widths = {
@@ -124,9 +123,7 @@ export function AppShell() {
           <div className={styles.mode} hidden={inSettings || mode !== 'workspace'}>
             <div key={viewKey} className={styles.view}>
               <ErrorBoundary region="This screen" resetKey={viewKey}>
-              {workView.type === 'project' ? (
-                <ProjectScreen projectId={workView.projectId} tab={workView.tab} />
-              ) : workView.type === 'workspace' ? (
+              {workView.type === 'workspace' ? (
                 <WorkspaceScreen
                   key={workView.workspaceId}
                   projectId={workView.projectId}
