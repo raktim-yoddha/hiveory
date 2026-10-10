@@ -32,4 +32,8 @@ export interface GitInfo {
   branches: string[]
   /** Branches already checked out in some worktree (cannot be reused). */
   branchesInUse: string[]
+  /** Remote-tracking branches (origin/x), newest first. */
+  remoteBranches: string[]
+  /** Asked to fetch, but origin could not be reached (the list may be stale). */
+  fetchFailed?: boolean
 }

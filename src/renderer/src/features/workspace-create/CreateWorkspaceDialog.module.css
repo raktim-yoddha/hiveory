@@ -39,36 +39,7 @@
   width: 100%;
 }
 
-.kinds {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-4);
-}
-
-.kind {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-6);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-inset);
-  text-align: left;
-  transition:
-    border-color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out);
-}
-
-.kind:not(:disabled):hover {
-  background: var(--color-surface-hover);
-}
-
-/* Selected reads as a tinted fill, never an outline (design.md "Selection"). */
-.kind[aria-checked='true'] {
-  background: var(--fill-accent-soft);
-}
-
-.kind[aria-checked='true'] .kindTitle {
+.kindTitle {
   color: var(--color-accent);
 }
 

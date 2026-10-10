@@ -9,7 +9,7 @@ import type { StateStore } from '../persistence/state-store'
  * A folder as one comparable key: its machine, then the path (symlinks/junctions resolved and
  * case folded on Windows for this computer; a remote host's path is compared as it is).
  */
-const treeKey = (path: string, host?: Project['host']): string => {
+export const treeKey = (path: string, host?: Project['host']): string => {
   if (host) return `${hostKey(host)}|${path}`
   let real = resolve(path)
   try {
@@ -47,6 +47,23 @@ export const mainTreeOwner = (state: PersistedState, project: Project): { projec
 export class WorkspaceRepository {
   constructor(private readonly store: StateStore) {}
 
+  projects(): Project[] {
+    return this.store.state.projects
+  }
+
+  /**
+   * Every checkout Hiveory already knows, as `treeKey`s: each Workspace's own folder and every linked
+   * worktree, in open and removed Workspaces alike. A folder Git lists is imported only when it is new here.
+   */
+  knownTrees(): Set<string> {
+    const { projects, workspaces, archive } = this.store.state
+    const hostOf = new Map([...projects, ...archive.map((a) => a.project)].map((p) => [p.id, p.host]))
+    return new Set([
+      ...projects.map((p) => treeKey(p.repositoryRoot ?? p.path, p.host)),
+      ...[...workspaces, ...archive.flatMap((a) => a.workspaces)].flatMap((w) => (w.git?.worktreePath ? [treeKey(w.git.worktreePath, hostOf.get(w.projectId))] : []))
+    ])
+  }
+
   findProject(projectId: string): Project | undefined {
     return this.store.state.projects.find((p) => p.id === projectId)
   }
@@ -78,12 +95,6 @@ export class WorkspaceRepository {
     const workspace = this.find(workspaceId)
     if (!workspace) fail('NOT_FOUND', 'Worktree not found.')
     return workspace!
-  }
-
-  /** Every linked worktree Hiveory knows, in open and removed projects alike. */
-  knownWorktrees(): string[] {
-    const { workspaces, archive } = this.store.state
-    return [...workspaces, ...archive.flatMap((a) => a.workspaces)].flatMap((w) => (w.git?.worktreePath ? [w.git.worktreePath] : []))
   }
 
   isolated(projectId: string): Workspace[] {

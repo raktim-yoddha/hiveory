@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Dices } from 'lucide-react'
-import { branchPrefixOf, PRIMARY_NAME, type WorkspaceAssociation, type WorkspaceKind } from '@shared/domain'
+import { branchPrefixOf, type WorkspaceAssociation } from '@shared/domain'
 import { totalInstances } from '@shared/presets'
 import { AgentConfigFields, type AgentConfig } from '../../components/cli/AgentConfigFields'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -26,21 +26,16 @@ interface CreateWorkspaceDialogProps {
 type ConfigTab = 'agents' | 'presets'
 
 /**
- * "Create Workspace". A Workspace is either the project folder itself (Main,
- * at most one) or an isolated copy on its own branch — Git worktree and branch
- * creation happen behind this one action (AGENTS.md rule 13, ADR 0011).
+ * "Create worktree": an isolated copy on its own branch — Git worktree and branch creation happen
+ * behind this one action (AGENTS.md rule 13). The Primary always exists already (ADR 0038).
  */
 export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDialogProps) {
   const openWorkspace = useNavigation((s) => s.openWorkspace)
-  const hasMain = useWorkspaces((s) => (s.byProject[projectId] ?? []).some((w) => w.kind === 'main'))
   const loadWorkspaces = useWorkspaces((s) => s.load)
-  /** null until the user picks; the default follows whether a main Workspace exists. */
-  const [chosenKind, setKind] = useState<WorkspaceKind | null>(null)
-  const kind = chosenKind ?? (hasMain ? 'isolated' : 'main')
   const [suggested, setSuggested] = useState('')
-  /** null until the user types, so switching kinds can swap in the right default name. */
+  /** null until the user types, so a new suggestion can replace the name. */
   const [typed, setTyped] = useState<string | null>(null)
-  const name = kind === 'main' ? PRIMARY_NAME : (typed ?? suggested)
+  const name = typed ?? suggested
   const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>('issue')
   const [associationRef, setAssociationRef] = useState('')
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
@@ -74,13 +69,15 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
     const workspace = await runAction('Create worktree', () =>
       api('workspaces.create', {
         projectId,
-        kind,
+        kind: 'isolated',
         name: name.trim(),
         association: associationRef.trim() ? { kind: associationKind, ref: associationRef.trim() } : undefined,
         cliSelections: withAgents ? config.cliSelections : [],
         autoApprove: config.autoApprove,
         chatUi: config.chatUi,
-        ...(kind === 'isolated' ? { baseRef: git.baseRef, branch: git.branch, useExistingBranch: git.useExistingBranch } : {})
+        baseRef: git.baseRef,
+        branch: git.branch,
+        useExistingBranch: git.useExistingBranch
       })
     )
     setBusy(null)
@@ -91,8 +88,7 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
   }
 
   const count = totalInstances(config.cliSelections)
-  const kindBlocked = (kind === 'main' && hasMain) || (kind === 'isolated' && !git.ready)
-  const canSubmit = name.trim().length > 0 && !busy && !kindBlocked
+  const canSubmit = name.trim().length > 0 && !busy && git.ready
 
   return (
     <Modal
@@ -112,38 +108,14 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
       }
     >
       <div className={styles.form}>
-        <div className={styles.association}>
-          <span className={styles.label}>Where agents work</span>
-          <div className={styles.kinds} role="radiogroup" aria-label="Worktree type">
-            <KindOption
-              selected={kind === 'main'}
-              disabled={hasMain}
-              title="Workspace folder"
-              description={hasMain ? 'This workspace already has a primary worktree.' : 'Agents work directly in the workspace folder.'}
-              onSelect={() => setKind('main')}
-            />
-            <KindOption
-              selected={kind === 'isolated'}
-              disabled={false}
-              title="New branch"
-              description="An isolated copy on its own branch, so agents never collide."
-              onSelect={() => setKind('isolated')}
-            />
-          </div>
-        </div>
         <TextField
           label="Worktree name"
           value={name}
           onChange={setTyped}
-          readOnly={kind === 'main'}
           maxLength={60}
-          adornment={
-            kind === 'isolated' && <IconButton label="Suggest another name" icon={<Dices />} size="lg" onClick={suggest} />
-          }
+          adornment={<IconButton label="Suggest another name" icon={<Dices />} size="lg" onClick={suggest} />}
         />
-        {kind === 'isolated' && (
-          <GitOptions projectId={projectId} suggestedBranch={`${branchPrefixOf(project)}${slugify(name)}`} defaultBase={project?.settings?.baseRef} onChange={onGitChange} />
-        )}
+        <GitOptions projectId={projectId} suggestedBranch={`${branchPrefixOf(project)}${slugify(name)}`} defaultBase={project?.settings?.baseRef} onChange={onGitChange} />
         <div className={styles.association}>
           <span className={styles.label}>Issue / Pull request</span>
           <div className={styles.associationRow}>
@@ -193,29 +165,5 @@ export function CreateWorkspaceDialog({ projectId, onClose }: CreateWorkspaceDia
         </div>
       </div>
     </Modal>
-  )
-}
-
-interface KindOptionProps {
-  selected: boolean
-  disabled: boolean
-  title: string
-  description: string
-  onSelect: () => void
-}
-
-function KindOption({ selected, disabled, title, description, onSelect }: KindOptionProps) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      disabled={disabled}
-      className={styles.kind}
-      onClick={onSelect}
-    >
-      <span className={styles.kindTitle}>{title}</span>
-      <span className={styles.kindText}>{description}</span>
-    </button>
   )
 }

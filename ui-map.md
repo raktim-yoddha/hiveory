@@ -244,7 +244,7 @@ setting, ADR 0037), search, Terminals, Agents.
 ```text
 ┌ Add workspace ─────────────────────────────────────── × ┐
 │  Workspace name                            [ Local ▾ ]  │
-│ [Pick directory] [New repository] [Clone] [Restore prev]│
+│ [Pick directory] [New repository] [Clone]               │
 │ Directory                                                │
 │ [📁 ~/code/app                              ( Choose )] │
 ├──────────────────────────────────────────────────────────┤
@@ -253,9 +253,8 @@ setting, ADR 0037), search, Terminals, Agents.
 ```
 
 New repository: name, "Also create it on GitHub" (owner, visibility), workspace directory.
-Clone: repository URL, workspace directory. Restore previous: removed workspaces (worktrees,
-agents, "Removed 2 days ago") and worktree folders found on disk ("Open now" adds them to
-the open workspace).
+Clone: repository URL, workspace directory. A workspace comes with its Primary and every worktree
+Git knows (ADR 0038).
 
 ## Workspace
 

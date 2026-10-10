@@ -28,6 +28,8 @@ app.setPath('userData', process.env.HIVEORY_USER_DATA ?? join(app.getPath('appDa
 
 const paths = resolvePaths(app.getPath('userData'), appName)
 const log = createLogger(paths.logDir)
+/** How often Worktrees are matched to Git while the app runs (ADR 0038). */
+const WORKTREE_SYNC_MS = 30_000
 
 /** `--serve <port>` (or `--serve=<port>`): run as a Hiveory server without a window (ADR 0022); `--tailscale` also serves the tailnet (ADR 0025). */
 const argValue = (flag: string): string | undefined => {
@@ -183,6 +185,25 @@ app.whenReady().then(async () => {
   }
   // Durable sessions: every agent comes back on its own, resuming its conversation.
   guard(log, 'Agent resume', () => c.agents.resumeAll(), report('Resuming agents'))
+  // Worktrees follow Git (ADR 0038): new ones appear, ones deleted outside Hiveory go — at startup,
+  // whenever the window comes back to the front, and every half minute (worktrees agents add).
+  let syncing = false
+  const syncWorktrees = async (): Promise<void> => {
+    if (syncing) return
+    syncing = true
+    try {
+      const { removed } = await c.workspaces.syncAll()
+      if (removed.length) {
+        const names = removed.length === 1 ? `Worktree ${removed[0]} was` : `Worktrees ${removed.join(', ')} were`
+        emit('app.notice', { level: 'info', message: `${names} deleted outside Hiveory, so ${removed.length === 1 ? 'it was' : 'they were'} removed.` })
+      }
+    } finally {
+      syncing = false
+    }
+  }
+  void guard(log, 'Worktree sync', syncWorktrees)
+  setInterval(() => void guard(log, 'Worktree sync', syncWorktrees), WORKTREE_SYNC_MS).unref()
+  app.on('browser-window-focus', () => void guard(log, 'Worktree sync', syncWorktrees))
   const notices = [
     ...(notice ? [notice] : []),
     ...(failed.length ? [`${failed.join(', ')} failed to start. Everything else works; details are in the log.`] : [])

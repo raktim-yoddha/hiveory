@@ -7,8 +7,8 @@ import { scheduleRoutine } from '../routines/open-run'
 
 /**
  * The one set of Workspace actions, shared by the sidebar's right-click menu and
- * the workspace card. Main is *removed* (forgotten — its folder is the project
- * itself); isolated workspaces are *deleted* with their worktree.
+ * the workspace card. Removing the Primary removes the whole Workspace (its folder is the
+ * Workspace itself, ADR 0038); other worktrees are *deleted* with their folder.
  */
 export const workspaceMenuEntries = (workspace: WorkspaceView, onDelete: () => void): MenuEntry[] => [
   {
@@ -46,6 +46,6 @@ export const workspaceMenuEntries = (workspace: WorkspaceView, onDelete: () => v
     : []),
   { type: 'separator' },
   workspace.kind === 'main'
-    ? { type: 'item', id: 'remove', label: 'Remove worktree', icon: <X />, danger: true, onSelect: onDelete }
+    ? { type: 'item', id: 'remove', label: 'Remove workspace…', icon: <X />, danger: true, onSelect: onDelete }
     : { type: 'item', id: 'delete', label: 'Delete worktree', icon: <Trash2 />, danger: true, onSelect: onDelete }
 ]

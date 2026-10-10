@@ -40,7 +40,7 @@ export interface HostKit {
   label: string
   paths: typeof posix
   home: string
-  git: Remote<Pick<GitService, 'repositoryRoot' | 'currentBranch' | 'hasCommits' | 'localBranchExists' | 'refExists' | 'localBranches' | 'status' | 'branchNameProblem' | 'init' | 'defaultBranch'>>
+  git: Remote<Pick<GitService, 'repositoryRoot' | 'currentBranch' | 'hasCommits' | 'localBranchExists' | 'refExists' | 'localBranches' | 'remoteBranches' | 'fetch' | 'status' | 'branchNameProblem' | 'init' | 'defaultBranch'>>
   worktrees: Remote<Pick<WorktreeService, 'create' | 'remove' | 'deleteBranchIfMerged' | 'repairLink' | 'list' | 'prune' | 'recreate'>>
   files: Remote<Pick<FileService, 'list' | 'search' | 'read' | 'write' | 'create' | 'rename' | 'remove' | 'paste' | 'watch' | 'resolveIn'>>
   fs: HostFs

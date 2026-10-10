@@ -11,12 +11,16 @@ export const gitArgs = {
   worktreeAdd: (path: string, branch: string, baseRef: string) => ['worktree', 'add', '-b', branch, path, baseRef],
   /** Checks an existing local branch out into a new linked worktree. */
   worktreeAddExisting: (path: string, branch: string) => ['worktree', 'add', path, branch],
+  /** A new local branch following a remote one (origin/x → x), checked out into a linked worktree. */
+  worktreeAddTracking: (path: string, branch: string, remoteRef: string) => ['worktree', 'add', '--track', '-b', branch, path, remoteRef],
   worktreeRemove: (path: string, force: boolean) => ['worktree', 'remove', ...(force ? ['--force'] : []), path],
   worktreeList: () => ['worktree', 'list', '--porcelain'],
   worktreePrune: () => ['worktree', 'prune'],
   worktreeRepair: (path: string) => ['worktree', 'repair', path],
   deleteMergedBranch: (branch: string) => ['branch', '-d', branch],
   localBranches: () => ['for-each-ref', '--format=%(refname:short)', '--sort=-committerdate', 'refs/heads'],
+  remoteBranches: () => ['for-each-ref', '--format=%(refname:short)', '--sort=-committerdate', 'refs/remotes'],
+  fetch: () => ['fetch', '--prune', '--quiet', 'origin'],
   checkBranchName: (name: string) => ['check-ref-format', '--branch', name],
   status: () => ['status', '--porcelain=v2', '--branch'],
   init: () => ['init'],
@@ -70,6 +74,8 @@ export interface WorktreeEntry {
   branch?: string
   detached: boolean
   bare: boolean
+  /** Git lists it, but its folder is gone (`git worktree prune` would drop it). */
+  prunable: boolean
 }
 
 /** Parses `git worktree list --porcelain`. The first entry is the main worktree. */
@@ -79,7 +85,7 @@ export const parseWorktreeList = (output: string): WorktreeEntry[] =>
     .map((block) => block.split(/\r?\n/).filter(Boolean))
     .filter((lines) => lines.length > 0 && lines[0]?.startsWith('worktree '))
     .map((lines) => {
-      const entry: WorktreeEntry = { path: '', detached: false, bare: false }
+      const entry: WorktreeEntry = { path: '', detached: false, bare: false, prunable: false }
       for (const line of lines) {
         const [key, ...rest] = line.split(' ')
         const value = rest.join(' ')
@@ -88,6 +94,7 @@ export const parseWorktreeList = (output: string): WorktreeEntry[] =>
         else if (key === 'branch') entry.branch = value.replace(/^refs\/heads\//, '')
         else if (key === 'detached') entry.detached = true
         else if (key === 'bare') entry.bare = true
+        else if (key === 'prunable') entry.prunable = true
       }
       return entry
     })

@@ -2,8 +2,10 @@ import { useState } from 'react'
 import type { WorkspaceView } from '@shared/domain'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { api, HiveoryError } from '../../lib/api'
+import { useProjects } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { reportError, useNotices } from '../../stores/notices'
+import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 
 interface DeleteWorkspaceDialogProps {
   workspace: WorkspaceView
@@ -11,10 +13,9 @@ interface DeleteWorkspaceDialogProps {
 }
 
 /**
- * Deletes an isolated Workspace, or removes the main one. Removing Main only
- * forgets it — the project folder is never touched. For isolated Workspaces,
- * uncommitted changes need a second, explicit confirmation and unmerged
- * branches are always kept.
+ * Deletes an isolated Worktree. The Primary is the Workspace itself, so removing it removes the
+ * Workspace (ADR 0038). For isolated Worktrees, uncommitted changes need a second, explicit
+ * confirmation and unmerged branches are always kept.
  */
 export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDialogProps) {
   const [force, setForce] = useState(false)
@@ -22,6 +23,7 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
   const view = useNavigation((s) => s.view)
   const openProject = useNavigation((s) => s.openProject)
   const isMain = workspace.kind === 'main'
+  const project = useProjects((s) => s.projects.find((p) => p.id === workspace.projectId))
 
   const confirm = async (): Promise<void> => {
     setBusy(true)
@@ -37,30 +39,13 @@ export function DeleteWorkspaceDialog({ workspace, onClose }: DeleteWorkspaceDia
       onClose()
     } catch (error) {
       if (error instanceof HiveoryError && error.error.code === 'WORKTREE_DIRTY') setForce(true)
-      else reportError(error, isMain ? 'Remove worktree' : 'Delete worktree')
+      else reportError(error, 'Delete worktree')
     } finally {
       setBusy(false)
     }
   }
 
-  if (isMain) {
-    return (
-      <ConfirmDialog
-        open
-        danger
-        busy={busy}
-        title={`Remove ${workspace.name}?`}
-        confirmLabel="Remove worktree"
-        onConfirm={() => void confirm()}
-        onClose={onClose}
-      >
-        <p>
-          Its agents will stop and close. The workspace folder and its files are not touched — you can create the primary
-          worktree again at any time.
-        </p>
-      </ConfirmDialog>
-    )
-  }
+  if (isMain) return project ? <RemoveProjectDialog project={project} onClose={onClose} /> : null
 
   return (
     <ConfirmDialog

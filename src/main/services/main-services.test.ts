@@ -53,12 +53,14 @@ describe('git command construction', () => {
   })
 
   it('parses porcelain worktree lists', () => {
-    const out = 'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /w/one\nHEAD def\nbranch refs/heads/hiveory/one\n\nworktree /w/two\nHEAD 123\ndetached\n'
+    const out =
+      'worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /w/one\nHEAD def\nbranch refs/heads/hiveory/one\n\nworktree /w/two\nHEAD 123\ndetached\nprunable gitdir file points to non-existent location\n'
     expect(parseWorktreeList(out)).toEqual([
-      { path: '/repo', head: 'abc', branch: 'main', detached: false, bare: false },
-      { path: '/w/one', head: 'def', branch: 'hiveory/one', detached: false, bare: false },
-      { path: '/w/two', head: '123', detached: true, bare: false }
+      { path: '/repo', head: 'abc', branch: 'main', detached: false, bare: false, prunable: false },
+      { path: '/w/one', head: 'def', branch: 'hiveory/one', detached: false, bare: false, prunable: false },
+      { path: '/w/two', head: '123', detached: true, bare: false, prunable: true }
     ])
+    expect(gitArgs.worktreeAddTracking('/w', 'fix', 'origin/fix')).toEqual(['worktree', 'add', '--track', '-b', 'fix', '/w', 'origin/fix'])
   })
 
   it('recognizes errors and remotes', () => {

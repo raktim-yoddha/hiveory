@@ -13,9 +13,8 @@ import { deliverMessage } from '../services/agent-tools/deliver'
 import { voiceFor } from '@shared/queen/voice'
 import { personaInfo } from '@shared/queen/personas'
 import { lastWords } from '@shared/queen/updates'
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { PreviousProject, Project } from '@shared/domain'
+import type { Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
 import type { HostRef } from '@shared/domain'
 
@@ -76,11 +75,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     if (![...picked, defaultParent()].some((p) => samePath(p, path))) fail('FORBIDDEN', 'Choose the folder with the picker first.')
     return path
   }
-  /** Opens (or restores) a project, then brings back any of its workspaces found on disk. */
+  /** Opens (or brings back) a Workspace, then matches its Worktrees to Git: Primary and every worktree (ADR 0038). */
   const addProject = async (path: string, name?: string): Promise<Project> => {
     const project = await c.projects.open(path, name)
-    const adopted = await c.workspaces.adoptWorktrees(project.id).catch(() => 0)
-    if (adopted) c.log.info(`Restored ${adopted} worktree folder(s) for ${project.name}`)
+    await c.workspaces.sync(project.id).catch((error) => c.log.warn(`Worktree sync failed for ${project.name}`, error))
     return project
   }
 
@@ -119,7 +117,9 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'projects.addDefaults': async () => ({ parentDir: defaultParent(), github: await c.repositories.githubAccount() }),
   'projects.add': async (input) => {
     if (input.mode === 'remote') {
-      return c.projects.openRemote({ kind: 'ssh', destination: input.destination, ...(input.port ? { port: input.port } : {}) }, input.path, input.name)
+      const project = await c.projects.openRemote({ kind: 'ssh', destination: input.destination, ...(input.port ? { port: input.port } : {}) }, input.path, input.name)
+      await c.workspaces.sync(project.id).catch((error) => c.log.warn(`Worktree sync failed for ${project.name}`, error))
+      return project
     }
     if (input.mode === 'folder') return addProject(chosen(input.path), input.name)
     if (input.mode === 'clone') return addProject(await c.repositories.clone(input.url, chosen(input.parentDir)), input.name)
@@ -127,33 +127,6 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const project = await addProject(created.path, input.name)
     if (created.warning) c.emit('app.notice', { level: 'warning', message: created.warning })
     return project
-  },
-  'projects.previous': () => {
-    const open = c.projects.list()
-    const openAt = (path: string) => open.find((p) => samePath(p.repositoryRoot ?? p.path, path) || samePath(p.path, path))?.id
-    const removed: PreviousProject[] = c.projects.archived().map((a) => ({
-      source: 'removed',
-      name: a.project.name,
-      path: a.project.path,
-      workspaces: a.workspaces.map((w) => w.name),
-      agents: a.instances.length,
-      removedAt: a.removedAt,
-      missing: !existsSync(a.project.path)
-    }))
-    const found: PreviousProject[] = c.workspaces
-      .foundWorktrees()
-      .filter((f) => !removed.some((r) => samePath(r.path, f.repoRoot)))
-      .map((f) => ({ source: 'found', name: f.name, path: f.repoRoot, workspaces: f.workspaces, agents: 0, missing: false, projectId: openAt(f.repoRoot) }))
-    return [...removed, ...found]
-  },
-  'projects.restore': async ({ path }) => {
-    // Only something "Restore previous" listed.
-    const known = c.projects.archived().some((a) => samePath(a.project.path, path)) || c.workspaces.foundWorktrees().some((f) => samePath(f.repoRoot, path))
-    if (!known) fail('NOT_FOUND', 'There is nothing to restore there any more.')
-    const open = c.projects.list().find((p) => samePath(p.repositoryRoot ?? p.path, path) || samePath(p.path, path))
-    if (!open) return addProject(path)
-    await c.workspaces.adoptWorktrees(open.id)
-    return open
   },
   'projects.remove': ({ projectId }) => c.projects.remove(projectId),
   'projects.touch': ({ projectId }) => c.projects.touch(projectId),
@@ -166,7 +139,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.projects.markActive(workspace.projectId)
     return workspace
   },
-  'workspaces.delete': ({ workspaceId, force }) => c.workspaces.delete(workspaceId, force ?? false),
+  // The Primary is the Workspace itself: removing it removes the Workspace (archived, nothing on disk changes; ADR 0038).
+  'workspaces.delete': async ({ workspaceId, force }) => {
+    const workspace = c.workspaceRepo.get(workspaceId)
+    if (workspace.kind !== 'main') return c.workspaces.delete(workspaceId, force ?? false)
+    c.projects.remove(workspace.projectId)
+    return {}
+  },
 
   'clis.list': async (input) => {
     const host = input?.projectId ? c.workspaceRepo.project(input.projectId).host : undefined
@@ -560,7 +539,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     }
   },
 
-  'git.info': ({ projectId }) => c.workspaces.gitInfo(projectId),
+  'git.info': ({ projectId, fetch }) => c.workspaces.gitInfo(projectId, fetch),
   'git.validateBranch': async ({ projectId, name }) => {
     const project = c.workspaceRepo.project(projectId)
     const kit = await c.hosts.kit(project.host)

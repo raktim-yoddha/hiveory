@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { create } from 'zustand'
-import { ArchiveRestore, Download, Folder, FolderOpen, Plus } from 'lucide-react'
-import type { PreviousProject, Project } from '@shared/domain'
+import { Download, Folder, FolderOpen, Plus } from 'lucide-react'
+import type { Project } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { Modal } from '../../components/ui/Modal'
 import { Select } from '../../components/ui/Select'
@@ -16,7 +16,7 @@ import { runAction } from '../../stores/notices'
 import { RemoteFolderPicker, SSH_DESTINATION } from './RemoteFolderPicker'
 import styles from './AddProjectDialog.module.css'
 
-type Mode = 'folder' | 'create' | 'clone' | 'previous'
+type Mode = 'folder' | 'create' | 'clone'
 type Defaults = Awaited<ReturnType<typeof loadDefaults>>
 const loadDefaults = () => api('projects.addDefaults')
 
@@ -32,22 +32,14 @@ export const useAddProject = create<{ open: boolean; mode: Mode; show(mode?: Mod
 const MODES: Array<{ id: Mode; label: string; icon: ReactNode }> = [
   { id: 'folder', label: 'Pick directory', icon: <FolderOpen aria-hidden /> },
   { id: 'create', label: 'New repository', icon: <Plus aria-hidden /> },
-  { id: 'clone', label: 'Clone repository', icon: <Download aria-hidden /> },
-  { id: 'previous', label: 'Restore previous', icon: <ArchiveRestore aria-hidden /> }
+  { id: 'clone', label: 'Clone repository', icon: <Download aria-hidden /> }
 ]
 
-const ago = (iso?: string): string => {
-  if (!iso) return ''
-  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)
-  return days < 1 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
-}
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
-
 /**
- * Add project (ADR 0020, ADR 0022): Remote picks a folder on an SSH host. Local offers four
- * ways in — pick a folder, create a new repository (optionally on GitHub), clone
- * one, or restore a project removed earlier (with its workspaces and agents) or
- * workspace folders found on disk. Folders are always chosen with main's picker.
+ * Add workspace (ADR 0020, ADR 0022, ADR 0038): Remote picks a folder on an SSH host. Local offers
+ * three ways in — pick a folder, create a new repository (optionally on GitHub), or clone one.
+ * Its Primary and every worktree Git knows come with it; a folder added before comes back whole.
+ * Folders are always chosen with main's picker.
  */
 export function AddProjectDialog() {
   const { open, hide, mode, setMode } = useAddProject()
@@ -61,8 +53,6 @@ export function AddProjectDialog() {
   const [owner, setOwner] = useState('')
   const [visibility, setVisibility] = useState<'private' | 'public'>('private')
   const [defaults, setDefaults] = useState<Defaults | null>(null)
-  const [previous, setPrevious] = useState<PreviousProject[] | null>(null)
-  const [restoring, setRestoring] = useState('')
   const [busy, setBusy] = useState(false)
   const [where, setWhere] = useState<'local' | 'remote'>('local')
   const [destination, setDestination] = useState('')
@@ -80,9 +70,6 @@ export function AddProjectDialog() {
         setOwner((o) => o || d.github.owners[0] || '')
       })
       .catch(() => undefined)
-    api('projects.previous')
-      .then((list) => live && setPrevious(list))
-      .catch(() => live && setPrevious([]))
     return () => {
       live = false
     }
@@ -94,7 +81,6 @@ export function AddProjectDialog() {
     setFolder('')
     setRepoName('')
     setUrl('')
-    setRestoring('')
   }
 
   const choose = async (purpose: 'project' | 'parent'): Promise<void> => {
@@ -106,8 +92,7 @@ export function AddProjectDialog() {
 
   const folderName = (path: string) => path.split(/[\\/]/).filter(Boolean).at(-1) ?? ''
   const cloneName = url.trim().replace(/[/\\]+$/, '').replace(/\.git$/i, '').split(/[/:]/).filter(Boolean).at(-1) ?? ''
-  const suggested = where === 'remote' ? folderName(remoteFolder) : mode === 'folder' ? folderName(folder) : mode === 'create' ? repoName : mode === 'clone' ? cloneName : ''
-  const target = previous?.find((p) => p.path === restoring)
+  const suggested = where === 'remote' ? folderName(remoteFolder) : mode === 'folder' ? folderName(folder) : mode === 'create' ? repoName : cloneName
 
   const ready = where === 'remote'
     ? SSH_DESTINATION.test(destination.trim()) && /^(\/|~)/.test(remoteFolder.trim())
@@ -115,18 +100,15 @@ export function AddProjectDialog() {
       ? Boolean(folder)
       : mode === 'create'
         ? /^[A-Za-z0-9._-]{1,100}$/.test(repoName) && Boolean(parentDir) && (!onGithub || Boolean(owner))
-        : mode === 'clone'
-          ? url.trim().length > 3 && Boolean(parentDir)
-          : Boolean(target && !target.missing)
+        : url.trim().length > 3 && Boolean(parentDir)
 
   const submit = (): void => {
     if (!ready || busy) return
     setBusy(true)
-    const label = where === 'remote' ? 'Add remote workspace' : { folder: 'Add workspace', create: 'Create repository', clone: 'Clone repository', previous: 'Restore workspace' }[mode]
+    const label = where === 'remote' ? 'Add remote workspace' : { folder: 'Add workspace', create: 'Create repository', clone: 'Clone repository' }[mode]
     const custom = name.trim() || undefined
     void runAction(label, async (): Promise<Project> => {
       if (where === 'remote') return api('projects.add', { mode: 'remote', destination: destination.trim(), path: remoteFolder.trim(), name: custom })
-      if (mode === 'previous') return api('projects.restore', { path: restoring })
       if (mode === 'folder') return api('projects.add', { mode: 'folder', path: folder, name: custom })
       if (mode === 'clone') return api('projects.add', { mode: 'clone', url: url.trim(), parentDir, name: custom })
       return api('projects.add', { mode: 'create', repoName, parentDir, name: custom, ...(onGithub ? { github: { owner, visibility } } : {}) })
@@ -134,7 +116,7 @@ export function AddProjectDialog() {
       .then(async (project) => {
         if (!project) return
         await useProjects.getState().load()
-        useNavigation.getState().openProject(project.id, mode === 'previous' ? 'workspaces' : 'tasks')
+        useNavigation.getState().openProject(project.id)
         close()
       })
       .finally(() => setBusy(false))
@@ -160,7 +142,7 @@ export function AddProjectDialog() {
     </div>
     )
 
-  const submitLabel = where === 'remote' ? 'Add workspace' : { folder: 'Add workspace', create: 'Create', clone: 'Clone', previous: target?.projectId ? 'Restore worktrees' : 'Restore' }[mode]
+  const submitLabel = where === 'remote' ? 'Add workspace' : { folder: 'Add workspace', create: 'Create', clone: 'Clone' }[mode]
 
   return (
     <Modal
@@ -191,7 +173,6 @@ export function AddProjectDialog() {
             placeholder={suggested || 'Workspace name'}
             value={name}
             onChange={setName}
-            disabled={mode === 'previous' && where === 'local'}
           />
           <div className={styles.where}>
             <Select
@@ -265,45 +246,6 @@ export function AddProjectDialog() {
               </>
             )}
 
-            {mode === 'previous' && (
-              <div className={styles.previous}>
-                <span className={styles.note}>
-                  Workspaces you removed come back whole: worktrees, agents (resuming their conversations), layouts and open files. Worktree folders found
-                  on disk come back as worktrees.
-                </span>
-                {previous === null ? null : previous.length === 0 ? (
-                  <p className={styles.none}>Nothing to restore. Removed workspaces and leftover worktree folders show up here.</p>
-                ) : (
-                  <ul className={styles.list} role="radiogroup" aria-label="Restore which">
-                    {previous.map((p) => (
-                      <li key={`${p.source}:${p.path}`}>
-                        <button
-                          type="button"
-                          role="radio"
-                          aria-checked={restoring === p.path}
-                          disabled={p.missing}
-                          className={cx(styles.item, restoring === p.path && styles.itemOn)}
-                          onClick={() => setRestoring(p.path)}
-                        >
-                          <span className={styles.itemTop}>
-                            <span className={styles.itemName}>{p.name}</span>
-                            <span className={styles.badge}>{p.missing ? 'Folder missing' : p.source === 'removed' ? `Removed ${ago(p.removedAt)}` : p.projectId ? 'Open now' : 'Found on disk'}</span>
-                          </span>
-                          <span className={styles.itemPath} title={p.path}>
-                            {p.path}
-                          </span>
-                          <span className={styles.itemMeta}>
-                            {plural(p.workspaces.length, 'workspace')}
-                            {p.workspaces.length ? `: ${p.workspaces.slice(0, 4).join(', ')}${p.workspaces.length > 4 ? '…' : ''}` : ''}
-                            {p.agents ? ` · ${plural(p.agents, 'agent')}` : ''}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </>
         )}
       </div>

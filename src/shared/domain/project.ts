@@ -57,6 +57,26 @@ export interface ProjectSettings {
   baseRef?: string
   /** False: agents here never announce themselves (Queen Bee updates, phone pushes). */
   alerts?: boolean
+  /** The Workspace's mark in the sidebar (ADR 0038); absent = a folder. */
+  icon?: WorkspaceIcon
+  /** Its color; absent = one picked from its id, so Workspaces differ from the start. */
+  color?: WorkspaceColor
+}
+
+/** Marks a Workspace can show in the sidebar; the renderer maps each to an icon. */
+export const WORKSPACE_ICONS = ['folder', 'code', 'globe', 'box', 'rocket', 'flask', 'book', 'server', 'phone', 'database', 'palette', 'bot'] as const
+export type WorkspaceIcon = (typeof WORKSPACE_ICONS)[number]
+
+/** Workspace colors, drawn from the theme (its accent and terminal colors), so every theme keeps them readable. */
+export const WORKSPACE_COLORS = ['accent', 'blue', 'cyan', 'green', 'yellow', 'red', 'magenta', 'gray'] as const
+export type WorkspaceColor = (typeof WORKSPACE_COLORS)[number]
+
+/** A Workspace's color: its own, or a stable pick from its id. */
+export const workspaceColor = (project: Pick<Project, 'id' | 'settings'>): WorkspaceColor => {
+  if (project.settings?.color) return project.settings.color
+  let hash = 0
+  for (const ch of project.id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  return WORKSPACE_COLORS[hash % WORKSPACE_COLORS.length]!
 }
 
 /** New worktree branches start with this unless a Workspace sets its own prefix. */
@@ -72,28 +92,3 @@ export const opensAsChat = (project: Pick<Project, 'settings'> | undefined, work
   project?.settings?.agentView ? project.settings.agentView === 'chat' : Boolean(worktree?.chatUi)
 
 export type ProjectSort = 'recent' | 'name'
-
-/** Hiveory workspace folders on disk that no project knows, grouped by their repository. */
-export interface FoundWorktrees {
-  repoRoot: string
-  name: string
-  /** Folder names (the workspaces' names). */
-  workspaces: string[]
-}
-
-/**
- * Something Add project › Restore previous can bring back: a removed project
- * (whole, with its agents), or workspace folders found on disk. `projectId` is
- * set when that repository is open as a project right now.
- */
-export interface PreviousProject {
-  source: 'removed' | 'found'
-  name: string
-  path: string
-  workspaces: string[]
-  agents: number
-  removedAt?: string
-  /** The folder is gone: nothing to restore into. */
-  missing: boolean
-  projectId?: string
-}

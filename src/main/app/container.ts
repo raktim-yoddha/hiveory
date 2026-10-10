@@ -303,7 +303,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
   const projects = new ProjectService(store, kits, agents, emit)
-  const workspaces = new WorkspaceService(workspaceRepo, kits, agents, paths.worktreeRoot, emit)
+  const workspaces = new WorkspaceService(workspaceRepo, kits, agents, emit)
   const presets = new PresetService(store, emit)
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)

@@ -59,9 +59,17 @@ first message. Chats keep running while the user is in Work.
 ## Workspace Lifecycle
 
 Add workspace (ADR 0020) is one dialog: a name, Local (Remote is listed but not available yet), and
-Pick directory · New repository (optionally also on GitHub) · Clone repository · Restore previous.
-Removing a workspace archives it: adding the folder again, or Restore previous, brings back its
-worktrees and agents. Worktree folders left on disk come back as worktrees.
+Pick directory · New repository (optionally also on GitHub) · Clone repository.
+Removing a workspace archives it: adding the folder again brings back its worktrees and agents.
+
+Worktrees follow Git (ADR 0038):
+- A workspace always has its Primary worktree (its own folder).
+- Every linked worktree Git knows for the repository appears in it, wherever its folder is, at
+  startup, when Hiveory comes back to the front and every half minute. A folder is never shown twice:
+  adding a folder inside a linked worktree opens the repository's workspace instead.
+- A worktree whose folder was deleted outside Hiveory is removed with its agents (a notice says so).
+- A workspace whose folder is gone stays in the sidebar, marked missing, until the user removes it.
+- Removing the Primary removes the workspace.
 
 ```text
 Open/Create Workspace
@@ -75,7 +83,8 @@ Open/Create Workspace
         └── Settings
 ```
 
-Opening a Workspace does not create a Worktree.
+Opening a Workspace creates no new worktree, branch or agent; it shows the Primary and the
+worktrees Git already has.
 
 The Workspaces sidebar's "Recent activity" order moves a workspace up only for real work there:
 an agent starting a turn, an agent opening, a worktree being created (ADR 0024). Clicking a
@@ -236,10 +245,10 @@ Selecting a preset replaces the current CLI configuration when the Worktree is i
 
 Primary Worktree:
 
-- is created by the user ("Create worktree" → "Workspace folder"), at most one per Workspace (ADR 0011)
+- exists as soon as the Workspace is added; it is not offered in Create worktree (ADR 0038)
 - one checkout hosts one worktree app-wide: if two workspaces share a repository (root and subfolder, or a linked worktree opened as a workspace), only one of them can have the Primary worktree (ADR 0021)
 - maps to the original workspace folder
-- is never deleted from disk; it can be removed from Hiveory (agents close, folder untouched) and created again (ADR 0013)
+- is never deleted from disk; removing it removes the whole Workspace from Hiveory (archived, folder untouched; ADR 0038)
 - can run CLI instances
 - participates in the same Kanban as isolated Worktrees
 

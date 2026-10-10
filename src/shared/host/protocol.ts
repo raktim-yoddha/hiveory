@@ -32,7 +32,7 @@ export interface ExecParams {
 
 /** Services the host runs on its own machine, so paths and tools are native there. */
 export const HOST_SERVICES = {
-  git: ['repositoryRoot', 'currentBranch', 'hasCommits', 'localBranchExists', 'refExists', 'localBranches', 'status', 'branchNameProblem', 'init', 'defaultBranch'],
+  git: ['repositoryRoot', 'currentBranch', 'hasCommits', 'localBranchExists', 'refExists', 'localBranches', 'remoteBranches', 'fetch', 'status', 'branchNameProblem', 'init', 'defaultBranch'],
   worktrees: ['create', 'remove', 'deleteBranchIfMerged', 'repairLink', 'list', 'prune', 'recreate'],
   files: ['list', 'search', 'read', 'write', 'create', 'rename', 'remove', 'paste', 'watch', 'resolveIn'],
   fs: ['exists', 'isDirectory', 'mkdirp', 'readDir', 'writeText']

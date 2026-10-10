@@ -10,6 +10,8 @@ export interface CreateWorktreeInput {
   branch: string
   /** New branch from this ref; omit to check out an existing `branch`. */
   baseRef?: string
+  /** `baseRef` is a remote branch the new one follows (git worktree add --track). */
+  track?: boolean
 }
 
 const gitFailure = (message: string, error: unknown, hint?: string): AppException =>
@@ -32,7 +34,9 @@ export class WorktreeService {
       await this.git.run(
         input.repoRoot,
         input.baseRef
-          ? gitArgs.worktreeAdd(input.path, input.branch, input.baseRef)
+          ? input.track
+            ? gitArgs.worktreeAddTracking(input.path, input.branch, input.baseRef)
+            : gitArgs.worktreeAdd(input.path, input.branch, input.baseRef)
           : gitArgs.worktreeAddExisting(input.path, input.branch)
       )
     } catch (error) {

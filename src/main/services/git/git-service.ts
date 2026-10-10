@@ -80,6 +80,17 @@ export class GitService {
     return out ? out.split(LINE_BREAK).map((b) => b.trim()).filter(Boolean) : []
   }
 
+  /** Remote-tracking branches (origin/x), newest first; the remotes' HEAD pointers left out. */
+  async remoteBranches(repoRoot: string): Promise<string[]> {
+    const out = await this.tryRun(repoRoot, gitArgs.remoteBranches())
+    return out ? out.split(LINE_BREAK).map((b) => b.trim()).filter((b) => b.includes('/') && !b.endsWith('/HEAD')) : []
+  }
+
+  /** Brings origin's branches up to date; false when there is no origin or it can't be reached. */
+  async fetch(repoRoot: string): Promise<boolean> {
+    return (await this.tryRun(repoRoot, gitArgs.fetch())) !== undefined
+  }
+
   async status(path: string): Promise<GitStatus | null> {
     const out = await this.tryRun(path, gitArgs.status())
     return out === undefined ? null : parseStatus(out)

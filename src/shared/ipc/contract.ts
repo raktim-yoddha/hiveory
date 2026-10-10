@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
+import { WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
 import type {
   AgentPreset,
   AgentSession,
-  PreviousProject,
   AppSettings,
   BrowserAnnotation,
   BrowserPageView,
@@ -230,7 +230,9 @@ export const projectSettingsPatchSchema = z.object({
   chatDefaults: z.record(id, z.object({ model: chatModel, effort: chatEffort })).nullable().optional(),
   branchPrefix: z.string().max(40).regex(/^([A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/).refine((v) => !v.startsWith('-') && !v.includes('..')).nullable().optional(),
   baseRef: gitRef.nullable().optional(),
-  alerts: z.boolean().nullable().optional()
+  alerts: z.boolean().nullable().optional(),
+  icon: z.enum(WORKSPACE_ICONS).nullable().optional(),
+  color: z.enum(WORKSPACE_COLORS).nullable().optional()
 })
 
 export const createWorkspaceSchema = z.object({
@@ -248,7 +250,9 @@ export const createWorkspaceSchema = z.object({
   baseRef: gitRef.optional(),
   /** Isolated only: new branch name, or the existing branch when `useExistingBranch`. */
   branch: gitRef.optional(),
-  useExistingBranch: z.boolean().optional()
+  useExistingBranch: z.boolean().optional(),
+  /** Isolated only: a remote branch (origin/x) to check out as a local branch following it (ADR 0038). */
+  remoteBranch: gitRef.optional()
 })
 
 const none = z.undefined()
@@ -286,9 +290,6 @@ export const requestSchemas = {
   'projects.pickFolder': z.object({ purpose: z.enum(['project', 'parent']) }),
   /** Where new repositories and clones go by default, and the GitHub account gh is signed in to. */
   'projects.addDefaults': none,
-  /** Removed projects and workspace folders found on disk that Add project › Restore previous can bring back. */
-  'projects.previous': none,
-  'projects.restore': z.object({ path: folderPath }),
   'projects.remove': z.object({ projectId: id }),
   'projects.touch': z.object({ projectId: id }),
   /** Rename a Workspace or change its settings (ADR 0037). */
@@ -659,7 +660,8 @@ export const requestSchemas = {
     port: z.number().int().min(1).max(65535).optional(),
     path: z.string().max(1000).regex(/^(\/|~|$)/).optional()
   }),
-  'git.info': z.object({ projectId: id }),
+  /** `fetch`: bring origin's branches up to date first (the remote-branch list). */
+  'git.info': z.object({ projectId: id, fetch: z.boolean().optional() }),
   'git.validateBranch': z.object({ projectId: id, name: z.string().max(200) }),
   /** Initializes Git in a project folder; `commit` also records an initial commit of its files. */
   'git.init': z.object({ projectId: id, commit: z.boolean() }),
@@ -732,8 +734,6 @@ export interface ResponseMap {
   'projects.add': Project
   'projects.pickFolder': string | null
   'projects.addDefaults': { parentDir: string; github: { available: boolean; login?: string; owners: string[]; reason?: string } }
-  'projects.previous': PreviousProject[]
-  'projects.restore': Project
   'projects.remove': void
   'projects.touch': Project
   'projects.update': Project

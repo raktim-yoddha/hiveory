@@ -15,6 +15,7 @@ import { mainTreeOwner } from '../workspaces/workspace-repository'
 /** A project's activity time moves at most this often. */
 const ACTIVE_THROTTLE_MS = 30_000
 import type { KitSource } from '../workspaces/workspace-service'
+import type { HostKit } from '../hosts/host-kit'
 
 export const samePath = (a: string, b: string): boolean =>
   process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
@@ -71,19 +72,20 @@ export class ProjectService {
     return this.add(path, name, host)
   }
 
-  private async add(path: string, name?: string, host?: HostRef): Promise<Project> {
+  private async add(folder: string, name?: string, host?: HostRef): Promise<Project> {
+    const kit = await this.kits.kit(host)
+    const { path, repositoryRoot } = await this.mainCheckout(kit, folder, host)
     const existing = this.store.state.projects.find((p) => sameFolder(p, path, host))
     if (existing) return this.touch(existing.id)
     const archived = this.store.state.archive.find((a) => sameFolder(a.project, path, host))
     if (archived) return this.restore(archived, name)
 
-    const kit = await this.kits.kit(host)
     const now = nowIso()
     const project: Project = {
       id: randomUUID(),
       name: name?.trim() || (host ? posix.basename(path) : basename(path)) || path,
       path,
-      repositoryRoot: await kit.git.repositoryRoot(path),
+      repositoryRoot,
       ...(host ? { host: { kind: 'ssh' as const, destination: host.destination, ...(host.port ? { port: host.port } : {}) } } : {}),
       createdAt: now,
       updatedAt: now,
@@ -94,6 +96,21 @@ export class ProjectService {
     })
     this.emit('state.changed', { topic: 'projects' })
     return project
+  }
+
+  /**
+   * A folder inside a linked worktree belongs to its repository's main checkout: one Workspace per
+   * repository, its worktrees listed inside it (ADR 0038). Any other folder stays as it is.
+   */
+  private async mainCheckout(kit: HostKit, folder: string, host?: HostRef): Promise<{ path: string; repositoryRoot?: string }> {
+    const root = await kit.git.repositoryRoot(folder)
+    if (!root) return { path: folder }
+    const main = (await kit.worktrees.list(root).catch(() => []))[0]
+    const paths = kit.paths
+    const same = (a: string, b: string): boolean => (host ? paths.normalize(a) === paths.normalize(b) : samePath(a, b))
+    if (!main || main.bare || same(main.path, root)) return { path: folder, repositoryRoot: root }
+    const mainRoot = paths.normalize(main.path)
+    return { path: paths.join(mainRoot, paths.relative(root, folder)), repositoryRoot: host ? mainRoot : resolve(mainRoot) }
   }
 
   /**
@@ -185,8 +202,8 @@ export class ProjectService {
   /**
    * Removes the Project from Hiveory: its agents stop and it leaves the sidebar.
    * Nothing on disk changes, and nothing is forgotten: the project, its workspaces,
-   * agents, layouts and open files are archived, so adding the folder again (or
-   * "Restore previous" in Add project) brings them all back (ADR 0020).
+   * agents, layouts and open files are archived, so adding the folder again brings
+   * them all back (ADR 0020).
    */
   remove(projectId: string): void {
     const project = this.get(projectId)

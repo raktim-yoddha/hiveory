@@ -17,8 +17,8 @@ export function RemoveProjectDialog({ project, onClose }: { project: Project; on
   return (
     <ConfirmDialog open danger title={`Remove ${project.name}?`} confirmLabel="Remove workspace" onConfirm={remove} onClose={onClose}>
       <p>
-        Its agents stop and it leaves the sidebar. Nothing is deleted from disk, and nothing is forgotten: adding this folder again, or Add workspace ›
-        Restore previous, brings back its worktrees and agents.
+        Its worktrees and agents stop and it leaves the sidebar. Nothing is deleted from disk, and nothing is forgotten: adding this folder again
+        brings back its worktrees and agents.
       </p>
     </ConfirmDialog>
   )

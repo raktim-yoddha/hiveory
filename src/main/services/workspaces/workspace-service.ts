@@ -1,22 +1,23 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { basename, join, relative, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
 import { branchPrefixOf, DEFAULT_BRANCH_PREFIX, mainWorkspaceId, PRIMARY_NAME, type Project, type Workspace, type WorkspaceView } from '@shared/domain'
 import type { GitInfo } from '@shared/domain/github'
-import type { GitStatus } from '../git/git-commands'
+import { stripRemote, type GitStatus } from '../git/git-commands'
 import { AppException, fail } from '@shared/errors'
 import type { DeleteWorkspaceResult, RequestOf } from '@shared/ipc/contract'
-import type { FoundWorktrees } from '@shared/domain'
 import { generateWorkspaceName, slugify, uniqueName } from '@shared/naming/names'
 import type { AgentService } from '../agents/agent-service'
 import { nowIso, type Emit } from '../events'
 import type { HostKit } from '../hosts/host-kit'
-import type { WorkspaceRepository } from './workspace-repository'
+import { treeKey, type WorkspaceRepository } from './workspace-repository'
 
 export const BRANCH_PREFIX = DEFAULT_BRANCH_PREFIX
 
-const key = (path: string): string => (process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path))
-const inside = (path: string, folder: string): boolean => key(path).startsWith(key(folder) + sep)
+/** What one sync changed: Worktrees Git showed that are new here, and ones deleted outside Hiveory. */
+export interface SyncResult {
+  added: string[]
+  removed: string[]
+}
 
 /** Hands out the kit of a project's machine: this computer, or an SSH host (ADR 0022). */
 export interface KitSource {
@@ -34,8 +35,6 @@ export class WorkspaceService {
     private readonly repo: WorkspaceRepository,
     private readonly kits: KitSource,
     private readonly agents: AgentService,
-    /** This computer's workspaces folder (scanned by Restore previous). */
-    private readonly worktreeRoot: string,
     private readonly emit: Emit
   ) {}
 
@@ -121,7 +120,21 @@ export class WorkspaceService {
     const slug = slugify(input.name)
     let branch: string
     let baseRef: string | undefined
-    if (input.useExistingBranch) {
+    let track = false
+    let createdBranch = !input.useExistingBranch
+    if (input.remoteBranch) {
+      // A branch on the remote (origin/x): a local x following it, or x itself when it already exists here.
+      if (!(await git.refExists(repoRoot!, input.remoteBranch))) {
+        fail('INVALID_INPUT', `Remote branch ${input.remoteBranch} was not found.`, { operation, hint: 'Refresh the list and pick it again.' })
+      }
+      branch = stripRemote(input.remoteBranch)
+      if (await git.localBranchExists(repoRoot!, branch)) createdBranch = false
+      else {
+        baseRef = input.remoteBranch
+        track = true
+        createdBranch = true
+      }
+    } else if (input.useExistingBranch) {
       // Check out a branch the user already has; Hiveory never deletes it later.
       if (!input.branch) fail('INVALID_INPUT', 'Choose a branch to check out.', { operation })
       if (!(await git.localBranchExists(repoRoot!, input.branch!))) {
@@ -157,7 +170,7 @@ export class WorkspaceService {
     const worktreePath = paths.join(projectDir, uniqueName(slug, (c) => taken.has(c)))
 
     try {
-      await kit.worktrees.create({ repoRoot: repoRoot!, path: worktreePath, branch, baseRef })
+      await kit.worktrees.create({ repoRoot: repoRoot!, path: worktreePath, branch, baseRef, ...(track ? { track } : {}) })
     } catch (error) {
       if (error instanceof AppException) throw new AppException({ operation, ...error.error })
       throw error
@@ -171,7 +184,7 @@ export class WorkspaceService {
       kind: 'isolated',
       // Projects opened from a repository subfolder keep that subfolder inside the worktree.
       path: paths.join(worktreePath, paths.relative(repoRoot!, project.path)),
-      git: { worktreePath, branch, baseRef, createdBranch: !input.useExistingBranch },
+      git: { worktreePath, branch, baseRef, createdBranch },
       association: input.association,
       autoApprove: input.autoApprove,
       chatUi: input.chatUi ?? project.settings?.agentView === 'chat',
@@ -218,87 +231,113 @@ export class WorkspaceService {
   }
 
   /**
-   * Brings back Hiveory workspaces that exist on disk but not in Hiveory — for
-   * example from before the project was removed and added again (its folder then
-   * got a new id). Only linked worktrees inside Hiveory's workspaces folder on this
-   * computer count; each becomes an isolated workspace again. Returns how many came back.
+   * Matches a Workspace's Worktrees to Git (ADR 0038). The Primary always exists; every linked
+   * worktree Git knows shows up, once app-wide, wherever it lives; a worktree whose folder was
+   * deleted outside Hiveory is forgotten with its agents; branches follow what is checked out.
+   * A Workspace whose own folder is gone is left alone: it shows as missing.
    */
-  async adoptWorktrees(projectId: string): Promise<number> {
-    const project = this.repo.project(projectId)
-    if (project.host) return 0
+  async sync(projectId: string): Promise<SyncResult> {
+    const result: SyncResult = { added: [], removed: [] }
+    const project = this.repo.findProject(projectId)
+    if (!project) return result
     const kit = await this.kitOf(project)
+    if (!(await kit.fs.exists(project.path))) return result
+    let changed = this.ensurePrimary(project)
     const repoRoot = await this.repoRootOf(project, kit)
-    if (!repoRoot) return 0
-    const known = new Set(this.repo.knownWorktrees().map(key))
-    const entries = await kit.worktrees.list(repoRoot).catch(() => [])
-    let adopted = 0
+    const entries = repoRoot ? await kit.worktrees.list(repoRoot).catch(() => null) : null
+    if (!repoRoot || !entries) {
+      if (changed) this.emit('state.changed', { topic: 'workspaces', projectId })
+      return result
+    }
+    const tree = (path: string): string => treeKey(path, project.host)
+    const listed = new Map(entries.map((e) => [tree(e.path), e]))
+    const main = this.repo.main(project)
+    const mainBranch = listed.get(tree(repoRoot))?.branch
+    if (main && mainBranch && main.git?.branch !== mainBranch) {
+      this.repo.save({ ...main, git: { ...main.git, branch: mainBranch } })
+      changed = true
+    }
+    for (const workspace of this.repo.isolated(projectId)) {
+      const folder = workspace.git?.worktreePath
+      if (!folder) continue
+      const entry = listed.get(tree(folder))
+      if (await kit.fs.exists(folder)) {
+        if (entry?.branch && entry.branch !== workspace.git?.branch) {
+          this.repo.save({ ...workspace, git: { ...workspace.git, branch: entry.branch } })
+          changed = true
+        }
+      } else if (!entry || entry.prunable) {
+        this.agents.forgetWorkspace(workspace.id)
+        this.repo.delete(workspace.id)
+        result.removed.push(workspace.name)
+      }
+    }
+    if (result.removed.length) await kit.worktrees.prune(repoRoot)
+    const known = this.repo.knownTrees()
+    const paths = kit.paths
     for (const entry of entries.slice(1)) {
-      if (entry.bare || !inside(entry.path, this.worktreeRoot) || known.has(key(entry.path)) || !existsSync(entry.path)) continue
+      if (entry.bare || entry.prunable || known.has(tree(entry.path))) continue
       const now = nowIso()
+      const name = paths.basename(entry.path)
       this.repo.save({
         id: randomUUID(),
         projectId,
-        name: basename(entry.path),
+        name,
         kind: 'isolated',
-        path: join(entry.path, relative(repoRoot, project.path)),
-        git: { worktreePath: entry.path, branch: entry.branch, createdBranch: entry.branch?.startsWith(BRANCH_PREFIX) ?? false },
+        // A Workspace opened from a repository subfolder keeps that subfolder inside each worktree.
+        path: paths.join(entry.path, paths.relative(repoRoot, project.path)),
+        git: { worktreePath: paths.normalize(entry.path), branch: entry.branch, createdBranch: false },
         autoApprove: false,
-        chatUi: false,
+        chatUi: project.settings?.agentView === 'chat',
         createdAt: now,
         updatedAt: now
       })
-      adopted++
+      result.added.push(name)
     }
-    if (adopted) this.emit('state.changed', { topic: 'workspaces', projectId })
-    return adopted
+    if (changed || result.added.length || result.removed.length) this.emit('state.changed', { topic: 'workspaces', projectId })
+    return result
   }
 
-  /**
-   * Hiveory workspace folders on this computer that no project knows: grouped by
-   * the repository they belong to (read from each worktree's .git file), for
-   * "Restore previous" in Add project.
-   */
-  foundWorktrees(): FoundWorktrees[] {
-    const known = new Set(this.repo.knownWorktrees().map(key))
-    const groups = new Map<string, FoundWorktrees>()
-    const list = (dir: string): string[] => {
-      try {
-        return readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => join(dir, d.name))
-      } catch {
-        return []
-      }
+  /** Syncs every Workspace on this computer (remote ones sync when added, not on a timer). */
+  async syncAll(): Promise<SyncResult> {
+    const total: SyncResult = { added: [], removed: [] }
+    for (const project of this.repo.projects().filter((p) => !p.host)) {
+      const { added, removed } = await this.sync(project.id).catch(() => ({ added: [], removed: [] }))
+      total.added.push(...added)
+      total.removed.push(...removed)
     }
-    for (const projectDir of list(this.worktreeRoot)) {
-      for (const folder of list(projectDir)) {
-        if (known.has(key(folder))) continue
-        let gitdir: string
-        try {
-          gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(join(folder, '.git'), 'utf8'))?.[1]?.trim() ?? ''
-        } catch {
-          continue
-        }
-        // <repo>/.git/worktrees/<name> → <repo>
-        const at = gitdir.replace(/\\/g, '/').lastIndexOf('/.git/worktrees/')
-        if (at < 0) continue
-        const repoRoot = resolve(gitdir.slice(0, at))
-        if (!existsSync(repoRoot)) continue
-        const group = groups.get(key(repoRoot)) ?? { repoRoot, name: basename(repoRoot), workspaces: [] }
-        group.workspaces.push(basename(folder))
-        groups.set(key(repoRoot), group)
-      }
-    }
-    return [...groups.values()]
+    return total
+  }
+
+  /** Every Workspace has its Primary, unless another Workspace already runs agents in that checkout (ADR 0021). */
+  private ensurePrimary(project: Project): boolean {
+    if (this.repo.main(project) || this.repo.mainTreeOwner(project)) return false
+    const now = nowIso()
+    this.repo.save({
+      id: mainWorkspaceId(project.id),
+      projectId: project.id,
+      name: PRIMARY_NAME,
+      kind: 'main',
+      path: project.path,
+      autoApprove: false,
+      chatUi: project.settings?.agentView === 'chat',
+      createdAt: now,
+      updatedAt: now
+    })
+    return true
   }
 
   /** Branch/repository facts for the create dialog. */
-  async gitInfo(projectId: string): Promise<GitInfo> {
+  async gitInfo(projectId: string, fetch = false): Promise<GitInfo> {
     const project = this.repo.project(projectId)
     const kit = await this.kitOf(project)
     const repoRoot = await this.repoRootOf(project, kit)
-    if (!repoRoot) return { isRepo: false, hasCommits: false, branches: [], branchesInUse: [] }
-    const [hasCommits, branches, defaultBranch, currentBranch, worktrees] = await Promise.all([
+    if (!repoRoot) return { isRepo: false, hasCommits: false, branches: [], branchesInUse: [], remoteBranches: [] }
+    const fetched = fetch ? await kit.git.fetch(repoRoot) : undefined
+    const [hasCommits, branches, remoteBranches, defaultBranch, currentBranch, worktrees] = await Promise.all([
       kit.git.hasCommits(repoRoot),
       kit.git.localBranches(repoRoot),
+      kit.git.remoteBranches(repoRoot),
       kit.git.defaultBranch(repoRoot),
       kit.git.currentBranch(repoRoot),
       kit.worktrees.list(repoRoot).catch(() => [])
@@ -309,7 +348,9 @@ export class WorkspaceService {
       branches,
       defaultBranch,
       currentBranch,
-      branchesInUse: worktrees.map((w) => w.branch).filter((b): b is string => Boolean(b))
+      branchesInUse: worktrees.map((w) => w.branch).filter((b): b is string => Boolean(b)),
+      remoteBranches,
+      ...(fetched === false ? { fetchFailed: true } : {})
     }
   }
 

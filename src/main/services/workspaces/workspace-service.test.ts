@@ -56,7 +56,6 @@ const setup = (git: Partial<Record<keyof GitService, unknown>> = {}) => {
     repo,
     localKitSource(fakeGit, worktrees as unknown as WorktreeService, join('/data', 'Workspaces')),
     agents as unknown as AgentService,
-    join('/data', 'Workspaces'),
     () => undefined
   )
   return { service, repo, worktrees, agents, calls, store }

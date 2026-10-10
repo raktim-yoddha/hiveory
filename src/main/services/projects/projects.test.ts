@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -32,7 +32,7 @@ const setup = () => {
   const gitService = new GitService()
   const repoStore = new WorkspaceRepository(store)
   const kits = localKitSource(gitService, new WorktreeService(gitService), join(root, 'Workspaces'))
-  const workspaces = new WorkspaceService(repoStore, kits, agents, join(root, 'Workspaces'), () => undefined)
+  const workspaces = new WorkspaceService(repoStore, kits, agents, () => undefined)
   const projects = new ProjectService(store, kits, agents, () => undefined)
   return { repo, store, agents, workspaces, projects }
 }
@@ -51,8 +51,6 @@ describe('removing and adding a project again', () => {
     expect(store.state.projects).toHaveLength(0)
     expect(store.state.workspaces).toHaveLength(0)
     expect(store.state.archive.map((a) => [a.project.id, a.workspaces.length, a.instances.length])).toEqual([[project.id, 1, 1]])
-    // The workspace folder is archived, not orphaned.
-    expect(workspaces.foundWorktrees()).toEqual([])
 
     const again = await projects.open(repo)
     expect(again.id).toBe(project.id)
@@ -61,26 +59,72 @@ describe('removing and adding a project again', () => {
     expect(store.state.archive).toHaveLength(0)
     expect(agents.resumeAll).toHaveBeenCalledWith(project.id)
   })
+})
 
-  it('finds workspace folders a forgotten project left behind, and adopts them', async () => {
+describe('Worktrees follow Git (ADR 0038)', () => {
+  it('gives every Workspace its Primary and shows each worktree Git knows, once', async () => {
     const { repo, store, workspaces, projects } = setup()
-    const first = await projects.open(repo)
-    await workspaces.create({ projectId: first.id, kind: 'isolated', name: 'Quiet Marsh', cliSelections: [], autoApprove: false })
-    // What older versions did on remove: everything forgotten, the worktree left on disk.
-    store.update((s) => {
-      s.projects = []
-      s.workspaces = []
-    })
-    const found = workspaces.foundWorktrees()
-    expect(found.map((f) => [f.name, f.workspaces])).toEqual([['demo', ['quiet-marsh']]])
+    const project = await projects.open(repo)
+    const outside = join(repo, '..', 'demo-fix')
+    git(repo, 'worktree', 'add', '-b', 'fix/login', outside)
 
-    const second = await projects.open(repo)
-    expect(second.id).not.toBe(first.id)
-    expect(await workspaces.adoptWorktrees(second.id)).toBe(1)
-    expect(store.state.workspaces.map((w) => [w.name, w.kind, w.git?.branch])).toEqual([['quiet-marsh', 'isolated', 'hiveory/quiet-marsh']])
-    // Adopted once only.
-    expect(await workspaces.adoptWorktrees(second.id)).toBe(0)
-    expect(workspaces.foundWorktrees()).toEqual([])
+    expect(await workspaces.sync(project.id)).toEqual({ added: ['demo-fix'], removed: [] })
+    expect(store.state.workspaces.map((w) => [w.kind, w.name, w.git?.branch, w.git?.createdBranch])).toEqual([
+      ['main', 'Primary', 'main', undefined],
+      ['isolated', 'demo-fix', 'fix/login', false]
+    ])
+    expect(await workspaces.sync(project.id)).toEqual({ added: [], removed: [] })
+    expect(store.state.workspaces).toHaveLength(2)
+
+    // A branch switched inside a worktree shows on the next sync.
+    git(outside, 'checkout', '-b', 'fix/login-2')
+    await workspaces.sync(project.id)
+    expect(store.state.workspaces[1]?.git?.branch).toBe('fix/login-2')
+  })
+
+  it('opens the repository Workspace for a folder inside one of its linked worktrees', async () => {
+    const { repo, projects } = setup()
+    const project = await projects.open(repo)
+    const outside = join(repo, '..', 'demo-linked')
+    git(repo, 'worktree', 'add', '-b', 'linked', outside)
+    expect((await projects.open(outside)).id).toBe(project.id)
+  })
+
+  it('forgets a worktree deleted outside Hiveory, with its agents', async () => {
+    const { repo, store, agents, workspaces, projects } = setup()
+    const project = await projects.open(repo)
+    const ws = await workspaces.create({ projectId: project.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
+    rmSync(ws.git!.worktreePath!, { recursive: true, force: true })
+
+    expect(await workspaces.sync(project.id)).toEqual({ added: [], removed: ['Amber'] })
+    expect(agents.forgetWorkspace).toHaveBeenCalledWith(ws.id)
+    expect(store.state.workspaces.map((w) => w.kind)).toEqual(['main'])
+    expect(git(repo, 'worktree', 'list')).not.toContain('amber')
+  })
+
+  it('checks a remote branch out as a local branch that follows it', async () => {
+    const { repo, store, workspaces, projects } = setup()
+    const origin = join(repo, '..', 'origin.git')
+    git(repo, 'clone', '--bare', repo, origin)
+    git(repo, 'remote', 'add', 'origin', origin)
+    git(repo, 'push', 'origin', 'main:feature/x')
+    const project = await projects.open(repo)
+
+    const info = await workspaces.gitInfo(project.id, true)
+    expect(info.remoteBranches).toContain('origin/feature/x')
+    const ws = await workspaces.create({ projectId: project.id, kind: 'isolated', name: 'X', remoteBranch: 'origin/feature/x', cliSelections: [], autoApprove: false })
+    expect(ws.git).toMatchObject({ branch: 'feature/x', createdBranch: true })
+    expect(git(ws.path, 'rev-parse', '--abbrev-ref', '@{upstream}')).toBe('origin/feature/x')
+    expect(store.state.workspaces.find((w) => w.id === ws.id)?.git?.baseRef).toBe('origin/feature/x')
+  })
+
+  it('leaves a Workspace whose folder is gone as it is', async () => {
+    const { repo, store, workspaces, projects } = setup()
+    const project = await projects.open(repo)
+    await workspaces.sync(project.id)
+    rmSync(repo, { recursive: true, force: true })
+    expect(await workspaces.sync(project.id)).toEqual({ added: [], removed: [] })
+    expect(store.state.workspaces.map((w) => w.kind)).toEqual(['main'])
   })
 })
 
@@ -100,12 +144,11 @@ describe('one Main workspace per checkout (ADR 0021)', () => {
     await expect(workspaces.create(main(sub.id))).resolves.toMatchObject({ kind: 'main' })
   })
 
-  it("refuses a Main workspace on a folder that is another project's isolated workspace", async () => {
+  it("adds no second Workspace for a folder that is another Workspace's worktree", async () => {
     const { workspaces, projects, repo } = setup()
     const root = await projects.open(repo)
     const ws = await workspaces.create({ projectId: root.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
-    const linked = await projects.open(ws.path)
-    await expect(workspaces.create(main(linked.id))).rejects.toMatchObject({ error: { code: 'INVALID_INPUT' } })
+    expect((await projects.open(ws.path)).id).toBe(root.id)
   })
 
   it('will not restore a project whose Main workspace another project now holds', async () => {
