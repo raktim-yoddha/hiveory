@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Ellipsis, Loader2, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
+import { Check, Ellipsis, Loader2, MessageSquare, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
@@ -74,7 +74,7 @@ function QueenWave() {
 }
 
 function QueenBar() {
-  const { placement, setPlacement, busy, card, show, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
+  const { placement, setPlacement, busy, card, cardOpen, setCardOpen, unseen, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
   const floating = placement === 'floating'
   const small = floating && compact
   const gestures = useMarkGestures(floating)
@@ -158,7 +158,7 @@ function QueenBar() {
           } else if (e.key === 'Escape') {
             // Esc first silences her, then dismisses the card, then leaves the field.
             if (phase === 'speaking') stopSpeaking()
-            else if (card) show(null)
+            else if (cardOpen) setCardOpen(false)
             else e.currentTarget.blur()
           } else if (e.key === 'ArrowUp' && !text && history.current[0]) {
             e.preventDefault()
@@ -183,6 +183,16 @@ function QueenBar() {
         </button>
       )}
       {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
+      <span className={styles.cardToggle} data-unseen={unseen || undefined}>
+        <IconButton
+          label={cardOpen ? 'Hide Queen Bee’s message' : unseen ? 'Show Queen Bee’s new message' : 'Show Queen Bee’s last message'}
+          icon={<MessageSquare />}
+          active={cardOpen}
+          aria-pressed={cardOpen}
+          disabled={!card}
+          onClick={() => setCardOpen(!cardOpen)}
+        />
+      </span>
       <IconButton
         label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
         icon={placement === 'docked' ? <PanelBottomClose /> : <PanelBottom />}
@@ -249,20 +259,21 @@ const UNDO_MS = 20_000
 
 function QueenCardView() {
   const card = useQueen((s) => s.card)
+  const open = useQueen((s) => s.cardOpen)
   const show = useQueen((s) => s.show)
   const busy = useQueen((s) => s.busy)
   // While the pointer or focus is on the card it stays.
   const [held, setHeld] = useState(false)
 
   useEffect(() => {
-    if (!card || card.kind !== 'reply' || held) return
+    if (!card || !open || card.kind !== 'reply' || held) return
     const timer = window.setTimeout(() => {
       if (useQueen.getState().card === card) show(null)
     }, card.undo ? UNDO_MS : REPLY_MS)
     return () => window.clearTimeout(timer)
-  }, [card, held, show])
+  }, [card, open, held, show])
 
-  if (!card) return null
+  if (!card || !open) return null
   return (
     <section
       className={styles.card}

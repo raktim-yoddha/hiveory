@@ -20,8 +20,8 @@ const wanted = (u: QueenUpdate): boolean => {
 
 /** A question or a yes/no on screen stays until it is answered; updates wait behind it. */
 const blocked = (): boolean => {
-  const { busy, card } = useQueen.getState()
-  return busy || card?.kind === 'confirm' || card?.kind === 'ask'
+  const { busy, card, cardOpen } = useQueen.getState()
+  return busy || (cardOpen && (card?.kind === 'confirm' || card?.kind === 'ask'))
 }
 
 function flush(): void {
@@ -50,7 +50,7 @@ function flush(): void {
       'all'
     ),
     ...(batch.length === 1 && last.excerpt ? { quote: last.excerpt } : {})
-  })
+  }, true)
   cue('update')
   if (settings.queenTalkback === 'always') void speak(text)
 }
@@ -65,14 +65,15 @@ const queue = (u: QueenUpdate): void => {
 /**
  * Queen Bee's live updates (ADR 0019): an agent finished, needs you, or stopped —
  * whether or not she started the work. Shown on her card with a jump-to row and
- * the agent's own last words, and said out loud when talkback is on.
+ * the agent's own last words, and said out loud when talkback is on. The card stays closed
+ * behind her button until it is pressed.
  */
 export function useQueenUpdates(): void {
   useEffect(() => {
     const off = subscribe('queen.update', queue)
     // Updates held behind a question show once it is answered.
     const unwatch = useQueen.subscribe((state, before) => {
-      const changed = state.card !== before.card || state.busy !== before.busy
+      const changed = state.card !== before.card || state.cardOpen !== before.cardOpen || state.busy !== before.busy
       if (pending.length && timer === null && changed && !blocked()) timer = window.setTimeout(flush, BATCH_MS)
     })
     return () => {

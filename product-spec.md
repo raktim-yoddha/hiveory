@@ -319,6 +319,8 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   Morning brief"; a model's plan asks first).
 - Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
   live state. The current workspace, or every workspace from Home.
+- Live updates (finished, needs you, stopped) wait behind her message button, which shows a
+  dot until seen; the button opens and closes the card (ADR 0038).
 - She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of
   a command is unclear, and offers Undo for opens and navigation.
 - Personalities Ada, Sunny, Frankie and a custom one change wording only. Settings › Queen Bee holds:

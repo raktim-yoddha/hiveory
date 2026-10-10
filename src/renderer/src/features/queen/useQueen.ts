@@ -35,6 +35,10 @@ interface QueenState {
   spot: QueenSpot
   compact: boolean
   card: QueenCard | null
+  /** Whether the card is on screen. Updates arrive closed; her button opens and closes the card. */
+  cardOpen: boolean
+  /** A closed card holds something not seen yet (her button shows a dot). */
+  unseen: boolean
   busy: boolean
   /** Bumped to move focus into the input (shortcut, menu). */
   focusTick: number
@@ -44,7 +48,9 @@ interface QueenState {
   setPlacement(placement: QueenPlacement): void
   setSpot(spot: QueenSpot): void
   setCompact(compact: boolean): void
-  show(card: QueenCard | null): void
+  /** `quiet`: keep it behind her button instead of opening it (updates nobody asked for). */
+  show(card: QueenCard | null, quiet?: boolean): void
+  setCardOpen(open: boolean): void
   setBusy(busy: boolean): void
   focus(): void
 }
@@ -78,6 +84,8 @@ const save = (state: Saved): void => {
 export const useQueen = create<QueenState>((set, get) => ({
   ...readSaved(),
   card: null,
+  cardOpen: false,
+  unseen: false,
   busy: false,
   focusTick: 0,
   settingsTab: 'personality',
@@ -94,7 +102,8 @@ export const useQueen = create<QueenState>((set, get) => ({
     set({ compact })
     save(get())
   },
-  show: (card) => set({ card }),
+  show: (card, quiet = false) => set(card ? (quiet ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false }) : { cardOpen: false }),
+  setCardOpen: (cardOpen) => set(cardOpen ? { cardOpen, unseen: false } : { cardOpen }),
   setBusy: (busy) => set({ busy }),
   // Her shortcut or menu wants the input: a shrunk bar opens up first.
   focus: () => {

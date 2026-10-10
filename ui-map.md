@@ -111,11 +111,12 @@ Expanding a workspace in the sidebar lists its Worktrees for navigation (ADR 001
 │              │ ┌───────────────────────────────────────────────┐ │
 │              │ │ Reply card: answer, report rows, receipts, Undo│ │
 │              │ └───────────────────────────────────────────────┘ │
-│              │ [∿ Ada  Your instructions…  Win + Alt  ▁ ⋯]      │
+│              │ [∿ Ada  Your instructions…  Win + Alt ✉ ▁ ⋯]     │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
-The reply card hovers over the panes (it never pushes them); only the bar takes room.
+The reply card hovers over the panes (it never pushes them); only the bar takes room. Live
+updates wait behind ✉ (a dot marks an unseen one); ✉ opens and closes the card (ADR 0038).
 
 ∿ is her waveform mark (still at rest, moving while you or she speaks). The shortcut chip
 opens Settings › Queen Bee › Voice until a speech pack is installed. ▁ switches docked ↔
