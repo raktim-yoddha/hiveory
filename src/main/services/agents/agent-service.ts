@@ -112,7 +112,7 @@ export class AgentService {
     const adapter = this.registry.adapter(cliId)
     if (!adapter) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
     // The user's pick for this agent, else the Workspace's setting, else the Worktree's own (ADR 0037).
-    const view = chatUi ?? opensAsChat(this.workspaces.findProject(workspace.projectId), workspace)
+    const view = chatUi ?? opensAsChat(this.workspaces.findProject(workspace.projectId), workspace, this.store.state.settings.defaultChatUi)
     const [instance] = this.build({ ...workspace, chatUi: view }, [{ cliId, count: 1 }])
     // From the Sessions tab: the new agent continues that conversation (the adapter says where its id goes).
     if (resumeSession) {

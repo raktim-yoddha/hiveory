@@ -58,6 +58,8 @@ export function Popover({ label, trigger, children, placement = 'below', width =
     if (!open) return
     const onDown = (e: PointerEvent): void => {
       const target = e.target as Node
+      // A dropdown opened from inside the popover is portaled elsewhere; picking from it stays inside.
+      if ((target as Element).closest?.('[role="listbox"]')) return
       if (!panelRef.current?.contains(target) && !triggerRef.current?.contains(target)) close()
     }
     const onKey = (e: KeyboardEvent): void => {

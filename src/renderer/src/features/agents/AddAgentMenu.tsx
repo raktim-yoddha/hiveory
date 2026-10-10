@@ -1,12 +1,13 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, MessageSquareText, Plus, Search, SquareTerminal } from 'lucide-react'
+import { ArrowDown, ArrowRight, Plus, Search } from 'lucide-react'
 import { opensAsChat, type CliDescriptor } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
+import { Select } from '../../components/ui/Select'
 import { cx } from '../../lib/cx'
-import { useHostClis, useProjects, useWorkspaces } from '../../stores/data'
+import { useHostClis, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { agentActions } from './agent-actions'
 import styles from './AddAgentMenu.module.css'
@@ -20,8 +21,8 @@ interface AddAgentMenuProps {
 }
 
 /**
- * The pane header "+": where (Right | Bottom, side by side), how (Terminal | Chat,
- * starting from the Workspace's setting, ADR 0037), then what — a terminal
+ * The pane header "+": where (Right | Bottom, side by side), how (a Terminal | Chat dropdown,
+ * starting from the Workspace's, Worktree's or app's setting, ADR 0037, ADR 0038), then what — a terminal
  * (PowerShell, Command Prompt, Git Bash) or a detected agent CLI — with search.
  * Nothing is hardcoded: entries come from the CLI registry.
  */
@@ -40,8 +41,9 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
   const worktree = useWorkspaces((s) => (projectId ? s.byProject[projectId] : undefined)?.find((w) => w.id === workspaceId))
   // Chat view runs the CLI headless on this computer, so remote Workspaces only get terminals.
   const chatPossible = !project?.host
+  const appDefault = useSettings((s) => s.settings.defaultChatUi)
   const [chosenView, setView] = useState<boolean | null>(null)
-  const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree))
+  const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree, appDefault))
   const [preferred, setSide] = useState<'right' | 'bottom'>('right')
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
@@ -100,19 +102,16 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
         {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
       </div>
       {chatPossible && (
-        <div className={styles.sides} role="radiogroup" aria-label="Open agents as">
-          {(
-            [
-              [false, 'Terminal', <SquareTerminal key="t" aria-hidden />],
-              [true, 'Chat', <MessageSquareText key="c" aria-hidden />]
-            ] as const
-          ).map(([value, label, icon]) => (
-            <button key={label} type="button" role="radio" aria-checked={chat === value} className={cx(styles.side, chat === value && styles.sideOn)} onClick={() => setView(value)}>
-              {icon}
-              {label}
-            </button>
-          ))}
-        </div>
+        <Select
+          label="Open agents as"
+          hideLabel
+          value={chat ? 'chat' : 'terminal'}
+          options={[
+            { value: 'terminal', label: 'Open as terminal' },
+            { value: 'chat', label: 'Open as chat' }
+          ]}
+          onChange={(value) => setView(value === 'chat')}
+        />
       )}
       <label className={styles.search} htmlFor={searchId}>
         <Search aria-hidden />

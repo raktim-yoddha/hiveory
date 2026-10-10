@@ -86,9 +86,10 @@ export const branchPrefixOf = (project?: Pick<Project, 'settings'>): string => p
 
 /**
  * Whether a new agent opens in chat view: the Workspace's setting when it has one, otherwise the
- * Worktree's own (chosen when it was created). The "+" menu and the phone start from this.
+ * Worktree's own (chosen when it was created), otherwise the app's (Settings › Agents, ADR 0038).
+ * The "+" menu and the phone start from this.
  */
-export const opensAsChat = (project: Pick<Project, 'settings'> | undefined, worktree: { chatUi?: boolean } | undefined): boolean =>
-  project?.settings?.agentView ? project.settings.agentView === 'chat' : Boolean(worktree?.chatUi)
+export const opensAsChat = (project: Pick<Project, 'settings'> | undefined, worktree: { chatUi?: boolean } | undefined, appDefault = false): boolean =>
+  project?.settings?.agentView ? project.settings.agentView === 'chat' : (worktree?.chatUi ?? appDefault)
 
 export type ProjectSort = 'recent' | 'name'

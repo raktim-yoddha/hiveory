@@ -58,6 +58,14 @@ Workspace (Add workspace, Queen Bee, right-click › Workspace settings) opens i
 that tab. Tasks has All (every Worktree) | Here (only the open Worktree); the columns stack when
 narrow.
 
+### Terminal or chat: a dropdown, with an app-wide default
+The pane "+" picks Terminal or Chat from a dropdown instead of two buttons. Settings › Agents ›
+"New agents open as" (Terminal | Chat; was the "Use chat UI" switch, same `defaultChatUi` setting)
+is the app's default, and the Workspace's Settings keep their own dropdown. A new agent follows
+the Workspace's choice, else its Worktree's (picked when it was created in the dialog), else the
+app's: `opensAsChat(project, worktree, appDefault)`. Worktrees Hiveory finds in Git and the
+Primary have no choice of their own, so they follow the Workspace and then the app.
+
 ## Consequences
 
 - Updates are easier to miss: the dot and the optional spoken update are the only signals.

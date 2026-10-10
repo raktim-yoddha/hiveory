@@ -241,8 +241,9 @@ Installing applies the extension's first theme.
 ```
 
 Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
-agents. Pane "+": `( → Right | ↓ Bottom )`, `( Terminal | Chat )` (starts from the Workspace's
-setting, ADR 0037), search, Terminals, Agents.
+agents. Pane "+": `( → Right | ↓ Bottom )`, a dropdown `[Open as terminal ▾]` / chat (starts
+from the Workspace's setting, else the Worktree's, else Settings › Agents › New agents open as;
+ADR 0037, ADR 0038), search, Terminals, Agents.
 
 ## Add workspace (ADR 0020)
 

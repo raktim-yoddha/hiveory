@@ -288,7 +288,6 @@ export class WorkspaceService {
         path: paths.join(entry.path, paths.relative(repoRoot, project.path)),
         git: { worktreePath: paths.normalize(entry.path), branch: entry.branch, createdBranch: false },
         autoApprove: false,
-        chatUi: project.settings?.agentView === 'chat',
         createdAt: now,
         updatedAt: now
       })
@@ -320,7 +319,6 @@ export class WorkspaceService {
       kind: 'main',
       path: project.path,
       autoApprove: false,
-      chatUi: project.settings?.agentView === 'chat',
       createdAt: now,
       updatedAt: now
     })
