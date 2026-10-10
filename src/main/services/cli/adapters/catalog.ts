@@ -108,8 +108,6 @@ export const CATALOG: CliAdapter[] = [
     // Measured: below 14 rows its footer is drawn over the prompt; 17 leaves room for a two-line
     // placeholder and a two-line folder footer.
     minRows: 17,
-    // Full-screen TUI breaks in small panes; the mini interface reflows and replays history on resize.
-    args: ['--mini', '--replay-limit', '100000'],
     autoApproveArgs: ['--auto'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),

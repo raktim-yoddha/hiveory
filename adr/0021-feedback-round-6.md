@@ -47,3 +47,9 @@ its handshake ended. opentui crashes on late, partial handshake replies; other T
   (OpenCode also segfaults near 2×1, opencode #38199).
 - OpenCode starts with `--mini --replay-limit 100000`: its full-screen TUI still broke in small
   panes, while the mini interface reflows and replays the session on resize.
+
+## Amendment (2026-10-11): OpenCode starts in its normal interface again
+Released OpenCode builds reject `--mini` and `--replay-limit` ("Unrecognized flag"; `mini` is a
+subcommand there), so every OpenCode agent exited with code 1. The product owner does not want the
+mini interface. OpenCode starts with no extra arguments; the 60×17 minimum pane size still keeps
+its full-screen interface from breaking.
