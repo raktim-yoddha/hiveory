@@ -134,7 +134,16 @@ const describeServer = (config: unknown): { target?: string; transport: McpServe
   return { target, transport: raw.url || c.type === 'remote' || c.type === 'http' ? 'http' : raw.command ? 'stdio' : 'unknown', config: raw }
 }
 
-const CLI_NAMES: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', kilocode: 'Kilo Code', gemini: 'Gemini CLI', qwen: 'Qwen Code', cursor: 'Cursor' }
+const CLI_NAMES: Record<string, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+  kilocode: 'Kilo Code',
+  gemini: 'Gemini CLI',
+  qwen: 'Qwen Code',
+  cursor: 'Cursor',
+  copilot: 'GitHub Copilot CLI'
+}
 
 /**
  * Agent Skills and MCP servers across installed CLIs. CLI configs are only
@@ -311,12 +320,22 @@ export class ExtensionsService {
       }
     }
 
-    for (const [cliId, file] of [
-      ['gemini', join(this.home, '.gemini', 'settings.json')],
-      ['qwen', join(this.home, '.qwen', 'settings.json')],
-      ['cursor', join(this.home, '.cursor', 'mcp.json')]
-    ] as const) {
-      for (const [name, cfg] of Object.entries(asRecord(asRecord(readJson(file)).mcpServers))) add(cliId, file, 'user', name, describeServer(cfg))
+    // The same `mcpServers` shape in each CLI's own file, for the user and (where the CLI reads one) the workspace.
+    const files: Array<[cliId: string, file: string, scope: 'user' | 'project']> = [
+      ['gemini', join(this.home, '.gemini', 'settings.json'), 'user'],
+      ['qwen', join(this.home, '.qwen', 'settings.json'), 'user'],
+      ['cursor', join(this.home, '.cursor', 'mcp.json'), 'user'],
+      ['copilot', join(this.home, '.copilot', 'mcp-config.json'), 'user'],
+      ...(projectPath
+        ? ([
+            ['gemini', join(projectPath, '.gemini', 'settings.json'), 'project'],
+            ['qwen', join(projectPath, '.qwen', 'settings.json'), 'project'],
+            ['cursor', join(projectPath, '.cursor', 'mcp.json'), 'project']
+          ] as Array<[string, string, 'project']>)
+        : [])
+    ]
+    for (const [cliId, file, scope] of files) {
+      for (const [name, cfg] of Object.entries(asRecord(asRecord(readJson(file)).mcpServers))) add(cliId, file, scope, name, describeServer(cfg))
     }
 
     return [...servers.values()].sort((a, b) => a.name.localeCompare(b.name))
