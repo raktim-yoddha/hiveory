@@ -41,7 +41,8 @@ export function workBoard(handoffs: Handoff[], runs: RoutineRun[], now: number):
         threadId: h.threadId
       })
     ),
-    ...runs.map(
+    // A Work routine's run is an agent in a worktree, not the team's work (ADR 0040).
+    ...runs.filter((r) => !r.agentId).map(
       (r): WorkItem => ({
         key: `r-${r.id}`,
         column: runColumn(r),

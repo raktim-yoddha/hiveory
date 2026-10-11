@@ -26,8 +26,9 @@ stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in
 never asked. The request waits in its thread and on the work board for Allow or Decline, and is
 declined after 15 minutes. A trigger's read-only run can't change or send anything in apps.
 Routines can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
-a new agent in a Work worktree (a worktree's "Schedule a routine…"), whose card then moves on the
-Kanban by its real state like any agent.
+a new agent in a Work worktree, whose card then moves on the Kanban by its real state like any agent.
+Work's routines belong to Work (ADR 0040): they are made and listed in the Workspace's Dashboard ›
+Routines (or a worktree's "Schedule a routine…") and never appear on the Bots calendar.
 While a chat or bot is answering, the user can type the **next message**: it waits above the box and
 goes in when the reply ends (Stop drops it). **Saved prompts** (the bookmark in every message box) are
 reusable text the user inserts, saves or removes (ADR 0031). Bots never appear on a

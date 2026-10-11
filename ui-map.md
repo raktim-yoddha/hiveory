@@ -63,10 +63,11 @@ Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busi
 - Work board: four cards, Needs you (approval cards) · Working · Didn't finish · Done, each with a count; a row per handoff or
   routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
-- Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)" and "A new agent in a
-  Work worktree" (Workspace, Worktree, CLI). Below the instructions: the routine's files (chips) and "Add files
-  for every run". Chat's sidebar header: Schedule a chat (calendar icon) beside
-  New chat. A worktree's menu: Schedule a routine…
+- Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)". A Work routine (ADR 0040)
+  is opened from Work and picks only its Worktree and CLI; its title names the Workspace. Below the instructions:
+  the routine's files (chips) and "Add files for every run". Chat's sidebar header: Schedule a chat (calendar
+  icon) beside New chat. A worktree's menu: Schedule a routine… (the editor opens in place, in Work).
+  The Routines page, calendar, run logs and work board show bots' routines and scheduled chats only.
 - Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
   as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting
   messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
@@ -274,7 +275,7 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 ┌ [▦ Dashboard ×] + ───────────────── ⤢ ┐
 │ ◆ Workspace A                         │
 │   ⌂ … › app  ⧉ 📁                     │
-│ Tasks │ Pull Requests │ Worktrees │ Settings
+│ Tasks │ Pull Requests │ Worktrees │ Routines │ Settings
 ├────────────────────────────────────────┤
 │ [ All | Here ]                         │
 │ ● WAITING FOR YOU                   0  │
@@ -284,6 +285,9 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 ```
 
 Tasks: All = every Worktree's agents; Here = only the open Worktree's. Narrow, the columns stack.
+
+Routines tab (ADR 0040): this Workspace's routines (name, CLI · Worktree, schedule, next run, Run now,
+Edit, on/off), Run log, New routine (for the open Worktree).
 
 Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
 Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and

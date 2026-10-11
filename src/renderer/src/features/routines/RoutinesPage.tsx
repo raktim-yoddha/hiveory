@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CalendarClock, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { isWorkRoutine, type RoutineRun } from '@shared/domain/routine'
 import { Button, IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Popover } from '../../components/ui/Popover'
@@ -29,7 +30,7 @@ const VIEWS: Array<{ value: View; label: string }> = [
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-/** Every routine (bots', scheduled chats and Work's) on a week calendar (or as a list), with the run log and the keep-awake switch. */
+/** Bots' routines and scheduled chats on a week calendar (Work's live in their Workspace, ADR 0040) (or as a list), with the run log and the keep-awake switch. */
 export function RoutinesPage() {
   const { routines, runs, loaded, load } = useRoutines()
   const { bots, routinesFilter, showRoutines } = useBots()
@@ -44,8 +45,10 @@ export function RoutinesPage() {
     if (!loaded) void load()
   }, [loaded, load])
 
-  const shown = routinesFilter ? routines.filter((r) => r.botId === routinesFilter) : routines
-  const shownRuns = routinesFilter ? runs.filter((r) => r.botId === routinesFilter) : runs
+  const mine = routines.filter((r) => !isWorkRoutine(r))
+  const isMine = (run: RoutineRun): boolean => (routinesFilter ? run.botId === routinesFilter : !run.agentId && !routines.some((r) => r.id === run.routineId && isWorkRoutine(r)))
+  const shown = routinesFilter ? mine.filter((r) => r.botId === routinesFilter) : mine
+  const shownRuns = runs.filter(isMine)
   const weekStart = weekStartOf(anchor)
   const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6)
   const range =
@@ -123,17 +126,17 @@ export function RoutinesPage() {
         />
       ) : view === 'list' ? (
         shown.length === 0 ? (
-          <EmptyState icon={<CalendarClock />} title="No routines yet" description="Give a bot, a new chat or a Work agent a job to do every morning, every hour or once next week." />
+          <EmptyState icon={<CalendarClock />} title="No routines yet" description="Give a bot or a new chat a job to do every morning, every hour or once next week." />
         ) : (
           <ul className={styles.list}>
             {shown.map((r) => (
-              <RoutineRow key={r.id} routine={r} botName={routinesFilter ? undefined : doer(r)} />
+              <RoutineRow key={r.id} routine={r} who={routinesFilter ? undefined : doer(r)} />
             ))}
           </ul>
         )
       ) : (
         <div className={styles.scroll}>
-          <RunLog botId={routinesFilter} />
+          <RunLog botId={routinesFilter} only={isMine} />
         </div>
       )}
     </section>

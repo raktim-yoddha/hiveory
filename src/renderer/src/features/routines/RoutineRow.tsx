@@ -7,8 +7,8 @@ import { useRoutineEditor } from './RoutineEditor'
 import { describeSchedule, when } from './routine-text'
 import styles from './Routines.module.css'
 
-/** One routine: what it does and when, its next run, on/off, Run now and Edit. */
-export function RoutineRow({ routine, botName }: { routine: RoutineView; botName?: string }) {
+/** One routine: who does it, when, its next run, on/off, Run now and Edit. */
+export function RoutineRow({ routine, who }: { routine: RoutineView; who?: string }) {
   const { update, runNow } = useRoutines()
   const open = useRoutineEditor((s) => s.open)
   const next = routine.nextRunAt ? `Next ${when(routine.nextRunAt)}` : routine.enabled ? 'No runs left' : 'Paused'
@@ -17,7 +17,7 @@ export function RoutineRow({ routine, botName }: { routine: RoutineView; botName
       <button type="button" className={styles.routineMain} onClick={() => open({ routineId: routine.id })}>
         <span className={styles.routineName}>{routine.name}</span>
         <span className={styles.meta}>
-          {botName ? `${botName} · ` : ''}
+          {who ? `${who} · ` : ''}
           {describeSchedule(routine)} · {next}
         </span>
         {routine.lastRun?.status === 'failed' && <span className={styles.problem}>Last run failed: {routine.lastRun.detail}</span>}

@@ -11,7 +11,6 @@ import { useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
 import { ChatComposer } from '../chat/ChatComposer'
 import { ChatMessages } from '../chat/ChatMessages'
-import { RoutineEditor } from '../routines/RoutineEditor'
 import { RoutinesPage } from '../routines/RoutinesPage'
 import { ApprovalCard } from './ApprovalCard'
 import { BotEditor, useBotEditor } from './BotEditor'
@@ -82,12 +81,7 @@ export function BotsScreen() {
   }
 
   if (page === 'routines') {
-    return (
-      <>
-        <RoutinesPage />
-        <RoutineEditor />
-      </>
-    )
+    return <RoutinesPage />
   }
 
   if (!bot) {
@@ -182,7 +176,6 @@ export function BotsScreen() {
         <EmptyState compact title="No thread open" description="Start a thread to give this bot a task." />
       )}
       <BotEditor />
-      <RoutineEditor />
     </section>
   )
 }

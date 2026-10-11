@@ -13,6 +13,10 @@ export type RoutineTarget =
   /** A new agent of this CLI in a Work workspace: its card moves on the Kanban by its real state. */
   | { kind: 'workspace'; projectId: string; workspaceId: string; cliId: string }
 
+/** A routine of Work (ADR 0040): it lives in its Workspace's Dashboard, not on the Bots calendar. */
+export const isWorkRoutine = <T extends { target?: RoutineTarget }>(r: T): r is T & { target: Extract<RoutineTarget, { kind: 'workspace' }> } =>
+  r.target?.kind === 'workspace'
+
 /** The editor's repeat choices. All but "once" and "every X minutes" are stored as cron. */
 export const REPEAT_PRESETS = ['daily', 'weekdays', 'weekly', 'selected-days', 'monthly', 'month-end', 'yearly', 'custom'] as const
 export type RepeatPreset = (typeof REPEAT_PRESETS)[number]

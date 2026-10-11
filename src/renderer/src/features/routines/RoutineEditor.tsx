@@ -192,7 +192,7 @@ function EditorDialog({ target }: { target: Target }) {
           : draft.doer !== 'bot' && !runsOn
             ? draft.doer === 'chat'
               ? 'Pick the CLI for the chat.'
-              : 'Pick the workspace, worktree and CLI.'
+              : 'Pick the worktree and CLI.'
             : draft.doer === 'bot' && !bot
             ? 'Assign a bot.'
             : bot && !bot.routines
@@ -256,7 +256,7 @@ function EditorDialog({ target }: { target: Target }) {
     <>
       <Modal
         open={!confirmDelete}
-        title={routine ? 'Edit routine' : 'New routine'}
+        title={`${routine ? 'Edit routine' : 'New routine'}${draft.doer === 'workspace' ? ` · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}` : ''}`}
         width="lg"
         onClose={close}
         footer={
@@ -343,31 +343,21 @@ function EditorDialog({ target }: { target: Target }) {
               </label>
             </div>
           </details>
-          <Select
-            label="Who does it"
-            value={draft.doer === 'bot' ? draft.botId : draft.doer}
-            options={[
-              ...bots.map((b) => ({ value: b.id, label: b.name, group: 'A bot' })),
-              { value: 'chat', label: 'A new chat (Chat mode)', group: 'Without a bot' },
-              { value: 'workspace', label: 'A new agent in a Work worktree', group: 'Without a bot' }
-            ]}
-            onChange={(v) => (v === 'chat' || v === 'workspace' ? setDraft((d) => ({ ...d, doer: v, cliId: '' })) : setDraft((d) => ({ ...d, doer: 'bot', botId: v })))}
-          />
-          {draft.doer === 'workspace' && (
-            <div className={styles.row}>
-              <Select
-                label="Workspace"
-                value={draft.projectId}
-                options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
-                onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: '' }))}
-              />
-              <Select
-                label="Worktree"
-                value={draft.workspaceId}
-                options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
-                onChange={(v) => set('workspaceId', v)}
-              />
-            </div>
+          {/* A Work routine belongs to its Workspace (ADR 0040): only the worktree and CLI are picked here. */}
+          {draft.doer === 'workspace' ? (
+            <Select
+              label="Worktree"
+              value={draft.workspaceId}
+              options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+              onChange={(v) => set('workspaceId', v)}
+            />
+          ) : (
+            <Select
+              label="Who does it"
+              value={draft.doer === 'bot' ? draft.botId : draft.doer}
+              options={[...bots.map((b) => ({ value: b.id, label: b.name, group: 'A bot' })), { value: 'chat', label: 'A new chat (Chat mode)', group: 'Without a bot' }]}
+              onChange={(v) => (v === 'chat' ? setDraft((d) => ({ ...d, doer: v, cliId: '' })) : setDraft((d) => ({ ...d, doer: 'bot', botId: v })))}
+            />
           )}
           {draft.doer !== 'bot' && (
             <>

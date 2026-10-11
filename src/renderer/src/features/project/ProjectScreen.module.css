@@ -183,3 +183,14 @@
   height: var(--icon-md);
   border-radius: var(--radius-pill);
 }
+
+.headerActions {
+  display: flex;
+  flex: none;
+  gap: var(--space-3);
+}
+
+/* A list that sits in a Dashboard section, which already has its padding. */
+.flush {
+  padding: 0;
+}

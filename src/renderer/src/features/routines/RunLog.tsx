@@ -19,11 +19,11 @@ const duration = (run: RoutineRun): string => {
 }
 
 /** What each run did: status, when, how long, why it failed, and its thread. Newest first. */
-export function RunLog({ botId }: { botId?: string }) {
+export function RunLog({ botId, only }: { botId?: string; only?: (run: RoutineRun) => boolean }) {
   const runs = useRoutines((s) => s.runs)
   const { bots, openBotThread } = useBots()
   const doer = useDoerName()
-  const shown = botId ? runs.filter((r) => r.botId === botId) : runs
+  const shown = runs.filter((r) => (botId ? r.botId === botId : true) && (only ? only(r) : true))
   if (shown.length === 0) return <EmptyState compact title="No runs yet" description="Each run of a routine is listed here, with how it went." />
   return (
     <ul className={styles.runs} aria-label="Run log">

@@ -16,6 +16,7 @@ import { QueenDock, QueenFloating } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
+import { RoutineEditor } from '../routines/RoutineEditor'
 import { SettingsScreen } from '../settings/SettingsScreen'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
@@ -174,6 +175,8 @@ export function AppShell() {
         </ErrorBoundary>
       )}
       <AddProjectDialog />
+      {/* Opened from Bots, Chat and Work (ADR 0040). */}
+      <RoutineEditor />
       <SshPromptDialog />
       <UpdatePrompt />
       <Toasts />

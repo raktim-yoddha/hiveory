@@ -10,9 +10,14 @@ export function openRunChat(chatId: string): void {
   void useChat.getState().open(chatId)
 }
 
-/** "Schedule a chat" (Chat) and "Schedule a routine" (a workspace's menu): the Routines page with the editor open on that target. */
+/** "Schedule a chat" (Chat): the Routines page with the editor open on that target. */
 export function scheduleRoutine(target: RoutineTarget): void {
   useNavigation.getState().setMode('bots')
   useBots.getState().showRoutines()
   useRoutineEditor.getState().open({ target })
+}
+
+/** "Schedule a routine…" in Work (ADR 0040): the editor opens right here, for that Workspace's worktree. */
+export function scheduleWorkRoutine(projectId: string, workspaceId: string): void {
+  useRoutineEditor.getState().open({ target: { kind: 'workspace', projectId, workspaceId, cliId: '' } })
 }
