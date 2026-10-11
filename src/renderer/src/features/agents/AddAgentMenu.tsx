@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Globe, PanelTop, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowRight, Globe, Plus, Search } from 'lucide-react'
 import { opensAsChat, type CliDescriptor } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -107,11 +107,13 @@ function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMe
 
   return (
     <div className={styles.picker}>
-      <div className={styles.sides} role="radiogroup" aria-label="Placement">
-        {tabbed && placement('tab', 'Tab', <PanelTop aria-hidden />, '')}
-        {placement('right', 'Right', <ArrowRight aria-hidden />, 'Too narrow')}
-        {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
-      </div>
+      {/* In the Tabs style "+" always opens a tab here; splitting is a drag or a tab's menu (ADR 0042). */}
+      {!tabbed && (
+        <div className={styles.sides} role="radiogroup" aria-label="Placement">
+          {placement('right', 'Right', <ArrowRight aria-hidden />, 'Too narrow')}
+          {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
+        </div>
+      )}
       {chatPossible && (
         <Select
           label="Open agents as"

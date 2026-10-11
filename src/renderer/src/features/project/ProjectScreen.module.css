@@ -15,8 +15,8 @@
 
 .headerMark {
   flex: none;
-  width: var(--icon-md);
-  height: var(--icon-md);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .titles {
@@ -28,6 +28,9 @@
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--text-lg);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.01em;

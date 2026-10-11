@@ -1,11 +1,14 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
-import type { CliInstanceView, CliStatus } from '@shared/domain'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, FileCode2, Globe, Loader2 } from 'lucide-react'
+import type { BrowserPageView, CliInstanceView, CliStatus, EditorView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { StatusDot, STATUS_LABEL } from '../../components/ui/StatusDot'
 import { shortAgo } from '../../lib/ago'
 import { cx } from '../../lib/cx'
 import { useAgents } from '../../stores/data'
+import { useBrowser } from '../../stores/browser'
+import { useEditors } from '../../stores/editors'
+import { pageTitle } from '../browser/page-title'
 import { useNavigation } from '../../stores/navigation'
 import styles from './ProjectSidebar.module.css'
 
@@ -40,19 +43,41 @@ export function WorktreeBusy({ workspaceId }: { workspaceId: string }) {
   return <Loader2 className={cx(styles.busy, 'spin')} role="img" aria-label={label} />
 }
 
+/** One pane of a worktree as the bar and its list show it. */
+interface PaneEntry {
+  id: string
+  name: string
+  icon: ReactNode
+  /** Agents and terminals only: their status dot. */
+  status?: CliStatus
+  detail: string
+}
+
+const NO_PAGES: BrowserPageView[] = []
+const NO_EDITORS: EditorView[] = []
+
 /**
- * The agents and terminals of one Worktree under its row (ADR 0039, 0040). Folded: one bar of
- * status-and-logo chips, "+N" for what doesn't fit; a click anywhere on it unfolds it. Unfolded: a list with each
- * one's name, status and how long it has been in it. Every chip and row opens its pane.
+ * Every pane of one Worktree under its row (ADR 0039, 0040, 0042): agents and terminals (busiest
+ * first), then browser pages and open files. Folded: one bar of chips, "+N" for what doesn't fit; a
+ * click anywhere on it unfolds it. Unfolded: "N panes", each with its name and state. Every row opens its pane.
  */
 export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; workspaceId: string }) {
   const sorted = useWorktreeAgents(workspaceId)
   const since = useAgents((s) => s.since)
+  const allPages = useBrowser((s) => s.pages)
+  const pages = useMemo(() => (allPages.some((p) => p.scope === workspaceId) ? allPages.filter((p) => p.scope === workspaceId) : NO_PAGES), [allPages, workspaceId])
+  const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const [open, setOpen] = useState(false)
   const [fit, setFit] = useState(Infinity)
   const barRef = useRef<HTMLButtonElement>(null)
-  const total = sorted.length
+  const statusText = (status: CliStatus): string => (status === 'waiting-for-you' ? 'Needs you' : STATUS_LABEL[status])
+  const entries: PaneEntry[] = [
+    ...sorted.map(({ agent, status }) => ({ id: agent.id, name: agent.petName, icon: <CliLogo cliId={agent.cliId} size="sm" />, status, detail: statusText(status) })),
+    ...pages.map((page) => ({ id: page.id, name: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: <Globe className={styles.paneIcon} aria-hidden />, detail: 'Browser' })),
+    ...editors.map((editor) => ({ id: editor.id, name: editor.name, icon: <FileCode2 className={styles.paneIcon} aria-hidden />, detail: 'File' }))
+  ]
+  const total = entries.length
 
   // How many chips fit the bar right now, measured from a real chip; "+N" only when they don't all fit.
   useLayoutEffect(() => {
@@ -73,8 +98,7 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   }, [total, open])
 
   if (!total) return null
-  const count = `${sorted.length} ${sorted.length === 1 ? 'agent' : 'agents'}`
-  const statusText = (status: CliStatus): string => (status === 'waiting-for-you' ? 'Needs you' : STATUS_LABEL[status])
+  const count = `${total} ${total === 1 ? 'pane' : 'panes'}`
 
   if (open) {
     return (
@@ -84,15 +108,15 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
           <ChevronDown aria-hidden />
         </button>
         <ul className={styles.agentList}>
-          {sorted.map(({ agent, status }) => (
-            <li key={agent.id}>
-              <button type="button" className={styles.agentItem} onClick={() => openWorkspace(projectId, workspaceId, agent.id)}>
-                <StatusDot status={status} />
-                <CliLogo cliId={agent.cliId} size="sm" />
+          {entries.map((e) => (
+            <li key={e.id}>
+              <button type="button" className={styles.agentItem} onClick={() => openWorkspace(projectId, workspaceId, e.id)}>
+                {e.status ? <StatusDot status={e.status} /> : <span className={styles.noDot} aria-hidden />}
+                {e.icon}
                 <span className={styles.agentName}>
-                  <span className={cx(status !== 'idle' && styles.agentNameStrong)}>{agent.petName}</span> · {statusText(status)}
+                  <span className={cx(e.status && e.status !== 'idle' && styles.agentNameStrong)}>{e.name}</span> · {e.detail}
                 </span>
-                <span className={styles.agentAgo}>{shortAgo(since[agent.id])}</span>
+                {e.status && <span className={styles.agentAgo}>{shortAgo(since[e.id])}</span>}
               </button>
             </li>
           ))}
@@ -101,22 +125,22 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
     )
   }
 
-  const shown = sorted.slice(0, fit)
-  const more = sorted.length - shown.length
+  const shown = entries.slice(0, fit)
+  const more = total - shown.length
   return (
-    // Folded, the bar is one button that unfolds the list; its chips only show who is there (ADR 0040).
+    // Folded, the bar is one button that unfolds the list; its chips only show what is there (ADR 0040).
     <button
       ref={barRef}
       type="button"
       className={cx(styles.agents, styles.agentsBar)}
       aria-expanded={false}
-      aria-label={`Show all ${count}: ${sorted.map(({ agent, status }) => `${agent.petName}, ${statusText(status)}`).join('; ')}`}
+      aria-label={`Show all ${count}: ${entries.map((e) => `${e.name}, ${e.detail}`).join('; ')}`}
       onClick={() => setOpen(true)}
     >
-      {shown.map(({ agent, status }) => (
-        <span key={agent.id} data-chip className={styles.agentChip} title={`${agent.petName} · ${statusText(status)}`}>
-          <StatusDot status={status} />
-          <CliLogo cliId={agent.cliId} size="sm" />
+      {shown.map((e) => (
+        <span key={e.id} data-chip className={styles.agentChip} title={`${e.name} · ${e.detail}`}>
+          {e.status && <StatusDot status={e.status} />}
+          {e.icon}
         </span>
       ))}
       {more > 0 && <span className={styles.more}>+{more}</span>}

@@ -47,9 +47,10 @@ export function ProjectScreen({ projectId, workspaceId }: { projectId: string; w
   return (
     <section className={styles.screen} aria-label={project.name}>
       <header className={styles.header}>
-        <WorkspaceMark project={project} className={styles.headerMark} />
         <div className={styles.titles}>
+          {/* The mark sits on the name's line, like the sidebar's. */}
           <h2 className={styles.title}>
+            <WorkspaceMark project={project} className={styles.headerMark} />
             {project.name} <HostBadge host={project.host} />
           </h2>
           <PathTrail path={project.path} reveal={project.host ? undefined : { projectId }} />

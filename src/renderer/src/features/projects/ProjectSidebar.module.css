@@ -427,3 +427,16 @@
   height: var(--icon-sm);
   color: var(--color-working);
 }
+
+/* A browser page's or file's icon in the bar, the size of a CLI logo; rows without a status keep the dot's room. */
+.paneIcon {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-secondary);
+}
+
+.noDot {
+  flex: none;
+  width: var(--status-dot);
+}
