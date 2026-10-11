@@ -50,6 +50,17 @@ interface ProjectState {
   update(projectId: string, patch: Omit<RequestOf<'projects.update'>, 'projectId'>): Promise<void>
 }
 
+/**
+ * `projectId` and the Workspaces open on the same repository: they mirror one set of Worktrees and
+ * agents, so a change in one refreshes all of them (ADR 0039).
+ */
+export const mirrorProjectIds = (projectId: string): string[] => {
+  const projects = useProjects.getState().projects
+  const root = projects.find((p) => p.id === projectId)?.repositoryRoot
+  const key = (path: string): string => path.replaceAll('\\', '/').toLowerCase()
+  return [projectId, ...(root ? projects.filter((p) => p.id !== projectId && p.repositoryRoot && key(p.repositoryRoot) === key(root)).map((p) => p.id) : [])]
+}
+
 export const useProjects = create<ProjectState>((set) => ({
   projects: [],
   loaded: false,

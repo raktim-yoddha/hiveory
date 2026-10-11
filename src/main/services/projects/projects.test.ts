@@ -118,6 +118,19 @@ describe('Worktrees follow Git (ADR 0038)', () => {
     expect(store.state.workspaces.find((w) => w.id === ws.id)?.git?.baseRef).toBe('origin/feature/x')
   })
 
+  it('mirrors one set of worktrees in two Workspaces on the same repository (ADR 0039)', async () => {
+    const { repo, workspaces, projects } = setup()
+    mkdirSync(join(repo, 'web'))
+    const root = await projects.open(repo)
+    await workspaces.sync(root.id)
+    const amber = await workspaces.create({ projectId: root.id, kind: 'isolated', name: 'Amber', cliSelections: [], autoApprove: false })
+    const sub = await projects.open(join(repo, 'web'))
+    await workspaces.sync(sub.id)
+    const names = (id: string) => workspaces.list(id).map((w) => [w.id, w.kind])
+    expect(names(sub.id)).toEqual(names(root.id))
+    expect(names(sub.id)).toEqual([[`${root.id}--main`, 'main'], [amber.id, 'isolated']])
+  })
+
   it('forgets a leftover worktree with no folder in a Workspace without Git (ADR 0039)', async () => {
     const { repo, store, workspaces, projects } = setup()
     const plain = join(repo, '..', 'plain')

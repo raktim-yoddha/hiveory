@@ -64,6 +64,17 @@ export class WorkspaceRepository {
     ])
   }
 
+  /**
+   * The Workspaces that share `projectId`'s repository (itself first): a repository opened twice — its
+   * root and a subfolder — mirrors one set of Worktrees and agents in both (ADR 0039).
+   */
+  mirrors(projectId: string): string[] {
+    const project = this.findProject(projectId)
+    if (!project) return [projectId]
+    const key = treeKey(project.repositoryRoot ?? project.path, project.host)
+    return [projectId, ...this.store.state.projects.filter((p) => p.id !== projectId && p.repositoryRoot && treeKey(p.repositoryRoot, p.host) === key).map((p) => p.id)]
+  }
+
   findProject(projectId: string): Project | undefined {
     return this.store.state.projects.find((p) => p.id === projectId)
   }

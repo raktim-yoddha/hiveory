@@ -576,13 +576,15 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return { url: await c.github.createPullRequest(root, workspace.git.worktreePath, branch, draft ?? false) }
   },
 
-  'kanban.board': ({ projectId }) =>
-    buildBoard(
-      projectId,
+  'kanban.board': ({ projectId }) => {
+    const mirrors = c.workspaceRepo.mirrors(projectId)
+    return buildBoard(
+      mirrors,
       // Shells are terminals, not agents: they have no place on the board.
-      c.agents.instancesInProject(projectId).filter((i) => c.registry.adapter(i.cliId)?.kind !== 'shell'),
+      mirrors.flatMap((id) => c.agents.instancesInProject(id)).filter((i) => c.registry.adapter(i.cliId)?.kind !== 'shell'),
       (workspaceId) => c.workspaceRepo.find(workspaceId)?.name,
       (instanceId) => c.runtime.details(instanceId)
     )
+  }
 }
 }

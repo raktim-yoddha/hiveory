@@ -46,11 +46,16 @@ export class WorkspaceService {
     return project.repositoryRoot ?? (await kit.git.repositoryRoot(project.path))
   }
 
-  /** Cheap by design (no Git calls): it runs on every agent change. */
+  /**
+   * Cheap by design (no Git calls): it runs on every agent change. Workspaces on the same repository
+   * mirror each other: each lists the one Primary and every Worktree of that repository (ADR 0039).
+   */
   list(projectId: string): WorkspaceView[] {
-    const project = this.repo.project(projectId)
-    const main = this.repo.main(project)
-    return [...(main ? [main] : []), ...this.repo.isolated(projectId)].map((w) => this.view(w))
+    this.repo.project(projectId)
+    const projects = this.repo.mirrors(projectId).map((id) => this.repo.findProject(id)!)
+    const mains = projects.flatMap((p) => this.repo.main(p) ?? [])
+    const isolated = projects.flatMap((p) => this.repo.isolated(p.id)).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return [...mains.slice(0, 1), ...isolated].map((w) => this.view(w))
   }
 
   view(workspace: Workspace): WorkspaceView {

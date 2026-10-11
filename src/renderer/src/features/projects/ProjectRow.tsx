@@ -48,7 +48,7 @@ export function ProjectRow({ project }: { project: Project }) {
   }, [project.id, loadWorkspaces])
 
   const openTarget = (): void => {
-    if (!expanded && target) openWorkspace(project.id, target.id)
+    if (!expanded && target) openWorkspace(target.projectId, target.id)
   }
 
   return (
@@ -144,7 +144,7 @@ export function ProjectRow({ project }: { project: Project }) {
                       {...props}
                       type="button"
                       className={cx(styles.childRow, selected && styles.selected)}
-                      onClick={() => openWorkspace(project.id, ws.id)}
+                      onClick={() => openWorkspace(ws.projectId, ws.id)}
                       aria-current={selected ? 'page' : undefined}
                       aria-label={main ? `${folderName(project.path)}, primary worktree` : ws.name}
                       title={ws.healthy ? ws.path : 'Folder missing on disk'}
@@ -166,7 +166,7 @@ export function ProjectRow({ project }: { project: Project }) {
                     </button>
                   )}
                 />
-                <WorktreeAgents projectId={project.id} workspaceId={ws.id} />
+                <WorktreeAgents projectId={ws.projectId} workspaceId={ws.id} />
               </li>
             )
           })}

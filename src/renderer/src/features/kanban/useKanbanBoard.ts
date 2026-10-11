@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { KanbanBoard } from '@shared/domain'
 import { api, subscribe } from '../../lib/api'
+import { mirrorProjectIds } from '../../stores/data'
 import { reportError } from '../../stores/notices'
 
 /**
@@ -23,10 +24,9 @@ export const useKanbanBoard = (projectId: string): KanbanBoard | null => {
       timer = setTimeout(refresh, 60)
     }
     refresh()
-    const offs = [
-      subscribe('runtime.changed', (e) => e.projectId === projectId && schedule()),
-      subscribe('state.changed', (e) => e.projectId === projectId && schedule())
-    ]
+    // Workspaces on the same repository share their agents (ADR 0039).
+    const ours = (id?: string): boolean => Boolean(id) && mirrorProjectIds(projectId).includes(id!)
+    const offs = [subscribe('runtime.changed', (e) => ours(e.projectId) && schedule()), subscribe('state.changed', (e) => ours(e.projectId) && schedule())]
     return () => {
       disposed = true
       if (timer) clearTimeout(timer)

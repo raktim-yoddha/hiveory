@@ -1,5 +1,5 @@
 import { subscribe } from '../lib/api'
-import { useAgents, useLayouts, usePresets, useProjects, useSettings, useThemes, useUpdates, useWorkspaces } from './data'
+import { mirrorProjectIds, useAgents, useLayouts, usePresets, useProjects, useSettings, useThemes, useUpdates, useWorkspaces } from './data'
 import { useBots } from './bots'
 import { useBrowser } from './browser'
 import { useChat } from './chat'
@@ -55,7 +55,7 @@ export const installEventBridge = (): (() => void) => {
       if (topic === 'connections') reload('connections', () => useConnections.getState().load())
       if (topic === 'editors' && workspaceId) reload(`editors:${workspaceId}`, () => useEditors.getState().load(workspaceId))
       if ((topic === 'workspaces' || topic === 'agents') && projectId) {
-        reload(`ws:${projectId}`, () => useWorkspaces.getState().load(projectId))
+        for (const id of mirrorProjectIds(projectId)) reload(`ws:${id}`, () => useWorkspaces.getState().load(id))
       }
       if (topic === 'agents' && workspaceId) reload(`agents:${workspaceId}`, () => useAgents.getState().load(workspaceId))
       if ((topic === 'agents' || topic === 'layout') && workspaceId) {

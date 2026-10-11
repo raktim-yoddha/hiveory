@@ -22,6 +22,13 @@ and fewer menus where a direct choice reads better. Shipped as PATCH releases (A
 - "+" opens New worktree directly; New branch · Existing branch · Remote branch are tabs at its top,
   switchable at any time (no menu first).
 
+### One repository, one set of Worktrees (amends ADR 0021)
+The same folder is never added twice (ADR 0038). Where two Workspaces still share a repository
+(its root and a monorepo subfolder), they mirror each other: `WorkspaceRepository.mirrors` finds
+them by repository, `workspaces.list` and the board show the one Primary and every Worktree and
+agent of that repository in each, and a change in one refreshes the others. A Worktree opens
+under the Workspace that owns its record.
+
 ### No leftover worktrees, Git when needed
 Without Git to ask (a folder that is not a repository), a Worktree whose folder is gone is a
 leftover and is forgotten on sync. When no local branch is free, Existing branch says why.
