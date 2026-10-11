@@ -16,6 +16,8 @@ avatar), a tidier Appearance page, remote sessions, and a few corrections.
 - A Worktree's bar in the sidebar lists every pane: agents and terminals (busiest first), browser
   pages (globe) and open files, headed "N panes".
 - The Dashboard's workspace mark sits on the name's line, a size smaller.
+- A click anywhere in a chat (Chat mode, a bot's thread, a Work agent's chat view) goes to its message
+  box, unless it hit a button, link or field, or ended a text selection (`focusChatInput`).
 
 ## Consequences
 

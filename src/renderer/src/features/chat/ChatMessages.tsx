@@ -6,6 +6,7 @@ import { CliLogo } from '../../components/cli/CliLogo'
 import { useClis } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { Markdown } from '../../components/ui/Markdown'
+import { focusChatInput } from './focus-input'
 import styles from './Chat.module.css'
 
 /** The conversation; follows new output unless the user has scrolled up. */
@@ -28,6 +29,7 @@ export function ChatMessages({ chat, welcome }: { chat: ChatSession & { running:
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
       }}
       aria-live="polite"
+      onClick={focusChatInput}
     >
       <div className={styles.thread}>
         {chat.messages.length === 0 && (

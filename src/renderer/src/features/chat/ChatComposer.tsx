@@ -12,6 +12,7 @@ import { AttachmentChips } from './AttachmentChips'
 import { EffortIcon } from './EffortIcon'
 import { PromptsMenu } from './PromptsMenu'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
+import { focusChatInput } from './focus-input'
 import styles from './Chat.module.css'
 
 const MAX_VISIBLE_MODELS = 250
@@ -118,7 +119,7 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   }))
 
   return (
-    <div className={cx(styles.composerWrap, agent && styles.composerWrapAgent)}>
+    <div className={cx(styles.composerWrap, agent && styles.composerWrapAgent)} onClick={focusChatInput}>
       <div
         className={cx(styles.composer, dragging && styles.composerDrop)}
         onDragOver={(e) => {
@@ -146,6 +147,7 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
         />
         <textarea
           ref={inputRef}
+          data-chat-input
           className={styles.input}
           rows={1}
           placeholder={chat.cliId ? (chat.running ? 'Type the next message: it goes in when this reply ends' : (placeholder ?? `Ask ${cliName ?? 'the agent'} anything…`)) : 'Choose a CLI below to start'}
