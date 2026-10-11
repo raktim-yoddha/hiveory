@@ -10,6 +10,7 @@ import { runAction } from '../../stores/notices'
 import { crossFadeLook, setLookVariable } from '../shell/appearance'
 import { SettingsPage } from './SettingsScreen'
 import { ThemeCard, type ThemePreview } from './ThemeCard'
+import { TerminalFontSettings } from './TerminalFontSettings'
 import { VsCodeThemes } from './VsCodeThemes'
 import styles from './Settings.module.css'
 
@@ -157,6 +158,7 @@ export function AppearanceSection() {
       </div>
 
       <VsCodeThemes />
+      <TerminalFontSettings />
     </SettingsPage>
   )
 }

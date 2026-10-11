@@ -66,8 +66,26 @@ const SGR = /\x1b\[([0-9;:]*)m/g
 // eslint-disable-next-line no-control-regex
 const PARTIAL = /\x1b(?:\[[0-9;:]*)?$/
 
-/** Stateful per terminal: chunks may split a sequence. */
-export const createDarkBackgroundFilter = (): ((chunk: string) => string) => {
+/**
+ * SGR parameters without italic (3), leaving color arguments (38;5;n, 48;2;r;g;b…) intact; null when
+ * nothing is left, so the sequence is dropped instead of becoming a reset (Settings › Terminal font).
+ */
+export const withoutItalic = (params: string): string | null => {
+  const parts = params.split(';')
+  const out: string[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]!
+    if ((part === '38' || part === '48' || part === '58') && (parts[i + 1] === '5' || parts[i + 1] === '2')) {
+      const n = parts[i + 1] === '5' ? 3 : 5
+      out.push(...parts.slice(i, i + n))
+      i += n - 1
+    } else if (part !== '3') out.push(part)
+  }
+  return out.length ? out.join(';') : null
+}
+
+/** Stateful per terminal: chunks may split a sequence. `upright`: draw italic text upright. */
+export const createDarkBackgroundFilter = (upright: () => boolean = () => false): ((chunk: string) => string) => {
   let carry = ''
   return (chunk) => {
     let data = carry + chunk
@@ -77,6 +95,12 @@ export const createDarkBackgroundFilter = (): ((chunk: string) => string) => {
       carry = partial[0]
       data = data.slice(0, partial.index)
     }
-    return data.includes('48') ? data.replace(SGR, (whole, params: string) => (params.includes('48') ? `\x1b[${rewriteSgr(params)}m` : whole)) : data
+    const strip = upright()
+    if (!data.includes('48') && !strip) return data
+    return data.replace(SGR, (whole, params: string) => {
+      let next: string | null = params.includes('48') ? rewriteSgr(params) : params
+      if (strip && next) next = withoutItalic(next)
+      return next === null ? '' : next === params ? whole : `\x1b[${next}m`
+    })
   }
 }

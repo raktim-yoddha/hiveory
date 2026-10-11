@@ -9,6 +9,8 @@ export interface AppSettings {
   autoCheckUpdates: boolean
   /** Download a found update in the background; it installs on restart or quit. */
   autoDownloadUpdates: boolean
+  /** Terminal panes' typeface and text rendering (Settings › Appearance › Terminal font; ADR 0039). */
+  terminalFont: TerminalFont
   /** How often automatic checks run (they also run on launch; ADR 0039). */
   updateCheckEvery: UpdateCheckEvery
   /** An update is overdue two days after its release; a dismissed reminder comes back after this. */
@@ -97,10 +99,61 @@ export interface AppSettings {
   queenVoiceSpeed: number
 }
 
+export const FONT_WEIGHTS = ['100', '200', '300', '400', '500', '600', '700', '800', '900'] as const
+export type FontWeight = (typeof FONT_WEIGHTS)[number]
+
+export interface TerminalFont {
+  /** An installed family name; '' = the default (JetBrainsMono Nerd Font when installed, else the bundled JetBrains Mono). */
+  family: string
+  /** Base size in pt (a narrow pane still zooms out below it). */
+  size: number
+  lineHeight: number
+  weight: FontWeight
+  boldWeight: FontWeight
+  /** Off: italic text is drawn upright. */
+  italic: boolean
+  /** Bold text in the bright variant of its color, as classic terminals do. */
+  boldBright: boolean
+}
+
+/** Every value is clamped to these, whatever a stored file or a request says, so text always renders. */
+export const TERMINAL_FONT_LIMITS = { size: { min: 8, max: 32 }, lineHeight: { min: 1, max: 2 } } as const
+/** Family names as fonts are named: letters, digits, spaces and a little punctuation (it is quoted into a font list). */
+export const FONT_FAMILY = /^[\p{L}\p{N} ._+&()'-]{0,100}$/u
+
+/** A stored or requested font made safe: unknown fields dropped, numbers clamped, bad names cleared. */
+export const safeTerminalFont = (value: unknown): TerminalFont => {
+  const v = (typeof value === 'object' && value !== null ? value : {}) as Partial<Record<keyof TerminalFont, unknown>>
+  const d = DEFAULT_TERMINAL_FONT
+  const num = (x: unknown, fallback: number, { min, max }: { min: number; max: number }, step: number): number =>
+    typeof x === 'number' && Number.isFinite(x) ? Math.round(Math.min(max, Math.max(min, x)) / step) * step : fallback
+  const weight = (x: unknown, fallback: FontWeight): FontWeight => ((FONT_WEIGHTS as readonly unknown[]).includes(x) ? (x as FontWeight) : fallback)
+  return {
+    family: typeof v.family === 'string' && FONT_FAMILY.test(v.family) ? v.family.trim() : d.family,
+    size: num(v.size, d.size, TERMINAL_FONT_LIMITS.size, 1),
+    lineHeight: Number(num(v.lineHeight, d.lineHeight, TERMINAL_FONT_LIMITS.lineHeight, 0.01).toFixed(2)),
+    weight: weight(v.weight, d.weight),
+    boldWeight: weight(v.boldWeight, d.boldWeight),
+    italic: typeof v.italic === 'boolean' ? v.italic : d.italic,
+    boldBright: typeof v.boldBright === 'boolean' ? v.boldBright : d.boldBright
+  }
+}
+
+export const DEFAULT_TERMINAL_FONT: TerminalFont = {
+  family: '',
+  size: 13,
+  lineHeight: 1.15,
+  weight: '400',
+  boldWeight: '700',
+  italic: true,
+  boldBright: true
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   autoCheckUpdates: true,
   autoDownloadUpdates: false,
+  terminalFont: DEFAULT_TERMINAL_FONT,
   updateCheckEvery: '6h',
   updateRemindEvery: '2h',
   agentTools: true,

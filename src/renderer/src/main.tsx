@@ -8,6 +8,7 @@ import { AppShell } from './features/shell/AppShell'
 import { useBrowser } from './stores/browser'
 import { installEventBridge } from './stores/bridge'
 import { applyLook } from './features/shell/appearance'
+import { applyTerminalFont } from './features/terminal/terminal-registry'
 import { useConnections } from './stores/connections'
 import { findTheme, useApp, useClis, useSettings, useThemes } from './stores/data'
 import { reportError } from './stores/notices'
@@ -38,6 +39,10 @@ function App() {
   useEffect(() => {
     applyLook({ theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim }, custom)
   }, [theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim, custom])
+  const terminalFont = settings.terminalFont
+  useEffect(() => {
+    applyTerminalFont(terminalFont)
+  }, [terminalFont])
   return <AppShell />
 }
 

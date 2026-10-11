@@ -51,6 +51,15 @@ Questions and yes/no still open, since the command waits for that answer.
 The Chat screen's empty state and a chat with no CLI yet show Hiveory's own logo, and a chat with
 a CLI shows that CLI's logo, instead of a generic chat icon.
 
+### Terminal font
+Settings › Appearance › Terminal font: Family (installed monospaced families, read by name through
+the Local Font Access permission `local-fonts`, allowed for Hiveory's own window only), Size
+(8–32 pt, the base a narrow pane still zooms out from), Line height (1.00–2.00), Regular and Bold
+weight (100–900), Italic text (off draws it upright by dropping SGR 3 from the output) and Bold text in
+bright colors. The default family is JetBrainsMono Nerd Font when installed, then the bundled
+JetBrains Mono. `settings.terminalFont` is clamped field by field (`safeTerminalFont`) when stored,
+read and changed, and a missing family falls back to the default list, so no value breaks terminals.
+
 ### Update schedule and overdue reminders
 Settings › Updates keeps its page and gains two rows: Check for updates (Hourly · Every 6 hours ·
 Daily; `updateCheckEvery`, default every 6 hours, also on launch) and Remind me about overdue

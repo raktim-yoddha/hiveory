@@ -30,12 +30,12 @@ const cellWidth = (fontSize: number, dpr: number): number => Math.floor(fontSize
  * whole-device-pixel cell that fits, with a font whose glyphs fill that cell (half a device pixel
  * over, so it snaps to it) rather than one squeezed into a smaller cell.
  */
-export const adaptiveFontSize = (width: number, minColumns: number, dpr: number): number => {
+export const adaptiveFontSize = (width: number, minColumns: number, dpr: number, base = FONT_SIZE): number => {
   const target = Math.max(COMFORT_COLUMNS, minColumns)
-  if (width / cellWidth(FONT_SIZE, dpr) >= target) return FONT_SIZE
-  const floor = minColumns ? SQUEEZED_FONT_SIZE : MIN_FONT_SIZE
+  if (width / cellWidth(base, dpr) >= target) return base
+  const floor = Math.min(base, minColumns ? SQUEEZED_FONT_SIZE : MIN_FONT_SIZE)
   const cell = Math.max(Math.floor((width / target) * dpr) / dpr, cellWidth(floor, dpr))
-  return Math.min(FONT_SIZE, Math.max(floor, (cell + 0.5 / dpr) / CELL_WIDTH_PER_PX))
+  return Math.min(base, Math.max(floor, (cell + 0.5 / dpr) / CELL_WIDTH_PER_PX))
 }
 
 /** A CLI's measured layout needs, from the CLI registry; 0: it adapts to any size. */

@@ -2,9 +2,10 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
+import { DEFAULT_TERMINAL_FONT, type FontWeight, type TerminalFont } from '@shared/domain'
 import { api, subscribe } from '../../lib/api'
 import { createDarkBackgroundFilter } from './dark-backgrounds'
-import { adaptiveFontSize, FONT_SIZE, type LayoutNeeds, MIN_FONT_SIZE, smallerFontSize, visibleTop } from './terminal-fit'
+import { adaptiveFontSize, type LayoutNeeds, MIN_FONT_SIZE, smallerFontSize, visibleTop } from './terminal-fit'
 
 /**
  * Keeps one xterm per agent instance alive outside React, so moving a pane
@@ -40,8 +41,29 @@ const readTheme = (): ITheme => {
  * vanish, so xterm lifts low-contrast text there, as VS Code's own terminal does (ADR 0038).
  */
 const minimumContrast = (): number => (document.documentElement.dataset.customTheme === 'light' ? 4.5 : 1)
-/** The WebGL renderer draws dark-on-light strokes thin; a step heavier reads like the dark themes. */
-const fontWeight = (): 'normal' | '500' => (document.documentElement.dataset.customTheme === 'light' ? '500' : 'normal')
+/**
+ * Settings › Appearance › Terminal font (ADR 0039), already clamped by the settings schema. The default
+ * family is JetBrainsMono Nerd Font when installed (its icons), then the bundled JetBrains Mono.
+ */
+let font: TerminalFont = DEFAULT_TERMINAL_FONT
+const DEFAULT_STACK = '"JetBrainsMono Nerd Font", "JetBrainsMono NF", "JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
+const fontFamily = (): string => (font.family ? `"${font.family}", ${DEFAULT_STACK}` : DEFAULT_STACK)
+/** The WebGL renderer draws dark-on-light strokes thin; a light theme draws regular text a step heavier. */
+const fontWeight = (): FontWeight => (document.documentElement.dataset.customTheme === 'light' && font.weight === '400' ? '500' : font.weight)
+
+/** Applies new font settings to every terminal, then refits them (the cell size changed). */
+export const applyTerminalFont = (next: TerminalFont): void => {
+  font = next
+  for (const [instanceId, entry] of entries) {
+    entry.term.options.fontFamily = fontFamily()
+    entry.term.options.lineHeight = font.lineHeight
+    entry.term.options.fontWeight = fontWeight()
+    entry.term.options.fontWeightBold = font.boldWeight
+    entry.term.options.drawBoldTextInBrightColors = font.boldBright
+    entry.term.clearTextureAtlas()
+    fitTerminal(instanceId)
+  }
+}
 
 /** Only a wallpaper needs a see-through terminal; an opaque one draws crisper text (dark-on-light above all). */
 const transparent = (): boolean => 'wallpaper' in document.documentElement.dataset
@@ -54,7 +76,6 @@ const transparent = (): boolean => 'wallpaper' in document.documentElement.datas
 const MIN_COLS = 20
 const MIN_ROWS = 5
 
-const FONT = '"JetBrains Mono Variable", "Cascadia Mono", Consolas, monospace'
 /** Matches the visible scrollbar (TerminalView.module.css), so fitting reserves no wider gutter. */
 const SCROLLBAR_PX = 6
 
@@ -84,7 +105,7 @@ interface Entry {
 const entries = new Map<string, Entry>()
 let listening = false
 let theme: ITheme | null = null
-const fontReady = document.fonts?.load(`13px ${FONT}`).catch(() => undefined) ?? Promise.resolve()
+const fontReady = document.fonts?.load('13px "JetBrains Mono Variable"').catch(() => undefined) ?? Promise.resolve()
 
 const writeChunk = (entry: Entry, data: string, offset: number): void => {
   const end = offset + data.length
@@ -131,9 +152,11 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   ensureListener()
   theme ??= readTheme()
   const term = new Terminal({
-    fontFamily: FONT,
-    fontSize: FONT_SIZE,
-    lineHeight: 1.15,
+    fontFamily: fontFamily(),
+    fontSize: font.size,
+    lineHeight: font.lineHeight,
+    fontWeightBold: font.boldWeight,
+    drawBoldTextInBrightColors: font.boldBright,
     cursorBlink: true,
     scrollback: 10000,
     smoothScrollDuration: 0,
@@ -194,7 +217,7 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
     if (!copySelection(term)) pasteClipboard(instanceId, term)
     else term.clearSelection()
   })
-  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter() }
+  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic) }
   entries.set(instanceId, entry)
   // Track cursor visibility (CSI ? 25 h / l) without consuming it: xterm still applies it.
   for (const final of ['h', 'l']) {
@@ -270,7 +293,7 @@ export const fitTerminal = (instanceId: string): void => {
   const { minColumns, minRows } = entry.needs
   const dpr = window.devicePixelRatio || 1
   const width = entry.element.clientWidth - SCROLLBAR_PX
-  let size = width > 0 ? adaptiveFontSize(width, minColumns, dpr) : (entry.term.options.fontSize ?? FONT_SIZE)
+  let size = width > 0 ? adaptiveFontSize(width, minColumns, dpr, font.size) : (entry.term.options.fontSize ?? font.size)
   if (size !== entry.term.options.fontSize) entry.term.options.fontSize = size
   let proposed = entry.fit.proposeDimensions()
   // A full-screen TUI draws its parts over each other when it is too short: a short pane zooms out

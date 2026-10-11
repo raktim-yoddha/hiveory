@@ -74,7 +74,8 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     callback(audioOnly && wc === window.webContents && ownPage(details.requestingUrl))
   })
   // The window never navigates away from Hiveory's page (will-navigate is blocked), so its contents identify it.
-  window.webContents.session.setPermissionCheckHandler((wc, permission) => permission === 'media' && wc === window.webContents)
+  // local-fonts: Settings › Terminal font lists installed monospaced families (names only; ADR 0039).
+  window.webContents.session.setPermissionCheckHandler((wc, permission) => (permission === 'media' || (permission as string) === 'local-fonts') && wc === window.webContents)
 
   // DevTools stay reachable in development without an application menu.
   if (targets.devServerUrl) {

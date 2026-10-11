@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
 import { WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
-import { UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
+import { FONT_FAMILY, FONT_WEIGHTS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -381,6 +381,15 @@ export const requestSchemas = {
       theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']),
       autoCheckUpdates: z.boolean(),
       autoDownloadUpdates: z.boolean(),
+      terminalFont: z.object({
+        family: z.string().regex(FONT_FAMILY),
+        size: z.number().int().min(TERMINAL_FONT_LIMITS.size.min).max(TERMINAL_FONT_LIMITS.size.max),
+        lineHeight: z.number().min(TERMINAL_FONT_LIMITS.lineHeight.min).max(TERMINAL_FONT_LIMITS.lineHeight.max),
+        weight: z.enum(FONT_WEIGHTS),
+        boldWeight: z.enum(FONT_WEIGHTS),
+        italic: z.boolean(),
+        boldBright: z.boolean()
+      }),
       updateCheckEvery: z.enum(UPDATE_CHECK_EVERY),
       updateRemindEvery: z.enum(UPDATE_REMIND_EVERY),
       agentTools: z.boolean(),
