@@ -87,7 +87,8 @@ export const WORKSPACE_ICONS = [
 export type WorkspaceIcon = (typeof WORKSPACE_ICONS)[number]
 
 /** One emoji (with its modifiers and joiners), as a Workspace's mark. */
-export const EMOJI = /^[\p{Emoji}\p{Emoji_Component}\u200d\ufe0f]{1,16}$/u
+// Joiners (U+200D) and variation selectors (U+FE0F) are Emoji_Component.
+export const EMOJI = /^[\p{Emoji}\p{Emoji_Component}]{1,16}$/u
 
 /** A custom Workspace color: #rrggbb. */
 export const HEX_COLOR = /^#[0-9a-f]{6}$/i
