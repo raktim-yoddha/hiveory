@@ -5,7 +5,7 @@ import { Select } from '../../components/ui/Select'
 import { Toggle } from '../../components/ui/Toggle'
 import { monospaceFamilies } from '../../lib/fonts'
 import { useSettings } from '../../stores/data'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const WEIGHT_NAMES: Record<FontWeight, string> = {

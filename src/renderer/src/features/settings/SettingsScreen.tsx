@@ -101,28 +101,3 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
     </dialog>
   )
 }
-
-/** Shared section scaffolding. */
-export function SettingsPage({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
-  return (
-    <div className={styles.page}>
-      <header className={styles.pageHeader}>
-        <h2 className={styles.pageTitle}>{title}</h2>
-        {description && <p className={styles.pageDescription}>{description}</p>}
-      </header>
-      {children}
-    </div>
-  )
-}
-
-export function SettingRow({ title, description, control }: { title: string; description?: ReactNode; control: ReactNode }) {
-  return (
-    <div className={styles.row}>
-      <div className={styles.rowText}>
-        <span className={styles.rowTitle}>{title}</span>
-        {description && <span className={styles.rowDescription}>{description}</span>}
-      </div>
-      <div className={styles.rowControl}>{control}</div>
-    </div>
-  )
-}

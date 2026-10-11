@@ -6,7 +6,7 @@ import { Select } from '../../components/ui/Select'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const SSH_HOST = /^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/

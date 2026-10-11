@@ -2,7 +2,7 @@ import { CliLogo } from '../../components/cli/CliLogo'
 import { Toggle } from '../../components/ui/Toggle'
 import { Select } from '../../components/ui/Select'
 import { useApp, useClis, useSettings } from '../../stores/data'
-import { SettingRow, SettingsPage } from './SettingsScreen'
+import { SettingRow, SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 /** CLIs whose sessions load Hiveory's MCP server (mirrors adapters with `injectMcp`). */

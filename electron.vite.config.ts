@@ -47,6 +47,9 @@ export default defineConfig({
     build: { rollupOptions: { external: ['electron'], output: { format: 'cjs', entryFileNames: '[name].cjs' } } }
   },
   renderer: {
+    // electron-vite leaves builds unminified; the renderer is parsed on every window start, so it is
+    // minified (ADR 0044). Main and preload stay readable for stack traces in the log.
+    build: { minify: true },
     plugins: [
       react(),
       {

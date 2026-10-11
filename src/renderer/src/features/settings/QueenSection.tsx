@@ -5,7 +5,7 @@ import { QueenBarSettings } from './QueenBarSettings'
 import { QueenPersonality } from './QueenPersonality'
 import { QueenProviders } from './QueenProviders'
 import { QueenVoiceSettings } from './QueenVoiceSettings'
-import { SettingsPage } from './SettingsScreen'
+import { SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 /** Queen Bee (ADR 0019): personality, providers, voice, and her bar and shortcut — one tab each. */

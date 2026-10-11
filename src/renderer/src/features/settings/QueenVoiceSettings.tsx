@@ -12,7 +12,7 @@ import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import { speak, useVoice } from '../queen/voice'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const size = (bytes: number): string => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.round(bytes / 1e6)} MB`)

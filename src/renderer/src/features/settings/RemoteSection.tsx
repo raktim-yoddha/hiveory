@@ -8,7 +8,7 @@ import { runAction } from '../../stores/notices'
 import { ServerConnection } from './ServerConnection'
 import { ShareThisComputer } from './ShareThisComputer'
 import { TailnetDevices } from './TailnetDevices'
-import { SettingRow, SettingsPage } from './SettingsScreen'
+import { SettingRow, SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 type Result = Awaited<ReturnType<typeof api<'hosts.check'>>>

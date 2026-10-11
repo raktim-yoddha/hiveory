@@ -6,7 +6,7 @@ import { Select } from '../../components/ui/Select'
 import { api } from '../../lib/api'
 import { useNavigation } from '../../stores/navigation'
 import { useProjects } from '../../stores/data'
-import { SettingRow } from '../settings/SettingsScreen'
+import { SettingRow } from '../settings/SettingsPage'
 import settings from '../settings/Settings.module.css'
 
 /**

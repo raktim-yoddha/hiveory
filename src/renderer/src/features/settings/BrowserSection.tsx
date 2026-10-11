@@ -10,7 +10,7 @@ import { api } from '../../lib/api'
 import { useBrowser } from '../../stores/browser'
 import { useSettings } from '../../stores/data'
 import { runAction, useNotices } from '../../stores/notices'
-import { SettingRow, SettingsPage } from './SettingsScreen'
+import { SettingRow, SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const TOOLS: Array<[string, string]> = [

@@ -7,7 +7,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useApp, useSettings, useUpdates } from '../../stores/data'
 import { runAction } from '../../stores/notices'
-import { SettingRow, SettingsPage } from './SettingsScreen'
+import { SettingRow, SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const describe = (s: UpdateStatus): { title: string; detail?: string } => {

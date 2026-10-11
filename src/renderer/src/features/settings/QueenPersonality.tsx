@@ -9,7 +9,7 @@ import { RangeField } from '../../components/ui/RangeField'
 import { Select } from '../../components/ui/Select'
 import { TextAreaField, TextInput } from '../../components/ui/TextField'
 import { useSettings } from '../../stores/data'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const SAMPLE = [{ kind: 'opened' as const, count: 2, cliName: 'Codex', workspace: 'feature-x' }]

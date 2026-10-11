@@ -10,7 +10,7 @@ import { runAction } from '../../stores/notices'
 import { McpPanel } from './extensions/McpPanel'
 import { AppsPanel } from './extensions/AppsPanel'
 import { SkillsPanel } from './extensions/SkillsPanel'
-import { SettingsPage } from './SettingsScreen'
+import { SettingsPage } from './SettingsPage'
 import styles from './extensions/Extensions.module.css'
 
 type Tab = 'skills' | 'mcp' | 'apps'

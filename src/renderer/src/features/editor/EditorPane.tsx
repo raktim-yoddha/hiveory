@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FileCode2, Maximize2, Minimize2, Save, X } from 'lucide-react'
 import type { EditorView } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
@@ -9,7 +9,8 @@ import { runAction } from '../../stores/notices'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
-import { CodeEditor } from './CodeEditor'
+// CodeMirror is large: it loads with the first file opened (ADR 0044).
+const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
 import styles from './Editor.module.css'
 
 interface EditorPaneProps extends PaneRenderProps {
@@ -111,6 +112,7 @@ export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleM
       {loaded.state === 'loading' ? null : loaded.state === 'error' ? (
         <EmptyState compact icon={<FileCode2 />} title="Can't open this file" description={loaded.message} />
       ) : (
+        <Suspense fallback={null}>
         <CodeEditor
           value={loaded.saved}
           revision={loaded.revision}
@@ -121,6 +123,7 @@ export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleM
           }}
           onSave={() => void save()}
         />
+        </Suspense>
       )}
       <ConfirmDialog
         open={confirmClose}

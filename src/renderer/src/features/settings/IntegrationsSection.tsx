@@ -7,7 +7,7 @@ import { TextInput } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
 import { AppMark } from './extensions/AppMark'
-import { SettingsPage } from './SettingsScreen'
+import { SettingsPage } from './SettingsPage'
 import settings from './Settings.module.css'
 import styles from './Integrations.module.css'
 

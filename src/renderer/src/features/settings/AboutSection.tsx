@@ -1,6 +1,6 @@
 import { AppLogo } from '../../components/brand/AppLogo'
 import { useApp, useClis } from '../../stores/data'
-import { SettingRow, SettingsPage } from './SettingsScreen'
+import { SettingRow, SettingsPage } from './SettingsPage'
 import styles from './Settings.module.css'
 
 export function AboutSection() {

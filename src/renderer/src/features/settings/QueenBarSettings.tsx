@@ -9,7 +9,7 @@ import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { useQueen, type QueenPlacement } from '../queen/useQueen'
 import { shortcutRecording } from '../queen/useQueenShortcut'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 const modifierOf = (code: string): Modifier | null => {

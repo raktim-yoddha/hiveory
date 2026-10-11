@@ -48,6 +48,13 @@ a livelier app, and a full pass for speed, memory, security and the guide.
   starts again the output is drawn first under "restored from last time". An agent that resumes its
   conversation redraws it itself, so its saved output is dropped. Closing a pane deletes it.
 
+### Speed and memory
+- The renderer is minified (electron-vite leaves it unminified by default): 3.8 MB became 2.1 MB.
+- Settings, Bots, Chat and the code editor (CodeMirror) load when first opened (`React.lazy`), and
+  Bots and Chat mount on their first visit, then stay mounted as before. A window that starts in Work
+  parses about a third of the code it did. `SettingsPage`/`SettingRow` moved to their own module so a
+  Workspace's settings don't pull the whole Settings window in.
+
 ### Found along the way
 - A skill whose description is a YAML block (`description: >`) showed ">"; block values are read.
 

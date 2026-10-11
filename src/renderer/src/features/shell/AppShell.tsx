@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
@@ -7,18 +7,12 @@ import { cx } from '../../lib/cx'
 import { useBots } from '../../stores/bots'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
-import { BotPanel } from '../bots/BotPanel'
-import { BotsScreen } from '../bots/BotsScreen'
-import { BotsSidebar } from '../bots/BotsSidebar'
-import { ChatScreen } from '../chat/ChatScreen'
-import { ChatSidebar } from '../chat/ChatSidebar'
 import { QueenDock, QueenFloating } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
 import { WelcomeDialog } from './WelcomeDialog'
-import { SettingsScreen } from '../settings/SettingsScreen'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
@@ -26,9 +20,21 @@ import { HomeScreen } from './HomeScreen'
 import { TitleBar } from './TitleBar'
 import styles from './AppShell.module.css'
 
+/*
+ * Loaded when first needed (ADR 0044): Settings, Bots and Chat are most of the app's code, and a window
+ * that starts in Work never parses them until they are opened.
+ */
+const SettingsScreen = lazy(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })))
+const BotsScreen = lazy(() => import('../bots/BotsScreen').then((m) => ({ default: m.BotsScreen })))
+const BotsSidebar = lazy(() => import('../bots/BotsSidebar').then((m) => ({ default: m.BotsSidebar })))
+const BotPanel = lazy(() => import('../bots/BotPanel').then((m) => ({ default: m.BotPanel })))
+const ChatScreen = lazy(() => import('../chat/ChatScreen').then((m) => ({ default: m.ChatScreen })))
+const ChatSidebar = lazy(() => import('../chat/ChatSidebar').then((m) => ({ default: m.ChatSidebar })))
+
 /**
- * Top-level layout. Work, Bots and Chat all stay mounted — switching modes only
- * hides the others — so none ever "sleeps". Each region has its own error boundary.
+ * Top-level layout. Work, Bots and Chat stay mounted once opened — switching modes only
+ * hides the others — so none ever "sleeps"; Bots and Chat mount on their first visit (ADR 0044).
+ * Each region has its own error boundary.
  * Both sidebars are resizable; a maximized side panel overlays the main area
  * (which keeps its size, so agent terminals never reflow).
  */
@@ -56,6 +62,9 @@ export function AppShell() {
   const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null && s.page === 'bot')
   const setBotPanelOpen = useBots((s) => s.setPanelOpen)
   const workView = view.type === 'settings' ? view.returnTo : view
+  // Modes visited so far: each mounts the first time it is shown and then stays.
+  const [visited, setVisited] = useState(() => new Set([mode]))
+  if (!visited.has(mode)) setVisited(new Set([...visited, mode]))
   const showBotPanel = botPanelOpen && mode === 'bots'
   const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && workView.type === 'workspace')
   const maximized = panelMaximized && !showBotPanel
@@ -101,7 +110,7 @@ export function AppShell() {
         {showSidebar && (
           <aside ref={sidebarRef} className={styles.sidebar}>
             <ErrorBoundary region="Sidebar" compact>
-              {mode === 'chatspace' ? <ChatSidebar /> : mode === 'bots' ? <BotsSidebar /> : <ProjectSidebar />}
+              <Suspense fallback={null}>{mode === 'chatspace' ? <ChatSidebar /> : mode === 'bots' ? <BotsSidebar /> : <ProjectSidebar />}</Suspense>
             </ErrorBoundary>
             <ResizeHandle
               label="Resize sidebar"
@@ -134,16 +143,24 @@ export function AppShell() {
               </ErrorBoundary>
             </div>
           </div>
-          <div className={styles.mode} hidden={mode !== 'bots'}>
-            <ErrorBoundary region="Bots">
-              <BotsScreen />
-            </ErrorBoundary>
-          </div>
-          <div className={styles.mode} hidden={mode !== 'chatspace'}>
-            <ErrorBoundary region="Chat">
-              <ChatScreen />
-            </ErrorBoundary>
-          </div>
+          {visited.has('bots') && (
+            <div className={styles.mode} hidden={mode !== 'bots'}>
+              <ErrorBoundary region="Bots">
+                <Suspense fallback={null}>
+                  <BotsScreen />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+          {visited.has('chatspace') && (
+            <div className={styles.mode} hidden={mode !== 'chatspace'}>
+              <ErrorBoundary region="Chat">
+                <Suspense fallback={null}>
+                  <ChatScreen />
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
           </div>
           <ErrorBoundary region="Queen Bee" compact>
             {queenPlacement === 'docked' ? <QueenDock /> : queenPlacement === 'floating' ? <QueenFloating /> : null}
@@ -165,14 +182,22 @@ export function AppShell() {
               />
             )}
             <ErrorBoundary key={showBotPanel ? 'bot' : 'side'} region={showBotPanel ? 'Bot panel' : 'Side panel'} compact>
-              {showBotPanel ? <BotPanel /> : <SidePanel />}
+              {showBotPanel ? (
+                <Suspense fallback={null}>
+                  <BotPanel />
+                </Suspense>
+              ) : (
+                <SidePanel />
+              )}
             </ErrorBoundary>
           </div>
         )}
       </div>
       {inSettings && (
         <ErrorBoundary region="Settings">
-          <SettingsScreen section={view.section} />
+          <Suspense fallback={null}>
+            <SettingsScreen section={view.section} />
+          </Suspense>
         </ErrorBoundary>
       )}
       <AddProjectDialog />

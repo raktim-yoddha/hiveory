@@ -7,7 +7,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useSettings } from '../../stores/data'
 import { runAction } from '../../stores/notices'
-import { SettingRow } from './SettingsScreen'
+import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
 /** The pairing code rotates and devices pair from elsewhere, so the panel re-reads while it is open. */
