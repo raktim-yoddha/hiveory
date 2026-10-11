@@ -152,6 +152,7 @@ const settingsSchema = z.object({
   keepRunningInBackground: z.boolean().catch(DEFAULT_SETTINGS.keepRunningInBackground),
   keepAwakeForRoutines: z.boolean().catch(DEFAULT_SETTINGS.keepAwakeForRoutines),
   shareOnTailnet: z.boolean().catch(DEFAULT_SETTINGS.shareOnTailnet),
+  shareOnLan: z.boolean().catch(DEFAULT_SETTINGS.shareOnLan),
   wallpaper: wallpaperSchema.catch(DEFAULT_SETTINGS.wallpaper),
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
   wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),

@@ -39,6 +39,8 @@ export interface AppSettings {
   keepAwakeForRoutines: boolean
   /** Share this computer with the user's other devices over Tailscale (ADR 0025). Off by default. */
   shareOnTailnet: boolean
+  /** Also share it on this computer's local network (Wi-Fi, Ethernet); devices pair with the code (ADR 0039). Off by default. */
+  shareOnLan: boolean
   /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
   wallpaper: string
   /** How opaque every surface is over a wallpaper (0 = fully transparent, 1 = solid). */
@@ -168,6 +170,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keepRunningInBackground: true,
   keepAwakeForRoutines: true,
   shareOnTailnet: false,
+  shareOnLan: false,
   wallpaper: '',
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,

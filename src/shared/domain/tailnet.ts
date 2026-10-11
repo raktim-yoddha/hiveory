@@ -57,6 +57,8 @@ export interface ShareStatus {
   state: 'off' | 'on' | 'no-tailscale' | 'error'
   /** How other devices reach it, e.g. "devbox.tail1234.ts.net" or a Tailscale address. */
   address?: string
+  /** Its address on the local network, when shared there too ("On this network", ADR 0039). */
+  lan?: string
   port?: number
   /** For devices signed in to another Tailscale account (or over SSH). */
   code?: string

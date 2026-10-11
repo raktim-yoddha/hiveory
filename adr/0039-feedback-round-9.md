@@ -90,6 +90,15 @@ hides it for this session unless it is overdue, when it returns after the chosen
   New worktree offers New · Existing · Remote branch, and an empty chat shows the CLI's or
   Hiveory's logo.
 
+### Share on this network (amends ADR 0025)
+Settings › Remote › Share this computer gains **On this network** (`shareOnLan`, off by default).
+When on, the server also listens on the computer's private local addresses (RFC 1918: 10/8,
+172.16/12, 192.168/16; never every interface, never a public address) and follows them as the
+network changes. Devices nearby pair with the same one-time, rate-limited code (or the phone's QR,
+which carries the local address when there is no Tailscale one); no-code pairing stays for the
+owner's Tailscale devices only. It works with or without Tailscale. Automatic discovery (mDNS) was
+left out: the QR code and the shown address cover it without another protocol.
+
 ### Board order
 Columns read Waiting for you · Working · Idle (`BOARD_COLUMNS`), as on the phone. The status
 model itself is unchanged (AGENTS.md rule 6).
@@ -98,3 +107,5 @@ model itself is unchanged (AGENTS.md rule 6).
 
 - A reply is easy to miss with popups off; the dot on her button is the signal.
 - Sidebar agent lines load each unfolded Worktree's agent list.
+- On this network exposes the pairing endpoint to everyone on that network; the code is single-use
+  and rate-limited, and the switch says to use it only on trusted networks.

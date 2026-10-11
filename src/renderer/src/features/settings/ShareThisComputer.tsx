@@ -14,14 +14,16 @@ import styles from './Settings.module.css'
 const POLL_MS = 5000
 
 /**
- * Share this computer (ADR 0025): this desktop keeps running everything and
- * also serves its window to the user's other devices over Tailscale — only on
- * loopback and its Tailscale address, never on the local network.
+ * Share this computer (ADR 0025): this desktop keeps running everything and also serves its window to
+ * the user's other devices — over Tailscale, and/or on this network for devices nearby (ADR 0039).
+ * It listens on loopback, its Tailscale address and its private local addresses, never everywhere.
  */
 export function ShareThisComputer() {
   const { settings, update } = useSettings()
   const [status, setStatus] = useState<ShareStatus | null>(null)
-  const on = settings.shareOnTailnet
+  const tailnet = settings.shareOnTailnet
+  const lan = settings.shareOnLan
+  const on = tailnet || lan
 
   useEffect(() => {
     if (!on) return
@@ -39,20 +41,32 @@ export function ShareThisComputer() {
   }, [on])
 
   const where = status?.address && status.port ? `${status.address}:${status.port}` : undefined
-  const description = !on
-    ? 'Let your other computers use this Hiveory over Tailscale. Agents keep running here while they are away.'
-    : status?.state === 'error' || status?.state === 'no-tailscale'
+  // The phone scans the Tailscale address when there is one, else the local one.
+  const reach = status?.address ?? (lan ? status?.lan : undefined)
+  const description = !tailnet
+    ? 'Let your other computers and phone use this Hiveory over Tailscale, from anywhere. Agents keep running here while they are away.'
+    : status?.state === 'error' || (status?.state === 'no-tailscale' && !status.lan)
       ? (status.detail ?? 'Not reachable yet.')
       : where
         ? `Reachable at ${where}. Your devices signed in to ${status?.owner ?? 'the same Tailscale account'} connect in one click; others need the code below.`
-        : 'Starting…'
+        : (status?.detail ?? 'Starting…')
+  const lanDescription = !lan
+    ? 'Devices on the same Wi-Fi or network connect with the pairing code — no Tailscale needed. Only turn it on for a network you trust.'
+    : status?.lan && status.port
+      ? `Reachable at ${status.lan}:${status.port} on this network. Devices here connect with the code below.`
+      : 'This computer has no local network address right now.'
 
   return (
     <div className={styles.group}>
       <SettingRow
         title="Share this computer"
         description={description}
-        control={<Toggle label="Share this computer over Tailscale" checked={on} onChange={(shareOnTailnet) => void update({ shareOnTailnet })} />}
+        control={<Toggle label="Share this computer over Tailscale" checked={tailnet} onChange={(shareOnTailnet) => void update({ shareOnTailnet })} />}
+      />
+      <SettingRow
+        title="On this network"
+        description={lanDescription}
+        control={<Toggle label="Share this computer on this network" checked={lan} onChange={(shareOnLan) => void update({ shareOnLan })} />}
       />
       {on && status?.code && (
         <SettingRow
@@ -61,11 +75,11 @@ export function ShareThisComputer() {
           control={<span className={`${styles.chip} ${styles.chipOn} ${styles.mono}`}>{status.code}</span>}
         />
       )}
-      {on && status?.code && status.address && status.port && (
+      {on && status?.code && reach && status.port && (
         <SettingRow
           title="Connect your phone"
-          description="Open the Hiveory app on your phone and scan this. Your phone needs Tailscale, signed in like this computer. Phones can watch and steer agents but not delete or change settings."
-          control={<QrCode value={pairingLink(status.address, status.port, status.code)} label="Pairing code for the Hiveory phone app" />}
+          description={`Open the Hiveory app on your phone and scan this. ${status.address ? 'Your phone needs Tailscale, signed in like this computer.' : 'Your phone needs to be on this network.'} Phones can watch and steer agents but not delete or change settings.`}
+          control={<QrCode value={pairingLink(reach, status.port, status.code)} label="Pairing code for the Hiveory phone app" />}
         />
       )}
       {on && status && status.devices.length > 0 && (

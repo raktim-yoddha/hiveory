@@ -143,7 +143,9 @@ app.whenReady().then(async () => {
   // What paired devices may do here: REMOTE_CHANNELS only, validated again, folders named directly.
   const serverHandlers = createHandlers(container, { trustPaths: true })
   // Share this computer (ADR 0025): loopback and its Tailscale address, on the default port.
-  const share = (on: boolean) => c.sharing.apply(on ? { port: DEFAULT_SERVER_PORT, hosts: ['127.0.0.1'], tailnet: true, handlers: serverHandlers } : null)
+  // Share this computer (ADR 0025) over Tailscale, its local network (ADR 0039), or both.
+  const share = (tailnet: boolean, lan: boolean) =>
+    c.sharing.apply(tailnet || lan ? { port: DEFAULT_SERVER_PORT, hosts: ['127.0.0.1'], tailnet, lan, handlers: serverHandlers } : null)
   // Every reaction is guarded on its own, so one broken feature never skips the others or fails the save.
   c.settings.on('changed', (next, previous) => {
     if (next.theme !== previous.theme || next.vscodeTheme !== previous.vscodeTheme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
@@ -157,7 +159,9 @@ app.whenReady().then(async () => {
     }
     if (next.autoDownloadUpdates !== previous.autoDownloadUpdates) guard(log, 'Update downloads', () => c.updates.setAutoDownload(next.autoDownloadUpdates))
     // A headless server keeps the addresses it was started with.
-    if (next.shareOnTailnet !== previous.shareOnTailnet && servePort === undefined) void guard(log, 'Sharing', () => share(next.shareOnTailnet))
+    if ((next.shareOnTailnet !== previous.shareOnTailnet || next.shareOnLan !== previous.shareOnLan) && servePort === undefined) {
+      void guard(log, 'Sharing', () => share(next.shareOnTailnet, next.shareOnLan))
+    }
     if (next.computerUse && !previous.computerUse) guard(log, 'Computer use', () => c.computer.warm())
     if (!next.computerUse && previous.computerUse) guard(log, 'Computer use', () => c.computer.dispose())
     if (next.queenGlobalShortcut !== previous.queenGlobalShortcut || next.queenShortcut !== previous.queenShortcut) {
@@ -183,7 +187,7 @@ app.whenReady().then(async () => {
     if (serveTailnet && !shared.address) console.log(`${shared.detail ?? 'Tailscale is not connected.'} Clients can reach it once it is.`)
   } else {
     openWindow()
-    if (startup.shareOnTailnet) void guard(log, 'Sharing', () => share(true))
+    if (startup.shareOnTailnet || startup.shareOnLan) void guard(log, 'Sharing', () => share(startup.shareOnTailnet, startup.shareOnLan))
   }
   // Durable sessions: every agent comes back on its own, resuming its conversation.
   guard(log, 'Agent resume', () => c.agents.resumeAll(), report('Resuming agents'))
