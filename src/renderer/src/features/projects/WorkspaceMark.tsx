@@ -29,8 +29,12 @@ export const WORKSPACE_COLOR: Record<WorkspaceColor, string> = {
   gray: 'var(--color-text-muted)'
 }
 
-/** A Workspace's icon in its color (Settings › Icon and color, ADR 0038). Decorative: the name beside it labels it. */
+/** A Workspace's color as CSS: the one the user picked, else a theme color (ADR 0038, 0042). */
+export const markColor = (project: Pick<Project, 'id' | 'settings'>): string => project.settings?.customColor ?? WORKSPACE_COLOR[workspaceColor(project)]
+
+/** A Workspace's avatar, or its icon in its color (Settings › Icon and color, ADR 0038, 0042). Decorative: the name beside it labels it. */
 export function WorkspaceMark({ project, className }: { project: Pick<Project, 'id' | 'settings'>; className?: string }) {
+  if (project.settings?.avatar) return <img className={className} src={project.settings.avatar} alt="" draggable={false} style={{ borderRadius: 'var(--radius-xs)', objectFit: 'cover' }} />
   const Icon = WORKSPACE_ICON[project.settings?.icon ?? 'folder']
-  return <Icon className={className} style={{ color: WORKSPACE_COLOR[workspaceColor(project)] } as CSSProperties} aria-hidden />
+  return <Icon className={className} style={{ color: markColor(project) } as CSSProperties} aria-hidden />
 }

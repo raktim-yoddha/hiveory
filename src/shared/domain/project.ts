@@ -63,6 +63,10 @@ export interface ProjectSettings {
   icon?: WorkspaceIcon
   /** Its color; absent = one picked from its id, so Workspaces differ from the start. */
   color?: WorkspaceColor
+  /** Any color the user picked (#rrggbb), over `color` (ADR 0042). */
+  customColor?: string
+  /** An image instead of the icon: a small PNG data URL (ADR 0042). */
+  avatar?: string
   /** Where its reviews come from (ADR 0040); absent = told by its origin remote, 'none' = off. */
   codeHost?: CodeHostId | 'none'
   /** Where its issues come from; absent = its code host's issues, 'none' = no issues. */
@@ -74,6 +78,13 @@ export interface ProjectSettings {
 /** Marks a Workspace can show in the sidebar; the renderer maps each to an icon. */
 export const WORKSPACE_ICONS = ['folder', 'code', 'globe', 'box', 'rocket', 'flask', 'book', 'server', 'phone', 'database', 'palette', 'bot'] as const
 export type WorkspaceIcon = (typeof WORKSPACE_ICONS)[number]
+
+/** A custom Workspace color: #rrggbb. */
+export const HEX_COLOR = /^#[0-9a-f]{6}$/i
+/** An avatar's side in pixels, and its stored form (ADR 0042). */
+export const AVATAR_PX = 96
+export const AVATAR_DATA = /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/
+export const MAX_AVATAR_CHARS = 80_000
 
 /** Workspace colors, drawn from the theme (its accent and terminal colors), so every theme keeps them readable. */
 export const WORKSPACE_COLORS = ['accent', 'blue', 'cyan', 'green', 'yellow', 'red', 'magenta', 'gray'] as const

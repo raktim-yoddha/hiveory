@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
-import { WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
+import { HEX_COLOR, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
 import { FONT_FAMILY, FONT_WEIGHTS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
@@ -236,6 +236,9 @@ export const projectSettingsPatchSchema = z.object({
   alerts: z.boolean().nullable().optional(),
   icon: z.enum(WORKSPACE_ICONS).nullable().optional(),
   color: z.enum(WORKSPACE_COLORS).nullable().optional(),
+  // ADR 0042: any color; the avatar is set by projects.pickAvatar and can only be cleared here.
+  customColor: z.string().regex(HEX_COLOR).nullable().optional(),
+  avatar: z.null().optional(),
   // ADR 0040: its code host and where its issues come from.
   codeHost: z.enum([...CODE_HOSTS, 'none']).nullable().optional(),
   issueSource: z.enum([...TRACKERS, 'none']).nullable().optional(),
@@ -301,6 +304,8 @@ export const requestSchemas = {
   'projects.touch': z.object({ projectId: id }),
   /** Rename a Workspace or change its settings (ADR 0037). */
   'projects.update': z.object({ projectId: id, name: projectName.optional(), settings: projectSettingsPatchSchema.optional() }),
+  /** Opens an image picker; the chosen image becomes the Workspace's avatar (ADR 0042). Null when cancelled. */
+  'projects.pickAvatar': z.object({ projectId: id }),
   'workspaces.list': z.object({ projectId: id }),
   'workspaces.suggestName': z.object({ projectId: id }),
   'workspaces.create': createWorkspaceSchema,
@@ -786,6 +791,7 @@ export interface ResponseMap {
   'projects.addDefaults': { parentDir: string; github: { available: boolean; login?: string; owners: string[]; reason?: string } }
   'projects.remove': void
   'projects.touch': Project
+  'projects.pickAvatar': Project | null
   'projects.update': Project
   'workspaces.list': WorkspaceView[]
   'workspaces.suggestName': string

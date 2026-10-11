@@ -148,7 +148,11 @@ export class ProjectService {
    * Renames a Workspace or changes its settings (ADR 0037). Sent settings replace the stored ones;
    * null puts one back to the app's default.
    */
-  update(projectId: string, { name, settings }: Omit<RequestOf<'projects.update'>, 'projectId'>): Project {
+  update(
+    projectId: string,
+    // An avatar arrives from main's own picker (ADR 0042); the renderer may only clear it.
+    { name, settings }: Omit<RequestOf<'projects.update'>, 'projectId' | 'settings'> & { settings?: Omit<NonNullable<RequestOf<'projects.update'>['settings']>, 'avatar'> & { avatar?: string | null } }
+  ): Project {
     this.get(projectId)
     this.store.update((s) => {
       const p = s.projects.find((x) => x.id === projectId)

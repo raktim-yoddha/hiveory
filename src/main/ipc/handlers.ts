@@ -1,4 +1,4 @@
-import { BrowserWindow, app, clipboard, dialog, safeStorage, shell, systemPreferences } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, nativeImage, safeStorage, shell, systemPreferences } from 'electron'
 import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
@@ -16,6 +16,7 @@ import { lastWords } from '@shared/queen/updates'
 import { join } from 'node:path'
 import type { Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
+import { AVATAR_EXTENSIONS, avatarFromFile } from '../services/projects/avatar'
 import type { HostRef } from '@shared/domain'
 import type { CodeHost } from '../services/git/code-host'
 
@@ -291,6 +292,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'extensions.removeSkill': ({ path }) => c.extensions.removeSkill(path),
   'extensions.createSkill': ({ projectId, botId, ...input }) => {
     c.extensions.createSkill(input, placePath(projectId, botId))
+  },
+  'projects.pickAvatar': async ({ projectId }, event) => {
+    const file = await pickPath(event.sender, { title: 'Choose an avatar image', properties: ['openFile'], filters: [{ name: 'Images', extensions: AVATAR_EXTENSIONS }] })
+    return file ? c.projects.update(projectId, { settings: { avatar: avatarFromFile(file, nativeImage) } }) : null
   },
   'extensions.importSkill': async ({ rootIds, projectId, botId }, event) => {
     const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })
