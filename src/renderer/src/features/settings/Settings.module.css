@@ -1,17 +1,43 @@
+/* Settings: a large window over the app (ADR 0039). A light scrim keeps the app readable behind it,
+   so a new theme, font or wallpaper shows at once. */
+.window {
+  width: min(calc(var(--sidebar-width) * 4.4), calc(100vw - var(--space-11)));
+  height: min(calc(var(--sidebar-width) * 3.1), calc(100vh - var(--space-11)));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-solid);
+  color: var(--color-text);
+  box-shadow: var(--shadow-dialog);
+}
+
+.window[open] {
+  animation: settings-in var(--duration-glide) var(--ease-liquid);
+}
+
+.window::backdrop {
+  background: color-mix(in srgb, var(--color-overlay) 45%, transparent);
+}
+
+@keyframes settings-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-5)) scale(0.98);
+  }
+}
+
 .screen {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  gap: var(--gutter);
+  grid-template-columns: calc(var(--sidebar-width) * 0.85) minmax(0, 1fr);
   height: 100%;
 }
 
 .nav,
 .content {
   min-height: 0;
-  border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--gradient-surface), var(--color-surface);
-  box-shadow: var(--shadow-surface);
 }
 
 .nav {
@@ -19,10 +45,16 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5) var(--space-4);
+  border-right: var(--border-width) solid var(--color-border-subtle);
+  background: var(--color-surface-top);
 }
 
-.back {
-  align-self: flex-start;
+.close {
+  position: sticky;
+  top: var(--space-4);
+  float: right;
+  margin: var(--space-4) var(--space-4) 0 0;
+  z-index: 1;
 }
 
 .navTitle {

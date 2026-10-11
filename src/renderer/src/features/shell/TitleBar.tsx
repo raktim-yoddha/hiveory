@@ -35,11 +35,11 @@ export function TitleBar() {
           )}
         </span>
         {/* Nudges a little right while the sidebar is open, a little left while it is closed. */}
-        <span className={styles.sidebarToggle} data-open={!sidebarCollapsed && !inSettings}>
+        <span className={styles.sidebarToggle} data-open={!sidebarCollapsed}>
           <IconButton
             label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
             icon={<PanelLeft />}
-            active={!sidebarCollapsed && !inSettings}
+            active={!sidebarCollapsed}
             onClick={toggleSidebar}
             className={styles.noDrag}
           />
@@ -48,7 +48,7 @@ export function TitleBar() {
       <Tabs label="Mode" variant="segmented" options={MODES} value={mode} onChange={setMode} className={styles.noDrag} />
       <div className={styles.end}>
         {/* The side panel belongs to workspaces only (ADR 0021). */}
-        {mode === 'workspace' && view.type === 'workspace' && (
+        {mode === 'workspace' && (view.type === 'settings' ? view.returnTo : view).type === 'workspace' && (
           <IconButton
             label={panelOpen ? 'Hide side panel' : 'Show side panel'}
             icon={<PanelRight />}

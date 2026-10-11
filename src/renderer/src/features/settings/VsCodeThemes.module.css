@@ -37,12 +37,17 @@
   margin-left: auto;
 }
 
+/* The catalog fills its own window (ADR 0039); the dialog body gives the padding. */
 .catalog {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  padding: var(--space-6) var(--space-7) var(--space-7);
-  border-top: var(--border-width) solid var(--color-border);
+  min-height: calc(var(--sidebar-width) * 1.6);
+}
+
+.browse {
+  align-self: flex-start;
+  margin: 0 var(--space-7) var(--space-7);
 }
 
 .search {

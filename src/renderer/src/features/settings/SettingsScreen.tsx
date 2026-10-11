@@ -1,8 +1,8 @@
-import { useRef, type ReactNode } from 'react'
-import { ArrowLeft, BookOpen, Blocks, Download, Globe, Info, Palette, Server } from 'lucide-react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { BookOpen, Blocks, Download, Globe, Info, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { QueenIcon } from '../../components/brand/QueenIcon'
-import { Button } from '../../components/ui/Button'
+import { IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { cx } from '../../lib/cx'
 import { useSelectionBox } from '../../lib/useSelectionBox'
@@ -30,19 +30,38 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
   { id: 'about', label: 'About', icon: <Info /> }
 ]
 
-/** App-level settings (project settings live on the project page). */
+/**
+ * App-level settings (a Workspace's own live in its Dashboard), as a window over the app (ADR 0039):
+ * what is behind stays in place, so appearance changes show at once. Escape or × closes it.
+ */
 export function SettingsScreen({ section }: { section: SettingsSection }) {
   const { openSettings, closeSettings } = useNavigation()
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]!
   const listRef = useRef<HTMLUListElement>(null)
+  const dialogRef = useRef<HTMLDialogElement>(null)
   const pill = useSelectionBox(listRef, '[aria-current="page"]', [current.id])
 
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (dialog && !dialog.open) dialog.showModal()
+  }, [])
+
   return (
+    <dialog
+      ref={dialogRef}
+      className={styles.window}
+      aria-label="Settings"
+      onCancel={(event) => {
+        event.preventDefault()
+        // Escape in a dialog opened from here (the theme browser) closes only that one.
+        if (event.target === dialogRef.current) closeSettings()
+      }}
+      onMouseDown={(event) => {
+        if (event.target === dialogRef.current) closeSettings()
+      }}
+    >
     <div className={styles.screen}>
       <nav className={styles.nav} aria-label="Settings sections">
-        <Button variant="ghost" size="sm" icon={<ArrowLeft />} onClick={closeSettings} className={styles.back}>
-          Back
-        </Button>
         <h1 className={styles.navTitle}>Settings</h1>
         <ul ref={listRef} className={styles.navList}>
           {pill && <li className={styles.navPill} aria-hidden style={pill} />}
@@ -62,6 +81,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
         </ul>
       </nav>
       <section className={styles.content} aria-label={current.label}>
+        <IconButton label="Close settings" icon={<X />} onClick={closeSettings} className={styles.close} />
         <ErrorBoundary key={current.id} region={current.label} resetKey={current.id}>
           {current.id === 'appearance' && <AppearanceSection />}
           {current.id === 'agents' && <AgentsSection />}
@@ -75,6 +95,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
         </ErrorBoundary>
       </section>
     </div>
+    </dialog>
   )
 }
 

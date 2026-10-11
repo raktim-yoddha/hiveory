@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Palette, Search } from 'lucide-react'
+import { Modal } from '../../components/ui/Modal'
 import type { ThemeListing, VsCodeTheme } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { TextInput } from '../../components/ui/TextField'
@@ -31,7 +32,7 @@ interface Results {
 
 /**
  * VS Code color themes (ADR 0034): what's installed, as theme cards, and the Open VSX
- * catalog to search and install from. Applying one recolors every token; the wallpaper,
+ * catalog to search and install from in its own window (ADR 0039). Applying one recolors every token; the wallpaper,
  * transparency, blur and dim above still apply on top.
  */
 export function VsCodeThemes() {
@@ -43,8 +44,10 @@ export function VsCodeThemes() {
   const [loading, setLoading] = useState(false)
   const [installing, setInstalling] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
+  const [browsing, setBrowsing] = useState(false)
 
   useEffect(() => {
+    if (!browsing) return
     let live = true
     const q = query.trim()
     const timer = setTimeout(
@@ -62,7 +65,7 @@ export function VsCodeThemes() {
       live = false
       clearTimeout(timer)
     }
-  }, [query, retry])
+  }, [query, retry, browsing])
 
   const apply = (theme: VsCodeTheme): void => {
     if (settings.vscodeTheme === theme.id) return
@@ -140,6 +143,11 @@ export function VsCodeThemes() {
         </div>
       )}
 
+      <Button size="sm" icon={<Search />} className={styles.browse} onClick={() => setBrowsing(true)}>
+        Browse VS Code themes…
+      </Button>
+
+      <Modal open={browsing} title="VS Code themes" width="lg" onClose={() => setBrowsing(false)}>
       <div className={styles.catalog}>
         <label className={styles.search}>
           <Search aria-hidden />
@@ -191,6 +199,7 @@ export function VsCodeThemes() {
           </Button>
         )}
       </div>
+      </Modal>
     </div>
   )
 }

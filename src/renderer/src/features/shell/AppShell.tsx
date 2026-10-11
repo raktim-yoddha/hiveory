@@ -48,17 +48,18 @@ export function AppShell() {
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
-  const showSidebar = !inSettings && !sidebarCollapsed
+  // Settings is a window over the app (ADR 0039): everything behind it stays laid out, so changes show live.
+  const showSidebar = !sidebarCollapsed
   // The right column: a worktree's side panel (never on Home or Settings), or the open bot's panel.
   const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null && s.page === 'bot')
   const setBotPanelOpen = useBots((s) => s.setPanelOpen)
-  const showBotPanel = botPanelOpen && mode === 'bots' && !inSettings
-  const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && view.type === 'workspace')
-  const maximized = panelMaximized && !showBotPanel
   const workView = view.type === 'settings' ? view.returnTo : view
+  const showBotPanel = botPanelOpen && mode === 'bots'
+  const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && workView.type === 'workspace')
+  const maximized = panelMaximized && !showBotPanel
   const viewKey = workView.type === 'home' ? 'home' : `w:${workView.workspaceId}`
   // The open Worktree's panes keep their minimum width: the sidebars give way (see .main).
-  const workMin = !inSettings && mode === 'workspace' && workView.type === 'workspace' ? workMinWidth : 0
+  const workMin = mode === 'workspace' && workView.type === 'workspace' ? workMinWidth : 0
   const widths = {
     '--sidebar-width': `${sidebarWidth}px`,
     '--sidebar-min': `${SIDEBAR_WIDTH.min}px`,
@@ -115,12 +116,7 @@ export function AppShell() {
         )}
         <main ref={contentRef} className={styles.content}>
           <div className={styles.stage}>
-          {inSettings && (
-            <ErrorBoundary region="Settings">
-              <SettingsScreen section={view.section} />
-            </ErrorBoundary>
-          )}
-          <div className={styles.mode} hidden={inSettings || mode !== 'workspace'}>
+          <div className={styles.mode} hidden={mode !== 'workspace'}>
             <div key={viewKey} className={styles.view}>
               <ErrorBoundary region="This screen" resetKey={viewKey}>
               {workView.type === 'workspace' ? (
@@ -136,12 +132,12 @@ export function AppShell() {
               </ErrorBoundary>
             </div>
           </div>
-          <div className={styles.mode} hidden={inSettings || mode !== 'bots'}>
+          <div className={styles.mode} hidden={mode !== 'bots'}>
             <ErrorBoundary region="Bots">
               <BotsScreen />
             </ErrorBoundary>
           </div>
-          <div className={styles.mode} hidden={inSettings || mode !== 'chatspace'}>
+          <div className={styles.mode} hidden={mode !== 'chatspace'}>
             <ErrorBoundary region="Chat">
               <ChatScreen />
             </ErrorBoundary>
@@ -172,6 +168,11 @@ export function AppShell() {
           </div>
         )}
       </div>
+      {inSettings && (
+        <ErrorBoundary region="Settings">
+          <SettingsScreen section={view.section} />
+        </ErrorBoundary>
+      )}
       <AddProjectDialog />
       <SshPromptDialog />
       <UpdatePrompt />

@@ -51,6 +51,13 @@ Questions and yes/no still open, since the command waits for that answer.
 The Chat screen's empty state and a chat with no CLI yet show Hiveory's own logo, and a chat with
 a CLI shows that CLI's logo, instead of a generic chat icon.
 
+### Settings is a window
+Settings opens as a large window over the app instead of replacing the screen: a light scrim keeps
+the sidebar, panes and side panel visible and laid out behind it, so a theme, font or wallpaper
+change shows at once. × or Escape closes it (the gear still toggles it). The VS Code theme catalog
+opens in its own window from "Browse VS Code themes…"; installed themes stay on the page. Escape in
+that window closes only it.
+
 ### Terminal font
 Settings › Appearance › Terminal font: Family (installed monospaced families, read by name through
 the Local Font Access permission `local-fonts`, allowed for Hiveory's own window only), Size
