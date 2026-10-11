@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, FileCode2, Globe, Loader2 } from 'lucide-react'
 import type { BrowserPageView, CliInstanceView, CliStatus, EditorView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -111,8 +111,8 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
           <ChevronDown aria-hidden />
         </button>
         <ul className={styles.agentList}>
-          {entries.map((e) => (
-            <li key={e.id}>
+          {entries.map((e, i) => (
+            <li key={e.id} style={{ '--i': i } as CSSProperties}>
               <button type="button" className={styles.agentItem} onClick={() => openWorkspace(projectId, workspaceId, e.id)}>
                 {e.status ? <StatusDot status={e.status} /> : <span className={styles.noDot} aria-hidden />}
                 {e.icon}

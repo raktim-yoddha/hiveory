@@ -15,7 +15,7 @@
     width var(--duration-base) var(--ease-out),
     height var(--duration-base) var(--ease-out),
     opacity var(--duration-fast) var(--ease-out);
-  animation: pane-in var(--duration-base) var(--ease-out);
+  animation: pane-in var(--duration-slow) var(--ease-liquid);
 }
 
 /* Follow the pointer exactly while resizing or dragging. */
@@ -27,10 +27,11 @@
   cursor: grabbing;
 }
 
+/* A new pane settles into place: a touch smaller and lower, then springs to size. */
 @keyframes pane-in {
   from {
     opacity: 0;
-    transform: scale(0.985);
+    transform: translateY(var(--nudge)) scale(0.97);
   }
 }
 

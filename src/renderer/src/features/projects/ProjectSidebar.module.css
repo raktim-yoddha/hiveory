@@ -380,6 +380,19 @@
   list-style: none;
 }
 
+/* Unfolding, the panes come in one after another (index in --i). */
+.agentList > li {
+  animation: row-in var(--duration-slow) var(--ease-liquid) both;
+  animation-delay: min(calc(var(--i, 0) * var(--stagger) * 2), 240ms);
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--nudge) * -2));
+  }
+}
+
 .agentItem {
   display: flex;
   align-items: center;

@@ -17,9 +17,18 @@
   height: calc(var(--pane-header-height) - var(--space-3));
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
+  animation: tab-in var(--duration-slow) var(--ease-liquid);
   transition:
     background var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
+}
+
+/* A new tab drops into the strip. */
+@keyframes tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--nudge) * -1)) scale(0.94);
+  }
 }
 
 .tab:hover {

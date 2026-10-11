@@ -18,7 +18,10 @@ export function KanbanColumn({ projectId, status, cards }: KanbanColumnProps) {
         <h3 id={headingId} className={styles.columnTitle}>
           {STATUS_LABEL[status]}
         </h3>
-        <span className={styles.columnCount}>{cards.length}</span>
+        {/* Keyed by the count, so a change pops it (ADR 0044). */}
+        <span key={cards.length} className={styles.columnCount}>
+          {cards.length}
+        </span>
       </header>
       <ul className={styles.cards}>
         {cards.map((card) => (

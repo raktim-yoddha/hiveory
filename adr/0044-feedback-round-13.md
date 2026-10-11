@@ -54,6 +54,14 @@ a livelier app, and a full pass for speed, memory, security and the guide.
   Bots and Chat mount on their first visit, then stay mounted as before. A window that starts in Work
   parses about a third of the code it did. `SettingsPage`/`SettingRow` moved to their own module so a
   Workspace's settings don't pull the whole Settings window in.
+- A terminal off screen for 90 seconds is freed in the window (its grid, scrollback and GPU context);
+  main keeps its output, so showing it again rebuilds it from there. Before, every terminal ever shown
+  stayed in memory until its agent was closed.
+
+### Livelier
+- Small CSS-only motion, shortened for reduced motion: a new pane springs into place, a new tab drops
+  into its strip, side panel tabs fade up on every switch, a worktree's pane list unfolds row by row,
+  a Kanban column's count pops when it changes, and a working card runs a bar along its edge.
 
 ### Found along the way
 - A skill whose description is a YAML block (`description: >`) showed ">"; block values are read.

@@ -61,6 +61,13 @@
   font-variant-numeric: tabular-nums;
   line-height: var(--control-xs);
   text-align: center;
+  animation: count-pop var(--duration-glide) var(--ease-liquid);
+}
+
+@keyframes count-pop {
+  from {
+    transform: scale(1.35);
+  }
 }
 
 .cards {

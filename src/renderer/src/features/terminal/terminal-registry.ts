@@ -100,7 +100,15 @@ interface Entry {
   placed: string
   /** Output after near-black screen fills are dropped (stateful: chunks may split a sequence). */
   filter: (chunk: string) => string
+  /** Set while the terminal is off screen: when it fires, the terminal is freed (see IDLE_MS). */
+  idle?: ReturnType<typeof setTimeout>
 }
+
+/**
+ * A terminal off screen this long is freed — its grid, scrollback and GPU context (ADR 0044). Main
+ * keeps the output, so showing it again rebuilds it from there; RAM stays bounded by what is on screen.
+ */
+const IDLE_MS = 90_000
 
 const entries = new Map<string, Entry>()
 let listening = false
@@ -325,6 +333,7 @@ export const fitTerminal = (instanceId: string): void => {
 /** Mounts the instance's terminal into `host`. Returns a detach function. */
 export const attachTerminal = (instanceId: string, host: HTMLElement, needs: LayoutNeeds): (() => void) => {
   const entry = entries.get(instanceId) ?? create(instanceId, needs)
+  clearTimeout(entry.idle)
   entry.needs = needs
   host.appendChild(entry.element)
   let cancelled = false
@@ -340,6 +349,10 @@ export const attachTerminal = (instanceId: string, host: HTMLElement, needs: Lay
   return () => {
     cancelled = true
     if (entry.element.parentElement === host) host.removeChild(entry.element)
+    clearTimeout(entry.idle)
+    entry.idle = setTimeout(() => {
+      if (!entry.element.isConnected && entries.get(instanceId) === entry) disposeTerminal(instanceId)
+    }, IDLE_MS)
   }
 }
 
@@ -350,6 +363,7 @@ export const disposeTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)
   if (!entry) return
   entries.delete(instanceId)
+  clearTimeout(entry.idle)
   entry.term.dispose()
   entry.element.remove()
 }

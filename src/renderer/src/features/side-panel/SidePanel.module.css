@@ -218,8 +218,17 @@
   min-height: 0;
 }
 
+/* Shown again on every tab switch (it was display:none), so it fades up each time. */
 .page {
   height: 100%;
+  animation: page-in var(--duration-slow) var(--ease-out);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--nudge));
+  }
 }
 
 .page[hidden] {
