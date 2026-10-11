@@ -19,7 +19,17 @@ export function Modal({ open, title, onClose, children, footer, width = 'md' }: 
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      // showModal focuses the first control, the header's Close, so Enter would close the dialog. React's
+      // autoFocus ran while the dialog was still closed; start instead on the control marked
+      // data-autofocus, else the first field, else the footer's last (primary) button.
+      const start =
+        dialog.querySelector<HTMLElement>('[data-autofocus]') ??
+        dialog.querySelector<HTMLElement>(`.${styles.body} :is(input, textarea, select):not([disabled])`) ??
+        [...dialog.querySelectorAll<HTMLElement>(`.${styles.footer} button:not([disabled])`)].at(-1)
+      start?.focus()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
 

@@ -24,7 +24,7 @@ export function ConfirmDialog({ open, title, children, confirmLabel, danger, bus
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={busy} autoFocus>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={busy} data-autofocus>
             {confirmLabel}
           </Button>
         </>
