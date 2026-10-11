@@ -137,7 +137,7 @@ const settingsSchema = z.object({
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
   autoDownloadUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoDownloadUpdates),
   // Clamped field by field: a hand-edited or older file can never break terminals (ADR 0039).
-  terminalFont: z.unknown().transform(safeTerminalFont),
+  terminalFont: z.unknown().optional().transform((v) => safeTerminalFont(v)),
   updateCheckEvery: z.enum(UPDATE_CHECK_EVERY).catch(DEFAULT_SETTINGS.updateCheckEvery),
   updateRemindEvery: z.enum(UPDATE_REMIND_EVERY).catch(DEFAULT_SETTINGS.updateRemindEvery),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
