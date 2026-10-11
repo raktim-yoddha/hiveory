@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { BookOpen, Blocks, Download, Globe, Info, Palette, Server, X } from 'lucide-react'
+import { BookOpen, Blocks, Download, GitPullRequest, Globe, Info, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { QueenIcon } from '../../components/brand/QueenIcon'
 import { IconButton } from '../../components/ui/Button'
@@ -12,6 +12,7 @@ import { AgentsSection } from './AgentsSection'
 import { AppearanceSection } from './AppearanceSection'
 import { BrowserSection } from './BrowserSection'
 import { ExtensionsSection } from './ExtensionsSection'
+import { IntegrationsSection } from './IntegrationsSection'
 import { QueenSection } from './QueenSection'
 import { RemoteSection } from './RemoteSection'
 import { GuideSection } from './guide/GuideSection'
@@ -23,6 +24,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
   { id: 'agents', label: 'Agents', icon: <AgentIcon /> },
   { id: 'browser', label: 'Browser', icon: <Globe /> },
   { id: 'extensions', label: 'Skills, MCP & Apps', icon: <Blocks /> },
+  { id: 'integrations', label: 'Integrations', icon: <GitPullRequest /> },
   { id: 'queen', label: 'Queen Bee', icon: <QueenIcon /> },
   { id: 'remote', label: 'Remote', icon: <Server /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
@@ -87,6 +89,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
           {current.id === 'agents' && <AgentsSection />}
           {current.id === 'browser' && <BrowserSection />}
           {current.id === 'extensions' && <ExtensionsSection />}
+          {current.id === 'integrations' && <IntegrationsSection />}
           {current.id === 'queen' && <QueenSection />}
           {current.id === 'remote' && <RemoteSection />}
           {current.id === 'updates' && <UpdatesSection />}

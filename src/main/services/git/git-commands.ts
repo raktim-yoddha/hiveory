@@ -7,6 +7,7 @@ export const gitArgs = {
   /** Resolves any ref (branch, remote branch, tag) to a commit. */
   verifyCommit: (ref: string) => ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`],
   remoteHead: () => ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+  remoteUrl: () => ['remote', 'get-url', 'origin'],
   localBranchExists: (branch: string) => ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`],
   worktreeAdd: (path: string, branch: string, baseRef: string) => ['worktree', 'add', '-b', branch, path, baseRef],
   /** Checks an existing local branch out into a new linked worktree. */

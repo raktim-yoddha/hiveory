@@ -11,6 +11,7 @@ import { runAction } from '../../stores/notices'
 import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 import { SettingRow } from '../settings/SettingsScreen'
 import { ChatDefaults } from './ChatDefaults'
+import { IntegrationSettings } from './IntegrationSettings'
 import { WorkspaceLook } from './WorkspaceLook'
 import settings from '../settings/Settings.module.css'
 import styles from './ProjectScreen.module.css'
@@ -140,6 +141,8 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
           />
         </div>
       )}
+
+      <IntegrationSettings project={project} />
 
       <div className={styles.danger}>
         <div>

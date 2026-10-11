@@ -12,23 +12,23 @@ import { KanbanBoard } from '../kanban/KanbanBoard'
 import { WorkspaceMark } from '../projects/WorkspaceMark'
 import { PortsMenu } from './PortsMenu'
 import { ProjectSettingsTab } from './ProjectSettingsTab'
-import { PullRequestsTab } from './PullRequestsTab'
+import { IssuesTab } from './IssuesTab'
 import { WorkRoutinesTab } from './WorkRoutinesTab'
 import { WorkspacesTab } from './WorkspacesTab'
 import styles from './ProjectScreen.module.css'
 
 const TABS: Array<{ value: ProjectTab; label: string }> = [
   { value: 'tasks', label: 'Tasks' },
-  { value: 'pull-requests', label: 'Pull Requests' },
   { value: 'workspaces', label: 'Worktrees' },
+  { value: 'issues', label: 'Issues' },
   { value: 'routines', label: 'Routines' },
   { value: 'settings', label: 'Settings' }
 ]
 
 const REGION: Record<ProjectTab, string> = {
   tasks: 'Kanban board',
-  'pull-requests': 'Pull requests',
-  workspaces: 'Worktrees',
+  workspaces: 'Worktrees and reviews',
+  issues: 'Issues',
   routines: 'Routines',
   settings: 'Workspace settings'
 }
@@ -67,8 +67,8 @@ export function ProjectScreen({ projectId, workspaceId }: { projectId: string; w
       <div className={styles.content} role="tabpanel" aria-label={REGION[tab]}>
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>
           {tab === 'tasks' && <KanbanBoard projectId={projectId} workspaceId={workspaceId} />}
-          {tab === 'pull-requests' && <PullRequestsTab projectId={projectId} />}
           {tab === 'workspaces' && <WorkspacesTab projectId={projectId} />}
+          {tab === 'issues' && <IssuesTab projectId={projectId} local={!project.host && Boolean(project.repositoryRoot)} />}
           {tab === 'routines' && <WorkRoutinesTab projectId={projectId} workspaceId={workspaceId} />}
           {tab === 'settings' && <ProjectSettingsTab project={project} />}
         </ErrorBoundary>

@@ -80,8 +80,9 @@ Open/Create Workspace
         │
         └── Side panel › Dashboard (ADR 0038, 0039)
                 ├── Tasks / Kanban (All | Here)
-                ├── Pull Requests
-                ├── Worktrees
+                ├── Worktrees (and their pull / merge requests)
+                ├── Issues
+                ├── Routines
                 └── Settings
 ```
 
@@ -286,6 +287,17 @@ Settings › Skills, MCP & Apps has three tabs (ADR 0017, 0023):
 - **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash). The folders come from the CLI registry: the shared `.agents/skills` plus each CLI's own (Claude, Codex, Gemini, Copilot, Cursor, OpenCode, Qwen, Goose, Kiro, Droid, Kilo, Junie and more); chips show the folders an installed CLI reads (ADR 0020)
 - **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click
 - **Apps** — paste the user's own Composio project API key once (free or paid). On any app card (Gmail, Google Drive, Slack, GitHub, Notion, Linear, Stripe…), Connect — or Add account for another one — first asks for the account's name (work, personal…), then goes straight to that app's sign-in: no Composio login, no app keys. Each account lists its name, id and status with Disconnect. Every app shows its real brand mark. Every agent — terminal, chat and bots — gets the connected apps, and can connect any of Composio's 1,000+ apps on request (ADR 0023)
+
+## Code hosts and issue trackers (ADR 0040)
+
+Settings › Integrations shows the code hosts this computer is signed in to (GitHub through `gh`,
+GitLab through `glab`; no tokens kept) and connects Jira Cloud (site, email, API token) and Linear
+(API key). Keys are checked before they are kept, stay encrypted on this computer and go only to
+that service. Each Workspace picks its code host (Automatic from the origin address, GitHub, GitLab
+or Off) and where its issues come from (the code host, a Jira project, a Linear team or nowhere).
+Its Dashboard shows each worktree's pull or merge request, Create PR/MR for any branch but the
+default one, every open one, and the open issues, where Start worktree makes a worktree named after
+the issue.
 
 ## Appearance
 

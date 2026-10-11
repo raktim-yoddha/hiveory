@@ -111,7 +111,9 @@ Project
 ├── isolated Workspace
 │   └── ...
 │
-├── Pull Requests
+├── Worktrees and their pull / merge requests
+├── Issues
+├── Routines
 └── Settings
 ```
 
@@ -395,12 +397,12 @@ Automatic resurrection is implemented and documented in ADR 0014 (durable sessio
 Keep external integrations behind services/adapters:
 
 ```text
-Integration layer
-├── GitHub
-├── GitLab
-├── Pull Requests
+Integration layer (ADR 0040)
+├── CodeHost — GithubService (gh), GitlabService (glab): reviews, issues, account
+├── TrackerService — Jira Cloud, Linear: keys sealed in main, issues, projects/teams
+├── IntegrationService — which host and issue source a Workspace uses
 ├── CI
-└── future providers
+└── future providers (a new CodeHost or tracker)
 ```
 
 The current local-first implementation must not depend on remote services.
@@ -485,7 +487,8 @@ src/
 │   ├── ipc/                    router (sender check + validation), handlers, trust
 │   └── services/
 │       ├── projects/ workspaces/ agents/ layout/ presets/ kanban/
-│       ├── git/                GitService, WorktreeService, GithubService (gh), command builders/parsers
+│       ├── git/                GitService, WorktreeService, CodeHost (GithubService gh, GitlabService glab), command builders/parsers
+│       ├── integrations/       IntegrationService (a Workspace's host and issues), TrackerService (Jira, Linear)
 │       ├── pty/                PtySession (deferred spawn, scrollback, headless mirror), env, shim resolver
 │       ├── shell/              ShellService — side-panel terminals
 │       ├── agent-tools/        MCP protocol + AgentTools (agents coordinating agents)

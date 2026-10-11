@@ -1,3 +1,5 @@
+import type { CodeHostId, TrackerId } from './integrations'
+
 /** Where a project's files, git and agents live (ADR 0022). Absent = this computer. */
 export interface HostRef {
   kind: 'ssh'
@@ -61,6 +63,12 @@ export interface ProjectSettings {
   icon?: WorkspaceIcon
   /** Its color; absent = one picked from its id, so Workspaces differ from the start. */
   color?: WorkspaceColor
+  /** Where its reviews come from (ADR 0040); absent = told by its origin remote, 'none' = off. */
+  codeHost?: CodeHostId | 'none'
+  /** Where its issues come from; absent = its code host's issues, 'none' = no issues. */
+  issueSource?: TrackerId | 'none'
+  /** The Jira project or Linear team key when `issueSource` names one. */
+  trackerGroup?: string
 }
 
 /** Marks a Workspace can show in the sidebar; the renderer maps each to an icon. */

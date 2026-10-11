@@ -8,6 +8,7 @@ import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
 import type { Bot } from '@shared/domain/bot'
 import { VSCODE_THEME_ID } from '@shared/domain/vscode-theme'
+import { CODE_HOSTS, TRACKERS } from '@shared/domain/integrations'
 import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
@@ -44,8 +45,15 @@ export interface PersistedState {
   triggers: Trigger[]
   /** The public link trigger events arrive by: its Funnel path and the Composio webhook (secret sealed). */
   triggerLink?: TriggerLink
+  /** Issue trackers connected in Settings › Integrations (ADR 0040); keys sealed by SecretBox. */
+  trackers?: StoredTrackers
   /** The user's saved prompts, newest first (ADR 0031). */
   savedPrompts: SavedPrompt[]
+}
+
+export interface StoredTrackers {
+  jira?: { site: string; email: string; token: string }
+  linear?: { key: string }
 }
 
 export interface TriggerLink {
@@ -207,7 +215,10 @@ export const projectSchema: z.ZodType<Project> = z.object({
       baseRef: str.optional(),
       alerts: z.boolean().optional(),
       icon: z.enum(WORKSPACE_ICONS).optional().catch(undefined),
-      color: z.enum(WORKSPACE_COLORS).optional().catch(undefined)
+      color: z.enum(WORKSPACE_COLORS).optional().catch(undefined),
+      codeHost: z.enum([...CODE_HOSTS, 'none']).optional().catch(undefined),
+      issueSource: z.enum([...TRACKERS, 'none']).optional().catch(undefined),
+      trackerGroup: str.optional()
     })
     .optional()
     .catch(undefined)
@@ -407,6 +418,11 @@ const savedPromptSchema: z.ZodType<SavedPrompt> = z.object({
   createdAt: str
 })
 
+const trackersSchema: z.ZodType<StoredTrackers> = z.object({
+  jira: z.object({ site: z.string().regex(/^https:\/\/[a-z0-9.-]+(:\d+)?$/), email: str, token: str }).optional().catch(undefined),
+  linear: z.object({ key: str }).optional().catch(undefined)
+})
+
 const triggerLinkSchema: z.ZodType<TriggerLink> = z.object({
   enabled: z.boolean(),
   path: z.string().regex(/^\/hiveory\/[a-f0-9]{32}$/),
@@ -501,7 +517,8 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS),
       triggers: list(input.triggers, triggerSchema),
       savedPrompts: list(input.savedPrompts, savedPromptSchema).slice(0, MAX_SAVED_PROMPTS),
-      ...(triggerLinkSchema.safeParse(input.triggerLink).success ? { triggerLink: triggerLinkSchema.parse(input.triggerLink) } : {})
+      ...(triggerLinkSchema.safeParse(input.triggerLink).success ? { triggerLink: triggerLinkSchema.parse(input.triggerLink) } : {}),
+      ...(trackersSchema.safeParse(input.trackers).success ? { trackers: trackersSchema.parse(input.trackers) } : {})
     },
     rejected
   }

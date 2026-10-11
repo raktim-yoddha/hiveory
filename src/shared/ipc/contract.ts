@@ -44,6 +44,7 @@ export interface WallpaperImage {
   thumb: string
 }
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
+import { CODE_HOSTS, TRACKERS, type IntegrationsView, type IssueList, type TrackerGroup } from '../domain/integrations'
 import type { Discovery, ShareStatus, RemotePort, SshHostSuggestion, SshPrompt, TailnetStatus } from '../domain/tailnet'
 import { THEME_EXTENSION_ID, THEME_SEGMENT, VSCODE_THEME_ID, type ThemeListing, type VsCodeThemeExtension } from '../domain/vscode-theme'
 
@@ -233,7 +234,11 @@ export const projectSettingsPatchSchema = z.object({
   baseRef: gitRef.nullable().optional(),
   alerts: z.boolean().nullable().optional(),
   icon: z.enum(WORKSPACE_ICONS).nullable().optional(),
-  color: z.enum(WORKSPACE_COLORS).nullable().optional()
+  color: z.enum(WORKSPACE_COLORS).nullable().optional(),
+  // ADR 0040: its code host and where its issues come from.
+  codeHost: z.enum([...CODE_HOSTS, 'none']).nullable().optional(),
+  issueSource: z.enum([...TRACKERS, 'none']).nullable().optional(),
+  trackerGroup: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,19}$/).nullable().optional()
 })
 
 export const createWorkspaceSchema = z.object({
@@ -686,6 +691,14 @@ export const requestSchemas = {
   'github.pullRequests': z.object({ projectId: id }),
   'github.issues': z.object({ projectId: id }),
   'github.createPullRequest': z.object({ workspaceId: id, draft: z.boolean().optional() }),
+  // Code hosts and issue trackers (ADR 0040). The github.* channels above answer for whichever code host
+  // the Workspace has (GitHub or GitLab); tracker keys go in here and never come back out.
+  'integrations.status': none,
+  'integrations.connectJira': z.object({ site: z.string().min(1).max(200), email: z.string().email().max(200), token: z.string().min(1).max(1000) }),
+  'integrations.connectLinear': z.object({ apiKey: z.string().min(1).max(1000) }),
+  'integrations.disconnect': z.object({ tracker: z.enum(TRACKERS) }),
+  'integrations.groups': z.object({ tracker: z.enum(TRACKERS) }),
+  'issues.list': z.object({ projectId: id }),
   // Use a Hiveory server from this desktop (ADR 0022): pair once with its code, then the app relaunches as its client.
   'client.status': none,
   'client.connect': z.discriminatedUnion('via', [
@@ -930,6 +943,12 @@ export interface ResponseMap {
   'github.pullRequests': PullRequest[]
   'github.issues': GithubIssue[]
   'github.createPullRequest': { url: string }
+  'integrations.status': IntegrationsView
+  'integrations.connectJira': IntegrationsView
+  'integrations.connectLinear': IntegrationsView
+  'integrations.disconnect': IntegrationsView
+  'integrations.groups': TrackerGroup[]
+  'issues.list': IssueList
   'client.status': ClientStatus
   'client.connect': ClientStatus
   'client.disconnect': void

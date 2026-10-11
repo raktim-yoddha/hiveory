@@ -275,7 +275,7 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 ┌ [▦ Dashboard ×] + ───────────────── ⤢ ┐
 │ ◆ Workspace A                         │
 │   ⌂ … › app  ⧉ 📁                     │
-│ Tasks │ Pull Requests │ Worktrees │ Routines │ Settings
+│ Tasks │ Worktrees │ Issues │ Routines │ Settings
 ├────────────────────────────────────────┤
 │ [ All | Here ]                         │
 │ ● WAITING FOR YOU                   0  │
@@ -286,12 +286,23 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 
 Tasks: All = every Worktree's agents; Here = only the open Worktree's. Narrow, the columns stack.
 
+Worktrees tab (ADR 0040): worktree cards (branch, agents, changes, ahead/behind; their PR/MR link or
+Create PR/MR), then "Pull requests · N" (or Merge requests) with refresh: title, #, branch, author,
+review state, open on the host; without a code host, the reason and Code host settings.
+Issues tab: "Issues · GitHub/GitLab/Jira/Linear", refresh, a filter past 8 issues, rows (title, key ·
+state, Start worktree, open); without a source, the reason and Issue settings.
+
 Routines tab (ADR 0040): this Workspace's routines (name, CLI · Worktree, schedule, next run, Run now,
 Edit, on/off), Run log, New routine (for the open Worktree).
 
 Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
 Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and
-effort per chat CLI) · New worktrees (Branch prefix, Start from) · Remove from Hiveory.
+effort per chat CLI) · New worktrees (Branch prefix, Start from) · Integrations (Code host: Automatic |
+GitHub | GitLab | Off; Issues: The code host | Jira | Linear | Off; Project or Team) · Remove from Hiveory.
+
+Settings › Integrations (ADR 0040): Code hosts (GitHub, GitLab: brand mark, signed-in user or how to
+sign in, check again) · Issue trackers (Jira: site, email, API token; Linear: API key; Connect unfolds
+the form with a link to create the key; connected: site · email, Disconnect).
 
 ## Workspace Kanban
 
@@ -429,7 +440,7 @@ Result:
 Tabs (one bar, the selected pill holds icon and label; ADR 0039) ─ Home ─ Work ─ Bots ─ Chat ─ Settings
 Work › Workspace (its mark; header: Pull requests · Settings; Worktrees (Primary tagged), + New: New | Existing | Remote branch; Needs you | Working | Idle tabs) › Worktree (branch and changes, Open an agent sheet with Terminal | Chat) › Agent
 Bots › Bot (its threads, + New thread) › Thread (as a chat) · Chat › Chat (+ New chat: pick a CLI)
-Workspace › Pull requests (worktree branches with Create PR, open pull requests) · Workspace › Settings (the computer's Settings tab, ADR 0037)
+Workspace › Pull requests (worktree branches with Create PR, open pull requests; GitLab's merge requests too) · Workspace › Settings (the computer's Settings tab, ADR 0037)
 Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat (markdown) · needs-you bar (Esc / Enter)
   terminal: a box typed straight into the CLI (keyboard Enter adds a line) · key row [/ Esc Tab ↑ ↓ ……… ⏎] (⏎ fixed right, sends)
   chat: model and effort · message box

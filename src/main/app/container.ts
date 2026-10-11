@@ -52,6 +52,9 @@ import { CliRegistry } from '../services/cli/registry'
 import { CliRuntimeManager } from '../services/cli/runtime/runtime-manager'
 import type { Emit } from '../services/events'
 import { GithubService } from '../services/git/github-service'
+import { GitlabService } from '../services/git/gitlab-service'
+import { IntegrationService } from '../services/integrations/integration-service'
+import { TrackerService } from '../services/integrations/tracker-service'
 import { GitService } from '../services/git/git-service'
 import { WorktreeService } from '../services/git/worktree-service'
 import { LayoutService } from '../services/layout/layout-service'
@@ -91,6 +94,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const secrets = new SecretBox(safeStorage)
   const openBrowser = (url: string): void => void shell.openExternal(url)
   const connections = new ConnectionService(store, secrets, emit)
+  const integrations = new IntegrationService(git, { github, gitlab: new GitlabService(git) }, new TrackerService(store, secrets))
   // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
   const queenBrain = new QueenBrain(store, secrets, fetch, {
     executable: (cliId) => registry.executable(cliId),
@@ -420,6 +424,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     store,
     git,
     github,
+    integrations,
     registry,
     runtime,
     localHost,

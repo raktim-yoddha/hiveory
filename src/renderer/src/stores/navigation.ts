@@ -3,9 +3,9 @@ import { mainWorkspaceId } from '@shared/domain'
 import { useWorkspaces } from './data'
 
 export type AppMode = 'workspace' | 'bots' | 'chatspace'
-export type ProjectTab = 'tasks' | 'pull-requests' | 'workspaces' | 'routines' | 'settings'
+export type ProjectTab = 'tasks' | 'workspaces' | 'issues' | 'routines' | 'settings'
 
-export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'queen' | 'remote' | 'updates' | 'guide' | 'about'
+export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'queen' | 'remote' | 'updates' | 'guide' | 'about'
 
 export type View =
   | { type: 'home' }

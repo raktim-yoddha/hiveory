@@ -110,3 +110,27 @@
   top: var(--space-4);
   right: var(--space-4);
 }
+
+/* Its pull or merge request (ADR 0040), or the way to open one. */
+.review {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-6) var(--space-6);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.review:hover {
+  text-decoration: underline;
+}
+
+.review svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.reviewRow {
+  margin: calc(var(--space-3) * -1) var(--space-4) var(--space-4);
+}

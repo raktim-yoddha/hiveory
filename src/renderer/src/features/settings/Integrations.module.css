@@ -1,0 +1,60 @@
+/* Settings › Integrations (ADR 0040): a service per row, its connect form unfolding under it. */
+.service {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.head > :nth-child(2) {
+  flex: 1;
+}
+
+.dot {
+  display: inline-block;
+  width: var(--status-dot);
+  height: var(--status-dot);
+  margin-right: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-success);
+  vertical-align: middle;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+}
+
+.link svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}

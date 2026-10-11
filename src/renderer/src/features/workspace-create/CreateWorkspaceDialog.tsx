@@ -21,6 +21,8 @@ interface CreateWorkspaceDialogProps {
   projectId: string
   /** The tab it opens on: a new branch (default), an existing local branch, or a remote branch (ADR 0038, 0039). */
   source?: WorktreeSource
+  /** Filled in from an issue (Dashboard › Issues, ADR 0040): its name and the issue it is for. */
+  initial?: { name: string; association: WorkspaceAssociation }
   /** The dialog is mounted only while open, so every opening starts fresh. */
   onClose: () => void
 }
@@ -37,16 +39,16 @@ const SOURCES: Array<{ value: WorktreeSource; label: string }> = [
   { value: 'remote', label: 'Remote branch' }
 ]
 
-export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new', onClose }: CreateWorkspaceDialogProps) {
+export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new', initial, onClose }: CreateWorkspaceDialogProps) {
   const [source, setSource] = useState<WorktreeSource>(initialSource)
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const loadWorkspaces = useWorkspaces((s) => s.load)
   const [suggested, setSuggested] = useState('')
   /** null until the user types, so a new suggestion can replace the name. */
-  const [typed, setTyped] = useState<string | null>(null)
+  const [typed, setTyped] = useState<string | null>(initial?.name ?? null)
   const name = typed ?? suggested
-  const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>('issue')
-  const [associationRef, setAssociationRef] = useState('')
+  const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>(initial?.association.kind ?? 'issue')
+  const [associationRef, setAssociationRef] = useState(initial?.association.ref ?? '')
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
   // Toggles start from the defaults chosen in Settings → Agents; the Workspace's own view wins (ADR 0037).
   const [config, setConfig] = useState<AgentConfig>(() => {

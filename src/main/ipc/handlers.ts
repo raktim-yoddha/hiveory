@@ -17,6 +17,10 @@ import { join } from 'node:path'
 import type { Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
 import type { HostRef } from '@shared/domain'
+import type { CodeHost } from '../services/git/code-host'
+
+/** Why a Workspace has no reviews when its settings turned the code host off (ADR 0040). */
+const CODE_HOST_OFF = "The code host is turned off in this workspace's settings."
 
 /** The machine a remote project lives on (ports exist only there). */
 const remoteHost = (c: Container, projectId: string): HostRef => {
@@ -41,6 +45,12 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   }
   const requireRepoRoot = async (projectId: string): Promise<string> =>
     (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This workspace is not a Git repository.')
+  /** The Workspace's code host (ADR 0040) and its repository root, or why it has none. */
+  const requireHost = async (projectId: string): Promise<{ host: CodeHost; root: string }> => {
+    const root = await requireRepoRoot(projectId)
+    const host = (await c.integrations.hostFor(c.workspaceRepo.project(projectId), root)) ?? fail('INVALID_INPUT', CODE_HOST_OFF)
+    return { host, root }
+  }
 
   /** The project folder for a project-scoped skill action (by id, or the project a scanned skill lives in). */
   const projectPathOf = (projectId?: string, skillPath?: string): string | undefined => {
@@ -552,28 +562,57 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'git.init': ({ projectId, commit }) => c.projects.initRepository(projectId, commit),
   'workspaces.gitStatus': ({ workspaceId }) => c.workspaces.gitStatus(workspaceId),
   'workspaces.repair': ({ workspaceId }) => c.workspaces.repair(workspaceId),
+  // The github.* channels answer for the Workspace's code host, GitHub or GitLab (ADR 0040).
   'github.status': async ({ projectId }) => {
-    if (c.workspaceRepo.project(projectId).host) return { available: false, reason: 'GitHub features work for workspaces on this computer.' }
+    const project = c.workspaceRepo.project(projectId)
+    if (project.host) return { available: false, reason: 'Pull requests work for workspaces on this computer.' }
     const root = await repoRootOf(projectId)
-    return root ? c.github.status(root) : { available: false, reason: 'This workspace is not a Git repository.' }
+    if (!root) return { available: false, reason: 'This workspace is not a Git repository.' }
+    const host = await c.integrations.hostFor(project, root)
+    return host ? host.status(root) : { available: false, reason: CODE_HOST_OFF }
   },
   'github.pullRequests': async ({ projectId }) => {
     localOnly(projectId, 'Pull requests')
-    return c.github.pullRequests(await requireRepoRoot(projectId))
+    const { host, root } = await requireHost(projectId)
+    return host.pullRequests(root)
   },
   'github.issues': async ({ projectId }) => {
     localOnly(projectId, 'Issues')
-    return c.github.issues(await requireRepoRoot(projectId))
+    const { host, root } = await requireHost(projectId)
+    // Older phones read GitHub-style issues; the desktop uses issues.list.
+    return (await host.issues(root)).map((i) => ({ number: Number(i.key.replace('#', '')), title: i.title, url: i.url }))
   },
   'github.createPullRequest': async ({ workspaceId, draft }) => {
     const workspace = c.workspaceRepo.get(workspaceId)
     localOnly(workspace.projectId, 'Pull requests')
-    const branch = workspace.git?.branch
-    if (workspace.kind !== 'isolated' || !branch || !workspace.git?.worktreePath) {
-      return fail('INVALID_INPUT', 'Pull requests are created from an isolated worktree branch.')
+    const { host, root } = await requireHost(workspace.projectId)
+    // From any worktree on a branch of its own: a linked one, or the Primary while it is off the default branch.
+    const path = workspace.git?.worktreePath ?? workspace.path
+    const branch = workspace.kind === 'isolated' ? workspace.git?.branch : await c.git.currentBranch(path)
+    if (!branch) return fail('INVALID_INPUT', 'This worktree is not on a branch.')
+    if (workspace.kind === 'main' && branch === (await c.git.defaultBranch(root))) {
+      return fail('INVALID_INPUT', `The Primary is on ${branch}, the default branch.`, { hint: 'Switch it to another branch, or use a worktree.' })
     }
-    const root = await requireRepoRoot(workspace.projectId)
-    return { url: await c.github.createPullRequest(root, workspace.git.worktreePath, branch, draft ?? false) }
+    return { url: await host.createPullRequest(root, path, branch, draft ?? false) }
+  },
+  'integrations.status': () => c.integrations.status(),
+  'integrations.connectJira': async (input) => {
+    await c.integrations.trackers.connectJira(input)
+    return c.integrations.status()
+  },
+  'integrations.connectLinear': async ({ apiKey }) => {
+    await c.integrations.trackers.connectLinear(apiKey)
+    return c.integrations.status()
+  },
+  'integrations.disconnect': ({ tracker }) => {
+    c.integrations.trackers.disconnect(tracker)
+    return c.integrations.status()
+  },
+  'integrations.groups': ({ tracker }) => c.integrations.trackers.groups(tracker),
+  'issues.list': async ({ projectId }) => {
+    const project = c.workspaceRepo.project(projectId)
+    if (project.host && !project.settings?.issueSource) return { issues: [], reason: 'Issues from the code host work for workspaces on this computer.' }
+    return c.integrations.issues(project, project.host ? undefined : await repoRootOf(projectId))
   },
 
   'kanban.board': ({ projectId }) => {

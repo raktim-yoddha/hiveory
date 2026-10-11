@@ -1,4 +1,5 @@
-import { AlertTriangle, ArrowDown, ArrowUp, FileDiff, GitBranch, House, MoreHorizontal, Wrench } from 'lucide-react'
+import { AlertTriangle, ArrowDown, ArrowUp, ExternalLink, FileDiff, GitBranch, GitPullRequest, House, MoreHorizontal, Wrench } from 'lucide-react'
+import type { PullRequest } from '@shared/domain/github'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import type { WorkspaceView } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
@@ -10,12 +11,23 @@ import { workspaceMenuEntries } from '../workspace/workspace-menu'
 import { useGitStatus } from './useGitStatus'
 import styles from './WorkspaceCard.module.css'
 
+/** The worktree's pull (or merge) request, or the way to open one (ADR 0040); absent without a code host. */
+export interface CardReview {
+  /** "PR" or "MR". */
+  short: string
+  defaultBranch?: string
+  /** The open ones; the card finds its own by its live branch. */
+  reviews: PullRequest[]
+  onCreate: () => void
+}
+
 interface WorkspaceCardProps {
   workspace: WorkspaceView
   onDelete: () => void
+  review?: CardReview
 }
 
-export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onDelete, review }: WorkspaceCardProps) {
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const isMain = workspace.kind === 'main'
   const status = useGitStatus(workspace.id, workspace.healthy)
@@ -24,6 +36,9 @@ export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
   const repair = (): void => void runAction('Repair worktree', () => api('workspaces.repair', { workspaceId: workspace.id }))
 
   const actions = workspaceMenuEntries(workspace, onDelete)
+  // Any branch but the default one can be reviewed: a linked worktree's, or the Primary's while it is elsewhere.
+  const pr = branch ? review?.reviews.find((r) => r.branch === branch) : undefined
+  const canReview = Boolean(review && !pr && branch && branch !== review.defaultBranch && workspace.healthy)
 
   return (
     <article className={styles.card}>
@@ -74,6 +89,22 @@ export function WorkspaceCard({ workspace, onDelete }: WorkspaceCardProps) {
             </Button>
           )}
         </div>
+      )}
+      {review && pr ? (
+        <a className={styles.review} href={pr.url} target="_blank" rel="noreferrer" title={pr.title}>
+          <GitPullRequest aria-hidden />
+          {review.short} #{pr.number}
+          {pr.draft ? ' · draft' : ''}
+          <ExternalLink aria-hidden />
+        </a>
+      ) : (
+        canReview && (
+          <div className={styles.reviewRow}>
+            <Button size="sm" variant="ghost" icon={<GitPullRequest />} onClick={review!.onCreate}>
+              Create {review!.short}
+            </Button>
+          </div>
+        )
       )}
       <div className={styles.actions}>
         <Menu

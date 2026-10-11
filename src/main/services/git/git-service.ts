@@ -111,6 +111,11 @@ export class GitService {
     await this.run(path, gitArgs.initialCommit())
   }
 
+  /** origin's address, when the repository has one. */
+  remoteUrl(repoRoot: string): Promise<string | undefined> {
+    return this.tryRun(repoRoot, gitArgs.remoteUrl())
+  }
+
   /** origin's default branch, else local main/master, else the current branch. */
   async defaultBranch(repoRoot: string): Promise<string | undefined> {
     const remote = await this.tryRun(repoRoot, gitArgs.remoteHead())

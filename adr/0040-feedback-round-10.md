@@ -25,6 +25,32 @@ Shipped as PATCH releases (ADR 0038).
 One Create button. With no panes chosen it creates an empty Worktree (Open agent, Load preset);
 "Create empty" is gone.
 
+### Code hosts and issue trackers
+The GitHub features were checked against a real repository (status, pull requests, issues, creating
+one, the GitHub account for new repositories): they work, but they only showed in a tab few found and
+only isolated worktrees could open a pull request. Now:
+- **Code hosts**: GitHub (`gh`) and GitLab (`glab`, gitlab.com or the user's own instance), each
+  through its own CLI the user is signed in to; Hiveory keeps no token for them. A Workspace's code
+  host is Automatic (GitLab when the origin address says so, else GitHub), GitHub, GitLab or Off
+  (Workspace settings › Integrations). `CodeHost` is the adapter; `GithubService` and
+  `GitlabService` implement it, `IntegrationService.hostFor` picks one. The `github.*` channels keep
+  their names (phones already use them) and answer for whichever host the Workspace has.
+- **Issue trackers**: Jira Cloud (site, email, API token) and Linear (personal API key), connected
+  once in Settings › Integrations. The key is checked with the service before it is kept, sealed by
+  SecretBox in `PersistedState.trackers`, sent only to that service's own address, and never to the
+  renderer, a model or a phone (AGENTS.md rule 27). A Workspace's issues come from its code host
+  (default), Jira (a project), Linear (a team) or nowhere.
+- **Dashboard**: tabs are Tasks · Worktrees · Issues · Routines · Settings. Pull Requests merges into
+  Worktrees: each worktree card shows its PR/MR (or Create PR/MR for any branch but the default, the
+  Primary included), and the open PRs/MRs follow below. Issues lists the open issues with a filter;
+  Start worktree opens New worktree named after the issue, with it attached. New worktree's issue
+  picker uses the same source.
+- New channels: `integrations.status`, `integrations.connectJira`, `integrations.connectLinear`,
+  `integrations.disconnect`, `integrations.groups`, `issues.list` (desktop and paired desktops; not
+  phones). Queen Bee's "open integrations" goes to the new Settings page.
+- Not added: Bitbucket and Azure DevOps (no first-party CLI to lean on), Jira Data Center, GitLens (a
+  VS Code extension, not a service). Their place is a new `CodeHost` or tracker in the same layer.
+
 ### Routines in Work (amends ADR 0030)
 Routines stay one engine (schedules, runs, catch-up, keep-awake, the run log; ADR 0028, 0030), but
 Work's are Work's own:
@@ -38,5 +64,7 @@ Work's are Work's own:
 ## Consequences
 
 The bar needs the agents of every visible Worktree loaded; they already were for the logo line.
+Tracker keys are one more secret on disk (sealed like Queen Bee's and Composio's). Issues and
+reviews need the network at the moment the tab opens; nothing is cached.
 Work routines are no longer on the Bots calendar: a user looking for every schedule in one place
 looks in two (Bots, and each Workspace's Dashboard).

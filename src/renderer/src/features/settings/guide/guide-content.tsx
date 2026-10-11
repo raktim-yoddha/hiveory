@@ -98,9 +98,10 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Status, pull requests and cleanup',
         body: (
           <p>
-            The Worktrees tab shows each branch's changes and ahead/behind counts. With the GitHub CLI signed in, the Pull Requests tab
-            lists PRs and can open one from a worktree branch. Deleting a worktree removes its folder; branches with unmerged commits
-            are always kept. A missing folder can be repaired from the branch.
+            The Dashboard's Worktrees tab shows each branch's changes, ahead/behind counts and its pull request (merge request on
+            GitLab), with the open ones below; Create PR opens one from any branch but the default. The Issues tab lists issues from
+            the code host, Jira or Linear (Settings › Integrations), and starts a worktree from one. Deleting a worktree removes its
+            folder; branches with unmerged commits are always kept. A missing folder can be repaired from the branch.
           </p>
         ),
         keywords: 'delete repair github gh pr'

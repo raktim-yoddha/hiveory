@@ -1,11 +1,19 @@
+import type { CodeHostId } from './integrations'
+
+/** A Workspace's code host and repository (GitHub or GitLab, ADR 0040; the name stays from when it was GitHub only). */
 export interface GithubStatus {
   available: boolean
+  /** Which host answered; absent when the Workspace has none. */
+  host?: CodeHostId
+  /** The repository's default branch on the host: reviews come from any other branch. */
+  defaultBranch?: string
   repository?: string
   url?: string
   /** Why pull requests are unavailable (gh missing, not signed in, no GitHub remote…). */
   reason?: string
 }
 
+/** A pull request (GitHub) or merge request (GitLab). */
 export interface PullRequest {
   number: number
   title: string

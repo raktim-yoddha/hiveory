@@ -144,7 +144,8 @@ const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
   [/\b(queen|personality|persona|voice|assistant)\b/, 'queen'],
   [/\b(agents?|clis?)\b/, 'agents'],
   [/\b(browser|cookies|profiles?)\b/, 'browser'],
-  [/\b(extensions?|skills?|mcp|plugins?|apps?|integrations?|servers?)\b/, 'extensions'],
+  [/\b(integrations?|jira|linear|gitlab|github)\b/, 'integrations'],
+  [/\b(extensions?|skills?|mcp|plugins?|apps?|servers?)\b/, 'extensions'],
   [/\b(updates?|upgrade)\b/, 'updates'],
   [/\b(guide|help|docs|tutorial)\b/, 'guide'],
   [/\b(about|version)\b/, 'about']
