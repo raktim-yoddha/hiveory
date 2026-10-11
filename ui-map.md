@@ -193,7 +193,8 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <worktree>, Copy
 
 ### Settings › Skills, MCP & Apps (ADR 0017, 0023)
 
-Skills: ( Installed | skills.sh ). skills.sh: search as you type; rows (name, Installed, source ·
+Skills: ( Installed | skills.sh ) beside the search box. skills.sh: before a search, "Top skills on
+skills.sh" (1–50 by installs); search as you type; rows (rank, name, Installed, source ·
 installs, open on skills.sh ↗, Install). Install: security audits (provider passed / warns / failed ·
 risk), Where (everywhere / this workspace), Folders (preselected to reach every installed CLI),
 "Reaches [logos] every installed CLI". MCP servers: ( In Hiveory | MCP Registry ). Registry: search on

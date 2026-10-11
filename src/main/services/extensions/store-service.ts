@@ -5,6 +5,10 @@ import { parseSkillFrontmatter } from './extensions-service'
 type Fetch = typeof fetch
 
 const SKILLS_API = 'https://skills.sh/api'
+/** skills.sh's leaderboard is public only on its home page (its API needs a Vercel account). */
+const SKILLS_HOME = 'https://www.skills.sh/'
+const TOP_SKILLS = 50
+const TOP_CACHE_MS = 10 * 60_000
 const REGISTRY_API = 'https://registry.modelcontextprotocol.io/v0.1'
 const GITHUB_API = 'https://api.github.com'
 const TIMEOUT_MS = 20_000
@@ -28,6 +32,22 @@ export interface SkillFiles {
 /** A safe relative path inside a skill folder: no absolute paths, no "..", no empty parts. */
 export const safeRelative = (path: string): boolean => !path.startsWith('/') && !/^[A-Za-z]:/.test(path) && path.split('/').every((part) => part !== '' && part !== '.' && part !== '..')
 
+/**
+ * The all-time leaderboard from skills.sh's home page data: every skill entry it embeds, most installs
+ * first. ponytail: reads the page's embedded data, so a redesign of skills.sh can empty it; the store
+ * then shows search only. Upgrade to /api/v1/skills if skills.sh opens it without a Vercel account.
+ */
+export const parseLeaderboard = (html: string): StoreSkill[] => {
+  const text = html.replaceAll('\\"', '"')
+  const seen = new Map<string, StoreSkill>()
+  for (const m of text.matchAll(/"source":"([^"]{1,200})","skillId":"([^"]{1,128})","name":"([^"]{1,128})","installs":(\d+)/g)) {
+    const [, source, skillId, name, installs] = m as unknown as [string, string, string, string, string]
+    const id = `${source}/${skillId}`
+    if (!seen.has(id)) seen.set(id, { id, source, skillId, name, installs: Number(installs), installable: GITHUB_SOURCE.test(source) })
+  }
+  return [...seen.values()].sort((a, b) => b.installs - a.installs)
+}
+
 /** The skill folder a skills.sh id names: a folder called after it, else the SKILL.md whose name matches. */
 export const skillDirOf = async (skillMds: string[], skillId: string, nameOf: (path: string) => Promise<string | undefined>): Promise<string | undefined> => {
   const dirOf = (p: string): string => p.split('/').slice(0, -1).join('/')
@@ -43,7 +63,19 @@ export const skillDirOf = async (skillMds: string[], skillId: string, nameOf: (p
  * from a store runs until the user installs it, and a server only starts once they add it.
  */
 export class StoreService {
+  private top: { at: number; skills: StoreSkill[] } | null = null
+
   constructor(private readonly http: Fetch = fetch) {}
+
+  /** The most installed skills on skills.sh, kept for ten minutes. */
+  async topSkills(): Promise<StoreSkill[]> {
+    if (this.top && Date.now() - this.top.at < TOP_CACHE_MS) return this.top.skills
+    const response = await this.get('skills.sh', SKILLS_HOME)
+    if (!response.ok) fail('INVALID_INPUT', `skills.sh answered ${response.status}.`)
+    const skills = parseLeaderboard(await response.text()).slice(0, TOP_SKILLS)
+    this.top = { at: Date.now(), skills }
+    return skills
+  }
 
   async searchSkills(query: string): Promise<StoreSkill[]> {
     const q = query.trim()

@@ -580,3 +580,12 @@
   justify-content: center;
   padding: var(--space-3) 0 var(--space-5);
 }
+
+/* A skill's place on the skills.sh leaderboard. */
+.rank {
+  flex: none;
+  min-width: var(--control-xs);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}

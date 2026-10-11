@@ -13,6 +13,11 @@ CLI), a global MCP store, and for every agent and Queen Bee to know the app they
 ### Skills: skills.sh
 - Settings › Skills, MCP & Apps › Skills has **Installed | skills.sh**. skills.sh is searched as you
   type through its public search (`skills.sh/api/search`, what `npx skills find` uses).
+- Before a search it lists the **top 50 skills** by installs, numbered. skills.sh's leaderboard API
+  needs a Vercel account, so they are read from the data its home page embeds (`parseLeaderboard`),
+  kept ten minutes; if that page changes shape the list is empty and search still works.
+- The Installed | skills.sh switch sits at the start of the search row (and In Hiveory | MCP Registry
+  likewise), not as a bar of its own.
 - Install opens a dialog with the skill's partner security audits (`/api/v1/skills/audit/…`, public),
   where it goes (everywhere, or this workspace / bot) and the skills folders, preselected to the fewest
   that reach every installed CLI (`coveringRoots`: the shared `.agents/skills`, then each CLI's own

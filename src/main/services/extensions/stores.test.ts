@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { connectionFor, coveringRoots, optionInputs, type McpOption } from '@shared/domain/stores'
 import { ExtensionsService } from './extensions-service'
-import { safeRelative, serverOf, skillDirOf, StoreService } from './store-service'
+import { parseLeaderboard, safeRelative, serverOf, skillDirOf, StoreService } from './store-service'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined, debug: () => undefined } as never
 
@@ -55,6 +55,17 @@ describe('installing a skill for every CLI', () => {
 
   it('refuses sources that are not GitHub repositories', async () => {
     await expect(new StoreService((async () => new Response('{}')) as unknown as typeof fetch).downloadSkill('open.feishu.cn', 'lark')).rejects.toThrow('GitHub')
+  })
+})
+
+describe('top skills', () => {
+  it("reads skills.sh's leaderboard from its page data, most installed first, once each", () => {
+    const entry = (source: string, skillId: string, installs: number): string => `{\\"source\\":\\"${source}\\",\\"skillId\\":\\"${skillId}\\",\\"name\\":\\"${skillId}\\",\\"installs\\":${installs},\\"weeklyInstalls\\":[1]}`
+    const html = `<script>self.__next_f.push([1,"[${entry('acme/skills', 'tdd', 50)},${entry('acme/skills', 'find', 90)},${entry('acme/skills', 'tdd', 50)},${entry('docs.acme.dev', 'docs', 70)}]"])</script>`
+    const top = parseLeaderboard(html)
+    expect(top.map((s) => s.id)).toEqual(['acme/skills/find', 'docs.acme.dev/docs', 'acme/skills/tdd'])
+    expect(top.find((s) => s.source === 'docs.acme.dev')?.installable).toBe(false)
+    expect(parseLeaderboard('<html>redesigned</html>')).toEqual([])
   })
 })
 

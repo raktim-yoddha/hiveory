@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { ExternalLink, Plus } from 'lucide-react'
 import { connectionFor, optionInputs, type McpOption, type McpSearchResult, type StoreMcpServer } from '@shared/domain'
 import { Button, IconButton } from '../../../components/ui/Button'
@@ -23,7 +23,7 @@ const titleOf = (s: StoreMcpServer): string => s.title || s.name.split('/').at(-
  * The official MCP Registry in the MCP tab (ADR 0041): search it, then add a server to Hiveory, which
  * runs it for every agent — terminal, chat and bots — like any server added by hand.
  */
-export function McpStore() {
+export function McpStore({ lead }: { lead: ReactNode }) {
   const connections = useConnections((s) => s.connections)
   const [query, setQuery] = useState('')
   const [submitted, setSubmitted] = useState('')
@@ -62,6 +62,7 @@ export function McpStore() {
           setSubmitted(query.trim())
         }}
       >
+        {lead}
         <div className={styles.search}>
           <TextInput type="search" value={query} onChange={setQuery} placeholder="Search the MCP Registry — github, postgres, slack… then Enter" aria-label="Search the MCP Registry" autoFocus />
         </div>

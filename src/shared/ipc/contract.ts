@@ -485,6 +485,7 @@ export const requestSchemas = {
   // Stores (ADR 0041): skills.sh and the official MCP Registry, read from main. A store server is added
   // through connections.saveCustom like any other; a skill is downloaded from its GitHub repository here.
   'store.searchSkills': z.object({ query: z.string().max(200) }),
+  'store.topSkills': none,
   'store.skillAudits': z.object({ id: z.string().min(3).max(300) }),
   'store.installSkill': z.object({
     source: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
@@ -837,6 +838,7 @@ export interface ResponseMap {
   'extensions.createSkill': void
   'extensions.importSkill': boolean
   'store.searchSkills': StoreSkill[]
+  'store.topSkills': StoreSkill[]
   'store.skillAudits': SkillAudit[]
   'store.installSkill': void
   'store.searchMcp': McpSearchResult

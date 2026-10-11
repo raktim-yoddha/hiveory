@@ -99,16 +99,15 @@ export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
   if (view === 'store') {
     return (
       <div className={styles.panel}>
-        {switcher}
-        <SkillStore inventory={inventory} roots={roots} projectId={projectId} botId={botId} onChanged={onChanged} />
+        <SkillStore lead={switcher} inventory={inventory} roots={roots} projectId={projectId} botId={botId} onChanged={onChanged} />
       </div>
     )
   }
 
   return (
     <div className={styles.panel}>
-      {switcher}
       <div className={styles.toolbar}>
+        {switcher}
         <div className={styles.search}>
           <TextInput value={query} onChange={setQuery} placeholder="Search skills" aria-label="Search skills" />
         </div>

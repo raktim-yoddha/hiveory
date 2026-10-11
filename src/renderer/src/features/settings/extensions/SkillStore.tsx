@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { Download, ExternalLink, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { coveringRoots, type ExtensionsInventory, type SkillAudit, type SkillRoot, type StoreSkill } from '@shared/domain'
 import { CliStack } from '../../../components/cli/CliStack'
@@ -20,6 +20,8 @@ const folderOf = (skillId: string): string => skillId.toLowerCase().replace(/[^a
 const installs = (n: number): string => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : String(n))
 
 interface Props {
+  /** The Installed | skills.sh switch, at the start of the search row. */
+  lead: ReactNode
   inventory: ExtensionsInventory | null
   roots: SkillRoot[]
   projectId?: string
@@ -31,9 +33,11 @@ interface Props {
  * skills.sh in the Skills tab (ADR 0041): search the open Agent Skills directory, see each skill's
  * security audits, and install it into the folders that reach every installed CLI at once.
  */
-export function SkillStore({ inventory, roots, projectId, botId, onChanged }: Props) {
+export function SkillStore({ lead, inventory, roots, projectId, botId, onChanged }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ query: string; skills: StoreSkill[] } | null>(null)
+  // Before a search: skills.sh's most installed skills (null while loading, [] when it can't be read).
+  const [top, setTop] = useState<StoreSkill[] | null>(null)
   const [installing, setInstalling] = useState<StoreSkill | null>(null)
   const have = useMemo(() => new Set(inventory?.skills.map((s) => s.folder) ?? []), [inventory])
   const q = query.trim()
@@ -53,11 +57,17 @@ export function SkillStore({ inventory, roots, projectId, botId, onChanged }: Pr
     }
   }, [q])
 
-  const shown = q.length >= 2 ? results : null
+  useEffect(() => {
+    void api('store.topSkills', undefined).then(setTop, () => setTop([]))
+  }, [])
+
+  const searching = q.length >= 2
+  const list = searching ? (results?.query === q ? results.skills : null) : top
 
   return (
     <>
       <div className={styles.toolbar}>
+        {lead}
         <div className={styles.search}>
           <TextInput type="search" value={query} onChange={setQuery} placeholder="Search skills.sh — react, pdf, testing, security review…" aria-label="Search skills.sh" autoFocus />
         </div>
@@ -66,20 +76,20 @@ export function SkillStore({ inventory, roots, projectId, botId, onChanged }: Pr
         <p className={cx(settings.groupNote, styles.noteTop)}>
           The open Agent Skills directory. Installing copies the skill from its GitHub repository into your skills folders; read its audits first.
         </p>
-        {!shown ? (
-          <p className={settings.empty}>{q.length < 2 ? 'Type at least two letters to search.' : 'Searching skills.sh…'}</p>
-        ) : shown.query !== q ? (
-          <p className={settings.empty}>Searching skills.sh…</p>
-        ) : shown.skills.length === 0 ? (
-          <p className={settings.empty}>No skills match.</p>
+        {!searching && top && top.length > 0 && <div className={settings.groupTitle}>Top skills on skills.sh</div>}
+        {!list ? (
+          <p className={settings.empty}>{searching ? 'Searching skills.sh…' : 'Loading the top skills…'}</p>
+        ) : list.length === 0 ? (
+          <p className={settings.empty}>{searching ? 'No skills match.' : 'Could not load the top skills. Search instead.'}</p>
         ) : (
           <ul className={settings.list}>
-            {shown.skills.map((skill, index) => {
+            {list.map((skill, index) => {
               const installed = have.has(folderOf(skill.skillId))
               return (
-                <li key={skill.id} className={cx(settings.listItem, styles.stagger)} style={{ '--i': index } as CSSProperties}>
+                <li key={skill.id} className={cx(settings.listItem, styles.stagger)} style={{ '--i': Math.min(index, 20) } as CSSProperties}>
                   <div className={settings.listMain}>
                     <span className={styles.skillName}>
+                      {!searching && <span className={styles.rank}>{index + 1}</span>}
                       <span className={settings.listTitle}>{skill.name}</span>
                       {installed && <span className={styles.badge}>Installed</span>}
                     </span>

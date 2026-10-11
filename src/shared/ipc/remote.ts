@@ -26,7 +26,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'routines.list', 'routines.addFile', 'routines.create', 'routines.update', 'routines.delete', 'routines.runNow', 'routines.runs',
   'hosts.check', 'hosts.suggest', 'hosts.status', 'hosts.listDir', 'ssh.pending', 'ssh.answer', 'git.info', 'git.validateBranch', 'git.init',
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest',
-  'store.searchSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
+  'store.searchSkills', 'store.topSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
   'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list'
 ])
 

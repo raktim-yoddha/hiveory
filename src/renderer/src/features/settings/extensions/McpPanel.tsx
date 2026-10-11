@@ -55,15 +55,14 @@ export function McpPanel({ inventory }: { inventory: ExtensionsInventory | null 
   if (view === 'store') {
     return (
       <div className={styles.panel}>
-        {switcher}
-        <McpStore />
+        <McpStore lead={switcher} />
       </div>
     )
   }
 
   return (
     <div className={styles.panel}>
-      {switcher}
+      <div className={styles.toolbar}>{switcher}</div>
       <div className={settings.group}>
         <div className={styles.groupHeader}>
           <div className={settings.groupTitle}>In Hiveory · every agent</div>
