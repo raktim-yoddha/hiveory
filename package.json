@@ -20,6 +20,7 @@
     "dist:linux": "electron-vite build && electron-builder --linux",
     "release": "node scripts/release.mjs",
     "e2e": "node scripts/e2e.mjs",
+    "e2e:panes": "node scripts/e2e-panes.mjs",
     "mobile": "pnpm --dir mobile",
     "mobile:install": "pnpm --dir mobile install",
     "mobile:check": "pnpm --dir mobile check"

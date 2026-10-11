@@ -3,17 +3,10 @@
 // Usage: pnpm build && node scripts/e2e.mjs [screenshotDir]   (E2E_CHAT=1 also runs real chat prompts)
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { _electron as electron } from 'playwright-core'
-
-const shots = resolve(process.argv[2] ?? join(tmpdir(), 'hiveory-e2e'))
-mkdirSync(shots, { recursive: true })
-const sandbox = mkdtempSync(join(tmpdir(), 'hiveory-e2e-'))
-const profile = join(sandbox, 'profile')
-const local = join(sandbox, 'local')
+import { join } from 'node:path'
+import { app, browserPane, close, expect, finish, invoke, launch, local, nativeShown, page, profile, relaunch, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
 
 // ---------- fixtures ----------
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: 'pipe' }).toString().trim()
@@ -101,44 +94,7 @@ const composioServer = createServer((req, res) => {
 await new Promise((r) => composioServer.listen(0, '127.0.0.1', r))
 process.env.HIVEORY_COMPOSIO_API = `http://127.0.0.1:${composioServer.address().port}/api/v3.1`
 
-// ---------- harness ----------
-const results = []
-// Playwright asserts ("Target crashed") when a hidden background page it auto-attached to (a
-// browser_crawl worker) is closed. The app is fine — the main window has its own crash handler —
-// so that one assertion is logged instead of killing the run.
-process.on('uncaughtException', (error) => {
-  if (/Target crashed/.test(String(error?.message))) return console.log('  (ignored Playwright assertion: a background page target closed)')
-  console.error(error)
-  process.exit(1)
-})
-let app
-let page
-let closing = false
-const launch = async () => {
-  app = await electron.launch({ args: ['.'], env: { ...process.env, HIVEORY_USER_DATA: profile, LOCALAPPDATA: local } })
-  const proc = app.process()
-  proc.on('exit', (code, signal) => {
-    if (!closing) console.log(`  !! Electron exited unexpectedly (code ${code}, signal ${signal})`)
-  })
-  proc.stderr?.on('data', (d) => {
-    const text = String(d)
-    if (/error|fatal|crash/i.test(text) && !/Security Warning|DevTools|Debugger/.test(text)) console.log(`  [stderr] ${text.trim().slice(0, 300)}`)
-  })
-  page = await app.firstWindow()
-  page.on('crash', () => console.log('  !! renderer crashed'))
-  page.on('pageerror', (e) => results.push({ name: `pageerror: ${e.message}`, ok: false }))
-  await page.setViewportSize({ width: 1440, height: 900 }).catch(() => undefined)
-  await page.waitForSelector('text=Hiveory')
-}
-const close = async () => {
-  closing = true
-  await app.close()
-  closing = false
-}
-const relaunch = async () => {
-  await close()
-  await launch()
-}
+// ---------- app helpers ----------
 /** Picks an option in the app's Select: a combobox with a themed listbox, never a native <select>. */
 const choose = async (scope, label, option) => {
   await scope.getByRole('combobox', { name: label, exact: true }).click()
@@ -159,33 +115,6 @@ const openSidebarWorkspace = async (projectName, workspaceName) => {
   await row.click()
   // The row's accessible name also carries its agent count ("Main 4").
   await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: new RegExp(`^${workspaceName}( [0-9]+)?$`) }).first().click()
-}
-const shot = (name) => page.screenshot({ path: join(shots, `${name}.png`) }).catch(() => undefined)
-const test = async (name, fn) => {
-  const started = Date.now()
-  try {
-    await fn()
-    results.push({ name, ok: true, ms: Date.now() - started })
-    console.log(`  ✓ ${name} (${Date.now() - started} ms)`)
-  } catch (error) {
-    // fetch failures hide the real reason in error.cause (ECONNRESET, a timeout…).
-    const cause = error?.cause ? ` (cause: ${error.cause.code ?? ''} ${error.cause.message ?? error.cause})` : ''
-    const message = `${String(error?.message ?? error).split('\n')[0]}${cause} after ${Date.now() - started} ms`
-    results.push({ name, ok: false, error: message })
-    // Playwright puts the reason (what intercepted a click, which elements matched) on later lines.
-    const detail = String(error?.message ?? '').split('\n').slice(1, 8).filter((l) => l.trim()).map((l) => `        ${l.trim()}`).join('\n')
-    console.log(`  ✗ ${name}\n      ${message}${detail ? `\n${detail}` : ''}`)
-    await shot(`FAIL-${name.replace(/[^a-z0-9]+/gi, '-')}`)
-  }
-}
-const expect = (cond, message) => {
-  if (!cond) throw new Error(message)
-}
-const invoke = (channel, payload) => page.evaluate(async ([c, p]) => window.hiveory.invoke(c, p), [channel, payload])
-const value = async (channel, payload) => {
-  const r = await invoke(channel, payload)
-  if (!r.ok) throw new Error(`${channel}: ${r.error.message}`)
-  return r.value
 }
 const stubFolderPicker = (folder) =>
   app.evaluate(({ dialog }, f) => {
@@ -208,14 +137,6 @@ const stubBrowser = () =>
       await fetch(url)
     }
   })
-const waitFor = async (fn, message, timeout = 15000) => {
-  const end = Date.now() + timeout
-  for (;;) {
-    if (await fn()) return
-    if (Date.now() > end) throw new Error(`Timed out: ${message}`)
-    await page.waitForTimeout(150)
-  }
-}
 const panes = () => page.locator('section[aria-label$=" agent"]')
 const paneBoxes = () =>
   page.locator('section[aria-label$=" agent"]').evaluateAll((els) => els.map((el) => ({ name: el.getAttribute('aria-label'), ...el.getBoundingClientRect().toJSON() })))
@@ -240,6 +161,22 @@ await test('home renders with DEV badge and Work/Chat modes', async () => {
   await shot('a1-home')
 })
 
+await test('the first-run welcome asks the pane style and spacing; Attached removes the air', async () => {
+  const welcome = page.getByRole('dialog').filter({ hasText: 'How should your agents' })
+  await welcome.waitFor()
+  expect(await welcome.getByRole('radiogroup', { name: 'Pane style' }).isVisible(), 'no pane style choice')
+  await welcome.getByRole('radio', { name: /Attached/ }).click()
+  await welcome.getByRole('radio', { name: /Tiles/ }).click()
+  await welcome.getByRole('button', { name: 'Start' }).click()
+  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === 'attached', 'attached spacing applied')
+  const s = await value('settings.get')
+  expect(s.welcomed && s.paneStyle === 'tiles' && s.paneSpacing === 'attached', `saved: ${s.paneStyle} ${s.paneSpacing}`)
+  expect((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--gutter').trim())) === '0px', 'attached panes keep a gutter')
+  await shot('a1-attached')
+  await value('settings.update', { paneSpacing: 'spaced' })
+  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === undefined, 'spaced again')
+})
+
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   for (const section of ['Appearance', 'Agents', 'Skills, MCP & Apps', 'Updates', 'Guide', 'About']) {
@@ -256,6 +193,12 @@ await test('settings: silver theme applies instantly and persists', async () => 
   expect((await value('settings.get')).theme === 'silver', 'theme not saved')
   await shot('a2-settings-silver')
   await page.getByRole('radio', { name: /Bronze/ }).click()
+  // Appearance is in sections, one at a time (ADR 0043).
+  const sections = page.getByRole('tablist', { name: 'Appearance sections' })
+  await sections.getByRole('tab', { name: 'Panes' }).click()
+  await page.getByRole('radiogroup', { name: 'Pane spacing' }).waitFor()
+  expect(!(await page.getByRole('radio', { name: /Silver/ }).count()), 'theme cards still shown beside Panes')
+  await sections.getByRole('tab', { name: 'Theme', exact: true }).click()
 })
 
 await test('settings: Dark is the default theme and perfectly flat', async () => {
@@ -286,6 +229,7 @@ await test('appearance: six themes, three per row; new themes apply', async () =
 })
 
 await test('appearance: an added image becomes the wallpaper; transparency reaches every surface', async () => {
+  await page.getByRole('tablist', { name: 'Appearance sections' }).getByRole('tab', { name: 'Background' }).click()
   expect((await page.getByRole('radiogroup', { name: 'Wallpaper' }).getByRole('radio').count()) === 1, 'built-in wallpapers still listed')
   await stubFolderPicker(IMAGE)
   await page.getByRole('button', { name: 'Add image' }).click()
@@ -395,7 +339,7 @@ await test('apps: a Composio key once; Connect goes straight to the app; a label
 
   // Disconnect the Work account (confirmed).
   await gmail.locator('li').filter({ hasText: 'Work' }).getByRole('button', { name: 'Disconnect' }).click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Disconnect' }).click()
+  await page.getByRole('dialog', { name: 'Disconnect Work?' }).getByRole('button', { name: 'Disconnect' }).click()
   await waitFor(async () => !composio.accounts.some((a) => a.id === 'ca_e2e2'), 'Work account removed from Composio')
   await gmail.getByText('ca_e2e2 · active').waitFor({ state: 'detached', timeout: 15000 })
   expect(await gmail.getByText('ca_e2e1 · active').isVisible(), 'the other account went too')
@@ -715,22 +659,12 @@ await test('a small window keeps every pane inside the layout', async () => {
 // ======================= D. Terminal & clipboard =======================
 console.log('D. Side panel, sidebars, terminal & clipboard')
 const sidePanel = () => page.locator('aside[aria-label="Side panel"]')
-await test('side panel starts empty; "+" adds browsers and a single Explorer', async () => {
+await test('the side panel has its fixed tabs, no "+" and no ×; browsers are panes', async () => {
   await page.getByRole('button', { name: 'Show side panel' }).click()
-  await sidePanel().getByText('Nothing open').waitFor()
-  const add = async (kind) => {
-    await sidePanel().getByRole('button', { name: 'Add browser, explorer or sessions' }).first().click()
-    await page.getByRole('menuitem', { name: new RegExp(kind) }).click()
-  }
-  expect(!(await sidePanel().getByText('Terminal').count()), 'terminal still offered in the side panel')
-  await add('Browser')
-  await add('Explorer')
-  await add('Explorer')
-  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 2, 'two tabs (one explorer)')
-  const tabs = await sidePanel().getByRole('tab').allInnerTexts()
-  expect(JSON.stringify(tabs) === JSON.stringify(['New tab', 'Explorer']), `tabs: ${tabs}`)
-  await sidePanel().getByRole('tab', { name: 'New tab' }).click()
-  expect(await sidePanel().getByLabel('Address').isVisible(), 'browser address bar missing')
+  for (const name of ['Dashboard', 'Sessions', 'Explorer', 'Routines', 'Settings']) await sidePanel().getByRole('tab', { name }).waitFor()
+  expect(!(await sidePanel().getByRole('button', { name: /^Close / }).count()), 'side panel tabs can be closed')
+  expect(!(await sidePanel().getByRole('button', { name: /^Add / }).count()), 'side panel still has "+"')
+  expect(!(await sidePanel().getByLabel('Address').count()), 'a browser in the side panel')
   await sidePanel().getByRole('tab', { name: 'Explorer' }).click()
   await sidePanel().getByRole('treeitem', { name: 'README.md' }).waitFor()
 })
@@ -772,10 +706,7 @@ await test('explorer: create, search, open a file as an editable pane and save i
   await waitFor(async () => !existsSync(join(repo, 'renamed.txt')), 'deleted to trash')
 })
 
-await test('closing the browser tab closes its page; the panel maximizes over the main area', async () => {
-  await sidePanel().getByRole('button', { name: 'Close New tab' }).click()
-  await waitFor(async () => (await sidePanel().getByRole('tab').count()) === 1, 'tab closed')
-  expect((await value('browser.state')).pages.length === 0, 'closing the browser tab left its page open')
+await test('the panel maximizes over the main area', async () => {
   const before = await sidePanel().boundingBox()
   const paneBefore = await panes().first().boundingBox()
   await page.getByRole('button', { name: 'Maximize side panel' }).click()
@@ -1486,18 +1417,30 @@ await test('drag-and-drop, console, network, cookies and screenshots work for ag
   await tool('browser_navigate', { url: 'back' })
 })
 
-await test('the agent page shows in the side panel under its name; viewport emulation', async () => {
+const fixturePort = String(fixtureServer.address().port)
+/** Whether the fixture page's native view is drawn (it must step aside whenever its pane can't be seen). */
+const fixtureShown = () => nativeShown(fixturePort)
+
+await test('the agent page opens as a pane beside its agent, under its name; viewport emulation', async () => {
   const agents = await value('agents.list', { workspaceId: mainWs.id })
-  await page.getByRole('button', { name: 'Show side panel' }).click()
-  await sidePanel().getByRole('tab', { name: new RegExp(`${agents[0].petName} · Fixture`) }).click()
+  await openSidebarWorkspace('demo-app', 'Main')
+  const pane = page.locator('section[aria-label$=" browser"]').filter({ hasText: `${agents[0].petName} · Fixture` })
+  await pane.waitFor()
+  expect(!(await sidePanel().getByLabel('Address').count()), 'the page opened in the side panel')
+  // Beside its agent, not docked at the far right.
+  const own = await page.locator(`section[aria-label="${agents[0].petName} agent"]`).boundingBox()
+  const box = await pane.boundingBox()
+  const gap = box.x - (own.x + own.width)
+  expect(Math.abs(box.y - own.y) < 2 && gap >= -1 && gap < 24, `page pane is not beside its agent (gap ${gap}, dy ${box.y - own.y})`)
+  await waitFor(fixtureShown, 'the page drawn over its pane')
   // "is using this page" shows only while the agent acts, not forever.
-  await waitFor(async () => !(await sidePanel().getByText('is using this page').isVisible()), 'agent strip to clear once the agent is idle', 6000)
+  await waitFor(async () => !(await pane.getByText('is using this page').isVisible()), 'agent strip to clear once the agent is idle', 6000)
   expect(!(await value('browser.state')).pages[0].agentActive, 'page still marked active')
   const vp = await tool('browser_viewport', { preset: 'iPhone SE' })
   expect(!vp.isError, text(vp))
   expect(text(await tool('browser_evaluate', { script: 'screen.width + "x" + screen.height + " " + navigator.maxTouchPoints + " " + devicePixelRatio' })).includes('375x667 5 2'), 'device not emulated')
   // The device toolbar appears for an agent-set device too.
-  const bar = sidePanel().getByRole('toolbar', { name: 'Device toolbar' })
+  const bar = browserPane().getByRole('toolbar', { name: 'Device toolbar' })
   await bar.waitFor()
   expect((await bar.getByRole('combobox', { name: 'Device', exact: true }).textContent()) === 'iPhone SE', 'toolbar does not show the device')
   await shot('e3-browser-device')
@@ -1512,10 +1455,12 @@ await test('the agent page shows in the side panel under its name; viewport emul
   await bar.getByRole('button', { name: 'Close device toolbar' }).click()
   await waitFor(async () => (await value('browser.state')).pages[0].viewport === null, 'device mode closed')
   // Menus open over the native page: it steps aside and leaves a picture behind.
-  await sidePanel().getByRole('button', { name: 'More browser actions' }).click()
+  await browserPane().getByRole('button', { name: 'More browser actions' }).click()
   await page.getByRole('menuitem', { name: 'Pick element' }).waitFor()
+  await waitFor(async () => !(await fixtureShown()), 'the page to step aside for a menu')
   await shot('e4-browser-menu')
   await page.keyboard.press('Escape')
+  await waitFor(fixtureShown, 'the page back after the menu')
 })
 
 await test('browser_crawl reads a whole site in one call; run_tools batches calls', async () => {
@@ -1536,24 +1481,27 @@ await test('computer use is off by default; when on, agents get computer_* tools
 })
 
 await test('pick element copies it for an agent; annotate pins a note agents can read', async () => {
-  const view = app.windows().find((w) => w.url().includes(fixtureHost.split(':')[1]))
+  const view = app.windows().find((w) => w.url().includes(fixturePort))
   expect(view, 'browser page target not found')
-  await sidePanel().getByRole('button', { name: 'More browser actions' }).click()
+  await browserPane().getByRole('button', { name: 'More browser actions' }).click()
   await page.getByRole('menuitem', { name: 'Pick element' }).click()
-  await sidePanel().getByText('Click an element to copy it').waitFor()
+  await browserPane().getByText('Click an element to copy it').waitFor()
   await page.waitForTimeout(300)
   await view.click('#go')
-  await sidePanel().getByText(/Copied button "Greet"/).waitFor()
+  await browserPane().getByText(/Copied button "Greet"/).waitFor()
   const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
   expect(copied.includes('selector: #go') && copied.includes('<button'), `clipboard: ${copied.slice(0, 200)}`)
-  await sidePanel().getByRole('button', { name: 'More browser actions' }).click()
+  await browserPane().getByRole('button', { name: 'More browser actions' }).click()
   await page.getByRole('menuitem', { name: 'Annotate element' }).click()
-  await sidePanel().getByText('Click the element to annotate').waitFor()
+  await browserPane().getByText('Click the element to annotate').waitFor()
   await page.waitForTimeout(300)
   await view.click('#email')
-  await sidePanel().getByLabel('Note for agents').fill('Validate this email')
-  await sidePanel().getByRole('button', { name: 'Save' }).click()
-  await sidePanel().getByText(/Note saved/).waitFor()
+  // The note card floats on the page at the element, its box focused (ADR 0042).
+  await browserPane().getByText(/Write the note on the page/).waitFor()
+  await view.keyboard.type('Validate this email')
+  await view.keyboard.press('Control+Enter')
+  await browserPane().getByText(/1 note ready/).waitFor()
+  await browserPane().getByRole('button', { name: 'Done' }).click()
   const notes = text(await tool('browser_annotations'))
   expect(notes.includes('Validate this email') && notes.includes('#email'), notes)
   await shot('e5-browser-annotated')
@@ -1568,7 +1516,6 @@ await test('annotations reach agents; turning browser use off hides the tools', 
   await value('settings.update', { browserUse: false })
   expect(!(await rpc('tools/list', {})).result.tools.some((t) => t.name.startsWith('browser_')), 'browser tools still listed')
   await value('settings.update', { browserUse: true })
-  await page.getByRole('button', { name: 'Hide side panel' }).click()
 })
 
 // ======================= F. Kanban =======================
@@ -1859,7 +1806,4 @@ await test('a corrupted state file is recovered with a notice', async () => {
 await close()
 fixtureServer.close()
 composioServer.close()
-const failed = results.filter((r) => !r.ok)
-console.log(`\n${results.length - failed.length}/${results.length} passed. Screenshots: ${shots}`)
-for (const f of failed) console.log(`  FAILED: ${f.name} — ${f.error}`)
-process.exit(failed.length ? 1 : 0)
+finish()

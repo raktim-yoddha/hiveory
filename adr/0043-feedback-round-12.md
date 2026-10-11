@@ -41,9 +41,11 @@ avatar), a tidier Appearance page, remote sessions, and a few corrections.
 - A page an agent opens lands beside that agent, and a popup beside the page that opened it: a tab in
   its area in the Tabs style, else to its right. Pages the user opens go where "+" or the menu says.
 - Removing a worktree closes its pages instead of leaving them running unseen.
-- The end-to-end suite covers it: the page opens beside its agent, a click selects its pane, it hides
-  under a maximized side panel, behind another tab and under a menu, a removed worktree closes its
-  pages, and a popup lands beside its opener.
+- A focused end-to-end suite (`pnpm build && pnpm e2e:panes`, `scripts/e2e-panes.mjs`, sharing
+  `scripts/e2e-harness.mjs` with the full suite) covers it: the page opens beside its agent, a click
+  selects its pane, it hides under a menu, a maximized side panel and another tab, the sidebar's pane
+  list brings its tab forward, attached spacing re-places it, a popup lands beside its opener, and a
+  removed worktree closes its pages. It sets itself up over IPC, so it runs on its own in seconds.
 
 ### Remote sessions
 - The side panel's Sessions lists a Workspace's sessions from the machine it lives on: an SSH host's

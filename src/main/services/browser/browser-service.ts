@@ -134,6 +134,8 @@ export class BrowserService {
     window.on('closed', () => {
       if (this.window === window) this.window = null
     })
+    // A click in the app itself takes the selection off the page.
+    window.webContents.on('before-mouse-event', (_event, mouse) => mouse.type === 'mouseDown' && this.focus(undefined))
   }
 
   /**
@@ -273,6 +275,12 @@ export class BrowserService {
     }
   }
 
+  private focus(pageId: string | undefined): void {
+    if (this.focusedId === pageId) return
+    this.focusedId = pageId
+    this.changed()
+  }
+
   private changed(): void {
     this.emitTimer ??= setTimeout(() => {
       this.emitTimer = null
@@ -365,15 +373,10 @@ export class BrowserService {
       }
       return { action: 'deny' }
     })
-    wc.on('focus', () => {
-      this.focusedId = page.id
-      this.changed()
-    })
-    wc.on('blur', () => {
-      if (this.focusedId !== page.id) return
-      this.focusedId = undefined
-      this.changed()
-    })
+    // A click in the page selects it; keyboard focus moving on does too (ADR 0043).
+    wc.on('focus', () => this.focus(page.id))
+    wc.on('before-mouse-event', (_event, mouse) => mouse.type === 'mouseDown' && this.focus(page.id))
+    wc.on('blur', () => this.focusedId === page.id && this.focus(undefined))
     wc.on('render-process-gone', (_event, details) => {
       this.log.warn(`Browser page ${page.id} crashed: ${details.reason}`)
       if (details.reason !== 'clean-exit') setTimeout(() => !wc.isDestroyed() && wc.reload(), 300)
