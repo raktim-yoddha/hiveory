@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import { AlertCircle, Brain, CheckCircle2, ChevronRight, Loader2, Wrench, XCircle } from 'lucide-react'
 import type { ChatMessage, ChatPart, ChatSession } from '@shared/domain/chat'
+import { AppLogo } from '../../components/brand/AppLogo'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { useClis } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
@@ -31,11 +32,8 @@ export function ChatMessages({ chat, welcome }: { chat: ChatSession & { running:
       <div className={styles.thread}>
         {chat.messages.length === 0 && (
           <div className={styles.welcome}>
-            {chat.cliId && (
-              <span className={styles.welcomeLogo}>
-                <CliLogo cliId={chat.cliId} size="xl" />
-              </span>
-            )}
+            {/* The chat's CLI, or Hiveory's own mark until one is chosen — never a generic icon (ADR 0039). */}
+            <span className={styles.welcomeLogo}>{chat.cliId ? <CliLogo cliId={chat.cliId} size="xl" /> : <AppLogo size="lg" />}</span>
             <p className={styles.welcomeTitle}>{welcome?.title ?? (cliName ? `Chat with ${cliName}` : 'Start a chat')}</p>
             <p className={styles.welcomeText}>
               {welcome?.text ??

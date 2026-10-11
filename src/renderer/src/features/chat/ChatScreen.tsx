@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { MessagesSquare, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
+import { AppLogo } from '../../components/brand/AppLogo'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -27,7 +28,7 @@ export function ChatScreen() {
     return (
       <div className={styles.surface}>
         <EmptyState
-          icon={<MessagesSquare />}
+          media={<AppLogo size="lg" />}
           title="Chat with any agent"
           description="Pick a CLI and a model, then just talk. Chats keep running while you work elsewhere."
           actions={
@@ -43,7 +44,7 @@ export function ChatScreen() {
   return (
     <section className={styles.surface} aria-label={chat.title}>
       <header className={styles.chatHeader}>
-        {chat.cliId ? <CliLogo cliId={chat.cliId} size="lg" /> : <MessagesSquare className={styles.headerIcon} aria-hidden />}
+        {chat.cliId ? <CliLogo cliId={chat.cliId} size="lg" /> : <AppLogo size="sm" />}
         <div className={styles.headerText}>
           {renaming ? (
             <InlineEdit

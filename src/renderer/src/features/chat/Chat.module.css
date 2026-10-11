@@ -129,12 +129,6 @@
   border-bottom: var(--border-width) solid var(--color-border-subtle);
 }
 
-.headerIcon {
-  width: var(--logo-lg);
-  height: var(--logo-lg);
-  color: var(--color-text-muted);
-}
-
 .headerText {
   display: flex;
   flex: 1;

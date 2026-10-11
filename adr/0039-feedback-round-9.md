@@ -47,6 +47,10 @@ Her replies no longer pop open: they wait behind the message button like updates
 Queen Bee › Bar › "Pop up replies" (`queenPopups`, off by default) brings the old behavior back.
 Questions and yes/no still open, since the command waits for that answer.
 
+### Chat shows real marks
+The Chat screen's empty state and a chat with no CLI yet show Hiveory's own logo, and a chat with
+a CLI shows that CLI's logo, instead of a generic chat icon.
+
 ### Board order
 Columns read Waiting for you · Working · Idle (`BOARD_COLUMNS`), as on the phone. The status
 model itself is unchanged (AGENTS.md rule 6).
