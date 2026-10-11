@@ -4,6 +4,7 @@ import type { HostAccount, Issue } from '@shared/domain/integrations'
 import type { GitService } from './git-service'
 import { gitArgs } from './git-commands'
 import { hostCli, reasonOf, urlIn, type CodeHost, type HostCli } from './code-host'
+import { githubAvatarUrl } from '../projects/avatar'
 
 /** Pull requests and issues via the GitHub CLI (`gh`), optional: everything else works without it. */
 export class GithubService implements CodeHost {
@@ -20,6 +21,12 @@ export class GithubService implements CodeHost {
     } catch (error) {
       return { available: false, reason: reasonOf(error, 'Run "gh auth login".') }
     }
+  }
+
+  async avatarUrl(repoRoot: string | undefined): Promise<string | undefined> {
+    // The repository's owner (a person or an organization), else the account signed in to gh.
+    const login = (repoRoot ? (await this.status(repoRoot)).repository?.split('/')[0] : undefined) ?? (await this.account()).login
+    return login ? githubAvatarUrl(login) : undefined
   }
 
   async status(repoRoot: string): Promise<GithubStatus> {

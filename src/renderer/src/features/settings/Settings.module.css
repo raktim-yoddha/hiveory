@@ -196,6 +196,11 @@
   line-height: var(--leading-normal);
 }
 
+/* A group that opens with its note (no title above it) still has room at the top. */
+.group > .groupNote:first-child {
+  padding-top: var(--space-6);
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -264,7 +269,7 @@
 }
 
 .themeCard:hover {
-  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
   transform: translateY(calc(var(--nudge-sm) * -1));
 }
 
@@ -272,9 +277,13 @@
   transform: scale(0.985);
 }
 
+/* Selected: a tinted fill with the accent name and check, never an outline (design.md "Selection"). */
 .themeCard[aria-checked='true'] {
-  border-color: var(--color-bronze);
-  box-shadow: var(--shadow-raised), 0 0 0 var(--hairline) var(--color-bronze-soft);
+  background: var(--fill-chosen);
+}
+
+.themeCard[aria-checked='true'] .themeName {
+  color: var(--color-accent);
 }
 
 .themePreview {
@@ -427,9 +436,9 @@
   transform: scale(1.03);
 }
 
+/* Selected: its check badge says so; the picture keeps its edges (design.md "Selection"). */
 .wallpaperTile[aria-checked='true'] {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 var(--hairline) var(--color-accent);
+  transform: scale(1.03);
 }
 
 .wallpaperAdd {
@@ -794,7 +803,7 @@
   color: var(--color-danger);
 }
 
-/* A section's main tab switch (Queen Bee), like Skills, MCP & Apps. */
+/* A section's main tab switch (Queen Bee), like Skills, MCPs & Apps. */
 .tabsHeader {
   display: flex;
   align-items: center;

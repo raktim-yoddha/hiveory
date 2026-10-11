@@ -436,7 +436,7 @@ export const HELP_EXAMPLES = [
   'pause Morning brief',
   'open the work board',
   'save this as preset Backend',
-  'jade theme',
+  'bronze theme',
   'mute'
 ]
 

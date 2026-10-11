@@ -282,7 +282,7 @@ Off by default (Settings › Agents). When on, agents operate this computer thro
 
 ## Apps, MCP servers and skills
 
-Settings › Skills, MCP & Apps has three tabs (ADR 0017, 0023):
+Settings › Skills, MCPs & Apps has three tabs (ADR 0017, 0023):
 
 - **Skills** — every Agent Skill across the skills folders, with the CLIs that load it; light a folder to copy the skill there; create a skill or import a skill folder; remove a copy (to the trash). The folders come from the CLI registry: the shared `.agents/skills` plus each CLI's own (Claude, Codex, Gemini, Copilot, Cursor, OpenCode, Qwen, Goose, Kiro, Droid, Kilo, Junie and more); chips show the folders an installed CLI reads (ADR 0020) **skills.sh** (ADR 0041): search the open skills directory, read a skill's security audits, and install it into the folders that reach every installed CLI (preselected)
 - **MCP servers** — servers Hiveory runs for every agent (add by command or URL, with env vars/headers) and the servers each CLI configures, which can be added to every agent in one click. **MCP Registry** (ADR 0041): search the official registry and add a server (npx, uvx, Docker or hosted, filling in the values it needs) so every agent gets it
@@ -308,9 +308,9 @@ and opens the place when she can.
 
 ## Appearance
 
-Appearance is in sections, one at a time: Theme, Panes, Background, VS Code themes, Terminal font (ADR 0043). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, like Orca). The first-run welcome asks both.
+Appearance is in sections, one at a time: Theme, Panes, Background, Terminal font (ADR 0043, 0044). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, like Orca). The first-run welcome asks both.
 
-Six flat themes, three per row. A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
+Three flat themes (Dark, Bronze, Silver), with VS Code themes right under them in the same Theme section (ADR 0044). A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
 
 VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A VS Code theme recolors every panel, the terminals, the editor and the window chrome; the wallpaper, transparency, blur and dim still apply on top. Choosing a built-in theme switches back.
 

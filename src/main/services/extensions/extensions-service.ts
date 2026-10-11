@@ -44,15 +44,29 @@ export interface McpRawConfig {
   headers?: Record<string, string>
 }
 
-/** Parses `name:` / `description:` from SKILL.md YAML frontmatter (single-line values). */
+/**
+ * Parses `name:` / `description:` from SKILL.md YAML frontmatter: a one-line value, or a block scalar
+ * (`>`, `|`, `>-`, `|-`) whose indented lines are joined into one line.
+ */
 export const parseSkillFrontmatter = (text: string): { name?: string; description?: string } => {
   const match = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)
   if (!match) return {}
   const out: { name?: string; description?: string } = {}
-  for (const line of (match[1] ?? '').split(/\r?\n/)) {
+  const lines = (match[1] ?? '').split(/\r?\n/)
+  lines.forEach((line, i) => {
     const kv = /^(name|description):\s*(.*)$/.exec(line)
-    if (kv) out[kv[1] as 'name' | 'description'] = (kv[2] ?? '').trim().replace(/^["']|["']$/g, '')
-  }
+    if (!kv) return
+    let value = (kv[2] ?? '').trim()
+    if (/^[>|][+-]?$/.test(value)) {
+      const block: string[] = []
+      for (const next of lines.slice(i + 1)) {
+        if (next.trim() && !/^\s/.test(next)) break
+        block.push(next.trim())
+      }
+      value = block.filter(Boolean).join(' ')
+    }
+    out[kv[1] as 'name' | 'description'] = value.replace(/^["']|["']$/g, '')
+  })
   return out
 }
 

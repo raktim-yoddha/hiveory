@@ -216,7 +216,7 @@
 
 .choiceOn,
 .choiceOn:hover {
-  border-color: var(--color-accent);
+  border-color: transparent;
   background: var(--fill-accent-soft);
   color: var(--color-text);
 }

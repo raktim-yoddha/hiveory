@@ -16,7 +16,8 @@ import { lastWords } from '@shared/queen/updates'
 import { join } from 'node:path'
 import type { Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
-import { AVATAR_EXTENSIONS, avatarFromFile, avatarFromGithub } from '../services/projects/avatar'
+import { AVATAR_EXTENSIONS, avatarFromFile, avatarFromUrl } from '../services/projects/avatar'
+import { CODE_HOST_INFO } from '@shared/domain/integrations'
 import type { HostRef } from '@shared/domain'
 import type { CodeHost } from '../services/git/code-host'
 
@@ -315,13 +316,14 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const file = await pickPath(event.sender, { title: 'Choose an avatar image', properties: ['openFile'], filters: [{ name: 'Images', extensions: AVATAR_EXTENSIONS }] })
     return file ? c.projects.update(projectId, { settings: { avatar: avatarFromFile(file, nativeImage), emoji: null } }) : null
   },
+  // The Workspace's code host avatar (ADR 0043, 0044): GitHub's or GitLab's, as its settings or remote say.
   'projects.githubAvatar': async ({ projectId }) => {
-    // The repository's owner (a person or an organization), else the account signed in to gh.
-    const root = c.workspaceRepo.project(projectId).host ? undefined : await repoRootOf(projectId)
-    const status = root ? await c.github.status(root) : undefined
-    const login = status?.repository?.split('/')[0] ?? (await c.github.account()).login
-    if (!login) return fail('INVALID_INPUT', 'No GitHub account found.', { hint: 'Sign in with "gh auth login", or use a repository on GitHub.' })
-    return c.projects.update(projectId, { settings: { avatar: await avatarFromGithub(login, nativeImage), emoji: null } })
+    const project = c.workspaceRepo.project(projectId)
+    const root = project.host ? undefined : await repoRootOf(projectId)
+    const host = (root ? await c.integrations.hostFor(project, root) : null) ?? c.github
+    const url = await host.avatarUrl(root)
+    if (!url) return fail('INVALID_INPUT', `No ${CODE_HOST_INFO[host.id].name} account found.`, { hint: `Sign in with "${CODE_HOST_INFO[host.id].signIn}", or use a repository on ${CODE_HOST_INFO[host.id].name}.` })
+    return c.projects.update(projectId, { settings: { avatar: await avatarFromUrl(url, nativeImage), emoji: null } })
   },
   'extensions.importSkill': async ({ rootIds, projectId, botId }, event) => {
     const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })

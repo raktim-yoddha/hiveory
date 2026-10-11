@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { AVATAR_DATA } from '@shared/domain/project'
 import { parseState } from '../persistence/schema'
-import { avatarFromFile, avatarFromGithub, type AvatarCodec } from './avatar'
+import { avatarFromFile, avatarFromGithub, avatarFromUrl, type AvatarCodec } from './avatar'
 
 describe('workspace avatars', () => {
   it('keeps the centre square of an image, scaled down, as a PNG data URL', () => {
@@ -28,6 +28,9 @@ describe('workspace avatars', () => {
     expect(await avatarFromGithub('acme-labs', codec, http)).toMatch(/^data:image\/png;base64,/)
     expect(urls).toEqual(['https://github.com/acme-labs.png?size=192'])
     await expect(avatarFromGithub('../../evil', codec, http)).rejects.toThrow('not a GitHub account')
+    // A GitLab (or any code host) avatar must be an https address (ADR 0044).
+    await expect(avatarFromUrl('http://gitlab.example/a.png', codec, http)).rejects.toThrow('https')
+    expect(await avatarFromUrl('https://gitlab.com/uploads/a.png', codec, http)).toMatch(/^data:image\/png/)
   })
 
   it('stores an emoji mark, dropping text that is not one', () => {

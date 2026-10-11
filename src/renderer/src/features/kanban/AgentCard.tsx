@@ -1,6 +1,7 @@
 import { GitBranch } from 'lucide-react'
 import type { KanbanCard } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
+import { STATUS_LABEL } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
 import { useClis } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
@@ -30,6 +31,9 @@ export function AgentCard({ projectId, card }: { projectId: string; card: Kanban
         <span className={styles.cardTop}>
           <CliLogo cliId={card.cliId} size="lg" />
           <span className={styles.petName}>{card.petName}</span>
+          <span className={styles.state} data-status={status} aria-hidden>
+            {runtime.running ? STATUS_LABEL[card.runtime.status] : 'Stopped'}
+          </span>
         </span>
         <span className={styles.cardBottom}>
           <span className={styles.workspace}>

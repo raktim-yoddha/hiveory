@@ -88,9 +88,8 @@ Conceptually:
 Implemented palettes (`src/renderer/src/styles/tokens.css`): **Dark** (default) —
 pure black and neutral grey, perfectly flat, no gradients or sheen; **Bronze** —
 warm graphite with champagne-silver text and metallic accents; **Silver** — cool
-graphite with brushed-silver accents; **Midnight** — ink-blue graphite with steel
-highlights; **Jade** — obsidian green with jade accents; **Rose** — plum graphite
-with rose gold. Saturated color only for status. Component fills are `--fill-*`
+graphite with brushed-silver accents (ADR 0044: three built-in themes; VS Code themes cover
+the rest). Saturated color only for status. Component fills are `--fill-*`
 tokens so a theme can flatten them (ADR 0011, 0012, 0013, 0017).
 
 Every theme is flat: solid colors only — no gradients, sheen or textures. Containers
@@ -99,7 +98,9 @@ pane's header shares its body's surface (no dividing line) (ADR 0018).
 
 Selection is a tinted fill, never an outline: selected chips, option cards and "on"
 badges use `--fill-accent-soft` with `--color-accent` text or check, which reads in every
-theme. A border is reserved for keyboard focus and the active pane (ADR 0018).
+theme; a chosen card among cards (theme, pane style) uses the brighter `--fill-chosen`, and its
+hover is a fill too (ADR 0044). A border is reserved for keyboard focus and the active pane (ADR 0018).
+Attached panes are split by `--color-pane-line` showing through a one-pixel gutter (ADR 0044).
 
 Themes set opaque `--base-*` surfaces; components use `--color-surface*`, which
 become translucent over a wallpaper — one `--surface-alpha` for every surface. Dialogs use

@@ -195,7 +195,7 @@ panels fold ⌖ ✎ </> into ⋯.
 Drag a tab into the lower half to open the bottom area ("Show below" preview); the browser page
 steps aside while a tab is dragged. ⋯ on a session: Resume in <worktree>, Copy session ID.
 
-### Settings › Skills, MCP & Apps (ADR 0017, 0023)
+### Settings › Skills, MCPs & Apps (ADR 0017, 0023)
 
 Skills: ( Installed | skills.sh ) beside the search box. skills.sh: before a search, "Top skills on
 skills.sh" (1–50 by installs); search as you type; rows (rank, name, Installed, source ·
@@ -207,7 +207,7 @@ Show more. Add: how it runs (when several), the command, its values (secret ones
 every agent (ADR 0041).
 
 ```text
-┌ Skills, MCP & Apps ──────────────────────────────────────────┐
+┌ Skills, MCPs & Apps ──────────────────────────────────────────┐
 │ ( Skills 12 | MCP servers 3 | Apps 2 )                   ⟳   │
 │ ┌──────────────────────────────────────────────────────────┐ │
 │ │ [C] Composio        ● Key saved  ⟳  [Change key] [Remove] │ │
@@ -239,8 +239,9 @@ New skill uses the same checklist. MCP: "In Hiveory · every agent"
 
 ### Settings › Appearance
 
-A section bar (ADR 0043): Theme · Panes · Background · VS Code themes · Terminal font, one shown at a
-time. Panes: Pane style [Tiles] [Tabs] and Pane spacing [Spaced] [Attached] cards. Theme cards three per row; Background: None, six presets, added images, Add
+A section bar like every Settings page's (ADR 0043, 0044): Theme · Panes · Background · Terminal font,
+one shown at a time. Theme: Dark · Bronze · Silver cards, then VS Code themes. Panes: Pane style
+[Tiles] [Tabs] and Pane spacing [Spaced] [Attached] cards. Theme cards three per row; Background: None, six presets, added images, Add
 image; Transparency · Blur · Dim sliders when a wallpaper is set. VS Code themes (ADR 0034):
 each installed extension's themes as cards (Remove per extension), then a search field and the
 Open VSX catalog (icon, name, publisher · installs, description, Install / Installed, Show more).

@@ -44,6 +44,8 @@ export function AgentPane({
 }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
+  // A terminal has no status to show: Hiveory tracks agents, not shells (ADR 0044).
+  const tracked = cli?.kind !== 'shell'
   const [renaming, setRenaming] = useState(false)
   useEffect(() => registerPaneCloser(agent.id, () => void agentActions.close(agent)), [agent])
   // A new name shows everywhere: sidebar, board, other agents' tools, Queen Bee and the phone (ADR 0042).
@@ -63,7 +65,7 @@ export function AgentPane({
     <PaneFrame
       label={`${agent.petName} agent`}
       highlighted={highlighted}
-      tone={runtime.running && runtime.status === 'waiting-for-you' ? 'waiting' : undefined}
+      tone={tracked && runtime.running && runtime.status === 'waiting-for-you' ? 'waiting' : undefined}
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
       tabStrip={tabStrip}
@@ -107,9 +109,11 @@ export function AgentPane({
                   <CliLogo cliId={agent.cliId} />
                   <span className={styles.name}>{agent.petName}</span>
                   {/* The dot is the only status signal and takes no room, so it stays at any width. */}
-                  <span className={styles.status}>
-                    <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
-                  </span>
+                  {tracked && (
+                    <span className={styles.status}>
+                      <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
+                    </span>
+                  )}
                 </button>
               )}
             />

@@ -82,6 +82,8 @@
   --fill-active: var(--color-surface-active);
   --fill-selected: var(--color-surface-active);
   --fill-accent-soft: var(--color-bronze-soft);
+  /* A chosen card (theme, pane style): brighter than every card around it, in every theme (ADR 0044). */
+  --fill-chosen: color-mix(in srgb, var(--color-accent) 12%, var(--color-surface-active));
   --fill-glass-accent: var(--color-glass);
   --fill-hero: var(--color-surface-raised);
   --shadow-surface: none;
@@ -240,8 +242,10 @@
   --page-padding: 10px;
   /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
   --surface-radius: var(--radius-lg);
-  /* A pane's edge at rest: none while panes have air between them, a line once they touch. */
+  /* A pane's edge at rest: none (attached panes are split by the shell's line instead). */
   --pane-rest-border: transparent;
+  /* The line between attached surfaces (ADR 0044): visible on every theme's darkest surfaces. */
+  --color-pane-line: var(--color-border);
 
   /* Elevation: restrained, warm-tinted. Light VS Code themes lighten the tint. */
   --shadow-tint: rgb(0 0 0 / 0.6);
@@ -370,147 +374,15 @@
   --term-bright-white: #f5f5f5;
 }
 
-/* Midnight: ink-blue graphite with cold steel highlights. */
-:root[data-theme='midnight'] {
-  --color-bg: #05070c;
-  --base-surface: #0b0f17;
-  --base-surface-top: #10151f;
-  --base-surface-raised: #141a25;
-  --base-surface-hover: #1a2130;
-  --base-surface-active: #222b3c;
-  --base-surface-inset: #080b12;
-  --base-pane-header: #121825;
-  --color-pane-header-edge: #212a3a;
-  --color-overlay: rgb(3 5 10 / 0.7);
-  --color-glass: rgb(20 26 37 / 0.82);
-
-  --color-border-subtle: transparent;
-  --color-border: #202838;
-  --color-border-strong: #323d52;
-
-  --color-text: #e8edf6;
-  --color-text-secondary: #a9b3c5;
-  --color-text-muted: #707b90;
-  --color-text-faint: #454e60;
-
-  --color-accent: #c6d4f0;
-  --color-accent-hover: #dfe8fb;
-  --color-accent-contrast: #0a0f1a;
-  --color-bronze: #7f9cd6;
-  --color-bronze-soft: rgb(120 150 220 / 0.15);
-  --color-focus: #8aa4dc;
-  --color-idle: #687286;
-
-  --color-drop: rgb(198 212 240 / 0.07);
-  --color-drop-border: rgb(198 212 240 / 0.5);
-
-  --term-bg: #0b0f17;
-  --term-fg: #dfe6f2;
-  --term-cursor: #c6d4f0;
-  --term-selection: rgb(198 212 240 / 0.22);
-  --term-black: #151b27;
-  --term-bright-black: #556078;
-  --term-white: #cdd5e3;
-  --term-bright-white: #f6f8fc;
-}
-
-/* Jade: deep obsidian green with polished jade accents. */
-:root[data-theme='jade'] {
-  --color-bg: #040706;
-  --base-surface: #0a0f0d;
-  --base-surface-top: #0e1512;
-  --base-surface-raised: #121a16;
-  --base-surface-hover: #18221d;
-  --base-surface-active: #202d27;
-  --base-surface-inset: #070b09;
-  --base-pane-header: #111915;
-  --color-pane-header-edge: #1f2b25;
-  --color-overlay: rgb(2 5 4 / 0.7);
-  --color-glass: rgb(18 26 22 / 0.82);
-
-  --color-border-subtle: transparent;
-  --color-border: #1e2a24;
-  --color-border-strong: #2f3f37;
-
-  --color-text: #e6efea;
-  --color-text-secondary: #a6b7ae;
-  --color-text-muted: #6d7f76;
-  --color-text-faint: #435049;
-
-  --color-accent: #bfe3d0;
-  --color-accent-hover: #d8f1e3;
-  --color-accent-contrast: #07110c;
-  --color-bronze: #5fb48a;
-  --color-bronze-soft: rgb(95 180 138 / 0.14);
-  --color-focus: #6fbf97;
-  --color-idle: #65756d;
-
-  --color-drop: rgb(191 227 208 / 0.07);
-  --color-drop-border: rgb(191 227 208 / 0.5);
-
-  --term-bg: #0a0f0d;
-  --term-fg: #dbe7e0;
-  --term-cursor: #bfe3d0;
-  --term-selection: rgb(191 227 208 / 0.22);
-  --term-black: #141c18;
-  --term-bright-black: #52635a;
-  --term-white: #ccd8d1;
-  --term-bright-white: #f4faf7;
-}
-
-/* Rose: plum graphite with rose-gold accents. */
-:root[data-theme='rose'] {
-  --color-bg: #080608;
-  --base-surface: #110d10;
-  --base-surface-top: #161115;
-  --base-surface-raised: #1b1519;
-  --base-surface-hover: #231b20;
-  --base-surface-active: #2c2228;
-  --base-surface-inset: #0c090b;
-  --base-pane-header: #1a1418;
-  --color-pane-header-edge: #2b2228;
-  --color-overlay: rgb(6 4 5 / 0.68);
-  --color-glass: rgb(27 21 25 / 0.82);
-
-  --color-border-subtle: transparent;
-  --color-border: #2a2126;
-  --color-border-strong: #3e3238;
-
-  --color-text: #f2e9ec;
-  --color-text-secondary: #bcadb3;
-  --color-text-muted: #85737a;
-  --color-text-faint: #554850;
-
-  --color-accent: #e8c4bd;
-  --color-accent-hover: #f4d8d2;
-  --color-accent-contrast: #1a0f0e;
-  --color-bronze: #c98f86;
-  --color-bronze-soft: rgb(201 143 134 / 0.15);
-  --color-focus: #c99a92;
-  --color-idle: #7a6a70;
-
-  --color-drop: rgb(232 196 189 / 0.07);
-  --color-drop-border: rgb(232 196 189 / 0.5);
-
-  --term-bg: #110d10;
-  --term-fg: #ebe0e4;
-  --term-cursor: #e8c4bd;
-  --term-selection: rgb(232 196 189 / 0.22);
-  --term-black: #1d171b;
-  --term-bright-black: #61535a;
-  --term-white: #d9ccd1;
-  --term-bright-white: #faf4f6;
-}
-
 /*
- * Attached panes (Settings › Appearance › Pane spacing, ADR 0043): no air and no rounded corners —
- * sidebars, side panel and panes meet at their borders, edge to edge, like Orca. --gutter is the air
- * between surfaces only; content grids use the spacing scale.
+ * Attached panes (Settings › Appearance › Pane spacing, ADR 0043, 0044): no air and no rounded corners —
+ * sidebars, side panel and panes meet edge to edge, like Orca, split by a one-pixel line: the shell
+ * shows --color-pane-line through a one-pixel gutter. --gutter is the air between surfaces only;
+ * content grids use the spacing scale.
  */
 :root[data-panes='attached'] {
-  --gutter: 0px;
+  --gutter: 1px;
   --page-padding: 0px;
   --surface-radius: 0px;
   --shadow-surface: none;
-  --pane-rest-border: var(--color-border-subtle);
 }

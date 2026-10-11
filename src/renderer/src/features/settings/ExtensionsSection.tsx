@@ -51,7 +51,7 @@ export function ExtensionsSection() {
 
   return (
     <SettingsPage
-      title="Skills, MCP & Apps"
+      title="Skills, MCPs & Apps"
       description="Everything your agents can load. Hiveory serves its MCP servers and apps to every agent — terminal, chat and bots — without touching any CLI's own config."
     >
       <div className={styles.header}>

@@ -45,6 +45,8 @@ export class AboutTools implements ToolFamily {
       ? [
           `You are ${caller.petName}, an agent in worktree "${place.worktree.name}"${place.worktree.kind === 'main' ? ' (the Primary)' : ''} of workspace "${place.project.name}"${place.worktree.git?.branch ? `, on branch ${place.worktree.git.branch}` : ''}.`,
           `Its folder: ${place.worktree.path}.`,
+          // The issue or pull request it was started for (GitHub, GitLab, Jira or Linear; ADR 0044).
+          ...(place.worktree.association ? [`It was started for ${place.worktree.association.kind === 'issue' ? 'issue' : 'pull request'} ${place.worktree.association.ref}.`] : []),
           workspaceSettings(place.project)
         ].join(' ')
       : `You are ${caller.petName}, running in Hiveory outside a Work worktree (a chat or a bot thread).`
@@ -57,7 +59,7 @@ export class AboutTools implements ToolFamily {
       `Hiveory coordination tools (other agents, panes, the worktree terminal): ${onOff(s.agentTools)}. Built-in browser (browser_* tools; the user watches it): ${onOff(s.browserUse)}. Computer use (computer_* tools): ${onOff(s.computerUse)}.`,
       connected.length ? `MCP servers and apps Hiveory serves you: ${connected.join(', ')}.` : 'No extra MCP servers or apps are connected in Hiveory.',
       `New agents auto-approve permissions: ${onOff(s.defaultAutoApprove)}; open in chat view: ${onOff(s.defaultChatUi)}.`,
-      'Skills live in the skills folders each CLI reads; the user manages them (and finds more on skills.sh) in Settings › Skills, MCP & Apps.',
+      'Skills live in the skills folders each CLI reads; the user manages them (and finds more on skills.sh) in Settings › Skills, MCPs & Apps.',
       'You cannot change settings: tell the user where they are (below). The gear at the top right opens Settings.',
       '',
       '# The app',

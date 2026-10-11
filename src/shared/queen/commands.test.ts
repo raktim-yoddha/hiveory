@@ -78,7 +78,7 @@ const CASES: Array<[string, QueenAction[]]> = [
   ['mute', [{ type: 'speak', on: false }]],
   ['stop talking', [{ type: 'speak', on: false }]],
   ['talk to me', [{ type: 'speak', on: true }]],
-  ['jade theme', [{ type: 'set-theme', theme: 'jade' }]],
+  ['bronze theme', [{ type: 'set-theme', theme: 'bronze' }]],
   ['switch to dark mode', [{ type: 'set-theme', theme: 'dark' }]],
   ['create a worktree called login-fix', [{ type: 'create-workspace', name: 'login-fix', projectId: 'p1' }]],
 

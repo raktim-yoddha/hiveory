@@ -283,7 +283,7 @@ export const GUIDE: GuideChapter[] = [
   },
   {
     id: 'extensions',
-    title: 'Skills, MCP & Apps',
+    title: 'Skills, MCPs & Apps',
     summary: 'Give every agent skills, MCP servers and apps.',
     icon: Blocks,
     sections: [
@@ -291,7 +291,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Skills',
         body: (
           <p>
-            Settings → Skills, MCP &amp; Apps → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
+            Settings → Skills, MCPs &amp; Apps → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
             Codex, Cursor) to copy the skill there, create a new skill, or import a skill folder.
           </p>
         )

@@ -43,4 +43,6 @@ export interface CodeHost {
   issues(repoRoot: string): Promise<Issue[]>
   /** Pushes the branch to origin, then opens a review filled from its commits; returns its address. */
   createPullRequest(repoRoot: string, worktreePath: string, branch: string, draft: boolean): Promise<string>
+  /** The repository owner's avatar (its project's, on GitLab), else the signed-in account's; an https address. */
+  avatarUrl(repoRoot: string | undefined): Promise<string | undefined>
 }

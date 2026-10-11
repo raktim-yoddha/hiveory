@@ -185,11 +185,13 @@ describe('wallpapers', () => {
   })
 
   it('persists appearance settings and drops junk', () => {
-    expect(parseState({ settings: { theme: 'jade', wallpaper: 'image:w-0123456789ab.jpg', surfaceOpacity: 0 } }).state.settings).toMatchObject({
-      theme: 'jade',
+    expect(parseState({ settings: { theme: 'silver', wallpaper: 'image:w-0123456789ab.jpg', surfaceOpacity: 0 } }).state.settings).toMatchObject({
+      theme: 'silver',
       wallpaper: 'image:w-0123456789ab.jpg',
       surfaceOpacity: 0
     })
+    // A removed theme (ADR 0044) falls back to Dark.
+    expect(parseState({ settings: { theme: 'jade' } }).state.settings.theme).toBe('dark')
     expect(parseState({ settings: { wallpaper: 'preset:aurora', surfaceOpacity: 9 } }).state.settings).toMatchObject({
       wallpaper: DEFAULT_SETTINGS.wallpaper,
       surfaceOpacity: DEFAULT_SETTINGS.surfaceOpacity

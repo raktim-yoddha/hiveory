@@ -11,10 +11,7 @@ import type { ThemeId } from '@shared/domain'
 export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string }> = {
   dark: { background: '#000000', symbols: '#a3a3a3' },
   bronze: { background: '#080706', symbols: '#b8afa3' },
-  silver: { background: '#08090b', symbols: '#b6bac2' },
-  midnight: { background: '#05070c', symbols: '#a9b3c5' },
-  jade: { background: '#040706', symbols: '#a6b7ae' },
-  rose: { background: '#080608', symbols: '#bcadb3' }
+  silver: { background: '#08090b', symbols: '#b6bac2' }
 }
 export type WindowChrome = { background: string; symbols: string }
 /** Over a wallpaper the window controls sit on the picture, not on a solid strip. */

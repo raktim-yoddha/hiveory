@@ -23,6 +23,24 @@ export class GitlabService implements CodeHost {
     }
   }
 
+  async avatarUrl(repoRoot: string | undefined): Promise<string | undefined> {
+    // The project's own avatar, else its group's or owner's, else the signed-in account's.
+    if (repoRoot) {
+      try {
+        const repo = JSON.parse(await this.glab(repoRoot, ['repo', 'view', '--output', 'json'], 15_000)) as { avatar_url?: string | null; namespace?: { avatar_url?: string | null } }
+        const url = repo.avatar_url || repo.namespace?.avatar_url
+        if (url) return url
+      } catch {
+        // Not on GitLab, or glab is not signed in: try the account.
+      }
+    }
+    try {
+      return (JSON.parse(await this.glab(process.cwd(), ['api', 'user'], 15_000)) as { avatar_url?: string | null }).avatar_url || undefined
+    } catch {
+      return undefined
+    }
+  }
+
   async status(repoRoot: string): Promise<GithubStatus> {
     try {
       const repo = JSON.parse(await this.glab(repoRoot, ['repo', 'view', '--output', 'json'], 15_000)) as { path_with_namespace: string; web_url: string; default_branch?: string }

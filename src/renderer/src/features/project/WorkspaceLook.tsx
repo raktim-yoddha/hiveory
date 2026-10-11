@@ -24,7 +24,7 @@ const COLOR_NAMES: Record<(typeof WORKSPACE_COLORS)[number], string> = {
 
 /**
  * The Workspace's sidebar mark (ADR 0038, 0042, 0043): an icon in a theme color or any color, an emoji,
- * or an avatar (an image of the user's own, or the GitHub avatar). Choosing one replaces the others.
+ * or an avatar (an image of the user's own, or its code host's: GitHub or GitLab). Choosing one replaces the others.
  */
 export function WorkspaceLook({ project }: { project: Project }) {
   const update = useProjects((s) => s.update)
@@ -54,7 +54,7 @@ export function WorkspaceLook({ project }: { project: Project }) {
       if (await api('projects.pickAvatar', { projectId: project.id })) await setProject()
     })
   const githubAvatar = (): void =>
-    void runAction('Use GitHub avatar', async () => {
+    void runAction('Use code host avatar', async () => {
       await api('projects.githubAvatar', { projectId: project.id })
       await setProject()
     })
@@ -80,8 +80,8 @@ export function WorkspaceLook({ project }: { project: Project }) {
           <Button size="sm" icon={<ImagePlus />} onClick={chooseImage}>
             {usingAvatar ? 'Change image' : 'Choose image'}
           </Button>
-          <Button size="sm" icon={<CircleUserRound />} onClick={githubAvatar} title="The avatar of the repository's GitHub owner, or of your GitHub account">
-            GitHub avatar
+          <Button size="sm" icon={<CircleUserRound />} onClick={githubAvatar} title="The avatar of the repository on GitHub or GitLab (its owner or project), or of your account there">
+            Code host avatar
           </Button>
           {usingAvatar && (
             <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => void update(project.id, { settings: { avatar: null } })}>

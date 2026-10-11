@@ -96,6 +96,8 @@ describe('extensions inventory', () => {
   it('parses skill frontmatter, codex toml and jsonc', () => {
     expect(parseSkillFrontmatter('---\nname: review\ndescription: "Reviews code"\n---\nbody')).toEqual({ name: 'review', description: 'Reviews code' })
     expect(parseSkillFrontmatter('no frontmatter')).toEqual({})
+    // A folded description (`>`) is its indented lines, joined.
+    expect(parseSkillFrontmatter('---\nname: cave\ndescription: >\n  Talk short.\n  Keep facts.\nversion: 1\n---\n')).toEqual({ name: 'cave', description: 'Talk short. Keep facts.' })
     expect(parseCodexMcp('[mcp_servers.docs]\ncommand = "npx"\n\n[mcp_servers."remote one"]\nurl = "https://x"\n[other]\n')).toEqual([
       { name: 'docs', target: 'npx', transport: 'stdio', config: { command: 'npx' } },
       { name: 'remote one', target: 'https://x', transport: 'http', config: { url: 'https://x' } }

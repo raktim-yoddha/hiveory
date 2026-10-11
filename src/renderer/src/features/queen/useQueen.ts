@@ -23,8 +23,11 @@ export type QueenCard = (
 
 export type QueenSettingsTab = 'personality' | 'providers' | 'voice' | 'bar'
 
-/** Docked under the main area (it lifts the screens), or floating over its bottom at a fixed size. */
-export type QueenPlacement = 'docked' | 'floating'
+/**
+ * Docked under the main area (it lifts the screens), floating over its bottom at a fixed size, or put
+ * away in the title bar: only her mark there, the bar drops down when called (ADR 0044).
+ */
+export type QueenPlacement = 'docked' | 'floating' | 'titlebar'
 
 /** Where the floating bar sits along the bottom of the window: dragged by her mark, it snaps to one of three. */
 export type QueenSpot = 'left' | 'middle' | 'right'
@@ -35,6 +38,9 @@ interface QueenState {
   /** Floating only: the bar's spot, and whether it is shrunk to just her mark (double-tap it). */
   spot: QueenSpot
   compact: boolean
+  /** Title bar only: whether her bar is dropped down under her mark. */
+  summoned: boolean
+  setSummoned(summoned: boolean): void
   card: QueenCard | null
   /** Whether the card is on screen. Updates arrive closed; her button opens and closes the card. */
   cardOpen: boolean
@@ -65,7 +71,7 @@ const readSaved = (): Saved => {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { placement?: unknown; spot?: unknown; compact?: unknown }
     return {
-      placement: raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'floating' : 'docked',
+      placement: raw.placement === 'auto-hide' || raw.placement === 'floating' ? 'floating' : raw.placement === 'titlebar' ? 'titlebar' : 'docked',
       spot: QUEEN_SPOTS.includes(raw.spot as QueenSpot) ? (raw.spot as QueenSpot) : 'middle',
       compact: raw.compact === true
     }
@@ -84,6 +90,8 @@ const save = (state: Saved): void => {
 
 export const useQueen = create<QueenState>((set, get) => ({
   ...readSaved(),
+  summoned: false,
+  setSummoned: (summoned) => set({ summoned }),
   card: null,
   cardOpen: false,
   unseen: false,
@@ -92,7 +100,7 @@ export const useQueen = create<QueenState>((set, get) => ({
   settingsTab: 'personality',
   setSettingsTab: (settingsTab) => set({ settingsTab }),
   setPlacement: (placement) => {
-    set({ placement })
+    set({ placement, summoned: false })
     save(get())
   },
   setSpot: (spot) => {
@@ -107,13 +115,15 @@ export const useQueen = create<QueenState>((set, get) => ({
   // yes/no still opens, since the command waits for that answer (ADR 0039).
   show: (card, quiet = false) => {
     const hold = quiet || (card?.kind === 'reply' && !useSettings.getState().settings.queenPopups)
-    set(card ? (hold ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false }) : { cardOpen: false })
+    // Put away in the title bar, a card that opens drops her bar down with it.
+    const summon = get().placement === 'titlebar' && Boolean(card) && !hold ? { summoned: true } : {}
+    set(card ? (hold ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false, ...summon }) : { cardOpen: false })
   },
   setCardOpen: (cardOpen) => set(cardOpen ? { cardOpen, unseen: false } : { cardOpen }),
   setBusy: (busy) => set({ busy }),
   // Her shortcut or menu wants the input: a shrunk bar opens up first.
   focus: () => {
     if (get().compact) get().setCompact(false)
-    set((s) => ({ focusTick: s.focusTick + 1 }))
+    set((s) => ({ focusTick: s.focusTick + 1, ...(s.placement === 'titlebar' ? { summoned: true } : {}) }))
   }
 }))

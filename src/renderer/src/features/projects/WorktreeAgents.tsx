@@ -5,7 +5,7 @@ import { CliLogo } from '../../components/cli/CliLogo'
 import { StatusDot, STATUS_LABEL } from '../../components/ui/StatusDot'
 import { shortAgo } from '../../lib/ago'
 import { cx } from '../../lib/cx'
-import { useAgents } from '../../stores/data'
+import { useAgents, useClis } from '../../stores/data'
 import { useBrowser } from '../../stores/browser'
 import { useEditors } from '../../stores/editors'
 import { pageTitle } from '../browser/page-title'
@@ -18,21 +18,24 @@ const RANK: Record<CliStatus, number> = { working: 0, 'waiting-for-you': 1, idle
 /** Room for the "+N" count, used only when not every chip fits. */
 const MORE_PX = 24
 
-/** A worktree's agents and terminals, busiest first, re-sorted live as statuses change. */
+/**
+ * A worktree's agents and terminals, busiest first, re-sorted live as statuses change. Terminals have
+ * no status (Hiveory tracks agents, not shells; ADR 0044): they come after the agents.
+ */
 const useWorktreeAgents = (workspaceId: string) => {
   const agents = useAgents((s) => s.byWorkspace[workspaceId] ?? EMPTY)
   const runtime = useAgents((s) => s.runtime)
   const load = useAgents((s) => s.load)
+  const clis = useClis((s) => s.clis)
   useEffect(() => {
     void load(workspaceId)
   }, [workspaceId, load])
-  return useMemo(
-    () =>
-      agents
-        .map((a) => ({ agent: a, status: (runtime[a.id] ?? a.runtime).status }))
-        .sort((x, y) => RANK[x.status] - RANK[y.status] || x.agent.petName.localeCompare(y.agent.petName)),
-    [agents, runtime]
-  )
+  return useMemo(() => {
+    const shell = new Set(clis.filter((c) => c.kind === 'shell').map((c) => c.id))
+    return agents
+      .map((a) => ({ agent: a, status: shell.has(a.cliId) ? undefined : (runtime[a.id] ?? a.runtime).status }))
+      .sort((x, y) => (x.status ? RANK[x.status] : 3) - (y.status ? RANK[y.status] : 3) || x.agent.petName.localeCompare(y.agent.petName))
+  }, [agents, runtime, clis])
 }
 
 /** Spins while anything in the worktree is working; in place of the old pane count (ADR 0040). */
@@ -73,7 +76,7 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   const barRef = useRef<HTMLButtonElement>(null)
   const statusText = (status: CliStatus): string => (status === 'waiting-for-you' ? 'Needs you' : STATUS_LABEL[status])
   const entries: PaneEntry[] = [
-    ...sorted.map(({ agent, status }) => ({ id: agent.id, name: agent.petName, icon: <CliLogo cliId={agent.cliId} size="sm" />, status, detail: statusText(status) })),
+    ...sorted.map(({ agent, status }) => ({ id: agent.id, name: agent.petName, icon: <CliLogo cliId={agent.cliId} size="sm" />, status, detail: status ? statusText(status) : 'Terminal' })),
     ...pages.map((page) => ({ id: page.id, name: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: <Globe className={styles.paneIcon} aria-hidden />, detail: 'Browser' })),
     ...editors.map((editor) => ({ id: editor.id, name: editor.name, icon: <FileCode2 className={styles.paneIcon} aria-hidden />, detail: 'File' }))
   ]

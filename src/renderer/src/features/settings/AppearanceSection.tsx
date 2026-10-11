@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { Ban, Check, ImagePlus, X } from 'lucide-react'
+import { Ban, Check, Columns2, ImagePlus, Image as ImageIcon, Palette, SquareTerminal, X } from 'lucide-react'
 import { THEMES, type ThemeId } from '@shared/domain'
 import type { WallpaperImage } from '@shared/ipc/contract'
 import { RangeField } from '../../components/ui/RangeField'
@@ -20,23 +20,19 @@ import styles from './Settings.module.css'
 const PREVIEW: Record<ThemeId, ThemePreview> = {
   dark: { bg: '#000000', panel: '#0d0d0d', pane: '#151515', line: '#2a2a2a', accent: '#e0e0e0' },
   bronze: { bg: '#080706', panel: '#14110e', pane: '#1b1814', line: '#2e2820', accent: 'linear-gradient(180deg, #f1e9dc, #bba98c)' },
-  silver: { bg: '#070809', panel: '#121418', pane: '#191b1f', line: '#2a2e35', accent: 'linear-gradient(180deg, #f5f7fa, #aeb5c0)' },
-  midnight: { bg: '#05070c', panel: '#0f141e', pane: '#151b27', line: '#25304a', accent: 'linear-gradient(180deg, #eef3fc, #9fb3db)' },
-  jade: { bg: '#040706', panel: '#0d1411', pane: '#131c17', line: '#21332a', accent: 'linear-gradient(180deg, #eaf7f0, #93c7ab)' },
-  rose: { bg: '#080608', panel: '#150f13', pane: '#1c151a', line: '#33262d', accent: 'linear-gradient(180deg, #f8e6e1, #c99a8f)' }
+  silver: { bg: '#070809', panel: '#121418', pane: '#191b1f', line: '#2a2e35', accent: 'linear-gradient(180deg, #f5f7fa, #aeb5c0)' }
 }
 
 const percent = (value: number): string => `${Math.round(value * 100)}%`
 
-/** Appearance in sections, one at a time (ADR 0043): it had grown too long for one page. */
+/** Appearance in sections, one at a time (ADR 0043, 0044): the same section bar as every Settings page. */
+type Section = 'theme' | 'panes' | 'background' | 'terminal'
 const SECTIONS = [
-  { value: 'theme', label: 'Theme' },
-  { value: 'panes', label: 'Panes' },
-  { value: 'background', label: 'Background' },
-  { value: 'vscode', label: 'VS Code themes' },
-  { value: 'terminal', label: 'Terminal font' }
-] as const
-type Section = (typeof SECTIONS)[number]['value']
+  { value: 'theme' as const, label: 'Theme', icon: <Palette /> },
+  { value: 'panes' as const, label: 'Panes', icon: <Columns2 /> },
+  { value: 'background' as const, label: 'Background', icon: <ImageIcon /> },
+  { value: 'terminal' as const, label: 'Terminal font', icon: <SquareTerminal /> }
+]
 
 export function AppearanceSection() {
   const { settings, update } = useSettings()
@@ -98,9 +94,13 @@ export function AppearanceSection() {
 
   return (
     <SettingsPage title="Appearance" description="Choose the finish for Hiveory, or install a VS Code theme. Terminals, the editor and window chrome follow the theme.">
-      <Tabs<Section> label="Appearance sections" value={section} onChange={setSection} options={[...SECTIONS]} className={styles.sectionTabs} />
+      <div className={styles.tabsHeader}>
+        <Tabs<Section> label="Appearance sections" variant="segmented" size="lg" value={section} onChange={setSection} options={SECTIONS} className={styles.sectionTabs} />
+      </div>
 
+      {/* One Theme section: the built-in finishes, then any VS Code theme (ADR 0044). */}
       {section === 'theme' && (
+      <>
       <div className={styles.themes} role="radiogroup" aria-label="Theme">
         {THEMES.map((theme, index) => (
           <ThemeCard
@@ -114,6 +114,8 @@ export function AppearanceSection() {
           />
         ))}
       </div>
+      <VsCodeThemes />
+      </>
       )}
 
       {section === 'panes' && (
@@ -195,7 +197,6 @@ export function AppearanceSection() {
       </div>
       )}
 
-      {section === 'vscode' && <VsCodeThemes />}
       {section === 'terminal' && <TerminalFontSettings />}
     </SettingsPage>
   )

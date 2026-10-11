@@ -50,6 +50,64 @@ export function QueenFloating() {
   )
 }
 
+/**
+ * Queen Bee put away in the title bar (ADR 0044): her mark sits after the side panel button, with a dot
+ * for an unseen message. A click, her shortcut or a question drops her bar down under it; Escape or a
+ * click elsewhere puts it away again.
+ */
+export function QueenTitle() {
+  useQueenShortcut()
+  useQueenUpdates()
+  const summoned = useQueen((s) => s.summoned)
+  const setSummoned = useQueen((s) => s.setSummoned)
+  const unseen = useQueen((s) => s.unseen)
+  const focus = useQueen((s) => s.focus)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!summoned) return
+    const away = (e: PointerEvent): void => {
+      const target = e.target as Element | null
+      // Her own menus and dialogs open outside the panel; using them keeps it down.
+      if (ref.current?.contains(target) || target?.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return
+      setSummoned(false)
+    }
+    const escape = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) setSummoned(false)
+    }
+    window.addEventListener('pointerdown', away, true)
+    window.addEventListener('keydown', escape)
+    return () => {
+      window.removeEventListener('pointerdown', away, true)
+      window.removeEventListener('keydown', escape)
+    }
+  }, [summoned, setSummoned])
+
+  return (
+    <div ref={ref} className={styles.title}>
+      <span className={styles.cardToggle} data-unseen={(unseen && !summoned) || undefined}>
+        <button
+          type="button"
+          className={cx(styles.mark, styles.titleMark)}
+          aria-label={summoned ? 'Put Queen Bee away' : 'Ask Queen Bee'}
+          aria-expanded={summoned}
+          title="Queen Bee"
+          onClick={() => (summoned ? setSummoned(false) : focus())}
+        >
+          <QueenWave />
+        </button>
+      </span>
+      {summoned && (
+        // Over a browser page too: the page's native view steps aside while she is down.
+        <div className={styles.titlePanel} data-steps-aside>
+          <QueenBar />
+          <QueenCardView />
+        </div>
+      )}
+    </div>
+  )
+}
+
 const BARS = [0.45, 0.75, 1, 0.75, 0.45]
 
 /**
@@ -193,11 +251,13 @@ function QueenBar() {
           onClick={() => setCardOpen(!cardOpen)}
         />
       </span>
-      <IconButton
-        label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
-        icon={placement === 'docked' ? <PanelBottomClose /> : <PanelBottom />}
-        onClick={() => setPlacement(placement === 'docked' ? 'floating' : 'docked')}
-      />
+      {placement !== 'titlebar' && (
+        <IconButton
+          label={placement === 'docked' ? 'Float Queen Bee' : 'Dock Queen Bee'}
+          icon={placement === 'docked' ? <PanelBottomClose /> : <PanelBottom />}
+          onClick={() => setPlacement(placement === 'docked' ? 'floating' : 'docked')}
+        />
+      )}
       <Menu
         label="Queen Bee"
         align="end"
@@ -228,6 +288,13 @@ function QueenBar() {
                 { type: 'separator' as const }
               ]
             : []),
+          {
+            type: 'item',
+            id: 'titlebar',
+            label: placement === 'titlebar' ? 'Show her bar again' : 'Put away in the title bar',
+            hint: placement === 'titlebar' ? 'Docked' : 'Only her mark stays',
+            onSelect: () => setPlacement(placement === 'titlebar' ? 'docked' : 'titlebar')
+          },
           {
             type: 'item',
             id: 'talkback',

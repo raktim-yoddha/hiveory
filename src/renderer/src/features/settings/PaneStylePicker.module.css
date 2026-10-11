@@ -9,24 +9,32 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-5);
-  border: var(--border-width) solid var(--color-border-subtle);
+  border: 0;
   border-radius: var(--radius-lg);
-  background: var(--color-surface-inset);
+  background: var(--color-surface-raised);
   color: var(--color-text-secondary);
   text-align: left;
   transition:
-    border-color var(--duration-fast) var(--ease-out),
-    background var(--duration-fast) var(--ease-out);
+    background var(--duration-fast) var(--ease-out),
+    transform var(--duration-base) var(--ease-liquid);
 }
 
 .card:hover {
-  border-color: var(--color-border-strong);
+  background: var(--color-surface-hover);
 }
 
+.card:active {
+  transform: scale(0.985);
+}
+
+/* Selected: a tinted fill and the accent name, never an outline (design.md "Selection"). */
 .on,
 .on:hover {
-  border-color: var(--color-accent);
-  background: var(--fill-selected);
+  background: var(--fill-chosen);
+}
+
+.on .name {
+  color: var(--color-accent);
 }
 
 /* The drawing: two by two tiles, or two wide areas with tab strips. */

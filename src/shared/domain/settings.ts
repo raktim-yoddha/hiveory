@@ -1,6 +1,8 @@
 import type { Viewport } from './browser'
 
-export type ThemeId = 'dark' | 'bronze' | 'silver' | 'midnight' | 'jade' | 'rose'
+/** The built-in themes (ADR 0044: three; VS Code themes cover the rest). */
+export const THEME_IDS = ['dark', 'bronze', 'silver'] as const
+export type ThemeId = (typeof THEME_IDS)[number]
 
 /** App-wide preferences, persisted with the rest of the domain state. */
 export interface AppSettings {
@@ -219,10 +221,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [
   { id: 'dark', name: 'Dark', description: 'Pure black and silver-grey, perfectly flat' },
   { id: 'bronze', name: 'Bronze', description: 'Warm graphite with champagne and bronze accents' },
-  { id: 'silver', name: 'Silver', description: 'Cool graphite with brushed-silver accents' },
-  { id: 'midnight', name: 'Midnight', description: 'Ink-blue graphite with cold steel highlights' },
-  { id: 'jade', name: 'Jade', description: 'Deep obsidian green with polished jade accents' },
-  { id: 'rose', name: 'Rose', description: 'Plum graphite with rose-gold accents' }
+  { id: 'silver', name: 'Silver', description: 'Cool graphite with brushed-silver accents' }
 ]
 
 

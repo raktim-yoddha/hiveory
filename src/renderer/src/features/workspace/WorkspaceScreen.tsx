@@ -101,10 +101,12 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
     const agent = byId.get(paneId)
     if (!agent) return undefined
     const r = runtime[agent.id] ?? agent.runtime
+    // Terminals have no status (ADR 0044).
+    const tracked = clis.find((c) => c.id === agent.cliId)?.kind !== 'shell'
     return {
       title: agent.petName,
       icon: <CliLogo cliId={agent.cliId} size="sm" />,
-      status: { status: r.status, running: r.running, detail: r.activity },
+      status: tracked ? { status: r.status, running: r.running, detail: r.activity } : undefined,
       rename: (name) => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
     }
   }

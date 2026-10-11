@@ -2,7 +2,7 @@ import { Check } from 'lucide-react-native'
 import { THEME_NAMES, useTheme, type ThemeChoice } from '@/core/theme'
 import { ListRow, Sheet } from '@/core/ui'
 
-export const THEME_LABEL: Record<string, string> = { dark: 'Dark', bronze: 'Bronze', silver: 'Silver', midnight: 'Midnight', jade: 'Jade', rose: 'Rose' }
+export const THEME_LABEL: Record<string, string> = { dark: 'Dark', bronze: 'Bronze', silver: 'Silver' }
 
 export const themeLabel = (choice: ThemeChoice, computerTheme?: string): string =>
   choice === 'computer' ? `Same as computer${computerTheme ? ` (${THEME_LABEL[computerTheme] ?? computerTheme})` : ''}` : (THEME_LABEL[choice] ?? choice)

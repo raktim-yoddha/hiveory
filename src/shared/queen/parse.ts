@@ -349,7 +349,7 @@ function parseQuick(input: string, ctx: QueenContext): QueenParse | null {
   if (is(HELP)) return { kind: 'actions', actions: [{ type: 'help' }] }
   if (is(MUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: false }] }
   if (is(UNMUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: true }] }
-  // "jade theme", "switch to the rose theme", "dark mode" — the whole sentence, nothing else in it.
+  // "bronze theme", "switch to the silver theme", "dark mode" — the whole sentence, nothing else in it.
   const words = text.split(' ').filter((w) => !THEME_WORDS.has(w))
   const theme = /\b(theme|mode|colou?rs?)\b/.test(text) && words.length === 1 ? THEMES.find((t) => t.id === words[0]) : undefined
   if (theme) return { kind: 'actions', actions: [{ type: 'set-theme', theme: theme.id as ThemeId }] }

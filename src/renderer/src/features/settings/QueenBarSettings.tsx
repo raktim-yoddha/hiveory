@@ -7,7 +7,7 @@ import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
-import { useQueen } from '../queen/useQueen'
+import { useQueen, type QueenPlacement } from '../queen/useQueen'
 import { shortcutRecording } from '../queen/useQueenShortcut'
 import { SettingRow } from './SettingsScreen'
 import styles from './Settings.module.css'
@@ -144,7 +144,7 @@ export function QueenBarSettings() {
         <div className={styles.groupTitle}>Placement</div>
         <SettingRow
           title="Where she sits"
-          description="Docked sits under the main area and lifts it up. Floating keeps a fixed-size bar over the bottom of the main area and takes no room."
+          description="Docked sits under the main area and lifts it up. Floating keeps a fixed-size bar over the bottom of the main area and takes no room. Title bar puts her bar away: only her mark stays, after the side panel button, and her bar drops down when you click it or press her shortcut."
           control={
             <Select
               label="Where she sits"
@@ -152,9 +152,10 @@ export function QueenBarSettings() {
               value={placement}
               options={[
                 { value: 'docked', label: 'Docked' },
-                { value: 'floating', label: 'Floating' }
+                { value: 'floating', label: 'Floating' },
+                { value: 'titlebar', label: 'Title bar only' }
               ]}
-              onChange={(v) => setPlacement(v as 'docked' | 'floating')}
+              onChange={(v) => setPlacement(v as QueenPlacement)}
             />
           }
         />

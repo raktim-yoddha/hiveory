@@ -463,9 +463,9 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         case 'apps-report': {
           const status = await api('apps.status')
           const active = status.accounts.filter((a) => a.status === 'active')
-          if (!status.keySet) reportText = 'No apps yet: add your Composio API key in Settings › Skills, MCP & Apps › Apps.'
+          if (!status.keySet) reportText = 'No apps yet: add your Composio API key in Settings › Skills, MCPs & Apps › Apps.'
           else if (status.error) reportText = `Composio can't be reached: ${status.error}`
-          else if (!active.length) reportText = 'No apps are connected yet. Connect one in Settings › Skills, MCP & Apps › Apps.'
+          else if (!active.length) reportText = 'No apps are connected yet. Connect one in Settings › Skills, MCPs & Apps › Apps.'
           else {
             const byApp = new Map<string, string[]>()
             for (const a of active) byApp.set(a.appId, [...(byApp.get(a.appId) ?? []), a.label ?? 'Default'])

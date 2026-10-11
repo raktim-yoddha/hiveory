@@ -146,7 +146,7 @@ export function AppShell() {
           </div>
           </div>
           <ErrorBoundary region="Queen Bee" compact>
-            {queenPlacement === 'docked' ? <QueenDock /> : <QueenFloating />}
+            {queenPlacement === 'docked' ? <QueenDock /> : queenPlacement === 'floating' ? <QueenFloating /> : null}
           </ErrorBoundary>
         </main>
         {showPanel && (

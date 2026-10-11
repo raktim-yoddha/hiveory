@@ -424,3 +424,41 @@
   background: var(--color-accent);
   pointer-events: none;
 }
+
+/* Put away in the title bar (ADR 0044): her mark beside the side panel button, the bar drops under it. */
+.title {
+  display: inline-flex;
+  -webkit-app-region: no-drag;
+}
+
+.titleMark {
+  width: var(--control-sm);
+  height: var(--control-sm);
+}
+
+.titlePanel {
+  position: fixed;
+  top: calc(var(--titlebar-height) - var(--space-2));
+  right: var(--space-7);
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: var(--queen-bar-width);
+  max-width: calc(100vw - var(--space-8));
+  animation: title-drop var(--duration-base) var(--ease-liquid);
+  transform-origin: top right;
+}
+
+.titlePanel .bar,
+.titlePanel .card {
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+}
+
+@keyframes title-drop {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--space-4) * -1)) scale(0.97);
+  }
+}

@@ -249,7 +249,8 @@ export class AgentService {
       this.startedAt.delete(instance.id)
       this.recoveries.delete(instance.id)
       if (instance.chatUi) this.chats.stop(instance.id)
-      else this.runtime.dispose(instance.id)
+      // Restored later with its output, like after a restart (ADR 0044).
+      else this.runtime.dispose(instance.id, true)
     }
   }
 

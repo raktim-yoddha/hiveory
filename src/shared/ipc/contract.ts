@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
 import { EMOJI, HEX_COLOR, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
-import { FONT_FAMILY, FONT_WEIGHTS, PANE_SPACINGS, PANE_STYLES, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
+import { FONT_FAMILY, FONT_WEIGHTS, PANE_SPACINGS, PANE_STYLES, THEME_IDS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -398,7 +398,7 @@ export const requestSchemas = {
   'settings.get': none,
   'settings.update': z
     .object({
-      theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']),
+      theme: z.enum(THEME_IDS),
       autoCheckUpdates: z.boolean(),
       autoDownloadUpdates: z.boolean(),
       terminalFont: z.object({

@@ -4,6 +4,9 @@ import { IconButton } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { useApp } from '../../stores/data'
 import { useNavigation, type AppMode } from '../../stores/navigation'
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
+import { QueenTitle } from '../queen/Queen'
+import { useQueen } from '../queen/useQueen'
 import styles from './TitleBar.module.css'
 
 const MODES: Array<{ value: AppMode; label: string }> = [
@@ -17,6 +20,7 @@ export function TitleBar() {
   const info = useApp((s) => s.info)
   const { mode, setMode, sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation()
   const inSettings = view.type === 'settings'
+  const queenInTitle = useQueen((s) => s.placement) === 'titlebar'
   return (
     <header className={styles.bar} data-platform={info?.platform}>
       <div className={styles.start}>
@@ -55,6 +59,12 @@ export function TitleBar() {
             onClick={togglePanel}
             className={styles.noDrag}
           />
+        )}
+        {/* Queen Bee put away (ADR 0044): her mark after the side panel button. */}
+        {queenInTitle && (
+          <ErrorBoundary region="Queen Bee" compact>
+            <QueenTitle />
+          </ErrorBoundary>
         )}
         <IconButton
           label={inSettings ? 'Close settings' : 'Settings'}

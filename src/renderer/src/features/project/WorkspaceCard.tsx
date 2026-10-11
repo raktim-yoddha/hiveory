@@ -54,6 +54,12 @@ export function WorkspaceCard({ workspace, onDelete, review }: WorkspaceCardProp
               {isMain && <span className={styles.badge}>Primary</span>}
             </span>
             {branch && <span className={styles.branch}>{branch}</span>}
+            {/* What it was started for: an issue from GitHub, GitLab, Jira or Linear, or a review (ADR 0044). */}
+            {workspace.association && (
+              <span className={styles.branch} title={workspace.association.ref}>
+                {workspace.association.kind === 'issue' ? 'Issue' : 'Review'} {workspace.association.ref}
+              </span>
+            )}
             <span className={styles.stats}>
               <span className={styles.meta}>
                 <AgentIcon aria-hidden />

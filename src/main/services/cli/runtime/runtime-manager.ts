@@ -6,6 +6,7 @@ import { fail } from '@shared/errors'
 import type { Logger } from '../../../app/logger'
 import { sanitizeEnv } from '../../pty/env'
 import { PtySession } from '../../pty/pty-session'
+import { forgetOutput, savedOutputFile, saveOutput, takeOutput } from '../../pty/saved-output'
 import { inProcessPty, type PtyBackend } from '../../pty/pty-backend'
 import type { HookEndpoint, McpEndpoint } from '../adapters/types'
 import type { CliRegistry } from '../registry'
@@ -125,6 +126,12 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     session.detector = heuristics ? new HeuristicDetector(heuristics) : null
     this.sessions.set(instance.id, session)
     if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
+    else {
+      // What it showed before Hiveory quit or its Workspace was removed (ADR 0044). A resumed
+      // conversation is redrawn by its CLI, so only a fresh start gets it back.
+      const before = takeOutput(this.outputFile(instance.id))
+      if (before && !instance.hasConversation) session.pty.annotate(`${before}\x1b[0m\r\n\x1b[2m── restored from last time ──\x1b[0m\r\n`)
+    }
 
     if (kit?.remote) {
       // The remote machine's own environment, never this computer's (no Windows PATH on a Linux box).
@@ -168,18 +175,31 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     if (session.details.running) this.apply(session, { type: 'exited', code: 0 }, 'process')
   }
 
-  /** Stops the process and forgets the session (agent closed). */
-  dispose(instanceId: string): void {
+  /**
+   * Stops the process and forgets the session. `keepOutput`: the agent comes back later (its Workspace
+   * was removed, not the agent), so its output is kept on disk for then (ADR 0044); else it goes.
+   */
+  dispose(instanceId: string, keepOutput = false): void {
     const session = this.sessions.get(instanceId)
+    if (keepOutput && session) saveOutput(this.outputFile(instanceId), session.pty.snapshot().data)
+    else forgetOutput(this.outputFile(instanceId))
     this.stop(instanceId)
     session?.pty.removeAllListeners()
     this.sessions.delete(instanceId)
   }
 
+  /** Quitting: every terminal's output is kept for the next start (ADR 0044). */
   disposeAll(): void {
     clearInterval(this.ticker)
-    for (const session of this.sessions.values()) session.pty.killNow()
+    for (const [id, session] of this.sessions) {
+      saveOutput(this.outputFile(id), session.pty.snapshot().data)
+      session.pty.killNow()
+    }
     this.sessions.clear()
+  }
+
+  private outputFile(instanceId: string): string {
+    return savedOutputFile(join(this.runtimeRoot, instanceId))
   }
 
   has(instanceId: string): boolean {

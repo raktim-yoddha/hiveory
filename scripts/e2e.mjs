@@ -179,7 +179,7 @@ await test('the first-run welcome asks the pane style and spacing; Attached remo
 
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  for (const section of ['Appearance', 'Agents', 'Skills, MCP & Apps', 'Updates', 'Guide', 'About']) {
+  for (const section of ['Appearance', 'Agents', 'Skills, MCPs & Apps', 'Updates', 'Guide', 'About']) {
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: section }).click()
     await page.waitForTimeout(150)
     expect(!(await page.getByText('failed to display').isVisible()), `${section} crashed`)
@@ -214,12 +214,12 @@ await test('settings: Dark is the default theme and perfectly flat', async () =>
   await shot('a2b-settings-dark')
 })
 
-await test('appearance: six themes, three per row; new themes apply', async () => {
+await test('appearance: three themes in a row; each applies', async () => {
   const cards = page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio')
-  expect((await cards.count()) === 6, `theme count ${await cards.count()}`)
+  expect((await cards.count()) === 3, `theme count ${await cards.count()}`)
   const tops = await cards.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)))
-  expect(tops[0] === tops[1] && tops[1] === tops[2] && tops[3] > tops[0] && tops[3] === tops[5], `not three per row: ${tops}`)
-  for (const [name, id] of [['Midnight', 'midnight'], ['Jade', 'jade'], ['Rose', 'rose']]) {
+  expect(tops[0] === tops[1] && tops[1] === tops[2], `not in one row: ${tops}`)
+  for (const [name, id] of [['Bronze', 'bronze'], ['Silver', 'silver']]) {
     await page.getByRole('radio', { name: new RegExp(name) }).click()
     await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.theme)) === id, `${id} theme`)
   }
@@ -271,7 +271,7 @@ await test('the title-bar logo is flat (no glow, no gradient)', async () => {
 })
 
 await test('extensions: skills, MCP and apps are separate tabs; apps use real logos', async () => {
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Apps' }).click()
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCPs & Apps' }).click()
   for (const tab of ['Skills', 'MCP servers', 'Apps']) expect(await page.getByRole('tab', { name: new RegExp(tab) }).isVisible(), `${tab} tab missing`)
   await page.getByRole('tab', { name: /MCP servers/ }).click()
   await page.getByText('In Hiveory · every agent').waitFor()
@@ -298,7 +298,7 @@ await test('extensions: skills, MCP and apps are separate tabs; apps use real lo
 
 await test('apps: a Composio key once; Connect goes straight to the app; a labelled second account; Disconnect', async () => {
   await stubBrowser()
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCP & Apps' }).click()
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Skills, MCPs & Apps' }).click()
   await page.getByRole('tab', { name: /Apps/ }).click()
   const keyField = page.getByRole('textbox', { name: 'Composio API key', exact: true })
   await keyField.fill('ak_wrong_key_123')
@@ -876,9 +876,9 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await waitFor(async () => (await shells()).length === 0, 'closed after the yes')
 
     await say('open plugin settings')
-    await page.getByRole('heading', { name: 'Skills, MCP & Apps' }).waitFor()
+    await page.getByRole('heading', { name: 'Skills, MCPs & Apps' }).waitFor()
     await say('take me to main')
-    await page.getByRole('heading', { name: 'Skills, MCP & Apps' }).waitFor({ state: 'detached' })
+    await page.getByRole('heading', { name: 'Skills, MCPs & Apps' }).waitFor({ state: 'detached' })
     expect((await queen.boundingBox()).y > (await page.locator('main').boundingBox()).y, 'docked bar not inside the main area')
 
     await say('write me a poem')

@@ -70,6 +70,18 @@
   padding: 0 var(--page-padding) var(--page-padding);
 }
 
+/*
+ * Attached panes (ADR 0044): the one-pixel gutters (and a line under the title bar) show the pane line.
+ * Over a wallpaper the gutters show the picture instead, so translucent surfaces are not tinted.
+ */
+:global(:root[data-panes='attached']:not([data-wallpaper])) .main {
+  background: var(--color-pane-line);
+}
+
+:global(:root[data-panes='attached']) .main {
+  padding-top: var(--gutter);
+}
+
 .withSidebar {
   --side-reserve: calc(var(--sidebar-min) + var(--gutter));
 

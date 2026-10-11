@@ -36,15 +36,24 @@ export const avatarFromFile = (path: string, codec: AvatarCodec): string => {
 /** GitHub logins: letters, digits and single hyphens, up to 39 characters. */
 const GITHUB_LOGIN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
 
-/** A GitHub account's avatar as a Workspace avatar (ADR 0043), from GitHub's public avatar address. */
-export const avatarFromGithub = async (login: string, codec: AvatarCodec, http: typeof fetch = fetch): Promise<string> => {
+/** GitHub's public avatar address for an account (ADR 0043). */
+export const githubAvatarUrl = (login: string): string => {
   if (!GITHUB_LOGIN.test(login)) fail('INVALID_INPUT', 'That is not a GitHub account name.')
+  return `https://github.com/${login}.png?size=192`
+}
+
+/** The avatar at a code host's https address as a Workspace avatar (ADR 0043, 0044: GitHub and GitLab alike). */
+export const avatarFromUrl = async (url: string, codec: AvatarCodec, http: typeof fetch = fetch): Promise<string> => {
+  if (!/^https:\/\//i.test(url)) fail('INVALID_INPUT', 'That avatar is not at an https address.')
   let response: Response
   try {
-    response = await http(`https://github.com/${login}.png?size=192`, { signal: AbortSignal.timeout(15_000) })
+    response = await http(url, { signal: AbortSignal.timeout(15_000) })
   } catch {
-    return fail('INVALID_INPUT', 'Could not reach GitHub.', { hint: 'Check your connection and try again.' })
+    return fail('INVALID_INPUT', 'Could not reach the code host.', { hint: 'Check your connection and try again.' })
   }
-  if (!response.ok) fail('NOT_FOUND', `GitHub has no avatar for ${login}.`)
+  if (!response.ok) fail('NOT_FOUND', 'The code host has no avatar for this workspace.')
   return avatarFromImage(codec.createFromBuffer(Buffer.from(await response.arrayBuffer())))
 }
+
+/** A GitHub account's avatar as a Workspace avatar (ADR 0043). */
+export const avatarFromGithub = async (login: string, codec: AvatarCodec, http: typeof fetch = fetch): Promise<string> => avatarFromUrl(githubAvatarUrl(login), codec, http)

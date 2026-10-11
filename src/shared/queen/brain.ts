@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { THEME_IDS } from '../domain/settings'
 import { appGuideText } from '../hiveory/guide'
 import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_BOTS_PAGES, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
 
@@ -124,7 +125,6 @@ const ACTION_TYPES = [
 ] as const
 const SETTING_IDS = Object.keys(QUEEN_SETTINGS) as [QueenSetting, ...QueenSetting[]]
 
-const THEME_IDS = ['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose'] as const
 const FOCUS = ['all', 'idle', 'working', 'waiting-for-you'] as const
 
 /**

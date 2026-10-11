@@ -1,5 +1,5 @@
 // The phone's colors come from the desktop's tokens.css (design.md): one source of
-// truth for all six themes. `pnpm sync:theme` writes src/core/theme/palettes.ts, and a
+// truth for all three themes. `pnpm sync:theme` writes src/core/theme/palettes.ts, and a
 // test fails when the desktop changed and the phone was not re-synced.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -59,7 +59,7 @@ export const palettesFromCss = (css) => {
   }
   const root = blocks.bronze
   const out = {}
-  for (const name of ['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']) {
+  for (const name of ['dark', 'bronze', 'silver']) {
     const vars = { ...root, ...(blocks[name] ?? {}) }
     const palette = {}
     for (const [token, key] of Object.entries(KEYS)) {
