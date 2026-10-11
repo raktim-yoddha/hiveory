@@ -109,24 +109,37 @@ const workspaceWhere = async (pid, pred) => {
   }, 'workspace to be created')
   return found
 }
-/** Opens a workspace from the sidebar, expanding its project first. */
+/** Opens a worktree from the sidebar ("Main" is the Primary), unfolding its workspace first. */
 const openSidebarWorkspace = async (projectName, workspaceName) => {
-  const row = page.getByRole('button', { name: projectName, exact: true })
-  await row.click()
-  // The row's accessible name also carries its agent count ("Main 4").
-  await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: new RegExp(`^${workspaceName}( [0-9]+)?$`) }).first().click()
+  const nav = page.getByRole('navigation', { name: 'Workspaces' })
+  const child = workspaceName === 'Main' ? nav.getByRole('button', { name: `${projectName}, primary worktree` }) : nav.getByRole('button', { name: workspaceName, exact: true })
+  if (!(await child.isVisible())) await nav.getByRole('button', { name: new RegExp(`^${projectName}(: open .*)?$`) }).first().click()
+  await child.click()
+}
+/** A tab of the open worktree's Dashboard (Tasks, Worktrees, Issues), showing the side panel first. */
+const openDashboardTab = async (tab) => {
+  if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
+  await page.locator('aside[aria-label="Side panel"]').getByRole('tab', { name: 'Dashboard' }).click()
+  await page.getByRole('tablist', { name: 'Workspace sections' }).getByRole('tab', { name: tab }).click()
 }
 const stubFolderPicker = (folder) =>
   app.evaluate(({ dialog }, f) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [f] })
   }, folder)
-/** Add project › Pick directory, with the folder picker stubbed to `folder`. */
+/** Add workspace › a folder, with the folder picker stubbed to `folder`. */
 const addProjectFolder = async (folder) => {
   await stubFolderPicker(folder)
-  await page.getByRole('button', { name: 'Add project', exact: true }).first().click()
-  const dialog = page.getByRole('dialog', { name: 'Add project' })
+  await page.getByRole('button', { name: 'Add workspace', exact: true }).first().click()
+  const dialog = page.getByRole('dialog', { name: 'Add workspace' })
   await dialog.getByRole('button', { name: 'Choose' }).click()
-  await dialog.getByRole('button', { name: /^Add project/ }).click()
+  await dialog.getByRole('button', { name: /^Add workspace/ }).click()
+}
+/** Settings is a window over the app (ADR 0039): its own × closes it. */
+const closeSettings = () => page.locator('dialog[open]').getByRole('button', { name: 'Close settings' }).click()
+/** The New worktree dialog of a workspace, from its sidebar "+". */
+const newWorktree = async (projectName) => {
+  await page.getByRole('button', { name: `New worktree in ${projectName}` }).click()
+  return page.getByRole('dialog', { name: 'New worktree' })
 }
 /** The user's browser: records each page Hiveory opens and follows it (a sign-in redirects straight back). */
 const stubBrowser = () =>
@@ -171,7 +184,7 @@ await test('the first-run welcome asks the pane style and spacing; Attached remo
   await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === 'attached', 'attached spacing applied')
   const s = await value('settings.get')
   expect(s.welcomed && s.paneStyle === 'tiles' && s.paneSpacing === 'attached', `saved: ${s.paneStyle} ${s.paneSpacing}`)
-  expect((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--gutter').trim())) === '0px', 'attached panes keep a gutter')
+  expect((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--surface-radius').trim())) === '0px', 'attached panes keep rounded corners')
   await shot('a1-attached')
   await value('settings.update', { paneSpacing: 'spaced' })
   await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === undefined, 'spaced again')
@@ -250,7 +263,7 @@ await test('appearance: an added image becomes the wallpaper; transparency reach
   for (const theme of ['dark', 'bronze', 'silver']) {
     await value('settings.update', { theme })
     await page.waitForTimeout(450)
-    const alphas = [await alphaOf('nav[aria-label="Settings sections"]'), await alphaOf('[role="radiogroup"][aria-label="Theme"] [role="radio"]')]
+    const alphas = [await alphaOf('nav[aria-label="Settings sections"]'), await alphaOf('div:has(> [role="radiogroup"][aria-label="Wallpaper"])')]
     expect(alphas.every((a) => a === 0), `${theme}: surfaces not fully transparent (${alphas})`)
   }
   await value('settings.update', { theme: 'dark', surfaceOpacity: 0.6 })
@@ -346,7 +359,7 @@ await test('apps: a Composio key once; Connect goes straight to the app; a label
 })
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Agents' }).click()
-  await page.getByRole('switch', { name: 'Use chat UI by default' }).click()
+  await choose(page, 'New agents open as', 'Chat')
   await page.getByRole('switch', { name: 'Auto-approve permissions by default' }).click()
   await waitFor(async () => {
     const s = await value('settings.get')
@@ -363,7 +376,7 @@ await test('settings: guide search filters and chapters open', async () => {
   await page.getByRole('button', { name: /Arranging panes/ }).click()
   expect(await page.getByRole('heading', { name: 'Arranging panes' }).isVisible(), 'chapter did not open')
   await page.getByRole('button', { name: /Next chapter/ }).click()
-  expect(await page.getByRole('heading', { name: 'The Kanban' }).isVisible(), 'next chapter failed')
+  expect(await page.getByRole('heading', { name: /The Kanban/ }).isVisible(), 'next chapter failed')
   await shot('a3-guide')
 })
 
@@ -372,72 +385,62 @@ await test('settings: updates are honest in development builds', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Updates' }).click()
   expect(await page.getByText('Updates run in installed builds').isVisible(), 'unsupported state not shown')
   expect(await page.getByRole('button', { name: 'Check now' }).isDisabled(), 'check should be disabled in dev')
-  await page.getByRole('button', { name: 'Close settings' }).click()
+  await closeSettings()
 })
 
 // ======================= B. Projects, Git, workspaces =======================
 console.log('B. Projects, Git & workspaces')
-await test('open a Git project: no workspaces are created automatically', async () => {
+await test('add a Git workspace: its Primary worktree is made, nothing else', async () => {
   await addProjectFolder(repo)
-  await page.waitForSelector('text=Idle')
+  await waitFor(async () => (await value('projects.list')).length === 1, 'workspace added')
   projectId = (await value('projects.list'))[0].id
-  expect((await value('workspaces.list', { projectId })).length === 0, 'a workspace was auto-created')
-  expect(await page.getByRole('button', { name: /Downloads|demo-app/ }).first().isVisible(), 'path trail missing')
+  mainWs = await workspaceWhere(projectId, (w) => w.kind === 'main')
+  const all = await value('workspaces.list', { projectId })
+  expect(all.length === 1 && mainWs.path === repo, `worktrees: ${all.map((w) => w.name)}`)
+  expect((await value('agents.list', { workspaceId: mainWs.id })).length === 0, 'agents were started on their own')
 })
 
-await test('project page has no gear; path trail copies the full path', async () => {
-  expect((await page.locator('header').getByRole('button', { name: 'Project settings' }).count()) === 0, 'project gear still present')
-  await page.getByRole('button', { name: /Copy path/ }).first().click()
+await test('the Dashboard path trail copies the full path', async () => {
+  await openSidebarWorkspace('demo-app', 'Main')
+  await openDashboardTab('Tasks')
+  await page.locator('aside[aria-label="Side panel"]').getByRole('button', { name: 'Copy path' }).first().click()
   await page.waitForTimeout(200)
   const clip = await app.evaluate(({ clipboard }) => clipboard.readText())
   expect(clip === repo, `clipboard has "${clip}"`)
 })
 
-await test('project tab bar "New workspace" opens create with the Settings defaults', async () => {
-  expect((await page.getByRole('banner').getByRole('button', { name: 'New workspace' }).count()) === 0, 'New workspace still in the app title bar')
-  await page.getByRole('region', { name: 'demo-app' }).getByRole('button', { name: 'New workspace', exact: true }).click()
-  await page.waitForSelector('dialog[open]')
-  expect((await page.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'true', 'chat UI default not applied')
-  expect((await page.getByRole('switch', { name: 'Auto-approve permissions' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
+await test('"+" opens New worktree with the Settings defaults', async () => {
+  const dialog = await newWorktree('demo-app')
+  await dialog.waitFor()
+  expect((await dialog.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'true', 'chat UI default not applied')
+  expect((await dialog.getByRole('switch', { name: 'Auto-approve permissions' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
   await page.keyboard.press('Escape')
   await value('settings.update', { defaultChatUi: false, defaultAutoApprove: false })
 })
 
-await test('sidebar "+" opens create; main workspace via Project folder', async () => {
-  // The dialog reads the defaults when it opens; the previous test's settings change reaches the window by event.
-  await page.waitForTimeout(600)
-  await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
-  await page.waitForSelector('dialog[open]')
-  expect((await page.getByRole('radio', { name: /Project folder/ }).getAttribute('aria-checked')) === 'true', 'main should be default')
-  expect((await page.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'false', 'chat UI default should be off again')
-  await page.getByRole('button', { name: 'Create empty' }).click()
-  mainWs = await workspaceWhere(projectId, (w) => w.kind === 'main')
-  expect(mainWs && mainWs.path === repo, 'main workspace wrong')
-})
-
-await test('main workspace cannot be created twice', async () => {
-  await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
-  await page.waitForSelector('dialog[open]')
-  expect(await page.getByRole('radio', { name: /Project folder/ }).isDisabled(), 'second main allowed')
+await test('a second Primary is refused', async () => {
   const r = await invoke('workspaces.create', { projectId, kind: 'main', name: 'Main 2', cliSelections: [], autoApprove: false })
-  expect(!r.ok && /already has a main/.test(r.error.message), 'IPC allowed duplicate main')
+  expect(!r.ok && /already has a main/.test(r.error.message), 'IPC allowed a second Primary')
 })
 
 await test('new branch: invalid branch name is caught before creating', async () => {
-  await page.getByRole('radio', { name: /New branch/ }).click()
-  await page.waitForSelector('text=Base branch')
-  await page.getByLabel('New branch').fill('bad..name')
-  await page.waitForSelector('text=not a valid Git branch name', { timeout: 5000 })
-  expect(await page.getByRole('button', { name: 'Create empty' }).isDisabled(), 'create enabled with invalid branch')
+  await page.waitForTimeout(600)
+  const dialog = await newWorktree('demo-app')
+  await dialog.getByText('Base branch').first().waitFor()
+  expect((await dialog.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'false', 'chat UI default should be off again')
+  await dialog.getByLabel('New branch').fill('bad..name')
+  await dialog.getByText('not a valid Git branch name').waitFor({ timeout: 5000 })
+  expect(await dialog.getByRole('button', { name: 'Create', exact: true }).isDisabled(), 'create enabled with invalid branch')
 })
 
 await test('new branch from develop with a custom name creates a real worktree', async () => {
-  await page.getByLabel('Workspace name').fill('Feature E2E')
-  await choose(page, 'Base branch', 'develop')
-  await page.getByLabel('New branch').fill('feature/e2e')
-  await waitFor(async () => !(await page.getByRole('button', { name: 'Create empty' }).isDisabled()), 'create to enable')
+  const dialog = page.getByRole('dialog', { name: 'New worktree' })
+  await dialog.getByLabel('Worktree name').fill('Feature E2E')
+  await choose(dialog, 'Base branch', 'develop')
+  await dialog.getByLabel('New branch').fill('feature/e2e')
+  await waitFor(async () => !(await dialog.getByRole('button', { name: 'Create', exact: true }).isDisabled()), 'create to enable')
   await shot('b1-create-branch')
-  await page.getByRole('button', { name: 'Create empty' }).click()
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
   featureWs = await workspaceWhere(projectId, (w) => w.git?.branch === 'feature/e2e')
   expect(featureWs?.git.baseRef === 'develop', 'base ref not recorded')
   expect(git(repo, 'worktree', 'list').includes('feature/e2e'), 'worktree missing from git')
@@ -445,13 +448,11 @@ await test('new branch from develop with a custom name creates a real worktree',
 })
 
 await test('use an existing branch (develop) without ever deleting it', async () => {
-  await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
-  await page.waitForSelector('dialog[open]')
-  await page.getByRole('radio', { name: /New branch/ }).click()
-  await page.getByRole('switch', { name: 'Use an existing branch' }).click()
-  await choose(page, 'Branch to check out', 'develop')
-  await page.getByLabel('Workspace name').fill('Develop')
-  await page.getByRole('button', { name: 'Create empty' }).click()
+  const dialog = await newWorktree('demo-app')
+  await dialog.getByRole('tab', { name: 'Existing branch' }).click()
+  await choose(dialog, 'Branch to check out', 'develop')
+  await dialog.getByLabel('Worktree name').fill('Develop')
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
   existingWs = await workspaceWhere(projectId, (w) => w.name === 'Develop')
   expect(existingWs?.git.createdBranch === false, 'existing branch flagged as created')
 })
@@ -468,28 +469,23 @@ await test('IPC rejects shell-ish branch names', async () => {
   expect(!r.ok && r.error.code === 'INVALID_INPUT', 'unsafe branch accepted')
 })
 
-await test('workspace cards show live git status', async () => {
+await test('worktree cards show live git status', async () => {
   writeFileSync(join(featureWs.path, 'new.txt'), 'x')
-  await page.getByRole('button', { name: 'demo-app', exact: true }).click()
-  await page.getByRole('tab', { name: 'Workspaces' }).click()
-  await page.waitForSelector('text=1 changed', { timeout: 10000 })
+  await openSidebarWorkspace('demo-app', 'Main')
+  await openDashboardTab('Worktrees')
+  await page.waitForSelector('text=1 changed', { timeout: 25000 })
   await shot('b2-workspaces-status')
 })
 
-await test('repair rebuilds a deleted workspace folder', async () => {
-  const path = existingWs.git.worktreePath
-  rmSync(path, { recursive: true, force: true })
+await test('a worktree whose folder is deleted outside Hiveory is forgotten; its branch stays (ADR 0038)', async () => {
+  rmSync(existingWs.git.worktreePath, { recursive: true, force: true })
   await relaunch()
-  await page.getByRole('button', { name: 'demo-app', exact: true }).click()
-  await page.getByRole('tab', { name: 'Workspaces' }).click()
-  await page.waitForSelector('text=Folder missing on disk')
-  await page.getByRole('button', { name: 'Repair', exact: true }).click()
-  await waitFor(async () => existsSync(join(path, 'README.md')), 'folder rebuilt')
+  await waitFor(async () => !(await value('workspaces.list', { projectId })).some((w) => w.id === existingWs.id), 'the deleted worktree forgotten')
+  expect(git(repo, 'branch', '--list', 'develop').includes('develop'), 'its branch was deleted')
+  await openSidebarWorkspace('demo-app', 'Main')
 })
 
-await test('deleting a dirty workspace needs a second confirmation; existing branches survive', async () => {
-  await value('workspaces.delete', { workspaceId: existingWs.id, force: false })
-  expect(git(repo, 'branch', '--list', 'develop').includes('develop'), 'existing branch was deleted')
+await test('deleting a dirty worktree needs a second confirmation', async () => {
   const dirty = await invoke('workspaces.delete', { workspaceId: featureWs.id, force: false })
   expect(!dirty.ok && dirty.error.code === 'WORKTREE_DIRTY', 'dirty delete not blocked')
   await value('workspaces.delete', { workspaceId: featureWs.id, force: true })
@@ -500,13 +496,12 @@ await test('plain folder: Initialize Git makes isolation possible', async () => 
   await addProjectFolder(plain)
   await page.waitForTimeout(500)
   plainProjectId = (await value('projects.list')).find((p) => p.path === plain).id
-  await page.getByRole('button', { name: 'New workspace in plain-folder' }).click()
-  await page.getByRole('radio', { name: /New branch/ }).click()
-  await page.waitForSelector('text=not a Git repository')
+  const dialog = await newWorktree('plain-folder')
+  await dialog.getByText('not a Git repository').waitFor()
   await shot('b3-init-git')
-  await page.getByRole('button', { name: 'Initialize Git' }).click()
-  await page.waitForSelector('text=Base branch', { timeout: 15000 })
-  await page.getByRole('button', { name: 'Create empty' }).click()
+  await dialog.getByRole('button', { name: 'Initialize Git' }).click()
+  await dialog.getByText('Base branch').first().waitFor({ timeout: 15000 })
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
   await workspaceWhere(plainProjectId, (w) => w.kind === 'isolated')
   expect(existsSync(join(plain, '.git')), 'git not initialized')
 })
@@ -515,6 +510,7 @@ await test('plain folder: Initialize Git makes isolation possible', async () => 
 console.log('C. Panes, layout & resizing')
 await test('open agents; panes fill the area without a header bar', async () => {
   await openSidebarWorkspace('demo-app', 'Main')
+  if (await page.getByRole('button', { name: 'Hide side panel' }).count()) await page.getByRole('button', { name: 'Hide side panel' }).click()
   await page.getByRole('button', { name: /Open agent/ }).click()
   await page.getByRole('menuitem', { name: 'Claude Code' }).click()
   await panes().first().waitFor()
@@ -529,14 +525,16 @@ await test('open agents; panes fill the area without a header bar', async () => 
 })
 
 await test('the sidebar order follows work, not clicks (ADR 0024)', async () => {
-  const nav = page.getByRole('navigation', { name: 'Projects' })
+  const nav = page.getByRole('navigation', { name: 'Workspaces' })
+  // A folded row is named "<workspace>: open <worktree>", an unfolded one just "<workspace>".
+  const row = (name) => nav.getByRole('button', { name: new RegExp(`^${name}(: open .*)?$`) }).first()
   const order = async () => {
-    const [a, b] = await Promise.all(['demo-app', 'plain-folder'].map(async (name) => (await nav.getByRole('button', { name, exact: true }).boundingBox()).y))
+    const [a, b] = await Promise.all(['demo-app', 'plain-folder'].map(async (name) => (await row(name).boundingBox()).y))
     return a < b ? ['demo-app', 'plain-folder'] : ['plain-folder', 'demo-app']
   }
   const before = await order()
   // Looking at the lower project does not move it.
-  await nav.getByRole('button', { name: before[1], exact: true }).click()
+  await row(before[1]).click()
   await page.waitForTimeout(500)
   expect(JSON.stringify(await order()) === JSON.stringify(before), `clicking ${before[1]} moved it: ${await order()}`)
   // Work there does: an agent opening in it.
@@ -660,7 +658,7 @@ await test('a small window keeps every pane inside the layout', async () => {
 console.log('D. Side panel, sidebars, terminal & clipboard')
 const sidePanel = () => page.locator('aside[aria-label="Side panel"]')
 await test('the side panel has its fixed tabs, no "+" and no ×; browsers are panes', async () => {
-  await page.getByRole('button', { name: 'Show side panel' }).click()
+  if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
   for (const name of ['Dashboard', 'Sessions', 'Explorer', 'Routines', 'Settings']) await sidePanel().getByRole('tab', { name }).waitFor()
   expect(!(await sidePanel().getByRole('button', { name: /^Close / }).count()), 'side panel tabs can be closed')
   expect(!(await sidePanel().getByRole('button', { name: /^Add / }).count()), 'side panel still has "+"')
@@ -712,7 +710,7 @@ await test('the panel maximizes over the main area', async () => {
   await page.getByRole('button', { name: 'Maximize side panel' }).click()
   await page.waitForTimeout(400)
   const after = await sidePanel().boundingBox()
-  const sidebar = await page.getByRole('navigation', { name: 'Projects' }).boundingBox()
+  const sidebar = await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()
   expect(after.width > before.width * 1.8, 'panel did not maximize')
   expect(after.x > sidebar.x + sidebar.width - 1, 'maximized panel covers the left sidebar')
   const paneAfter = await panes().first().boundingBox()
@@ -729,7 +727,7 @@ await test('both sidebars resize by dragging their edge', async () => {
     await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2, { steps: 6 })
     await page.mouse.up()
   }
-  const left = async () => (await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width
+  const left = async () => (await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()).width
   const right = async () => (await sidePanel().boundingBox()).width
   const [l0, r0] = [await left(), await right()]
   await drag('Resize sidebar', 80)
@@ -775,12 +773,12 @@ await test('dragging a sidebar well past its minimum hides it; showing it again 
     await page.mouse.move(box.x + box.width / 2 + dx, box.y + box.height / 2, { steps: 8 })
     await page.mouse.up()
   }
-  const width = (await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width
+  const width = (await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()).width
   await drag('Resize sidebar', -400)
-  await waitFor(async () => !(await page.getByRole('navigation', { name: 'Projects' }).isVisible()), 'sidebar collapsed')
+  await waitFor(async () => !(await page.getByRole('navigation', { name: 'Workspaces' }).isVisible()), 'sidebar collapsed')
   await page.getByRole('button', { name: 'Show sidebar' }).click()
   await page.waitForTimeout(400)
-  expect(Math.abs((await page.getByRole('navigation', { name: 'Projects' }).boundingBox()).width - width) < 2, 'sidebar width not restored')
+  expect(Math.abs((await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()).width - width) < 2, 'sidebar width not restored')
   await drag('Resize side panel', 900)
   await waitFor(async () => !(await sidePanel().isVisible()), 'side panel collapsed')
   await page.getByRole('button', { name: 'Show side panel' }).click()
@@ -797,7 +795,8 @@ await test('pane "+": terminals first, search, Right and Bottom side by side; Po
   const bottom = await picker.getByRole('radio', { name: 'Bottom' }).boundingBox()
   expect(Math.abs(right.y - bottom.y) < 1 && bottom.x > right.x, 'Right and Bottom are not on one line')
   const names = await picker.getByRole('menuitem').allInnerTexts()
-  expect(names[0] === 'PowerShell' && names.includes('Command Prompt'), `terminals not first: ${names}`)
+  // The browser, then terminals, then agents (ADR 0042).
+  expect(names[0] === 'Browser' && names[1] === 'PowerShell' && names.includes('Command Prompt'), `terminals not right after the browser: ${names}`)
   await picker.getByLabel('Search terminals and agents').fill('power')
   await waitFor(async () => JSON.stringify(await picker.getByRole('menuitem').allInnerTexts()) === JSON.stringify(['PowerShell']), 'search filters')
   await page.keyboard.press('Enter')
@@ -846,6 +845,8 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await queen.press('Enter')
   }
   const shells = async () => (await value('agents.list', { workspaceId: mainWs.id })).filter((a) => a.cliId === 'powershell')
+  // Replies wait behind her message button unless they pop up (ADR 0039); these checks read her card.
+  await value('settings.update', { queenPopups: true })
   try {
     // Tap Win+Alt (⌘⌥ on macOS): the default shortcut.
     await page.keyboard.down('Meta')
@@ -856,7 +857,7 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     const started = Date.now()
     await say('please open two powershell')
     await waitFor(async () => (await shells()).length === 2, 'two shells opened')
-    await card.getByText(/Two PowerShell agents are starting in Main/).waitFor()
+    await card.getByText(/Two PowerShell agents are starting/).waitFor()
     console.log(`      (command to receipt: ${Date.now() - started} ms)`)
     await shot('h1-queen-opened')
     await card.getByRole('button', { name: 'Undo' }).click()
@@ -877,8 +878,14 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
 
     await say('open plugin settings')
     await page.getByRole('heading', { name: 'Skills, MCPs & Apps' }).waitFor()
-    await say('take me to main')
+    // Settings is a window over the app (ADR 0039): her shortcut closes it and gives her the keys.
+    await page.keyboard.down('Meta')
+    await page.keyboard.down('Alt')
+    await page.keyboard.up('Alt')
+    await page.keyboard.up('Meta')
     await page.getByRole('heading', { name: 'Skills, MCPs & Apps' }).waitFor({ state: 'detached' })
+    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'her shortcut focuses her over Settings')
+    await say('take me to main')
     expect((await queen.boundingBox()).y > (await page.locator('main').boundingBox()).y, 'docked bar not inside the main area')
 
     await say('write me a poem')
@@ -905,6 +912,21 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     expect(hidden === before, `the floating bar moved or resized with the main area: ${before} → ${hidden}`)
     await shot('h3-queen-floating')
     await page.getByRole('button', { name: 'Dock Queen Bee' }).click()
+    // Put away in the title bar (ADR 0044): only her mark stays; it drops her bar down, Escape puts it away.
+    await page.getByRole('button', { name: 'Queen Bee options' }).click()
+    await page.getByRole('menuitem', { name: /Put away in the title bar/ }).click()
+    await waitFor(async () => (await queen.count()) === 0, 'bar put away')
+    const mark = page.getByRole('banner').getByRole('button', { name: 'Ask Queen Bee' })
+    await mark.click()
+    await queen.waitFor()
+    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'her input focused')
+    await shot('h3b-queen-title')
+    await page.keyboard.press('Escape')
+    await waitFor(async () => (await queen.count()) === 0, 'Escape put her bar away')
+    await mark.click()
+    await page.getByRole('button', { name: 'Queen Bee options' }).click()
+    await page.getByRole('menuitem', { name: /Show her bar again/ }).click()
+    await queen.waitFor()
   } finally {
     for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
     await value('settings.update', { queenPersona: 'ada' })
@@ -979,18 +1001,6 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
     await page.getByRole('heading', { name: 'Queen Bee' }).waitFor()
     for (const tab of ['Personality', 'Providers', 'Voice', 'Bar & shortcut']) await page.getByRole('tab', { name: tab }).waitFor()
 
-    // Shortcut: pick Ctrl + Win, and it calls her.
-    await page.getByRole('tab', { name: 'Bar & shortcut' }).click()
-    await page.getByRole('button', { name: /Win \+ Ctrl|⌃⌘/ }).click()
-    await waitFor(async () => (await value('settings.get')).queenShortcut === 'Control+Meta', 'shortcut saved')
-    await page.getByRole('heading', { name: 'Queen Bee' }).click()
-    await page.keyboard.down('Control')
-    await page.keyboard.down('Meta')
-    await page.keyboard.up('Meta')
-    await page.keyboard.up('Control')
-    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'new shortcut focuses Queen Bee')
-    await value('settings.update', { queenShortcut: 'Meta+Alt' })
-
     // Providers: add a custom one; its models load from the provider.
     await page.getByRole('tab', { name: 'Providers' }).click()
     await page.getByRole('button', { name: 'Add provider' }).click()
@@ -1010,18 +1020,30 @@ await test('Queen Bee settings: tabs; a new shortcut works; a provider added in 
 
     await page.getByRole('tab', { name: 'Voice' }).click()
     await waitFor(async () => (await page.getByRole('button', { name: 'Download' }).count()) === 3, 'three speech packs offered')
-    const voiceText = await page.locator('main').innerText()
+    const voiceText = await page.locator('dialog[open]').innerText()
     expect(['Parakeet', 'Whisper Turbo', 'Kokoro'].every((n) => voiceText.includes(n)), 'a speech pack is missing')
     // Her four voices, each previewable once Kokoro is in; until then the cards offer the download.
     for (const name of ['Heart', 'Bella', 'Emma', 'Nicole']) await page.getByRole('radio', { name: new RegExp(name) }).waitFor()
     expect(await page.getByRole('button', { name: 'Preview Heart (needs the Kokoro pack)' }).isDisabled(), 'preview played the system voice')
     await page.getByRole('button', { name: /Get these voices/ }).waitFor()
     await shot('h6-queen-voice')
+
+    // Shortcut: pick Ctrl + Win, and it calls her (closing Settings, which sits over her bar).
+    await page.getByRole('tab', { name: 'Bar & shortcut' }).click()
+    await page.getByRole('button', { name: /Win \+ Ctrl|⌃⌘/ }).click()
+    await waitFor(async () => (await value('settings.get')).queenShortcut === 'Control+Meta', 'shortcut saved')
+    await page.getByRole('heading', { name: 'Queen Bee' }).click()
+    await page.keyboard.down('Control')
+    await page.keyboard.down('Meta')
+    await page.keyboard.up('Meta')
+    await page.keyboard.up('Control')
+    await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'new shortcut focuses Queen Bee')
+    await value('settings.update', { queenShortcut: 'Meta+Alt' })
   } finally {
     for (const a of await value('queen.accounts')) await value('queen.removeAccount', { id: a.id })
     await value('settings.update', { queenShortcut: 'Meta+Alt' })
     fake.close()
-    await page.getByRole('button', { name: 'Back' }).click().catch(() => undefined)
+    await closeSettings().catch(() => undefined)
   }
 })
 
@@ -1056,9 +1078,13 @@ await test('Queen Bee notes, custom personality, system-wide shortcut and subscr
     await waitFor(async () => (await value('settings.get')).queenCustomName === 'Nia', 'custom name saved')
     await page.getByText('Things she’s learned').waitFor()
     await shot('h8-queen-custom-personality')
+    // Settings sits over her bar (ADR 0039): close it to talk to her, then come back.
+    await closeSettings()
     await say('Nia, remember that I like tabs')
     await card.getByText('Noted: I like tabs').waitFor()
     expect((await page.locator('[class*="persona"]').allInnerTexts()).some((t) => t.trim() === 'Nia'), 'bar does not show her custom name')
+    await say('configure the queen')
+    await page.getByRole('heading', { name: 'Queen Bee' }).waitFor()
 
     // System-wide shortcut: opt-in, starts the native hook, stops it again.
     await page.getByRole('tab', { name: 'Bar & shortcut' }).click()
@@ -1078,7 +1104,7 @@ await test('Queen Bee notes, custom personality, system-wide shortcut and subscr
     await dialog.getByRole('button', { name: 'Cancel' }).click()
   } finally {
     await value('settings.update', { queenPersona: 'ada', queenCustomName: 'Zara', queenMemory: [], queenGlobalShortcut: false })
-    await page.getByRole('button', { name: 'Back' }).click().catch(() => undefined)
+    await closeSettings().catch(() => undefined)
   }
 })
 
@@ -1115,7 +1141,7 @@ await test('Queen Bee voice inside Electron: speak → 16 kHz → transcribe (ne
     return r.ok ? r.value.text : r.error.message
   })
   expect(/open two codex agents/i.test(heard), `heard: ${heard}`)
-  await page.getByRole('button', { name: 'Back' }).click()
+  await closeSettings()
 })
 
 // ======================= E. Agent tools (MCP) =======================
@@ -1220,6 +1246,8 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
     await hook('UserPromptSubmit')
     await page.waitForTimeout(4500)
     await hook('Stop')
+    // An update nobody asked for waits behind her message button (ADR 0038).
+    await page.getByRole('button', { name: /Show Queen Bee’s new message/ }).click()
     await card.getByText(new RegExp(`${claude.petName} has finished in`)).waitFor()
     await page.waitForFunction((pet) => window.__spoken.some((t) => t.includes(`${pet} has finished`)) || document.querySelector('[aria-label="Stop talking"]'), claude.petName, { timeout: 15000 })
     await shot('h11-queen-update')
@@ -1378,7 +1406,7 @@ await test('browser tools are on by default and listed in Settings › Browser',
   await page.getByText('Give agents the browser').waitFor()
   await page.getByText(/devices are built in/).waitFor()
   await shot('e2-browser-settings')
-  await page.getByRole('button', { name: 'Back' }).click()
+  await closeSettings()
 })
 
 const fixtureRefs = {}
@@ -1521,8 +1549,8 @@ await test('annotations reach agents; turning browser use off hides the tools', 
 // ======================= F. Kanban =======================
 console.log('F. Kanban')
 await test('kanban shows agents by real status, colour only', async () => {
-  await page.getByRole('button', { name: 'demo-app', exact: true }).click()
-  await page.getByRole('tab', { name: 'Tasks' }).click()
+  await openSidebarWorkspace('demo-app', 'Main')
+  await openDashboardTab('Tasks')
   await page.waitForTimeout(800)
   const board = await value('kanban.board', { projectId })
   const total = board.idle.length + board.working.length + board['waiting-for-you'].length
@@ -1532,7 +1560,7 @@ await test('kanban shows agents by real status, colour only', async () => {
 })
 
 await test('clicking a kanban card jumps to that agent\'s pane', async () => {
-  await page.locator('button[aria-label*=", Claude Code, Main"]').first().click()
+  await page.locator('aside[aria-label="Side panel"] button[aria-label*=", Claude Code, "]').first().click()
   await page.waitForTimeout(500)
   expect((await panes().count()) > 0, 'did not navigate to the workspace')
 })
@@ -1698,13 +1726,13 @@ await test('chats can be renamed from the Chat sidebar', async () => {
 })
 
 await test('right-click menus: workspace actions without a ⋯ button', async () => {
-  const row = page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /^Chatty( [0-9]+)?$/ })
+  const row = page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: 'Chatty', exact: true })
   await row.click({ button: 'right' })
-  expect(await page.getByRole('menuitem', { name: 'Delete workspace' }).isVisible(), 'workspace context menu missing')
+  expect(await page.getByRole('menuitem', { name: 'Delete worktree' }).isVisible(), 'worktree context menu missing')
   await page.keyboard.press('Escape')
-  expect((await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /actions$/ }).count()) === 0, '⋯ buttons still in the sidebar')
-  await page.getByRole('button', { name: 'demo-app', exact: true }).click({ button: 'right' })
-  expect(await page.getByRole('menuitem', { name: 'Remove project…' }).isVisible(), 'project context menu missing')
+  expect((await page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: /actions$/ }).count()) === 0, '⋯ buttons still in the sidebar')
+  await page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: /^demo-app(: open .*)?$/ }).first().click({ button: 'right' })
+  expect(await page.getByRole('menuitem', { name: 'Remove workspace…' }).isVisible(), 'workspace context menu missing')
   await page.keyboard.press('Escape')
   await value('workspaces.delete', { workspaceId: chatWs.id, force: true })
 })
@@ -1779,20 +1807,16 @@ await test('Composio: the key and accounts survive a restart; nothing opens the 
 })
 await test('closing every agent returns to the empty workspace', async () => {
   for (const a of await value('agents.list', { workspaceId: mainWs.id })) await value('agents.close', { instanceId: a.id })
-  await page.waitForSelector('text=Empty workspace')
+  await page.waitForSelector('text=Empty worktree')
   expect((await value('layout.get', { workspaceId: mainWs.id })) === null, 'layout not cleared')
 })
 
-await test('Main can be removed from the sidebar; its folder is untouched', async () => {
-  await page.getByRole('navigation', { name: 'Projects' }).getByRole('button', { name: /^Main( [0-9]+)?$/ }).click({ button: 'right' })
-  await page.getByRole('menuitem', { name: 'Remove workspace' }).click()
-  await page.getByRole('button', { name: 'Remove workspace' }).click()
-  await waitFor(async () => !(await value('workspaces.list', { projectId })).some((w) => w.kind === 'main'), 'main removed')
-  expect(existsSync(join(repo, 'README.md')), 'project folder was touched')
-  await page.getByRole('button', { name: 'New workspace in demo-app' }).click()
-  await page.waitForSelector('dialog[open]')
-  expect((await page.getByRole('radio', { name: /Project folder/ }).getAttribute('aria-checked')) === 'true', 'main cannot be created again')
-  await page.keyboard.press('Escape')
+await test('removing the Primary removes the workspace from Hiveory; its folder is untouched (ADR 0013, 0039)', async () => {
+  await page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: 'demo-app, primary worktree' }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /Remove workspace/ }).click()
+  await page.getByRole('dialog').getByRole('button', { name: /^Remove/ }).click()
+  await waitFor(async () => !(await value('projects.list')).some((p) => p.id === projectId), 'workspace removed')
+  expect(existsSync(join(repo, 'README.md')), 'its folder was touched')
 })
 
 await test('a corrupted state file is recovered with a notice', async () => {

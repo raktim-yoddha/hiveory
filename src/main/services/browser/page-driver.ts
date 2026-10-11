@@ -53,6 +53,13 @@ export class PageDriver {
   private emulated: Viewport | null = null
   private lastSnapshot: { url: string; lines: string[] } | null = null
 
+  /**
+   * The blank page a new page starts on. A navigation sent while it is still loading can lose to it
+   * (on a page nobody is watching, the blank one commits last and the agent's address is dropped), so
+   * navigations wait for it first (ADR 0044).
+   */
+  initial: Promise<unknown> = Promise.resolve()
+
   constructor(
     private readonly wc: WebContents,
     /** Whether the page is on screen (frames flow by themselves). */
@@ -91,6 +98,7 @@ export class PageDriver {
       return this.settle(true)
     }
     const url = normalizeUrl(input)
+    await this.initial
     try {
       await Promise.race([wc.loadURL(url), sleep(LOAD_TIMEOUT_MS)])
     } catch (error) {

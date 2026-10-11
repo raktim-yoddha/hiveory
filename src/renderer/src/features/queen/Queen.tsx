@@ -72,14 +72,17 @@ export function QueenTitle() {
       if (ref.current?.contains(target) || target?.closest?.('[role="menu"], [role="dialog"], [role="listbox"]')) return
       setSummoned(false)
     }
+    // Escape works as in her input (it silences her, then closes her card); with nothing left to close it
+    // puts her bar away. Read before the input handles the key (capture), since it changes both.
     const escape = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape' && ref.current?.contains(document.activeElement)) setSummoned(false)
+      if (e.key !== 'Escape' || !ref.current?.contains(e.target as Node)) return
+      if (!useQueen.getState().cardOpen && useVoice.getState().phase !== 'speaking') setSummoned(false)
     }
     window.addEventListener('pointerdown', away, true)
-    window.addEventListener('keydown', escape)
+    window.addEventListener('keydown', escape, true)
     return () => {
       window.removeEventListener('pointerdown', away, true)
-      window.removeEventListener('keydown', escape)
+      window.removeEventListener('keydown', escape, true)
     }
   }, [summoned, setSummoned])
 

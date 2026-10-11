@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { useSettings } from '../../stores/data'
+import { useNavigation } from '../../stores/navigation'
 import type { QueenQuestion } from '@shared/queen/actions'
 import type { QueenReport } from '@shared/queen/report'
 
@@ -124,6 +125,8 @@ export const useQueen = create<QueenState>((set, get) => ({
   // Her shortcut or menu wants the input: a shrunk bar opens up first.
   focus: () => {
     if (get().compact) get().setCompact(false)
+    // Settings is a window over the app (ADR 0039): calling her closes it, or she couldn't take the keys.
+    if (useNavigation.getState().view.type === 'settings') useNavigation.getState().closeSettings()
     set((s) => ({ focusTick: s.focusTick + 1, ...(s.placement === 'titlebar' ? { summoned: true } : {}) }))
   }
 }))

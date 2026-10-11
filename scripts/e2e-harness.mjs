@@ -38,6 +38,8 @@ export const launch = async () => {
   page = await app.firstWindow()
   page.on('crash', () => console.log('  !! renderer crashed'))
   page.on('pageerror', (e) => results.push({ name: `pageerror: ${e.message}`, ok: false }))
+  // A missing control fails its test in seconds, not half a minute (slow steps pass their own timeout).
+  page.setDefaultTimeout(10_000)
   await page.setViewportSize({ width: 1440, height: 900 }).catch(() => undefined)
   await page.waitForSelector('text=Hiveory')
 }

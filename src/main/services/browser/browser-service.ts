@@ -335,7 +335,7 @@ export class BrowserService {
     this.place(page)
     const url = input.url ?? settings.browserHomeUrl
     if (url) void page.driver.navigate(url).catch((error) => push(page.console, { at: Date.now(), level: 'error', text: String(error?.message ?? error) }))
-    else void view.webContents.loadURL('about:blank')
+    else page.driver.initial = view.webContents.loadURL('about:blank').catch(() => undefined)
     if (input.owner) this.current.set(input.owner.id, page.id)
     this.changed()
     const beside = input.opener ?? input.owner?.id

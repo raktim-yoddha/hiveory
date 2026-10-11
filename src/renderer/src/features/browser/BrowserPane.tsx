@@ -49,7 +49,8 @@ const HANDLE_SPACE = 24
  * and every corner (ADR 0043). A partly covering popup is the overlay check's job.
  */
 const covered = (el: HTMLElement, r: DOMRect): boolean => {
-  if (r.width < 1 || r.height < 1 || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) return true
+  // Not opacity: a pane fading in is about to be seen, and the page must be drawn (and sized) at once.
+  if (r.width < 1 || r.height < 1 || !el.checkVisibility({ visibilityProperty: true })) return true
   const i = 2
   const points = [
     [r.left + r.width / 2, r.top + r.height / 2],

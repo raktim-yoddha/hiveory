@@ -74,6 +74,15 @@ a livelier app, and a full pass for speed, memory, security and the guide.
 
 ### Found along the way
 - A skill whose description is a YAML block (`description: >`) showed ">"; block values are read.
+- An agent's new page in a worktree nobody was looking at dropped the agent's first address: the
+  blank page it starts on committed last. Navigations now wait for that first blank load (agent
+  browsing there went from a 15 s timeout to well under a second); the panes suite covers it.
+- Queen Bee's shortcut (or menu) closes Settings first: Settings is a window over the app, and her
+  bar under it could not take the keys. In the title bar, Escape inside her input puts her away once
+  there is nothing left for it to close.
+- The full end-to-end suite follows the app again (Workspace/Worktree names, the New worktree
+  dialog, Settings as a window, replies behind her message button) and shares its harness with
+  the panes suite.
 
 ## Consequences
 

@@ -141,6 +141,17 @@ await test('Tabs style: the page hides behind another tab; jumping to it from th
   await value('settings.update', { paneStyle: 'tiles' })
 })
 
+await test('an agent browses a page nobody has seen: a worktree that is not open', async () => {
+  const other = await value('workspaces.create', { projectId: project.id, kind: 'isolated', name: 'Unseen', cliSelections: [], autoApprove: false })
+  const cli = (await value('clis.list')).find((c) => c.id === agent.cliId)
+  const away = (await value('agents.open', { workspaceId: other.id, cliId: cli.id })).agent
+  const { tool: awayTool } = await agentMcp(away.id)
+  const snap = await awayTool('browser_navigate', { url: host })
+  const text = snap.content.map((c) => c.text ?? '').join('\n')
+  expect(/heading "Browser fixture"/.test(text) && !/viewport 0×0/.test(text), `an unseen page has no size:\n${text.slice(0, 400)}`)
+  await value('workspaces.delete', { workspaceId: other.id, force: true })
+})
+
 await test("a popup opens right after its opener; a removed worktree closes its pages", async () => {
   const before = (await value('browser.state')).pages.filter((p) => p.scope === worktree.id).map((p) => p.id)
   await tool('browser_evaluate', { script: `window.open('http://${host}/two'); 'ok'` })
