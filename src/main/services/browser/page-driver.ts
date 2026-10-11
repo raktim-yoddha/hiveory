@@ -235,6 +235,11 @@ export class PageDriver {
     return this.call<boolean>('cancelPick()').catch(() => false)
   }
 
+  /** Shows numbered badges on the given elements (none clears them). */
+  marks(list: Array<{ n: number; selector: string }>): Promise<number> {
+    return this.call<number>(`marks(${JSON.stringify(list)})`).catch(() => 0)
+  }
+
   // ---------- pointer ----------
 
   private async target(target: string, options: ActionOptions): Promise<Point> {

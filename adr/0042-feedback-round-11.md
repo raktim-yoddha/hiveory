@@ -30,6 +30,15 @@ own, not open by default.
 - The page is a native view: it hides while another pane is maximized and steps aside (leaving a
   picture) while a pane is dragged.
 
+### Browser notes in batches
+- Annotate keeps going: click an element, write the note, choose **Change | Question**, Add (Enter);
+  the next click annotates the next element, until Done or Escape. Each note's number appears on its
+  element in the page (badges the page script draws, again after a reload).
+- The page's notes form one batch under the toolbar: numbered rows (element, note, change or
+  question, remove), **Send** (to a running agent of this worktree, or a new agent of any installed
+  CLI, which gets them once it is ready), **Copy** and Clear. Sent notes clear. `annotationsText`
+  writes the message; agents still read notes with `browser_annotations`, now with each one's intent.
+
 ### Renaming a pane
 Right-click an agent's or terminal's pane name twice (or right-click › Rename) to rename it in
 place: Enter saves, Escape cancels. The name is the agent's pet name, so it changes everywhere at

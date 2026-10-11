@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { session, WebContentsView, type BrowserWindow, type Session } from 'electron'
 import {
   DEFAULT_BROWSER_PROFILE,
+  type AnnotationIntent,
   type BrowserAnnotation,
   type BrowserPageView,
   type BrowserProfile,
@@ -334,6 +335,10 @@ export class BrowserService {
     for (const event of ['did-start-loading', 'did-stop-loading', 'page-title-updated', 'did-navigate', 'did-navigate-in-page', 'devtools-opened', 'devtools-closed'] as const) {
       wc.on(event as 'did-start-loading', update)
     }
+    // A reload drops the page's badges: number the notes again once it has loaded.
+    wc.on('did-stop-loading', () => {
+      if (this.annotations.some((a) => a.pageId === page.id)) this.drawMarks(page)
+    })
     wc.on('console-message', (event) => {
       const { level, message, sourceId, lineNumber } = event as unknown as { level: string; message: string; sourceId: string; lineNumber: number }
       // Electron's own dev-mode security banner is noise, not the page's output.
@@ -420,12 +425,19 @@ export class BrowserService {
     return this.get(pageId).driver.cancelPick()
   }
 
-  annotate(pageId: string, element: PickedElement, note: string): BrowserAnnotation {
+  annotate(pageId: string, element: PickedElement, note: string, intent?: AnnotationIntent): BrowserAnnotation {
     const page = this.get(pageId)
-    const annotation: BrowserAnnotation = { id: randomUUID(), pageId, url: page.view.webContents.getURL(), element, note: note.trim(), createdAt: nowIso() }
+    const annotation: BrowserAnnotation = { id: randomUUID(), pageId, url: page.view.webContents.getURL(), element, note: note.trim(), ...(intent ? { intent } : {}), createdAt: nowIso() }
     this.annotations = [...this.annotations, annotation].slice(-100)
     this.changed()
+    this.drawMarks(page)
     return annotation
+  }
+
+  /** Numbers each of a page's notes on its element (ADR 0042); again after the page reloads. */
+  private drawMarks(page: Page): void {
+    const list = this.annotations.filter((a) => a.pageId === page.id).map((a, i) => ({ n: i + 1, selector: a.element.selector }))
+    void page.driver.marks(list)
   }
 
   annotationsIn(scope: string): BrowserAnnotation[] {
@@ -433,8 +445,13 @@ export class BrowserService {
   }
 
   deleteAnnotations(id?: string, scope?: string): void {
-    this.annotations = this.annotations.filter((a) => (id ? a.id !== id : scope ? this.pages.get(a.pageId)?.scope !== scope : false))
+    const gone = this.annotations.filter((a) => (id ? a.id === id : scope ? this.pages.get(a.pageId)?.scope === scope : false))
+    this.annotations = this.annotations.filter((a) => !gone.includes(a))
     this.changed()
+    for (const pageId of new Set(gone.map((a) => a.pageId))) {
+      const page = this.pages.get(pageId)
+      if (page) this.drawMarks(page)
+    }
   }
 
   // ---------- cookies ----------

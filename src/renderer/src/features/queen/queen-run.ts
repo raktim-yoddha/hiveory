@@ -32,6 +32,7 @@ import { useAgents, useClis, useLayouts, usePresets, useProjects, useSettings, u
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
 import { openBrowserPane } from '../browser/open-browser'
+import { waitUntilReady } from '../agents/agent-actions'
 import { useQueen } from './useQueen'
 import { cue, speak } from './voice'
 
@@ -43,32 +44,6 @@ import { cue, speak } from './voice'
  */
 
 const prefs = (): QueenPrefs => prefsFromSettings(useSettings.getState().settings)
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
-/**
- * Waits until a just-opened agent can take a message: running, idle for 2 s and
- * something on its screen. A question first (trust this folder?) stops the wait:
- * typing into it would answer it.
- */
-async function waitUntilReady(instanceId: string, timeoutMs = 60_000): Promise<'ready' | 'waiting' | 'stopped' | 'timeout'> {
-  const started = Date.now()
-  let idleSince: number | null = null
-  for (;;) {
-    const r = useAgents.getState().runtime[instanceId]
-    const now = Date.now()
-    if (r?.status === 'waiting-for-you') return 'waiting'
-    if (r && !r.running && now - started > 5000) return 'stopped'
-    if (r?.running && r.status === 'idle') {
-      idleSince ??= now
-      if (now - idleSince >= 2000 && now - started >= 3000) {
-        const peek = await api('queen.peek', { instanceId }).catch(() => null)
-        if (peek?.excerpt) return 'ready'
-      }
-    } else idleSince = null
-    if (now - started > timeoutMs) return 'timeout'
-    await sleep(250)
-  }
-}
 
 /** Her notes (Settings › Queen Bee › Personality), saved through settings. */
 const notes = (): string[] => useSettings.getState().settings.queenMemory

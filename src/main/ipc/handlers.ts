@@ -423,7 +423,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'browser.cancelPick': async ({ pageId }) => {
     await c.browser.cancelPick(pageId)
   },
-  'browser.annotate': ({ pageId, element, note }) => c.browser.annotate(pageId, element, note),
+  'browser.annotate': ({ pageId, element, note, intent }) => c.browser.annotate(pageId, element, note, intent),
   'browser.deleteAnnotation': ({ id }) => c.browser.deleteAnnotations(id),
   'browser.switchProfile': ({ pageId, profileId }) => c.browser.switchProfile(pageId, profileId),
   'browser.createProfile': ({ name }) => c.browser.createProfile(name),

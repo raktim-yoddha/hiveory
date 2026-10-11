@@ -563,7 +563,7 @@ export const requestSchemas = {
   'browser.openExternal': z.object({ pageId }),
   'browser.pick': z.object({ pageId }),
   'browser.cancelPick': z.object({ pageId }),
-  'browser.annotate': z.object({ pageId, element: pickedElementSchema, note: z.string().trim().min(1).max(4000) }),
+  'browser.annotate': z.object({ pageId, element: pickedElementSchema, note: z.string().trim().min(1).max(4000), intent: z.enum(['change', 'question']).optional() }),
   'browser.deleteAnnotation': z.object({ id: z.string().uuid().optional() }),
   'browser.switchProfile': z.object({ pageId, profileId }),
   'browser.createProfile': z.object({ name: z.string().trim().min(1).max(40) }),

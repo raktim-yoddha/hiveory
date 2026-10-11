@@ -22,10 +22,11 @@ import {
   X
 } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
-import type { PickedElement, Viewport } from '@shared/domain'
+import type { AnnotationIntent, PickedElement, Viewport } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { Modal } from '../../components/ui/Modal'
+import { Tabs } from '../../components/ui/Tabs'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
@@ -33,6 +34,7 @@ import { useBrowser } from '../../stores/browser'
 import { useSettings } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
+import { AnnotationBatch } from './AnnotationBatch'
 import { DeviceToolbar } from './DeviceToolbar'
 import { isOverlayOpen, useOverlayOpen } from './useOverlayOpen'
 import styles from './BrowserPane.module.css'
@@ -73,6 +75,9 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   const [picking, setPicking] = useState<PickMode | null>(null)
   const [noteFor, setNoteFor] = useState<PickedElement | null>(null)
   const [note, setNote] = useState('')
+  const [intent, setIntent] = useState<AnnotationIntent>('change')
+  /** Annotating keeps going, note after note, until Done or Escape (ADR 0042). */
+  const [annotating, setAnnotating] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const [newProfile, setNewProfile] = useState<string | null>(null)
 
@@ -212,13 +217,19 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   const startPick = async (mode: PickMode): Promise<void> => {
     if (picking) {
       setPicking(null)
+      setAnnotating(false)
       await api('browser.cancelPick', { pageId }).catch(() => undefined)
       return
     }
     setPicking(mode)
+    if (mode === 'annotate') setAnnotating(true)
     const element = await runAction('Pick element', () => api('browser.pick', { pageId }))
     setPicking(null)
-    if (!element) return
+    if (!element) {
+      // Escape on the page ends annotating.
+      if (mode === 'annotate') setAnnotating(false)
+      return
+    }
     if (mode === 'annotate') {
       setNote('')
       setNoteFor(element)
@@ -230,12 +241,21 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
 
   const saveNote = async (): Promise<void> => {
     if (!noteFor || !note.trim()) return
-    const saved = await runAction('Save annotation', () => api('browser.annotate', { pageId, element: noteFor, note }))
+    await runAction('Save annotation', () => api('browser.annotate', { pageId, element: noteFor, note, intent }))
     setNoteFor(null)
-    if (saved) {
-      await api('clipboard.writeText', { text: `${note.trim()}\n\n${describeElement(page.url, noteFor)}` })
-      setFlash('Note saved — agents read it with browser_annotations (also copied)')
-    }
+    // On to the next element: annotate several, then send them together.
+    if (annotating) void startPick('annotate')
+  }
+
+  const cancelNote = (): void => {
+    setNoteFor(null)
+    if (annotating) void startPick('annotate')
+  }
+
+  const finishAnnotating = (): void => {
+    setAnnotating(false)
+    setNoteFor(null)
+    if (picking) void startPick('annotate')
   }
 
   const cookies = async (kind: 'import' | 'export' | 'clear'): Promise<void> => {
@@ -359,10 +379,21 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
           </span>
         </div>
       )}
-      {picking && (
+      {(picking || annotating) && (
         <div className={styles.strip} role="status">
           <Crosshair aria-hidden />
-          <span>{picking === 'annotate' ? 'Click the element to annotate' : 'Click an element to copy it'} · Esc to cancel</span>
+          <span>
+            {picking === 'pick'
+              ? 'Click an element to copy it · Esc to cancel'
+              : pageNotes.length
+                ? `${pageNotes.length} ${pageNotes.length === 1 ? 'note' : 'notes'} ready. Click another element, or send them below.`
+                : 'Click the element to annotate · Esc to stop'}
+          </span>
+          {annotating && (
+            <Button size="sm" variant="ghost" onClick={finishAnnotating}>
+              Done
+            </Button>
+          )}
         </div>
       )}
       {noteFor && (
@@ -381,18 +412,30 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
           <input
             className={styles.noteInput}
             aria-label="Note for agents"
-            placeholder="What should change here?"
+            placeholder={intent === 'question' ? 'What do you want to know about it?' : 'What should change here?'}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && setNoteFor(null)}
+            onKeyDown={(e) => e.key === 'Escape' && cancelNote()}
             autoFocus
           />
+          <Tabs<AnnotationIntent>
+            label="Intent"
+            variant="segmented"
+            className={styles.intent}
+            value={intent}
+            onChange={setIntent}
+            options={[
+              { value: 'change', label: 'Change' },
+              { value: 'question', label: 'Question' }
+            ]}
+          />
           <Button size="sm" variant="primary" type="submit" disabled={!note.trim()} icon={<Check />}>
-            Save
+            Add
           </Button>
-          <IconButton label="Cancel note" icon={<X />} onClick={() => setNoteFor(null)} />
+          <IconButton label="Skip this element" icon={<X />} onClick={cancelNote} />
         </form>
       )}
+      {pageNotes.length > 0 && <AnnotationBatch scope={page.scope} notes={pageNotes} onSent={setFlash} />}
       {flash && (
         <div className={cx(styles.strip, styles.flash)} role="status">
           <Check aria-hidden />

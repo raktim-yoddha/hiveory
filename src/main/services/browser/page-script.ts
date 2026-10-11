@@ -628,6 +628,42 @@ export const PAGE_SCRIPT = String.raw`(() => {
     })
   }
 
+  /** Numbered badges on annotated elements (ADR 0042), placed on the document so they scroll with it. */
+  function marks(list) {
+    for (const old of D.querySelectorAll('[' + OVERLAY + '="mark"]')) old.remove()
+    let shown = 0
+    for (const m of list) {
+      let el = null
+      try {
+        el = D.querySelector(m.selector)
+      } catch {}
+      if (!el) continue
+      const r = absRect(el)
+      const badge = D.createElement('hiveory-mark')
+      badge.setAttribute(OVERLAY, 'mark')
+      badge.textContent = String(m.n)
+      css(badge, {
+        position: 'absolute',
+        left: Math.max(0, r.x + scrollX + r.width / 2 - 10) + 'px',
+        top: Math.max(0, r.y + scrollY - 10) + 'px',
+        width: '20px',
+        height: '20px',
+        display: 'grid',
+        placeItems: 'center',
+        borderRadius: '50%',
+        background: '#2563eb',
+        color: '#fff',
+        font: '600 11px system-ui, sans-serif',
+        boxShadow: '0 1px 4px rgba(0,0,0,.45)',
+        pointerEvents: 'none',
+        zIndex: '2147483646'
+      })
+      D.documentElement.appendChild(badge)
+      shown++
+    }
+    return shown
+  }
+
   function rect(target) {
     const el = resolve(target)
     el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' })
@@ -644,6 +680,7 @@ export const PAGE_SCRIPT = String.raw`(() => {
     ripple,
     pick,
     cancelPick: () => (cancelPick ? (cancelPick(), true) : false),
+    marks,
     rect,
     links: () => [...new Set([...D.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => /^https?:/.test(h)))],
     describe: (target) => describe(resolve(target)),

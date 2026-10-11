@@ -5,6 +5,33 @@ import { useAgents, useLayouts } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import { disposeTerminal } from '../terminal/terminal-registry'
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Waits until a just-opened agent can take a message: running, idle for 2 s and
+ * something on its screen. A question first (trust this folder?) stops the wait:
+ * typing into it would answer it.
+ */
+export async function waitUntilReady(instanceId: string, timeoutMs = 60_000): Promise<'ready' | 'waiting' | 'stopped' | 'timeout'> {
+  const started = Date.now()
+  let idleSince: number | null = null
+  for (;;) {
+    const r = useAgents.getState().runtime[instanceId]
+    const now = Date.now()
+    if (r?.status === 'waiting-for-you') return 'waiting'
+    if (r && !r.running && now - started > 5000) return 'stopped'
+    if (r?.running && r.status === 'idle') {
+      idleSince ??= now
+      if (now - idleSince >= 2000 && now - started >= 3000) {
+        const peek = await api('queen.peek', { instanceId }).catch(() => null)
+        if (peek?.excerpt) return 'ready'
+      }
+    } else idleSince = null
+    if (now - started > timeoutMs) return 'timeout'
+    await sleep(250)
+  }
+}
+
 /**
  * Agent commands shared by every surface that controls agents. Results are
  * applied to the stores immediately so panes appear/disappear without

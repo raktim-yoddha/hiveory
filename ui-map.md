@@ -153,6 +153,10 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 
 ### Browser pane (ADR 0015; a pane among the agents since ADR 0042, opened from a pane's "+" › Browser)
 
+Annotate (ADR 0042): strip "N notes ready. Click another element, or send them below." [Done]; note bar
+[note…] ( Change | Question ) [Add] [×]; numbered badges on the page; batch: "N notes" ˅ [Send ▾: running
+agents · New agent: CLIs] [Copy] [🗑], rows (n, element, note, Change/Question, ×).
+
 ```text
 ┌ [Terminal] [Milo · GitHub ×] [New tab ×] [+] ───────────── ⤢ ┐
 │ ← → ⟳ ( github.com/acme/app       [Work] [375×667] )  ⌖ ✎ ▭ </> ⋯ │

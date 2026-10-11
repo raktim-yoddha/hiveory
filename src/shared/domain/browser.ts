@@ -86,8 +86,12 @@ export interface BrowserAnnotation {
   url: string
   element: PickedElement
   note: string
+  /** What the note asks for (ADR 0042): a change to make, or a question to answer. */
+  intent?: AnnotationIntent
   createdAt: string
 }
+
+export type AnnotationIntent = 'change' | 'question'
 
 export interface BrowserState {
   pages: BrowserPageView[]

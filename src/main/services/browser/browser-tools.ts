@@ -345,7 +345,7 @@ export class BrowserTools {
         if (!notes.length) return { text: 'The user has not annotated anything in your worktree.' }
         return {
           text: notes
-            .map((a, i) => `${i + 1}. page ${a.pageId} · ${a.url}\n   element: ${a.element.role} "${a.element.name}" ref ${a.element.ref} · selector ${a.element.selector}\n   note: ${a.note}`)
+            .map((a, i) => `${i + 1}. page ${a.pageId} · ${a.url}\n   element: ${a.element.role} "${a.element.name}" ref ${a.element.ref} · selector ${a.element.selector}\n   ${a.intent === 'question' ? 'question' : 'change'}: ${a.note}`)
             .join('\n')
         }
       }
