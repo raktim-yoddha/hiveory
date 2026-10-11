@@ -55,7 +55,7 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
     return { cliSelections: [], autoApprove: defaultAutoApprove, chatUi: view ? view === 'chat' : defaultChatUi }
   })
   const [tab, setTab] = useState<ConfigTab>('agents')
-  const [busy, setBusy] = useState<'empty' | 'full' | null>(null)
+  const [busy, setBusy] = useState(false)
   const [git, setGit] = useState<GitChoice>({ useExistingBranch: false, ready: false })
   const onGitChange = useCallback((choice: GitChoice) => setGit(choice), [])
 
@@ -73,15 +73,15 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
     void runAction('Suggest worktree name', async () => setSuggested(await api('workspaces.suggestName', { projectId })))
   }, [projectId])
 
-  const create = async (withAgents: boolean): Promise<void> => {
-    setBusy(withAgents ? 'full' : 'empty')
+  const create = async (): Promise<void> => {
+    setBusy(true)
     const workspace = await runAction('Create worktree', () =>
       api('workspaces.create', {
         projectId,
         kind: 'isolated',
         name: name.trim(),
         association: associationRef.trim() ? { kind: associationKind, ref: associationRef.trim() } : undefined,
-        cliSelections: withAgents ? config.cliSelections : [],
+        cliSelections: config.cliSelections,
         autoApprove: config.autoApprove,
         chatUi: config.chatUi,
         baseRef: git.baseRef,
@@ -90,7 +90,7 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
         remoteBranch: git.remoteBranch
       })
     )
-    setBusy(null)
+    setBusy(false)
     if (workspace) {
       onClose()
       openWorkspace(projectId, workspace.id)
@@ -108,10 +108,8 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
       width="lg"
       footer={
         <div className={styles.footer}>
-          <Button variant="ghost" onClick={() => void create(false)} disabled={!canSubmit} loading={busy === 'empty'}>
-            Create empty
-          </Button>
-          <Button variant="primary" onClick={() => void create(true)} disabled={!canSubmit || count === 0} loading={busy === 'full'}>
+          {/* Panes are optional: with none chosen it is an empty Worktree (Open agent, Load preset). */}
+          <Button variant="primary" onClick={() => void create()} disabled={!canSubmit} loading={busy}>
             {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create'}
           </Button>
         </div>
