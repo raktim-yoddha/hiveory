@@ -34,8 +34,7 @@ export function TitleBar() {
             </span>
           )}
         </span>
-        {/* Nudges a little right while the sidebar is open, a little left while it is closed. */}
-        <span className={styles.sidebarToggle} data-open={!sidebarCollapsed}>
+        <span className={styles.sidebarToggle}>
           <IconButton
             label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
             icon={<PanelLeft />}
