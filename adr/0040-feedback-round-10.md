@@ -16,7 +16,8 @@ Shipped as PATCH releases (ADR 0038).
 - A Worktree's agents and terminals sit in one rounded bar under its row: a chip per agent (its
   status dot and CLI logo), busiest first, "+N" for what doesn't fit, a chevron that unfolds it.
   Unfolded, it is a list headed "N agents": status dot, logo, pet name · status and how long it has
-  been in that status. Every chip and row opens its pane. A click anywhere else on the bar unfolds it;
+  been in that status. Folded, the bar is one button: a click anywhere on it unfolds it (the chips
+  are not clickable); unfolded, each row opens its pane;
   "+N" shows only when another chip would not fit (measured from a real chip). The open Worktree's
   highlight covers its row and its bar as one.
 - The pane count at the end of a Worktree's row is gone. In its place a loop spins while any agent

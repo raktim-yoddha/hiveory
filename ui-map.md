@@ -28,7 +28,7 @@ last-opened Worktree's folder and branch and clicking it opens that Worktree. Ea
 name and branch; the Primary shows the workspace folder's name with a Primary tag. "+" offers New
 branch · Existing branch · Remote branch. A workspace whose folder is gone shows a warning mark.
 Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busiest first, +N, ›);
-› (or a click anywhere on the bar outside a chip) unfolds it into a list: "N agents", then dot · logo · pet name · status · time in that status
+a click anywhere on the bar unfolds it into a list (each row opens its pane): "N agents", then dot · logo · pet name · status · time in that status
 (ADR 0040). A loop spins at the end of a Worktree's row while any of its agents is working.
 
 ### Bots mode (ADR 0022)

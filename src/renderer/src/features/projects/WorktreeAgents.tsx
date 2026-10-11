@@ -42,7 +42,7 @@ export function WorktreeBusy({ workspaceId }: { workspaceId: string }) {
 
 /**
  * The agents and terminals of one Worktree under its row (ADR 0039, 0040). Folded: one bar of
- * status-and-logo chips, "+N" for what doesn't fit, a chevron to unfold. Unfolded: a list with each
+ * status-and-logo chips, "+N" for what doesn't fit; a click anywhere on it unfolds it. Unfolded: a list with each
  * one's name, status and how long it has been in it. Every chip and row opens its pane.
  */
 export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; workspaceId: string }) {
@@ -51,7 +51,7 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const [open, setOpen] = useState(false)
   const [fit, setFit] = useState(Infinity)
-  const barRef = useRef<HTMLDivElement>(null)
+  const barRef = useRef<HTMLButtonElement>(null)
   const total = sorted.length
 
   // How many chips fit the bar right now, measured from a real chip; "+N" only when they don't all fit.
@@ -104,39 +104,25 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   const shown = sorted.slice(0, fit)
   const more = sorted.length - shown.length
   return (
-    // The whole bar unfolds the list; a chip opens its pane instead. The chevron is the keyboard way in.
-    <div ref={barRef} className={cx(styles.agents, styles.agentsBar)} onClick={() => setOpen(true)}>
+    // Folded, the bar is one button that unfolds the list; its chips only show who is there (ADR 0040).
+    <button
+      ref={barRef}
+      type="button"
+      className={cx(styles.agents, styles.agentsBar)}
+      aria-expanded={false}
+      aria-label={`Show all ${count}: ${sorted.map(({ agent, status }) => `${agent.petName}, ${statusText(status)}`).join('; ')}`}
+      onClick={() => setOpen(true)}
+    >
       {shown.map(({ agent, status }) => (
-        <button
-          key={agent.id}
-          type="button"
-          data-chip
-          className={styles.agentChip}
-          aria-label={`${agent.petName}: ${statusText(status)}`}
-          title={`${agent.petName} · ${statusText(status)}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            openWorkspace(projectId, workspaceId, agent.id)
-          }}
-        >
+        <span key={agent.id} data-chip className={styles.agentChip} title={`${agent.petName} · ${statusText(status)}`}>
           <StatusDot status={status} />
           <CliLogo cliId={agent.cliId} size="sm" />
-        </button>
+        </span>
       ))}
       {more > 0 && <span className={styles.more}>+{more}</span>}
-      <button
-        type="button"
-        data-toggle
-        className={styles.agentsToggle}
-        aria-expanded={false}
-        aria-label={`Show all ${count}`}
-        onClick={(event) => {
-          event.stopPropagation()
-          setOpen(true)
-        }}
-      >
-        <ChevronRight aria-hidden />
-      </button>
-    </div>
+      <span data-toggle className={styles.agentsToggle} aria-hidden>
+        <ChevronRight />
+      </span>
+    </button>
   )
 }
