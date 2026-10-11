@@ -8,13 +8,32 @@ import { Text } from './Text'
  * What a screen shows when there is nothing yet, always with the next step. `compact` sits inside a
  * page between other content; the default fills an otherwise empty screen.
  */
-export function EmptyState({ icon: Icon, title, body, action, compact }: { icon: IconComponent; title: string; body?: string; action?: ReactNode; compact?: boolean }) {
+export function EmptyState({
+  icon: Icon,
+  media,
+  title,
+  body,
+  action,
+  compact
+}: {
+  icon?: IconComponent
+  /** A real mark (Hiveory's or a CLI's logo) in place of the icon tile. */
+  media?: ReactNode
+  title: string
+  body?: string
+  action?: ReactNode
+  compact?: boolean
+}) {
   const { colors } = useTheme()
   return (
     <View style={[styles.wrap, compact && styles.compact]}>
-      <View style={[styles.icon, { backgroundColor: colors.surfaceRaised }]}>
-        <Icon size={24} color={colors.accent} strokeWidth={1.8} />
-      </View>
+      {media ? (
+        <View style={styles.media}>{media}</View>
+      ) : Icon ? (
+        <View style={[styles.icon, { backgroundColor: colors.surfaceRaised }]}>
+          <Icon size={24} color={colors.accent} strokeWidth={1.8} />
+        </View>
+      ) : null}
       <Text variant="lead" style={styles.center}>
         {title}
       </Text>
@@ -32,6 +51,7 @@ const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: space[3], paddingVertical: space[11], paddingHorizontal: space[7] },
   compact: { paddingVertical: space[9] },
   icon: { width: 52, height: 52, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', marginBottom: space[4] },
+  media: { marginBottom: space[4] },
   center: { textAlign: 'center' },
   // A readable measure on wide phones; balanced breaking handles the narrow ones.
   body: { maxWidth: 300 },

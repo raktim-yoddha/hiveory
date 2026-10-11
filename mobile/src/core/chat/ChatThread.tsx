@@ -1,19 +1,20 @@
 import { useRef } from 'react'
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
-import { MessageSquareText } from 'lucide-react-native'
 import type { ChatMessage } from '@shared/domain/chat'
-import { useCall, useConnection, useServerEvent, type Response } from '@/core/api'
+import { useCall, useCliIcons, useConnection, useServerEvent, type Response } from '@/core/api'
 import { pageX, radius, space, useTheme } from '@/core/theme'
-import { EmptyState, Loading, Markdown, Text } from '@/core/ui'
+import { CliLogo, EmptyState, Loading, Logo, Markdown, Text } from '@/core/ui'
 
 /**
- * A chat-view agent's conversation, live: the chat behind the agent shares its id. The question
- * shows as soon as it is sent, and the reply streams in as the computer reports it (chat.event).
+ * A conversation, live: a chat, a bot's thread, or a chat-view agent (whose chat shares its id). The
+ * question shows as soon as it is sent, and the reply streams in as the computer reports it
+ * (chat.event). Empty, it shows the chat's CLI logo, or Hiveory's before one is chosen (ADR 0039).
  */
-export function ChatThread({ instanceId, petName }: { instanceId: string; petName: string }) {
+export function ChatThread({ chatId: instanceId, title }: { chatId: string; title: string }) {
   const { computer } = useConnection()
   const queryClient = useQueryClient()
+  const icons = useCliIcons()
   const payload = { chatId: instanceId }
   const chat = useCall('chat.get', payload)
   const scroll = useRef<ScrollView>(null)
@@ -33,7 +34,15 @@ export function ChatThread({ instanceId, petName }: { instanceId: string; petNam
   if (chat.isLoading || !messages.length) {
     return (
       <View style={styles.fill}>
-        {chat.isLoading ? <Loading /> : <EmptyState icon={MessageSquareText} title={`Chat with ${petName}`} body="Send a message below; the answer shows here and on the computer." />}
+        {chat.isLoading ? (
+          <Loading />
+        ) : (
+          <EmptyState
+            media={chat.data?.cliId ? <CliLogo icon={icons.get(chat.data.cliId)} size={52} /> : <Logo size={52} />}
+            title={title}
+            body="Send a message below; the answer shows here and on the computer."
+          />
+        )}
       </View>
     )
   }

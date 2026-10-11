@@ -9,10 +9,9 @@ import { KEYS, TerminalView, type TerminalHandle } from '@/core/terminal'
 import { space, useTheme } from '@/core/theme'
 import { agentLine, Button, CliLogo, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
 import { AgentActions } from './AgentActions'
-import { ChatThread } from './ChatThread'
-import { Composer } from './Composer'
+import { ChatThread, Composer, ModelBar } from '@/core/chat'
 import { KeyBar } from './KeyBar'
-import { ModelBar } from './ModelBar'
+import { TerminalInput } from './TerminalInput'
 
 /**
  * One agent, live (ADR 0027): its terminal (or chat) exactly as on the computer, a bar to
@@ -29,6 +28,8 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   const message = useAction('agents.sendMessage')
   const terminal = useRef<TerminalHandle>(null)
   const [actions, setActions] = useState(false)
+  // Bumped each time the key bar's Enter sends the prompt, so the typing box starts fresh.
+  const [line, setLine] = useState(0)
 
   if (agents.isLoading) return <Loading />
   if (!agent) {
@@ -66,7 +67,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
       />
       <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={headerHeight}>
         {agent.chatUi ? (
-          <ChatThread instanceId={instanceId} petName={agent.petName} />
+          <ChatThread chatId={instanceId} title={`Chat with ${agent.petName}`} />
         ) : (
           <TerminalView ref={terminal} instanceId={instanceId} />
         )}
@@ -80,9 +81,25 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
               <Button label="Enter ⏎" size="sm" variant="waiting" onPress={() => key(KEYS.enter)} />
             </View>
           ) : null}
-          {/* A chat-view agent has no terminal to press keys into. */}
-          {agent.chatUi ? <ModelBar chatId={instanceId} /> : <KeyBar onKey={key} />}
-          <Composer petName={agent.petName} busy={message.isPending} onSend={(text) => message.mutateAsync({ instanceId, message: text })} />
+          {/* A chat-view agent gets a message box; a terminal is typed into directly, keys right above the keyboard (ADR 0039). */}
+          {agent.chatUi ? (
+            <>
+              <ModelBar chatId={instanceId} />
+              <Composer petName={agent.petName} busy={message.isPending} onSend={(text) => message.mutateAsync({ instanceId, message: text })} />
+            </>
+          ) : (
+            <>
+              {/* Keyed by the sent line: after the key bar's Enter the box starts fresh. */}
+              <TerminalInput key={line} petName={agent.petName} onType={key} />
+              <KeyBar
+                onKey={key}
+                onEnter={() => {
+                  key(KEYS.enter)
+                  setLine((n) => n + 1)
+                }}
+              />
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
       <AgentActions instanceId={instanceId} petName={agent.petName} open={actions} onClose={() => setActions(false)} onReload={() => terminal.current?.reload()} />

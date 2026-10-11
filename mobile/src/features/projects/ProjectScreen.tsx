@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Stack, router } from 'expo-router'
-import { CheckCheck, CirclePause, FolderGit2, GitBranch, GitPullRequest, Moon, Plus, Settings2, type LucideIcon } from 'lucide-react-native'
+import { CheckCheck, CirclePause, GitBranch, GitPullRequest, House, Moon, Plus, Settings2, type LucideIcon } from 'lucide-react-native'
 import type { CliStatus } from '@shared/domain/cli'
 import { useCall, useCliIcons } from '@/core/api'
 import { routes } from '@/core/routes'
@@ -68,9 +68,10 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
           {(workspaces.data ?? []).map((w) => (
             <ListRow
               key={w.id}
-              title={w.name}
-              subtitle={[w.kind === 'main' ? 'Primary folder' : w.git?.branch, `${w.agentCount} ${w.agentCount === 1 ? 'agent' : 'agents'}`, w.healthy ? null : 'folder missing'].filter(Boolean).join(' · ')}
-              leading={w.kind === 'main' ? <FolderGit2 size={18} color={colors.textMuted} /> : <GitBranch size={18} color={colors.brand} />}
+              // The Primary is the Workspace's own folder: its name, tagged Primary, as on the computer (ADR 0038, 0039).
+              title={w.kind === 'main' ? (project?.path.split(/[\\/]/).filter(Boolean).at(-1) ?? w.name) : w.name}
+              subtitle={[w.kind === 'main' ? 'Primary' : null, w.git?.branch, `${w.agentCount} ${w.agentCount === 1 ? 'pane' : 'panes'}`, w.healthy ? null : 'folder missing'].filter(Boolean).join(' · ')}
+              leading={w.kind === 'main' ? <House size={18} color={colors.textMuted} /> : <GitBranch size={18} color={colors.brand} />}
               onPress={() => router.push(routes.workspace(w.id, projectId))}
             />
           ))}

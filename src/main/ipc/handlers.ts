@@ -425,7 +425,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'chat.clis': () => c.chats.clis(),
   'chat.list': () => c.chats.list(),
   'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
-  'chat.create': ({ projectId }) => c.chats.create(projectId),
+  'chat.create': ({ projectId, cliId }) => c.chats.create(projectId, cliId),
   'chat.update': ({ chatId, ...patch }) => c.chats.update(chatId, patch),
   'chat.setModel': ({ chatId, model, effort }) => c.chats.update(chatId, { model, effort }),
   'chat.delete': ({ chatId }) => {

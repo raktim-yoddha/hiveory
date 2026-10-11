@@ -74,6 +74,22 @@ updates (2 · 4 · 8 hours · Daily; `updateRemindEvery`, default 2 hours). An u
 days after its release (`releaseDate` from the release feed); dismissing its pop-up ("Later")
 hides it for this session unless it is overdue, when it returns after the chosen interval.
 
+### The phone app
+- Five tabs in one custom bar (Home · Work · Bots · Chat · Settings); the selected tab is one pill
+  around its icon and label, not a dot behind the icon. "Workspaces" is now **Work**.
+- A terminal agent is typed into directly: each character goes to the CLI as typed (deletions
+  erase there too); the keyboard's Enter adds a line (Ctrl+J). One slim key row sits above the
+  keyboard: / · Esc · Tab · ↑ · ↓, with Enter fixed at the right end, which sends the prompt. Chat-
+  view agents keep their message box.
+- **Chat** lists chats and starts one on a chosen CLI (`chat.create` takes `cliId`); **Bots** lists
+  bots, a bot's threads and starts one. Threads and chats open in one chat screen with its model,
+  effort, message box and Stop. New phone channels: `chat.list`, `chat.create`, `chat.send`,
+  `chat.stop` (already allowed) and `bots.list`, `bots.threads`, `bots.newThread` (added to
+  `MOBILE_CHANNELS`). The chat thread, composer and model bar moved to `mobile/src/core/chat`.
+- As on the computer: Workspaces show their mark, the Primary shows its folder name tagged Primary,
+  New worktree offers New · Existing · Remote branch, and an empty chat shows the CLI's or
+  Hiveory's logo.
+
 ### Board order
 Columns read Waiting for you · Working · Idle (`BOARD_COLUMNS`), as on the phone. The status
 model itself is unchanged (AGENTS.md rule 6).

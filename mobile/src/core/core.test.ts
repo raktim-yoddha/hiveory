@@ -94,9 +94,10 @@ describe('live updates', () => {
     expect(staleChannels({ event: 'state.changed', payload: { topic: 'agents' } })).toEqual(['agents.list', 'workspaces.list', 'kanban.board'])
     expect(staleChannels({ event: 'runtime.changed', payload: {} as never })).toEqual(['agents.list', 'kanban.board'])
     expect(staleChannels({ event: 'terminal.data', payload: {} as never })).toEqual([])
-    // A chat's model or effort changed: the open chat reloads; a turn starting or ending does not refetch it.
-    expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats', chatId: 'c1' } })).toEqual(['chat.get'])
-    expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats' } })).toEqual([])
+    // A chat's model or effort changed: the open chat reloads, with the Chat and Bots lists (ADR 0039).
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats', chatId: 'c1' } })).toEqual(['chat.get', 'chat.list', 'bots.threads'])
+    // Chats came or went: only the lists, never an open chat mid-stream.
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats' } })).toEqual(['chat.list', 'bots.threads', 'bots.list'])
   })
 
   it('a listener that throws never stops the others', () => {

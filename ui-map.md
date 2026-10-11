@@ -419,10 +419,13 @@ Result:
 ## Phone app (ADR 0027)
 
 ```text
-Tabs ─ Inbox (Needs you · Working)  ─ Workspaces ─ Settings
-Workspaces › Workspace (header: Pull requests · Settings; Needs you | Working | Idle tabs, Worktrees, + New) › Worktree (branch and changes, Open an agent sheet with Terminal | Chat) › Agent
+Tabs (one bar, the selected pill holds icon and label; ADR 0039) ─ Home ─ Work ─ Bots ─ Chat ─ Settings
+Work › Workspace (its mark; header: Pull requests · Settings; Worktrees (Primary tagged), + New: New | Existing | Remote branch; Needs you | Working | Idle tabs) › Worktree (branch and changes, Open an agent sheet with Terminal | Chat) › Agent
+Bots › Bot (its threads, + New thread) › Thread (as a chat) · Chat › Chat (+ New chat: pick a CLI)
 Workspace › Pull requests (worktree branches with Create PR, open pull requests) · Workspace › Settings (the computer's Settings tab, ADR 0037)
-Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat (markdown) · needs-you bar (Esc / Enter) · key row (terminal) or model and effort (chat) · message box
+Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat (markdown) · needs-you bar (Esc / Enter)
+  terminal: a box typed straight into the CLI (keyboard Enter adds a line) · key row [/ Esc Tab ↑ ↓ ……… ⏎] (⏎ fixed right, sends)
+  chat: model and effort · message box
 Welcome (3 steps) › Pair (QR scanner · or address + code)
 App-wide: SSH question sheet · notices · notification taps
 ```

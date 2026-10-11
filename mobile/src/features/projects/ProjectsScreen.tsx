@@ -6,7 +6,7 @@ import type { Project } from '@shared/domain/project'
 import { useCall, useCalls } from '@/core/api'
 import { routes } from '@/core/routes'
 import { space, useTheme } from '@/core/theme'
-import { EmptyState, ListRow, Loading, Screen, Section, StatusDot, Text } from '@/core/ui'
+import { EmptyState, ListRow, Loading, Screen, Section, StatusDot, Text, WorkspaceMark } from '@/core/ui'
 
 /** Most recently worked on first, like the desktop sidebar. */
 const byWork = (a: Project, b: Project): number => (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt)
@@ -44,7 +44,7 @@ export function ProjectsScreen() {
               title={p.name}
               subtitle={p.host ? `On ${p.host.destination}` : p.path}
               label={`${p.name}${waiting ? `, ${waiting} need you` : ''}${working ? `, ${working} working` : ''}`}
-              leading={p.host ? <Server size={18} color={colors.brand} /> : <FolderOpen size={18} color={colors.textMuted} />}
+              leading={p.host ? <Server size={18} color={colors.brand} /> : <WorkspaceMark project={p} />}
               trailing={
                 <View style={styles.counts}>
                   {waiting ? (

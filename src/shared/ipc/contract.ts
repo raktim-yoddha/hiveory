@@ -544,7 +544,8 @@ export const requestSchemas = {
   'chat.clis': none,
   'chat.list': none,
   'chat.get': z.object({ chatId: id }),
-  'chat.create': z.object({ projectId: id.optional() }),
+  /** `cliId`: start on that CLI (the phone picks it in one step; ADR 0039). */
+  'chat.create': z.object({ projectId: id.optional(), cliId: id.optional() }),
   'chat.update': z.object({
     chatId: id,
     cliId: id.optional(),

@@ -173,10 +173,12 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return chat!
   }
 
-  create(projectId?: string): ChatSession {
+  create(projectId?: string, cliId?: string): ChatSession {
     const now = nowIso()
     const cwd = projectId ? this.workspaces.project(projectId).path : homedir()
-    const chat: ChatSession = { id: randomUUID(), title: 'New chat', projectId, cwd, autoApprove: false, messages: [], createdAt: now, updatedAt: now }
+    // Only a CLI that can chat (and is installed); anything else starts without one, as on the computer.
+    const cli = cliId && CHAT_PROVIDERS[cliId] && this.registry.executable(cliId) ? { cliId } : {}
+    const chat: ChatSession = { id: randomUUID(), title: 'New chat', projectId, cwd, ...cli, autoApprove: false, messages: [], createdAt: now, updatedAt: now }
     this.store.save(chat)
     this.broadcast('state.changed', { topic: 'chats' })
     return chat

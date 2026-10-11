@@ -33,6 +33,13 @@ export const PHONE_CHANNELS = [
   'chat.get',
   'chat.catalog',
   'chat.setModel',
+  'chat.list',
+  'chat.create',
+  'chat.send',
+  'chat.stop',
+  'bots.list',
+  'bots.threads',
+  'bots.newThread',
   'hosts.status',
   'ssh.pending',
   'ssh.answer'

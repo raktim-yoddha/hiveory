@@ -67,6 +67,8 @@ export const MOBILE_CHANNELS = new Set<Channel>([
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'terminal.write', 'terminal.snapshot', 'presets.list', 'kanban.board', 'settings.get', 'sessions.list',
   'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.send', 'chat.stop', 'chat.catalog', 'chat.setModel',
+  // The phone's Bots tab (ADR 0039): see bots, read and continue their threads, start one.
+  'bots.list', 'bots.threads', 'bots.newThread',
   'hosts.status', 'ssh.pending', 'ssh.answer', 'git.info'
 ])
 
