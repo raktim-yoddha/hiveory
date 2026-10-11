@@ -121,8 +121,7 @@
   }
 }
 
-.strip,
-.noteBar {
+.strip {
   display: flex;
   flex: none;
   align-items: center;
@@ -148,8 +147,7 @@
   font-weight: var(--weight-semibold);
 }
 
-.strip svg,
-.noteBar > svg {
+.strip svg {
   flex: none;
   width: var(--icon-xs);
   height: var(--icon-xs);
@@ -160,32 +158,8 @@
   color: var(--color-success);
 }
 
-.noteTarget {
-  flex: none;
-  max-width: 35%;
-  overflow: hidden;
-  color: var(--color-text);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
-.noteInput {
-  flex: 1;
-  min-width: 0;
-  height: var(--control-sm);
-  padding: 0 var(--space-3);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-inset);
-  color: var(--color-text);
-  font: inherit;
-  user-select: text;
-}
 
-.noteInput:focus {
-  border-color: var(--color-focus);
-  outline: none;
-}
 
 /* Main lays the page's native view exactly over this box. */
 .host {
@@ -466,6 +440,28 @@
   font-size: var(--text-xs);
 }
 
-.intent {
-  flex: none;
+
+.batchEditor {
+  width: 100%;
+  min-height: calc(var(--control-lg) * 1.5);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+  user-select: text;
+}
+
+.batchEditor:focus {
+  border-color: var(--color-focus);
+  outline: none;
+}
+
+.batchEditRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }

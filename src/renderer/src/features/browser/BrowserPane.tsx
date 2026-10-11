@@ -26,7 +26,6 @@ import type { AnnotationIntent, PickedElement, Viewport } from '@shared/domain'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { Modal } from '../../components/ui/Modal'
-import { Tabs } from '../../components/ui/Tabs'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
@@ -73,11 +72,13 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   const [frozen, setFrozen] = useState<string | null>(null)
   const [draft, setDraft] = useState<string | null>(null)
   const [picking, setPicking] = useState<PickMode | null>(null)
-  const [noteFor, setNoteFor] = useState<PickedElement | null>(null)
-  const [note, setNote] = useState('')
-  const [intent, setIntent] = useState<AnnotationIntent>('change')
   /** Annotating keeps going, note after note, until Done or Escape (ADR 0042). */
   const [annotating, setAnnotating] = useState(false)
+  const annotatingRef = useRef(false)
+  /** The note card is open on the page. */
+  const [writing, setWriting] = useState(false)
+  /** The next note starts as the last one was: a change or a question. */
+  const lastIntent = useRef<AnnotationIntent>('change')
   const [flash, setFlash] = useState<string | null>(null)
   const [newProfile, setNewProfile] = useState<string | null>(null)
 
@@ -215,47 +216,50 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
   }
 
   const startPick = async (mode: PickMode): Promise<void> => {
-    if (picking) {
+    // A second press stops: picking, or annotating (also while its note card is open).
+    if (picking || annotatingRef.current) {
+      annotatingRef.current = false
       setPicking(null)
       setAnnotating(false)
       await api('browser.cancelPick', { pageId }).catch(() => undefined)
       return
     }
-    setPicking(mode)
-    if (mode === 'annotate') setAnnotating(true)
-    const element = await runAction('Pick element', () => api('browser.pick', { pageId }))
-    setPicking(null)
-    if (!element) {
-      // Escape on the page ends annotating.
-      if (mode === 'annotate') setAnnotating(false)
-      return
-    }
-    if (mode === 'annotate') {
-      setNote('')
-      setNoteFor(element)
-    } else {
+    if (mode === 'pick') {
+      setPicking('pick')
+      const element = await runAction('Pick element', () => api('browser.pick', { pageId }))
+      setPicking(null)
+      if (!element) return
       await api('clipboard.writeText', { text: describeElement(page.url, element) })
       setFlash(`Copied ${element.role}${element.name ? ` "${element.name.slice(0, 40)}"` : ''} — paste it to an agent`)
+      return
     }
-  }
-
-  const saveNote = async (): Promise<void> => {
-    if (!noteFor || !note.trim()) return
-    await runAction('Save annotation', () => api('browser.annotate', { pageId, element: noteFor, note, intent }))
-    setNoteFor(null)
-    // On to the next element: annotate several, then send them together.
-    if (annotating) void startPick('annotate')
-  }
-
-  const cancelNote = (): void => {
-    setNoteFor(null)
-    if (annotating) void startPick('annotate')
+    // Annotating (ADR 0042): pick an element, write its note in the card floating at it, repeat — until
+    // Escape while picking, or Done. Each note is a change or a question.
+    annotatingRef.current = true
+    setAnnotating(true)
+    while (annotatingRef.current) {
+      setPicking('annotate')
+      setWriting(false)
+      const element = await runAction('Pick element', () => api('browser.pick', { pageId }))
+      setPicking(null)
+      if (!element || !annotatingRef.current) break
+      setWriting(true)
+      const label = `${element.role}${element.name ? ` "${element.name.slice(0, 80)}"` : ''}`
+      const answer = await api('browser.askNote', { pageId, label, path: element.selector.slice(0, 1000), intent: lastIntent.current }).catch(() => null)
+      if (answer) {
+        lastIntent.current = answer.intent
+        await runAction('Save annotation', () => api('browser.annotate', { pageId, element, note: answer.note, intent: answer.intent }))
+      }
+    }
+    annotatingRef.current = false
+    setWriting(false)
+    setAnnotating(false)
   }
 
   const finishAnnotating = (): void => {
+    annotatingRef.current = false
     setAnnotating(false)
-    setNoteFor(null)
-    if (picking) void startPick('annotate')
+    void api('browser.cancelPick', { pageId }).catch(() => undefined)
   }
 
   const cookies = async (kind: 'import' | 'export' | 'clear'): Promise<void> => {
@@ -354,9 +358,9 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
           />
           <IconButton
             className={styles.wide}
-            label={picking === 'annotate' ? 'Cancel annotating' : `Annotate element${pageNotes.length ? ` (${pageNotes.length} notes)` : ''}`}
+            label={annotating ? 'Stop annotating' : `Annotate elements${pageNotes.length ? ` (${pageNotes.length} notes)` : ''}`}
             icon={<MessageSquarePlus />}
-            active={picking === 'annotate'}
+            active={annotating}
             onClick={() => void startPick('annotate')}
           />
           <IconButton label={device ? 'Close device toolbar' : 'Device toolbar (screen sizes)'} icon={<MonitorSmartphone />} active={device} onClick={toggleDevice} />
@@ -385,9 +389,11 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
           <span>
             {picking === 'pick'
               ? 'Click an element to copy it · Esc to cancel'
-              : pageNotes.length
-                ? `${pageNotes.length} ${pageNotes.length === 1 ? 'note' : 'notes'} ready. Click another element, or send them below.`
-                : 'Click the element to annotate · Esc to stop'}
+              : writing
+                ? 'Write the note on the page · Ctrl+Enter adds it, Esc skips the element'
+                : pageNotes.length
+                  ? `${pageNotes.length} ${pageNotes.length === 1 ? 'note' : 'notes'} ready. Click another element, or send them below.`
+                  : 'Click the element to annotate · Esc to stop'}
           </span>
           {annotating && (
             <Button size="sm" variant="ghost" onClick={finishAnnotating}>
@@ -395,45 +401,6 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
             </Button>
           )}
         </div>
-      )}
-      {noteFor && (
-        <form
-          className={styles.noteBar}
-          onSubmit={(e) => {
-            e.preventDefault()
-            void saveNote()
-          }}
-        >
-          <MessageSquarePlus aria-hidden />
-          <span className={styles.noteTarget} title={noteFor.selector}>
-            {noteFor.role}
-            {noteFor.name ? ` "${noteFor.name}"` : ''}
-          </span>
-          <input
-            className={styles.noteInput}
-            aria-label="Note for agents"
-            placeholder={intent === 'question' ? 'What do you want to know about it?' : 'What should change here?'}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onKeyDown={(e) => e.key === 'Escape' && cancelNote()}
-            autoFocus
-          />
-          <Tabs<AnnotationIntent>
-            label="Intent"
-            variant="segmented"
-            className={styles.intent}
-            value={intent}
-            onChange={setIntent}
-            options={[
-              { value: 'change', label: 'Change' },
-              { value: 'question', label: 'Question' }
-            ]}
-          />
-          <Button size="sm" variant="primary" type="submit" disabled={!note.trim()} icon={<Check />}>
-            Add
-          </Button>
-          <IconButton label="Skip this element" icon={<X />} onClick={cancelNote} />
-        </form>
       )}
       {pageNotes.length > 0 && <AnnotationBatch scope={page.scope} notes={pageNotes} onSent={setFlash} />}
       {flash && (

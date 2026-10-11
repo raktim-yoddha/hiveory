@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { ChevronDown, Copy, MessageSquareText, Send, Trash2, X } from 'lucide-react'
-import { annotationsText, type BrowserAnnotation, type CliInstanceView } from '@shared/domain'
+import { ChevronDown, Copy, MessageSquareText, Pencil, Send, Trash2, X } from 'lucide-react'
+import { annotationsText, type AnnotationIntent, type BrowserAnnotation, type CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { STATUS_LABEL } from '../../components/ui/StatusDot'
+import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useAgents, useClis } from '../../stores/data'
@@ -84,21 +85,79 @@ export function AnnotationBatch({ scope, notes, onSent }: { scope: string; notes
       {open && (
         <ol className={styles.batchList}>
           {notes.map((n, i) => (
-            <li key={n.id} className={styles.batchItem}>
-              <span className={styles.batchNumber}>{i + 1}</span>
-              <span className={styles.batchText}>
-                <span className={styles.batchTarget} title={n.element.selector}>
-                  {n.element.role}
-                  {n.element.name ? ` "${n.element.name}"` : ''}
-                </span>
-                <span>{n.note}</span>
-                <span className={styles.batchIntent}>{n.intent === 'question' ? 'Question' : 'Change'}</span>
-              </span>
-              <IconButton label={`Remove note ${i + 1}`} icon={<X />} onClick={() => void api('browser.deleteAnnotation', { id: n.id }).catch(() => undefined)} />
-            </li>
+            <NoteRow key={n.id} note={n} number={i + 1} />
           ))}
         </ol>
       )}
     </section>
+  )
+}
+
+const INTENTS: Array<{ value: AnnotationIntent; label: string }> = [
+  { value: 'change', label: 'Change' },
+  { value: 'question', label: 'Question' }
+]
+
+/** One note: its element, text and intent; Edit changes the text or intent in place (Ctrl+Enter saves). */
+function NoteRow({ note, number }: { note: BrowserAnnotation; number: number }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(note.note)
+  const [intent, setIntent] = useState<AnnotationIntent>(note.intent ?? 'change')
+  const save = (): void => {
+    if (!text.trim()) return
+    void runAction('Save note', () => api('browser.updateAnnotation', { id: note.id, note: text, intent })).then(() => setEditing(false))
+  }
+  return (
+    <li className={styles.batchItem}>
+      <span className={styles.batchNumber}>{number}</span>
+      <span className={styles.batchText}>
+        <span className={styles.batchTarget} title={note.element.selector}>
+          {note.element.role}
+          {note.element.name ? ` "${note.element.name}"` : ''}
+        </span>
+        {editing ? (
+          <>
+            <textarea
+              className={styles.batchEditor}
+              aria-label={`Note ${number}`}
+              value={text}
+              rows={2}
+              autoFocus
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save()
+                if (e.key === 'Escape') setEditing(false)
+              }}
+            />
+            <span className={styles.batchEditRow}>
+              <Tabs<AnnotationIntent> label="Intent" variant="segmented" value={intent} onChange={setIntent} options={INTENTS} />
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+              <Button size="sm" variant="primary" disabled={!text.trim()} onClick={save}>
+                Save
+              </Button>
+            </span>
+          </>
+        ) : (
+          <>
+            <span>{note.note}</span>
+            <span className={styles.batchIntent}>{note.intent === 'question' ? 'Question' : 'Change'}</span>
+          </>
+        )}
+      </span>
+      {!editing && (
+        <IconButton
+          label={`Edit note ${number}`}
+          icon={<Pencil />}
+          onClick={() => {
+            setText(note.note)
+            setIntent(note.intent ?? 'change')
+            setEditing(true)
+          }}
+        />
+      )}
+      <IconButton label={`Remove note ${number}`} icon={<X />} onClick={() => void api('browser.deleteAnnotation', { id: note.id }).catch(() => undefined)} />
+    </li>
   )
 }

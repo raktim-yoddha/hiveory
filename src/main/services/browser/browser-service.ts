@@ -422,7 +422,20 @@ export class BrowserService {
   }
 
   cancelPick(pageId: string): Promise<boolean> {
-    return this.get(pageId).driver.cancelPick()
+    const driver = this.get(pageId).driver
+    void driver.cancelNote()
+    return driver.cancelPick()
+  }
+
+  /** Asks for a note on the element just picked, in a card floating on the page (ADR 0042). */
+  askNote(pageId: string, opts: { label: string; path: string; intent: AnnotationIntent }): Promise<{ note: string; intent: AnnotationIntent } | null> {
+    return this.get(pageId).driver.askNote(opts)
+  }
+
+  /** Edits a note's text or intent (the batch's Edit). */
+  updateAnnotation(id: string, note: string, intent: AnnotationIntent): void {
+    this.annotations = this.annotations.map((a) => (a.id === id ? { ...a, note: note.trim(), intent } : a))
+    this.changed()
   }
 
   annotate(pageId: string, element: PickedElement, note: string, intent?: AnnotationIntent): BrowserAnnotation {

@@ -235,6 +235,15 @@ export class PageDriver {
     return this.call<boolean>('cancelPick()').catch(() => false)
   }
 
+  /** The floating note card at the element just picked (ADR 0042); waits for the user, no deadline. */
+  askNote(opts: { label: string; path: string; intent: 'change' | 'question' }): Promise<{ note: string; intent: 'change' | 'question' } | null> {
+    return this.call<{ note: string; intent: 'change' | 'question' } | null>(`note(${JSON.stringify(opts)})`, null)
+  }
+
+  cancelNote(): Promise<boolean> {
+    return this.call<boolean>('cancelNote()').catch(() => false)
+  }
+
   /** Shows numbered badges on the given elements (none clears them). */
   marks(list: Array<{ n: number; selector: string }>): Promise<number> {
     return this.call<number>(`marks(${JSON.stringify(list)})`).catch(() => 0)

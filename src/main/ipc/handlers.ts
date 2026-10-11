@@ -428,6 +428,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'browser.annotate': ({ pageId, element, note, intent }) => c.browser.annotate(pageId, element, note, intent),
   'browser.deleteAnnotation': ({ id }) => c.browser.deleteAnnotations(id),
+  'browser.askNote': ({ pageId, ...opts }) => c.browser.askNote(pageId, opts),
+  'browser.updateAnnotation': ({ id, note, intent }) => c.browser.updateAnnotation(id, note, intent),
   'browser.switchProfile': ({ pageId, profileId }) => c.browser.switchProfile(pageId, profileId),
   'browser.createProfile': ({ name }) => c.browser.createProfile(name),
   'browser.renameProfile': ({ profileId, name }) => c.browser.renameProfile(profileId, name),

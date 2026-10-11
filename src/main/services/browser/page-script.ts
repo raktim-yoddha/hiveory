@@ -584,6 +584,8 @@ export const PAGE_SCRIPT = String.raw`(() => {
   }
 
   let cancelPick = null
+  /** The element the last pick chose: the note card floats beside it. */
+  let lastPicked = null
   function pick() {
     if (cancelPick) cancelPick()
     const { box, tip } = ensureOverlay()
@@ -608,6 +610,7 @@ export const PAGE_SCRIPT = String.raw`(() => {
       const click = (e) => {
         block(e)
         const el = target(e) || current
+        lastPicked = el
         finish(el ? info(el) : null)
       }
       const key = (e) => {
@@ -628,6 +631,98 @@ export const PAGE_SCRIPT = String.raw`(() => {
     })
   }
 
+  /**
+   * The note card (ADR 0042): floats at the element just picked, inside the page so the page stays
+   * live. A change or a question; Ctrl+Enter adds, Escape or Cancel skips. Resolves { note, intent } or null.
+   */
+  let closeNote = null
+  function note(opts) {
+    if (closeNote) closeNote(null)
+    const { root, box } = ensureOverlay()
+    return new Promise((done) => {
+      const el = lastPicked && lastPicked.isConnected ? lastPicked : null
+      const r = el ? absRect(el) : { x: innerWidth / 2 - 170, y: innerHeight / 3, width: 340, height: 0 }
+      if (el) css(box, { display: 'block', left: r.x + 'px', top: r.y + 'px', width: r.width + 'px', height: r.height + 'px' })
+      const W = Math.min(340, innerWidth - 16)
+      const font = 'system-ui,-apple-system,Segoe UI,sans-serif'
+      const card = D.createElement('div')
+      css(card, { position: 'absolute', width: W + 'px', boxSizing: 'border-box', padding: '12px', borderRadius: '12px', background: '#141417', color: '#ececf1', border: '1px solid rgba(255,255,255,.14)', boxShadow: '0 14px 36px rgba(0,0,0,.5)', font: '13px/1.4 ' + font, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'auto' })
+      const line = (text, style) => {
+        const d = D.createElement('div')
+        d.textContent = text
+        css(d, Object.assign({ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, style))
+        return d
+      }
+      const title = line(opts.label, { fontWeight: '600' })
+      const path = line(opts.path, { font: '11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace', color: '#9a9aa6' })
+      const text = D.createElement('textarea')
+      text.rows = 3
+      css(text, { resize: 'vertical', minHeight: '68px', padding: '8px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,.18)', background: '#0c0c0e', color: '#ececf1', font: '13px/1.45 ' + font, outline: 'none', boxSizing: 'border-box', width: '100%' })
+      let intent = opts.intent === 'question' ? 'question' : 'change'
+      const label = line('Intent', { fontSize: '11px', color: '#9a9aa6' })
+      const seg = D.createElement('div')
+      css(seg, { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', padding: '3px', borderRadius: '8px', background: '#0c0c0e', border: '1px solid rgba(255,255,255,.12)' })
+      const button = (textContent, style) => {
+        const b = D.createElement('button')
+        b.type = 'button'
+        b.textContent = textContent
+        css(b, Object.assign({ padding: '6px 10px', borderRadius: '6px', border: '0', font: '500 12px ' + font, cursor: 'pointer' }, style))
+        return b
+      }
+      const change = button('Change', {})
+      const question = button('Question', {})
+      seg.append(change, question)
+      const cancel = button('Cancel', { background: 'transparent', color: '#c9c9d1' })
+      const add = button('Add  Ctrl+Enter', { background: '#ececf1', color: '#141417', fontWeight: '600' })
+      const foot = D.createElement('div')
+      css(foot, { display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px' })
+      foot.append(cancel, add)
+      const paint = () => {
+        css(change, intent === 'change' ? { background: '#2c2c36', color: '#fff' } : { background: 'transparent', color: '#9a9aa6' })
+        css(question, intent === 'question' ? { background: '#2c2c36', color: '#fff' } : { background: 'transparent', color: '#9a9aa6' })
+        text.placeholder = intent === 'question' ? 'What do you want to know about it?' : 'What should change here?'
+        add.style.opacity = text.value.trim() ? '1' : '.5'
+      }
+      const finish = (value) => {
+        card.remove()
+        box.style.display = 'none'
+        closeNote = null
+        done(value)
+      }
+      const submit = () => {
+        const value = text.value.trim()
+        if (!value) return text.focus()
+        finish({ note: value, intent })
+      }
+      change.onclick = () => ((intent = 'change'), paint(), text.focus())
+      question.onclick = () => ((intent = 'question'), paint(), text.focus())
+      cancel.onclick = () => finish(null)
+      add.onclick = submit
+      text.oninput = paint
+      // Keys typed here are the note's, never the page's shortcuts.
+      for (const type of ['keydown', 'keyup', 'keypress']) card.addEventListener(type, (e) => e.stopPropagation())
+      text.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault()
+          submit()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          finish(null)
+        }
+      })
+      card.append(title, path, text, label, seg, foot)
+      root.appendChild(card)
+      // Below the element when it fits, else above it; always inside the window.
+      const h = card.getBoundingClientRect().height
+      let top = r.y + r.height + 8
+      if (top + h > innerHeight - 8) top = Math.max(8, r.y - h - 8)
+      css(card, { left: Math.min(Math.max(8, r.x), innerWidth - W - 8) + 'px', top: top + 'px' })
+      paint()
+      closeNote = finish
+      setTimeout(() => text.focus(), 0)
+    })
+  }
+
   /** Numbered badges on annotated elements (ADR 0042), placed on the document so they scroll with it. */
   function marks(list) {
     for (const old of D.querySelectorAll('[' + OVERLAY + '="mark"]')) old.remove()
@@ -644,8 +739,9 @@ export const PAGE_SCRIPT = String.raw`(() => {
       badge.textContent = String(m.n)
       css(badge, {
         position: 'absolute',
-        left: Math.max(0, r.x + scrollX + r.width / 2 - 10) + 'px',
-        top: Math.max(0, r.y + scrollY - 10) + 'px',
+        // On the element's top-left corner, where a comment pin goes.
+        left: Math.max(0, r.x + scrollX - 8) + 'px',
+        top: Math.max(0, r.y + scrollY - 8) + 'px',
         width: '20px',
         height: '20px',
         display: 'grid',
@@ -681,6 +777,8 @@ export const PAGE_SCRIPT = String.raw`(() => {
     pick,
     cancelPick: () => (cancelPick ? (cancelPick(), true) : false),
     marks,
+    note,
+    cancelNote: () => (closeNote ? (closeNote(null), true) : false),
     rect,
     links: () => [...new Set([...D.querySelectorAll('a[href]')].map((a) => a.href).filter((h) => /^https?:/.test(h)))],
     describe: (target) => describe(resolve(target)),

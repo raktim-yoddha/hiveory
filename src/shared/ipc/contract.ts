@@ -6,6 +6,7 @@ import type {
   AgentPreset,
   AgentSession,
   AppSettings,
+  AnnotationIntent,
   BrowserAnnotation,
   BrowserPageView,
   BrowserProfile,
@@ -570,6 +571,9 @@ export const requestSchemas = {
   'browser.cancelPick': z.object({ pageId }),
   'browser.annotate': z.object({ pageId, element: pickedElementSchema, note: z.string().trim().min(1).max(4000), intent: z.enum(['change', 'question']).optional() }),
   'browser.deleteAnnotation': z.object({ id: z.string().uuid().optional() }),
+  /** The floating note card at the element just picked (ADR 0042): null when skipped. */
+  'browser.askNote': z.object({ pageId, label: z.string().max(300), path: z.string().max(1000), intent: z.enum(['change', 'question']) }),
+  'browser.updateAnnotation': z.object({ id: z.string().uuid(), note: z.string().trim().min(1).max(4000), intent: z.enum(['change', 'question']) }),
   'browser.switchProfile': z.object({ pageId, profileId }),
   'browser.createProfile': z.object({ name: z.string().trim().min(1).max(40) }),
   'browser.renameProfile': z.object({ profileId, name: z.string().trim().min(1).max(40) }),
@@ -906,6 +910,8 @@ export interface ResponseMap {
   'browser.cancelPick': void
   'browser.annotate': BrowserAnnotation
   'browser.deleteAnnotation': void
+  'browser.askNote': { note: string; intent: AnnotationIntent } | null
+  'browser.updateAnnotation': void
   'browser.switchProfile': BrowserPageView
   'browser.createProfile': BrowserProfile
   'browser.renameProfile': void

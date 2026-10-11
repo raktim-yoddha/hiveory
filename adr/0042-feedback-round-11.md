@@ -92,3 +92,11 @@ Decided by the product owner after trying round 11.
   to add it last, to an area's edge to split it out, or hold Space over a tab or area to swap.
   `stack` takes `beforePaneId`; while a shown tab is dragged, another tab of its area stands for the
   area, so it can split beside its own area.
+- **Floating notes, change or question:** a picked element's note is written in a card that floats
+  on the page at the element (drawn by the page script, so the page stays live): the element and its
+  selector, the note, Intent Change | Question, Cancel and Add (Ctrl+Enter); Escape skips the
+  element, Escape while picking stops. The bar above the page is gone. The next note starts with the
+  last intent. The two ask for different work, so the prompt keeps them apart: changes to make (then
+  check in the browser), and questions to answer from the code and the page without changing
+  anything for them, each under its page number. Each note in the batch can be edited in place (text
+  and intent), as in Orca's tray (`browser.askNote`, `browser.updateAnnotation`).
