@@ -3,7 +3,7 @@ import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
-import { isAppsHelpUrl } from '@shared/domain'
+import { isOpenableUrl } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
@@ -299,7 +299,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'system.openUrl': async ({ url }) => {
-    if (!isAppsHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
+    if (!isOpenableUrl(url)) fail('FORBIDDEN', 'Hiveory only opens its help and store pages from here.')
     await shell.openExternal(url)
   },
   // Files run where the folder is: this computer, or the project's SSH host (ADR 0022).

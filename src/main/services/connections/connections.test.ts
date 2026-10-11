@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { COMPOSIO, APPS, isAppsHelpUrl, DEFAULT_SETTINGS } from '@shared/domain'
+import { COMPOSIO, APPS, isOpenableUrl, DEFAULT_SETTINGS } from '@shared/domain'
 import { agentPrompt } from '../cli/adapters/mcp-injection'
 import { StateStore } from '../persistence/state-store'
 import { parseState } from '../persistence/schema'
@@ -39,8 +39,14 @@ describe('app catalog (ADR 0023)', () => {
   it('lists unique Composio apps and opens only the page where the Composio key comes from', () => {
     expect(new Set(APPS.map((a) => a.id)).size).toBe(APPS.length)
     for (const app of APPS) expect(app.id).toMatch(/^[a-z0-9_]+$/)
-    expect(isAppsHelpUrl(COMPOSIO.keyUrl)).toBe(true)
-    expect(isAppsHelpUrl('https://evil.example')).toBe(false)
+    expect(isOpenableUrl(COMPOSIO.keyUrl)).toBe(true)
+    expect(isOpenableUrl('https://linear.app/settings/account/security')).toBe(true)
+    expect(isOpenableUrl('https://skills.sh/vercel-labs/skills/find-skills')).toBe(true)
+    expect(isOpenableUrl('https://github.com/acme/mcp-server')).toBe(true)
+    expect(isOpenableUrl('https://evil.example')).toBe(false)
+    expect(isOpenableUrl('http://github.com/acme')).toBe(false)
+    expect(isOpenableUrl('https://me:pw@github.com/acme')).toBe(false)
+    expect(isOpenableUrl('https://linear.app/anything-else')).toBe(false)
   })
 
   it('drops the old key-based plugins and their keys when the state is read', () => {

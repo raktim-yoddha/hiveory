@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
+import { HELP_URLS } from '@shared/domain'
 import { CODE_HOST_INFO, CODE_HOSTS, type IntegrationsView } from '@shared/domain/integrations'
 import { Button, IconButton } from '../../components/ui/Button'
 import { TextInput } from '../../components/ui/TextField'
@@ -11,8 +12,7 @@ import settings from './Settings.module.css'
 import styles from './Integrations.module.css'
 
 const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
-const JIRA_TOKENS = 'https://id.atlassian.com/manage-profile/security/api-tokens'
-const LINEAR_KEYS = 'https://linear.app/settings/account/security'
+const [, JIRA_TOKENS, LINEAR_KEYS] = HELP_URLS
 
 /**
  * Settings › Integrations (ADR 0040): the code hosts this computer is signed in to (through their own

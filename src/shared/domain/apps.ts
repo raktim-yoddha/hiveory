@@ -83,8 +83,22 @@ export const APPS: AppInfo[] = [
 
 export const appById = (id: string): AppInfo | undefined => APPS.find((a) => a.id === id)
 
-/** The only external page the Apps screen opens itself: where the Composio API key comes from. */
-export const isAppsHelpUrl = (url: string): boolean => url === COMPOSIO.keyUrl
+/** Fixed help pages the app opens in the browser: where the Composio, Jira and Linear keys come from (ADR 0040). */
+export const HELP_URLS = [COMPOSIO.keyUrl, 'https://id.atlassian.com/manage-profile/security/api-tokens', 'https://linear.app/settings/account/security'] as const
+
+/** Hosts whose pages the stores link to (ADR 0041): a skill's page on skills.sh, a skill's or MCP server's repository. */
+const STORE_HOSTS = new Set(['skills.sh', 'www.skills.sh', 'github.com'])
+
+/** The only external pages `system.openUrl` opens: the help pages above and store pages over https. */
+export const isOpenableUrl = (url: string): boolean => {
+  if ((HELP_URLS as readonly string[]).includes(url)) return true
+  try {
+    const u = new URL(url)
+    return u.protocol === 'https:' && STORE_HOSTS.has(u.hostname) && !u.username && !u.password && !u.port
+  } catch {
+    return false
+  }
+}
 
 /** One account of an app, connected through Composio (several per app, told apart by label). */
 export interface AppAccount {

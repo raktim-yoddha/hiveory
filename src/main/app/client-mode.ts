@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, safeStorage, shell } from 'electron'
 import { join } from 'node:path'
-import { isAppsHelpUrl } from '@shared/domain'
+import { isOpenableUrl } from '@shared/domain'
 import type { SshPrompt } from '@shared/domain/tailnet'
 import { fail } from '@shared/errors'
 import { CHANNELS, IPC_PREFIX, type Channel } from '@shared/ipc/contract'
@@ -64,7 +64,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'clipboard.readText': () => clipboard.readText(),
     'clipboard.writeText': ({ text }) => clipboard.writeText(text),
     'system.openUrl': async ({ url }) => {
-      if (!isAppsHelpUrl(url)) fail('FORBIDDEN', 'Hiveory only opens the Composio account page from here.')
+      if (!isOpenableUrl(url)) fail('FORBIDDEN', 'Hiveory only opens its help and store pages from here.')
       await shell.openExternal(url)
     },
     'updates.status': () => ({ state: 'unsupported' as const, reason: 'This window uses a Hiveory server. Update Hiveory on each machine.' }),
