@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { RefreshCw } from 'lucide-react'
-import type { CliSelection } from '@shared/domain'
+import type { CliDescriptor, CliSelection } from '@shared/domain'
 import { MAX_INSTANCES_PER_CLI } from '@shared/ipc/contract'
 import { useHostClis } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
@@ -15,8 +15,9 @@ interface CliSelectorProps {
 }
 
 /**
- * Per-CLI instance counts over the dynamically discovered CLI list. Shared by
- * Workspace creation and the preset editor (STARTER_PROMPT §10).
+ * Per-CLI instance counts over the dynamically discovered CLI list: terminals (PowerShell, bash…)
+ * and agents, the same choices as a pane's "+" (ADR 0039). Shared by Worktree creation and the
+ * preset editor (STARTER_PROMPT §10).
  */
 export function CliSelector({ value, onChange }: CliSelectorProps) {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
@@ -25,7 +26,7 @@ export function CliSelector({ value, onChange }: CliSelectorProps) {
     if (!loaded) void load()
   }, [loaded, load])
 
-  // Agents only: shells open from a pane's "+" menu.
+  const shells = clis.filter((c) => c.kind === 'shell' && c.available)
   const agents = clis.filter((c) => c.kind !== 'shell')
   const available = agents.filter((c) => c.available)
   const missing = agents.filter((c) => !c.available)
@@ -42,33 +43,8 @@ export function CliSelector({ value, onChange }: CliSelectorProps) {
 
   return (
     <div className={styles.root}>
-      <ul className={styles.list} aria-label="Agents">
-        {available.map((cli) => {
-          const count = countOf(cli.id)
-          return (
-            <li key={cli.id} className={styles.row} data-selected={count > 0}>
-              <label className={styles.check}>
-                <input
-                  type="checkbox"
-                  checked={count > 0}
-                  onChange={(e) => setCount(cli.id, e.target.checked ? 1 : 0)}
-                />
-                <CliLogo cliId={cli.id} />
-                <span className={styles.name}>{cli.displayName}</span>
-              </label>
-              <CounterControl
-                label={`${cli.displayName} instances`}
-                value={count}
-                max={MAX_INSTANCES_PER_CLI}
-                onChange={(n) => setCount(cli.id, n)}
-              />
-            </li>
-          )
-        })}
-        {loaded && available.length === 0 && (
-          <li className={styles.none}>No supported CLIs were found on this machine.</li>
-        )}
-      </ul>
+      {shells.length > 0 && <Group label="Terminals" items={shells} countOf={countOf} setCount={setCount} />}
+      <Group label="Agents" items={available} countOf={countOf} setCount={setCount} empty={loaded ? 'No supported CLIs were found on this machine.' : undefined} />
       <div className={styles.footer}>
         <Button size="sm" onClick={addAll} disabled={available.length === 0}>
           Add all CLIs
@@ -80,6 +56,42 @@ export function CliSelector({ value, onChange }: CliSelectorProps) {
         )}
         <IconButton label="Detect CLIs again" icon={<RefreshCw />} onClick={() => void load(true)} />
       </div>
+    </div>
+  )
+}
+
+function Group({
+  label,
+  items,
+  countOf,
+  setCount,
+  empty
+}: {
+  label: string
+  items: CliDescriptor[]
+  countOf: (cliId: string) => number
+  setCount: (cliId: string, count: number) => void
+  empty?: string
+}) {
+  return (
+    <div className={styles.group}>
+      <div className={styles.groupLabel}>{label}</div>
+      <ul className={styles.list} aria-label={label}>
+        {items.map((cli) => {
+          const count = countOf(cli.id)
+          return (
+            <li key={cli.id} className={styles.row} data-selected={count > 0}>
+              <label className={styles.check}>
+                <input type="checkbox" checked={count > 0} onChange={(e) => setCount(cli.id, e.target.checked ? 1 : 0)} />
+                <CliLogo cliId={cli.id} />
+                <span className={styles.name}>{cli.displayName}</span>
+              </label>
+              <CounterControl label={`${cli.displayName} instances`} value={count} max={MAX_INSTANCES_PER_CLI} onChange={(n) => setCount(cli.id, n)} />
+            </li>
+          )
+        })}
+        {items.length === 0 && empty && <li className={styles.none}>{empty}</li>}
+      </ul>
     </div>
   )
 }

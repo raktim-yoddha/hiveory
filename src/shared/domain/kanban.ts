@@ -1,5 +1,8 @@
 import type { CliRuntimeDetails, CliStatus } from './cli'
 
+/** Board columns, most urgent first: what needs you, what is running, what is resting (ADR 0039). */
+export const BOARD_COLUMNS: readonly CliStatus[] = ['waiting-for-you', 'working', 'idle']
+
 export interface KanbanCard {
   instanceId: string
   cliId: string

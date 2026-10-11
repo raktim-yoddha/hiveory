@@ -19,7 +19,7 @@ import styles from './CreateWorkspaceDialog.module.css'
 
 interface CreateWorkspaceDialogProps {
   projectId: string
-  /** New branch (default), an existing local branch, or a remote branch (ADR 0038). */
+  /** The tab it opens on: a new branch (default), an existing local branch, or a remote branch (ADR 0038, 0039). */
   source?: WorktreeSource
   /** The dialog is mounted only while open, so every opening starts fresh. */
   onClose: () => void
@@ -31,13 +31,14 @@ type ConfigTab = 'agents' | 'presets'
  * "Create worktree": an isolated copy on its own branch — Git worktree and branch creation happen
  * behind this one action (AGENTS.md rule 13). The Primary always exists already (ADR 0038).
  */
-const TITLES: Record<WorktreeSource, string> = {
-  new: 'New worktree',
-  existing: 'Worktree from an existing branch',
-  remote: 'Worktree from a remote branch'
-}
+const SOURCES: Array<{ value: WorktreeSource; label: string }> = [
+  { value: 'new', label: 'New branch' },
+  { value: 'existing', label: 'Existing branch' },
+  { value: 'remote', label: 'Remote branch' }
+]
 
-export function CreateWorkspaceDialog({ projectId, source = 'new', onClose }: CreateWorkspaceDialogProps) {
+export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new', onClose }: CreateWorkspaceDialogProps) {
+  const [source, setSource] = useState<WorktreeSource>(initialSource)
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const loadWorkspaces = useWorkspaces((s) => s.load)
   const [suggested, setSuggested] = useState('')
@@ -102,7 +103,7 @@ export function CreateWorkspaceDialog({ projectId, source = 'new', onClose }: Cr
   return (
     <Modal
       open
-      title={TITLES[source]}
+      title="New worktree"
       onClose={onClose}
       width="lg"
       footer={
@@ -111,12 +112,14 @@ export function CreateWorkspaceDialog({ projectId, source = 'new', onClose }: Cr
             Create empty
           </Button>
           <Button variant="primary" onClick={() => void create(true)} disabled={!canSubmit || count === 0} loading={busy === 'full'}>
-            {count > 0 ? `Create with ${count} ${count === 1 ? 'agent' : 'agents'}` : 'Create'}
+            {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create'}
           </Button>
         </div>
       }
     >
       <div className={styles.form}>
+        {/* Where its branch comes from; switch any time (ADR 0039). */}
+        <Tabs label="Branch" variant="segmented" value={source} onChange={setSource} options={SOURCES} />
         <TextField
           label="Worktree name"
           value={name}

@@ -33,7 +33,7 @@ const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
  * Right side panel for the Worktree in view: browser tabs (any number), the folder's Explorer, the
- * agent session history and the Workspace page (board, pull requests, worktrees, settings; ADR 0038),
+ * agent session history and the Dashboard (the Workspace's board, pull requests, worktrees and settings; ADR 0038, 0039),
  * added from "+". Tabs drag to reorder;
  * dragging one into the lower half splits the panel into a top and a bottom area,
  * each with its own tabs (a divider sets their heights). Browser pages live in
@@ -85,40 +85,24 @@ export function SidePanel() {
     return page.ownerName ? `${page.ownerName} · ${title}` : title
   }
 
+  // Explorer, Dashboard and Sessions open once per worktree: an open one leaves the menu (ADR 0039).
+  const isOpen = (kind: PanelTab['kind']): boolean => tabs.some((t) => t.kind === kind)
   const addMenu = (group: PanelGroup) => (
     <Menu
       label="Add to side panel"
       items={[
-        { type: 'item', id: 'browser', label: 'Browser', icon: <Globe />, disabled: !scope, onSelect: () => void openBrowserTab(scope, group) },
-        {
-          type: 'item',
-          id: 'explorer',
-          label: 'Explorer',
-          icon: <FolderTree />,
-          disabled: !scope,
-          hint: tabs.some((t) => t.kind === 'explorer') ? 'Open' : undefined,
-          onSelect: () => addPanelTab(scope, 'explorer', undefined, true, group)
-        },
-        {
-          type: 'item',
-          id: 'workspace',
-          label: 'Workspace',
-          icon: <LayoutDashboard />,
-          disabled: !scope,
-          hint: tabs.some((t) => t.kind === 'workspace') ? 'Open' : 'Board and settings',
-          onSelect: () => addPanelTab(scope, 'workspace', undefined, true, group)
-        },
-        {
-          type: 'item',
-          id: 'sessions',
-          label: 'Sessions',
-          icon: <History />,
-          disabled: !scope,
-          hint: tabs.some((t) => t.kind === 'sessions') ? 'Open' : 'Agent history',
-          onSelect: () => addPanelTab(scope, 'sessions', undefined, true, group)
-        }
+        { type: 'item' as const, id: 'browser', label: 'Browser', icon: <Globe />, disabled: !scope, onSelect: () => void openBrowserTab(scope, group) },
+        ...(
+          [
+            ['explorer', 'Explorer', <FolderTree key="e" />],
+            ['workspace', 'Dashboard', <LayoutDashboard key="d" />],
+            ['sessions', 'Sessions', <History key="s" />]
+          ] as const
+        )
+          .filter(([kind]) => !isOpen(kind))
+          .map(([kind, label, icon]) => ({ type: 'item' as const, id: kind, label, icon, disabled: !scope, onSelect: () => void addPanelTab(scope, kind, undefined, true, group) }))
       ]}
-      trigger={(props) => <IconButton {...props} label="Add browser, explorer, workspace or sessions" icon={<Plus />} className={styles.add} />}
+      trigger={(props) => <IconButton {...props} label="Add browser, explorer, dashboard or sessions" icon={<Plus />} className={styles.add} />}
     />
   )
 
@@ -377,7 +361,7 @@ function PanelArea({
             compact
             icon={<Plus />}
             title="Nothing open"
-            description="Add a browser, the Explorer for this folder's files, the Workspace's board and settings, or the agent session history."
+            description="Add a browser, the Explorer for this folder's files, the Dashboard, or the agent session history."
             actions={addMenu}
           />
         ) : (

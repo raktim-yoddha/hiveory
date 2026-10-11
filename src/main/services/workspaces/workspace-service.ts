@@ -246,7 +246,14 @@ export class WorkspaceService {
     const repoRoot = await this.repoRootOf(project, kit)
     const entries = repoRoot ? await kit.worktrees.list(repoRoot).catch(() => null) : null
     if (!repoRoot || !entries) {
-      if (changed) this.emit('state.changed', { topic: 'workspaces', projectId })
+      // No Git to ask: a worktree whose folder is gone can only be a leftover, never a real one (ADR 0039).
+      for (const workspace of this.repo.isolated(projectId)) {
+        if (await kit.fs.exists(workspace.git?.worktreePath ?? workspace.path)) continue
+        this.agents.forgetWorkspace(workspace.id)
+        this.repo.delete(workspace.id)
+        result.removed.push(workspace.name)
+      }
+      if (changed || result.removed.length) this.emit('state.changed', { topic: 'workspaces', projectId })
       return result
     }
     const tree = (path: string): string => treeKey(path, project.host)

@@ -264,19 +264,19 @@ Git knows (ADR 0038).
 
 ## Workspace
 
-The Workspace page is a tab of the side panel beside the open Worktree (ADR 0038), added from the
+The Workspace page is the **Dashboard** tab of the side panel beside the open Worktree (ADR 0038, 0039), added from the
 panel's "+" or from a workspace's right-click › Workspace settings. It has no New worktree button.
 
 ```text
-┌ [▦ Workspace ×] + ───────────────── ⤢ ┐
+┌ [▦ Dashboard ×] + ───────────────── ⤢ ┐
 │ ◆ Workspace A                         │
 │   ⌂ … › app  ⧉ 📁                     │
 │ Tasks │ Pull Requests │ Worktrees │ Settings
 ├────────────────────────────────────────┤
 │ [ All | Here ]                         │
-│ ● IDLE                              2  │
-│ ● WORKING                           1  │
 │ ● WAITING FOR YOU                   0  │
+│ ● WORKING                           1  │
+│ ● IDLE                              2  │
 └────────────────────────────────────────┘
 ```
 
@@ -292,7 +292,7 @@ effort per chat CLI) · New worktrees (Branch prefix, Start from) · Remove from
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Tasks                                                                    │
 ├──────────────────────┬──────────────────────┬─────────────────────────────┤
-│ Idle                 │ Working              │ Waiting for You             │
+│ Waiting for You      │ Working              │ Idle                        │
 ├──────────────────────┼──────────────────────┼─────────────────────────────┤
 │ ┌──────────────────┐ │ ┌──────────────────┐ │ ┌─────────────────────────┐ │
 │ │ [logo] Milo      │ │ │ [logo] Luna      │ │ │ [logo] Kai              │ │

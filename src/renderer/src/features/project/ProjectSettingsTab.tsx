@@ -7,6 +7,7 @@ import { TextInput } from '../../components/ui/TextField'
 import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useProjects } from '../../stores/data'
+import { runAction } from '../../stores/notices'
 import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 import { SettingRow } from '../settings/SettingsScreen'
 import { ChatDefaults } from './ChatDefaults'
@@ -48,8 +49,17 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
         <SettingRow title="Folder" description={<span className={styles.mono}>{project.path}</span>} control={null} />
         <SettingRow
           title="Repository"
-          description={<span className={styles.mono}>{project.repositoryRoot ?? 'Not a Git repository'}</span>}
-          control={null}
+          description={<span className={styles.mono}>{project.repositoryRoot ?? 'Not a Git repository: worktrees need Git.'}</span>}
+          control={
+            project.repositoryRoot ? null : (
+              <Button
+                size="sm"
+                onClick={() => void runAction('Initialize Git', () => api('git.init', { projectId: project.id, commit: true })).then(() => useProjects.getState().load())}
+              >
+                Initialize Git
+              </Button>
+            )
+          }
         />
       </div>
 

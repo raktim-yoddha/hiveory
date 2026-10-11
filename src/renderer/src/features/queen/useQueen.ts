@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { useSettings } from '../../stores/data'
 import type { QueenQuestion } from '@shared/queen/actions'
 import type { QueenReport } from '@shared/queen/report'
 
@@ -102,7 +103,12 @@ export const useQueen = create<QueenState>((set, get) => ({
     set({ compact })
     save(get())
   },
-  show: (card, quiet = false) => set(card ? (quiet ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false }) : { cardOpen: false }),
+  // Replies wait behind her button unless Settings › Queen Bee › Pop up replies is on; a question or a
+  // yes/no still opens, since the command waits for that answer (ADR 0039).
+  show: (card, quiet = false) => {
+    const hold = quiet || (card?.kind === 'reply' && !useSettings.getState().settings.queenPopups)
+    set(card ? (hold ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false }) : { cardOpen: false })
+  },
   setCardOpen: (cardOpen) => set(cardOpen ? { cardOpen, unseen: false } : { cardOpen }),
   setBusy: (busy) => set({ busy }),
   // Her shortcut or menu wants the input: a shrunk bar opens up first.

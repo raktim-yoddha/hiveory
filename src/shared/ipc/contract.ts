@@ -419,6 +419,7 @@ export const requestSchemas = {
       queenTalkback: z.enum(['always', 'after-voice', 'never']),
       queenSounds: z.boolean(),
       queenUpdates: z.enum(['all', 'waiting', 'off']),
+      queenPopups: z.boolean(),
       queenVoiceSpeed: z.number().min(0.8).max(1.4)
     })
     .partial(),

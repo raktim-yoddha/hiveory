@@ -158,6 +158,11 @@ export function QueenBarSettings() {
             />
           }
         />
+        <SettingRow
+          title="Pop up replies"
+          description="Off: her answers and agent updates wait behind the message button on her bar, so nothing covers your work. Questions and yes/no still open."
+          control={<Toggle label="Pop up Queen Bee's replies" checked={settings.queenPopups} onChange={(queenPopups) => void update({ queenPopups })} />}
+        />
       </div>
     </>
   )

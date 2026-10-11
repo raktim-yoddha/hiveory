@@ -144,16 +144,26 @@ export function GitOptions({ projectId, source, suggestedBranch, defaultBase, on
           </span>
         </>
       ) : useExisting ? (
-        <Select
-          label="Branch to check out"
-          value={chosenExisting}
-          onChange={setExisting}
-          options={
-            free.length
-              ? free.map((b) => ({ value: b, label: b }))
-              : [{ value: '', label: 'Every branch is already checked out somewhere', disabled: true }]
-          }
-        />
+        <>
+          <Select
+            label="Branch to check out"
+            value={chosenExisting}
+            onChange={setExisting}
+            options={
+              free.length
+                ? free.map((b) => ({ value: b, label: b }))
+                : [{ value: '', label: 'No branch is free to check out', disabled: true }]
+            }
+          />
+          {/* Git checks a branch out in one folder at a time; say why the list is empty (ADR 0039). */}
+          {!free.length && (
+            <span className={formStyles.fieldHint}>
+              {info.branches.length
+                ? `Every local branch (${info.branches.join(', ')}) is already open in a worktree. Use New branch, or Remote branch for one on GitHub.`
+                : 'This repository has no local branches yet.'}
+            </span>
+          )}
+        </>
       ) : (
         <div className={styles.gitRow}>
           <Select

@@ -182,7 +182,8 @@
   --space-10: 32px;
   --space-11: 48px;
 
-  /* Radius: small → controls, medium → cards, large → panes/dialogs */
+  /* Radius: extra-small → tags, small → controls, medium → cards, large → panes/dialogs */
+  --radius-xs: 3px;
   --radius-sm: 6px;
   --radius-md: 9px;
   --radius-lg: 12px;

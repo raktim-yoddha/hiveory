@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { CLI_STATUSES, boardForWorktree } from '@shared/domain'
+import { BOARD_COLUMNS, boardForWorktree } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { Tabs } from '../../components/ui/Tabs'
 import { useFlip } from '../../lib/useFlip'
@@ -20,7 +20,7 @@ export function KanbanBoard({ projectId, workspaceId }: { projectId: string; wor
   const boardRef = useRef<HTMLDivElement>(null)
   // Cards glide to their new column when an agent's status changes.
   useFlip(boardRef)
-  const total = board ? CLI_STATUSES.reduce((n, s) => n + board[s].length, 0) : 0
+  const total = board ? BOARD_COLUMNS.reduce((n, s) => n + board[s].length, 0) : 0
 
   return (
     <div className={styles.page}>
@@ -49,7 +49,7 @@ export function KanbanBoard({ projectId, workspaceId }: { projectId: string; wor
         </div>
       )}
       <div ref={boardRef} className={styles.board}>
-        {CLI_STATUSES.map((status) => (
+        {BOARD_COLUMNS.map((status) => (
           <KanbanColumn key={status} projectId={projectId} status={status} cards={board?.[status] ?? []} />
         ))}
       </div>

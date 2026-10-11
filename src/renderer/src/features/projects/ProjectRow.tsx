@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Copy, FolderOpen, GitBranch, House, Plus, Settings2, X } from 'lucide-react'
+import { AlertTriangle, Copy, FolderOpen, GitBranch, House, Settings2, X } from 'lucide-react'
 import type { Project, WorkspaceView } from '@shared/domain'
 import { HostBadge } from '../../components/ui/HostBadge'
-import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
-import { NewWorktreeMenu } from '../workspace-create/NewWorktreeMenu'
+import { NewWorktreeButton } from '../workspace-create/NewWorktreeButton'
 import { DeleteWorkspaceDialog } from '../workspace/DeleteWorkspaceDialog'
 import { workspaceMenuEntries } from '../workspace/workspace-menu'
 import { RemoveProjectDialog } from './RemoveProjectDialog'
 import { WorkspaceMark } from './WorkspaceMark'
+import { WorktreeAgents } from './WorktreeAgents'
 import styles from './ProjectSidebar.module.css'
 
 const EMPTY: WorkspaceView[] = []
@@ -111,7 +111,8 @@ export function ProjectRow({ project }: { project: Project }) {
                 </span>
                 {!expanded && target && (
                   <span className={styles.rowMeta}>
-                    <span className={styles.metaPath}>../{folderName(target.path)}</span>
+                    {/* The Primary is the Workspace's own folder: its name would only repeat the title (ADR 0039). */}
+                    {target.kind !== 'main' && <span className={styles.metaPath}>{target.name}</span>}
                     {target.git?.branch && (
                       <span className={styles.metaBranch}>
                         <GitBranch aria-hidden />
@@ -124,10 +125,7 @@ export function ProjectRow({ project }: { project: Project }) {
             </button>
           )}
         />
-        <NewWorktreeMenu
-          projectId={project.id}
-          trigger={(props) => <IconButton {...props} className={styles.rowAction} label={`New worktree in ${project.name}`} icon={<Plus />} />}
-        />
+        <NewWorktreeButton projectId={project.id} className={styles.rowAction} label={`New worktree in ${project.name}`} />
       </div>
       {expanded && (
         <ul className={styles.children}>
@@ -158,8 +156,8 @@ export function ProjectRow({ project }: { project: Project }) {
                       )}
                       <span className={styles.rowLines}>
                         <span className={styles.rowTitle}>
-                          {/* The Primary is the Workspace's own folder: it shows the folder's name and a tag (ADR 0038). */}
-                          <span className={styles.rowText}>{main ? folderName(project.path) : ws.name}</span>
+                          {/* The Primary is the Workspace's own folder: its name, then the tag right beside it (ADR 0038, 0039). */}
+                          <span className={styles.rowName}>{main ? folderName(project.path) : ws.name}</span>
                           {main && <span className={styles.tag}>Primary</span>}
                         </span>
                         {ws.git?.branch && <span className={cx(styles.rowMeta, styles.rowText)}>{ws.git.branch}</span>}
@@ -168,6 +166,7 @@ export function ProjectRow({ project }: { project: Project }) {
                     </button>
                   )}
                 />
+                <WorktreeAgents projectId={project.id} workspaceId={ws.id} />
               </li>
             )
           })}

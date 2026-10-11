@@ -87,6 +87,8 @@ export interface AppSettings {
   queenSounds: boolean
   /** Live updates from agents: finished and waiting, only waiting, or none. */
   queenUpdates: 'all' | 'waiting' | 'off'
+  /** Her replies pop open over the work; off (default), they wait behind her message button (ADR 0039). */
+  queenPopups: boolean
   /** Speaking speed (0.8–1.4). */
   queenVoiceSpeed: number
 }
@@ -134,6 +136,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenTalkback: 'always',
   queenSounds: true,
   queenUpdates: 'all',
+  queenPopups: false,
   queenVoiceSpeed: 1.05
 }
 

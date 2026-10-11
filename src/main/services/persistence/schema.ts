@@ -175,6 +175,7 @@ const settingsSchema = z.object({
   queenTalkback: z.enum(['always', 'after-voice', 'never']).catch(DEFAULT_SETTINGS.queenTalkback),
   queenSounds: z.boolean().catch(DEFAULT_SETTINGS.queenSounds),
   queenUpdates: z.enum(['all', 'waiting', 'off']).catch(DEFAULT_SETTINGS.queenUpdates),
+  queenPopups: z.boolean().catch(DEFAULT_SETTINGS.queenPopups),
   queenVoiceSpeed: z.number().min(0.8).max(1.4).catch(DEFAULT_SETTINGS.queenVoiceSpeed)
 })
 

@@ -118,6 +118,18 @@ describe('Worktrees follow Git (ADR 0038)', () => {
     expect(store.state.workspaces.find((w) => w.id === ws.id)?.git?.baseRef).toBe('origin/feature/x')
   })
 
+  it('forgets a leftover worktree with no folder in a Workspace without Git (ADR 0039)', async () => {
+    const { repo, store, workspaces, projects } = setup()
+    const plain = join(repo, '..', 'plain')
+    mkdirSync(plain)
+    const project = await projects.open(plain)
+    store.update((s) => {
+      s.workspaces.push({ id: 'ghost', projectId: project.id, name: 'Iron Hollow', kind: 'isolated', path: join(plain, '..', 'gone'), git: { worktreePath: join(plain, '..', 'gone'), branch: 'workspace/second' }, autoApprove: false, createdAt: '', updatedAt: '' })
+    })
+    expect(await workspaces.sync(project.id)).toEqual({ added: [], removed: ['Iron Hollow'] })
+    expect(store.state.workspaces.map((w) => w.kind)).toEqual(['main'])
+  })
+
   it('leaves a Workspace whose folder is gone as it is', async () => {
     const { repo, store, workspaces, projects } = setup()
     const project = await projects.open(repo)

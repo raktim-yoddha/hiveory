@@ -77,7 +77,7 @@ Open/Create Workspace
         ▼
   Its last Worktree (Primary at first)
         │
-        └── Side panel › Workspace page (ADR 0038)
+        └── Side panel › Dashboard (ADR 0038, 0039)
                 ├── Tasks / Kanban (All | Here)
                 ├── Pull Requests
                 ├── Worktrees
@@ -296,7 +296,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; Terminal and Chat side by side, starting from the Workspace's "New agents open as" setting (ADR 0037)
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It holds browsers, the Workspace page (ADR 0038) and one Explorer per worktree: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It holds browsers, the Dashboard (the Workspace page; ADR 0038, 0039) and one Explorer per worktree: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)
