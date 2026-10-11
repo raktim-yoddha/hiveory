@@ -10,7 +10,9 @@ import { api } from '../../../lib/api'
 import { cx } from '../../../lib/cx'
 import { useClis } from '../../../stores/data'
 import { runAction } from '../../../stores/notices'
+import { Tabs } from '../../../components/ui/Tabs'
 import { NewSkillDialog } from './NewSkillDialog'
+import { SkillStore } from './SkillStore'
 import { SkillFolderList } from './SkillFolderList'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
@@ -39,6 +41,7 @@ interface Props {
 export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
   const clis = useClis((s) => s.clis)
   const installed = useMemo(() => new Set(clis.filter((c) => c.available).map((c) => c.id)), [clis])
+  const [view, setView] = useState<'installed' | 'store'>('installed')
   const [query, setQuery] = useState('')
   const [creating, setCreating] = useState(false)
   const [removing, setRemoving] = useState<{ skill: SkillInfo; last: boolean } | null>(null)
@@ -79,8 +82,32 @@ export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
       if (await api('extensions.importSkill', { rootIds: ['agents', 'claude'], projectId: undefined, ...(botId ? { botId } : {}) })) await onChanged()
     })
 
+  // Installed skills, or skills.sh to find more (ADR 0041).
+  const switcher = (
+    <Tabs<'installed' | 'store'>
+      label="Skills source"
+      variant="segmented"
+      value={view}
+      onChange={setView}
+      options={[
+        { value: 'installed', label: 'Installed' },
+        { value: 'store', label: 'skills.sh' }
+      ]}
+    />
+  )
+
+  if (view === 'store') {
+    return (
+      <div className={styles.panel}>
+        {switcher}
+        <SkillStore inventory={inventory} roots={roots} projectId={projectId} botId={botId} onChanged={onChanged} />
+      </div>
+    )
+  }
+
   return (
     <div className={styles.panel}>
+      {switcher}
       <div className={styles.toolbar}>
         <div className={styles.search}>
           <TextInput value={query} onChange={setQuery} placeholder="Search skills" aria-label="Search skills" />
@@ -99,7 +126,7 @@ export function SkillsPanel({ inventory, projectId, botId, onChanged }: Props) {
         </p>
         {inventory && groups.length === 0 && (
           <p className={settings.empty}>
-            {query ? 'No skills match.' : 'No skills yet. Create one or import a skill folder.'}
+            {query ? 'No skills match.' : 'No skills yet. Find one on skills.sh, create one or import a skill folder.'}
           </p>
         )}
         <ul className={settings.list}>

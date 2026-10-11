@@ -526,3 +526,57 @@
   padding-top: var(--space-6);
 }
 
+
+/* Stores (ADR 0041): a skill's audits and where an install reaches. */
+.audits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.audits .fieldTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.audits .fieldTitle svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.auditList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit {
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+}
+
+.auditWarn {
+  background: var(--color-waiting-soft);
+  color: var(--color-waiting);
+}
+
+.reach {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.moreRow {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-3) 0 var(--space-5);
+}

@@ -45,6 +45,7 @@ export interface WallpaperImage {
 }
 import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
 import { CODE_HOSTS, TRACKERS, type IntegrationsView, type IssueList, type TrackerGroup } from '../domain/integrations'
+import type { McpSearchResult, SkillAudit, StoreSkill } from '../domain/stores'
 import type { Discovery, ShareStatus, RemotePort, SshHostSuggestion, SshPrompt, TailnetStatus } from '../domain/tailnet'
 import { THEME_EXTENSION_ID, THEME_SEGMENT, VSCODE_THEME_ID, type ThemeListing, type VsCodeThemeExtension } from '../domain/vscode-theme'
 
@@ -481,6 +482,18 @@ export const requestSchemas = {
   }),
   /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
   'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional(), botId: id.optional() }),
+  // Stores (ADR 0041): skills.sh and the official MCP Registry, read from main. A store server is added
+  // through connections.saveCustom like any other; a skill is downloaded from its GitHub repository here.
+  'store.searchSkills': z.object({ query: z.string().max(200) }),
+  'store.skillAudits': z.object({ id: z.string().min(3).max(300) }),
+  'store.installSkill': z.object({
+    source: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
+    skillId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/),
+    rootIds: z.array(skillRoot).min(1).max(40),
+    projectId: id.optional(),
+    botId: id.optional()
+  }),
+  'store.searchMcp': z.object({ query: z.string().max(200), cursor: z.string().max(500).optional() }),
   /** MCP servers and apps Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
   /** Explorer (ADR 0018): paths are relative to the scope's folder and re-checked in main. */
   'files.list': z.object({ scope: fileScope, dir: relPath }),
@@ -823,6 +836,10 @@ export interface ResponseMap {
   'extensions.removeSkill': void
   'extensions.createSkill': void
   'extensions.importSkill': boolean
+  'store.searchSkills': StoreSkill[]
+  'store.skillAudits': SkillAudit[]
+  'store.installSkill': void
+  'store.searchMcp': McpSearchResult
   'system.openUrl': void
   'files.list': { root: string; entries: FileEntry[] }
   'files.search': FileEntry[]

@@ -193,6 +193,14 @@ steps aside while a tab is dragged. ⋯ on a session: Resume in <worktree>, Copy
 
 ### Settings › Skills, MCP & Apps (ADR 0017, 0023)
 
+Skills: ( Installed | skills.sh ). skills.sh: search as you type; rows (name, Installed, source ·
+installs, open on skills.sh ↗, Install). Install: security audits (provider passed / warns / failed ·
+risk), Where (everywhere / this workspace), Folders (preselected to reach every installed CLI),
+"Reaches [logos] every installed CLI". MCP servers: ( In Hiveory | MCP Registry ). Registry: search on
+Enter, rows (title, npx · uvx · Docker · Hosted, Added, description · version, repository ↗, Add),
+Show more. Add: how it runs (when several), the command, its values (secret ones hidden), Add to
+every agent (ADR 0041).
+
 ```text
 ┌ Skills, MCP & Apps ──────────────────────────────────────────┐
 │ ( Skills 12 | MCP servers 3 | Apps 2 )                   ⟳   │

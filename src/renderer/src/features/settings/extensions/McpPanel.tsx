@@ -10,6 +10,8 @@ import { cx } from '../../../lib/cx'
 import { useConnections } from '../../../stores/connections'
 import { runAction } from '../../../stores/notices'
 import { ConnectionStatus } from './ConnectionStatus'
+import { Tabs } from '../../../components/ui/Tabs'
+import { McpStore } from './McpStore'
 import { ServerDialog } from './ServerDialog'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
@@ -22,6 +24,7 @@ export function McpPanel({ inventory }: { inventory: ExtensionsInventory | null 
   const all = useConnections((s) => s.connections)
   const put = useConnections((s) => s.put)
   const servers = all.filter((c) => !c.provider)
+  const [view, setView] = useState<'hiveory' | 'store'>('hiveory')
   const [editing, setEditing] = useState<ConnectionView | 'new' | null>(null)
   const [removing, setRemoving] = useState<ConnectionView | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -35,8 +38,32 @@ export function McpPanel({ inventory }: { inventory: ExtensionsInventory | null 
     }).finally(() => setBusy(null))
   }
 
+  // Servers Hiveory runs, or the MCP Registry to find more (ADR 0041).
+  const switcher = (
+    <Tabs<'hiveory' | 'store'>
+      label="MCP servers source"
+      variant="segmented"
+      value={view}
+      onChange={setView}
+      options={[
+        { value: 'hiveory', label: 'In Hiveory' },
+        { value: 'store', label: 'MCP Registry' }
+      ]}
+    />
+  )
+
+  if (view === 'store') {
+    return (
+      <div className={styles.panel}>
+        {switcher}
+        <McpStore />
+      </div>
+    )
+  }
+
   return (
     <div className={styles.panel}>
+      {switcher}
       <div className={settings.group}>
         <div className={styles.groupHeader}>
           <div className={settings.groupTitle}>In Hiveory · every agent</div>
@@ -45,7 +72,7 @@ export function McpPanel({ inventory }: { inventory: ExtensionsInventory | null 
           </Button>
         </div>
         <p className={settings.groupNote}>Hiveory starts these on first use, shares them between agents and stops them when idle.</p>
-        {servers.length === 0 && <p className={settings.empty}>None yet. Add one, or bring one over from a CLI below.</p>}
+        {servers.length === 0 && <p className={settings.empty}>None yet. Find one in the MCP Registry, add one by hand, or bring one over from a CLI below.</p>}
         <ul className={settings.list}>
           {servers.map((server, index) => (
             <li key={server.id} className={cx(settings.listItem, styles.stagger)} style={{ '--i': index } as CSSProperties}>

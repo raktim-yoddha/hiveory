@@ -298,6 +298,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return true
   },
 
+  'store.searchSkills': ({ query }) => c.stores.searchSkills(query),
+  'store.skillAudits': ({ id }) => c.stores.skillAudits(id),
+  'store.installSkill': async ({ source, skillId, rootIds, projectId, botId }) => {
+    c.extensions.installFiles(await c.stores.downloadSkill(source, skillId), rootIds, placePath(projectId, botId))
+  },
+  'store.searchMcp': ({ query, cursor }) => c.stores.searchMcp(query, cursor),
+
   'system.openUrl': async ({ url }) => {
     if (!isOpenableUrl(url)) fail('FORBIDDEN', 'Hiveory only opens its help and store pages from here.')
     await shell.openExternal(url)

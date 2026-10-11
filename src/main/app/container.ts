@@ -55,6 +55,7 @@ import { GithubService } from '../services/git/github-service'
 import { GitlabService } from '../services/git/gitlab-service'
 import { IntegrationService } from '../services/integrations/integration-service'
 import { TrackerService } from '../services/integrations/tracker-service'
+import { StoreService } from '../services/extensions/store-service'
 import { GitService } from '../services/git/git-service'
 import { WorktreeService } from '../services/git/worktree-service'
 import { LayoutService } from '../services/layout/layout-service'
@@ -425,6 +426,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     git,
     github,
     integrations,
+    stores: new StoreService(),
     registry,
     runtime,
     localHost,

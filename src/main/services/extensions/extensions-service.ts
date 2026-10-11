@@ -225,6 +225,23 @@ export class ExtensionsService {
     return targets
   }
 
+  /** Writes a downloaded skill (skills.sh, ADR 0041) into each chosen skills folder. */
+  installFiles(skill: { folder: string; files: Array<{ path: string; data: Buffer }> }, rootIds: SkillRoot['id'][], projectPath?: string): string[] {
+    const base = projectPath ?? this.home
+    const targets = rootIds.map((id) => join(this.rootDir(id, base, projectPath ? 'project' : 'user'), skill.folder))
+    const taken = targets.find((t) => existsSync(t))
+    if (taken) fail('INVALID_INPUT', `A skill named "${skill.folder}" already exists in ${relative(base, taken)}.`)
+    for (const target of targets) {
+      for (const file of skill.files) {
+        const path = resolve(target, ...file.path.split('/'))
+        if (!path.startsWith(resolve(target) + sep)) fail('INVALID_INPUT', 'A file in that skill points outside its folder.')
+        mkdirSync(join(path, '..'), { recursive: true })
+        writeFileSync(path, file.data)
+      }
+    }
+    return targets
+  }
+
   /** Folder to reveal for a scanned skill (only paths from the last scan are allowed). */
   skillFolder(skillPath: string): string {
     return this.known(skillPath).path
