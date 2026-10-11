@@ -181,3 +181,17 @@ describe('durable sessions', () => {
   })
 })
 
+
+describe('renaming a pane', () => {
+  it('renames an agent everywhere it is read, keeping names unique, and counts browser pages among the panes', () => {
+    const { agents, emitted } = setup()
+    const first = agents.open('w1', 'claude').agent
+    const second = agents.open('w1', 'claude').agent
+    agents.rename(first.id, '  Design   lead ')
+    expect(agents.find(first.id)?.petName).toBe('Design lead')
+    expect(emitted.at(-1)).toEqual(['state.changed', { topic: 'agents', projectId: 'p1', workspaceId: 'w1' }])
+    expect(() => agents.rename(second.id, 'design LEAD')).toThrow('already called Design lead')
+    agents.setExtraPanes((id) => (id === 'w1' ? ['b1'] : []))
+    expect(agents.paneIds('w1')).toEqual([first.id, second.id, 'b1'])
+  })
+})

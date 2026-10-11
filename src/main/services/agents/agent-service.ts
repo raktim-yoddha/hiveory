@@ -238,6 +238,23 @@ export class AgentService {
     }
   }
 
+  /**
+   * Renames a pane (ADR 0042). Names stay unique across every agent, removed ones included, because
+   * agents, the board, Queen Bee and the phone all address agents by name.
+   */
+  rename(instanceId: string, name: string): void {
+    const instance = this.get(instanceId)
+    const next = name.trim().replace(/\s+/g, ' ')
+    if (next === instance.petName) return
+    const taken = [...this.store.state.instances, ...this.store.state.archive.flatMap((a) => a.instances)].find((i) => i.id !== instanceId && i.petName.toLowerCase() === next.toLowerCase())
+    if (taken) fail('INVALID_INPUT', `Another agent is already called ${taken.petName}.`)
+    this.store.update((s) => {
+      const stored = s.instances.find((i) => i.id === instanceId)
+      if (stored) stored.petName = next
+    })
+    this.emitAgents(this.workspaces.get(instance.workspaceId))
+  }
+
   find(instanceId: string): CliInstance | undefined {
     return this.store.state.instances.find((i) => i.id === instanceId)
   }

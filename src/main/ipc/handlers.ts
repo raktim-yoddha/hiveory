@@ -177,6 +177,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return c.sessions.list([project.path, ...(main ? [main.path] : []), ...c.workspaceRepo.isolated(projectId).map((w) => w.path)])
   },
   'agents.close': ({ instanceId }) => c.agents.close(instanceId),
+  'agents.rename': ({ instanceId, name }) => c.agents.rename(instanceId, name),
   'agents.restart': ({ instanceId }) => c.agents.restart(instanceId),
   'agents.sendMessage': ({ instanceId, message }) => {
     const agent = c.agents.find(instanceId) ?? fail('NOT_FOUND', 'That agent is no longer open.')

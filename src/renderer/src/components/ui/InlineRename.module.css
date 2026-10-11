@@ -1,0 +1,14 @@
+.input {
+  min-width: 0;
+  width: calc(var(--space-11) * 3);
+  height: var(--control-xs);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  outline: none;
+}

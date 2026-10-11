@@ -320,6 +320,8 @@ export const requestSchemas = {
   /** The agent CLIs' own conversation history on this computer, for a workspace, a project or everything. */
   'sessions.list': z.object({ scope: z.enum(['workspace', 'project', 'all']), workspaceId: id.optional(), projectId: id.optional() }),
   'agents.close': z.object({ instanceId: id }),
+  /** A pane's new name (ADR 0042): letters, digits, spaces and a little punctuation, unique among all agents. */
+  'agents.rename': z.object({ instanceId: id, name: z.string().trim().min(1).max(32).regex(/^[\p{L}\p{N} ._'-]+$/u) }),
   'agents.restart': z.object({ instanceId: id }),
   'agents.applyPreset': z.object({ workspaceId: id, presetId: id }),
   'terminal.write': z.object({ instanceId: id, data: z.string().max(1_000_000) }),
@@ -794,6 +796,7 @@ export interface ResponseMap {
   /** The new agent plus the resulting layout, so the UI can show the pane without another round trip. */
   'agents.open': { agent: CliInstanceView; layout: LayoutNode | null }
   'agents.close': LayoutNode | null
+  'agents.rename': void
   'agents.restart': void
   'agents.applyPreset': void
   'terminal.write': void

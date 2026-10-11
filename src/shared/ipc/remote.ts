@@ -10,7 +10,7 @@ import type { Channel } from './contract'
 export const REMOTE_CHANNELS = new Set<Channel>([
   'projects.list', 'projects.add', 'projects.addDefaults', 'projects.remove', 'projects.touch', 'projects.update',
   'workspaces.list', 'workspaces.suggestName', 'workspaces.create', 'workspaces.delete', 'workspaces.gitStatus', 'workspaces.repair',
-  'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
+  'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.rename', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot',
   'layout.get', 'layout.apply', 'presets.list', 'presets.save', 'presets.delete', 'kanban.board',
   'queen.plan', 'queen.peek', 'queen.accounts', 'queen.saveAccount', 'queen.removeAccount', 'queen.moveAccount', 'queen.testAccount', 'queen.listModels',

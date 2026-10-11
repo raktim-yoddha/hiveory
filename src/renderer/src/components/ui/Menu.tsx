@@ -52,12 +52,17 @@ interface MenuProps {
   empty?: ReactNode
   /** Open on right-click at the pointer instead of on click. */
   context?: boolean
+  /** Context menus: a second right-click right after the first closes the menu and calls this (rename a pane, ADR 0042). */
+  onDoubleContext?: () => void
 }
+
+/** Two right-clicks closer than this are a double right-click. */
+const DOUBLE_CONTEXT_MS = 450
 
 const GAP = 4
 
 /** Accessible popover menu: arrow-key navigation, Escape/outside-click to close, focus restore. */
-export function Menu({ label, items, trigger, align = 'start', empty, context = false }: MenuProps) {
+export function Menu({ label, items, trigger, align = 'start', empty, context = false, onDoubleContext }: MenuProps) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -65,6 +70,7 @@ export function Menu({ label, items, trigger, align = 'start', empty, context = 
   /** Where a context menu was requested. */
   const [point, setPoint] = useState<{ x: number; y: number } | null>(null)
   const [root, setRoot] = useState<Element | null>(null)
+  const lastContext = useRef(0)
 
   const close = useCallback((restoreFocus = true) => {
     setOpen(false)
@@ -128,6 +134,14 @@ export function Menu({ label, items, trigger, align = 'start', empty, context = 
           ? {
               onContextMenu: (event: ReactMouseEvent) => {
                 event.preventDefault()
+                const now = event.timeStamp
+                if (onDoubleContext && now - lastContext.current < DOUBLE_CONTEXT_MS) {
+                  lastContext.current = 0
+                  close(false)
+                  onDoubleContext()
+                  return
+                }
+                lastContext.current = now
                 const r = triggerRef.current?.getBoundingClientRect()
                 // Keyboard-invoked context menus may report (0, 0): anchor to the row instead.
                 const fromKeyboard = event.clientX === 0 && event.clientY === 0

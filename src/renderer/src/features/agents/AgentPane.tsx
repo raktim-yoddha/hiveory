@@ -1,11 +1,15 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Play, RotateCcw, Square, X } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Pencil, Play, RotateCcw, Square, X } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Button, IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
+import { InlineRename } from '../../components/ui/InlineRename'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
 import { useAgents, useClis } from '../../stores/data'
+import { api } from '../../lib/api'
+import { runAction } from '../../stores/notices'
 import { PaneFrame } from '../panes/PaneFrame'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { TerminalView } from '../terminal/TerminalView'
@@ -36,6 +40,9 @@ export function AgentPane({
 }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
+  const [renaming, setRenaming] = useState(false)
+  // A new name shows everywhere: sidebar, board, other agents' tools, Queen Bee and the phone (ADR 0042).
+  const rename = (name: string): void => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
   const fits = { right: rect.width >= minSize.width * 2 + gutter, bottom: rect.height >= minSize.height * 2 + gutter }
   const moves = moveTo
     ? (['left', 'right', 'up', 'down'] as const).map((direction) => ({
@@ -56,42 +63,51 @@ export function AgentPane({
       onHeaderDoubleClick={toggleMaximize}
       header={
         <>
-          {/* Right-click the name for the agent's actions (restart, move, close). */}
-          <Menu
-            label={`${agent.petName} actions`}
-            context
-            items={[
-              agent.chatUi
-                ? {
-                    type: 'item',
-                    id: 'restart',
-                    label: 'Stop reply',
-                    icon: <Square />,
-                    disabled: runtime.status !== 'working',
-                    onSelect: () => void agentActions.restart(agent.id)
-                  }
-                : {
-                    type: 'item',
-                    id: 'restart',
-                    label: runtime.running ? 'Restart' : 'Start',
-                    icon: runtime.running ? <RotateCcw /> : <Play />,
-                    onSelect: () => void agentActions.restart(agent.id)
-                  },
-              ...(moves.length ? [{ type: 'separator' as const }, ...moves] : []),
-              { type: 'separator' },
-              { type: 'item', id: 'close', label: 'Close', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
-            ]}
-            trigger={(props) => (
-              <button type="button" {...props} className={styles.identity} data-pane-grip aria-label={`${agent.petName} actions`} title="Right-click for actions">
-                <CliLogo cliId={agent.cliId} />
-                <span className={styles.name}>{agent.petName}</span>
-                {/* The dot is the only status signal and takes no room, so it stays at any width. */}
-                <span className={styles.status}>
-                  <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
-                </span>
-              </button>
-            )}
-          />
+          {/* Right-click the name for the agent's actions; right-click twice to rename it (ADR 0042). */}
+          {renaming ? (
+            <span className={styles.identity}>
+              <CliLogo cliId={agent.cliId} />
+              <InlineRename value={agent.petName} label={`Rename ${agent.petName}`} onCommit={rename} onDone={() => setRenaming(false)} />
+            </span>
+          ) : (
+            <Menu
+              label={`${agent.petName} actions`}
+              context
+              onDoubleContext={() => setRenaming(true)}
+              items={[
+                agent.chatUi
+                  ? {
+                      type: 'item',
+                      id: 'restart',
+                      label: 'Stop reply',
+                      icon: <Square />,
+                      disabled: runtime.status !== 'working',
+                      onSelect: () => void agentActions.restart(agent.id)
+                    }
+                  : {
+                      type: 'item',
+                      id: 'restart',
+                      label: runtime.running ? 'Restart' : 'Start',
+                      icon: runtime.running ? <RotateCcw /> : <Play />,
+                      onSelect: () => void agentActions.restart(agent.id)
+                    },
+                { type: 'item', id: 'rename', label: 'Rename', icon: <Pencil />, hint: 'Right-click twice', onSelect: () => setRenaming(true) },
+                ...(moves.length ? [{ type: 'separator' as const }, ...moves] : []),
+                { type: 'separator' },
+                { type: 'item', id: 'close', label: 'Close', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
+              ]}
+              trigger={(props) => (
+                <button type="button" {...props} className={styles.identity} data-pane-grip aria-label={`${agent.petName} actions`} title="Right-click for actions, twice to rename">
+                  <CliLogo cliId={agent.cliId} />
+                  <span className={styles.name}>{agent.petName}</span>
+                  {/* The dot is the only status signal and takes no room, so it stays at any width. */}
+                  <span className={styles.status}>
+                    <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
+                  </span>
+                </button>
+              )}
+            />
+          )}
           <span className={styles.actions}>
             <span data-pane-optional="add">
               <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} fits={fits} />
