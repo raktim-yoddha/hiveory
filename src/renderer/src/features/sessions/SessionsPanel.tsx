@@ -12,6 +12,7 @@ import { cx } from '../../lib/cx'
 import { useClis, useWorkspaces } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
+import { ago } from '../../lib/ago'
 import styles from './Sessions.module.css'
 
 const PAGE = 40
@@ -20,17 +21,6 @@ const SCOPES: Array<{ value: SessionScope; label: string }> = [
   { value: 'project', label: 'Workspace' },
   { value: 'all', label: 'All' }
 ]
-
-/** "3m ago", "2h ago", "4d ago", then a date. */
-const ago = (iso: string): string => {
-  const minutes = (Date.now() - Date.parse(iso)) / 60_000
-  if (!Number.isFinite(minutes)) return ''
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${Math.floor(minutes)}m ago`
-  if (minutes < 60 * 24) return `${Math.floor(minutes / 60)}h ago`
-  if (minutes < 60 * 24 * 30) return `${Math.floor(minutes / 1440)}d ago`
-  return new Date(iso).toLocaleDateString()
-}
 
 const folderName = (path: string): string => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 const samePath = (a: string, b: string): boolean => a.replace(/[\\/]+$/, '').toLowerCase() === b.replace(/[\\/]+$/, '').toLowerCase()

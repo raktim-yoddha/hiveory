@@ -13,7 +13,7 @@ import { DeleteWorkspaceDialog } from '../workspace/DeleteWorkspaceDialog'
 import { workspaceMenuEntries } from '../workspace/workspace-menu'
 import { RemoveProjectDialog } from './RemoveProjectDialog'
 import { WorkspaceMark } from './WorkspaceMark'
-import { WorktreeAgents } from './WorktreeAgents'
+import { WorktreeAgents, WorktreeBusy } from './WorktreeAgents'
 import styles from './ProjectSidebar.module.css'
 
 const EMPTY: WorkspaceView[] = []
@@ -162,7 +162,7 @@ export function ProjectRow({ project }: { project: Project }) {
                         </span>
                         {ws.git?.branch && <span className={cx(styles.rowMeta, styles.rowText)}>{ws.git.branch}</span>}
                       </span>
-                      {ws.agentCount > 0 && <span className={styles.count}>{ws.agentCount}</span>}
+                      <WorktreeBusy workspaceId={ws.id} />
                     </button>
                   )}
                 />

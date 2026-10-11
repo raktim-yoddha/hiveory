@@ -27,6 +27,9 @@ folds or unfolds its Worktrees. The workspace row does nothing while unfolded; f
 last-opened Worktree's folder and branch and clicking it opens that Worktree. Each Worktree shows its
 name and branch; the Primary shows the workspace folder's name with a Primary tag. "+" offers New
 branch · Existing branch · Remote branch. A workspace whose folder is gone shows a warning mark.
+Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busiest first, +N, ›);
+› unfolds it into a list: "N agents", then dot · logo · pet name · status · time in that status
+(ADR 0040). A loop spins at the end of a Worktree's row while any of its agents is working.
 
 ### Bots mode (ADR 0022)
 
@@ -366,7 +369,7 @@ pane's name for restart, move and close (ADR 0018).
 │                                               │
 │ Auto-approve permissions              [ ON ]  │
 │                                               │
-│ [ Create empty ]             [ Create ]       │
+│                 [ Create  /  Create with N ]  │
 └───────────────────────────────────────────────┘
 ```
 
