@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { ImagePlus, Pipette, Trash2 } from 'lucide-react'
+import { CircleUserRound, ImagePlus, Pipette, Trash2 } from 'lucide-react'
 import { WORKSPACE_COLORS, WORKSPACE_ICONS, workspaceColor, type Project } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
+import { EmojiPicker } from '../../components/ui/EmojiPicker'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
@@ -22,17 +23,19 @@ const COLOR_NAMES: Record<(typeof WORKSPACE_COLORS)[number], string> = {
 }
 
 /**
- * The Workspace's sidebar mark (ADR 0038, 0042): an icon in a theme color or any color, or an avatar
- * image of the user's own. Choosing an icon goes back from the avatar to the icon.
+ * The Workspace's sidebar mark (ADR 0038, 0042, 0043): an icon in a theme color or any color, an emoji,
+ * or an avatar (an image of the user's own, or the GitHub avatar). Choosing one replaces the others.
  */
 export function WorkspaceLook({ project }: { project: Project }) {
   const update = useProjects((s) => s.update)
   const setProject = useProjects((s) => s.load)
-  const [mode, setMode] = useState<'icon' | 'avatar'>(project.settings?.avatar ? 'avatar' : 'icon')
+  const [mode, setMode] = useState<'icon' | 'emoji' | 'avatar'>(project.settings?.avatar ? 'avatar' : project.settings?.emoji ? 'emoji' : 'icon')
   const icon = project.settings?.icon ?? 'folder'
   const custom = project.settings?.customColor
   const color = custom ? null : workspaceColor(project)
   const usingAvatar = Boolean(project.settings?.avatar)
+  const usingEmoji = !usingAvatar && Boolean(project.settings?.emoji)
+  const usingIcon = !usingAvatar && !usingEmoji
   // The system picker reports every step of a drag: show it at once, save once it settles.
   const [draftColor, setDraftColor] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -50,24 +53,35 @@ export function WorkspaceLook({ project }: { project: Project }) {
     void runAction('Choose avatar', async () => {
       if (await api('projects.pickAvatar', { projectId: project.id })) await setProject()
     })
+  const githubAvatar = (): void =>
+    void runAction('Use GitHub avatar', async () => {
+      await api('projects.githubAvatar', { projectId: project.id })
+      await setProject()
+    })
 
   return (
     <div className={styles.look}>
-      <Tabs<'icon' | 'avatar'>
+      <Tabs<'icon' | 'emoji' | 'avatar'>
         label="Workspace mark"
         variant="segmented"
         value={mode}
         onChange={setMode}
         options={[
           { value: 'icon', label: 'Icon' },
+          { value: 'emoji', label: 'Emoji' },
           { value: 'avatar', label: 'Avatar' }
         ]}
       />
-      {mode === 'avatar' ? (
+      {mode === 'emoji' ? (
+        <EmojiPicker value={usingEmoji ? project.settings?.emoji : undefined} onPick={(emoji) => void update(project.id, { settings: { emoji, avatar: null } })} />
+      ) : mode === 'avatar' ? (
         <div className={styles.lookRow}>
           <span className={styles.avatarPreview}>{usingAvatar ? <WorkspaceMark project={project} className={styles.avatarImage} /> : <ImagePlus aria-hidden />}</span>
           <Button size="sm" icon={<ImagePlus />} onClick={chooseImage}>
             {usingAvatar ? 'Change image' : 'Choose image'}
+          </Button>
+          <Button size="sm" icon={<CircleUserRound />} onClick={githubAvatar} title="The avatar of the repository's GitHub owner, or of your GitHub account">
+            GitHub avatar
           </Button>
           {usingAvatar && (
             <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => void update(project.id, { settings: { avatar: null } })}>
@@ -85,12 +99,12 @@ export function WorkspaceLook({ project }: { project: Project }) {
                   key={id}
                   type="button"
                   role="radio"
-                  aria-checked={!usingAvatar && icon === id}
+                  aria-checked={usingIcon && icon === id}
                   aria-label={id}
                   title={id}
-                  className={cx(styles.lookOption, !usingAvatar && icon === id && styles.lookOn)}
+                  className={cx(styles.lookOption, usingIcon && icon === id && styles.lookOn)}
                   style={{ color: markColor(project) }}
-                  onClick={() => void update(project.id, { settings: { icon: id === 'folder' ? null : id, ...(usingAvatar ? { avatar: null } : {}) } })}
+                  onClick={() => void update(project.id, { settings: { icon: id === 'folder' ? null : id, avatar: null, emoji: null } })}
                 >
                   <Icon aria-hidden />
                 </button>

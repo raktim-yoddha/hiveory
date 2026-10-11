@@ -65,8 +65,10 @@ export interface ProjectSettings {
   color?: WorkspaceColor
   /** Any color the user picked (#rrggbb), over `color` (ADR 0042). */
   customColor?: string
-  /** An image instead of the icon: a small PNG data URL (ADR 0042). */
+  /** An image instead of the icon: a small PNG data URL (ADR 0042). Shown over `emoji` and `icon`. */
   avatar?: string
+  /** An emoji instead of the icon (ADR 0043); shown over `icon`. */
+  emoji?: string
   /** Where its reviews come from (ADR 0040); absent = told by its origin remote, 'none' = off. */
   codeHost?: CodeHostId | 'none'
   /** Where its issues come from; absent = its code host's issues, 'none' = no issues. */
@@ -76,8 +78,16 @@ export interface ProjectSettings {
 }
 
 /** Marks a Workspace can show in the sidebar; the renderer maps each to an icon. */
-export const WORKSPACE_ICONS = ['folder', 'code', 'globe', 'box', 'rocket', 'flask', 'book', 'server', 'phone', 'database', 'palette', 'bot'] as const
+// The product owner's set, in their order (ADR 0043), then the earlier ones a Workspace may already use.
+export const WORKSPACE_ICONS = [
+  'folder', 'code', 'terminal', 'bot', 'package', 'database', 'globe', 'server', 'cpu', 'layers',
+  'braces', 'rocket', 'wrench', 'briefcase', 'building', 'palette', 'gauge', 'sparkles', 'shapes', 'box',
+  'flask', 'book', 'phone'
+] as const
 export type WorkspaceIcon = (typeof WORKSPACE_ICONS)[number]
+
+/** One emoji (with its modifiers and joiners), as a Workspace's mark. */
+export const EMOJI = /^[\p{Emoji}\p{Emoji_Component}\u200d\ufe0f]{1,16}$/u
 
 /** A custom Workspace color: #rrggbb. */
 export const HEX_COLOR = /^#[0-9a-f]{6}$/i
