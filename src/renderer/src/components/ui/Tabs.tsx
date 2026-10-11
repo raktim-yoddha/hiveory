@@ -19,6 +19,8 @@ interface TabsProps<T extends string> {
   variant?: 'underline' | 'segmented'
   /** Segmented only: `lg` for a section's main switch. */
   size?: 'md' | 'lg'
+  /** Tabs with icons show only their icons while the list is narrow (it fills its row). */
+  iconsWhenNarrow?: boolean
   className?: string
 }
 
@@ -27,7 +29,7 @@ interface TabsProps<T extends string> {
  * selection is one indicator that glides to the chosen tab (transform and
  * width only), instead of each tab painting its own background.
  */
-export function Tabs<T extends string>({ label, options, value, onChange, variant = 'underline', size = 'md', className }: TabsProps<T>) {
+export function Tabs<T extends string>({ label, options, value, onChange, variant = 'underline', size = 'md', iconsWhenNarrow, className }: TabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null)
   const indicator = useSelectionBox(listRef, '[aria-selected="true"]', [value, options.length])
 
@@ -43,7 +45,7 @@ export function Tabs<T extends string>({ label, options, value, onChange, varian
   }
 
   return (
-    <div ref={listRef} role="tablist" aria-label={label} className={cx(styles.list, styles[variant], size === 'lg' && styles.lg, className)} onKeyDown={onKeyDown}>
+    <div ref={listRef} role="tablist" aria-label={label} className={cx(styles.list, styles[variant], size === 'lg' && styles.lg, iconsWhenNarrow && styles.collapsible, className)} onKeyDown={onKeyDown}>
       {indicator && <span className={styles.indicator} aria-hidden style={indicator} />}
       {options.map((option) => {
         const selected = option.value === value
@@ -56,6 +58,9 @@ export function Tabs<T extends string>({ label, options, value, onChange, varian
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             className={cx(styles.tab, selected && styles.selected)}
+            // The name stays readable when only the icon shows.
+            aria-label={iconsWhenNarrow && option.icon ? option.label : undefined}
+            title={iconsWhenNarrow && option.icon ? option.label : undefined}
             onClick={() => onChange(option.value)}
           >
             {option.icon}

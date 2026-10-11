@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { FolderTree, Globe, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, X } from 'lucide-react'
+import { CalendarClock, FolderTree, Globe, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, Settings2, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -22,13 +22,14 @@ import {
 import { BrowserPane } from '../browser/BrowserPane'
 import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
+import { ProjectPanel } from '../project/ProjectPanel'
 import { ProjectScreen } from '../project/ProjectScreen'
 import { openBrowserTab } from './panel-actions'
 import styles from './SidePanel.module.css'
 import { pageTitle } from '../browser/page-title'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History, workspace: LayoutDashboard }
+const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History, workspace: LayoutDashboard, routines: CalendarClock, settings: Settings2 }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
@@ -46,7 +47,7 @@ export function SidePanel() {
   // Workspaces only — a project page has no side panel.
   const scope = workspaceId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
-  const { addPanelTab, closePanelTab, movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit } = useNavigation()
+  const { addPanelTab, closePanelTab, movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation()
   const pages = useBrowser((s) => s.pages)
   const bodyRef = useRef<HTMLDivElement>(null)
   /** The tab being dragged, and where the panel shows it would land. */
@@ -63,6 +64,11 @@ export function SidePanel() {
     observer.observe(el)
     return () => observer.disconnect()
   }, [scope])
+
+  // A worktree's panel starts with Dashboard, Sessions and Explorer (ADR 0042).
+  useEffect(() => {
+    if (projectId) ensurePanelTabs(scope)
+  }, [scope, projectId, ensurePanelTabs])
 
   // Browser tabs mirror main's pages for this folder: agent-opened pages appear, closed ones go.
   useEffect(() => {
@@ -85,7 +91,7 @@ export function SidePanel() {
     return page.ownerName ? `${page.ownerName} · ${title}` : title
   }
 
-  // Explorer, Dashboard and Sessions open once per worktree: an open one leaves the menu (ADR 0039).
+  // Explorer, Dashboard, Sessions, Routines and Settings open once per worktree: an open one leaves the menu (ADR 0039, 0042).
   const isOpen = (kind: PanelTab['kind']): boolean => tabs.some((t) => t.kind === kind)
   const addMenu = (group: PanelGroup) => (
     <Menu
@@ -96,7 +102,9 @@ export function SidePanel() {
           [
             ['explorer', 'Explorer', <FolderTree key="e" />],
             ['workspace', 'Dashboard', <LayoutDashboard key="d" />],
-            ['sessions', 'Sessions', <History key="s" />]
+            ['sessions', 'Sessions', <History key="s" />],
+            ['routines', 'Routines', <CalendarClock key="r" />],
+            ['settings', 'Workspace settings', <Settings2 key="w" />]
           ] as const
         )
           .filter(([kind]) => !isOpen(kind))
@@ -375,6 +383,8 @@ function PanelArea({
                   <BrowserPane pageId={tab.id} visible={tab.id === active?.id} />
                 ) : tab.kind === 'workspace' ? (
                   projectId && <ProjectScreen key={scope} projectId={projectId} workspaceId={scope} />
+                ) : tab.kind === 'routines' || tab.kind === 'settings' ? (
+                  projectId && <ProjectPanel key={scope} kind={tab.kind} projectId={projectId} workspaceId={scope} />
                 ) : (
                   <SessionsPanel key={scope} projectId={projectId} workspaceId={workspaceId} />
                 )}

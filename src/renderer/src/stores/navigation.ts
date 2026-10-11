@@ -3,7 +3,10 @@ import { mainWorkspaceId } from '@shared/domain'
 import { useWorkspaces } from './data'
 
 export type AppMode = 'workspace' | 'bots' | 'chatspace'
-export type ProjectTab = 'tasks' | 'workspaces' | 'issues' | 'routines' | 'settings'
+/** The Dashboard's sections (ADR 0042: Routines and Settings are side-panel tabs of their own). */
+export type ProjectTab = 'tasks' | 'workspaces' | 'issues'
+/** Where `openProject` lands: a Dashboard section, or the Routines or Settings tab. */
+export type ProjectPlace = ProjectTab | 'routines' | 'settings'
 
 export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'queen' | 'remote' | 'updates' | 'guide' | 'about'
 
@@ -18,7 +21,7 @@ export type View =
  */
 export interface PanelTab {
   id: string
-  kind: 'browser' | 'explorer' | 'sessions' | 'workspace'
+  kind: 'browser' | 'explorer' | 'sessions' | 'workspace' | 'routines' | 'settings'
   title: string
   /** The side panel splits into a top and a bottom area; tabs sit in the top one unless moved down. */
   group?: PanelGroup
@@ -72,7 +75,9 @@ interface NavigationState {
   movePanelTab(scope: string, tabId: string, group: PanelGroup, beforeId?: string | null): void
   setPanelSplit(share: number): void
   /** A Workspace's page lives in the side panel (ADR 0038): opens its last Worktree with that tab on `tab`. */
-  openProject(projectId: string, tab?: ProjectTab): void
+  openProject(projectId: string, place?: ProjectPlace): void
+  /** A worktree's side panel starts with Dashboard, Sessions and Explorer (ADR 0042). */
+  ensurePanelTabs(scope: string): void
   openWorkspace(projectId: string, workspaceId: string, focusPaneId?: string): void
   goHome(): void
   toggleSidebar(): void
@@ -173,7 +178,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', browser: 'Browser' }[kind]
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', browser: 'Browser', routines: 'Routines', settings: 'Settings' }[kind]
     const tab: PanelTab = { id: tabId ?? `t${++tabCounter}`, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({
@@ -215,13 +220,23 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       const next = at < 0 ? [...rest, moved] : [...rest.slice(0, at), moved, ...rest.slice(at)]
       return { panelTabs: { ...s.panelTabs, [scope]: next }, activePanelTab: fixActive(scope, next, s.activePanelTab, { [group]: tabId }) }
     }),
-  openProject: (projectId, tab = 'tasks') => {
+  openProject: (projectId, place = 'tasks') => {
     const list = useWorkspaces.getState().byProject[projectId] ?? []
     const remembered = get().lastWorktree[projectId]
     const workspaceId = list.find((w) => w.id === remembered)?.id ?? list.find((w) => w.kind === 'main')?.id ?? list[0]?.id ?? remembered ?? mainWorkspaceId(projectId)
     get().openWorkspace(projectId, workspaceId)
-    get().addPanelTab(workspaceId, 'workspace')
-    set({ panelOpen: true, workspaceTab: tab })
+    get().ensurePanelTabs(workspaceId)
+    if (place === 'routines' || place === 'settings') {
+      get().addPanelTab(workspaceId, place)
+      set({ panelOpen: true })
+    } else {
+      get().addPanelTab(workspaceId, 'workspace')
+      set({ panelOpen: true, workspaceTab: place })
+    }
+  },
+  ensurePanelTabs: (scope) => {
+    if (!scope || get().panelTabs[scope]) return
+    for (const kind of ['workspace', 'sessions', 'explorer'] as const) get().addPanelTab(scope, kind, undefined, kind === 'workspace')
   },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
     set((s) => ({

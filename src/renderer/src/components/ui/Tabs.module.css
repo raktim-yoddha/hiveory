@@ -40,6 +40,19 @@
   text-box: trim-both cap alphabetic;
 }
 
+/* iconsWhenNarrow: the list fills its row and drops its labels below this width. */
+.collapsible {
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+@container (max-width: 340px) {
+  .collapsible .label {
+    display: none;
+  }
+}
+
 .tab svg {
   width: var(--icon-sm);
   height: var(--icon-sm);

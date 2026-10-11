@@ -284,7 +284,7 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 ┌ [▦ Dashboard ×] + ───────────────── ⤢ ┐
 │ ◆ Workspace A                         │
 │   ⌂ … › app  ⧉ 📁                     │
-│ Tasks │ Worktrees │ Issues │ Routines │ Settings
+│ ▦ Tasks │ ⑂ Worktrees │ ◉ Issues   (icons only when narrow)
 ├────────────────────────────────────────┤
 │ [ All | Here ]                         │
 │ ● WAITING FOR YOU                   0  │
@@ -301,7 +301,7 @@ review state, open on the host; without a code host, the reason and Code host se
 Issues tab: "Issues · GitHub/GitLab/Jira/Linear", refresh, a filter past 8 issues, rows (title, key ·
 state, Start worktree, open); without a source, the reason and Issue settings.
 
-Routines tab (ADR 0040): this Workspace's routines (name, CLI · Worktree, schedule, next run, Run now,
+Routines tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): this Workspace's routines (name, CLI · Worktree, schedule, next run, Run now,
 Edit, on/off), Run log, New routine (for the open Worktree).
 
 Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:

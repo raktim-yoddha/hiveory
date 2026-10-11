@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { FolderGit2 } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
+import { CircleDot, FolderGit2, GitBranch, KanbanSquare } from 'lucide-react'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { PathTrail } from '../../components/ui/PathTrail'
@@ -11,26 +11,21 @@ import { useNavigation, type ProjectTab } from '../../stores/navigation'
 import { KanbanBoard } from '../kanban/KanbanBoard'
 import { WorkspaceMark } from '../projects/WorkspaceMark'
 import { PortsMenu } from './PortsMenu'
-import { ProjectSettingsTab } from './ProjectSettingsTab'
 import { IssuesTab } from './IssuesTab'
-import { WorkRoutinesTab } from './WorkRoutinesTab'
 import { WorkspacesTab } from './WorkspacesTab'
 import styles from './ProjectScreen.module.css'
 
-const TABS: Array<{ value: ProjectTab; label: string }> = [
-  { value: 'tasks', label: 'Tasks' },
-  { value: 'workspaces', label: 'Worktrees' },
-  { value: 'issues', label: 'Issues' },
-  { value: 'routines', label: 'Routines' },
-  { value: 'settings', label: 'Settings' }
+// Routines and Settings are side-panel tabs of their own (ADR 0042).
+const TABS: Array<{ value: ProjectTab; label: string; icon: ReactNode }> = [
+  { value: 'tasks', label: 'Tasks', icon: <KanbanSquare /> },
+  { value: 'workspaces', label: 'Worktrees', icon: <GitBranch /> },
+  { value: 'issues', label: 'Issues', icon: <CircleDot /> }
 ]
 
 const REGION: Record<ProjectTab, string> = {
   tasks: 'Kanban board',
   workspaces: 'Worktrees and reviews',
-  issues: 'Issues',
-  routines: 'Routines',
-  settings: 'Workspace settings'
+  issues: 'Issues'
 }
 
 /**
@@ -62,15 +57,13 @@ export function ProjectScreen({ projectId, workspaceId }: { projectId: string; w
         {project.host && <PortsMenu projectId={projectId} host={project.host.destination} />}
       </header>
       <div className={styles.tabs}>
-        <Tabs label="Workspace sections" options={TABS} value={tab} onChange={setTab} />
+        <Tabs label="Workspace sections" options={TABS} value={tab} onChange={setTab} iconsWhenNarrow />
       </div>
       <div className={styles.content} role="tabpanel" aria-label={REGION[tab]}>
         <ErrorBoundary region={REGION[tab]} resetKey={`${projectId}:${tab}`}>
           {tab === 'tasks' && <KanbanBoard projectId={projectId} workspaceId={workspaceId} />}
           {tab === 'workspaces' && <WorkspacesTab projectId={projectId} />}
           {tab === 'issues' && <IssuesTab projectId={projectId} local={!project.host && Boolean(project.repositoryRoot)} />}
-          {tab === 'routines' && <WorkRoutinesTab projectId={projectId} workspaceId={workspaceId} />}
-          {tab === 'settings' && <ProjectSettingsTab project={project} />}
         </ErrorBoundary>
       </div>
     </section>
