@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
 import { WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
+import { UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -380,6 +381,8 @@ export const requestSchemas = {
       theme: z.enum(['dark', 'bronze', 'silver', 'midnight', 'jade', 'rose']),
       autoCheckUpdates: z.boolean(),
       autoDownloadUpdates: z.boolean(),
+      updateCheckEvery: z.enum(UPDATE_CHECK_EVERY),
+      updateRemindEvery: z.enum(UPDATE_REMIND_EVERY),
       agentTools: z.boolean(),
       defaultAutoApprove: z.boolean(),
       defaultChatUi: z.boolean(),

@@ -9,6 +9,10 @@ export interface AppSettings {
   autoCheckUpdates: boolean
   /** Download a found update in the background; it installs on restart or quit. */
   autoDownloadUpdates: boolean
+  /** How often automatic checks run (they also run on launch; ADR 0039). */
+  updateCheckEvery: UpdateCheckEvery
+  /** An update is overdue two days after its release; a dismissed reminder comes back after this. */
+  updateRemindEvery: UpdateRemindEvery
   /** Give agents Hiveory's tools (list/read/message/open/arrange agents, terminal) over MCP. */
   agentTools: boolean
   /** Starting value of "Auto-approve permissions" when creating workspaces and presets. */
@@ -97,6 +101,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   autoCheckUpdates: true,
   autoDownloadUpdates: false,
+  updateCheckEvery: '6h',
+  updateRemindEvery: '2h',
   agentTools: true,
   defaultAutoApprove: false,
   defaultChatUi: false,
@@ -150,12 +156,33 @@ export const THEMES: Array<{ id: ThemeId; name: string; description: string }> =
 ]
 
 
+export const UPDATE_CHECK_EVERY = ['hourly', '6h', 'daily'] as const
+export type UpdateCheckEvery = (typeof UPDATE_CHECK_EVERY)[number]
+export const UPDATE_REMIND_EVERY = ['2h', '4h', '8h', 'daily'] as const
+export type UpdateRemindEvery = (typeof UPDATE_REMIND_EVERY)[number]
+
+const HOUR_MS = 60 * 60 * 1000
+export const UPDATE_INTERVAL_MS: Record<UpdateCheckEvery | UpdateRemindEvery, number> = {
+  hourly: HOUR_MS,
+  '2h': 2 * HOUR_MS,
+  '4h': 4 * HOUR_MS,
+  '6h': 6 * HOUR_MS,
+  '8h': 8 * HOUR_MS,
+  daily: 24 * HOUR_MS
+}
+/** An update not installed this long after its release is overdue (its reminder keeps coming back). */
+export const UPDATE_OVERDUE_MS = 2 * 24 * HOUR_MS
+
+/** Whether a release is overdue at `now`; an unknown release date never is. */
+export const updateOverdue = (releaseDate: string | undefined, now = Date.now()): boolean =>
+  Boolean(releaseDate) && now - Date.parse(releaseDate!) >= UPDATE_OVERDUE_MS
+
 export type UpdateStatus =
   | { state: 'unsupported'; reason: string }
   | { state: 'idle'; lastChecked?: string }
   | { state: 'checking' }
-  | { state: 'available'; version: string; notes?: string }
+  | { state: 'available'; version: string; notes?: string; releaseDate?: string }
   | { state: 'not-available'; lastChecked: string }
-  | { state: 'downloading'; version: string; percent: number; notes?: string }
-  | { state: 'downloaded'; version: string; notes?: string }
+  | { state: 'downloading'; version: string; percent: number; notes?: string; releaseDate?: string }
+  | { state: 'downloaded'; version: string; notes?: string; releaseDate?: string }
   | { state: 'error'; message: string }

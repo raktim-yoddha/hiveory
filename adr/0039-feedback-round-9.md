@@ -51,6 +51,13 @@ Questions and yes/no still open, since the command waits for that answer.
 The Chat screen's empty state and a chat with no CLI yet show Hiveory's own logo, and a chat with
 a CLI shows that CLI's logo, instead of a generic chat icon.
 
+### Update schedule and overdue reminders
+Settings › Updates keeps its page and gains two rows: Check for updates (Hourly · Every 6 hours ·
+Daily; `updateCheckEvery`, default every 6 hours, also on launch) and Remind me about overdue
+updates (2 · 4 · 8 hours · Daily; `updateRemindEvery`, default 2 hours). An update is overdue two
+days after its release (`releaseDate` from the release feed); dismissing its pop-up ("Later")
+hides it for this session unless it is overdue, when it returns after the chosen interval.
+
 ### Board order
 Columns read Waiting for you · Working · Idle (`BOARD_COLUMNS`), as on the phone. The status
 model itself is unchanged (AGENTS.md rule 6).

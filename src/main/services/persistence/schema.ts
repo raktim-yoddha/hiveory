@@ -12,7 +12,7 @@ import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAM
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
-import { DEFAULT_SETTINGS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
+import { DEFAULT_SETTINGS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -136,6 +136,8 @@ const settingsSchema = z.object({
   vscodeTheme: z.union([z.literal(''), z.string().regex(VSCODE_THEME_ID)]).catch(DEFAULT_SETTINGS.vscodeTheme),
   autoCheckUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoCheckUpdates),
   autoDownloadUpdates: z.boolean().catch(DEFAULT_SETTINGS.autoDownloadUpdates),
+  updateCheckEvery: z.enum(UPDATE_CHECK_EVERY).catch(DEFAULT_SETTINGS.updateCheckEvery),
+  updateRemindEvery: z.enum(UPDATE_REMIND_EVERY).catch(DEFAULT_SETTINGS.updateRemindEvery),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
   defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),
   defaultChatUi: z.boolean().catch(DEFAULT_SETTINGS.defaultChatUi),

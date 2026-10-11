@@ -152,7 +152,9 @@ app.whenReady().then(async () => {
         for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, Boolean(next.wallpaper), custom)
       })
     }
-    if (next.autoCheckUpdates !== previous.autoCheckUpdates) guard(log, 'Update checks', () => c.updates.setAutoCheck(next.autoCheckUpdates))
+    if (next.autoCheckUpdates !== previous.autoCheckUpdates || next.updateCheckEvery !== previous.updateCheckEvery) {
+      guard(log, 'Update checks', () => c.updates.setAutoCheck(next.autoCheckUpdates, next.updateCheckEvery))
+    }
     if (next.autoDownloadUpdates !== previous.autoDownloadUpdates) guard(log, 'Update downloads', () => c.updates.setAutoDownload(next.autoDownloadUpdates))
     // A headless server keeps the addresses it was started with.
     if (next.shareOnTailnet !== previous.shareOnTailnet && servePort === undefined) void guard(log, 'Sharing', () => share(next.shareOnTailnet))
@@ -164,7 +166,7 @@ app.whenReady().then(async () => {
   })
   const startup = c.settings.get()
   guard(log, 'Update downloads', () => c.updates.setAutoDownload(startup.autoDownloadUpdates))
-  guard(log, 'Update checks', () => c.updates.setAutoCheck(startup.autoCheckUpdates))
+  guard(log, 'Update checks', () => c.updates.setAutoCheck(startup.autoCheckUpdates, startup.updateCheckEvery))
   if (startup.computerUse) guard(log, 'Computer use', () => c.computer.warm(), report('Computer use'))
   if (startup.queenGlobalShortcut) guard(log, 'Queen Bee shortcut', () => c.hotkey.apply(true, startup.queenShortcut), report("Queen Bee's shortcut"))
   registerIpc(

@@ -2,27 +2,39 @@ import { useEffect, useState } from 'react'
 import { Download, Rocket, X } from 'lucide-react'
 import { Button, IconButton } from '../../components/ui/Button'
 import { api } from '../../lib/api'
-import { useUpdates } from '../../stores/data'
+import { UPDATE_INTERVAL_MS, updateOverdue } from '@shared/domain'
+import { useSettings, useUpdates } from '../../stores/data'
 import { runAction } from '../../stores/notices'
 import { releaseHighlights } from './release-notes'
 import styles from './UpdatePrompt.module.css'
 
 const RELEASES = 'https://github.com/raktim-yoddha/hiveory/releases'
 
+/** How often a dismissed reminder is re-checked. */
+const TICK_MS = 60_000
+
 /**
- * Pop-up when an update is found, downloading or ready. "Later" hides it for that version this session;
- * a downloaded update still installs on quit, and Settings → Updates always shows the current state.
+ * Pop-up when an update is found, downloading or ready. "Later" hides it for that version this session —
+ * unless it is overdue (two days after its release): then it returns after Settings › Updates › Remind me
+ * (ADR 0039). A downloaded update still installs on quit, and Settings → Updates always shows the state.
  */
 export function UpdatePrompt() {
   const { status, load } = useUpdates()
-  const [dismissed, setDismissed] = useState<string | null>(null)
+  const remindEvery = useSettings((s) => s.settings.updateRemindEvery)
+  const [dismissed, setDismissed] = useState<{ version: string; at: number } | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     void load()
   }, [load])
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
 
   if (status.state !== 'available' && status.state !== 'downloading' && status.state !== 'downloaded') return null
-  if (dismissed === status.version) return null
-  const later = () => setDismissed(status.version)
+  const due = updateOverdue(status.releaseDate, now) && dismissed !== null && now - dismissed.at >= UPDATE_INTERVAL_MS[remindEvery]
+  if (dismissed?.version === status.version && !due) return null
+  const later = () => setDismissed({ version: status.version, at: Date.now() })
   const notes = releaseHighlights(status.notes)
 
   return (

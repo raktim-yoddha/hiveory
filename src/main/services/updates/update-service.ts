@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '@shared/domain'
+import { UPDATE_INTERVAL_MS, type UpdateCheckEvery, type UpdateStatus } from '@shared/domain'
 import type { Logger } from '../../app/logger'
 import type { Emit } from '../events'
 
@@ -12,14 +12,16 @@ export interface Updater {
   on(event: string, listener: (...args: never[]) => void): unknown
 }
 
-const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
-
 /**
  * Update checks against the project's GitHub releases (electron-updater).
  * Manual check is always available in installed builds; automatic checks run
  * on launch and every few hours when enabled. Development builds report
  * `unsupported` instead of pretending to check.
  */
+/** The release date electron-updater reports, when it is a real date. */
+const released = (info: { releaseDate?: unknown }): { releaseDate?: string } =>
+  typeof info.releaseDate === 'string' && !Number.isNaN(Date.parse(info.releaseDate)) ? { releaseDate: info.releaseDate } : {}
+
 export class UpdateService {
   private status: UpdateStatus
   private timer: NodeJS.Timeout | null = null
@@ -34,15 +36,16 @@ export class UpdateService {
     updater.autoDownload = false
     updater.autoInstallOnAppQuit = true
     updater.on('checking-for-update', () => this.set({ state: 'checking' }))
-    updater.on('update-available', ((info: { version: string; releaseNotes?: unknown }) =>
-      this.set({ state: 'available', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined })) as never)
+    updater.on('update-available', ((info: { version: string; releaseNotes?: unknown; releaseDate?: unknown }) =>
+      this.set({ state: 'available', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined, ...released(info) })) as never)
     updater.on('update-not-available', () => this.set({ state: 'not-available', lastChecked: new Date().toISOString() }))
     updater.on('download-progress', ((p: { percent: number }) => {
-      const { version, notes } = this.status.state === 'available' || this.status.state === 'downloading' ? this.status : { version: '', notes: undefined }
-      this.set({ state: 'downloading', version, percent: Math.round(p.percent), notes })
+      const { version, notes, releaseDate } =
+        this.status.state === 'available' || this.status.state === 'downloading' ? this.status : { version: '', notes: undefined, releaseDate: undefined }
+      this.set({ state: 'downloading', version, percent: Math.round(p.percent), notes, ...(releaseDate ? { releaseDate } : {}) })
     }) as never)
-    updater.on('update-downloaded', ((info: { version: string; releaseNotes?: unknown }) =>
-      this.set({ state: 'downloaded', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined })) as never)
+    updater.on('update-downloaded', ((info: { version: string; releaseNotes?: unknown; releaseDate?: unknown }) =>
+      this.set({ state: 'downloaded', version: info.version, notes: typeof info.releaseNotes === 'string' ? info.releaseNotes : undefined, ...released(info) })) as never)
     updater.on('error', ((error: Error) => this.set({ state: 'error', message: error?.message ?? 'Update failed' })) as never)
   }
 
@@ -82,12 +85,13 @@ export class UpdateService {
     if (enabled && this.status.state === 'available') void this.download()
   }
 
-  setAutoCheck(enabled: boolean): void {
+  /** Checks now and then every `every` (Settings › Updates › Check for updates, ADR 0039). */
+  setAutoCheck(enabled: boolean, every: UpdateCheckEvery = '6h'): void {
     if (this.timer) clearInterval(this.timer)
     this.timer = null
     if (!enabled || !this.updater) return
     void this.check()
-    this.timer = setInterval(() => void this.check(), AUTO_CHECK_INTERVAL_MS)
+    this.timer = setInterval(() => void this.check(), UPDATE_INTERVAL_MS[every])
     this.timer.unref()
   }
 

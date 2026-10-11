@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Download, Loader2, RefreshCw, Rocket } from 'lucide-react'
 import type { UpdateStatus } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
+import { Tabs } from '../../components/ui/Tabs'
 import { Toggle } from '../../components/ui/Toggle'
 import { api } from '../../lib/api'
 import { useApp, useSettings, useUpdates } from '../../stores/data'
@@ -99,7 +100,7 @@ export function UpdatesSection() {
       <div className={styles.group}>
         <SettingRow
           title="Check automatically"
-          description="On launch and every six hours. A pop-up tells you when a new version is out."
+          description="On launch and on the schedule below. A pop-up tells you when a new version is out."
           control={
             <Toggle
               label="Check for updates automatically"
@@ -116,6 +117,41 @@ export function UpdatesSection() {
               label="Download updates automatically"
               checked={settings.autoDownloadUpdates}
               onChange={(autoDownloadUpdates) => void update({ autoDownloadUpdates })}
+            />
+          }
+        />
+        <SettingRow
+          title="Check for updates"
+          description="Hiveory also checks each time it opens."
+          control={
+            <Tabs
+              label="Check for updates"
+              variant="segmented"
+              value={settings.updateCheckEvery}
+              onChange={(updateCheckEvery) => void update({ updateCheckEvery })}
+              options={[
+                { value: 'hourly', label: 'Hourly' },
+                { value: '6h', label: 'Every 6 hours' },
+                { value: 'daily', label: 'Daily' }
+              ]}
+            />
+          }
+        />
+        <SettingRow
+          title="Remind me about overdue updates"
+          description="An update becomes overdue two days after its release. A dismissed reminder returns after this interval."
+          control={
+            <Tabs
+              label="Remind me about overdue updates"
+              variant="segmented"
+              value={settings.updateRemindEvery}
+              onChange={(updateRemindEvery) => void update({ updateRemindEvery })}
+              options={[
+                { value: '2h', label: '2 hours' },
+                { value: '4h', label: '4 hours' },
+                { value: '8h', label: '8 hours' },
+                { value: 'daily', label: 'Daily' }
+              ]}
             />
           }
         />
