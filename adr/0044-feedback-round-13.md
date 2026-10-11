@@ -58,6 +58,15 @@ a livelier app, and a full pass for speed, memory, security and the guide.
   main keeps its output, so showing it again rebuilds it from there. Before, every terminal ever shown
   stayed in memory until its agent was closed.
 
+- While an agent works its model is read from the newest 64 KB of its session file (it read up to
+  480 KB every five seconds); a Workspace's Worktrees tab stops polling Git while the window is hidden.
+
+### The Guide
+- Settings › Guide is rewritten: a short, current chapter for each part of the app (getting started,
+  worktrees and Git, panes, arranging, the Kanban and side panel, the browser, Queen Bee, bots, chat,
+  routines, skills and apps, integrations, remote and phone, keyboard, appearance, troubleshooting).
+  It had stale facts (browsers in the side panel, agents never relaunching) and no word on half the app.
+
 ### Livelier
 - Small CSS-only motion, shortened for reduced motion: a new pane springs into place, a new tab drops
   into its strip, side panel tabs fade up on every switch, a worktree's pane list unfolds row by row,

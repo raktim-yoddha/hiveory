@@ -5,7 +5,7 @@ import type { CliInstance } from '@shared/domain'
 import type { CliRuntimeManager } from '../cli/runtime/runtime-manager'
 import type { StateStore } from '../persistence/state-store'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
-import { headAndTail, newestFiles } from './readers'
+import { newestFiles, tailLines } from './readers'
 
 const TICK_MS = 5000
 /** Looking up an unknown Codex thread walks its sessions folder: at most this often. */
@@ -79,7 +79,8 @@ export class ModelTracker {
   }
 
   private async modelIn(cliId: string, file: string, size: number): Promise<string | undefined> {
-    const { tail } = await headAndTail(file, size)
+    // Polled while the agent works: the newest 64 KB hold its current model.
+    const tail = await tailLines(file, size)
     for (const line of [...tail].reverse()) {
       if (cliId === 'claude' && line.type === 'assistant' && !line.isSidechain) {
         const model = str(obj(line.message).model)

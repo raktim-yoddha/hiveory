@@ -1,18 +1,22 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import {
   Blocks,
+  Bot,
+  CalendarClock,
   Compass,
   GitBranch,
+  GitPullRequest,
+  Globe,
   Keyboard,
   KanbanSquare,
-  Layers,
   LayoutGrid,
   LifeBuoy,
   MessagesSquare,
-  SquareTerminal,
-  Workflow
+  Palette,
+  Smartphone
 } from 'lucide-react'
 import { AgentIcon } from '../../../components/brand/AgentIcon'
+import { QueenIcon } from '../../../components/brand/QueenIcon'
 
 export interface GuideSection {
   heading: string
@@ -31,29 +35,32 @@ export interface GuideChapter {
 
 const K = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>
 
+/**
+ * The field guide (Settings › Guide, ADR 0044): one short chapter per part of the app, in the words the
+ * app uses. Kept in step with APP_GUIDE (src/shared/hiveory/guide.ts), which agents and Queen Bee read.
+ */
 export const GUIDE: GuideChapter[] = [
   {
     id: 'start',
     title: 'Getting started',
-    summary: 'Open a workspace, create a worktree, start your first agents.',
+    summary: 'Add a workspace, open a worktree, start your first agents.',
     icon: Compass,
     sections: [
       {
-        heading: 'Open a workspace',
+        heading: 'Add a workspace',
         body: (
           <p>
-            Click <b>Add workspace</b> (or the folder icon in the sidebar): pick a local folder, create a new repository, clone one, or
-            restore a workspace you removed earlier with its worktrees and agents. Adding a workspace creates nothing — no worktree,
-            branch or agent — until you ask for it.
+            A workspace is a folder or repository. Click <b>Add workspace</b> (the folder icon in the sidebar): pick a local folder,
+            create or clone a repository, choose a folder on an SSH host, or restore one you removed with its worktrees and agents.
           </p>
         )
       },
       {
-        heading: 'Create a worktree',
+        heading: 'Worktrees',
         body: (
           <p>
-            Press <b>+</b> next to the workspace name. Choose <b>Workspace folder</b> to work directly in the folder (one per workspace), or{' '}
-            <b>New branch</b> for an isolated copy on its own Git branch so agents never collide.
+            Each workspace opens on its <b>Primary</b> worktree: the folder itself. Press <b>+</b> beside the workspace for another
+            worktree, an isolated copy on its own branch, so agents working on different things never collide.
           </p>
         )
       },
@@ -61,89 +68,130 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Open agents',
         body: (
           <p>
-            Pick CLIs and counts while creating the worktree, or use <b>Open agent</b> in an empty worktree. Every installed CLI is
-            detected automatically; each instance gets its own pet name, terminal and status.
+            In an empty worktree use <b>Open agent</b> (or <b>Load preset</b>); in a busy one, a pane&rsquo;s <b>+</b>. Every installed CLI
+            is found by itself. Each agent gets its own name, terminal or chat view, and status.
           </p>
-        )
+        ),
+        keywords: 'cli claude codex gemini pet name'
+      },
+      {
+        heading: 'Your first choices',
+        body: (
+          <p>
+            The welcome asks how panes share a worktree (<b>Tiles</b> side by side, or <b>Tabs</b> like Orca) and whether surfaces have
+            air between them (<b>Spaced</b>) or meet edge to edge (<b>Attached</b>). Both change any time in Settings › Appearance › Panes.
+          </p>
+        ),
+        keywords: 'tiles tabs spaced attached welcome onboarding'
       }
     ]
   },
   {
     id: 'git',
-    title: 'Worktrees & branches',
-    summary: 'How isolation works, base branches, existing branches and cleanup.',
+    title: 'Worktrees & Git',
+    summary: 'Isolation, branches, the Primary, reviews and cleanup.',
     icon: GitBranch,
     sections: [
       {
-        heading: 'Isolated worktrees',
+        heading: 'New worktrees',
         body: (
           <p>
-            A <b>New branch</b> worktree is a separate folder that shares your repository but has its own branch and
-            files. Hiveory creates the folder and branch for you (default <code>hiveory/&lt;name&gt;</code>) from the base branch you
-            choose.
+            A new worktree is its own folder sharing your repository, on its own branch (<code>hiveory/&lt;name&gt;</code> by default) from
+            the base you choose. Turn on <b>Use existing branch</b> to check out one you have, or pick a remote branch. Hiveory runs the Git
+            commands; you never manage worktrees by hand.
           </p>
         ),
-        keywords: 'worktree isolation folder'
-      },
-      {
-        heading: 'Use an existing branch',
-        body: <p>Turn on “Use existing branch” to check out a branch you already have into a new isolated worktree.</p>
+        keywords: 'branch base isolated'
       },
       {
         heading: 'No Git yet?',
-        body: <p>Isolation needs a Git repository with one commit. The create dialog offers to initialize Git and make that first commit.</p>,
+        body: <p>Worktrees need a repository with one commit. The create dialog offers to initialize Git and make that first commit.</p>,
         keywords: 'init initialize repository commit'
       },
       {
-        heading: 'Status, pull requests and cleanup',
+        heading: 'Reviews and issues',
         body: (
           <p>
-            The Dashboard's Worktrees tab shows each branch's changes, ahead/behind counts and its pull request (merge request on
-            GitLab), with the open ones below; Create PR opens one from any branch but the default. The Issues tab lists issues from
-            the code host, Jira or Linear (Settings › Integrations), and starts a worktree from one. Deleting a worktree removes its
-            folder; branches with unmerged commits are always kept. A missing folder can be repaired from the branch.
+            The Dashboard&rsquo;s <b>Worktrees</b> tab shows each branch&rsquo;s changes, ahead/behind and its pull request (merge request on
+            GitLab); <b>Create PR</b> pushes the branch and opens one. The <b>Issues</b> tab lists issues from GitHub, GitLab, Jira or Linear;{' '}
+            <b>Start worktree</b> names a worktree after an issue, shows it on the card and tells its agents.
           </p>
         ),
-        keywords: 'delete repair github gh pr'
+        keywords: 'github gitlab pr merge request issue'
+      },
+      {
+        heading: 'Delete and repair',
+        body: (
+          <p>
+            Deleting a worktree removes its folder; a branch with unmerged commits is always kept. A missing folder can be repaired from its
+            branch. The Primary is never deleted, only removed from Hiveory.
+          </p>
+        ),
+        keywords: 'delete remove repair cleanup'
       }
     ]
   },
   {
     id: 'panes',
     title: 'Agents & panes',
-    summary: 'Pane controls, status colors, restart and maximize.',
+    summary: 'The pane header, status, terminals, presets and memory.',
     icon: AgentIcon,
     sections: [
       {
         heading: 'Pane header',
         body: (
           <p>
-            The logo is the CLI, the name is the agent. <b>+</b> opens another agent beside it (right or below), the expand icon maximizes
-            (or double-click the header), <b>⋯</b> has restart, move and close. Narrow panes hide extras but always keep close.
+            The logo is the CLI, the name is the agent: right-click it for Rename, Restart, Move and Close (right-click twice renames). The{' '}
+            <b>+</b> opens an agent, terminal or browser beside it; double-click the header to maximize.
           </p>
         )
       },
       {
-        heading: 'Status colors',
+        heading: 'Status',
         body: (
           <p>
-            Grey = idle, green = working, amber = waiting for you (a permission, question or confirmation). A pane waiting for you also
-            gets an amber edge. Hover the dot for the reason.
+            Grey is idle, green is working, amber is waiting for you (a permission, question or confirmation) — the pane gets an amber edge
+            too. Hover the dot for the reason. Terminals are not agents: they have no status and no Kanban card.
           </p>
         ),
-        keywords: 'idle working waiting colour color'
+        keywords: 'idle working waiting colour color dot'
+      },
+      {
+        heading: 'Terminal or chat',
+        body: (
+          <p>
+            An agent runs in its own terminal, or in a chat view for CLIs that have one (each workspace picks a default in its settings).
+            Click anywhere in a chat to type.
+          </p>
+        ),
+        keywords: 'chat ui view'
+      },
+      {
+        heading: 'Presets',
+        body: <p>A preset remembers which CLIs, how many of each, auto-approve and chat view — never the layout. Load one into any empty worktree.</p>,
+        keywords: 'preset save load'
+      },
+      {
+        heading: 'Memory',
+        body: (
+          <p>
+            Agents keep working with the window closed (Hiveory stays in the tray). After a quit, a reboot or removing and restoring a
+            workspace, every agent comes back and resumes its own conversation; terminals show what they printed last time.
+          </p>
+        ),
+        keywords: 'resume restart reopen tray background scrollback'
       }
     ]
   },
   {
     id: 'layout',
     title: 'Arranging panes',
-    summary: 'Dock, swap, resize and one-drop layouts.',
+    summary: 'Tiles or tabs, dock, swap, resize and one-drop layouts.',
     icon: LayoutGrid,
     sections: [
       {
         heading: 'Drag to dock',
-        body: <p>Drag a pane by its header onto the edge of another pane (or of the whole area). A preview shows where it lands.</p>
+        body: <p>Drag a pane by its header (or a tab) onto the edge of another pane or of the whole area. A preview shows where it lands.</p>
       },
       {
         heading: 'Swap',
@@ -154,101 +202,318 @@ export const GUIDE: GuideChapter[] = [
         )
       },
       {
-        heading: 'One-drop layouts',
+        heading: 'Tabs',
         body: (
           <p>
-            Drag a pane to the top edge: <b>Equal</b> divides the space evenly, <b>Focus</b> gives the dragged pane half and stacks the
-            rest, <b>Columns</b> puts everything side by side.
+            In the Tabs style each area holds several panes as tabs; <b>+</b> after the last tab opens one there. Drag a tab along its strip to
+            reorder, onto another strip to move it, into an area to add it, or to an edge to split it out. Middle-click closes.
           </p>
         ),
-        keywords: 'equal focus columns arrange grid'
+        keywords: 'tabs strip reorder split'
       },
       {
-        heading: 'Resize',
+        heading: 'One-drop layouts and resizing',
         body: (
           <p>
-            Drag the gap between panes, or focus it and use the arrow keys. Panes never shrink below a usable size; <b>⋯ → Move</b> rearranges
-            from the keyboard.
+            Drag a pane to the top edge: <b>Equal</b>, <b>Focus</b> (half for it, the rest stacked) or <b>Columns</b>. Drag the line between
+            panes to resize, or focus it and use the arrow keys.
           </p>
-        )
+        ),
+        keywords: 'equal focus columns arrange resize'
       }
     ]
   },
   {
     id: 'kanban',
-    title: 'The Kanban',
-    summary: 'Idle, Working, Waiting for You — driven by real agent state.',
+    title: 'The Kanban & Dashboard',
+    summary: 'Every agent by what it is really doing, and the side panel.',
     icon: KanbanSquare,
     sections: [
       {
         heading: 'Three columns, no manual moves',
         body: (
           <p>
-            The workspace's Tasks tab shows every agent sorted by what it is actually doing. Cards move by themselves; click one to jump to
-            its pane.
+            The Dashboard&rsquo;s <b>Tasks</b> tab sorts the workspace&rsquo;s agents into Idle, Working and Waiting for you by their real state.
+            Cards move by themselves; click one to jump to its pane.
           </p>
         )
-      }
-    ]
-  },
-  {
-    id: 'presets',
-    title: 'Presets',
-    summary: 'Reusable sets of CLIs and counts.',
-    icon: Layers,
-    sections: [
+      },
       {
-        heading: 'Save and load',
-        body: <p>A preset remembers which CLIs, how many of each and the auto-approve setting — never the layout. Load one into any empty worktree.</p>
-      }
-    ]
-  },
-  {
-    id: 'terminal',
-    title: 'Terminal & side panel',
-    summary: 'A real shell for each worktree.',
-    icon: SquareTerminal,
-    sections: [
-      {
-        heading: 'Side panel',
-        body: <p>Inside a worktree, the right-panel button in the title bar opens the side panel: browsers, the worktree's Explorer and agent Sessions. Terminals open as panes from a pane's "+".</p>
-      }
-    ]
-  },
-  {
-    id: 'tools',
-    title: 'Agent tools',
-    summary: 'Let agents see, message and coordinate each other.',
-    icon: Workflow,
-    sections: [
-      {
-        heading: 'What agents can do',
+        heading: 'The side panel',
         body: (
           <p>
-            Supported agents get a local MCP server named <code>hiveory</code>: list agents and their status, read another agent's screen,
-            send it a message, wait for it, open or close agents, arrange panes and run terminal commands. Try asking an agent: “open a
-            Codex agent next to you and ask it to review your last change.”
+            Inside a worktree the side panel holds the Dashboard, Sessions (every CLI conversation, resumable), the Explorer, Routines and the
+            workspace&rsquo;s Settings. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
+            button.
           </p>
         ),
-        keywords: 'mcp coordinate orchestrate message'
+        keywords: 'sessions explorer side panel dashboard'
+      },
+      {
+        heading: 'Files',
+        body: <p>Double-click a file in the Explorer to edit it as a pane (Ctrl+S saves). It reloads when an agent changes it on disk.</p>,
+        keywords: 'explorer editor file'
+      }
+    ]
+  },
+  {
+    id: 'browser',
+    title: 'Built-in browser',
+    summary: 'A real browser your agents can drive, beside them.',
+    icon: Globe,
+    sections: [
+      {
+        heading: 'Pages are panes',
+        body: (
+          <p>
+            Open a page from a pane&rsquo;s <b>+</b> › Browser. A page an agent opens appears beside that agent (a tab in its area in the Tabs
+            style), named after it, with its cursor visible while it works. A page steps aside while a menu or dialog is open over it.
+          </p>
+        ),
+        keywords: 'page pane agent cursor'
+      },
+      {
+        heading: 'Notes for agents',
+        body: (
+          <p>
+            <b>Annotate</b> picks elements one after another and writes a note for each in a card on the page — a change or a question — then
+            sends them to an agent. <b>Pick element</b> copies one element for pasting to an agent.
+          </p>
+        ),
+        keywords: 'annotate pick element note'
+      },
+      {
+        heading: 'Profiles and devices',
+        body: (
+          <p>
+            Profiles keep separate cookies and logins (import, export or clear them from the menu). The device toolbar emulates phones,
+            tablets and desktops. Settings › Browser turns agent browsing on or off and sets the home page and sizes.
+          </p>
+        ),
+        keywords: 'profile cookies device viewport mobile'
+      }
+    ]
+  },
+  {
+    id: 'queen',
+    title: 'Queen Bee',
+    summary: 'Run the app by voice or text.',
+    icon: QueenIcon,
+    sections: [
+      {
+        heading: 'Call her',
+        body: (
+          <p>
+            Tap her shortcut (<K>Win</K> <K>Alt</K> by default, <K>⌘</K> <K>⌥</K> on a Mac) to type, hold it to talk. She opens, closes,
+            restarts and finds agents, messages them (&ldquo;tell Bruno to run the tests&rdquo;), reports who is waiting, switches pages and
+            changes a few settings. She asks before closing or guessing.
+          </p>
+        ),
+        keywords: 'shortcut voice talk command'
+      },
+      {
+        heading: 'Where she sits',
+        body: (
+          <p>
+            Docked under the main area, floating over it, or put away in the title bar: only her mark stays there and her bar drops down
+            when you click it or press her shortcut. Change it in her <b>⋯</b> menu or Settings › Queen Bee › Bar &amp; shortcut.
+          </p>
+        ),
+        keywords: 'docked floating title bar hide disable'
+      },
+      {
+        heading: 'Voice, models and notes',
+        body: (
+          <p>
+            Speech packs download on request and run on this computer. A model (your key, a local server, or your Codex or Claude plan) is
+            optional: it only handles what her rules don&rsquo;t understand. &ldquo;Remember that…&rdquo; saves a note; notes stay on this
+            computer.
+          </p>
+        ),
+        keywords: 'provider model voice notes memory'
+      }
+    ]
+  },
+  {
+    id: 'bots',
+    title: 'Bots',
+    summary: 'Teammates with a brief, memory and their own threads.',
+    icon: Bot,
+    sections: [
+      {
+        heading: 'A bot',
+        body: (
+          <p>
+            Each bot has a name, a brief, an engine and model, and a memory it carries into every new thread. Threads keep running while you
+            are elsewhere. Bots are grouped into teams; each team&rsquo;s <b>Chief of Staff</b> hands work to its bots and gets the results back.
+          </p>
+        ),
+        keywords: 'team chief thread memory brief'
+      },
+      {
+        heading: 'Asking before acting',
+        body: (
+          <p>
+            A bot asks before it sends or changes things in your apps (per bot). The request waits in its thread and on the work board for
+            Allow or Decline. A bot may also work in its own sandboxed Linux computer, which you can take over from its panel.
+          </p>
+        ),
+        keywords: 'approval allow decline computer docker'
+      },
+      {
+        heading: 'Routines and triggers',
+        body: (
+          <p>
+            A bot can run instructions on a schedule (routines) or when something happens in a connected app (triggers, read-only). The work
+            board lists what the team owes: Working, Didn&rsquo;t finish or Done.
+          </p>
+        ),
+        keywords: 'routine trigger schedule work board'
       }
     ]
   },
   {
     id: 'chat',
     title: 'Chat',
-    summary: 'A clean chat over any detected CLI.',
+    summary: 'A clean chat over any CLI.',
     icon: MessagesSquare,
     sections: [
       {
         heading: 'Pick, then talk',
         body: (
           <p>
-            Choose a CLI, a model (search helps with long lists) and, when the model supports it, an effort level. The CLI locks once the
-            chat starts. Chats keep running while you work elsewhere.
+            Choose a CLI, a model (searchable) and, when the model has one, an effort level; the CLI locks after the first message. While it
+            answers you can type the next message — it waits and goes in when the reply ends. The bookmark in the box holds saved prompts.
           </p>
         ),
-        keywords: 'model effort thinking'
+        keywords: 'model effort thinking saved prompts queue'
+      }
+    ]
+  },
+  {
+    id: 'routines',
+    title: 'Routines',
+    summary: 'Scheduled agents, chats and bot runs.',
+    icon: CalendarClock,
+    sections: [
+      {
+        heading: 'Three kinds',
+        body: (
+          <p>
+            A Work routine starts an agent in a worktree (its card moves on the Kanban like any agent); make one in the Dashboard&rsquo;s Routines
+            tab. A chat routine starts a new chat. A bot routine runs in a fresh thread of that bot.
+          </p>
+        ),
+        keywords: 'schedule cron calendar'
+      },
+      {
+        heading: 'When they run',
+        body: (
+          <p>
+            Once, every few minutes, or on a calendar rule in a timezone — while Hiveory (or your Hiveory server) runs. A run missed by under
+            12 hours still happens when it is back, and every run is kept in a log.
+          </p>
+        ),
+        keywords: 'missed log timezone'
+      }
+    ]
+  },
+  {
+    id: 'extensions',
+    title: 'Skills, MCPs & Apps',
+    summary: 'Give every agent skills, MCP servers and apps.',
+    icon: Blocks,
+    sections: [
+      {
+        heading: 'Skills',
+        body: (
+          <p>
+            Settings › Skills, MCPs &amp; Apps › Skills lists every skill and the CLIs that load it. Light a folder to copy a skill there, create
+            or import one, or find more on <b>skills.sh</b> and install it for every CLI.
+          </p>
+        ),
+        keywords: 'skill skills.sh install'
+      },
+      {
+        heading: 'MCP servers and apps',
+        body: (
+          <p>
+            Servers you add (or find in the MCP Registry) and apps you connect are served by Hiveory to every agent — terminal, chat and bots —
+            without touching any CLI&rsquo;s config. Apps run through your own Composio key, kept encrypted on this computer.
+          </p>
+        ),
+        keywords: 'mcp registry composio apps'
+      }
+    ]
+  },
+  {
+    id: 'integrations',
+    title: 'Integrations',
+    summary: 'GitHub, GitLab, Jira and Linear.',
+    icon: GitPullRequest,
+    sections: [
+      {
+        heading: 'Code hosts',
+        body: (
+          <p>
+            GitHub and GitLab work through their own CLIs (<code>gh</code>, <code>glab</code>) you are signed in to; Hiveory keeps no token.
+            Settings › Integrations shows who you are signed in as.
+          </p>
+        ),
+        keywords: 'gh glab github gitlab sign in'
+      },
+      {
+        heading: 'Issue trackers',
+        body: (
+          <p>
+            Jira (site, email and API token) and Linear (API key) connect in Settings › Integrations; keys stay encrypted here. Each
+            workspace&rsquo;s settings pick its code host, where its issues come from, and its Jira project or Linear team.
+          </p>
+        ),
+        keywords: 'jira linear issues tracker project team'
+      },
+      {
+        heading: 'Workspace look',
+        body: <p>A workspace&rsquo;s settings give it an icon in any color, an emoji, your own image, or its GitHub or GitLab avatar.</p>,
+        keywords: 'avatar icon emoji color'
+      }
+    ]
+  },
+  {
+    id: 'remote',
+    title: 'Remote, server & phone',
+    summary: 'Workspaces on other machines, and Hiveory from anywhere.',
+    icon: Smartphone,
+    sections: [
+      {
+        heading: 'Workspaces over SSH',
+        body: (
+          <p>
+            Add workspace › Remote picks a host (from Tailscale or <code>~/.ssh/config</code>) and a folder. Files, Git, worktrees and agents stay
+            on that machine. If the link drops, its agents keep running and Hiveory reconnects for five minutes.
+          </p>
+        ),
+        keywords: 'ssh remote host tailscale'
+      },
+      {
+        heading: 'A Hiveory server',
+        body: (
+          <p>
+            Run <code>hiveory --serve 7788</code> on an always-on machine so agents work while this computer is off; Settings › Remote pairs
+            this window with it using the code it prints.
+          </p>
+        ),
+        keywords: 'server serve headless pair'
+      },
+      {
+        heading: 'Your devices and phone',
+        body: (
+          <p>
+            With Tailscale, Settings › Remote › Share this computer lets your other devices and the Hiveory phone app connect — one tap on the
+            same Tailscale account, a pairing code otherwise. Remove a device to cut it off at once.
+          </p>
+        ),
+        keywords: 'phone mobile tailscale share devices'
       }
     ]
   },
@@ -266,13 +531,13 @@ export const GUIDE: GuideChapter[] = [
               <K>Ctrl</K> <K>C</K> copies a selection; with nothing selected it interrupts the agent.
             </li>
             <li>
-              <K>Ctrl</K> <K>V</K> pastes text; if the clipboard holds an image, the agent receives it as its own paste.
+              <K>Ctrl</K> <K>V</K> pastes text; an image on the clipboard reaches the agent as its own paste.
             </li>
             <li>
               <K>Shift</K> <K>Enter</K> inserts a newline instead of sending.
             </li>
             <li>
-              <K>Alt</K> shortcuts (e.g. <K>Alt</K> <K>V</K>) reach the agent untouched. Right-click copies or pastes.
+              <K>Alt</K> shortcuts reach the agent untouched. Right-click copies or pastes.
             </li>
             <li>Dictation tools that paste (such as Wispr Flow) work like a normal paste.</li>
           </ul>
@@ -282,29 +547,20 @@ export const GUIDE: GuideChapter[] = [
     ]
   },
   {
-    id: 'extensions',
-    title: 'Skills, MCPs & Apps',
-    summary: 'Give every agent skills, MCP servers and apps.',
-    icon: Blocks,
+    id: 'appearance',
+    title: 'Appearance',
+    summary: 'Themes, panes, wallpaper and the terminal font.',
+    icon: Palette,
     sections: [
       {
-        heading: 'Skills',
+        heading: 'Make it yours',
         body: (
           <p>
-            Settings → Skills, MCPs &amp; Apps → Skills lists every skill and the CLIs that load it. Light a folder (Shared, Claude,
-            Codex, Cursor) to copy the skill there, create a new skill, or import a skill folder.
+            Settings › Appearance: <b>Theme</b> (Dark, Bronze, Silver, or any VS Code theme from Open VSX), <b>Panes</b> (Tiles or Tabs, Spaced
+            or Attached), <b>Background</b> (your own image, with transparency, blur and dim) and <b>Terminal font</b>.
           </p>
-        )
-      },
-      {
-        heading: 'MCP servers and apps',
-        body: (
-          <p>
-            Servers you add under MCP servers, and apps you connect under Apps, are served by Hiveory to every agent — terminal, chat
-            and bots — without changing any CLI's config. Apps run through your own Composio project: paste its API key once, then Connect
-            takes you straight to each app's sign-in. The key is encrypted on this computer.
-          </p>
-        )
+        ),
+        keywords: 'theme vs code wallpaper font tiles tabs attached'
       }
     ]
   },
@@ -316,15 +572,28 @@ export const GUIDE: GuideChapter[] = [
     sections: [
       {
         heading: 'Updates',
-        body: <p>Settings → Updates checks GitHub releases on demand or automatically. Nothing downloads without your click.</p>
+        body: <p>Settings › Updates checks for new versions on its own or on demand, and installs on your click.</p>,
+        keywords: 'update version release'
       },
       {
         heading: 'An agent shows "Not running"',
-        body: <p>Agents are never relaunched automatically after a restart. Use Start (or Resume for Claude sessions) in the pane.</p>
+        body: (
+          <p>
+            Its process ended (it exited, or the CLI failed to start). Use Restart in the pane&rsquo;s menu; if the CLI no longer has the
+            conversation, it starts a new one.
+          </p>
+        ),
+        keywords: 'not running stopped crashed restart'
       },
       {
         heading: 'A CLI is missing',
-        body: <p>Install it so its command is on your PATH, then use “Detect CLIs again” in the create dialog.</p>
+        body: <p>Install it so its command is on your PATH, then refresh the list in the agent menu or the create dialog.</p>,
+        keywords: 'install path detect'
+      },
+      {
+        heading: 'Ask an agent or Queen Bee',
+        body: <p>Every agent and Queen Bee know this app: ask them where something is or how to do it.</p>,
+        keywords: 'help where how'
       }
     ]
   }

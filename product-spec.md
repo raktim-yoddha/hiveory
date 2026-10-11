@@ -270,7 +270,7 @@ The browser is a real browser (ADR 0015), opened as a pane among the agents from
 
 - toolbar: back, forward, reload, address bar (bare hosts and searches work), pick element, annotate element, viewport sizes, developer tools, and a menu with profiles, cookie import/export/clear and Browser settings
 - agents drive it through `browser_*` MCP tools with a visible cursor; it is on by default and works while the panel is closed
-- pages an agent opens appear as tabs in its worktree's side panel, named after the agent
+- pages an agent opens appear as panes beside that agent (a tab in its area in the Tabs style), named after it (ADR 0043)
 - profiles keep separate cookies and logins; viewports emulate phones, tablets and desktops
 - Settings › Browser: browser use, agent cursor, home page, default profile, profiles, custom viewport sizes
 - device mode: a toolbar above the page with 22 devices, editable width × height, pixel ratio, rotate and drag handles (ADR 0016); agents use the same
@@ -400,7 +400,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 - Talk to agents by name: "codex run the tests", "Bruno, …", "everyone: …", "tell all
   claude to …", "open codex and send: …" (exact words, no model needed).
 - "stop Bruno" interrupts without closing; "status of everything", "codex status", "what is
-  Bruno doing", "take me to whoever needs me", "close idle agents", "jade theme", "create a
+  Bruno doing", "take me to whoever needs me", "close idle agents", "bronze theme", "create a
   worktree called …", "help", "again".
 - Live updates: she tells you (and says) when an agent finishes, needs you or crashes,
   whether or not she started the work.

@@ -48,6 +48,20 @@ export async function headAndTail(file: string, size: number): Promise<{ head: J
   }
 }
 
+/** Only the last whole lines of a JSONL file, at most `bytes` of it (a live file read often, ADR 0044). */
+export async function tailLines(file: string, size: number, bytes = 64 * 1024): Promise<Json[]> {
+  if (size <= bytes) return (await headAndTail(file, size)).tail
+  const handle = await open(file, 'r')
+  try {
+    const buffer = Buffer.alloc(bytes)
+    const { bytesRead } = await handle.read(buffer, 0, bytes, size - bytes)
+    const text = buffer.subarray(0, bytesRead).toString('utf8')
+    return parseLines(text.slice(text.indexOf('\n') + 1))
+  } finally {
+    await handle.close()
+  }
+}
+
 /** Plain text of a message's content: a string, or the text parts of a content array. */
 const textOf = (content: unknown): string => {
   if (typeof content === 'string') return content

@@ -15,10 +15,16 @@ export const useGitStatus = (workspaceId: string, enabled: boolean): GitStatusVi
         .then((s) => !disposed && setStatus(s))
         .catch(() => undefined)
     load()
-    const timer = setInterval(load, REFRESH_MS)
+    // Not while the window is minimized or hidden (ADR 0044); it catches up when shown again.
+    const timer = setInterval(() => !document.hidden && load(), REFRESH_MS)
+    const shown = (): void => {
+      if (!document.hidden) load()
+    }
+    document.addEventListener('visibilitychange', shown)
     return () => {
       disposed = true
       clearInterval(timer)
+      document.removeEventListener('visibilitychange', shown)
     }
   }, [workspaceId, enabled])
   return status
