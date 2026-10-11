@@ -20,6 +20,7 @@ import { findExecutable } from '../main/services/cli/discovery'
 import { FileService } from '../main/services/files/file-service'
 import { GitCommandError, GitService } from '../main/services/git/git-service'
 import { WorktreeService } from '../main/services/git/worktree-service'
+import { SessionHistoryService } from '../main/services/sessions/session-history'
 
 const MAX_EXEC_OUTPUT = 32 * 1024 * 1024
 
@@ -56,6 +57,8 @@ export const runProgram = (p: ExecParams): Promise<{ code: number | null; stdout
 export interface HostServeOptions {
   /** How this machine trashes files: the OS trash locally, a folder under ~/.hiveory-host remotely. */
   trash?: (path: string) => Promise<void>
+  /** Where the CLIs keep their history (the user's home; tests use a folder of their own). */
+  home?: string
 }
 
 /** Output kept per terminal while no client is attached (the newest part wins). */
@@ -105,7 +108,9 @@ export const createHostState = (options: HostServeOptions = {}): HostState => {
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, content, 'utf8')
       }
-    }
+    },
+    // Unreadable session files are skipped either way; the host has no log of its own.
+    sessions: new SessionHistoryService({ info: () => undefined, warn: () => undefined, error: () => undefined }, options.home)
   }
   return state
 }

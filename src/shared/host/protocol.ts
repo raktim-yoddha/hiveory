@@ -35,7 +35,9 @@ export const HOST_SERVICES = {
   git: ['repositoryRoot', 'currentBranch', 'hasCommits', 'localBranchExists', 'refExists', 'localBranches', 'remoteBranches', 'fetch', 'status', 'branchNameProblem', 'init', 'defaultBranch'],
   worktrees: ['create', 'remove', 'deleteBranchIfMerged', 'repairLink', 'list', 'prune', 'recreate'],
   files: ['list', 'search', 'read', 'write', 'create', 'rename', 'remove', 'paste', 'watch', 'resolveIn'],
-  fs: ['exists', 'isDirectory', 'mkdirp', 'readDir', 'writeText']
+  fs: ['exists', 'isDirectory', 'mkdirp', 'readDir', 'writeText'],
+  /** The CLIs' own session history on that machine (the side panel's Sessions, ADR 0043). */
+  sessions: ['list']
 } as const
 export type HostService = keyof typeof HOST_SERVICES
 

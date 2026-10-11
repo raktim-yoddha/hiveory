@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -48,6 +48,25 @@ describe('host services (git, files, fs run on the host)', () => {
     const clash = await worktrees.create({ repoRoot: dir, path: join(dir, '..', `wt-${Date.now()}`), branch: 'main' }).catch((e: unknown) => e)
     expect(clash).toBeInstanceOf(AppException)
     expect((clash as AppException).error.message).toContain('already checked out')
+  })
+
+  it("lists the CLI sessions kept on the host's own disk (ADR 0043)", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'hv-host-home-'))
+    const cwd = join(home, 'code', 'demo')
+    mkdirSync(join(home, '.claude', 'projects', 'demo'), { recursive: true })
+    const line = (r: unknown) => JSON.stringify(r)
+    writeFileSync(
+      join(home, '.claude', 'projects', 'demo', '11111111-2222-3333-4444-555555555555.jsonl'),
+      [
+        line({ type: 'user', cwd, timestamp: '2026-10-01T10:00:05Z', message: { role: 'user', content: 'Fix the login bug' } }),
+        line({ type: 'assistant', cwd, timestamp: '2026-10-01T10:01:00Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Fixed it.' }] } })
+      ].join('\n') + '\n'
+    )
+    const [clientSide, hostSide] = transportPair()
+    serveHost(hostSide, { trash: async () => undefined, home })
+    const sessions = new HostClient(clientSide).service<HostKit['sessions']>('sessions')
+    expect((await sessions.list([cwd])).map((s) => s.title)).toEqual(['Fix the login bug'])
+    expect(await sessions.list([join(home, 'elsewhere')])).toEqual([])
   })
 
   it('only runs allowed service methods', async () => {

@@ -13,6 +13,7 @@ import type { FileService } from '../files/file-service'
 import type { GitService } from '../git/git-service'
 import type { WorktreeService } from '../git/worktree-service'
 import type { PtyBackend } from '../pty/pty-backend'
+import type { SessionHistoryService } from '../sessions/session-history'
 import { hostPtyBackend } from './host-client'
 import type { HostClient } from './host-client'
 import type { SshHostConnector } from './ssh-host'
@@ -44,6 +45,8 @@ export interface HostKit {
   worktrees: Remote<Pick<WorktreeService, 'create' | 'remove' | 'deleteBranchIfMerged' | 'repairLink' | 'list' | 'prune' | 'recreate'>>
   files: Remote<Pick<FileService, 'list' | 'search' | 'read' | 'write' | 'create' | 'rename' | 'remove' | 'paste' | 'watch' | 'resolveIn'>>
   fs: HostFs
+  /** The CLIs' session history on this machine (ADR 0043). */
+  sessions: Remote<Pick<SessionHistoryService, 'list'>>
   pty: PtyBackend
   registry: CliRegistry
   /** Runs a program on this machine without a shell (docker for bot computers, for example). */
@@ -88,6 +91,7 @@ export interface LocalKitParts {
   git: GitService
   worktrees: WorktreeService
   files: FileService
+  sessions?: SessionHistoryService
   pty: PtyBackend
   registry: CliRegistry
   hook: () => HookEndpoint | undefined
@@ -106,6 +110,7 @@ export const localKit = (parts: LocalKitParts): HostKit => ({
   worktrees: asRemote(parts.worktrees),
   files: asRemote(parts.files),
   fs: localFs,
+  sessions: parts.sessions ? asRemote(parts.sessions) : { list: async () => [] },
   pty: parts.pty,
   registry: parts.registry,
   exec: runProgram,
@@ -277,6 +282,7 @@ export class HostRegistry {
       worktrees: service('worktrees'),
       files: service('files'),
       fs: service('fs'),
+      sessions: service('sessions'),
       // Remote PTYs never fall back to this computer: the work belongs on that host.
       pty: hostPtyBackend(() => Promise.resolve(live().alive ? live() : null), {
         spawn: () => fail('NOT_FOUND', `${host.destination} is not connected.`)

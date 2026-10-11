@@ -3,7 +3,7 @@ import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
-import { isOpenableUrl } from '@shared/domain'
+import { hostKey, hostLabel, isOpenableUrl, type AgentSession } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
@@ -169,13 +169,31 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.projects.markActive(opened.agent.projectId)
     return opened
   },
-  'sessions.list': ({ scope, workspaceId, projectId }) => {
-    if (scope === 'all') return c.sessions.list()
-    if (scope === 'workspace') return c.sessions.list(workspaceId ? [c.workspaceRepo.get(workspaceId).path] : [])
+  // A Workspace on an SSH host lists that host's sessions; All adds every connected host's (ADR 0043).
+  'sessions.list': async ({ scope, workspaceId, projectId }) => {
+    const on = async (host: HostRef | undefined, folders?: string[]): Promise<AgentSession[]> => {
+      if (!host) return c.sessions.list(folders)
+      try {
+        return await (await c.hosts.kit(host)).sessions.list(folders)
+      } catch (error) {
+        c.log.warn(`Could not read sessions on ${hostLabel(host)}`, error)
+        return []
+      }
+    }
+    if (scope === 'all') {
+      const hosts = new Map(c.projects.list().flatMap((p) => (p.host && c.hosts.connected(p.host) ? [[hostKey(p.host), p.host] as const] : [])))
+      const lists = await Promise.all([c.sessions.list(), ...[...hosts.values()].map((host) => on(host))])
+      return lists.flat().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    }
+    if (scope === 'workspace') {
+      if (!workspaceId) return []
+      const worktree = c.workspaceRepo.get(workspaceId)
+      return on(c.workspaceRepo.project(worktree.projectId).host, [worktree.path])
+    }
     if (!projectId) return []
     const project = c.workspaceRepo.project(projectId)
     const main = c.workspaceRepo.main(project)
-    return c.sessions.list([project.path, ...(main ? [main.path] : []), ...c.workspaceRepo.isolated(projectId).map((w) => w.path)])
+    return on(project.host, [project.path, ...(main ? [main.path] : []), ...c.workspaceRepo.isolated(projectId).map((w) => w.path)])
   },
   'agents.close': ({ instanceId }) => c.agents.close(instanceId),
   'agents.rename': ({ instanceId, name }) => c.agents.rename(instanceId, name),
