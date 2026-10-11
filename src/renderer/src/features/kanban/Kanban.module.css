@@ -22,7 +22,7 @@
   display: grid;
   flex: 1;
   grid-template-columns: repeat(3, minmax(var(--kanban-column-min), 1fr));
-  gap: var(--gutter);
+  gap: var(--space-5);
   min-height: 0;
 }
 

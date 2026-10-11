@@ -72,3 +72,12 @@
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
+
+/* Attached: the areas meet at a hairline with square corners. */
+.attached {
+  gap: var(--border-width);
+}
+
+.attached .area {
+  border-radius: 0;
+}

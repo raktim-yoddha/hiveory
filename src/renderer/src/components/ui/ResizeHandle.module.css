@@ -11,6 +11,17 @@
   touch-action: none;
 }
 
+/* Attached panes: a zero-width gutter keeps a grabbable strip (ADR 0043). */
+:global(:root[data-panes='attached']) .handle::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(var(--space-2) * -1);
+}
+
+:global(:root[data-panes='attached']) .horizontal::before {
+  inset: calc(var(--space-2) * -1) 0;
+}
+
 .handle::after {
   content: '';
   width: var(--space-1);

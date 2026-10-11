@@ -15,7 +15,7 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Bots', 'Bots mode: assistants with threads, teams and a Chief of Staff, routines on a calendar, triggers from connected apps, the work board and the team map.'],
   ['Chat', 'Chat mode: conversations with a CLI in a chat view, read-only by default; schedule one as a routine.'],
   ['Queen Bee', 'The voice and text operator: opens, messages and reports on agents, navigates and changes a few settings. Her shortcut is in Settings › Queen Bee.'],
-  ['Settings › Appearance', 'Pane style (Tiles, or Tabs where each area holds several panes as tabs), themes, wallpaper, transparency, VS Code color themes and the terminal font.'],
+  ['Settings › Appearance', 'In sections: Theme; Panes (pane style: Tiles, or Tabs where each area holds several panes as tabs; pane spacing: Spaced, or Attached edge to edge); Background (wallpaper, transparency, blur, dim); VS Code color themes; Terminal font.'],
   ['Settings › Agents', 'Hiveory tools for agents, default auto-approve and chat view, computer use, keep running in the background.'],
   ['Settings › Browser', 'Browser use for agents, the agent cursor, home page, profiles and viewport sizes.'],
   ['Settings › Skills, MCP & Apps', 'Skills across every CLI (and skills.sh to find more), MCP servers Hiveory runs for every agent (and the MCP Registry), and apps through Composio.'],

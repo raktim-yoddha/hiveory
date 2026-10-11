@@ -3,6 +3,7 @@ import { Ban, Check, ImagePlus, X } from 'lucide-react'
 import { THEMES, type ThemeId } from '@shared/domain'
 import type { WallpaperImage } from '@shared/ipc/contract'
 import { RangeField } from '../../components/ui/RangeField'
+import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { useSettings } from '../../stores/data'
@@ -12,7 +13,7 @@ import { SettingsPage } from './SettingsScreen'
 import { ThemeCard, type ThemePreview } from './ThemeCard'
 import { TerminalFontSettings } from './TerminalFontSettings'
 import { VsCodeThemes } from './VsCodeThemes'
-import { PaneStylePicker } from './PaneStylePicker'
+import { PaneSpacingPicker, PaneStylePicker } from './PaneStylePicker'
 import styles from './Settings.module.css'
 
 /** Literal swatches: each card previews its own theme regardless of the active one. */
@@ -27,9 +28,20 @@ const PREVIEW: Record<ThemeId, ThemePreview> = {
 
 const percent = (value: number): string => `${Math.round(value * 100)}%`
 
+/** Appearance in sections, one at a time (ADR 0043): it had grown too long for one page. */
+const SECTIONS = [
+  { value: 'theme', label: 'Theme' },
+  { value: 'panes', label: 'Panes' },
+  { value: 'background', label: 'Background' },
+  { value: 'vscode', label: 'VS Code themes' },
+  { value: 'terminal', label: 'Terminal font' }
+] as const
+type Section = (typeof SECTIONS)[number]['value']
+
 export function AppearanceSection() {
   const { settings, update } = useSettings()
   const [images, setImages] = useState<WallpaperImage[]>([])
+  const [section, setSection] = useState<Section>('theme')
 
   useEffect(() => {
     let live = true
@@ -86,6 +98,9 @@ export function AppearanceSection() {
 
   return (
     <SettingsPage title="Appearance" description="Choose the finish for Hiveory, or install a VS Code theme. Terminals, the editor and window chrome follow the theme.">
+      <Tabs<Section> label="Appearance sections" value={section} onChange={setSection} options={[...SECTIONS]} className={styles.sectionTabs} />
+
+      {section === 'theme' && (
       <div className={styles.themes} role="radiogroup" aria-label="Theme">
         {THEMES.map((theme, index) => (
           <ThemeCard
@@ -99,7 +114,10 @@ export function AppearanceSection() {
           />
         ))}
       </div>
+      )}
 
+      {section === 'panes' && (
+      <>
       <div className={styles.group}>
         <div className={styles.groupTitle}>Pane style</div>
         <p className={styles.groupNote}>How agents, terminals, files and pages share a worktree. Going back to Tiles spreads every tab into its own area.</p>
@@ -107,7 +125,17 @@ export function AppearanceSection() {
           <PaneStylePicker value={settings.paneStyle} onChange={(paneStyle) => void update({ paneStyle })} />
         </div>
       </div>
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Pane spacing</div>
+        <p className={styles.groupNote}>Spaced keeps air and rounded corners between surfaces. Attached puts everything edge to edge.</p>
+        <div className={styles.paneStyle}>
+          <PaneSpacingPicker value={settings.paneSpacing} onChange={(paneSpacing) => void update({ paneSpacing })} />
+        </div>
+      </div>
+      </>
+      )}
 
+      {section === 'background' && (
       <div className={styles.group}>
         <div className={styles.groupTitle}>Background</div>
         <p className={styles.groupNote}>Add any image as a wallpaper behind every panel. Hiveory keeps its own copy, sized for the screen.</p>
@@ -165,9 +193,10 @@ export function AppearanceSection() {
           </div>
         )}
       </div>
+      )}
 
-      <VsCodeThemes />
-      <TerminalFontSettings />
+      {section === 'vscode' && <VsCodeThemes />}
+      {section === 'terminal' && <TerminalFontSettings />}
     </SettingsPage>
   )
 }

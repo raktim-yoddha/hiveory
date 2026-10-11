@@ -203,7 +203,7 @@
 .surface {
   height: 100%;
   border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: var(--surface-radius);
   background: var(--gradient-surface), var(--color-surface);
   box-shadow: var(--shadow-surface);
 }

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
 import { EMOJI, HEX_COLOR, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
-import { FONT_FAMILY, FONT_WEIGHTS, PANE_STYLES, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
+import { FONT_FAMILY, FONT_WEIGHTS, PANE_SPACINGS, PANE_STYLES, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -454,6 +454,7 @@ export const requestSchemas = {
       queenUpdates: z.enum(['all', 'waiting', 'off']),
       queenPopups: z.boolean(),
       paneStyle: z.enum(PANE_STYLES),
+      paneSpacing: z.enum(PANE_SPACINGS),
       welcomed: z.boolean(),
       queenVoiceSpeed: z.number().min(0.8).max(1.4)
     })

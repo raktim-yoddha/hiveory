@@ -39,6 +39,12 @@ function App() {
   useEffect(() => {
     applyLook({ theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim }, custom)
   }, [theme, wallpaper, surfaceOpacity, wallpaperBlur, wallpaperDim, custom])
+  // Spaced or attached surfaces (ADR 0043): tokens.css reads data-panes.
+  const paneSpacing = settings.paneSpacing
+  useEffect(() => {
+    if (paneSpacing === 'attached') document.documentElement.dataset.panes = 'attached'
+    else delete document.documentElement.dataset.panes
+  }, [paneSpacing])
   const terminalFont = settings.terminalFont
   useEffect(() => {
     applyTerminalFont(terminalFont)

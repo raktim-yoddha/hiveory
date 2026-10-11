@@ -298,7 +298,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
-  gap: var(--gutter);
+  gap: var(--space-5);
 }
 
 @container settings (width < 620px) {

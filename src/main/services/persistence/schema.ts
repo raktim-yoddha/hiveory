@@ -13,7 +13,7 @@ import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAM
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
-import { DEFAULT_SETTINGS, PANE_STYLES, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, AVATAR_DATA, EMOJI, HEX_COLOR, MAX_AVATAR_CHARS, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
+import { DEFAULT_SETTINGS, PANE_SPACINGS, PANE_STYLES, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, AVATAR_DATA, EMOJI, HEX_COLOR, MAX_AVATAR_CHARS, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -190,6 +190,7 @@ const settingsSchema = z.object({
   queenUpdates: z.enum(['all', 'waiting', 'off']).catch(DEFAULT_SETTINGS.queenUpdates),
   queenPopups: z.boolean().catch(DEFAULT_SETTINGS.queenPopups),
   paneStyle: z.enum(PANE_STYLES).catch(DEFAULT_SETTINGS.paneStyle),
+  paneSpacing: z.enum(PANE_SPACINGS).catch(DEFAULT_SETTINGS.paneSpacing),
   welcomed: z.boolean().catch(DEFAULT_SETTINGS.welcomed),
   queenVoiceSpeed: z.number().min(0.8).max(1.4).catch(DEFAULT_SETTINGS.queenVoiceSpeed)
 })

@@ -10,7 +10,7 @@
   overflow: hidden;
   /* No outline at rest: it appears only when the pane is the selected one. */
   border: var(--border-width) solid transparent;
-  border-radius: var(--radius-lg);
+  border-radius: var(--surface-radius);
   background: var(--color-surface);
   transition:
     border-color var(--duration-base) var(--ease-out),

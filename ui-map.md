@@ -239,7 +239,8 @@ New skill uses the same checklist. MCP: "In Hiveory · every agent"
 
 ### Settings › Appearance
 
-Theme cards three per row; Background: None, six presets, added images, Add
+A section bar (ADR 0043): Theme · Panes · Background · VS Code themes · Terminal font, one shown at a
+time. Panes: Pane style [Tiles] [Tabs] and Pane spacing [Spaced] [Attached] cards. Theme cards three per row; Background: None, six presets, added images, Add
 image; Transparency · Blur · Dim sliders when a wallpaper is set. VS Code themes (ADR 0034):
 each installed extension's themes as cards (Remove per extension), then a search field and the
 Open VSX catalog (icon, name, publisher · installs, description, Install / Installed, Show more).
@@ -409,8 +410,8 @@ pane's name for restart, move and close (ADR 0018).
 └─────────────────────────────────────────────────────┘  └──────────────────────────┘
 ```
 
-Settings › Appearance › Pane style: [Tiles] [Tabs] cards; the first-run welcome asks the same.
-"+" (right after the last tab) in Tabs: ( Tab | → Right | ↓ Bottom ). Tab: click shows; drag along the
+Settings › Appearance › Panes: [Tiles] [Tabs] and [Spaced] [Attached] cards; the first-run welcome asks
+the same. "+" (right after the last tab) in Tabs opens a tab, with no placement choice (ADR 0043). Tab: click shows; drag along the
 strip reorders (a bar marks the spot), onto another strip places it there, into an area's middle adds it,
 to an area's edge splits it out, Space swaps; middle-click closes; double-click maximizes; right-click:
 Rename · Split right · Split down · Close; right-click twice renames.

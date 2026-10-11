@@ -48,6 +48,13 @@
   pointer-events: none;
 }
 
+/* Attached panes: the hairline divider keeps a grabbable width (ADR 0043). */
+:global(:root[data-panes='attached']) .divider::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-2) * -1);
+}
+
 /* The gutter is the divider: invisible until hovered, so surfaces keep their air. */
 .divider {
   position: absolute;

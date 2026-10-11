@@ -308,6 +308,8 @@ and opens the place when she can.
 
 ## Appearance
 
+Appearance is in sections, one at a time: Theme, Panes, Background, VS Code themes, Terminal font (ADR 0043). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, like Orca). The first-run welcome asks both.
+
 Six flat themes, three per row. A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
 
 VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A VS Code theme recolors every panel, the terminals, the editor and the window chrome; the wallpaper, transparency, blur and dim still apply on top. Choosing a built-in theme switches back.

@@ -152,7 +152,7 @@
   min-height: 0;
   overflow: hidden;
   border: var(--border-width) solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: var(--surface-radius);
   background: var(--gradient-surface), var(--color-surface);
   box-shadow: var(--shadow-surface);
 }
@@ -287,7 +287,7 @@
   place-items: center;
   aspect-ratio: 16 / 10;
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: var(--surface-radius);
   background: var(--color-surface-inset);
 }
 

@@ -236,7 +236,7 @@
 .themes {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--gutter);
+  gap: var(--space-5);
 }
 
 @container settings (width < 620px) {
@@ -1024,4 +1024,12 @@
 /* Settings › Appearance › Pane style (ADR 0042). */
 .paneStyle {
   padding: 0 var(--space-7) var(--space-6);
+}
+
+/* Appearance's section bar (ADR 0043): scrolls sideways on a narrow window instead of wrapping. */
+.sectionTabs {
+  flex: none;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }

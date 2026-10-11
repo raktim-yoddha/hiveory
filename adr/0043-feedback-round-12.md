@@ -31,6 +31,16 @@ avatar), a tidier Appearance page, remote sessions, and a few corrections.
   avatar address and kept like any avatar (`projects.githubAvatar`). Avatar over emoji over icon; choosing
   one clears the others. The phone shows all three.
 
+### Pane spacing and Appearance
+- **Pane spacing**: Spaced (today's look: air and rounded corners between the sidebars, side panel,
+  panes and screens) or **Attached**: no air, square corners, no surface shadow; surfaces meet at their
+  borders, like Orca. Asked in the first-run welcome beside the pane style, changed in Settings ›
+  Appearance › Panes. Stored as `paneSpacing` (`spaced` default); applied as `data-panes` on the root,
+  which sets `--gutter`, `--page-padding` and `--surface-radius`. Dividers and resize handles keep a
+  grabbable strip when the gutter is zero; grids inside screens use the spacing scale, not the gutter.
+- Settings › Appearance has a section bar: Theme · Panes · Background · VS Code themes · Terminal font,
+  one shown at a time.
+
 ## Consequences
 
 The sidebar bar now needs the browser pages and open files of each Worktree; files are known once a

@@ -80,17 +80,25 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
   useLayoutEffect(() => {
     const el = containerRef.current
     if (!el) return
-    setMetrics({
-      gutter: readPx(el, '--gutter', 10),
-      minWidth: readPx(el, '--pane-min-width', 240),
-      minHeight: readPx(el, '--pane-min-height', 140)
-    })
+    const measure = (): void =>
+      setMetrics({
+        gutter: readPx(el, '--gutter', 10),
+        minWidth: readPx(el, '--pane-min-width', 240),
+        minHeight: readPx(el, '--pane-min-height', 140)
+      })
+    measure()
+    // Spaced or attached panes (ADR 0043) change --gutter at the root.
+    const spacing = new MutationObserver(measure)
+    spacing.observe(document.documentElement, { attributes: true, attributeFilter: ['data-panes'] })
     // Pixel bounds are for drag targets and limits only; pane positions are relative (see placed()).
     const observer = new ResizeObserver(([entry]) => {
       if (entry) setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
     })
     observer.observe(el)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      spacing.disconnect()
+    }
   }, [])
 
   const activeTree = resizing?.tree ?? tree

@@ -238,6 +238,8 @@
   /* Layout rhythm: the visible air between surfaces (design.md "Surfaces Need Air") */
   --gutter: 10px;
   --page-padding: 10px;
+  /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
+  --surface-radius: var(--radius-lg);
 
   /* Elevation: restrained, warm-tinted. Light VS Code themes lighten the tint. */
   --shadow-tint: rgb(0 0 0 / 0.6);
@@ -496,4 +498,16 @@
   --term-bright-black: #61535a;
   --term-white: #d9ccd1;
   --term-bright-white: #faf4f6;
+}
+
+/*
+ * Attached panes (Settings › Appearance › Pane spacing, ADR 0043): no air and no rounded corners —
+ * sidebars, side panel and panes meet at their borders, edge to edge, like Orca. --gutter is the air
+ * between surfaces only; content grids use the spacing scale.
+ */
+:root[data-panes='attached'] {
+  --gutter: 0px;
+  --page-padding: 0px;
+  --surface-radius: 0px;
+  --shadow-surface: none;
 }

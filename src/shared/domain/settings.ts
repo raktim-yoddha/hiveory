@@ -99,6 +99,8 @@ export interface AppSettings {
   queenPopups: boolean
   /** Tiles: one pane per area. Tabs: each area holds several panes as tabs, like Orca (ADR 0042). */
   paneStyle: PaneStyle
+  /** Spaced: air and rounded corners between surfaces. Attached: edge to edge, like Orca (ADR 0043). */
+  paneSpacing: PaneSpacing
   /** The welcome that asks for the pane style has been answered (shown once). */
   welcomed: boolean
   /** Speaking speed (0.8–1.4). */
@@ -107,6 +109,8 @@ export interface AppSettings {
 
 export const PANE_STYLES = ['tiles', 'tabs'] as const
 export type PaneStyle = (typeof PANE_STYLES)[number]
+export const PANE_SPACINGS = ['spaced', 'attached'] as const
+export type PaneSpacing = (typeof PANE_SPACINGS)[number]
 
 export const FONT_WEIGHTS = ['100', '200', '300', '400', '500', '600', '700', '800', '900'] as const
 export type FontWeight = (typeof FONT_WEIGHTS)[number]
@@ -207,6 +211,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenUpdates: 'all',
   queenPopups: false,
   paneStyle: 'tiles',
+  paneSpacing: 'spaced',
   welcomed: false,
   queenVoiceSpeed: 1.05
 }
