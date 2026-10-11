@@ -84,6 +84,8 @@ export class BrowserService {
   private readonly pages = new Map<string, Page>()
   /** The page each agent acts on by default. */
   private readonly current = new Map<string, string>()
+  /** The page that has keyboard focus: a native view, so the app's own focus can't tell (ADR 0043). */
+  private focusedId: string | undefined
   private readonly configured = new WeakSet<Session>()
   private annotations: BrowserAnnotation[] = []
   /** Pages each agent touched during its current tool call. */
@@ -95,8 +97,11 @@ export class BrowserService {
   private window: BrowserWindow | null = null
   private counter = 0
   private emitTimer: ReturnType<typeof setTimeout> | null = null
-  /** Told when a scope gains or loses a page, so a worktree's pane layout follows (ADR 0042). */
-  private onScope: (scope: string) => void = () => undefined
+  /**
+   * Told when a scope gains or loses a page, so a worktree's pane layout follows (ADR 0042). A page
+   * an agent or another page opened names the pane it belongs beside (ADR 0043).
+   */
+  private onScope: (scope: string, opened?: { pageId: string; beside: string }) => void = () => undefined
 
   constructor(
     private readonly store: StateStore,
@@ -108,7 +113,7 @@ export class BrowserService {
   ) {}
 
   /** Browser pages are panes of their worktree (ADR 0042): its layout follows them. */
-  onScopeChange(listener: (scope: string) => void): void {
+  onScopeChange(listener: (scope: string, opened?: { pageId: string; beside: string }) => void): void {
     this.onScope = listener
   }
 
@@ -245,7 +250,7 @@ export class BrowserService {
   // ---------- pages ----------
 
   state(): BrowserState {
-    return { pages: [...this.pages.values()].map((p) => this.view(p)), profiles: this.profiles(), annotations: this.annotations }
+    return { pages: [...this.pages.values()].map((p) => this.view(p)), profiles: this.profiles(), annotations: this.annotations, focusedPageId: this.focusedId }
   }
 
   private view(page: Page): BrowserPageView {
@@ -285,7 +290,7 @@ export class BrowserService {
     return this.pages.has(pageId)
   }
 
-  open(input: { scope: string; url?: string; profileId?: string; owner?: AgentRef }): BrowserPageView {
+  open(input: { scope: string; url?: string; profileId?: string; owner?: AgentRef; opener?: string }): BrowserPageView {
     const settings = this.settings.get()
     const wanted = input.profileId ?? this.profileFor(input.scope) ?? settings.browserDefaultProfile
     const profileId = this.profiles().some((p) => p.id === wanted) ? wanted : DEFAULT_BROWSER_PROFILE.id
@@ -325,7 +330,8 @@ export class BrowserService {
     else void view.webContents.loadURL('about:blank')
     if (input.owner) this.current.set(input.owner.id, page.id)
     this.changed()
-    this.onScope(page.scope)
+    const beside = input.opener ?? input.owner?.id
+    this.onScope(page.scope, beside ? { pageId: id, beside } : undefined)
     return this.view(page)
   }
 
@@ -355,9 +361,18 @@ export class BrowserService {
     wc.setWindowOpenHandler(({ url }) => {
       if (/^https?:/i.test(url)) {
         const owner = page.ownerAgentId && page.ownerName ? { id: page.ownerAgentId, workspaceId: page.scope, petName: page.ownerName } : undefined
-        this.open({ scope: page.scope, url, profileId: page.profileId, owner })
+        this.open({ scope: page.scope, url, profileId: page.profileId, owner, opener: page.id })
       }
       return { action: 'deny' }
+    })
+    wc.on('focus', () => {
+      this.focusedId = page.id
+      this.changed()
+    })
+    wc.on('blur', () => {
+      if (this.focusedId !== page.id) return
+      this.focusedId = undefined
+      this.changed()
     })
     wc.on('render-process-gone', (_event, details) => {
       this.log.warn(`Browser page ${page.id} crashed: ${details.reason}`)
@@ -380,6 +395,11 @@ export class BrowserService {
     this.annotations = this.annotations.filter((a) => a.pageId !== pageId)
     this.changed()
     this.onScope(page.scope)
+  }
+
+  /** A worktree went away: its pages go with it, rather than running on unseen (ADR 0043). */
+  closeScope(scope: string): void {
+    for (const id of this.pageIdsIn(scope)) this.close(id)
   }
 
   closeAll(): void {

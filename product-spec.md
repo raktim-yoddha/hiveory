@@ -327,7 +327,8 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   and a bottom area, each with its own tabs and "+"; a divider sets their heights. Keyboard:
   Ctrl+Shift+← → reorders, Ctrl+Shift+↓ ↑ moves a tab between the areas.
 - **Sessions** tab: every Claude Code, Codex and Gemini CLI conversation on this computer, read
-  from the CLIs' own history (so it survives restarts and reboots). Worktree · Workspace · All,
+  from the CLIs' own history (so it survives restarts and reboots). A Workspace on an SSH host lists
+  that host's sessions; All adds every connected host's (ADR 0043). Worktree · Workspace · All,
   search, grouped by folder, newest first; title, last words, CLI, time and model. A session
   that ran in one of the workspace's worktrees resumes there as a new agent pane.
 

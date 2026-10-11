@@ -240,6 +240,8 @@
   --page-padding: 10px;
   /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
   --surface-radius: var(--radius-lg);
+  /* A pane's edge at rest: none while panes have air between them, a line once they touch. */
+  --pane-rest-border: transparent;
 
   /* Elevation: restrained, warm-tinted. Light VS Code themes lighten the tint. */
   --shadow-tint: rgb(0 0 0 / 0.6);
@@ -510,4 +512,5 @@
   --page-padding: 0px;
   --surface-radius: 0px;
   --shadow-surface: none;
+  --pane-rest-border: var(--color-border-subtle);
 }

@@ -225,7 +225,15 @@ export class AgentService {
     }
   }
 
+  /** Told when a worktree is forgotten, so its other panes (browser pages) close with it (ADR 0043). */
+  private forgotten: (workspaceId: string) => void = () => undefined
+
+  onForgetWorkspace(listener: (workspaceId: string) => void): void {
+    this.forgotten = listener
+  }
+
   forgetWorkspace(workspaceId: string): void {
+    this.forgotten(workspaceId)
     for (const instance of this.instances(workspaceId)) this.disposeRuntime(instance)
     this.store.update((s) => {
       s.instances = s.instances.filter((i) => i.workspaceId !== workspaceId)

@@ -97,6 +97,8 @@ export interface BrowserState {
   pages: BrowserPageView[]
   profiles: BrowserProfile[]
   annotations: BrowserAnnotation[]
+  /** The page the user's keyboard is in: its pane shows as the selected one (ADR 0043). */
+  focusedPageId?: string
 }
 
 export interface Bounds {

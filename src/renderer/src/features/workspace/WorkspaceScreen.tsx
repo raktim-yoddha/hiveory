@@ -66,15 +66,19 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
     void loadLayout(workspaceId)
   }, [workspaceId, loadAgents, loadEditors, loadLayout])
 
-  // Arriving from a Kanban card: focus that agent's terminal and briefly mark its pane.
+  // Arriving from a Kanban card or the sidebar's pane list: bring the pane's tab forward (Tabs style,
+  // ADR 0043), focus its terminal and briefly mark it.
   useEffect(() => {
     if (!focusPaneId) return
+    if (tabbed) void apply(workspaceId, { type: 'activate', paneId: focusPaneId })
     const focus = setTimeout(() => focusTerminal(focusPaneId), 150)
     const clear = setTimeout(() => setClearedHighlight(focusPaneId), 1200)
     return () => {
       clearTimeout(focus)
       clearTimeout(clear)
     }
+    // Only a new pane to focus re-runs this; switching style or worktree must not re-activate it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPaneId])
 
   if (!project || (workspaces.length > 0 && !workspace)) {
@@ -147,7 +151,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                 if (page) {
                   return (
                     <ErrorBoundary region="Browser" compact resetKey={page.id}>
-                      <BrowserPaneFrame page={page} {...props} tabStrip={tabStrip} />
+                      <BrowserPaneFrame page={page} highlighted={highlight === paneId} {...props} tabStrip={tabStrip} />
                     </ErrorBoundary>
                   )
                 }

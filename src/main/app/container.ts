@@ -347,6 +347,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       git,
       worktrees,
       files,
+      sessions,
       pty: ptyBackend,
       registry,
       hook: () => hookServer?.endpoint,
@@ -371,9 +372,19 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   })
   // A worktree's browser pages are panes of its layout (ADR 0042): they join and leave it as they open and close.
   agents.setExtraPanes((workspaceId) => browser.pageIdsIn(workspaceId))
-  browser.onScopeChange((scope) => {
+  agents.onForgetWorkspace((workspaceId) => browser.closeScope(workspaceId))
+  browser.onScopeChange((scope, opened) => {
     if (!workspaceRepo.find(scope)) return
-    layouts.get(scope, agents.paneIds(scope))
+    const panes = agents.paneIds(scope)
+    // An agent's page, or a popup, opens beside its agent or opener, not at the far right: a tab in
+    // its area in the Tabs style, else to its right (ADR 0043).
+    if (opened && panes.includes(opened.beside)) {
+      const operation =
+        settings?.get().paneStyle === 'tabs'
+          ? { type: 'stack' as const, paneId: opened.pageId, targetPaneId: opened.beside }
+          : { type: 'move' as const, paneId: opened.pageId, targetPaneId: opened.beside, side: 'right' as const }
+      layouts.apply(scope, panes, operation)
+    } else layouts.get(scope, panes)
     emit('state.changed', { topic: 'layout', workspaceId: scope })
   })
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])

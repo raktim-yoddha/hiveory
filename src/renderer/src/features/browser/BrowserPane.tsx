@@ -43,6 +43,27 @@ type PickMode = 'pick' | 'annotate'
 /** Room around the emulated screen for its resize handles (px). */
 const HANDLE_SPACE = 24
 
+/**
+ * The page is a native view drawn above the app, so it must step aside whenever its box can't be seen:
+ * zero size, hidden (a maximized side panel hides the main area), or covered by the app at its centre
+ * and every corner (ADR 0043). A partly covering popup is the overlay check's job.
+ */
+const covered = (el: HTMLElement, r: DOMRect): boolean => {
+  if (r.width < 1 || r.height < 1 || !el.checkVisibility({ visibilityProperty: true, opacityProperty: true })) return true
+  const i = 2
+  const points = [
+    [r.left + r.width / 2, r.top + r.height / 2],
+    [r.left + i, r.top + i],
+    [r.right - i, r.top + i],
+    [r.left + i, r.bottom - i],
+    [r.right - i, r.bottom - i]
+  ] as const
+  return points.every(([x, y]) => {
+    const hit = document.elementFromPoint(x, y)
+    return hit !== null && !el.contains(hit)
+  })
+}
+
 const describeElement = (url: string, el: PickedElement): string =>
   [`Element on ${url}: ${el.role}${el.name ? ` "${el.name}"` : ''} (ref ${el.ref})`, `selector: ${el.selector}`, el.text && `text: ${el.text}`, `html: ${el.html}`]
     .filter(Boolean)
@@ -93,10 +114,11 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
       const el = boxRef.current
       if (!el) return
       const r = el.getBoundingClientRect()
-      const key = `${r.left},${r.top},${r.width},${r.height}`
+      const hidden = covered(el, r)
+      const key = hidden ? 'hidden' : `${r.left},${r.top},${r.width},${r.height}`
       if (key === last) return
       last = key
-      void api('browser.show', { pageId, bounds: { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => undefined)
+      void api('browser.show', { pageId, bounds: hidden ? null : { x: r.left, y: r.top, width: r.width, height: r.height } }).catch(() => undefined)
     }
     // Event-driven, not a per-frame loop: the native page moves only when the
     // layout does (resize, panel/sidebar changes, a slide-in finishing).
@@ -108,6 +130,9 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
     if (boxRef.current) observer.observe(boxRef.current)
     if (stageRef.current) observer.observe(stageRef.current)
     observer.observe(document.body)
+    // Hiding and covering change classes, not sizes: a maximized side panel, a screen switch.
+    const mutations = new MutationObserver(schedule)
+    mutations.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'hidden'] })
     window.addEventListener('resize', schedule)
     document.addEventListener('transitionend', schedule, true)
     document.addEventListener('animationend', schedule, true)
@@ -116,6 +141,7 @@ export function BrowserPane({ pageId, visible }: { pageId: string; visible: bool
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
+      mutations.disconnect()
       clearInterval(poll)
       window.removeEventListener('resize', schedule)
       document.removeEventListener('transitionend', schedule, true)

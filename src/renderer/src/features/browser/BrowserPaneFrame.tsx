@@ -4,6 +4,7 @@ import type { BrowserPageView } from '@shared/domain/browser'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { api } from '../../lib/api'
+import { useBrowser } from '../../stores/browser'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
@@ -15,8 +16,17 @@ import styles from '../editor/Editor.module.css'
  * A browser page as a pane among the agents (ADR 0042): same header, drag, split and maximize as any
  * pane. The page itself is main's native view laid over the pane, so it steps aside while hidden.
  */
-export function BrowserPaneFrame({ page, onDragHandlePointerDown, maximized, toggleMaximize, concealed, tabStrip }: PaneRenderProps & { page: BrowserPageView; tabStrip?: ReactNode }) {
+export function BrowserPaneFrame({
+  page,
+  onDragHandlePointerDown,
+  maximized,
+  toggleMaximize,
+  concealed,
+  tabStrip,
+  highlighted
+}: PaneRenderProps & { page: BrowserPageView; tabStrip?: ReactNode; highlighted?: boolean }) {
   const title = pageTitle(page)
+  const focused = useBrowser((s) => s.focusedPageId === page.id)
   useEffect(() => registerPaneCloser(page.id, () => void api('browser.close', { pageId: page.id }).catch(() => undefined)), [page.id])
   const name = page.ownerName ? `${page.ownerName} · ${title}` : title
   return (
@@ -25,6 +35,8 @@ export function BrowserPaneFrame({ page, onDragHandlePointerDown, maximized, tog
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
       tabStrip={tabStrip}
+      focused={focused}
+      highlighted={highlighted}
       header={
         <>
           <span className={styles.identity} title={page.url}>

@@ -9,7 +9,7 @@
   min-height: 0;
   overflow: hidden;
   /* No outline at rest: it appears only when the pane is the selected one. */
-  border: var(--border-width) solid transparent;
+  border: var(--border-width) solid var(--pane-rest-border);
   border-radius: var(--surface-radius);
   background: var(--color-surface);
   transition:
@@ -17,7 +17,8 @@
     box-shadow var(--duration-base) var(--ease-out);
 }
 
-.frame:focus-within {
+.frame:focus-within,
+.frame[data-focused] {
   border-color: var(--color-border-strong);
 }
 

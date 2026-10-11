@@ -10,6 +10,8 @@ interface PaneFrameProps {
   /** Double-clicking empty header space (or the pane's name, marked data-pane-grip) toggles maximize. */
   onHeaderDoubleClick?: () => void
   highlighted?: boolean
+  /** Selected though DOM focus is elsewhere: a browser page's native view has the keyboard (ADR 0043). */
+  focused?: boolean
   /** Tints the frame so state reads at a glance (e.g. an agent waiting for you). */
   tone?: 'waiting'
   /** Tabbed panes (ADR 0042): the area's tab strip replaces this pane's own header. */
@@ -17,9 +19,9 @@ interface PaneFrameProps {
 }
 
 /** A pane surface: draggable header + content. Content-agnostic. */
-export function PaneFrame({ label, header, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, tone, tabStrip }: PaneFrameProps) {
+export function PaneFrame({ label, header, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, focused, tone, tabStrip }: PaneFrameProps) {
   return (
-    <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} aria-label={label}>
+    <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} data-focused={focused || undefined} aria-label={label}>
       <header
         className={styles.header}
         onPointerDown={onHeaderPointerDown}

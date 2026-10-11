@@ -13,6 +13,7 @@ export const useBrowser = create<BrowserStore>((set) => ({
   pages: [],
   profiles: [],
   annotations: [],
+  focusedPageId: undefined,
   load: async () => {
     try {
       set(await api('browser.state'))
@@ -20,5 +21,6 @@ export const useBrowser = create<BrowserStore>((set) => ({
       reportError(error, 'Load browser')
     }
   },
-  set: (state) => set(state)
+  // A snapshot without a focused page clears it (zustand merges, so set it explicitly).
+  set: (state) => set({ ...state, focusedPageId: state.focusedPageId })
 }))
