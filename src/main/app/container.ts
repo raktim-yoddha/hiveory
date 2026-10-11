@@ -369,9 +369,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const bot = scope.startsWith(botScope('')) ? bots?.find(scope.slice(botScope('').length)) : undefined
     return bot ? bots!.browserProfile(bot.id, { list: () => browser.profiles(), create: (name) => browser.createProfile(name) }) : undefined
   })
+  // A worktree's browser pages are panes of its layout (ADR 0042): they join and leave it as they open and close.
+  agents.setExtraPanes((workspaceId) => browser.pageIdsIn(workspaceId))
+  browser.onScopeChange((scope) => {
+    if (!workspaceRepo.find(scope)) return
+    layouts.get(scope, agents.paneIds(scope))
+    emit('state.changed', { topic: 'layout', workspaceId: scope })
+  })
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
   const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
-  // Apps and Hiveory's MCP servers come through the gateway (ADR 0017, 0023).
   // Every agent, chat and bot can ask Hiveory about itself (ADR 0041).
   const aboutTools = new AboutTools({
     settings: () => settings!.get(),
@@ -381,6 +387,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     },
     connections: () => connections.enabled().flatMap((c) => (c.provider === COMPOSIO.id ? (c.apps ?? []).map((id) => appById(id)?.name ?? id) : [c.name]))
   })
+  // Apps and Hiveory's MCP servers come through the gateway (ADR 0017, 0023).
   const extraTools = () => [aboutTools, ...(settings?.get().computerUse && computer.supported ? [computerTools] : []), gateway]
   const toolDeps = {
     agents,

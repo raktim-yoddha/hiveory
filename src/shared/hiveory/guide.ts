@@ -8,6 +8,7 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Workspace', 'A folder or Git repository in the Work sidebar. Its mark folds its worktrees; right-click for its settings.'],
   ['Worktree', 'The Primary (the workspace folder itself) or an isolated branch folder made by "+" (new, existing or remote branch). Each holds agent and terminal panes.'],
   ['Agents', 'Each pane runs one CLI instance with a pet name. Its status is Idle, Working or Waiting for you; the sidebar bar under a worktree shows them. Panes split right or bottom and can be dragged.'],
+  ['Panes', 'A pane holds an agent, a terminal, a file or a browser page (the built-in browser agents drive; open one from a pane\'s "+" › Browser).'],
   ['Side panel', "A worktree's right panel. It starts with Dashboard, Sessions (the agents' conversation history) and Explorer (files); \"+\" adds Routines (scheduled agents) and Workspace settings."],
   ['Dashboard', "The workspace page in the side panel. Tabs: Tasks (the board), Worktrees (changes and each branch's pull or merge request) and Issues (from GitHub, GitLab, Jira or Linear; start a worktree from one)."],
   ['Workspace settings', 'Name, icon and color; how new agents open (terminal or chat); chat models; branch prefix and base branch; code host and issue source.'],

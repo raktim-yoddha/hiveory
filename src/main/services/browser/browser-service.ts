@@ -94,6 +94,8 @@ export class BrowserService {
   private window: BrowserWindow | null = null
   private counter = 0
   private emitTimer: ReturnType<typeof setTimeout> | null = null
+  /** Told when a scope gains or loses a page, so a worktree's pane layout follows (ADR 0042). */
+  private onScope: (scope: string) => void = () => undefined
 
   constructor(
     private readonly store: StateStore,
@@ -103,6 +105,16 @@ export class BrowserService {
     /** The profile new pages in a scope open in when none is asked for (a bot's own logins). */
     private readonly profileFor: (scope: string) => string | undefined = () => undefined
   ) {}
+
+  /** Browser pages are panes of their worktree (ADR 0042): its layout follows them. */
+  onScopeChange(listener: (scope: string) => void): void {
+    this.onScope = listener
+  }
+
+  /** Ids of a scope's pages, oldest first (a worktree's browser panes). */
+  pageIdsIn(scope: string): string[] {
+    return [...this.pages.values()].filter((p) => p.scope === scope).map((p) => p.id)
+  }
 
   // ---------- window hosting ----------
 
@@ -312,6 +324,7 @@ export class BrowserService {
     else void view.webContents.loadURL('about:blank')
     if (input.owner) this.current.set(input.owner.id, page.id)
     this.changed()
+    this.onScope(page.scope)
     return this.view(page)
   }
 
@@ -361,6 +374,7 @@ export class BrowserService {
     if (!page.view.webContents.isDestroyed()) page.view.webContents.close()
     this.annotations = this.annotations.filter((a) => a.pageId !== pageId)
     this.changed()
+    this.onScope(page.scope)
   }
 
   closeAll(): void {

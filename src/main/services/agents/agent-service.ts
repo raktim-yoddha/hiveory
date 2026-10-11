@@ -103,8 +103,15 @@ export class AgentService {
   }
 
   /** Every pane in the workspace layout: agents, then files open in editor panes. */
+  /** Panes that are neither agents nor files: a worktree's browser pages (ADR 0042). */
+  private extraPanes: (workspaceId: string) => string[] = () => []
+
+  setExtraPanes(source: (workspaceId: string) => string[]): void {
+    this.extraPanes = source
+  }
+
   paneIds(workspaceId: string): string[] {
-    return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id)]
+    return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id), ...this.extraPanes(workspaceId)]
   }
 
   open(workspaceId: string, cliId: string, placement?: Placement, resumeSession?: string, chatUi?: boolean): { agent: CliInstanceView; layout: LayoutNode | null } {

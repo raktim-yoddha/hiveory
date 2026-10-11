@@ -398,7 +398,11 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
 
   'browser.state': () => c.browser.state(),
-  'browser.open': ({ scope, url, profileId }) => c.browser.open({ scope, url, profileId }),
+  'browser.open': ({ scope, url, profileId, beside }) => {
+    const page = c.browser.open({ scope, url, profileId })
+    if (beside && c.workspaceRepo.find(scope)) c.layouts.apply(scope, c.agents.paneIds(scope), { type: 'move', paneId: page.id, targetPaneId: beside.paneId, side: beside.side })
+    return page
+  },
   'browser.close': ({ pageId }) => c.browser.close(pageId),
   'browser.navigate': ({ pageId, url }) => c.browser.navigate(pageId, url),
   'browser.show': ({ pageId, bounds, freeze }) => c.browser.show(pageId, bounds, freeze ?? false),

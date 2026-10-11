@@ -151,7 +151,7 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 - Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
   placement.
 
-### Side panel browser tab (ADR 0015)
+### Browser pane (ADR 0015; a pane among the agents since ADR 0042, opened from a pane's "+" › Browser)
 
 ```text
 ┌ [Terminal] [Milo · GitHub ×] [New tab ×] [+] ───────────── ⤢ ┐

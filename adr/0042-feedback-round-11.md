@@ -20,6 +20,17 @@ own, not open by default.
 - The Dashboard's section tabs have icons and show only them while the panel is narrow (Tabs
   `iconsWhenNarrow`, a container query); the side panel's own tabs do the same.
 
+### Browser panes
+- A browser page is a pane of its worktree, beside agents, terminals and files: same header, drag,
+  split, swap and maximize. A pane's "+" offers Browser (placed right or below that pane); pages an
+  agent opens join its worktree's layout as panes; Queen Bee opens them as panes too.
+- The side panel no longer holds browsers. Main counts a worktree's pages among its panes
+  (`AgentService.setExtraPanes`, `BrowserService.pageIdsIn`) and reconciles the layout when one opens
+  or closes (`onScopeChange`); `browser.open` takes `beside` to place it.
+- The page is a native view: it hides while another pane is maximized and steps aside (leaving a
+  picture) while a pane is dragged.
+
 ## Consequences
 
 A worktree opened before this keeps the side-panel tabs it had; the defaults apply to new ones.
+Browser pages are not restored after a restart (as before), so their panes leave the layout then.

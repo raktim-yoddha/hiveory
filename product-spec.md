@@ -266,7 +266,7 @@ Isolated Worktree:
 
 ## Built-in Browser
 
-The side panel's Browser tab is a real browser (ADR 0015):
+The browser is a real browser (ADR 0015), opened as a pane among the agents from a pane's "+" › Browser (ADR 0042); pages an agent opens appear as panes of its worktree:
 
 - toolbar: back, forward, reload, address bar (bare hosts and searches work), pick element, annotate element, viewport sizes, developer tools, and a menu with profiles, cookie import/export/clear and Browser settings
 - agents drive it through `browser_*` MCP tools with a visible cursor; it is on by default and works while the panel is closed
@@ -316,7 +316,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; Terminal and Chat side by side, starting from the Workspace's "New agents open as" setting (ADR 0037)
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It holds browsers, the Dashboard (the Workspace page; ADR 0038, 0039) and one Explorer per worktree: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It starts with the Dashboard (the Workspace page; ADR 0038, 0039), Sessions and the Explorer, and "+" adds the Workspace's Routines and Settings (ADR 0042). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)

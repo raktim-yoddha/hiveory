@@ -16,12 +16,12 @@ export type View =
   | { type: 'workspace'; projectId: string; workspaceId: string; focusPaneId?: string }
 
 /**
- * One tab of the right side panel: a browser page (main-owned, its id e.g. `b3`) or the
- * folder's Explorer — at most one Explorer per folder (id `explorer`). Terminals open as panes.
+ * One tab of the right side panel, at most one of each kind per worktree (its id is its kind).
+ * Terminals, agents, files and browser pages open as panes (ADR 0042).
  */
 export interface PanelTab {
   id: string
-  kind: 'browser' | 'explorer' | 'sessions' | 'workspace' | 'routines' | 'settings'
+  kind: 'explorer' | 'sessions' | 'workspace' | 'routines' | 'settings'
   title: string
   /** The side panel splits into a top and a bottom area; tabs sit in the top one unless moved down. */
   group?: PanelGroup
@@ -127,7 +127,6 @@ const fixActive = (scope: string, tabs: PanelTab[], active: Record<string, strin
 }
 
 const initialWidths = readWidths()
-let tabCounter = 0
 
 /** Ephemeral UI navigation state. Never persisted to the main process. */
 export const useNavigation = create<NavigationState>((set, get) => ({
@@ -170,16 +169,16 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   },
   addPanelTab: (scope, kind, id, select = true, group = 'top') => {
     const tabs = get().panelTabs[scope] ?? []
-    // Only one Explorer (and one Sessions list, one Workspace page) per folder: asking again selects it.
-    const tabId = kind === 'browser' ? id : kind
-    const existing = tabId ? tabs.find((t) => t.id === tabId) : undefined
+    // One of each per folder: asking again selects it.
+    const tabId = id ?? kind
+    const existing = tabs.find((t) => t.id === tabId)
     if (existing) {
       if (select) set((s) => ({ activePanelTab: { ...s.activePanelTab, [panelGroupKey(scope, tabGroup(existing))]: existing.id } }))
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', browser: 'Browser', routines: 'Routines', settings: 'Settings' }[kind]
-    const tab: PanelTab = { id: tabId ?? `t${++tabCounter}`, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', routines: 'Routines', settings: 'Settings' }[kind]
+    const tab: PanelTab = { id: tabId, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({
       panelTabs: { ...s.panelTabs, [scope]: [...tabs, tab] },

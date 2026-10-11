@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { CalendarClock, FolderTree, Globe, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, Settings2, X } from 'lucide-react'
-import { AgentIcon } from '../../components/brand/AgentIcon'
+import { CalendarClock, FolderTree, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, Settings2, X } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { Menu } from '../../components/ui/Menu'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
-import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { useBrowser } from '../../stores/browser'
 import {
   PANEL_SPLIT,
   panelGroupKey,
@@ -19,26 +16,21 @@ import {
   type PanelGroup,
   type PanelTab
 } from '../../stores/navigation'
-import { BrowserPane } from '../browser/BrowserPane'
 import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
 import { ProjectPanel } from '../project/ProjectPanel'
 import { ProjectScreen } from '../project/ProjectScreen'
-import { openBrowserTab } from './panel-actions'
 import styles from './SidePanel.module.css'
-import { pageTitle } from '../browser/page-title'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { explorer: FolderTree, browser: Globe, sessions: History, workspace: LayoutDashboard, routines: CalendarClock, settings: Settings2 }
+const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDashboard, routines: CalendarClock, settings: Settings2 }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
- * Right side panel for the Worktree in view: browser tabs (any number), the folder's Explorer, the
- * agent session history and the Dashboard (the Workspace's board, pull requests, worktrees and settings; ADR 0038, 0039),
- * added from "+". Tabs drag to reorder;
- * dragging one into the lower half splits the panel into a top and a bottom area,
- * each with its own tabs (a divider sets their heights). Browser pages live in
- * main; pages agents open in this workspace appear here as tabs on their own.
+ * Right side panel for the Worktree in view: the Dashboard (ADR 0038, 0039), the agent session history,
+ * the folder's Explorer, and the Workspace's Routines and Settings (ADR 0042), added from "+". Browser
+ * pages are panes among the agents (ADR 0042). Tabs drag to reorder; dragging one into the lower half
+ * splits the panel into a top and a bottom area, each with its own tabs (a divider sets their heights).
  */
 export function SidePanel() {
   const view = useNavigation((s) => s.view)
@@ -48,7 +40,6 @@ export function SidePanel() {
   const scope = workspaceId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
   const { addPanelTab, closePanelTab, movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation()
-  const pages = useBrowser((s) => s.pages)
   const bodyRef = useRef<HTMLDivElement>(null)
   /** The tab being dragged, and where the panel shows it would land. */
   const [dragging, setDragging] = useState<string | null>(null)
@@ -70,26 +61,7 @@ export function SidePanel() {
     if (projectId) ensurePanelTabs(scope)
   }, [scope, projectId, ensurePanelTabs])
 
-  // Browser tabs mirror main's pages for this folder: agent-opened pages appear, closed ones go.
-  useEffect(() => {
-    if (!scope) return
-    const here = pages.filter((p) => p.scope === scope)
-    for (const page of here) addPanelTab(scope, 'browser', page.id, false)
-    for (const tab of tabs) if (tab.kind === 'browser' && !here.some((p) => p.id === tab.id)) closePanelTab(scope, tab.id)
-  }, [pages, scope, tabs, addPanelTab, closePanelTab])
-
-  const closeTab = (tab: PanelTab): void => {
-    closePanelTab(scope, tab.id)
-    if (tab.kind === 'browser') void api('browser.close', { pageId: tab.id }).catch(() => undefined)
-  }
-
-  const tabTitle = (tab: PanelTab): string => {
-    if (tab.kind !== 'browser') return tab.title
-    const page = pages.find((p) => p.id === tab.id)
-    if (!page) return tab.title
-    const title = pageTitle(page)
-    return page.ownerName ? `${page.ownerName} · ${title}` : title
-  }
+  const closeTab = (tab: PanelTab): void => closePanelTab(scope, tab.id)
 
   // Explorer, Dashboard, Sessions, Routines and Settings open once per worktree: an open one leaves the menu (ADR 0039, 0042).
   const isOpen = (kind: PanelTab['kind']): boolean => tabs.some((t) => t.kind === kind)
@@ -97,7 +69,6 @@ export function SidePanel() {
     <Menu
       label="Add to side panel"
       items={[
-        { type: 'item' as const, id: 'browser', label: 'Browser', icon: <Globe />, disabled: !scope, onSelect: () => void openBrowserTab(scope, group) },
         ...(
           [
             ['explorer', 'Explorer', <FolderTree key="e" />],
@@ -110,7 +81,7 @@ export function SidePanel() {
           .filter(([kind]) => !isOpen(kind))
           .map(([kind, label, icon]) => ({ type: 'item' as const, id: kind, label, icon, disabled: !scope, onSelect: () => void addPanelTab(scope, kind, undefined, true, group) }))
       ]}
-      trigger={(props) => <IconButton {...props} label="Add browser, explorer, dashboard or sessions" icon={<Plus />} className={styles.add} />}
+      trigger={(props) => <IconButton {...props} label="Add to the side panel" icon={<Plus />} className={styles.add} />}
     />
   )
 
@@ -128,7 +99,7 @@ export function SidePanel() {
     return (
       <aside className={styles.panel} aria-label="Side panel">
         <div className={styles.area}>
-          <EmptyState compact icon={<PanelRight />} title="No worktree open" description="Open a worktree to browse, explore its files and see its agent sessions here." />
+          <EmptyState compact icon={<PanelRight />} title="No worktree open" description="Open a worktree to see its Dashboard, explore its files and see its agent sessions here." />
         </div>
       </aside>
     )
@@ -143,8 +114,6 @@ export function SidePanel() {
             scope={scope}
             group={group}
             tabs={tabs.filter((t) => tabGroup(t) === group)}
-            title={tabTitle}
-            isAgentPage={(id) => Boolean(pages.find((p) => p.id === id)?.ownerName)}
             onClose={closeTab}
             dragging={dragging}
             onDragStart={setDragging}
@@ -199,8 +168,6 @@ interface PanelAreaProps {
   scope: string
   group: PanelGroup
   tabs: PanelTab[]
-  title(tab: PanelTab): string
-  isAgentPage(id: string): boolean
   onClose(tab: PanelTab): void
   dragging: string | null
   onDragStart(id: string): void
@@ -221,8 +188,6 @@ function PanelArea({
   scope,
   group,
   tabs,
-  title,
-  isAgentPage,
   onClose,
   dragging,
   onDragStart,
@@ -297,9 +262,9 @@ function PanelArea({
           onDrop={onStripDrop}
         >
           {tabs.map((tab) => {
-            const Icon = tab.kind === 'browser' && isAgentPage(tab.id) ? AgentIcon : TAB_ICON[tab.kind]
+            const Icon = TAB_ICON[tab.kind]
             const selected = tab.id === active?.id
-            const name = title(tab)
+            const name = tab.title
             return (
               <div
                 key={tab.id}
@@ -343,7 +308,7 @@ function PanelArea({
       <div className={styles.body}>
         {dragging && (
           // Covers only this area's pages (never a tab strip: a new element under the dragged tab would
-          // cancel the drag); the browser page steps aside while it is there.
+          // cancel the drag); browser panes step aside while it is there.
           <div
             className={styles.dropZone}
             data-steps-aside
@@ -369,7 +334,7 @@ function PanelArea({
             compact
             icon={<Plus />}
             title="Nothing open"
-            description="Add a browser, the Explorer for this folder's files, the Dashboard, or the agent session history."
+            description="Add the Dashboard, the agent session history, the Explorer for this folder's files, Routines or the Workspace's settings."
             actions={addMenu}
           />
         ) : (
@@ -379,8 +344,6 @@ function PanelArea({
               <ErrorBoundary region={tab.title} compact>
                 {tab.kind === 'explorer' ? (
                   <Explorer key={scope} workspaceId={scope} />
-                ) : tab.kind === 'browser' ? (
-                  <BrowserPane pageId={tab.id} visible={tab.id === active?.id} />
                 ) : tab.kind === 'workspace' ? (
                   projectId && <ProjectScreen key={scope} projectId={projectId} workspaceId={scope} />
                 ) : tab.kind === 'routines' || tab.kind === 'settings' ? (

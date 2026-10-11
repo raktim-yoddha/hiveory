@@ -31,7 +31,7 @@ import { useTriggers } from '../../stores/triggers'
 import { useAgents, useClis, useLayouts, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
-import { openBrowserTab } from '../side-panel/panel-actions'
+import { openBrowserPane } from '../browser/open-browser'
 import { useQueen } from './useQueen'
 import { cue, speak } from './voice'
 
@@ -383,10 +383,13 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         case 'open-panel-tab': {
           const scope = selectedWorkspaceId(nav().view)
           if (!scope) throw new QueenError('the side panel is only in worktrees. Open one first.')
-          if (!nav().panelOpen) nav().togglePanel()
+          // The browser is a pane among the agents (ADR 0042); the Explorer stays in the side panel.
           if (action.kind === 'browser') {
-            if (!(await openBrowserTab(scope))) throw new QueenError('the browser did not open.')
-          } else nav().addPanelTab(scope, 'explorer')
+            if (!(await openBrowserPane(scope))) throw new QueenError('the browser did not open.')
+          } else {
+            if (!nav().panelOpen) nav().togglePanel()
+            nav().addPanelTab(scope, 'explorer')
+          }
           outcomes.push({ kind: 'panel', what: action.kind })
           break
         }
@@ -436,9 +439,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'open-url': {
           if (selectedWorkspaceId(nav().view) !== action.workspaceId) throw new QueenError('the browser opens in a worktree. Open one first.')
-          if (!nav().panelOpen) nav().togglePanel()
-          const page = await api('browser.open', { scope: action.workspaceId, url: action.url })
-          nav().addPanelTab(action.workspaceId, 'browser', page.id, true, 'top')
+          if (!(await openBrowserPane(action.workspaceId, { url: action.url }))) throw new QueenError('the browser did not open.')
           outcomes.push({ kind: 'page', host: new URL(action.url).host })
           break
         }

@@ -4,8 +4,10 @@ import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
+import { useBrowser } from '../../stores/browser'
 import { useEditors } from '../../stores/editors'
 import { useNavigation } from '../../stores/navigation'
+import { BrowserPaneFrame } from '../browser/BrowserPaneFrame'
 import { EditorPane } from '../editor/EditorPane'
 import { AgentPane } from '../agents/AgentPane'
 import { PaneLayout } from '../panes/PaneLayout'
@@ -34,6 +36,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
+  const allPages = useBrowser((s) => s.pages)
   const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
   const setWorkMinWidth = useNavigation((s) => s.setWorkMinWidth)
@@ -72,11 +75,13 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const list = agents ?? NO_AGENTS
   const byId = new Map(list.map((a) => [a.id, a]))
   const editorById = new Map(editors.map((e) => [e.id, e]))
+  // This worktree's browser pages are panes too (ADR 0042).
+  const pageById = new Map(allPages.filter((p) => p.scope === workspaceId).map((p) => [p.id, p]))
 
   return (
     <section className={styles.screen} aria-label={`${workspace.name} worktree`}>
       <div className={styles.body}>
-        {agents && list.length === 0 && editors.length === 0 ? (
+        {agents && list.length === 0 && editors.length === 0 && pageById.size === 0 ? (
           <div className={styles.emptySurface}>
             <EmptyWorkspace workspaceId={workspaceId} />
           </div>
@@ -98,6 +103,14 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                   return (
                     <ErrorBoundary region={`${editor.name} editor`} compact resetKey={editor.id}>
                       <EditorPane editor={editor} {...props} />
+                    </ErrorBoundary>
+                  )
+                }
+                const page = pageById.get(paneId)
+                if (page) {
+                  return (
+                    <ErrorBoundary region="Browser" compact resetKey={page.id}>
+                      <BrowserPaneFrame page={page} {...props} />
                     </ErrorBoundary>
                   )
                 }

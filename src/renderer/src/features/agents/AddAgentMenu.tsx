@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowRight, Globe, Plus, Search } from 'lucide-react'
 import { opensAsChat, type CliDescriptor } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -9,6 +9,7 @@ import { Select } from '../../components/ui/Select'
 import { cx } from '../../lib/cx'
 import { useHostClis, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
+import { openBrowserPane } from '../browser/open-browser'
 import { agentActions } from './agent-actions'
 import styles from './AddAgentMenu.module.css'
 
@@ -69,6 +70,12 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
     onDone()
     void agentActions.open(workspaceId, cli.id, side ? { targetPaneId: paneId, side } : undefined, undefined, cli.kind === 'shell' ? false : chat)
   }
+
+  const browser = (): void => {
+    onDone()
+    void openBrowserPane(workspaceId, side ? { beside: { paneId, side } } : {})
+  }
+  const showBrowser = !query.trim() || 'browser'.includes(query.trim().toLowerCase())
 
   const items = (): HTMLButtonElement[] => [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])]
   const onListKey = (event: KeyboardEvent): void => {
@@ -138,7 +145,16 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
         />
       </label>
       <div ref={listRef} className={styles.list} role="menu" aria-label="Open" onKeyDown={onListKey}>
-        {groups.length === 0 && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
+        {showBrowser && (
+          <div className={styles.group}>
+            <div className={styles.groupLabel}>Browser</div>
+            <button type="button" role="menuitem" className={styles.item} onClick={browser}>
+              <Globe aria-hidden className={styles.itemIcon} />
+              <span>Browser</span>
+            </button>
+          </div>
+        )}
+        {groups.length === 0 && !showBrowser && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
         {groups.map((group) => (
           <div key={group.label} className={styles.group}>
             <div className={styles.groupLabel}>{group.label}</div>

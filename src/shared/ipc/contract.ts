@@ -539,7 +539,13 @@ export const requestSchemas = {
   'connections.remove': z.object({ id: connectionId }),
   /** Built-in browser (ADR 0015). Pages live in main; the panel only shows them. */
   'browser.state': none,
-  'browser.open': z.object({ scope: id, url: z.string().max(4000).optional(), profileId: profileId.optional() }),
+  /** `beside`: a worktree's browser pane placed next to another pane (ADR 0042). */
+  'browser.open': z.object({
+    scope: id,
+    url: z.string().max(4000).optional(),
+    profileId: profileId.optional(),
+    beside: z.object({ paneId: id, side: z.enum(['right', 'bottom']) }).optional()
+  }),
   'browser.close': z.object({ pageId }),
   /** A URL (normalized in main), or back / forward / reload / stop. */
   'browser.navigate': z.object({ pageId, url: z.string().max(4000) }),

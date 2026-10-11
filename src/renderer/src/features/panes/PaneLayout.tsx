@@ -13,6 +13,8 @@ export interface PaneRenderProps {
   dragging: boolean
   /** The pane fills the whole layout area; the others stay mounted but hidden. */
   maximized: boolean
+  /** Another pane fills the layout: this one is mounted but out of sight (a browser page hides its view). */
+  concealed: boolean
   toggleMaximize: () => void
   /** The pane's current rect within the layout (for placement decisions). */
   rect: Rect
@@ -152,6 +154,7 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
               onDragHandlePointerDown: (event) => (maximized ? undefined : startDrag(paneId, event)),
               dragging: drag?.paneId === paneId,
               maximized: isMax,
+              concealed: Boolean(maximized && !isMax),
               toggleMaximize: () => setMaximizedId(isMax ? null : paneId),
               rect: layoutRect,
               minSize: minFor(paneId),
@@ -193,6 +196,8 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
           />
         )
       })}
+      {/* Browser pages are native views above the app: they step aside so the drop preview shows. */}
+      {drag && <span data-steps-aside hidden />}
       {drag && <PaneDropPreview target={drag.target} swap={drag.swap} container={bounds} showArrangeBar={drag.inArrangeBand} />}
     </div>
   )
