@@ -38,7 +38,7 @@ import { SshHostConnector } from '../services/hosts/ssh-host'
 import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
 import { PortForwards } from '../services/hosts/ports'
-import { hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
+import { appById, COMPOSIO, hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
 import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
@@ -56,6 +56,7 @@ import { GitlabService } from '../services/git/gitlab-service'
 import { IntegrationService } from '../services/integrations/integration-service'
 import { TrackerService } from '../services/integrations/tracker-service'
 import { StoreService } from '../services/extensions/store-service'
+import { AboutTools } from '../services/agent-tools/about-tools'
 import { GitService } from '../services/git/git-service'
 import { WorktreeService } from '../services/git/worktree-service'
 import { LayoutService } from '../services/layout/layout-service'
@@ -371,7 +372,16 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])
   const computerTools = new ComputerTools(computer, (message) => emit('app.notice', { level: 'info', message }))
   // Apps and Hiveory's MCP servers come through the gateway (ADR 0017, 0023).
-  const extraTools = () => [...(settings?.get().computerUse && computer.supported ? [computerTools] : []), gateway]
+  // Every agent, chat and bot can ask Hiveory about itself (ADR 0041).
+  const aboutTools = new AboutTools({
+    settings: () => settings!.get(),
+    worktree: (workspaceId) => {
+      const worktree = workspaceRepo.find(workspaceId)
+      return worktree ? { worktree, project: workspaceRepo.project(worktree.projectId) } : undefined
+    },
+    connections: () => connections.enabled().flatMap((c) => (c.provider === COMPOSIO.id ? (c.apps ?? []).map((id) => appById(id)?.name ?? id) : [c.name]))
+  })
+  const extraTools = () => [aboutTools, ...(settings?.get().computerUse && computer.supported ? [computerTools] : []), gateway]
   const toolDeps = {
     agents,
     runtime,
@@ -403,6 +413,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     const reach = bot ? botReach(bot, { browser: settings.get().browserUse, computer: settings.get().computerUse && computer.supported }) : []
     const families = bot
       ? [
+          aboutTools,
           botTools,
           ...(bot.routines ? [routineTools] : []),
           ...reach.map((f) => ({ browser: browserFamily, desktop: desktopTools, computer: computerTools })[f]),

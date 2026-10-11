@@ -31,6 +31,18 @@ CLI), a global MCP store, and for every agent and Queen Bee to know the app they
   as a folder to mount). `connectionFor` turns that into a connection saved with
   `connections.saveCustom`, so Hiveory runs it for every agent like a server added by hand (ADR 0017).
 
+### Agents and Queen Bee know Hiveory
+- `APP_GUIDE` (`src/shared/hiveory/guide.ts`) says what Hiveory is and where everything lives (modes,
+  Workspace, Worktree, side panel, Dashboard tabs, Bots, Chat, Queen Bee, each Settings section), in
+  the user's words. It holds product facts only.
+- Every agent, chat and bot gets the MCP tool `hiveory_about` (`AboutTools`): where the caller runs
+  (worktree, workspace, branch, folder, the workspace's own settings), which Hiveory tools are on
+  (coordination, browser, computer use), the MCP servers and apps Hiveory serves, the defaults for new
+  agents, that the user changes settings in Settings, and the guide. Names and switches only: no keys,
+  Queen Bee's notes or user data. Every launched agent's prompt points to it (`ABOUT_PROMPT`).
+- Queen Bee's fixed prompt carries the same guide: questions about the app get an answer from it, and
+  she navigates there when it is a page or a Settings section.
+
 ### Links
 `system.openUrl` opens only fixed help pages (Composio, Jira and Linear keys) and https pages on
 skills.sh and github.com (`isOpenableUrl`). The Jira and Linear links of ADR 0040 were refused before.
@@ -42,4 +54,6 @@ New channels: `store.searchSkills`, `store.skillAudits`, `store.installSkill`, `
 
 Installing a skill or adding a server is trusting its author: the audits and the exact command are
 shown first, and nothing runs until the user adds it. Unauthenticated GitHub downloads are limited to
-60 an hour per computer. Updating installed skills and servers is left for later.
+60 an hour per computer. Updating installed skills and servers is left for later. The guide is
+written by hand: a new screen or Settings section must be added to `APP_GUIDE` too, or agents and
+Queen Bee will not know it.

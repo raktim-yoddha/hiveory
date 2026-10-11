@@ -299,6 +299,13 @@ Its Dashboard shows each worktree's pull or merge request, Create PR/MR for any 
 default one, every open one, and the open issues, where Start worktree makes a worktree named after
 the issue.
 
+## Agents that know Hiveory (ADR 0041)
+
+Every agent, chat and bot can call `hiveory_about`: what Hiveory is and where everything lives, where
+it runs (worktree, workspace, branch), which Hiveory tools and settings apply, and what MCP servers and
+apps it has. Queen Bee answers "where is…" and "how do I…" questions about the app from the same guide
+and opens the place when she can.
+
 ## Appearance
 
 Six flat themes, three per row. A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).

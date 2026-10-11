@@ -297,6 +297,7 @@ Before declaring work complete:
 [ ] Lint passes
 [ ] Documentation is still consistent
 [ ] ADR written or amended when rule 29 requires it
+[ ] A new screen, tab or Settings section is in APP_GUIDE (ADR 0041)
 [ ] AGENTS.md and CLAUDE.md are still identical
 ```
 

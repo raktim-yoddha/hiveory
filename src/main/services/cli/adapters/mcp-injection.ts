@@ -11,6 +11,11 @@ export const MCP_SERVER_NAME = 'hiveory'
 /** wait_for_agent may legitimately block for up to 15 minutes. */
 export const MCP_TOOL_TIMEOUT_MS = 16 * 60 * 1000
 
+/** Every agent, chat and bot learns the app it runs in from hiveory_about (ADR 0041). */
+export const ABOUT_PROMPT =
+  'You run inside Hiveory, a desktop app where coding agents work side by side in Git worktrees. When the user asks about Hiveory, ' +
+  'its settings or where something is, or you need to know where you are and what is connected, call the hiveory MCP tool hiveory_about.'
+
 /** One-line orientation so an agent understands the tools immediately. */
 export const AGENT_TOOLS_PROMPT =
   'You are running inside Hiveory next to other coding agents. Use the hiveory MCP tools to coordinate: ' +
@@ -67,6 +72,7 @@ export const botPrompt = (role: NonNullable<McpEndpoint['bot']>, computer = fals
 export const agentPrompt = (mcp: McpEndpoint, coordination = true): string => {
   const coord = coordination && mcp.coordination !== false
   return [
+    ABOUT_PROMPT,
     coord ? AGENT_TOOLS_PROMPT : '',
     mcp.bot ? botPrompt(mcp.bot, mcp.botComputer) : '',
     mcp.browser ? BROWSER_PROMPT : '',
