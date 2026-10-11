@@ -262,6 +262,16 @@
 .childItem {
   display: flex;
   flex-direction: column;
+  border-radius: var(--radius-md);
+}
+
+/* The open Worktree: its row and its agents' bar highlighted as one. */
+.childItem.current {
+  background: var(--fill-selected);
+}
+
+.childItem.current .childRow.selected {
+  background: transparent;
 }
 
 .warn {
@@ -278,6 +288,10 @@
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-md);
   background: var(--color-surface-hover);
+}
+
+.agentsBar {
+  cursor: pointer;
 }
 
 .agentsOpen {
@@ -356,6 +370,9 @@
 .agentList {
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
 .agentItem {

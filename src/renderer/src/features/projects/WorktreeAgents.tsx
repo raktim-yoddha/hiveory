@@ -12,9 +12,8 @@ import styles from './ProjectSidebar.module.css'
 const EMPTY: CliInstanceView[] = []
 /** Busy first, so what is running is always in view: working, then needs you, then idle. */
 const RANK: Record<CliStatus, number> = { working: 0, 'waiting-for-you': 1, idle: 2 }
-/** One chip (dot + logo) plus its gap, and room kept for the "+N" chip and the toggle. */
-const SLOT_PX = 38
-const RESERVED_PX = 56
+/** Room for the "+N" count, used only when not every chip fits. */
+const MORE_PX = 24
 
 /** A worktree's agents and terminals, busiest first, re-sorted live as statuses change. */
 const useWorktreeAgents = (workspaceId: string) => {
@@ -51,20 +50,29 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   const since = useAgents((s) => s.since)
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const [open, setOpen] = useState(false)
-  const [fit, setFit] = useState(4)
+  const [fit, setFit] = useState(Infinity)
   const barRef = useRef<HTMLDivElement>(null)
-  const any = sorted.length > 0
+  const total = sorted.length
 
-  // How many chips fit the sidebar's width right now.
+  // How many chips fit the bar right now, measured from a real chip; "+N" only when they don't all fit.
   useLayoutEffect(() => {
     const el = barRef.current
     if (!el) return
-    const observer = new ResizeObserver(([entry]) => entry && setFit(Math.max(1, Math.floor((entry.contentRect.width - RESERVED_PX) / SLOT_PX))))
+    const measure = (): void => {
+      const style = getComputedStyle(el)
+      const gap = parseFloat(style.columnGap) || 0
+      const inner = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+      const chip = (el.querySelector<HTMLElement>('[data-chip]')?.offsetWidth ?? 36) + gap
+      const room = inner - (el.querySelector<HTMLElement>('[data-toggle]')?.offsetWidth ?? 20) - gap
+      const all = Math.floor((room + gap) / chip)
+      setFit(all >= total ? total : Math.max(1, Math.floor((room - MORE_PX) / chip)))
+    }
+    const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [any, open])
+  }, [total, open])
 
-  if (!any) return null
+  if (!total) return null
   const count = `${sorted.length} ${sorted.length === 1 ? 'agent' : 'agents'}`
   const statusText = (status: CliStatus): string => (status === 'waiting-for-you' ? 'Needs you' : STATUS_LABEL[status])
 
@@ -96,22 +104,37 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
   const shown = sorted.slice(0, fit)
   const more = sorted.length - shown.length
   return (
-    <div ref={barRef} className={styles.agents}>
+    // The whole bar unfolds the list; a chip opens its pane instead. The chevron is the keyboard way in.
+    <div ref={barRef} className={cx(styles.agents, styles.agentsBar)} onClick={() => setOpen(true)}>
       {shown.map(({ agent, status }) => (
         <button
           key={agent.id}
           type="button"
+          data-chip
           className={styles.agentChip}
           aria-label={`${agent.petName}: ${statusText(status)}`}
           title={`${agent.petName} · ${statusText(status)}`}
-          onClick={() => openWorkspace(projectId, workspaceId, agent.id)}
+          onClick={(event) => {
+            event.stopPropagation()
+            openWorkspace(projectId, workspaceId, agent.id)
+          }}
         >
           <StatusDot status={status} />
           <CliLogo cliId={agent.cliId} size="sm" />
         </button>
       ))}
       {more > 0 && <span className={styles.more}>+{more}</span>}
-      <button type="button" className={styles.agentsToggle} aria-expanded={false} aria-label={`Show all ${count}`} onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        data-toggle
+        className={styles.agentsToggle}
+        aria-expanded={false}
+        aria-label={`Show all ${count}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          setOpen(true)
+        }}
+      >
         <ChevronRight aria-hidden />
       </button>
     </div>

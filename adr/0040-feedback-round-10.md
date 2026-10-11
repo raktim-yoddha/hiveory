@@ -16,10 +16,17 @@ Shipped as PATCH releases (ADR 0038).
 - A Worktree's agents and terminals sit in one rounded bar under its row: a chip per agent (its
   status dot and CLI logo), busiest first, "+N" for what doesn't fit, a chevron that unfolds it.
   Unfolded, it is a list headed "N agents": status dot, logo, pet name · status and how long it has
-  been in that status. Every chip and row opens its pane.
+  been in that status. Every chip and row opens its pane. A click anywhere else on the bar unfolds it;
+  "+N" shows only when another chip would not fit (measured from a real chip). The open Worktree's
+  highlight covers its row and its bar as one.
 - The pane count at the end of a Worktree's row is gone. In its place a loop spins while any agent
   in that Worktree is working.
 - The sidebar toggle in the title bar stays where it sits while the sidebar is open, open or closed.
+
+### Dialogs start on their action
+A confirmation (delete a worktree, remove a workspace…) opens with its confirm button focused, so
+Enter does it; other dialogs start on their first field, else their last footer button — never the
+header's Close.
 
 ### New worktree
 One Create button. With no panes chosen it creates an empty Worktree (Open agent, Load preset);

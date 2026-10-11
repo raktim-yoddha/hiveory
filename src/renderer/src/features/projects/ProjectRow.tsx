@@ -134,7 +134,7 @@ export function ProjectRow({ project }: { project: Project }) {
             const main = ws.kind === 'main'
             const Icon = main ? House : GitBranch
             return (
-              <li key={ws.id} className={styles.childItem}>
+              <li key={ws.id} className={cx(styles.childItem, selected && styles.current)}>
                 <Menu
                   context
                   label={`${ws.name} actions`}
