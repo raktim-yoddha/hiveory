@@ -21,7 +21,7 @@ export function PaneDropPreview({ target, swap, container, showArrangeBar }: Pan
       {target && target.kind !== 'arrange' && (
         <div
           className={styles.preview}
-          data-kind={target.kind}
+          data-kind={target.kind === 'stack' && target.insert ? 'insert' : target.kind}
           style={{ left: target.preview.x, top: target.preview.y, width: target.preview.width, height: target.preview.height }}
           aria-hidden
         >
@@ -30,7 +30,7 @@ export function PaneDropPreview({ target, swap, container, showArrangeBar }: Pan
               <ArrowLeftRight /> Swap
             </span>
           )}
-          {target.kind === 'stack' && (
+          {target.kind === 'stack' && !target.insert && (
             <span className={styles.previewLabel}>
               <PanelTop /> Add as a tab
             </span>

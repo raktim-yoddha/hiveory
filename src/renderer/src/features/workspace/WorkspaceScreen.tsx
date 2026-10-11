@@ -132,8 +132,6 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                     area={props.area}
                     describe={describe}
                     onOperation={(operation) => void apply(workspaceId, operation)}
-                    maximized={props.maximized}
-                    toggleMaximize={props.toggleMaximize}
                     add={<AddAgentMenu workspaceId={workspaceId} paneId={paneId} fits={fits} tabbed />}
                   />
                 ) : undefined

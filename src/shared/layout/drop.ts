@@ -7,8 +7,8 @@ export type DropTarget =
   | { kind: 'swap'; targetPaneId: string; preview: Rect }
   | { kind: 'move'; targetPaneId: string; side: Side; preview: Rect }
   | { kind: 'dock'; side: Side; preview: Rect }
-  /** Tabbed panes (ADR 0042): into another area as a tab. */
-  | { kind: 'stack'; targetPaneId: string; preview: Rect }
+  /** Tabbed panes (ADR 0042): into an area as a tab, before `beforePaneId` (else last). `insert`: the preview is a bar between tabs. */
+  | { kind: 'stack'; targetPaneId: string; beforePaneId?: string; insert?: boolean; preview: Rect }
 
 export interface DropQuery {
   x: number
@@ -22,7 +22,19 @@ export interface DropQuery {
   edgeThreshold?: number
   /** Tabbed panes: the middle of another area adds the pane there as a tab. */
   stacking?: boolean
+  /** Tabbed panes: each pane's area. Only an area's shown tab is a target (another of its tabs while that one is dragged). */
+  areas?: Record<string, { paneIds: string[]; active: string }>
 }
+
+/** The pane that stands for each area while `dragged` moves: its shown tab, or another tab when that one is dragged. */
+const standIns = (panes: Record<string, Rect>, dragged: string, areas?: DropQuery['areas']): string[] =>
+  Object.keys(panes).filter((id) => {
+    if (id === dragged) return false
+    const area = areas?.[id]
+    if (!area) return true
+    const shown = area.active === dragged ? area.paneIds.find((p) => p !== dragged) : area.active
+    return id === shown
+  })
 
 /** The middle of an area, as a share of each side, that means "add as a tab". */
 const STACK_ZONE = 0.3
@@ -51,7 +63,7 @@ const closest = (entries: Array<[Side, number]>): [Side, number] =>
 
 /** Resolves where a dragged pane would land. Pure so drag behavior is testable. */
 export const resolveDropTarget = (q: DropQuery): DropTarget | null => {
-  const others = Object.keys(q.panes).filter((id) => id !== q.draggedPaneId)
+  const others = standIns(q.panes, q.draggedPaneId, q.areas)
   if (others.length === 0) return null
 
   const c = q.container

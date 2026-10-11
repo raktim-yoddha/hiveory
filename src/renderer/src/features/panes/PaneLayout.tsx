@@ -109,8 +109,8 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
     onMinSizeChange?.({ width: minWidth, height: minHeight })
     return () => onMinSizeChange?.({ width: 0, height: 0 })
   }, [minWidth, minHeight, onMinSizeChange])
-  const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation, stacking: tabbed })
   const groups = useMemo(() => paneGroups(shownTree), [shownTree])
+  const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation, stacking: tabbed, areas: tabbed ? groups : undefined })
   // Falls back to the normal layout if the maximized pane was closed.
   const maximized = maximizedId && geometry.panes[maximizedId] ? maximizedId : null
 

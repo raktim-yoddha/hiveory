@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Maximize2, Minimize2, PanelBottom, PanelRight, Pencil, X } from 'lucide-react'
+import { PanelBottom, PanelRight, Pencil, X } from 'lucide-react'
 import type { CliStatus, LayoutOperation } from '@shared/domain'
-import { IconButton } from '../../components/ui/Button'
 import { InlineRename } from '../../components/ui/InlineRename'
 import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
@@ -23,17 +22,16 @@ interface PaneTabStripProps {
   area: PaneArea
   describe: (paneId: string) => PaneTabInfo | undefined
   onOperation: (operation: LayoutOperation) => void
-  maximized: boolean
-  toggleMaximize: () => void
-  /** The area's "+": a new pane opens as a tab here. */
+  /** The area's "+", right after its last tab: a new pane opens as a tab here. */
   add: ReactNode
 }
 
 /**
- * An area's tabs (tabbed panes, ADR 0042, like Orca): click a tab to show it, drag it out to an edge or
- * into another area, double-click to maximize, right-click for its actions, right-click twice to rename.
+ * An area's tabs (tabbed panes, ADR 0042, like Orca's tab groups): click a tab to show it; drag it along
+ * the strip to reorder, onto another strip or area to move it there, to an area's edge to split, or hold
+ * Space to swap; double-click to maximize; right-click for its actions, right-click twice to rename.
  */
-export function PaneTabStrip({ area, describe, onOperation, maximized, toggleMaximize, add }: PaneTabStripProps) {
+export function PaneTabStrip({ area, describe, onOperation, add }: PaneTabStripProps) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const others = (id: string): string | undefined => area.paneIds.find((p) => p !== id)
 
@@ -50,6 +48,7 @@ export function PaneTabStrip({ area, describe, onOperation, maximized, toggleMax
         return (
           <div
             key={id}
+            data-pane-tab={id}
             className={cx(styles.tab, selected && styles.selected)}
             onPointerDown={(e) => {
               // This tab is dragged, not the area's shown pane (the header's own handle).
@@ -82,7 +81,7 @@ export function PaneTabStrip({ area, describe, onOperation, maximized, toggleMax
                     aria-selected={selected}
                     data-pane-grip
                     className={styles.tabButton}
-                    title={`${info.title}\nDouble-click to maximize · right-click for actions, twice to rename`}
+                    title={`${info.title}\nDrag to move or split · double-click to maximize · right-click for actions, twice to rename`}
                     onClick={() => area.activate(id)}
                     onAuxClick={(e) => e.button === 1 && closePane(id)}
                   >
@@ -99,10 +98,7 @@ export function PaneTabStrip({ area, describe, onOperation, maximized, toggleMax
           </div>
         )
       })}
-      <span className={styles.actions}>
-        {add}
-        <IconButton data-pane-optional="maximize" label={maximized ? 'Restore area' : 'Maximize area'} icon={maximized ? <Minimize2 /> : <Maximize2 />} onClick={toggleMaximize} />
-      </span>
+      <span className={styles.add}>{add}</span>
     </div>
   )
 }

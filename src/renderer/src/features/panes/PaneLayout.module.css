@@ -112,6 +112,13 @@
   border-style: solid;
 }
 
+/* Tabbed panes: where a dragged tab lands between tabs (ADR 0042). */
+.preview[data-kind='insert'] {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+}
+
 .previewLabel {
   display: inline-flex;
   align-items: center;

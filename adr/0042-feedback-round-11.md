@@ -86,3 +86,9 @@ Decided by the product owner after trying round 11.
 - **Side panel:** every worktree's side panel always has Dashboard, Sessions, Explorer, Routines and
   Settings. There is no "+" and no ×: tabs only drag to reorder, or between the top and bottom area
   for a dual view and back. A worktree opened before gets the tabs it lacks.
+- **Tab areas, like Orca's tab groups:** an area's strip has no maximize button (double-click a tab
+  still maximizes); "+" sits right after the last tab. Drag a tab along a strip to reorder it (a bar
+  shows where it lands), onto another area's strip to place it among those tabs, into an area's middle
+  to add it last, to an area's edge to split it out, or hold Space over a tab or area to swap.
+  `stack` takes `beforePaneId`; while a shown tab is dragged, another tab of its area stands for the
+  area, so it can split beside its own area.

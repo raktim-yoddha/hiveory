@@ -20,7 +20,7 @@ export type LayoutOperation =
   | { type: 'swap'; paneId: string; targetPaneId: string }
   | { type: 'resize'; path: number[]; ratios: number[] }
   | { type: 'arrange'; mode: ArrangeMode; focusPaneId?: string }
-  /** Puts a pane into another pane's area as a tab, and shows it (ADR 0042). */
-  | { type: 'stack'; paneId: string; targetPaneId: string }
+  /** Puts a pane into another pane's area as a tab (before `beforePaneId`, else last) and shows it; reorders within an area too (ADR 0042). */
+  | { type: 'stack'; paneId: string; targetPaneId: string; beforePaneId?: string }
   /** Shows a pane in its area (its tab is chosen). */
   | { type: 'activate'; paneId: string }

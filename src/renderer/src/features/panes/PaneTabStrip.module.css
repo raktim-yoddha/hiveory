@@ -95,10 +95,9 @@
   height: var(--icon-xs);
 }
 
-.actions {
+/* "+" sits right after the last tab, as in a browser. */
+.add {
   display: flex;
   flex: none;
   align-items: center;
-  gap: var(--space-1);
-  margin-left: auto;
 }

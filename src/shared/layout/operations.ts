@@ -141,14 +141,19 @@ export const swapPanes = (tree: LayoutNode | null, a: string, b: string): Layout
   return { ...tree, children: tree.children.map((c) => swapPanes(c, a, b) as LayoutNode) }
 }
 
-/** Moves a pane into the area of `targetPaneId` as its last tab and shows it (ADR 0042). */
-export const stackPane = (tree: LayoutNode | null, paneId: string, targetPaneId: string): LayoutNode | null => {
+/**
+ * Moves a pane into the area of `targetPaneId` as a tab — before `beforePaneId` when it is one of that
+ * area's tabs, else last — and shows it. Within its own area this reorders it (ADR 0042).
+ */
+export const stackPane = (tree: LayoutNode | null, paneId: string, targetPaneId: string, beforePaneId?: string): LayoutNode | null => {
   if (!tree || paneId === targetPaneId || !containsPane(tree, targetPaneId)) return tree
   const without = containsPane(tree, paneId) ? removePane(tree, paneId) : tree
   const add = (node: LayoutNode): LayoutNode => {
     if (node.type === 'split') return { ...node, children: node.children.map(add) }
     const tabs = leafPanes(node)
-    return tabs.includes(targetPaneId) ? leaf([...tabs, paneId], paneId) : node
+    if (!tabs.includes(targetPaneId)) return node
+    const at = beforePaneId ? tabs.indexOf(beforePaneId) : -1
+    return leaf(at < 0 ? [...tabs, paneId] : [...tabs.slice(0, at), paneId, ...tabs.slice(at)], paneId)
   }
   return without ? add(without) : pane(paneId)
 }
@@ -207,7 +212,7 @@ export const applyOperation = (tree: LayoutNode | null, op: LayoutOperation): La
     case 'arrange':
       return arrange(tree, op.mode, op.focusPaneId)
     case 'stack':
-      return stackPane(tree, op.paneId, op.targetPaneId)
+      return stackPane(tree, op.paneId, op.targetPaneId, op.beforePaneId)
     case 'activate':
       return activatePane(tree, op.paneId)
   }

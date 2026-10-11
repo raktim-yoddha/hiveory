@@ -205,7 +205,7 @@ export const layoutOperationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('dock'), paneId: id, side }),
   z.object({ type: z.literal('swap'), paneId: id, targetPaneId: id }),
   z.object({ type: z.literal('arrange'), mode: z.enum(['equal', 'focus', 'columns']), focusPaneId: id.optional() }),
-  z.object({ type: z.literal('stack'), paneId: id, targetPaneId: id }),
+  z.object({ type: z.literal('stack'), paneId: id, targetPaneId: id, beforePaneId: id.optional() }),
   z.object({ type: z.literal('activate'), paneId: id }),
   z.object({
     type: z.literal('resize'),

@@ -404,15 +404,16 @@ pane's name for restart, move and close (ADR 0018).
 ## Tabbed panes (ADR 0042)
 
 ```text
-┌ [◉ Milo ● ×] [◉ Ivy ●] [⊕ notes.md] ───── + ⤢ ┐  ┌ [◉ Rex ● ×] ───── + ⤢ ┐
-│ (the chosen tab's terminal, chat, file or page) │  │                      │
-└─────────────────────────────────────────────────┘  └──────────────────────┘
+┌ [◉ Milo ● ×] [◉ Ivy ●] [⊕ notes.md] [+] ──────────┐  ┌ [◉ Rex ● ×] [+] ────────┐
+│ (the chosen tab's terminal, chat, file or page)     │  │                          │
+└─────────────────────────────────────────────────────┘  └──────────────────────────┘
 ```
 
 Settings › Appearance › Pane style: [Tiles] [Tabs] cards; the first-run welcome asks the same.
-"+" in Tabs: ( Tab | → Right | ↓ Bottom ). Tab: click shows, drag to an edge splits out, into an
-area's middle adds it there, middle-click closes, double-click maximizes, right-click: Rename ·
-Split right · Split down · Close; right-click twice renames.
+"+" (right after the last tab) in Tabs: ( Tab | → Right | ↓ Bottom ). Tab: click shows; drag along the
+strip reorders (a bar marks the spot), onto another strip places it there, into an area's middle adds it,
+to an area's edge splits it out, Space swaps; middle-click closes; double-click maximizes; right-click:
+Rename · Split right · Split down · Close; right-click twice renames.
 
 ## Pane Add Menu
 
