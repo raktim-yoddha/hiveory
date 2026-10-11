@@ -189,6 +189,12 @@ describe('settings persistence', () => {
     })
   })
 
+  it("keeps a Workspace's icon and color across restarts, dropping unknown ones", () => {
+    const project = { id: 'p', name: 'web', path: '/home/me/web', createdAt: 'x', updatedAt: 'x', lastOpenedAt: 'x' }
+    expect(parseState({ projects: [{ ...project, settings: { icon: 'rocket', color: 'green' } }] }).state.projects[0]?.settings).toEqual({ icon: 'rocket', color: 'green' })
+    expect(parseState({ projects: [{ ...project, settings: { icon: 'nope', alerts: false } }] }).state.projects[0]?.settings).toEqual({ alerts: false })
+  })
+
   it('rejects corrupt layouts so they are rebuilt', () => {
     const { state, rejected } = parseState({
       layouts: { w: { type: 'split', direction: 'horizontal', children: [{ type: 'pane', paneId: 'a' }, { type: 'pane', paneId: 'b' }], ratios: [1] } }

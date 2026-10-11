@@ -12,7 +12,7 @@ import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAM
 import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
-import { DEFAULT_SETTINGS, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
+import { DEFAULT_SETTINGS, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -205,7 +205,9 @@ export const projectSchema: z.ZodType<Project> = z.object({
       chatDefaults: z.record(str, z.object({ model: str, effort: str })).optional(),
       branchPrefix: str.optional(),
       baseRef: str.optional(),
-      alerts: z.boolean().optional()
+      alerts: z.boolean().optional(),
+      icon: z.enum(WORKSPACE_ICONS).optional().catch(undefined),
+      color: z.enum(WORKSPACE_COLORS).optional().catch(undefined)
     })
     .optional()
     .catch(undefined)
