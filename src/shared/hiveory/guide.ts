@@ -9,7 +9,7 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Worktree', 'The Primary (the workspace folder itself) or an isolated branch folder made by "+" (new, existing or remote branch). Each holds agent and terminal panes.'],
   ['Agents', 'Each pane runs one CLI instance with a pet name. Its status is Idle, Working or Waiting for you; the sidebar bar under a worktree shows them. Panes split right or bottom and can be dragged.'],
   ['Panes', 'A pane holds an agent, a terminal, a file or a browser page (the built-in browser agents drive; open one from a pane\'s "+" › Browser). Right-click a pane\'s name for its actions, twice to rename it; double-click it to maximize.'],
-  ['Side panel', "A worktree's right panel. It starts with Dashboard, Sessions (the agents' conversation history) and Explorer (files); \"+\" adds Routines (scheduled agents) and Workspace settings."],
+  ['Side panel', "A worktree's right panel. It always has Dashboard, Sessions (the agents' conversation history), Explorer (files), Routines (scheduled agents) and Workspace settings; drag a tab into the lower half for a dual view."],
   ['Dashboard', "The workspace page in the side panel. Tabs: Tasks (the board), Worktrees (changes and each branch's pull or merge request) and Issues (from GitHub, GitLab, Jira or Linear; start a worktree from one)."],
   ['Workspace settings', 'Name, icon or avatar and color; how new agents open (terminal or chat); chat models; branch prefix and base branch; code host and issue source.'],
   ['Bots', 'Bots mode: assistants with threads, teams and a Chief of Staff, routines on a calendar, triggers from connected apps, the work board and the team map.'],

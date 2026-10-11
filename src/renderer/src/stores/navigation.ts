@@ -76,7 +76,7 @@ interface NavigationState {
   setPanelSplit(share: number): void
   /** A Workspace's page lives in the side panel (ADR 0038): opens its last Worktree with that tab on `tab`. */
   openProject(projectId: string, place?: ProjectPlace): void
-  /** A worktree's side panel starts with Dashboard, Sessions and Explorer (ADR 0042). */
+  /** A worktree's side panel always has Dashboard, Sessions, Explorer, Routines and Settings (ADR 0042). */
   ensurePanelTabs(scope: string): void
   openWorkspace(projectId: string, workspaceId: string, focusPaneId?: string): void
   goHome(): void
@@ -234,8 +234,10 @@ export const useNavigation = create<NavigationState>((set, get) => ({
     }
   },
   ensurePanelTabs: (scope) => {
-    if (!scope || get().panelTabs[scope]) return
-    for (const kind of ['workspace', 'sessions', 'explorer'] as const) get().addPanelTab(scope, kind, undefined, kind === 'workspace')
+    if (!scope) return
+    const fresh = !get().panelTabs[scope]
+    // Every kind, once: a worktree opened before keeps its order and gets what it lacks.
+    for (const kind of ['workspace', 'sessions', 'explorer', 'routines', 'settings'] as const) get().addPanelTab(scope, kind, undefined, fresh && kind === 'workspace')
   },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
     set((s) => ({

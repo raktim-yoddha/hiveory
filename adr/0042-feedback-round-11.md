@@ -78,3 +78,11 @@ A worktree opened before this keeps the side-panel tabs it had; the defaults app
 Browser pages are not restored after a restart (as before), so their panes leave the layout then.
 In Tabs, files opened from the Explorer and agents opened by Queen Bee or presets still open in their
 own area; only a pane's "+" opens a tab.
+
+## Amendment (2026-10-11): fixed side-panel tabs, Orca-style tab areas, floating notes
+
+Decided by the product owner after trying round 11.
+
+- **Side panel:** every worktree's side panel always has Dashboard, Sessions, Explorer, Routines and
+  Settings. There is no "+" and no ×: tabs only drag to reorder, or between the top and bottom area
+  for a dual view and back. A worktree opened before gets the tabs it lacks.

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { CalendarClock, FolderTree, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, Plus, Settings2, X } from 'lucide-react'
+import { CalendarClock, FolderTree, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop, Settings2 } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { Menu } from '../../components/ui/Menu'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { cx } from '../../lib/cx'
 import {
@@ -27,10 +26,10 @@ const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDas
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
- * Right side panel for the Worktree in view: the Dashboard (ADR 0038, 0039), the agent session history,
- * the folder's Explorer, and the Workspace's Routines and Settings (ADR 0042), added from "+". Browser
- * pages are panes among the agents (ADR 0042). Tabs drag to reorder; dragging one into the lower half
- * splits the panel into a top and a bottom area, each with its own tabs (a divider sets their heights).
+ * Right side panel for the Worktree in view: always the Dashboard (ADR 0038, 0039), the agent session
+ * history, the folder's Explorer, and the Workspace's Routines and Settings (ADR 0042) — nothing to add
+ * or close. Tabs drag to reorder; dragging one into the lower half splits the panel into a top and a
+ * bottom area for a dual view, and back (a divider sets their heights). Browser pages are panes.
  */
 export function SidePanel() {
   const view = useNavigation((s) => s.view)
@@ -39,7 +38,7 @@ export function SidePanel() {
   // Workspaces only — a project page has no side panel.
   const scope = workspaceId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
-  const { addPanelTab, closePanelTab, movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation()
+  const { movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation()
   const bodyRef = useRef<HTMLDivElement>(null)
   /** The tab being dragged, and where the panel shows it would land. */
   const [dragging, setDragging] = useState<string | null>(null)
@@ -60,30 +59,6 @@ export function SidePanel() {
   useEffect(() => {
     if (projectId) ensurePanelTabs(scope)
   }, [scope, projectId, ensurePanelTabs])
-
-  const closeTab = (tab: PanelTab): void => closePanelTab(scope, tab.id)
-
-  // Explorer, Dashboard, Sessions, Routines and Settings open once per worktree: an open one leaves the menu (ADR 0039, 0042).
-  const isOpen = (kind: PanelTab['kind']): boolean => tabs.some((t) => t.kind === kind)
-  const addMenu = (group: PanelGroup) => (
-    <Menu
-      label="Add to side panel"
-      items={[
-        ...(
-          [
-            ['explorer', 'Explorer', <FolderTree key="e" />],
-            ['workspace', 'Dashboard', <LayoutDashboard key="d" />],
-            ['sessions', 'Sessions', <History key="s" />],
-            ['routines', 'Routines', <CalendarClock key="r" />],
-            ['settings', 'Workspace settings', <Settings2 key="w" />]
-          ] as const
-        )
-          .filter(([kind]) => !isOpen(kind))
-          .map(([kind, label, icon]) => ({ type: 'item' as const, id: kind, label, icon, disabled: !scope, onSelect: () => void addPanelTab(scope, kind, undefined, true, group) }))
-      ]}
-      trigger={(props) => <IconButton {...props} label="Add to the side panel" icon={<Plus />} className={styles.add} />}
-    />
-  )
 
   /** A tab dropped on an area's pages moves to that area (see PanelArea's drop zone). */
   const dropInArea = (id: string, area: PanelGroup): void => {
@@ -114,7 +89,6 @@ export function SidePanel() {
             scope={scope}
             group={group}
             tabs={tabs.filter((t) => tabGroup(t) === group)}
-            onClose={closeTab}
             dragging={dragging}
             onDragStart={setDragging}
             onDragEnd={endDrag}
@@ -122,7 +96,6 @@ export function SidePanel() {
             dropArea={dropArea}
             onDropAreaChange={setDropArea}
             onDropInArea={dropInArea}
-            addMenu={addMenu(group)}
             workspaceId={workspaceId}
             projectId={projectId}
             actions={
@@ -168,7 +141,6 @@ interface PanelAreaProps {
   scope: string
   group: PanelGroup
   tabs: PanelTab[]
-  onClose(tab: PanelTab): void
   dragging: string | null
   onDragStart(id: string): void
   onDragEnd(): void
@@ -177,7 +149,6 @@ interface PanelAreaProps {
   dropArea: PanelGroup | null
   onDropAreaChange(area: PanelGroup | null): void
   onDropInArea(id: string, area: PanelGroup): void
-  addMenu: ReactNode
   actions: ReactNode
   workspaceId?: string
   projectId?: string
@@ -188,7 +159,6 @@ function PanelArea({
   scope,
   group,
   tabs,
-  onClose,
   dragging,
   onDragStart,
   onDragEnd,
@@ -196,7 +166,6 @@ function PanelArea({
   dropArea,
   onDropAreaChange,
   onDropInArea,
-  addMenu,
   actions,
   workspaceId,
   projectId
@@ -288,20 +257,15 @@ function PanelArea({
                   className={styles.tabButton}
                   title={`${name}\nDrag to reorder, or into the lower half to show it below (Ctrl+Shift+arrows)`}
                   onClick={() => selectPanelTab(scope, tab.id)}
-                  onAuxClick={(e) => e.button === 1 && onClose(tab)}
                   onKeyDown={(e) => onTabKey(e, tab)}
                 >
                   <Icon aria-hidden />
                   <span className={styles.tabTitle}>{name}</span>
                 </button>
-                <button type="button" className={styles.tabClose} aria-label={`Close ${name}`} onClick={() => onClose(tab)}>
-                  <X aria-hidden />
-                </button>
               </div>
             )
           })}
           {before === '' && dragging && <span className={styles.insertEnd} aria-hidden />}
-          {addMenu}
         </div>
         {actions && <div className={styles.actions}>{actions}</div>}
       </header>
@@ -330,13 +294,7 @@ function PanelArea({
           />
         )}
         {tabs.length === 0 ? (
-          <EmptyState
-            compact
-            icon={<Plus />}
-            title="Nothing open"
-            description="Add the Dashboard, the agent session history, the Explorer for this folder's files, Routines or the Workspace's settings."
-            actions={addMenu}
-          />
+          <EmptyState compact icon={<PanelTop />} title="Drag a tab here" description="Drag a tab from the other area to show it here." />
         ) : (
           // Every tab stays mounted so pages and the Explorer keep their state; only the active one is visible.
           tabs.map((tab) => (
