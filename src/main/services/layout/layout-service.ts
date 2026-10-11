@@ -1,5 +1,5 @@
 import type { LayoutNode, LayoutOperation } from '@shared/domain'
-import { applyOperation, dockPane, listPanes, removePane } from '@shared/layout/operations'
+import { applyOperation, dockPane, flattenTabs, listPanes, removePane } from '@shared/layout/operations'
 import type { Emit } from '../events'
 import type { StateStore } from '../persistence/state-store'
 
@@ -28,6 +28,14 @@ export class LayoutService {
     const next = applyOperation(this.get(workspaceId, paneIds), operation)
     this.set(workspaceId, next)
     return next
+  }
+
+  /** Back to the tiles style (ADR 0042): every worktree's tabbed areas become side-by-side panes. */
+  flattenAll(): void {
+    for (const [workspaceId, tree] of Object.entries(this.store.state.layouts)) {
+      const flat = flattenTabs(tree)
+      if (JSON.stringify(flat) !== JSON.stringify(tree)) this.set(workspaceId, flat)
+    }
   }
 
   set(workspaceId: string, tree: LayoutNode | null, notify = true): void {

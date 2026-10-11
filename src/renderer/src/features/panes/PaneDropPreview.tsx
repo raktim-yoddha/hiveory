@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Columns3, LayoutGrid, PanelLeft } from 'lucide-react'
+import { ArrowLeftRight, Columns3, LayoutGrid, PanelLeft, PanelTop } from 'lucide-react'
 import type { ArrangeMode } from '@shared/domain'
 import { arrangeBarRects, type DropTarget } from '@shared/layout/drop'
 import type { Rect } from '@shared/layout/geometry'
@@ -28,6 +28,11 @@ export function PaneDropPreview({ target, swap, container, showArrangeBar }: Pan
           {target.kind === 'swap' && (
             <span className={styles.previewLabel}>
               <ArrowLeftRight /> Swap
+            </span>
+          )}
+          {target.kind === 'stack' && (
+            <span className={styles.previewLabel}>
+              <PanelTop /> Add as a tab
             </span>
           )}
         </div>

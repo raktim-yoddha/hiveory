@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Globe, Plus, Search } from 'lucide-react'
+import { ArrowDown, ArrowRight, Globe, PanelTop, Plus, Search } from 'lucide-react'
 import { opensAsChat, type CliDescriptor } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -19,6 +19,8 @@ interface AddAgentMenuProps {
   paneId: string
   /** Whether a split in each direction still leaves both panes above their minimum size. */
   fits: { right: boolean; bottom: boolean }
+  /** Tabbed panes (ADR 0042): "Tab" (the default) opens the new pane as a tab of this area. */
+  tabbed?: boolean
 }
 
 /**
@@ -27,15 +29,15 @@ interface AddAgentMenuProps {
  * (PowerShell, Command Prompt, Git Bash) or a detected agent CLI — with search.
  * Nothing is hardcoded: entries come from the CLI registry.
  */
-export function AddAgentMenu({ workspaceId, paneId, fits }: AddAgentMenuProps) {
+export function AddAgentMenu({ workspaceId, paneId, fits, tabbed }: AddAgentMenuProps) {
   return (
     <Popover label="Add pane" align="end" trigger={(props) => <IconButton {...props} label="Add agent" icon={<Plus />} />}>
-      {(close) => <AddPanePicker workspaceId={workspaceId} paneId={paneId} fits={fits} onDone={close} />}
+      {(close) => <AddPanePicker workspaceId={workspaceId} paneId={paneId} fits={fits} tabbed={tabbed} onDone={close} />}
     </Popover>
   )
 }
 
-function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps & { onDone: () => void }) {
+function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMenuProps & { onDone: () => void }) {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const { clis, loaded, load } = useHostClis(projectId)
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
@@ -45,13 +47,13 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
   const appDefault = useSettings((s) => s.settings.defaultChatUi)
   const [chosenView, setView] = useState<boolean | null>(null)
   const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree, appDefault))
-  const [preferred, setSide] = useState<'right' | 'bottom'>('right')
+  const [preferred, setSide] = useState<'right' | 'bottom' | 'tab'>(tabbed ? 'tab' : 'right')
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const searchId = useId()
   // Fall back to whichever direction fits; if neither does, the pane docks along the layout edge.
-  const side = fits[preferred] ? preferred : fits.right ? 'right' : fits.bottom ? 'bottom' : null
+  const side = preferred === 'tab' ? 'tab' : fits[preferred] ? preferred : fits.right ? 'right' : fits.bottom ? 'bottom' : null
 
   useEffect(() => {
     if (!loaded) void load()
@@ -68,7 +70,8 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
 
   const open = (cli: CliDescriptor): void => {
     onDone()
-    void agentActions.open(workspaceId, cli.id, side ? { targetPaneId: paneId, side } : undefined, undefined, cli.kind === 'shell' ? false : chat)
+    const placement = side === 'tab' ? { targetPaneId: paneId, side: 'right' as const, asTab: true } : side ? { targetPaneId: paneId, side } : undefined
+    void agentActions.open(workspaceId, cli.id, placement, undefined, cli.kind === 'shell' ? false : chat)
   }
 
   const browser = (): void => {
@@ -87,13 +90,13 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
     event.preventDefault()
   }
 
-  const placement = (value: 'right' | 'bottom', label: string, icon: ReactNode, hint: string) => (
+  const placement = (value: 'right' | 'bottom' | 'tab', label: string, icon: ReactNode, hint: string) => (
     <button
       type="button"
       role="radio"
       aria-checked={side === value}
-      disabled={!fits[value]}
-      title={fits[value] ? undefined : hint}
+      disabled={value !== 'tab' && !fits[value]}
+      title={value === 'tab' || fits[value] ? undefined : hint}
       className={cx(styles.side, side === value && styles.sideOn)}
       onClick={() => setSide(value)}
     >
@@ -105,6 +108,7 @@ function AddPanePicker({ workspaceId, paneId, fits, onDone }: AddAgentMenuProps 
   return (
     <div className={styles.picker}>
       <div className={styles.sides} role="radiogroup" aria-label="Placement">
+        {tabbed && placement('tab', 'Tab', <PanelTop aria-hidden />, '')}
         {placement('right', 'Right', <ArrowRight aria-hidden />, 'Too narrow')}
         {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
       </div>

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
 import { HEX_COLOR, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
-import { FONT_FAMILY, FONT_WEIGHTS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
+import { FONT_FAMILY, FONT_WEIGHTS, PANE_STYLES, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -205,6 +205,8 @@ export const layoutOperationSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('dock'), paneId: id, side }),
   z.object({ type: z.literal('swap'), paneId: id, targetPaneId: id }),
   z.object({ type: z.literal('arrange'), mode: z.enum(['equal', 'focus', 'columns']), focusPaneId: id.optional() }),
+  z.object({ type: z.literal('stack'), paneId: id, targetPaneId: id }),
+  z.object({ type: z.literal('activate'), paneId: id }),
   z.object({
     type: z.literal('resize'),
     path: z.array(z.number().int().min(0).max(64)).max(32),
@@ -316,7 +318,8 @@ export const requestSchemas = {
   'agents.open': z.object({
     workspaceId: id,
     cliId: id,
-    placement: z.object({ targetPaneId: id, side }).optional(),
+    /** `asTab`: into the target's area as a tab (tabbed panes, ADR 0042) instead of beside it. */
+    placement: z.object({ targetPaneId: id, side, asTab: z.boolean().optional() }).optional(),
     /** Continue this conversation from the CLI's history (Sessions tab) instead of starting a new one. */
     resumeSession: z.string().regex(SESSION_ID).optional(),
     /** Chat view or terminal for this one agent; absent = the Workspace's or Worktree's default (ADR 0037). */
@@ -446,6 +449,8 @@ export const requestSchemas = {
       queenSounds: z.boolean(),
       queenUpdates: z.enum(['all', 'waiting', 'off']),
       queenPopups: z.boolean(),
+      paneStyle: z.enum(PANE_STYLES),
+      welcomed: z.boolean(),
       queenVoiceSpeed: z.number().min(0.8).max(1.4)
     })
     .partial(),
@@ -551,7 +556,7 @@ export const requestSchemas = {
     scope: id,
     url: z.string().max(4000).optional(),
     profileId: profileId.optional(),
-    beside: z.object({ paneId: id, side: z.enum(['right', 'bottom']) }).optional()
+    beside: z.object({ paneId: id, side: z.enum(['right', 'bottom', 'tab']) }).optional()
   }),
   'browser.close': z.object({ pageId }),
   /** A URL (normalized in main), or back / forward / reload / stop. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FileCode2, Maximize2, Minimize2, Save, X } from 'lucide-react'
 import type { EditorView } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
@@ -7,12 +7,15 @@ import { EmptyState } from '../../components/ui/EmptyState'
 import { api, subscribe } from '../../lib/api'
 import { runAction } from '../../stores/notices'
 import { PaneFrame } from '../panes/PaneFrame'
+import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { CodeEditor } from './CodeEditor'
 import styles from './Editor.module.css'
 
 interface EditorPaneProps extends PaneRenderProps {
   editor: EditorView
+  /** Tabbed panes (ADR 0042): the area's tabs, in place of this header. */
+  tabStrip?: ReactNode
 }
 
 type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; saved: string; revision: number }
@@ -22,7 +25,7 @@ type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { sta
  * file changes on disk (an agent edited it) and there are no unsaved edits,
  * the pane reloads it.
  */
-export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleMaximize }: EditorPaneProps) {
+export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleMaximize, tabStrip }: EditorPaneProps) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [dirty, setDirty] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
@@ -69,12 +72,19 @@ export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleM
   }
 
   const close = (): void => void runAction('Close file', () => api('editors.close', { editorId: editor.id }))
+  // Closing its tab asks about unsaved changes, like its own close button.
+  const closeRef = useRef(() => (dirty ? setConfirmClose(true) : close()))
+  useEffect(() => {
+    closeRef.current = () => (dirty ? setConfirmClose(true) : close())
+  })
+  useEffect(() => registerPaneCloser(editor.id, () => closeRef.current()), [editor.id])
 
   return (
     <PaneFrame
       label={`${editor.name} file`}
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
+      tabStrip={tabStrip}
       header={
         <>
           <span className={styles.identity} title={editor.path}>

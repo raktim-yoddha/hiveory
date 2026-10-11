@@ -39,6 +39,25 @@ own, not open by default.
   CLI, which gets them once it is ready), **Copy** and Clear. Sent notes clear. `annotationsText`
   writes the message; agents still read notes with `browser_annotations`, now with each one's intent.
 
+### Tabbed panes (an option, chosen at the first run)
+- `paneStyle`: **Tiles** (one pane per area, as before) or **Tabs** (like Orca). The first run shows
+  a welcome asking which (`welcomed` records the answer; existing installs see it once too); Settings
+  › Appearance › Pane style changes it any time.
+- In Tabs, a layout leaf may hold several panes: `{ type: 'pane', paneId: <shown>, tabs: [...] }`.
+  Every tab keeps its own slot at the area's rect, mounted (terminals keep running) but out of sight
+  unless chosen, so switching tabs never remounts anything. New operations: `stack` (into another
+  area as a tab) and `activate` (choose a tab); `remove`, `move`, `swap` and splitting beside a tab
+  understand areas. Saved layouts accept `tabs` (it must include the shown pane).
+- The area's header becomes a tab strip with the gutters and look of the tiles: each tab has its
+  icon or CLI logo, name, status dot and ×; the area's "+" opens Tab (default) · Right · Bottom;
+  maximize. Click a tab to show it, drag it to an edge to split it out or into the middle of another
+  area to add it there (drop preview "Add as a tab"), middle-click to close it, double-click to
+  maximize, right-click for Rename · Split right · Split down · Close, right-click twice to rename.
+  Each pane registers what closing it means (`pane-commands`), so a file still asks about unsaved
+  changes.
+- Back to Tiles, main spreads every area's tabs into side-by-side panes (`flattenTabs`), so none stays
+  hidden. Arranging (Equal, Focus, Columns) lays every pane out on its own, in either style.
+
 ### Renaming a pane
 Right-click an agent's or terminal's pane name twice (or right-click › Rename) to rename it in
 place: Enter saves, Escape cancels. The name is the agent's pet name, so it changes everywhere at
@@ -57,3 +76,5 @@ show it without reading files. Choosing an icon goes back from the avatar.
 
 A worktree opened before this keeps the side-panel tabs it had; the defaults apply to new ones.
 Browser pages are not restored after a restart (as before), so their panes leave the layout then.
+In Tabs, files opened from the Explorer and agents opened by Queen Bee or presets still open in their
+own area; only a pane's "+" opens a tab.

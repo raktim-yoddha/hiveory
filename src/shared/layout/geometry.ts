@@ -55,7 +55,8 @@ export const computeGeometry = (
   const geometry: LayoutGeometry = { panes: {}, dividers: [] }
   const walk = (node: LayoutNode, rect: Rect, path: number[]): void => {
     if (node.type === 'pane') {
-      geometry.panes[node.paneId] = rect
+      // An area's tabs share its rect; only the shown one is visible (ADR 0042).
+      for (const id of node.tabs ?? [node.paneId]) geometry.panes[id] = rect
       return
     }
     const horizontal = node.direction === 'horizontal'

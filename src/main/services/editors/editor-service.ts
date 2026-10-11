@@ -2,8 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { basename } from 'node:path'
 import type { EditorView } from '@shared/domain'
 import { fail } from '@shared/errors'
-import { dockPane, insertBeside, listPanes } from '@shared/layout/operations'
-import type { Placement } from '../agents/agent-service'
+import { placePane, type Placement } from '../agents/agent-service'
 import type { Emit } from '../events'
 import type { LayoutService } from '../layout/layout-service'
 import type { StateStore } from '../persistence/state-store'
@@ -44,10 +43,7 @@ export class EditorService {
     this.store.update((s) => {
       s.editors.push(editor)
     })
-    const next =
-      placement && listPanes(tree).includes(placement.targetPaneId)
-        ? insertBeside(tree, editor.id, placement.targetPaneId, placement.side)
-        : dockPane(tree, editor.id, 'right')
+    const next = placePane(tree, editor.id, placement)
     this.layouts.set(workspaceId, next)
     this.emit('state.changed', { topic: 'editors', workspaceId })
     return this.view(editor)

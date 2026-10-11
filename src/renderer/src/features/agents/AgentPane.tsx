@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Pencil, Play, RotateCcw, Square, X } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -11,6 +11,7 @@ import { useAgents, useClis } from '../../stores/data'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
 import { PaneFrame } from '../panes/PaneFrame'
+import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { TerminalView } from '../terminal/TerminalView'
 import { AddAgentMenu } from './AddAgentMenu'
@@ -21,6 +22,8 @@ import styles from './AgentPane.module.css'
 interface AgentPaneProps extends PaneRenderProps {
   agent: CliInstanceView
   highlighted?: boolean
+  /** Tabbed panes (ADR 0042): the area's tabs, in place of this header. */
+  tabStrip?: ReactNode
 }
 
 /**
@@ -36,11 +39,13 @@ export function AgentPane({
   rect,
   minSize,
   gutter,
-  moveTo
+  moveTo,
+  tabStrip
 }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
   const [renaming, setRenaming] = useState(false)
+  useEffect(() => registerPaneCloser(agent.id, () => void agentActions.close(agent)), [agent])
   // A new name shows everywhere: sidebar, board, other agents' tools, Queen Bee and the phone (ADR 0042).
   const rename = (name: string): void => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
   const fits = { right: rect.width >= minSize.width * 2 + gutter, bottom: rect.height >= minSize.height * 2 + gutter }
@@ -61,6 +66,7 @@ export function AgentPane({
       tone={runtime.running && runtime.status === 'waiting-for-you' ? 'waiting' : undefined}
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
+      tabStrip={tabStrip}
       header={
         <>
           {/* Right-click the name for the agent's actions; right-click twice to rename it (ADR 0042). */}

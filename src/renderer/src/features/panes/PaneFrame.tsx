@@ -12,10 +12,12 @@ interface PaneFrameProps {
   highlighted?: boolean
   /** Tints the frame so state reads at a glance (e.g. an agent waiting for you). */
   tone?: 'waiting'
+  /** Tabbed panes (ADR 0042): the area's tab strip replaces this pane's own header. */
+  tabStrip?: ReactNode
 }
 
 /** A pane surface: draggable header + content. Content-agnostic. */
-export function PaneFrame({ label, header, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, tone }: PaneFrameProps) {
+export function PaneFrame({ label, header, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, tone, tabStrip }: PaneFrameProps) {
   return (
     <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} aria-label={label}>
       <header
@@ -25,7 +27,7 @@ export function PaneFrame({ label, header, children, onHeaderPointerDown, onHead
           if (!(e.target as HTMLElement).closest('button:not([data-pane-grip])')) onHeaderDoubleClick?.()
         }}
       >
-        {header}
+        {tabStrip ?? header}
       </header>
       <div className={styles.body}>{children}</div>
     </section>

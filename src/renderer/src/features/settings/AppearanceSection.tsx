@@ -12,6 +12,7 @@ import { SettingsPage } from './SettingsScreen'
 import { ThemeCard, type ThemePreview } from './ThemeCard'
 import { TerminalFontSettings } from './TerminalFontSettings'
 import { VsCodeThemes } from './VsCodeThemes'
+import { PaneStylePicker } from './PaneStylePicker'
 import styles from './Settings.module.css'
 
 /** Literal swatches: each card previews its own theme regardless of the active one. */
@@ -97,6 +98,14 @@ export function AppearanceSection() {
             onSelect={() => chooseTheme(theme.id)}
           />
         ))}
+      </div>
+
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Pane style</div>
+        <p className={styles.groupNote}>How agents, terminals, files and pages share a worktree. Going back to Tiles spreads every tab into its own area.</p>
+        <div className={styles.paneStyle}>
+          <PaneStylePicker value={settings.paneStyle} onChange={(paneStyle) => void update({ paneStyle })} />
+        </div>
       </div>
 
       <div className={styles.group}>

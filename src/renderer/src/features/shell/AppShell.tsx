@@ -17,6 +17,7 @@ import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
+import { WelcomeDialog } from './WelcomeDialog'
 import { SettingsScreen } from '../settings/SettingsScreen'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
@@ -179,6 +180,8 @@ export function AppShell() {
       <RoutineEditor />
       <SshPromptDialog />
       <UpdatePrompt />
+      {/* First run: Tiles or Tabs (ADR 0042). */}
+      <WelcomeDialog />
       <Toasts />
     </div>
   )

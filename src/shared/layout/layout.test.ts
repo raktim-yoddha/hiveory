@@ -9,6 +9,7 @@ import {
   dockPane,
   insertBeside,
   listPanes,
+  flattenTabs,
   normalize,
   removePane,
   resizeSplit
@@ -308,5 +309,49 @@ describe('pane minimums hold whatever squeezes the layout', () => {
     const tree: LayoutNode = { type: 'split', direction: 'vertical', children: [p('a'), p('b')], ratios: [0.9, 0.1] }
     const panes = computeGeometry(fitToMinimums(tree, bounds(500, 410), 10, min), bounds(500, 410), 10, min).panes
     expect(panes.b!.height).toBeCloseTo(100)
+  })
+})
+
+describe('panes as tabs in an area (ADR 0042)', () => {
+  const tabs = (active: string, ...ids: string[]): LayoutNode => ({ type: 'pane', paneId: active, tabs: ids })
+
+  it('stacks a pane into another area and shows it, leaving its old place', () => {
+    const tree = applyOperation(h(p('a'), p('b')), { type: 'stack', paneId: 'b', targetPaneId: 'a' })
+    expect(tree).toEqual(tabs('b', 'a', 'b'))
+    expect(listPanes(tree)).toEqual(['a', 'b'])
+  })
+
+  it('switches tabs, and a closed tab hands over to its neighbour', () => {
+    const tree = tabs('b', 'a', 'b', 'c')
+    expect(applyOperation(tree, { type: 'activate', paneId: 'c' })).toEqual(tabs('c', 'a', 'b', 'c'))
+    expect(removePane(tree, 'b')).toEqual(tabs('c', 'a', 'c'))
+    expect(removePane(tabs('a', 'a', 'b'), 'a')).toEqual(p('b'))
+  })
+
+  it('moves a tab out to a side of its own area, and gives every tab the area\'s rect', () => {
+    const tree = applyOperation(tabs('a', 'a', 'b'), { type: 'move', paneId: 'b', targetPaneId: 'a', side: 'right' })
+    expect(tree).toEqual(h(p('a'), p('b')))
+    const geometry = computeGeometry(tabs('a', 'a', 'b'), { x: 0, y: 0, width: 400, height: 300 }, 10)
+    expect(geometry.panes.a).toEqual(geometry.panes.b)
+  })
+
+  it('lays tabs out side by side again for the tiles style', () => {
+    const v = (...children: LayoutNode[]): LayoutNode => ({ type: 'split', direction: 'vertical', children, ratios: children.map(() => 1 / children.length) })
+    expect(flattenTabs(v(tabs('a', 'a', 'b'), p('c')))).toEqual(v(h(p('a'), p('b')), p('c')))
+  })
+
+  it('splits beside an area when the target is one of its tabs, and swaps ids inside tabs', () => {
+    expect(insertBeside(tabs('a', 'a', 'b'), 'c', 'b', 'bottom')).toMatchObject({ type: 'split', direction: 'vertical', children: [tabs('a', 'a', 'b'), p('c')] })
+    expect(applyOperation(h(tabs('a', 'a', 'b'), p('c')), { type: 'swap', paneId: 'b', targetPaneId: 'c' })).toMatchObject({ children: [tabs('a', 'a', 'c'), p('b')] })
+  })
+})
+
+describe('dropping a pane into an area as a tab (ADR 0042)', () => {
+  const panes = { a: { x: 0, y: 0, width: 400, height: 400 }, b: { x: 410, y: 0, width: 400, height: 400 } }
+  const container = { x: 0, y: 0, width: 810, height: 400 }
+  it('stacks in the middle of an area only in the tabbed style; edges still split', () => {
+    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: false, stacking: true })).toMatchObject({ kind: 'stack', targetPaneId: 'b' })
+    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: false })).toMatchObject({ kind: 'move', targetPaneId: 'b' })
+    expect(resolveDropTarget({ x: 780, y: 200, panes, container, draggedPaneId: 'a', swap: false, stacking: true, edgeThreshold: 10 })).toMatchObject({ kind: 'move', side: 'right' })
   })
 })

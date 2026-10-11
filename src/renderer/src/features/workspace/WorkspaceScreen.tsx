@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FolderX } from 'lucide-react'
+import { FileCode2, FolderX, Globe } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
+import { useAgents, useClis, useLayouts, useProjects, useSettings, useWorkspaces } from '../../stores/data'
+import { CliLogo } from '../../components/cli/CliLogo'
+import { AgentIcon } from '../../components/brand/AgentIcon'
+import { api } from '../../lib/api'
+import { runAction } from '../../stores/notices'
+import { pageTitle } from '../browser/page-title'
+import { AddAgentMenu } from '../agents/AddAgentMenu'
+import { PaneTabStrip, type PaneTabInfo } from '../panes/PaneTabStrip'
 import { useBrowser } from '../../stores/browser'
 import { useEditors } from '../../stores/editors'
 import { useNavigation } from '../../stores/navigation'
@@ -37,6 +44,9 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const allPages = useBrowser((s) => s.pages)
+  const runtime = useAgents((s) => s.runtime)
+  // Tabbed panes (ADR 0042): each area shows its panes as tabs.
+  const tabbed = useSettings((s) => s.settings.paneStyle) === 'tabs'
   const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
   const setWorkMinWidth = useNavigation((s) => s.setWorkMinWidth)
@@ -78,6 +88,23 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   // This worktree's browser pages are panes too (ADR 0042).
   const pageById = new Map(allPages.filter((p) => p.scope === workspaceId).map((p) => [p.id, p]))
 
+  /** What a pane's tab shows: an agent's or terminal's name, logo and status; a file's or page's name. */
+  const describe = (paneId: string): PaneTabInfo | undefined => {
+    const editor = editorById.get(paneId)
+    if (editor) return { title: editor.name, icon: <FileCode2 aria-hidden /> }
+    const page = pageById.get(paneId)
+    if (page) return { title: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: page.ownerName ? <AgentIcon aria-hidden /> : <Globe aria-hidden /> }
+    const agent = byId.get(paneId)
+    if (!agent) return undefined
+    const r = runtime[agent.id] ?? agent.runtime
+    return {
+      title: agent.petName,
+      icon: <CliLogo cliId={agent.cliId} size="sm" />,
+      status: { status: r.status, running: r.running, detail: r.activity },
+      rename: (name) => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
+    }
+  }
+
   return (
     <section className={styles.screen} aria-label={`${workspace.name} worktree`}>
       <div className={styles.body}>
@@ -91,6 +118,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
               tree={tree}
               onOperation={(operation) => void apply(workspaceId, operation)}
               onMinSizeChange={onMinSizeChange}
+              tabbed={tabbed}
               paneMinWidth={(paneId) => {
                 // A CLI whose terminal breaks (or crashes) when too narrow locks its pane's width.
                 const agent = byId.get(paneId)
@@ -98,11 +126,22 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                 return minColumns ? terminalMinWidth(minColumns) : undefined
               }}
               renderPane={(paneId, props) => {
+                const fits = { right: props.rect.width >= props.minSize.width * 2 + props.gutter, bottom: props.rect.height >= props.minSize.height * 2 + props.gutter }
+                const tabStrip = props.area ? (
+                  <PaneTabStrip
+                    area={props.area}
+                    describe={describe}
+                    onOperation={(operation) => void apply(workspaceId, operation)}
+                    maximized={props.maximized}
+                    toggleMaximize={props.toggleMaximize}
+                    add={<AddAgentMenu workspaceId={workspaceId} paneId={paneId} fits={fits} tabbed />}
+                  />
+                ) : undefined
                 const editor = editorById.get(paneId)
                 if (editor) {
                   return (
                     <ErrorBoundary region={`${editor.name} editor`} compact resetKey={editor.id}>
-                      <EditorPane editor={editor} {...props} />
+                      <EditorPane editor={editor} {...props} tabStrip={tabStrip} />
                     </ErrorBoundary>
                   )
                 }
@@ -110,7 +149,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                 if (page) {
                   return (
                     <ErrorBoundary region="Browser" compact resetKey={page.id}>
-                      <BrowserPaneFrame page={page} {...props} />
+                      <BrowserPaneFrame page={page} {...props} tabStrip={tabStrip} />
                     </ErrorBoundary>
                   )
                 }
@@ -118,7 +157,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                 if (!agent) return null
                 return (
                   <ErrorBoundary region={`${agent.petName}'s pane`} compact resetKey={agent.id}>
-                    <AgentPane agent={agent} highlighted={highlight === paneId} {...props} />
+                    <AgentPane agent={agent} highlighted={highlight === paneId} {...props} tabStrip={tabStrip} />
                   </ErrorBoundary>
                 )
               }}

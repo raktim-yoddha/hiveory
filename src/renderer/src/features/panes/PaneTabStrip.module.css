@@ -1,0 +1,104 @@
+/* An area's tabs (tabbed panes, ADR 0042): the pane header becomes this strip. */
+.strip {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  height: 100%;
+}
+
+.tab {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: calc(var(--space-11) * 1.5);
+  max-width: calc(var(--space-11) * 4);
+  height: calc(var(--pane-header-height) - var(--space-3));
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.tab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+.selected,
+.selected:hover {
+  background: var(--fill-selected);
+  color: var(--color-text);
+}
+
+.tabButton {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-align: left;
+}
+
+.tabButton > svg,
+.tabButton > img {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  margin-right: var(--space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-faint);
+  opacity: 0;
+}
+
+.tab:hover .close,
+.selected .close,
+.close:focus-visible {
+  opacity: 1;
+}
+
+.close:hover {
+  background: var(--color-surface-active);
+  color: var(--color-text);
+}
+
+.close svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+}

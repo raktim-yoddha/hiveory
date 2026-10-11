@@ -406,7 +406,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'browser.state': () => c.browser.state(),
   'browser.open': ({ scope, url, profileId, beside }) => {
     const page = c.browser.open({ scope, url, profileId })
-    if (beside && c.workspaceRepo.find(scope)) c.layouts.apply(scope, c.agents.paneIds(scope), { type: 'move', paneId: page.id, targetPaneId: beside.paneId, side: beside.side })
+    if (beside && c.workspaceRepo.find(scope)) {
+      const operation = beside.side === 'tab' ? { type: 'stack' as const, paneId: page.id, targetPaneId: beside.paneId } : { type: 'move' as const, paneId: page.id, targetPaneId: beside.paneId, side: beside.side }
+      c.layouts.apply(scope, c.agents.paneIds(scope), operation)
+    }
     return page
   },
   'browser.close': ({ pageId }) => c.browser.close(pageId),

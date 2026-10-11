@@ -1,0 +1,74 @@
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+  color: var(--color-text-secondary);
+  text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out);
+}
+
+.card:hover {
+  border-color: var(--color-border-strong);
+}
+
+.on,
+.on:hover {
+  border-color: var(--color-accent);
+  background: var(--fill-selected);
+}
+
+/* The drawing: two by two tiles, or two wide areas with tab strips. */
+.sketch {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  height: calc(var(--space-11) * 1.4);
+}
+
+.area {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-active);
+  overflow: hidden;
+}
+
+.strip {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+}
+
+.tabMark {
+  width: var(--space-6);
+  height: var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--color-border-strong);
+}
+
+.tabOn {
+  background: var(--color-accent);
+}
+
+.name {
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+}
+
+.text {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}

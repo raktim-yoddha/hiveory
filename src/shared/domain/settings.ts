@@ -97,9 +97,16 @@ export interface AppSettings {
   queenUpdates: 'all' | 'waiting' | 'off'
   /** Her replies pop open over the work; off (default), they wait behind her message button (ADR 0039). */
   queenPopups: boolean
+  /** Tiles: one pane per area. Tabs: each area holds several panes as tabs, like Orca (ADR 0042). */
+  paneStyle: PaneStyle
+  /** The welcome that asks for the pane style has been answered (shown once). */
+  welcomed: boolean
   /** Speaking speed (0.8–1.4). */
   queenVoiceSpeed: number
 }
+
+export const PANE_STYLES = ['tiles', 'tabs'] as const
+export type PaneStyle = (typeof PANE_STYLES)[number]
 
 export const FONT_WEIGHTS = ['100', '200', '300', '400', '500', '600', '700', '800', '900'] as const
 export type FontWeight = (typeof FONT_WEIGHTS)[number]
@@ -199,6 +206,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenSounds: true,
   queenUpdates: 'all',
   queenPopups: false,
+  paneStyle: 'tiles',
+  welcomed: false,
   queenVoiceSpeed: 1.05
 }
 

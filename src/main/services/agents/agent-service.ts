@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { opensAsChat, type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { AppException, fail } from '@shared/errors'
-import { buildGridLayout, dockPane, insertBeside, listPanes } from '@shared/layout/operations'
+import { buildGridLayout, dockPane, insertBeside, listPanes, stackPane } from '@shared/layout/operations'
 import { generatePetNames } from '@shared/naming/names'
 import { normalizeSelections } from '@shared/presets'
 import type { Logger } from '../../app/logger'
@@ -19,7 +19,17 @@ import type { KitSource } from '../workspaces/workspace-service'
 export interface Placement {
   targetPaneId: string
   side: Side
+  /** Into the target's area as a tab (tabbed panes, ADR 0042). */
+  asTab?: boolean
 }
+
+/** A new pane placed by `placement` (beside its target, or as a tab in its area), else docked at the right. */
+export const placePane = (tree: LayoutNode | null, paneId: string, placement?: Placement): LayoutNode | null =>
+  placement && listPanes(tree).includes(placement.targetPaneId)
+    ? placement.asTab
+      ? stackPane(tree, paneId, placement.targetPaneId)
+      : insertBeside(tree, paneId, placement.targetPaneId, placement.side)
+    : dockPane(tree, paneId, 'right')
 
 /** An agent that crashes after running at least this long is restarted automatically… */
 const MIN_UPTIME_MS = 10_000
@@ -127,10 +137,7 @@ export class AgentService {
       Object.assign(instance!, adapter!.adoptSession!(resumeSession), { hasConversation: true, chatUi: false })
     }
     const tree = this.layouts.get(workspaceId, this.paneIds(workspaceId))
-    const next =
-      placement && listPanes(tree).includes(placement.targetPaneId)
-        ? insertBeside(tree, instance!.id, placement.targetPaneId, placement.side)
-        : dockPane(tree, instance!.id, 'right')
+    const next = placePane(tree, instance!.id, placement)
     this.persist([instance!])
     this.layouts.set(workspaceId, next)
     this.launchQuietly(instance!, workspace)

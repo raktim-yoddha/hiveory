@@ -40,7 +40,7 @@ export async function waitUntilReady(instanceId: string, timeoutMs = 60_000): Pr
 export const agentActions = {
   /** Opens an agent; with `resumeSession` it continues that conversation from the CLI's history. */
   /** `chatUi`: chat view or terminal for this agent; absent = the Workspace's or Worktree's default. */
-  open: async (workspaceId: string, cliId: string, placement?: { targetPaneId: string; side: Side }, resumeSession?: string, chatUi?: boolean) => {
+  open: async (workspaceId: string, cliId: string, placement?: { targetPaneId: string; side: Side; asTab?: boolean }, resumeSession?: string, chatUi?: boolean) => {
     const result = await runAction(resumeSession ? 'Resume session' : 'Open agent', () => api('agents.open', { workspaceId, cliId, placement, resumeSession, chatUi }))
     if (!result) return
     useAgents.setState((s) => ({
