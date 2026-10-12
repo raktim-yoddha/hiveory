@@ -174,7 +174,7 @@
 .mode,
 .view {
   height: 100%;
-  animation: screen-in var(--duration-slow) var(--ease-out);
+  animation: screen-in var(--duration-slow) var(--ease-in-out);
 }
 
 /* Sidebars glide in from their edge when shown. */

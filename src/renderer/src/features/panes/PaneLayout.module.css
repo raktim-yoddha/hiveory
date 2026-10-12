@@ -6,32 +6,39 @@
   overflow: hidden;
 }
 
+/*
+ * Pane changes (split, swap, close, maximize, switching tabs) ease in and out: they start gently
+ * and settle gently, with no overshoot. A pane put out of sight fades first, then hides.
+ */
 .slot {
   position: absolute;
   display: flex;
   transition:
-    left var(--duration-base) var(--ease-out),
-    top var(--duration-base) var(--ease-out),
-    width var(--duration-base) var(--ease-out),
-    height var(--duration-base) var(--ease-out),
-    opacity var(--duration-fast) var(--ease-out);
-  animation: pane-in var(--duration-slow) var(--ease-liquid);
+    left var(--duration-slow) var(--ease-in-out),
+    top var(--duration-slow) var(--ease-in-out),
+    width var(--duration-slow) var(--ease-in-out),
+    height var(--duration-slow) var(--ease-in-out),
+    opacity var(--duration-base) var(--ease-in-out),
+    visibility 0s;
+  animation: pane-in var(--duration-slow) var(--ease-in-out);
 }
 
 /* Follow the pointer exactly while resizing or dragging. */
 .interacting .slot {
-  transition: opacity var(--duration-fast) var(--ease-out);
+  transition:
+    opacity var(--duration-base) var(--ease-in-out),
+    visibility 0s;
 }
 
 .interacting {
   cursor: grabbing;
 }
 
-/* A new pane settles into place: a touch smaller and lower, then springs to size. */
+/* A pane appears: it fades in from a touch smaller, easing in and out. */
 @keyframes pane-in {
   from {
     opacity: 0;
-    transform: translateY(var(--nudge)) scale(0.97);
+    transform: scale(0.985);
   }
 }
 
@@ -47,6 +54,12 @@
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+  /* Hidden only once the fade is over; shown again at once. */
+  transition-delay: 0s, 0s, 0s, 0s, 0s, var(--duration-base);
+}
+
+.interacting .concealed {
+  transition-delay: 0s, var(--duration-base);
 }
 
 /* Attached panes: the hairline divider keeps a grabbable width (ADR 0043). */
