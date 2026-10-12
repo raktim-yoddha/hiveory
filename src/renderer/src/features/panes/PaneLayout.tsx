@@ -91,9 +91,14 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
     const spacing = new MutationObserver(measure)
     spacing.observe(document.documentElement, { attributes: true, attributeFilter: ['data-panes'] })
     // Pixel bounds are for drag targets and limits only; pane positions are relative (see placed()).
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setBounds({ x: 0, y: 0, width: entry.contentRect.width, height: entry.contentRect.height })
-    })
+    // A hidden layout (another mode shown) measures 0×0: keep the last real bounds, so showing it
+    // again paints the fitted layout at once instead of the raw ratios, which would squeeze narrow
+    // panes for a frame and make their CLIs resize and redraw twice.
+    const track = (width: number, height: number): void => {
+      if (width > 0 && height > 0) setBounds({ x: 0, y: 0, width, height })
+    }
+    track(el.clientWidth, el.clientHeight)
+    const observer = new ResizeObserver(([entry]) => entry && track(entry.contentRect.width, entry.contentRect.height))
     observer.observe(el)
     return () => {
       observer.disconnect()
