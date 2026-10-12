@@ -142,6 +142,16 @@ Full right                                [∿ Ada  Your instructions…  Win + 
 Small        [∿]            [∿]                                              [∿]
 ```
 
+Title bar only (ADR 0044): no bar; her mark ∿ sits in the title bar after the side panel button
+(a dot for an unseen message). A click, her shortcut or a question drops the bar (and card) down
+under it; Escape or a click elsewhere puts it away. ⋯ › "Put away in the title bar" / "Show her bar
+again" switch it, as does Settings › Queen Bee › Bar & shortcut › Where she sits.
+
+```text
+… [Work │ Bots │ Chat] …                          [▯] [∿] [⚙]
+                                   [∿ Ada  Your instructions…  ✉ ⋯]
+```
+
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
 - Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,
   how she talks to you, and "Things she's learned" (edit, remove, add notes).

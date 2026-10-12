@@ -363,7 +363,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   - a custom personality: her name (never an agent name), a style text and three sliders
     (formal↔casual, calm↔energetic, gentle↔direct);
   - her voice (any English Kokoro voice) and speed;
-  - placement, and the system-wide shortcut (opt-in).
+  - placement (docked, floating, or put away in the title bar, ADR 0044), and the system-wide shortcut (opt-in).
 - Things she's learned: "remember that …" saves a note (shown as "Noted: …", undoable),
   "what do you know about me?" reads them back, "forget …" removes them. Notes are local,
   editable in Settings, and reach a model provider only as facts.

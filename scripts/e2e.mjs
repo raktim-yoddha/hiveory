@@ -740,6 +740,9 @@ await test('both sidebars resize by dragging their edge', async () => {
 })
 
 await test('panes follow a moving sidebar in the same frame: no pane ever steps backwards (ADR 0024)', async () => {
+  // With room to give: four panes at their minimum beside an open side panel leave the sidebar nowhere to go.
+  if (await page.getByRole('button', { name: 'Hide side panel' }).count()) await page.getByRole('button', { name: 'Hide side panel' }).click()
+  await page.waitForTimeout(300)
   // Every animation frame while the sidebar edge moves one way: each pane's left edge may only move that way.
   await page.evaluate(() => {
     window.__paneFrames = []
@@ -779,6 +782,8 @@ await test('dragging a sidebar well past its minimum hides it; showing it again 
   await page.getByRole('button', { name: 'Show sidebar' }).click()
   await page.waitForTimeout(400)
   expect(Math.abs((await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()).width - width) < 2, 'sidebar width not restored')
+  if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
+  await sidePanel().waitFor()
   await drag('Resize side panel', 900)
   await waitFor(async () => !(await sidePanel().isVisible()), 'side panel collapsed')
   await page.getByRole('button', { name: 'Show side panel' }).click()
@@ -833,7 +838,7 @@ await test('selection + Ctrl+C copies to the system clipboard', async () => {
   } finally {
     // The shell pane is only for these tests; later tests count agents.
     if (shellPane) await value('agents.close', { instanceId: shellPane.id }).catch(() => undefined)
-    await page.getByRole('button', { name: 'Hide side panel' }).click()
+    if (await page.getByRole('button', { name: 'Hide side panel' }).count()) await page.getByRole('button', { name: 'Hide side panel' }).click()
   }
 })
 
@@ -921,7 +926,11 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     await queen.waitFor()
     await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'her input focused')
     await shot('h3b-queen-title')
-    await page.keyboard.press('Escape')
+    // Escape closes her open reply card first, then puts her bar away.
+    for (let i = 0; i < 3 && (await queen.count()); i++) {
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(250)
+    }
     await waitFor(async () => (await queen.count()) === 0, 'Escape put her bar away')
     await mark.click()
     await page.getByRole('button', { name: 'Queen Bee options' }).click()
@@ -930,6 +939,13 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
   } finally {
     for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
     await value('settings.update', { queenPersona: 'ada' })
+    // Never leave her in the title bar for the tests after this one.
+    const mark = page.getByRole('banner').getByRole('button', { name: /Ask Queen Bee|Put Queen Bee away/ })
+    if (await mark.count()) {
+      if (!(await queen.count())) await mark.click()
+      await page.getByRole('button', { name: 'Queen Bee options' }).click()
+      await page.getByRole('menuitem', { name: /Show her bar again/ }).click()
+    }
   }
 })
 

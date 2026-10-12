@@ -1,12 +1,13 @@
 /* global document, getComputedStyle */
-// End-to-end: browser pages follow every pane rule (ADR 0042, 0043). Self-contained: sets up its own
-// Workspace and agent over IPC, so it runs on its own and quickly.
+// End-to-end: browser pages follow every pane rule (ADR 0042, 0043), and round 13's pane promises (ADR 0044):
+// terminals without status, Kanban states in words, terminals that remember, lazily loaded screens.
+// Self-contained: sets up its own Workspace and agent over IPC, so it runs on its own and quickly.
 // Usage: pnpm build && node scripts/e2e-panes.mjs [screenshotDir]
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
-import { agentMcp, app, browserPane, close, expect, finish, launch, nativeShown, page, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
+import { agentMcp, app, browserPane, close, expect, finish, launch, nativeShown, page, relaunch, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
 
 const repo = join(sandbox, 'demo-app')
 mkdirSync(repo)
@@ -166,6 +167,60 @@ await test("a popup opens right after its opener; a removed worktree closes its 
   const opened = await value('browser.open', { scope: other.id, url: `http://${host}/two` })
   await value('workspaces.delete', { workspaceId: other.id, force: true })
   await waitFor(async () => !(await value('browser.state')).pages.some((p) => p.id === opened.id), 'the removed worktree left its page running')
+})
+
+await test('terminals carry no status: no dot on the pane or in the sidebar; Kanban cards say their state (ADR 0044)', async () => {
+  const shellCli = (await value('clis.list')).find((c) => c.available && c.kind === 'shell')
+  expect(shellCli, 'no terminal installed')
+  const shell = (await value('agents.open', { workspaceId: worktree.id, cliId: shellCli.id })).agent
+  const pane = page.locator(`section[aria-label="${shell.petName} agent"]`)
+  await pane.waitFor()
+  // Its header has the CLI's logo only; an agent's has the logo and its status dot.
+  expect((await pane.locator('header [role="img"]').count()) === 1, 'a terminal pane shows a status dot')
+  expect((await agentPane().locator('header [role="img"]').count()) === 2, "the agent's pane lost its status dot")
+  // The worktree's pane list (folded bar or unfolded rows) calls it a terminal, with no state.
+  const bar = sidebar().getByRole('button', { name: /^Show all/ })
+  if (await bar.count()) await bar.click()
+  await sidebar().getByRole('button', { name: `${shell.petName} · Terminal` }).waitFor()
+  // The Dashboard's board: the agent's card names its state; the terminal has no card.
+  if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
+  await page.locator('aside[aria-label="Side panel"]').getByRole('tab', { name: 'Dashboard' }).click()
+  const card = page.locator(`aside[aria-label="Side panel"] button[aria-label^="${agent.petName},"]`)
+  await card.waitFor()
+  expect(/Idle|Working|Waiting for you|Stopped/.test(await card.innerText()), `the card does not say its state: ${await card.innerText()}`)
+  expect((await page.locator(`aside[aria-label="Side panel"] button[aria-label^="${shell.petName},"]`).count()) === 0, 'a terminal has a Kanban card')
+  await shot('p6-terminal-and-card')
+  await page.getByRole('button', { name: 'Hide side panel' }).click()
+  await value('terminal.write', { instanceId: shell.id, data: 'echo hv-memory-ok\r' })
+  await waitFor(async () => (await value('terminal.snapshot', { instanceId: shell.id })).data.includes('hv-memory-ok'), 'terminal output')
+  globalThis.__shell = shell
+})
+
+await test('a terminal shows what it printed after Hiveory restarts (ADR 0044)', async () => {
+  const shell = globalThis.__shell
+  await relaunch()
+  await openWorktree()
+  await page.locator(`section[aria-label="${shell.petName} agent"]`).waitFor()
+  await waitFor(async () => {
+    const out = (await value('terminal.snapshot', { instanceId: shell.id })).data
+    return out.includes('hv-memory-ok') && out.includes('restored from last time')
+  }, 'the old output restored above the new prompt', 20000)
+  await shot('p7-terminal-restored')
+})
+
+await test('Settings, Bots and Chat load on first open without errors (ADR 0044)', async () => {
+  const errors = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await page.getByRole('heading', { name: 'Appearance' }).waitFor()
+  await page.locator('dialog[open]').getByRole('button', { name: 'Close settings' }).click()
+  await page.getByRole('tab', { name: 'Bots' }).click()
+  await page.getByText(/Build your team of bots|Bots/).first().waitFor()
+  await page.getByRole('tab', { name: 'Chat' }).click()
+  await page.waitForTimeout(800)
+  await page.getByRole('tab', { name: 'Work' }).click()
+  await openWorktree()
+  expect(errors.length === 0, `errors: ${errors.join(' | ')}`)
 })
 
 await close()

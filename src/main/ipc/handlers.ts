@@ -323,7 +323,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     const host = (root ? await c.integrations.hostFor(project, root) : null) ?? c.github
     const url = await host.avatarUrl(root)
     if (!url) return fail('INVALID_INPUT', `No ${CODE_HOST_INFO[host.id].name} account found.`, { hint: `Sign in with "${CODE_HOST_INFO[host.id].signIn}", or use a repository on ${CODE_HOST_INFO[host.id].name}.` })
-    return c.projects.update(projectId, { settings: { avatar: await avatarFromUrl(url, nativeImage), emoji: null } })
+    // A private project's avatar needs a login the fetch doesn't have: the account's avatar instead.
+    const avatar = await avatarFromUrl(url, nativeImage).catch(async (error: unknown) => {
+      const account = root ? await host.avatarUrl(undefined) : undefined
+      if (!account || account === url) throw error
+      return avatarFromUrl(account, nativeImage)
+    })
+    return c.projects.update(projectId, { settings: { avatar, emoji: null } })
   },
   'extensions.importSkill': async ({ rootIds, projectId, botId }, event) => {
     const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })
