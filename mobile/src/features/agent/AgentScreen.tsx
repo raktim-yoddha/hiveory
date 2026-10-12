@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native'
+import { KeyboardAvoidingView, StyleSheet, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ellipsis, SearchX } from 'lucide-react-native'
 import { useAction, useCall, useCliIcons } from '@/core/api'
-import { KEYS, TerminalView, type TerminalHandle } from '@/core/terminal'
+import { KEYS, TerminalView, withModifiers, type Modifiers, type TerminalHandle } from '@/core/terminal'
 import { space, useTheme } from '@/core/theme'
 import { agentLine, Button, CliLogo, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
 import { AgentActions } from './AgentActions'
@@ -30,6 +30,8 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   const [actions, setActions] = useState(false)
   // Bumped each time the key bar's Enter sends the prompt, so the typing box starts fresh.
   const [line, setLine] = useState(0)
+  // Ctrl and Alt from the key bar, held for the next key (typed or tapped).
+  const [modifiers, setModifiers] = useState<Modifiers>({ ctrl: false, alt: false })
 
   if (agents.isLoading) return <Loading />
   if (!agent) {
@@ -41,6 +43,14 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   }
 
   const key = (bytes: string): void => write.mutate({ instanceId, data: bytes })
+  /** A key or typed text, with a held Ctrl or Alt applied once. */
+  const press = (bytes: string): void => {
+    if (!modifiers.ctrl && !modifiers.alt) return key(bytes)
+    key(withModifiers(bytes, modifiers))
+    setModifiers({ ctrl: false, alt: false })
+    // The box no longer mirrors the prompt after a combination (Ctrl+C clears it): start it fresh.
+    setLine((n) => n + 1)
+  }
   const waiting = agent.runtime.status === 'waiting-for-you'
 
   return (
@@ -65,7 +75,8 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
           )
         }}
       />
-      <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={headerHeight}>
+      {/* Padding on Android too: edge to edge, the window no longer shrinks for the keyboard, so the keys would sit under it (ADR 0048). */}
+      <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior="padding" keyboardVerticalOffset={headerHeight}>
         {agent.chatUi ? (
           <ChatThread chatId={instanceId} title={`Chat with ${agent.petName}`} />
         ) : (
@@ -90,9 +101,11 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
           ) : (
             <>
               {/* Keyed by the sent line: after the key bar's Enter the box starts fresh. */}
-              <TerminalInput key={line} petName={agent.petName} onType={key} />
+              <TerminalInput key={line} petName={agent.petName} onType={press} />
               <KeyBar
-                onKey={key}
+                onKey={press}
+                modifiers={modifiers}
+                onModifiers={setModifiers}
                 onEnter={() => {
                   key(KEYS.enter)
                   setLine((n) => n + 1)

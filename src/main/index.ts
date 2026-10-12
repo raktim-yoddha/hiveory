@@ -9,6 +9,7 @@ import type { QueenUpdate } from '@shared/queen/updates'
 import { readClientConfig } from './app/client'
 import { runClientMode } from './app/client-mode'
 import { createContainer, type Container } from './app/container'
+import type { ShareOptions } from './app/sharing'
 import { guard } from './app/guard'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
@@ -142,10 +143,13 @@ app.whenReady().then(async () => {
   container.shells.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   // What paired devices may do here: REMOTE_CHANNELS only, validated again, folders named directly.
   const serverHandlers = createHandlers(container, { trustPaths: true })
+  // A phone watching a terminal sizes it to its screen while it watches (ADR 0048).
+  const fitTerminal: ShareOptions['fitTerminal'] = (id, key, size) =>
+    c.shells.has(id) ? c.shells.fitViewer(id, key, size) : c.runtime.fitViewer(id, key, size)
   // Share this computer (ADR 0025): loopback and its Tailscale address, on the default port.
   // Share this computer (ADR 0025) over Tailscale, its local network (ADR 0039), or both.
   const share = (tailnet: boolean, lan: boolean) =>
-    c.sharing.apply(tailnet || lan ? { port: DEFAULT_SERVER_PORT, hosts: ['127.0.0.1'], tailnet, lan, handlers: serverHandlers } : null)
+    c.sharing.apply(tailnet || lan ? { port: DEFAULT_SERVER_PORT, hosts: ['127.0.0.1'], tailnet, lan, handlers: serverHandlers, fitTerminal } : null)
   // Every reaction is guarded on its own, so one broken feature never skips the others or fails the save.
   c.settings.on('changed', (next, previous) => {
     if (next.theme !== previous.theme || next.vscodeTheme !== previous.vscodeTheme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
@@ -182,7 +186,7 @@ app.whenReady().then(async () => {
   )
   if (servePort !== undefined) {
     // Server mode: no window; paired clients drive it (only REMOTE_CHANNELS, validated again).
-    await c.sharing.apply({ port: Number(servePort) || 0, hosts: [serveHost], tailnet: serveTailnet, handlers: serverHandlers })
+    await c.sharing.apply({ port: Number(servePort) || 0, hosts: [serveHost], tailnet: serveTailnet, handlers: serverHandlers, fitTerminal })
     // Supervisors and the person starting it read the addresses and the pairing code from stdout.
     const shared = c.sharing.status()
     console.log(`Hiveory server ready on ${serveHost}:${shared.port}${shared.address ? ` and ${shared.address}:${shared.port} (Tailscale)` : ''}`)

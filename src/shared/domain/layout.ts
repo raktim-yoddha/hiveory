@@ -11,7 +11,8 @@ export type LayoutNode =
   | { type: 'split'; direction: SplitDirection; children: LayoutNode[]; ratios: number[] }
 
 export type SplitDirection = 'horizontal' | 'vertical'
-export type ArrangeMode = 'equal' | 'focus' | 'columns'
+/** `rows` (ADR 0048) is Queen Bee's and agents' only; dragging offers the other three. */
+export type ArrangeMode = 'equal' | 'focus' | 'columns' | 'rows'
 export type Side = 'left' | 'right' | 'top' | 'bottom'
 
 export type LayoutOperation =

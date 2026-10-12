@@ -23,6 +23,7 @@ import {
 } from '@shared/queen/personas'
 import { BOTS_PAGE_LABEL, MAX_NOTES, MODE_LABEL, QUEEN_SETTINGS } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
+import { growPane } from '@shared/layout/operations'
 import { api, HiveoryError } from '../../lib/api'
 import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
@@ -50,6 +51,8 @@ const notes = (): string[] => useSettings.getState().settings.queenMemory
 const saveNotes = (next: string[]): Promise<void> => useSettings.getState().update({ queenMemory: next })
 
 class QueenError extends Error {}
+/** How much of its split "make Bruno bigger" adds or takes (ADR 0048). */
+const PANE_STEP = 0.15
 
 const ensure = async <T>(loaded: boolean, load: () => Promise<void>, get: () => T): Promise<T> => {
   if (!loaded) await load()
@@ -164,6 +167,13 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     const card = cards.find((c) => c.instanceId === id)
     if (!card) throw new QueenError('that agent is no longer open.')
     return card
+  }
+  /** A worktree's pane layout, loaded when it was never shown. */
+  const paneTree = async (workspaceId: string) => {
+    if (!useLayouts.getState().byWorkspace[workspaceId]) await useLayouts.getState().load(workspaceId)
+    const tree = useLayouts.getState().byWorkspace[workspaceId]
+    if (!tree) throw new QueenError('there are no panes there to arrange.')
+    return tree
   }
   /** Navigation steps undo to the page (and mode) that was showing before them. */
   const remember = (): void => {
@@ -429,10 +439,42 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'arrange': {
-          if (!useLayouts.getState().byWorkspace[action.workspaceId]) await useLayouts.getState().load(action.workspaceId)
-          if (!useLayouts.getState().byWorkspace[action.workspaceId]) throw new QueenError('there are no panes here to arrange.')
-          await useLayouts.getState().apply(action.workspaceId, { type: 'arrange', mode: action.layout })
-          outcomes.push({ kind: 'arranged', layout: action.layout })
+          await paneTree(action.workspaceId)
+          const focus = action.agentId ? agent(action.agentId) : undefined
+          if (focus && focus.workspaceId !== action.workspaceId) throw new QueenError(`${focus.petName} is in another worktree.`)
+          if (action.layout === 'focus' && !focus) throw new QueenError('say which agent should take the main spot.')
+          await useLayouts.getState().apply(action.workspaceId, { type: 'arrange', mode: action.layout, ...(focus ? { focusPaneId: focus.instanceId } : {}) })
+          outcomes.push({ kind: 'arranged', layout: action.layout, ...(focus ? { name: focus.petName } : {}) })
+          break
+        }
+        // Pane commands (ADR 0048): both agents must share a worktree, the one whose panes change.
+        case 'swap-panes':
+        case 'move-pane': {
+          const a = agent(action.agentId)
+          const b = action.targetAgentId ? agent(action.targetAgentId) : undefined
+          if (b?.instanceId === a.instanceId) throw new QueenError(`${a.petName} can't move next to itself.`)
+          if (b && b.workspaceId !== a.workspaceId) throw new QueenError(`${a.petName} and ${b.petName} are in different worktrees.`)
+          await paneTree(a.workspaceId)
+          if (action.type === 'swap-panes') {
+            await useLayouts.getState().apply(a.workspaceId, { type: 'swap', paneId: a.instanceId, targetPaneId: b!.instanceId })
+            outcomes.push({ kind: 'swapped', names: [a.petName, b!.petName] })
+            break
+          }
+          await useLayouts.getState().apply(a.workspaceId, b ? { type: 'move', paneId: a.instanceId, targetPaneId: b.instanceId, side: action.side } : { type: 'dock', paneId: a.instanceId, side: action.side })
+          const where = { left: 'to the left', right: 'to the right', top: 'to the top', bottom: 'to the bottom' }[action.side]
+          const beside = { left: 'left of', right: 'right of', top: 'above', bottom: 'below' }[action.side]
+          outcomes.push({ kind: 'moved', name: a.petName, where: b ? `${beside} ${b.petName}` : where })
+          break
+        }
+        case 'resize-pane': {
+          const a = agent(action.agentId)
+          const tree = await paneTree(a.workspaceId)
+          const grow = ['bigger', 'wider', 'taller'].includes(action.size)
+          const direction = action.size === 'wider' || action.size === 'narrower' ? 'horizontal' : action.size === 'taller' || action.size === 'shorter' ? 'vertical' : undefined
+          const resize = growPane(tree, a.instanceId, grow ? PANE_STEP : -PANE_STEP, direction)
+          if (!resize) throw new QueenError(`${a.petName} already has all the room there is that way.`)
+          await useLayouts.getState().apply(a.workspaceId, { type: 'resize', ...resize })
+          outcomes.push({ kind: 'resized', name: a.petName, size: action.size })
           break
         }
         case 'git-status': {

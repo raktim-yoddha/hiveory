@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { THEME_IDS } from '../domain/settings'
 import { appGuideText } from '../hiveory/guide'
-import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_BOTS_PAGES, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
+import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_BOTS_PAGES, QUEEN_LAYOUTS, QUEEN_PANE_SIZES, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, QUEEN_SIDES, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
 
 /**
  * Tier 1 of Queen Bee (ADR 0019): a model plans what the rule parser could not.
@@ -112,6 +112,9 @@ const ACTION_TYPES = [
   'open-url',
   'open-file',
   'arrange',
+  'swap-panes',
+  'move-pane',
+  'resize-pane',
   'git-status',
   'pull-requests',
   'apps-report',
@@ -149,6 +152,7 @@ export const PLAN_TOOL = {
             workspaceId: { type: 'string' },
             projectId: { type: 'string' },
             agentId: { type: 'string' },
+            targetAgentId: { type: 'string' },
             agentIds: { type: 'array', items: { type: 'string' } },
             presetId: { type: 'string' },
             text: { type: 'string' },
@@ -166,7 +170,9 @@ export const PLAN_TOOL = {
             on: { type: 'boolean' },
             url: { type: 'string' },
             query: { type: 'string' },
-            layout: { type: 'string', enum: ['equal', 'columns'] },
+            layout: { type: 'string', enum: [...QUEEN_LAYOUTS] },
+            side: { type: 'string', enum: [...QUEEN_SIDES] },
+            size: { type: 'string', enum: [...QUEEN_PANE_SIZES] },
             botId: { type: 'string' },
             automationId: { type: 'string' }
           },
@@ -208,7 +214,10 @@ const actionSchema: z.ZodType<QueenAction> = z.union([
   z.object({ type: z.literal('set-setting'), setting: z.enum(SETTING_IDS), on: z.boolean() }),
   z.object({ type: z.literal('open-url'), url: z.string().max(2000).regex(/^https?:\/\/\S+$/i), workspaceId: id }),
   z.object({ type: z.literal('open-file'), query: z.string().trim().min(1).max(200), workspaceId: id }),
-  z.object({ type: z.literal('arrange'), layout: z.enum(['equal', 'columns']), workspaceId: id }),
+  z.object({ type: z.literal('arrange'), layout: z.enum(QUEEN_LAYOUTS), workspaceId: id, agentId: id.optional() }),
+  z.object({ type: z.literal('swap-panes'), agentId: id, targetAgentId: id }),
+  z.object({ type: z.literal('move-pane'), agentId: id, side: z.enum(QUEEN_SIDES), targetAgentId: id.optional() }),
+  z.object({ type: z.literal('resize-pane'), agentId: id, size: z.enum(QUEEN_PANE_SIZES) }),
   z.object({ type: z.literal('git-status'), workspaceId: id }),
   z.object({ type: z.literal('pull-requests'), projectId: id }),
   z.object({ type: z.literal('apps-report') }),
@@ -288,6 +297,7 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
   const cliNames = (c: QueenContext['clis'][number]) => [c.displayName, c.displayName.replace(/ (code )?cli$| code$/i, '')]
   if (a.cliId !== undefined) a.cliId = find(a.cliId, ctx.clis, cliNames)
   if (a.agentId !== undefined) a.agentId = find(a.agentId, ctx.agents, (x) => [x.petName])
+  if (a.targetAgentId !== undefined) a.targetAgentId = find(a.targetAgentId, ctx.agents, (x) => [x.petName])
   if (Array.isArray(a.agentIds)) a.agentIds = a.agentIds.map((x) => find(x, ctx.agents, (y) => [y.petName]))
   if (a.type === 'close-agents' && a.agentIds === undefined && a.agentId !== undefined) a.agentIds = [a.agentId]
   if (a.workspaceId !== undefined) a.workspaceId = /^(main|primary)$/.test(lower(a.workspaceId)) ? (ctx.workspaces.find((w) => w.kind === 'main')?.id ?? a.workspaceId) : find(a.workspaceId, ctx.workspaces, (w) => [w.name])
@@ -341,7 +351,7 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
     case 'git-status':
     case 'save-preset':
       a.workspaceId ??= ctx.workspaceId
-      if (a.type === 'arrange') a.layout ??= 'equal'
+      if (a.type === 'arrange') a.layout = { grid: 'equal', tiles: 'equal', even: 'equal', column: 'columns', row: 'rows', stack: 'rows', main: 'focus' }[lower(a.layout)] ?? (a.layout || (a.agentId ? 'focus' : 'equal'))
       if (a.type === 'save-preset') {
         a.name ??= a.text
         delete a.text
@@ -408,6 +418,7 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
         : true) &&
       (typeof a.projectId === 'string' ? known.project.has(a.projectId) : true) &&
       (typeof a.agentId === 'string' ? known.agent.has(a.agentId) : true) &&
+      (typeof a.targetAgentId === 'string' ? known.agent.has(a.targetAgentId) : true) &&
       (Array.isArray(a.agentIds) ? (a.agentIds as string[]).every((x) => known.agent.has(x)) : true) &&
       (typeof a.presetId === 'string' ? known.preset.has(a.presetId) : true) &&
       (typeof a.botId === 'string' ? known.bot.has(a.botId) : true) &&
@@ -456,7 +467,8 @@ export function systemPrompt(persona: { name: string; tagline: string; text?: st
     '- navigate {to: home|settings+section|project+projectId|workspace+workspaceId|bots+page (work board, schedules, triggers, team map)}; set-mode {mode}; set-theme {theme}; side-panel {open}; open-panel-tab {kind}',
     '- apply-preset {presetId}; save-preset {name}: save this workspace\'s agents; create-workspace {name}; add-project; remember {text} (only when asked to remember); help.',
     `- set-setting {setting: ${SETTING_IDS.join('|')}, on}; check-updates; apps-report: connected apps.`,
-    '- open-url {url}: a page in the side browser; open-file {query}: a file of this workspace by name; arrange {layout: equal|columns}: tidy the panes.',
+    '- open-url {url}: a page in the side browser; open-file {query}: a file of this workspace by name; arrange {layout: equal (a grid)|columns|rows|focus + agentId (its pane takes half)}: lay out this worktree\'s panes.',
+    '- swap-panes {agentId, targetAgentId}; move-pane {agentId, side: left|right|top|bottom, targetAgentId?: beside that agent, else the layout\'s edge}; resize-pane {agentId, size: bigger|smaller|wider|narrower|taller|shorter}.',
     '- git-status: branch and changes here; pull-requests: open PRs of this project; resume-session {cliId}: reopen its latest conversation.',
     '- new-chat {cliId?, text?}: a chat in Chat mode; message-bot {botId, text}: send the user\'s exact words to a bot. switch-automation {automationId, on}: pause or resume a schedule or trigger.',
     'Words: the user says "workspace" for a STATE project and "worktree" (or branch) for a STATE workspace; say it their way in `question`/`reply`.',

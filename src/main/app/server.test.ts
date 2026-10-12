@@ -18,9 +18,13 @@ const handlers = new Proxy({} as Handlers, {
 })
 
 let server: HiveoryServer | null = null
+/** Every phone-sized terminal the server asked for (ADR 0048), null when given back. */
+let fits: Array<[string, { cols: number; rows: number } | null]> = []
 const start = async (ownerPairing?: (address: string) => Promise<boolean>) => {
   const dir = mkdtempSync(join(tmpdir(), 'hv-server-'))
-  server = await startServer({ port: 0, hosts: ['127.0.0.1'], handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0', ownerPairing })
+  fits = []
+  const fitTerminal = (id: string, _key: string, size: { cols: number; rows: number } | null) => void fits.push([id, size])
+  server = await startServer({ port: 0, hosts: ['127.0.0.1'], handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0', ownerPairing, fitTerminal })
   const base = `http://127.0.0.1:${server.port}`
   /** null sends no code at all (the owner's code-less pairing). */
   const pair = async (code: string | null = server!.pairingCode()) =>
@@ -168,6 +172,21 @@ describe('Hiveory server', () => {
     expect(oneText).toContain('"data":"mine"')
     expect(oneText).not.toContain('other')
     expect(oneText).not.toContain('state.changed')
+  })
+
+  it('sizes a terminal to the phone while its stream is open, and only for a phone (ADR 0048)', async () => {
+    const { base, pair, pairPhone } = await start()
+    const phone = { authorization: `Bearer ${await pairPhone()}` }
+    const desktop = { authorization: `Bearer ${((await (await pair()).json()) as { token: string }).token}` }
+    const watch = new AbortController()
+    await fetch(`${base}/events?terminal=a1&cols=48&rows=30`, { headers: phone, signal: watch.signal })
+    await fetch(`${base}/events?terminal=a2&cols=48&rows=30`, { headers: desktop })
+    await fetch(`${base}/events?terminal=a3&cols=2&rows=30`, { headers: phone })
+    expect(fits).toEqual([['a1', { cols: 48, rows: 30 }]])
+    watch.abort()
+    const end = Date.now() + 2000
+    while (fits.length < 2 && Date.now() < end) await new Promise((r) => setTimeout(r, 20))
+    expect(fits).toEqual([['a1', { cols: 48, rows: 30 }], ['a1', null]])
   })
 
   it('keeps a phone’s push token, accepting only Expo tokens', async () => {

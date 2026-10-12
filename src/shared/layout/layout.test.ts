@@ -10,6 +10,7 @@ import {
   insertBeside,
   listPanes,
   flattenTabs,
+  growPane,
   normalize,
   removePane,
   resizeSplit
@@ -193,6 +194,26 @@ describe('arrange modes', () => {
     const rest = out.children[1] as Extract<LayoutNode, { type: 'split' }>
     expect(rest.direction).toBe('vertical')
     rest.ratios.forEach((r) => expect(r).toBeCloseTo(1 / 3))
+  })
+
+  it('rows stacks every pane top to bottom (ADR 0048)', () => {
+    expect(arrange(tree, 'rows')).toMatchObject({ direction: 'vertical', ratios: [0.25, 0.25, 0.25, 0.25] })
+  })
+
+  it('growPane grows a pane in its nearest split (or the nearest of a direction), its neighbours giving way', () => {
+    // a | (b over c): b grows within its column; wider grows the whole column.
+    const t = h(p('a'), { type: 'split', direction: 'vertical', children: [p('b'), p('c')], ratios: [0.5, 0.5] })
+    const taller = growPane(t, 'b', 0.2)!
+    expect(taller.path).toEqual([1])
+    expect(taller.ratios[0]).toBeCloseTo(0.7)
+    expect(taller.ratios[1]).toBeCloseTo(0.3)
+    const wider = growPane(t, 'b', 0.2, 'horizontal')!
+    expect(wider.path).toEqual([])
+    expect(wider.ratios[1]).toBeCloseTo(0.7)
+    // Never below the minimum share, and nothing to grow in a single pane.
+    expect(growPane(t, 'a', -0.9)!.ratios[0]).toBeCloseTo(0.08)
+    expect(growPane(p('a'), 'a', 0.2)).toBeNull()
+    expect(applyOperation(t, { type: 'resize', ...taller })).toMatchObject({ children: [p('a'), { ratios: taller.ratios }] })
   })
 
   it('columns puts every pane side by side; single panes stay single', () => {

@@ -11,9 +11,9 @@ export interface TerminalHandle {
 }
 
 /**
- * A live agent or shell terminal, drawn exactly as on the computer: its own
- * size scaled to the phone's width (pinch to zoom), never resizing the real
- * one. Read-only; typing goes through the screen's own input bar.
+ * A live agent or shell terminal, sized to this phone while it is shown here and given
+ * back to the computer's size afterwards (ADR 0048); pinch to zoom. Read-only; typing goes
+ * through the screen's own input bar.
  */
 export const TerminalView = forwardRef<TerminalHandle, { instanceId: string }>(function TerminalView({ instanceId }, ref) {
   const web = useRef<WebView>(null)

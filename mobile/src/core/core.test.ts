@@ -7,6 +7,7 @@ import { staleChannels } from './api/invalidation'
 import { computerName, NeedsCodeError, pairWith, parsePairingLink } from './computers/pairing'
 import { createComputersStore } from './computers/store'
 import { memoryStore } from './storage/secure'
+import { KEYS, withModifiers } from './terminal/keys'
 import { mergeChunk } from './terminal/merge'
 import { svgFromDataUri } from './ui/svg-data'
 
@@ -115,5 +116,20 @@ describe('live updates', () => {
     expect(mergeChunk(10, 'abcde', 5)).toEqual({ write: '', written: 10 })
     expect(mergeChunk(10, 'abcdefgh', 6)).toEqual({ write: 'efgh', written: 14 })
     expect(mergeChunk(10, 'xy', 10)).toEqual({ write: 'xy', written: 12 })
+  })
+})
+
+describe('the key bar', () => {
+  it('sends Ctrl and Alt combinations the way a terminal reads them', () => {
+    const none = { ctrl: false, alt: false }
+    expect(withModifiers('c', none)).toBe('c')
+    expect(withModifiers('c', { ctrl: true, alt: false })).toBe('\u0003')
+    expect(withModifiers('L', { ctrl: true, alt: false })).toBe('\u000c')
+    expect(withModifiers('[', { ctrl: true, alt: false })).toBe(KEYS.escape)
+    expect(withModifiers('b', { ctrl: false, alt: true })).toBe(`${KEYS.escape}b`)
+    expect(withModifiers('x', { ctrl: true, alt: true })).toBe(`${KEYS.escape}\u0018`)
+    expect(withModifiers(KEYS.left, { ctrl: true, alt: false })).toBe(`${KEYS.escape}[1;5D`)
+    expect(withModifiers(KEYS.up, { ctrl: false, alt: true })).toBe(`${KEYS.escape}[1;3A`)
+    expect(withModifiers(KEYS.tab, { ctrl: false, alt: true })).toBe(`${KEYS.escape}${KEYS.tab}`)
   })
 })

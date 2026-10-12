@@ -2,7 +2,7 @@ import type { QueenAction, QueenContext, QueenParse, QueenSetting } from './acti
 import { cliAliases, norm } from './words'
 
 /**
- * Commands for the rest of the app — settings, the browser, files, panes, Git and
+ * Commands for the rest of the app — settings, the browser, files, Git and
  * GitHub, apps, updates, presets, chats, bots, sessions and projects — so Queen
  * Bee reaches what a click reaches. Like the rule parser, it never guesses: a
  * missing place or name becomes a question.
@@ -66,12 +66,6 @@ export function parseAppCommand(raw: string, ctx: QueenContext): QueenParse | nu
 
   // Projects.
   if (/^(add|open|new|import) (a )?(new )?(project|workspace)( folder)?$/.test(text)) return actions({ type: 'add-project' })
-
-  // Panes.
-  if (/^(arrange|tidy|tidy up|organi[sz]e|even out|equali[sz]e|line up|reset|clean up)\b.*\b(panes?|agents?|windows?|layout|terminals?)\b/.test(text) || /^(arrange|tidy up)$/.test(text)) {
-    if (!ws) return needWorkspace('arrange its panes')
-    return actions({ type: 'arrange', layout: /\b(columns?|side by side)\b/.test(text) ? 'columns' : 'equal', workspaceId: ws })
-  }
 
   // Presets: "save this as preset Backend".
   const preset = SAVE_PRESET.exec(input)

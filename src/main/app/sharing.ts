@@ -4,7 +4,7 @@ import type { Handlers } from '../ipc/router'
 import type { Tailscale } from '../services/tailscale/tailscale'
 import type { Logger } from './logger'
 import { sendPush } from './push'
-import { startServer, type HiveoryServer } from './server'
+import { startServer, type HiveoryServer, type ServerOptions } from './server'
 
 /** How often the Tailscale address is re-read: it appears late after boot and can change after a re-login. */
 const FOLLOW_MS = 30_000
@@ -30,6 +30,7 @@ export interface ShareOptions {
   /** Also listen on its private local-network addresses; devices there pair with the code (ADR 0039). */
   lan?: boolean
   handlers: Handlers
+  fitTerminal?: ServerOptions['fitTerminal']
 }
 
 /**
@@ -69,6 +70,7 @@ export class Sharing {
         port: options.port,
         hosts: options.hosts,
         handlers: options.handlers,
+        fitTerminal: options.fitTerminal,
         log: this.log,
         devicesFile: this.devicesFile,
         version: this.version,

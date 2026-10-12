@@ -48,6 +48,8 @@ export const arrange = (tree: LayoutNode | null, mode: ArrangeMode, focusPaneId?
       return buildGridLayout(ids)
     case 'columns':
       return evenSplit('horizontal', ids)
+    case 'rows':
+      return evenSplit('vertical', ids)
     case 'focus': {
       const focus = focusPaneId && ids.includes(focusPaneId) ? focusPaneId : (ids[0] as string)
       const rest = ids.filter((id) => id !== focus)

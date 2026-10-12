@@ -306,10 +306,12 @@ export const GUIDE: GuideChapter[] = [
           <p>
             Tap her shortcut (<K>Win</K> <K>Alt</K> by default, <K>⌘</K> <K>⌥</K> on a Mac) to type, hold it to talk. She opens, closes,
             restarts and finds agents, messages them (&ldquo;tell Bruno to run the tests&rdquo;), reports who is waiting, switches pages and
-            changes a few settings. She asks before closing or guessing.
+            changes a few settings. She lays out panes too: &ldquo;arrange them in a grid&rdquo;, columns or rows, &ldquo;make Bruno the
+            main pane&rdquo;, &ldquo;swap Bruno and Luna&rdquo;, &ldquo;move Luna to the left&rdquo;, &ldquo;make Bruno bigger&rdquo;. She
+            asks before closing or guessing.
           </p>
         ),
-        keywords: 'shortcut voice talk command'
+        keywords: 'shortcut voice talk command grid layout swap move resize panes'
       },
       {
         heading: 'Where she sits',
@@ -510,10 +512,12 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             With Tailscale, Settings › Remote › Share this computer lets your other devices and the Hiveory phone app connect — one tap on the
-            same Tailscale account, a pairing code otherwise. Remove a device to cut it off at once.
+            same Tailscale account, a pairing code otherwise. Remove a device to cut it off at once. A terminal opened on the phone is
+            sized to the phone while you look at it there, and goes back to its pane&rsquo;s size when you leave; the keys above the
+            phone&rsquo;s keyboard add Esc, Tab, Ctrl, Alt and the arrows.
           </p>
         ),
-        keywords: 'phone mobile tailscale share devices'
+        keywords: 'phone mobile tailscale share devices keyboard ctrl alt resize'
       }
     ]
   },

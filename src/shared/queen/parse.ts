@@ -2,6 +2,7 @@ import { THEMES, type ThemeId } from '../domain/settings'
 import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, type QueenAction, type QueenContext, type QueenParse, type QueenSettingsSection } from './actions'
 import { parseAddress, parseMessage, parseOpenAndSend } from './address'
 import { parseAppCommand } from './app-commands'
+import { parsePaneCommand } from './pane-commands'
 import { parseSmallTalk } from './chat'
 import { CLOSE_VERBS, cliAliases, clauses, fold, GO_VERBS, hasWord, norm, NUMBER_WORDS, OPEN_VERBS, RESTART_VERBS, STOP_VERBS } from './words'
 
@@ -370,7 +371,7 @@ export function parseCommand(raw: string, ctx: QueenContext): QueenParse {
   const talk = parseSmallTalk(input)
   if (talk) return { kind: 'actions', actions: [{ type: 'chat', topic: talk }] }
   // Most specific first: notes, one-liners, then anything addressed to an agent by name.
-  const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parseAppCommand(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
+  const direct = parseMemory(input) ?? parseQuick(input, ctx) ?? parsePaneCommand(input, ctx) ?? parseAppCommand(input, ctx) ?? parseOpenAndSend(input, ctx) ?? parseMessage(input, ctx) ?? parseAddress(input, ctx)
   if (direct) return direct
   const text = fold(input)
   if (!text) return { kind: 'unknown' }

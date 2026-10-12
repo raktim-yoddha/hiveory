@@ -1,4 +1,5 @@
 import type { CliStatus, ThemeId } from '../domain'
+import type { Side } from '../domain/layout'
 import type { SmallTalk } from './chat'
 
 /** Settings sections Queen Bee can open (mirrors the renderer's Settings navigation). */
@@ -61,8 +62,14 @@ export type QueenAction =
   | { type: 'open-url'; url: string; workspaceId: string }
   /** Finds a file of the workspace by name and opens it as an editor pane. */
   | { type: 'open-file'; query: string; workspaceId: string }
-  /** Rearranges the workspace's panes: equal tiles or side-by-side columns. */
-  | { type: 'arrange'; layout: 'equal' | 'columns'; workspaceId: string }
+  /** Rearranges the workspace's panes: a grid, side-by-side columns, stacked rows, or one agent's pane taking half (`agentId`). */
+  | { type: 'arrange'; layout: QueenLayout; workspaceId: string; agentId?: string }
+  /** Two agents' panes trade places (ADR 0048). */
+  | { type: 'swap-panes'; agentId: string; targetAgentId: string }
+  /** Moves an agent's pane to a side of the whole layout, or beside another agent's pane (ADR 0048). */
+  | { type: 'move-pane'; agentId: string; side: Side; targetAgentId?: string }
+  /** Gives an agent's pane more or less room (ADR 0048). */
+  | { type: 'resize-pane'; agentId: string; size: QueenPaneSize }
   /** The workspace's branch, changes and sync state. */
   | { type: 'git-status'; workspaceId: string }
   /** The project's open pull requests. */
@@ -83,6 +90,14 @@ export type QueenAction =
   | { type: 'resume-session'; cliId: string; workspaceId: string; projectId: string }
   /** Adds a project folder (the folder picker opens). */
   | { type: 'add-project' }
+
+/** How Queen Bee lays out a worktree's panes (ADR 0048). */
+export const QUEEN_LAYOUTS = ['equal', 'columns', 'rows', 'focus'] as const
+export type QueenLayout = (typeof QUEEN_LAYOUTS)[number]
+export const QUEEN_SIDES = ['left', 'right', 'top', 'bottom'] as const satisfies readonly Side[]
+/** Bigger and smaller take the room of the pane's own split; wider and taller say which way. */
+export const QUEEN_PANE_SIZES = ['bigger', 'smaller', 'wider', 'narrower', 'taller', 'shorter'] as const
+export type QueenPaneSize = (typeof QUEEN_PANE_SIZES)[number]
 
 /** Settings Queen Bee may turn on or off, and the app setting each one is. */
 export const QUEEN_SETTINGS = {

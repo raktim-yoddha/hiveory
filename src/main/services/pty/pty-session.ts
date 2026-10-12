@@ -50,6 +50,9 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   private process: PtyHandle | null = null
   private pending: { spec: PtySpawnSpec; timer: NodeJS.Timeout } | null = null
   private size: { cols: number; rows: number } | null = null
+  /** The size the desktop's pane asked for; a watching phone's size wins while it watches (ADR 0048). */
+  private ownSize: { cols: number; rows: number } | null = null
+  private readonly viewers = new Map<string, { cols: number; rows: number }>()
   private readonly buffer = new OutputBuffer()
   private outbox: { data: string; offset: number } | null = null
   private mirror: HeadlessTerminalType | null = null
@@ -90,6 +93,23 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   }
 
   resize(cols: number, rows: number): void {
+    this.ownSize = { cols, rows }
+    if (!this.viewers.size) this.setSize(cols, rows)
+  }
+
+  /**
+   * A phone watching this terminal sizes it to its own screen until it stops (`null`); then the
+   * newest phone still watching, or else the desktop's size, applies again (ADR 0048).
+   */
+  fitViewer(key: string, size: { cols: number; rows: number } | null): void {
+    this.viewers.delete(key)
+    if (size) this.viewers.set(key, size)
+    // A terminal no pane ever sized went back to the size it started at.
+    const next = [...this.viewers.values()].at(-1) ?? this.ownSize ?? DEFAULT_SIZE
+    this.setSize(next.cols, next.rows)
+  }
+
+  private setSize(cols: number, rows: number): void {
     if (this.size?.cols === cols && this.size.rows === rows) return
     this.size = { cols, rows }
     this.mirror?.resize(cols, rows)

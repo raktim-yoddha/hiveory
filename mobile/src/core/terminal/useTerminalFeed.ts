@@ -32,13 +32,16 @@ const xtermTheme = (c: Palette) => {
 
 /**
  * Feeds a terminal page (WebView on phones, iframe on the web) with one agent's
- * screen: the snapshot at the computer's own size, then only this terminal's
- * live output (ADR 0027), merged without repeats. `send` posts to the page.
+ * screen: the snapshot, then only this terminal's live output (ADR 0027), merged
+ * without repeats. `send` posts to the page. The page reports the grid that fits
+ * this screen; while the stream is open the computer sizes the terminal to it and
+ * gives the desktop's size back when it closes (ADR 0048).
  */
 export const useTerminalFeed = (instanceId: string, send: (message: object) => void) => {
   const { computer, token } = useConnection()
   const { colors } = useTheme()
-  const ready = useRef(false)
+  // The page's grid once it is ready ({} from a page that measures nothing).
+  const [size, setSize] = useState<{ cols?: number; rows?: number } | null>(null)
   const written = useRef(-1)
   const pending = useRef<{ data: string; offset: number }[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -60,36 +63,45 @@ export const useTerminalFeed = (instanceId: string, send: (message: object) => v
   }, [computer, token, instanceId, colors, send])
 
   useEffect(() => {
-    if (!computer || !token) return
+    if (!computer || !token || !size) return
     written.current = -1
     pending.current = []
-    const stream = openStream(computer, token, instanceId, (e) => {
-      if (e.event !== 'terminal.data') return
-      const { data, offset } = e.payload as { data: string; offset: number }
-      if (written.current < 0) return void pending.current.push({ data, offset })
-      const next = mergeChunk(written.current, data, offset)
-      written.current = next.written
-      if (next.write) send({ type: 'write', data: next.write })
-    })
-    if (ready.current) void load()
-    return () => stream.close()
-    // Reconnects follow the computer and terminal; `load` runs once the page says it is ready.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [computer?.id, token, instanceId, generation])
-
-  /** The page's own messages ('ready' when xterm is up). */
-  const onPageMessage = useCallback(
-    (raw: string): void => {
-      try {
-        if ((JSON.parse(raw) as { type?: string }).type !== 'ready') return
-        ready.current = true
+    const fit = size.cols && size.rows ? { cols: size.cols, rows: size.rows } : undefined
+    const stream = openStream(
+      computer,
+      token,
+      instanceId,
+      (e) => {
+        if (e.event !== 'terminal.data') return
+        const { data, offset } = e.payload as { data: string; offset: number }
+        if (written.current < 0) return void pending.current.push({ data, offset })
+        const next = mergeChunk(written.current, data, offset)
+        written.current = next.written
+        if (next.write) send({ type: 'write', data: next.write })
+      },
+      // Once open, the computer has sized the terminal to this phone: read the screen then (and after a reconnect).
+      (status) => {
+        if (status !== 'online') return
+        written.current = -1
+        pending.current = []
         void load()
-      } catch {
-        // Not ours.
-      }
-    },
-    [load]
-  )
+      },
+      fit
+    )
+    return () => stream.close()
+    // Reconnects follow the computer, terminal and the page's grid; `load` reads the latest theme itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computer?.id, token, instanceId, generation, size?.cols, size?.rows])
+
+  /** The page's own messages ('ready' with its grid when xterm is up). */
+  const onPageMessage = useCallback((raw: string): void => {
+    try {
+      const m = JSON.parse(raw) as { type?: string; cols?: number; rows?: number }
+      if (m.type === 'ready') setSize({ cols: m.cols, rows: m.rows })
+    } catch {
+      // Not ours.
+    }
+  }, [])
   const reload = useCallback(() => setGeneration((g) => g + 1), [])
 
   return {

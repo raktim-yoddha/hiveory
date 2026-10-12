@@ -1,4 +1,4 @@
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native'
+import { KeyboardAvoidingView, StyleSheet, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useHeaderHeight } from 'expo-router/react-navigation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -28,7 +28,7 @@ export function ChatScreen({ chatId }: { chatId: string }) {
           headerRight: () => (chat.data?.running ? <IconButton label="Stop answering" icon={Square} onPress={() => stop.mutate({ chatId })} /> : null)
         }}
       />
-      <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={headerHeight}>
+      <KeyboardAvoidingView style={[styles.fill, { backgroundColor: colors.bg }]} behavior="padding" keyboardVerticalOffset={headerHeight}>
         <ChatThread chatId={chatId} title={title} />
         <View style={[styles.dock, { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, space[4]) }]}>
           <ModelBar chatId={chatId} />

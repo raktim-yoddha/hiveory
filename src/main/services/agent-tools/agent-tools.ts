@@ -191,11 +191,11 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'arrange_panes',
-        description: 'Rearrange every pane in your worktree: equal grid, focus (one agent takes half), or columns.',
+        description: 'Rearrange every pane in your worktree: equal grid, focus (one agent takes half), columns, or rows (stacked top to bottom).',
         inputSchema: {
           type: 'object',
           properties: {
-            mode: { type: 'string', enum: ['equal', 'focus', 'columns'] },
+            mode: { type: 'string', enum: ['equal', 'focus', 'columns', 'rows'] },
             focus: { ...agentArg, description: 'For mode "focus": the agent that gets half the space (default: you).' }
           },
           required: ['mode'],
@@ -338,7 +338,7 @@ export class AgentTools implements ToolHost {
       }
       case 'arrange_panes': {
         const mode = str(args, 'mode') as ArrangeMode
-        if (!['equal', 'focus', 'columns'].includes(mode)) throw new ToolError('mode must be one of: equal, focus, columns.')
+        if (!['equal', 'focus', 'columns', 'rows'].includes(mode)) throw new ToolError('mode must be one of: equal, focus, columns, rows.')
         const focusName = str(args, 'focus', false)
         const focus = focusName ? this.resolve(focusName) : this.caller
         const workspaceId = this.caller.workspaceId

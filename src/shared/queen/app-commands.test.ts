@@ -63,6 +63,33 @@ describe('Queen Bee app commands', () => {
     expect(actions('add a project')).toEqual([{ type: 'add-project' }])
   })
 
+  it('lays panes out, swaps, moves and resizes them by agent name (ADR 0048)', () => {
+    const arrange = (layout: string, extra = {}) => [{ type: 'arrange', layout, workspaceId: 'w1', ...extra }]
+    expect(actions('arrange them in a grid')).toEqual(arrange('equal'))
+    expect(actions('put the panes in a grid')).toEqual(arrange('equal'))
+    expect(actions('grid layout')).toEqual(arrange('equal'))
+    expect(actions('can you tile the panels')).toEqual(arrange('equal'))
+    expect(actions('stack the agents')).toEqual(arrange('rows'))
+    expect(actions('show them in rows')).toEqual(arrange('rows'))
+    expect(actions('lay out panes in columns')).toEqual(arrange('columns'))
+    expect(actions('make Bruno the main pane')).toEqual(arrange('focus', { agentId: 'a1' }))
+    expect(actions('give Luna half the screen')).toEqual(arrange('focus', { agentId: 'a2' }))
+    expect(actions('swap Bruno and Luna')).toEqual([{ type: 'swap-panes', agentId: 'a1', targetAgentId: 'a2' }])
+    expect(actions('move Luna to the left')).toEqual([{ type: 'move-pane', agentId: 'a2', side: 'left' }])
+    expect(actions('put Bruno below Luna')).toEqual([{ type: 'move-pane', agentId: 'a1', side: 'bottom', targetAgentId: 'a2' }])
+    expect(actions('make Bruno bigger')).toEqual([{ type: 'resize-pane', agentId: 'a1', size: 'bigger' }])
+    expect(actions('make Luna narrower')).toEqual([{ type: 'resize-pane', agentId: 'a2', size: 'narrower' }])
+    // Messages stay messages, and "focus Bruno" still jumps to the pane.
+    expect(actions('tell Bruno to make the logo bigger')).toEqual([{ type: 'message-agent', agentId: 'a1', text: 'make the logo bigger' }])
+    expect(actions('focus Bruno')).toEqual([{ type: 'focus-agent', agentId: 'a1', workspaceId: 'w1', projectId: 'p1' }])
+    expect(parseCommand('arrange them in a grid', { ...ctx, workspaceId: undefined })).toMatchObject({ kind: 'ask' })
+    // A model may name the agents and say "grid".
+    expect(planFromToolArgs({ actions: [{ type: 'arrange', layout: 'grid' }, { type: 'swap-panes', agentId: 'Bruno', targetAgentId: 'luna' }] }, ctx)).toEqual({
+      kind: 'actions',
+      actions: [...arrange('equal'), { type: 'swap-panes', agentId: 'a1', targetAgentId: 'a2' }]
+    })
+  })
+
   it('starts chats, messages bots and resumes sessions', () => {
     expect(actions('new chat')).toEqual([{ type: 'new-chat', projectId: 'p1' }])
     expect(actions('start a chat with codex about the API design')).toEqual([{ type: 'new-chat', cliId: 'codex', text: 'the API design', projectId: 'p1' }])

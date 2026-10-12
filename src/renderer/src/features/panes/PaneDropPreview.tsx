@@ -1,11 +1,11 @@
-import { ArrowLeftRight, Columns3, LayoutGrid, PanelLeft, PanelTop } from 'lucide-react'
+import { ArrowLeftRight, Columns3, LayoutGrid, PanelLeft, PanelTop, Rows3 } from 'lucide-react'
 import type { ArrangeMode } from '@shared/domain'
 import { arrangeBarRects, type DropTarget } from '@shared/layout/drop'
 import type { Rect } from '@shared/layout/geometry'
 import { cx } from '../../lib/cx'
 import styles from './PaneLayout.module.css'
 
-const ARRANGE_ICONS: Record<ArrangeMode, typeof LayoutGrid> = { equal: LayoutGrid, focus: PanelLeft, columns: Columns3 }
+const ARRANGE_ICONS: Record<ArrangeMode, typeof LayoutGrid> = { equal: LayoutGrid, focus: PanelLeft, columns: Columns3, rows: Rows3 }
 
 interface PaneDropPreviewProps {
   target: DropTarget | null

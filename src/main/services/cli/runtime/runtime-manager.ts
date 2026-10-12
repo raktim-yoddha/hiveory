@@ -218,6 +218,11 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     this.sessions.get(instanceId)?.pty.resize(cols, rows)
   }
 
+  /** A watching phone's size, or null when it stops watching (ADR 0048). */
+  fitViewer(instanceId: string, key: string, size: { cols: number; rows: number } | null): void {
+    this.sessions.get(instanceId)?.pty.fitViewer(key, size)
+  }
+
   snapshot(instanceId: string): { data: string; end: number; cols?: number; rows?: number } {
     return this.sessions.get(instanceId)?.pty.snapshot() ?? { data: '', end: 0 }
   }

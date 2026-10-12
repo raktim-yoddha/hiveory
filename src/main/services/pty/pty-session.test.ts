@@ -36,4 +36,17 @@ describe('PtySession resize pacing', () => {
     expect(resizes.length).toBeLessThanOrEqual(3)
     session.stop()
   })
+
+  it("a watching phone's size wins until it stops; the desktop's size comes back (ADR 0048)", () => {
+    const { backend } = fakeBackend()
+    const session = new PtySession(false, backend)
+    session.start({ file: 'x', args: [], cwd: '.', env: {} })
+    session.resize(120, 30)
+    session.fitViewer('phone', { cols: 40, rows: 20 })
+    session.resize(130, 32) // the desktop window changed meanwhile: remembered, not applied
+    expect(session.snapshot()).toMatchObject({ cols: 40, rows: 20 })
+    session.fitViewer('phone', null)
+    expect(session.snapshot()).toMatchObject({ cols: 130, rows: 32 })
+    session.stop()
+  })
 })

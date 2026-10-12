@@ -376,7 +376,10 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   - settings on or off ("turn off browser use", "enable computer use");
   - a page in the side browser ("open localhost:3000"), a file in an editor
     ("open README.md");
-  - the panes tidied ("tidy up the panes", "side by side");
+  - the panes laid out (ADR 0048): a grid, columns or rows ("arrange them in a grid", "side by
+    side", "stack the agents"), one agent's pane taking half ("make Bruno the main pane"), two
+    agents' panes swapped, one moved to a side or beside another ("put Bruno below Luna"), or
+    made bigger, smaller, wider, narrower, taller or shorter;
   - the worktree's branch and changes ("what changed"), the workspace's open pull requests;
   - connected apps, a Hiveory update check;
   - the current agents saved as a preset ("save this as preset Backend");
@@ -458,13 +461,15 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   Same Tailscale account = no code.
 - A phone may do everyday things only: watch every workspace and agent, open agents and presets,
   type in terminals, send messages, interrupt, restart and close agents, create worktrees, chat,
-  answer the computer's SSH questions. Deleting, settings, accounts and resizing a desktop
-  terminal stay on the computer (enforced by the server). Paired devices show as Phone or Desktop.
+  answer the computer's SSH questions. Deleting, settings and accounts stay on the computer
+  (enforced by the server). Paired devices show as Phone or Desktop.
 - Tabs: **Inbox** (agents that need you across workspaces, then those working; badge on the tab),
   **Workspaces** (each with live counts; a workspace's board one status at a time, most urgent first,
   and its worktrees), **Settings** (computers, notifications, theme, privacy).
-- An agent screen shows its terminal exactly as on the computer (never resized), a bar that says
-  why it waits with Esc and Enter, the keys a phone lacks, and a message box.
+- An agent screen shows its terminal sized to the phone while it is open there (the computer's
+  pane gets its own size back when the phone leaves it, ADR 0048), a bar that says why it waits
+  with Esc and Enter, and the keys a phone lacks right above the keyboard, which never covers
+  them: Esc, Tab, Ctrl and Alt (held for the next key), the arrows, / and Enter.
 - Notifications (opt-in): "An agent needs you." through Expo push, at most once a minute per
   agent; only ids travel. Tapping opens that agent on the right computer.
 - The phone wears the theme picked on the computer.

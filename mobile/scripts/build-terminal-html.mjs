@@ -18,8 +18,9 @@ try {
 const script = readFileSync(join(xtermDir, 'lib', 'xterm.js'), 'utf8')
 const css = readFileSync(join(xtermDir, 'css', 'xterm.css'), 'utf8')
 
-// The page's own code: draws what the app sends at the computer's terminal size,
-// scaled to the phone's width (pinch to zoom). Typing goes through the app's own bar.
+// The page's own code: tells the app the grid that fits this screen (the computer sizes the
+// terminal to it while the phone watches, ADR 0048) and draws what the app sends at the size it
+// says, scaled to the phone's width (pinch to zoom). Typing goes through the app's own bar.
 const page = `
 // The app's WebView on phones; the hosting page when shown in an iframe (the web build).
 const post = (m) => {
@@ -28,10 +29,22 @@ const post = (m) => {
   else if (window.parent !== window) window.parent.postMessage(s, '*');
 };
 let term = null;
+// One character's width and line height per pixel of font size.
+const cell = () => {
+  const box = document.getElementById('probe').getBoundingClientRect();
+  return { w: box.width / 100 / 10, h: box.height / 10 };
+};
+// The grid that fills this screen at 12px text, within the bounds the computer accepts.
+const grid = () => {
+  const c = cell();
+  return {
+    cols: Math.max(20, Math.min(400, Math.floor((window.innerWidth - 8) / (12 * c.w)))),
+    rows: Math.max(5, Math.min(200, Math.floor((window.innerHeight - 8) / (12 * c.h))))
+  };
+};
 const fit = () => {
   if (!term) return;
-  const probe = document.getElementById('probe');
-  const ratio = probe.getBoundingClientRect().width / 100 / 10;
+  const ratio = cell().w;
   // Fit the computer's width when that stays readable; otherwise keep 9.5px text and pan sideways
   // (agents write mostly from the left edge), with pinch to zoom for anything finer.
   const size = Math.max(9.5, Math.min(15, (window.innerWidth - 8) / (term.cols * ratio)));
@@ -61,8 +74,10 @@ const handle = (m) => {
 const receive = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { post({ type: 'error', message: String(err) }); } };
 window.addEventListener('message', receive);
 document.addEventListener('message', receive);
-window.addEventListener('resize', fit);
-post({ type: 'ready' });
+// The keyboard opening shrinks the page: keep the bottom, where the prompt is, in view.
+window.addEventListener('resize', () => { fit(); window.scrollTo(0, document.body.scrollHeight); });
+// A page not laid out yet measures nothing: the terminal then stays at the computer's size.
+post({ type: 'ready', ...(window.innerWidth > 100 && window.innerHeight > 100 ? grid() : {}) });
 `
 
 const html = `<!doctype html><html><head><meta charset="utf-8">

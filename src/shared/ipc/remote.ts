@@ -60,9 +60,9 @@ export const DEFAULT_SERVER_PORT = 7788
 /**
  * What a paired phone may do (ADR 0027): everyday control. It watches and steers
  * agents, terminals, chats and SSH questions, and opens workspaces. A Workspace's own
- * settings and its pull requests are reachable too (ADR 0037). Deleting, app settings,
- * accounts and anything that resizes a desktop terminal stay on the desktop. A subset of
- * REMOTE_CHANNELS (a test checks).
+ * settings and its pull requests are reachable too (ADR 0037). Deleting, app settings and
+ * accounts stay on the desktop. A terminal is sized to the phone only while the phone's stream
+ * of it is open, never through a call (ADR 0048). A subset of REMOTE_CHANNELS (a test checks).
  */
 export const MOBILE_CHANNELS = new Set<Channel>([
   'projects.list', 'projects.update', 'github.status', 'github.pullRequests', 'github.createPullRequest', 'workspaces.list', 'workspaces.create', 'workspaces.suggestName', 'workspaces.gitStatus',

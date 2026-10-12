@@ -23,7 +23,9 @@ export const openStream = (
   token: string,
   terminal: string,
   onEvent: (event: ServerEvent) => void,
-  onStatus: (status: StreamStatus) => void = () => undefined
+  onStatus: (status: StreamStatus) => void = () => undefined,
+  /** The phone's own terminal grid: the computer sizes that terminal to it while this stream is open (ADR 0048). */
+  size?: { cols: number; rows: number }
 ): Stream => {
   let source: EventSource | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -33,7 +35,8 @@ export const openStream = (
   const connect = (): void => {
     if (closed) return
     onStatus('connecting')
-    const es = new EventSource(`${baseUrl(computer)}/events?terminal=${encodeURIComponent(terminal)}`, {
+    const fit = size ? `&cols=${size.cols}&rows=${size.rows}` : ''
+    const es = new EventSource(`${baseUrl(computer)}/events?terminal=${encodeURIComponent(terminal)}${fit}`, {
       headers: { authorization: `Bearer ${token}` },
       // Reconnects are ours (with backoff and status), not the library's fixed interval.
       pollingInterval: 0

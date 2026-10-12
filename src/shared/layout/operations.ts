@@ -194,6 +194,29 @@ export const resizeSplit = (tree: LayoutNode | null, path: number[], ratios: num
   return update(tree, 0)
 }
 
+/**
+ * The resize that grows (positive `delta`) or shrinks a pane's area by `delta` of its split, taken
+ * from or given to its neighbours in proportion: in the nearest split of `direction` when given
+ * (wider, taller), else the nearest split. Null when the pane fills its whole layout that way.
+ */
+export const growPane = (tree: LayoutNode | null, paneId: string, delta: number, direction?: SplitDirection): { path: number[]; ratios: number[] } | null => {
+  let found: { path: number[]; ratios: number[] } | null = null
+  const walk = (node: LayoutNode, path: number[]): boolean => {
+    if (node.type === 'pane') return leafPanes(node).includes(paneId)
+    const index = node.children.findIndex((c, i) => walk(c, [...path, i]))
+    if (index < 0) return false
+    if (!found && (!direction || node.direction === direction)) {
+      const own = node.ratios[index] ?? 0
+      const next = Math.min(1 - MIN_RATIO * (node.children.length - 1), Math.max(MIN_RATIO, own + delta))
+      const rest = 1 - own
+      found = { path, ratios: node.ratios.map((r, i) => (i === index ? next : rest > 0 ? (r * (1 - next)) / rest : r)) }
+    }
+    return true
+  }
+  if (tree) walk(tree, [])
+  return found
+}
+
 export const applyOperation = (tree: LayoutNode | null, op: LayoutOperation): LayoutNode | null => {
   switch (op.type) {
     case 'move':

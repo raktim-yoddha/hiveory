@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { dirname } from 'node:path'
@@ -139,6 +139,15 @@ export interface ServerOptions {
    * of the owner's own devices, as Tailscale reports it.
    */
   ownerPairing?: (remoteAddress: string) => Promise<boolean>
+  /** A phone watching a terminal at its own size (`key` is that watch), or null when it stops (ADR 0048). */
+  fitTerminal?: (instanceId: string, key: string, size: { cols: number; rows: number } | null) => void
+}
+
+/** `cols` and `rows` from a stream's query, within the bounds `terminal.resize` accepts; else undefined. */
+const terminalSize = (params: URLSearchParams): { cols: number; rows: number } | undefined => {
+  const cols = Number(params.get('cols'))
+  const rows = Number(params.get('rows'))
+  return Number.isInteger(cols) && Number.isInteger(rows) && cols >= 20 && cols <= 1000 && rows >= 5 && rows <= 1000 ? { cols, rows } : undefined
 }
 
 /**
@@ -234,11 +243,17 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
         res.write('retry: 2000\n\n')
         // A phone's data plan matters: ?terminal=<id> streams one terminal only, ?terminal=none every event but terminal output.
         const terminal = url.searchParams.get('terminal')
-        streams.set(res, { tokenHash: device.tokenHash, terminal: terminal && /^[A-Za-z0-9_-]{1,128}$/.test(terminal) ? terminal : undefined })
+        const watched = terminal && /^[A-Za-z0-9_-]{1,128}$/.test(terminal) ? terminal : undefined
+        streams.set(res, { tokenHash: device.tokenHash, terminal: watched })
+        // A phone watching one terminal sizes it to its screen while it watches (ADR 0048).
+        const fit = watched && watched !== 'none' && device.scope === 'mobile' ? terminalSize(url.searchParams) : undefined
+        const watchKey = randomUUID()
+        if (fit) options.fitTerminal?.(watched!, watchKey, fit)
         const keepalive = setInterval(() => res.write(': keepalive\n\n'), KEEPALIVE_MS)
         req.on('close', () => {
           clearInterval(keepalive)
           streams.delete(res)
+          if (fit) options.fitTerminal?.(watched!, watchKey, null)
         })
         return
       }

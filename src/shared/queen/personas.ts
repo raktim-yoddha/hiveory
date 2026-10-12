@@ -1,5 +1,6 @@
 import type { AppSettings } from '../domain/settings'
 import { PET_NAMES } from '../naming/names'
+import type { QueenLayout, QueenPaneSize } from './actions'
 import type { QueenReport } from './report'
 import type { QueenPeek, QueenUpdate } from './updates'
 import { formatWait } from './report'
@@ -115,12 +116,18 @@ export type QueenOutcome =
   | { kind: 'switched'; name: string; on: boolean }
   | { kind: 'page'; host: string }
   | { kind: 'file'; name: string }
-  | { kind: 'arranged'; layout: 'equal' | 'columns' }
+  /** `name`: the agent whose pane took half (the focus layout). */
+  | { kind: 'arranged'; layout: QueenLayout; name?: string }
+  | { kind: 'swapped'; names: [string, string] }
+  /** `where`: "to the left", "below Luna". */
+  | { kind: 'moved'; name: string; where: string }
+  | { kind: 'resized'; name: string; size: QueenPaneSize }
   | { kind: 'preset-saved'; name: string }
   | { kind: 'chat'; cliName?: string }
   | { kind: 'resumed'; cliName: string; title: string }
   | { kind: 'project'; name: string }
 
+const LAYOUT_WORDS = { equal: 'in a grid', columns: 'in columns', rows: 'in rows' } as const
 const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 const plural = (n: number, one: string, many = `${one}s`): string => (n === 1 ? one : many)
@@ -168,7 +175,13 @@ export function receipt(o: QueenOutcome): string {
     case 'file':
       return `Opened ${o.name}`
     case 'arranged':
-      return o.layout === 'columns' ? 'Arranged panes in columns' : 'Arranged panes evenly'
+      return o.layout === 'focus' ? `Made ${o.name ?? 'one pane'} the main pane` : `Arranged panes ${LAYOUT_WORDS[o.layout]}`
+    case 'swapped':
+      return `Swapped ${list(o.names)}`
+    case 'moved':
+      return `Moved ${o.name} ${o.where}`
+    case 'resized':
+      return `Made ${o.name} ${o.size}`
     case 'preset-saved':
       return `Saved preset ${o.name}`
     case 'chat':
@@ -223,7 +236,13 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
     case 'file':
       return `${o.name} is open`
     case 'arranged':
-      return o.layout === 'columns' ? 'the panes are in columns' : 'the panes are even'
+      return o.layout === 'focus' ? `${o.name ?? 'that pane'} has the main spot` : `the panes are ${LAYOUT_WORDS[o.layout]}`
+    case 'swapped':
+      return `${list(o.names)} have traded places`
+    case 'moved':
+      return `${o.name} is ${o.where.replace(/^to /, 'on ')}`
+    case 'resized':
+      return `${o.name} is ${o.size}`
     case 'preset-saved':
       return `the ${o.name} preset is saved`
     case 'chat':
@@ -428,7 +447,8 @@ export const HELP_EXAMPLES = [
   'show open PRs',
   'open localhost:3000',
   'open README.md',
-  'tidy up the panes',
+  'arrange them in a grid',
+  'make Bruno bigger',
   'resume my last claude session',
   'new chat with codex about the API',
   'which apps are connected',

@@ -96,6 +96,11 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     this.shells.get(id)?.pty.resize(cols, rows)
   }
 
+  /** A watching phone's size, or null when it stops watching (ADR 0048). */
+  fitViewer(id: string, key: string, size: { cols: number; rows: number } | null): void {
+    this.shells.get(id)?.pty.fitViewer(key, size)
+  }
+
   snapshot(id: string): { data: string; end: number; cols?: number; rows?: number } {
     return this.shells.get(id)?.pty.snapshot() ?? { data: '', end: 0 }
   }
