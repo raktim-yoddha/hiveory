@@ -44,6 +44,16 @@
   cursor: grab;
 }
 
+/* A tab strip sits as close to the corner as to the top edge: tab chip inset is (header - tab) / 2. */
+.header[data-tabs] {
+  padding-left: calc(var(--space-3) / 2);
+}
+
+/* Attached panes (ADR 0044): tabs fill the header edge to edge, from the pane's very corner. */
+:global(:root[data-panes='attached']) .header[data-tabs] {
+  padding-left: 0;
+}
+
 .header:active {
   cursor: grabbing;
 }

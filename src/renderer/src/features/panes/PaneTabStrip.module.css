@@ -23,6 +23,16 @@
     color var(--duration-fast) var(--ease-out);
 }
 
+/* Attached panes: square, full-height tabs from the corner (see PaneFrame .header[data-tabs]). */
+:global(:root[data-panes='attached']) .strip {
+  gap: 0;
+}
+
+:global(:root[data-panes='attached']) .tab {
+  height: 100%;
+  border-radius: 0;
+}
+
 /* A new tab drops into the strip. */
 @keyframes tab-in {
   from {

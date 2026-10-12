@@ -139,7 +139,15 @@ await test('Tabs style: the page hides behind another tab; jumping to it from th
   await sidebar().getByRole('button', { name: /Fixture · Browser/ }).click()
   await waitFor(shown, 'the page brought forward from the sidebar', 3000)
   await shot('p5-tabs')
-  await value('settings.update', { paneStyle: 'tiles' })
+  // Tabs + attached: the first tab starts at the pane's corner, not inset from it.
+  await value('settings.update', { paneSpacing: 'attached' })
+  await waitFor(async () => {
+    const pane = await browserPane().boundingBox()
+    const tab = await browserPane().getByRole('tab').first().boundingBox()
+    return tab.x - pane.x <= 2 && tab.y - pane.y <= 2
+  }, 'the first tab at the pane corner', 3000)
+  await shot('p5-tabs-attached')
+  await value('settings.update', { paneStyle: 'tiles', paneSpacing: 'spaced' })
 })
 
 await test('an agent browses a page nobody has seen: a worktree that is not open', async () => {

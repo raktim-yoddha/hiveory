@@ -23,6 +23,8 @@ a livelier app, and a full pass for speed, memory, security and the guide.
   accent name, never an outline; hover is a fill too. The same goes for bot choices and routine days.
 - Attached panes are split by a one-pixel line: the shell shows `--color-pane-line` through a
   one-pixel gutter, and under the title bar. Over a wallpaper the gutter shows the picture instead.
+  In Tabs style the tabs then run square and full height from the pane's very corner; spaced panes
+  inset the first tab as far from the side as from the top.
 - Kanban cards: a raised fill that stands clear of the column in every theme, the name at full
   strength, the state in words in a tinted pill, a waiting card tinted, a running bar on a working
   card. A stopped agent stays readable; only its logo greys out.

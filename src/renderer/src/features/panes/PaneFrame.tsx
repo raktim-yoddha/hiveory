@@ -24,6 +24,7 @@ export function PaneFrame({ label, header, children, onHeaderPointerDown, onHead
     <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} data-focused={focused || undefined} aria-label={label}>
       <header
         className={styles.header}
+        data-tabs={tabStrip ? '' : undefined}
         onPointerDown={onHeaderPointerDown}
         onDoubleClick={(e) => {
           if (!(e.target as HTMLElement).closest('button:not([data-pane-grip])')) onHeaderDoubleClick?.()
