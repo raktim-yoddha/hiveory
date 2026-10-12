@@ -62,3 +62,11 @@ Decided by the product owner. The user says "release" and the agent picks the ve
 user-facing commits → patch; docs, tests, CI and chores alone → nothing to release). The agent checks
 that against the commits, writes the changelog entry, then runs `pnpm release X.Y.Z --check` and
 `pnpm release X.Y.Z` as before. The steps live in AGENTS.md §26 only; the README no longer repeats them.
+
+## Amendment (2026-10-12): Linux arm64
+
+Decided by the product owner. Every release also ships Linux arm64 (aarch64): a fourth desktop job
+on GitHub's `ubuntu-24.04-arm` runner builds the AppImage and deb natively, so the PTY, speech and
+shortcut addons install their arm64 prebuilds. Linux file names carry the architecture
+(`Hiveory-X.Y.Z-<arch>.AppImage`) so the two jobs never overwrite each other; electron-updater reads
+`latest-linux.yml` on x64 and `latest-linux-arm64.yml` on arm64, which electron-builder writes per job.

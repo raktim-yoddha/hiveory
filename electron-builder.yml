@@ -43,10 +43,11 @@ mac:
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
+  # The build machine's architecture, as on macOS: x64 and arm64 (aarch64) build on their own runners.
   target: [AppImage, deb]
   category: Development
   maintainer: Raktim Yoddha
-  artifactName: ${productName}-${version}.${ext}
+  artifactName: ${productName}-${version}-${arch}.${ext}
 publish:
   # Installers + latest.yml go to GitHub Releases; electron-updater reads them back.
   provider: github

@@ -48,7 +48,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-14, ubuntu-latest]
+        # ubuntu-24.04-arm builds the Linux arm64 (aarch64) installers natively (ADR 0035).
+        os: [windows-latest, macos-14, ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     env:
       # No Apple Developer certificate yet: build unsigned instead of searching the keychain.

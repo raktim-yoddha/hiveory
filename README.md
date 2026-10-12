@@ -24,7 +24,7 @@ pnpm build && pnpm e2e     # 50 end-to-end checks against the real app (screensh
 ```bash
 pnpm dist:win     # dist/Hiveory-Setup-<version>.exe
 pnpm dist:mac     # dist/Hiveory-<version>.dmg   (run on macOS)
-pnpm dist:linux   # dist/Hiveory-<version>.AppImage / .deb
+pnpm dist:linux   # dist/Hiveory-<version>-<arch>.AppImage / .deb
 ```
 
 The app logo lives in `resources/icon.png` (512×512). It is the single source
