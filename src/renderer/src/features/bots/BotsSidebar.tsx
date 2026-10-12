@@ -144,7 +144,7 @@ export function BotsSidebar() {
           onClick={() => showRoutines()}
         >
           <CalendarClock aria-hidden className={styles.footerIcon} />
-          <span className={chat.chatTitle}>Routines</span>
+          <span className={chat.chatTitle}>Schedules</span>
         </button>
         <button
           type="button"

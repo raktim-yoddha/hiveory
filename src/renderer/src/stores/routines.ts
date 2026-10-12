@@ -31,29 +31,29 @@ export const useRoutines = create<RoutinesState>((set, get) => ({
       set({ routines, runs, loaded: true })
     } catch (error) {
       set({ loaded: true })
-      reportError(error, 'Load routines')
+      reportError(error, 'Load schedules')
     }
   },
 
   create: async (input) => {
-    const routine = await runAction('Schedule routine', () => api('routines.create', input))
+    const routine = await runAction('Save schedule', () => api('routines.create', input))
     if (routine) await get().load()
     return routine
   },
 
   update: async (routineId, patch) => {
-    const routine = await runAction('Save routine', () => api('routines.update', { routineId, ...patch }))
+    const routine = await runAction('Save schedule', () => api('routines.update', { routineId, ...patch }))
     if (routine) await get().load()
     return routine
   },
 
   remove: async (routineId) => {
-    await runAction('Delete routine', () => api('routines.delete', { routineId }))
+    await runAction('Delete schedule', () => api('routines.delete', { routineId }))
     await get().load()
   },
 
   runNow: async (routineId) => {
-    await runAction('Run routine', () => api('routines.runNow', { routineId }))
+    await runAction('Run schedule', () => api('routines.runNow', { routineId }))
     await get().load()
   }
 }))

@@ -28,7 +28,8 @@ If implementation and documentation disagree, do not silently choose one. Determ
 
 Users see **Workspace** (a folder/repository in the sidebar) and **Worktree** (the main checkout or
 an isolated branch folder inside it). Code keeps the older entity names: `Project` is the user's
-Workspace, `Workspace` is the user's Worktree. All UI text and docs use the user's words; earlier
+Workspace, `Workspace` is the user's Worktree. Users see **Schedule** (work that runs on its own at
+set times); code calls it `Routine` (ADR 0046). All UI text and docs use the user's words; earlier
 ADRs and code identifiers use the code names.
 
 ## Non-Negotiable Rules

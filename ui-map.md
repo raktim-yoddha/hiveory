@@ -54,20 +54,20 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
   gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
   Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
   Create team opens a name dialog. New group chat joins the menu when group chats are built.
-- Sidebar footer: **Work board** opens the work board; **Routines** the Routines page; **Triggers** the Triggers page; **Team map** the team map (ADR 0028).
+- Sidebar footer: **Work board** opens the work board; **Schedules** the Schedules page; **Triggers** the Triggers page; **Team map** the team map (ADR 0028).
 - Triggers page: the event link card (off / on with its address / needs attention, with the reason, a
   button to the page that fixes it, and "Use this project's webhook for Hiveory" when the Composio
   project's webhook goes elsewhere); then "⚡ When [app · account] [event] → [bot] should", the event's
   fields, "What it should do with each event", Create trigger; then YOUR TRIGGERS (name, app → bot,
   last event, instructions, delete, on/off). Without a Composio key or connected app: a pointer to Apps.
 - Work board: four cards, Needs you (approval cards) · Working · Didn't finish · Done, each with a count; a row per handoff or
-  routine/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
+  schedule/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
   Finished work stays a day. Nothing is dragged.
-- Routine editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)". A Work routine (ADR 0040)
+- Schedule editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)". A Work schedule (ADR 0040)
   is opened from Work and picks only its Worktree and CLI; its title names the Workspace. Below the instructions:
-  the routine's files (chips) and "Add files for every run". Chat's sidebar header: Schedule a chat (calendar
-  icon) beside New chat. A worktree's menu: Schedule a routine… (the editor opens in place, in Work).
-  The Routines page, calendar, run logs and work board show bots' routines and scheduled chats only.
+  the schedule's files (chips) and "Add files for every run". Chat's sidebar header: Schedule a chat (calendar
+  icon) beside New chat (the editor opens in place, in Chat). A worktree's menu: New schedule… (the editor opens in place, in Work).
+  The Schedules page, calendar, run logs and work board show bots' schedules and scheduled chats only.
 - Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
   as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting
   messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
@@ -78,21 +78,21 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
   Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
   drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to
   <team>" included. Below: Handoffs, "From → To · thread · Working / Done · when", each opening its thread.
-- Routines page: header (Routines, ‹ › week or day, the range ("October 5 – 11, 2026"; a button opening a
+- Schedules page: header (Schedules, ‹ › week or day, the range ("October 5 – 11, 2026"; a button opening a
   mini month whose days with runs carry a dot; picking a day jumps there), Today, Day · Week · List · Run logs,
-  bot filter, New routine); the keep-awake switch with its explanation; Week: Mon–Sun columns,
+  bot filter, New schedule); the keep-awake switch with its explanation; Week: Mon–Sun columns,
   hour rows (opening at 07:00), today shaded, a now line, past runs coloured by outcome and upcoming
-  runs from each schedule (same-time runs side by side); click an empty hour for a new routine there,
-  or drop a bot from the sidebar on it for a new routine for that bot at that hour; Day: the same for one day;
-  click a run to edit its routine. List: routine rows. Run logs: status, routine, bot, when, by you
+  runs from each schedule (same-time runs side by side); click an empty hour for a new schedule there,
+  or drop a bot from the sidebar on it for a new schedule for that bot at that hour; Day: the same for one day;
+  click a run to edit its schedule. List: schedule rows. Run logs: status, schedule, bot, when, by you
   or the schedule, duration, why it failed, and Open thread.
-- Routine editor (modal): Title; Starts (date, time, this computer's timezone); Repeat (Does not
+- Schedule editor (modal): Title; Starts (date, time, this computer's timezone); Repeat (Does not
   repeat · Every X minutes · Daily · Every weekday · Weekly on <day> · Selected weekdays (day chips) ·
   Monthly on day N · Monthly on the last day · Yearly · Custom cron); the next three runs; when
-  routines run; Advanced (stop a run after N minutes, last day); Assign a bot (with "allow it to run
+  schedules run; Advanced (stop a run after N minutes, last day); Assign a bot (with "allow it to run
   on a schedule" inline); Post results to (a dedicated results thread · one of the bot's threads ·
   only each run's own thread); Instructions. Editing adds Delete and Run now.
-- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Overview · Computer · Routines · Browser):
+- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Overview · Computer · Schedules · Browser):
   - **Overview**: name and blurb; Does; Can reach; Won't; Notifications switch; Asks before (Sending as
     you · Any change · Never, ADR 0029); Prompt preview
     (bytes ≈ tokens, expands to the exact text); Skills (the shared Skills panel, scoped to the bot:
@@ -103,9 +103,9 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
     cards: Auto · Linux computer · Server computer (SSH host field) · Share a computer (Whose computer) ·
     This computer · Browser · Off; a "Can use … now" line and, when a
     Settings switch blocks the choice, the reason with Open settings.
-  - **Routines**: count, "allow it to run on a schedule" when it can't yet, Run logs, Create
-    schedule, the bot's routine rows (name, schedule in words, next run, last failure, Run now, Edit,
-    on/off), and Open schedules → (the Routines page filtered to this bot).
+  - **Schedules**: count, "allow it to run on a schedule" when it can't yet, Run logs, Create
+    schedule, the bot's schedule rows (name, schedule in words, next run, last failure, Run now, Edit,
+    on/off), and Open schedules → (the Schedules page filtered to this bot).
   - **Browser**: the pages all the bot's threads share, as tabs with close and "+"; the built-in
     browser pane below. Pages open in the bot's own profile ("Bot · <name>", made on first use), so
     the user can sign in to sites for the bot here and its logins stay apart from theirs. A note
@@ -318,8 +318,8 @@ review state, open on the host; without a code host, the reason and Code host se
 Issues tab: "Issues · GitHub/GitLab/Jira/Linear", refresh, a filter past 8 issues, rows (title, key ·
 state, Start worktree, open); without a source, the reason and Issue settings.
 
-Routines tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): this Workspace's routines (name, CLI · Worktree, schedule, next run, Run now,
-Edit, on/off), Run log, New routine (for the open Worktree).
+Schedules tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): this Workspace's schedules (name, CLI · Worktree, schedule, next run, Run now,
+Edit, on/off), Run log, New schedule (for the open Worktree).
 
 Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
 Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and

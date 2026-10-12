@@ -10,7 +10,7 @@ export function ProjectPanel({ kind, projectId, workspaceId }: { kind: 'routines
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
   if (!project) return <EmptyState compact icon={<FolderGit2 />} title="Workspace not found" description="It may have been removed." />
   return (
-    <section className={styles.screen} aria-label={`${project.name} ${kind === 'routines' ? 'routines' : 'settings'}`}>
+    <section className={styles.screen} aria-label={`${project.name} ${kind === 'routines' ? 'schedules' : 'settings'}`}>
       <div className={styles.content}>{kind === 'routines' ? <WorkRoutinesTab projectId={projectId} workspaceId={workspaceId} /> : <ProjectSettingsTab project={project} />}</div>
     </section>
   )

@@ -62,9 +62,9 @@ export function RoutinesPage() {
   const doer = useDoerName()
 
   return (
-    <section className={chat.surface} aria-label="Routines">
+    <section className={chat.surface} aria-label="Schedules">
       <header className={styles.pageHeader}>
-        <h1 className={chat.chatHeading}>Routines</h1>
+        <h1 className={chat.chatHeading}>Schedules</h1>
         {(view === 'week' || view === 'day') && (
           <div className={styles.weekNav}>
             <IconButton label={`Previous ${view}`} icon={<ChevronLeft />} onClick={() => move(-1)} />
@@ -94,25 +94,25 @@ export function RoutinesPage() {
           </div>
         )}
         <span className={styles.spacer} />
-        <Tabs label="Routines view" options={VIEWS} value={view} onChange={setView} variant="segmented" />
+        <Tabs label="Schedules view" options={VIEWS} value={view} onChange={setView} variant="segmented" />
         <Select
           label="Bot"
           hideLabel
           size="sm"
           value={routinesFilter ?? ''}
-          options={[{ value: '', label: 'All routines' }, ...bots.map((b) => ({ value: b.id, label: b.name }))]}
+          options={[{ value: '', label: 'All schedules' }, ...bots.map((b) => ({ value: b.id, label: b.name }))]}
           onChange={(v) => showRoutines(v || undefined)}
         />
         <Button variant="primary" icon={<Plus />} onClick={() => open({ botId: routinesFilter })}>
-          New routine
+          New schedule
         </Button>
       </header>
       <div className={styles.awake}>
         <span>
-          <strong>Keep this computer awake for routines.</strong> Holds it awake for the hour before a routine and while one runs, while plugged in. A closed lid
+          <strong>Keep this computer awake for schedules.</strong> Holds it awake for the hour before a scheduled run and while one runs, while plugged in. A closed lid
           still sleeps.
         </span>
-        <Toggle label="Keep this computer awake for routines" checked={settings.keepAwakeForRoutines} onChange={(keepAwakeForRoutines) => void updateSettings({ keepAwakeForRoutines })} />
+        <Toggle label="Keep this computer awake for schedules" checked={settings.keepAwakeForRoutines} onChange={(keepAwakeForRoutines) => void updateSettings({ keepAwakeForRoutines })} />
       </div>
       {view === 'week' || view === 'day' ? (
         <WeekCalendar
@@ -126,7 +126,7 @@ export function RoutinesPage() {
         />
       ) : view === 'list' ? (
         shown.length === 0 ? (
-          <EmptyState icon={<CalendarClock />} title="No routines yet" description="Give a bot or a new chat a job to do every morning, every hour or once next week." />
+          <EmptyState icon={<CalendarClock />} title="No schedules yet" description="Give a bot or a new chat a job to do every morning, every hour or once next week." />
         ) : (
           <ul className={styles.list}>
             {shown.map((r) => (

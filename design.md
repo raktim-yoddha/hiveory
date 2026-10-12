@@ -226,7 +226,7 @@ Do not add additional top-level modes.
 
 ## Workspace Page
 
-The Workspace page is workspace-level (its tasks, worktrees with their reviews, issues, routines and settings). It lives
+The Workspace page is workspace-level (its tasks, worktrees with their reviews, issues, schedules and settings). It lives
 in the side panel as the "Dashboard" tab beside the open Worktree (ADR 0038, 0039), so it is drawn compact:
 a small header with the workspace's mark, then the tabs; narrow, the board's columns stack and
 setting rows put their control under the text.
@@ -237,7 +237,7 @@ Conceptual layout:
 ┌───────────────────────────────────────────────────────────────┐
 │ Workspace name                                    Settings    │
 ├───────────────────────────────────────────────────────────────┤
-│ Tasks   Worktrees   Issues   Routines   Settings              │
+│ Tasks   Worktrees   Issues   Schedules   Settings              │
 ├───────────────────────────────────────────────────────────────┤
 │                                                               │
 │                   WORKSPACE CONTENT                            │

@@ -36,7 +36,7 @@ export function WorkBoardPage() {
   const [now] = useState(Date.now)
   const board = workBoard(handoffs, runs, now)
   const name = (botId: string): string => bots.find((b) => b.id === botId)?.name ?? 'A deleted bot'
-  const from = (item: WorkItem): string => (item.from.kind === 'bot' ? name(item.from.botId) : item.from.kind === 'trigger' ? 'Trigger' : 'Routine')
+  const from = (item: WorkItem): string => (item.from.kind === 'bot' ? name(item.from.botId) : item.from.kind === 'trigger' ? 'Trigger' : 'Schedule')
   const total = requests.length + board.working.length + board.unfinished.length + board.done.length
 
   return (
@@ -53,7 +53,7 @@ export function WorkBoardPage() {
           <EmptyState
             icon={<ListChecks />}
             title="No work yet"
-            description="When a Chief hands a bot work, or a routine or trigger runs, it shows here until a day after it ends."
+            description="When a Chief hands a bot work, or a schedule or trigger runs, it shows here until a day after it ends."
           />
         ) : (
           <div className={styles.teamCards}>

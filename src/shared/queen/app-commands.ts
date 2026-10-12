@@ -31,7 +31,7 @@ const SAVE_PRESET = /^(?:save|store|keep)\s+(?:this|these|the agents|this layout
 // "open chat" switches to Chat mode; a new chat says new or start.
 const NEW_CHAT = /^(?:(?:start|begin)\s+(?:a\s+)?(?:new\s+)?|(?:open|create|make)\s+(?:a\s+)?new\s+|new\s+)chat(?:\s+(?:with|using|in)\s+([a-z0-9 .-]+?))?(?:\s*(?::|about|to|and (?:ask|say|tell)(?: it)?)\s+([\s\S]+))?\s*$/i
 const TELL_BOT = /^(?:ask|tell|message|ping|have)\s+(?:the\s+)?(?:bot\s+)?([\s\S]+)$/i
-const SWITCH = /^(pause|resume|unpause|stop|start|enable|disable|turn on|turn off|switch on|switch off|turn|switch)\s+(?:the\s+|my\s+)?(?:(routine|trigger)\s+)?(.+?)(?:\s+(routine|trigger))?(?:\s+(on|off))?$/i
+const SWITCH = /^(pause|resume|unpause|stop|start|enable|disable|turn on|turn off|switch on|switch off|turn|switch)\s+(?:the\s+|my\s+)?(?:(routine|schedule|trigger)\s+)?(.+?)(?:\s+(routine|schedule|trigger))?(?:\s+(on|off))?$/i
 const RESUME = /^(?:resume|continue|reopen|pick up)\b\s*(?:my\s+|the\s+)?(?:last\s+|latest\s+|previous\s+|recent\s+)?(.*?)\s*(?:session|conversation|chat)?\s*$/i
 
 /** Parses one command for the app beyond agents; null when it is not one. */
@@ -102,20 +102,24 @@ export function parseAppCommand(raw: string, ctx: QueenContext): QueenParse | nu
     }
   }
 
-  // Routines and triggers: "pause Morning brief", "turn the New issue trigger back on".
+  // Schedules and triggers: "pause Morning brief", "turn the New issue trigger back on".
   const flip = SWITCH.exec(input.replace(/\s+back(?=\s+on$)/i, ''))
   // "turn X" without on or off is not a switch.
   if (flip && ctx.automations?.length && (flip[5] || !/^(turn|switch)$/i.test(flip[1]!))) {
     const wanted = norm(flip[3]!)
-    const kind = (flip[2] ?? flip[4])?.toLowerCase()
+    // "schedule" is the user's word for a routine (ADR 0046).
+    const kind = (flip[2] ?? flip[4])?.toLowerCase().replace('schedule', 'routine')
     const hits = ctx.automations.filter((x) => norm(x.name) === wanted && (!kind || x.kind === kind))
     // An agent with that name wins: "stop Bruno" interrupts the agent.
     if (hits.length && !ctx.agents.some((a) => norm(a.petName) === wanted)) {
       const on = flip[5] ? flip[5].toLowerCase() === 'on' : /^(resume|unpause|start|enable|turn on|switch on)$/i.test(flip[1]!)
       if (hits.length === 1) return actions({ type: 'switch-automation', automationId: hits[0]!.id, on })
       return ask(
-        `More than one routine or trigger is called ${hits[0]!.name}. Which one?`,
-        hits.map((x) => ({ label: `The ${x.kind}`, command: `${on ? 'resume' : 'pause'} ${x.name} ${x.kind}` }))
+        `More than one schedule or trigger is called ${hits[0]!.name}. Which one?`,
+        hits.map((x) => {
+          const kind = x.kind === 'routine' ? 'schedule' : x.kind
+          return { label: `The ${kind}`, command: `${on ? 'resume' : 'pause'} ${x.name} ${kind}` }
+        })
       )
     }
   }

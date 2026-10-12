@@ -177,7 +177,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', routines: 'Routines', settings: 'Settings' }[kind]
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', routines: 'Schedules', settings: 'Settings' }[kind]
     const tab: PanelTab = { id: tabId, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({

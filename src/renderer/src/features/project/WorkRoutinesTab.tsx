@@ -40,7 +40,7 @@ export function WorkRoutinesTab({ projectId, workspaceId }: { projectId: string;
     <div className={styles.section}>
       <div className={styles.sectionHeader}>
         <div>
-          <h2 className={styles.sectionTitle}>Routines</h2>
+          <h2 className={styles.sectionTitle}>Schedules</h2>
           <p className={styles.muted}>Agents on a schedule: each run opens a new agent in its worktree with your instructions.</p>
         </div>
         <div className={styles.headerActions}>
@@ -48,7 +48,7 @@ export function WorkRoutinesTab({ projectId, workspaceId }: { projectId: string;
             Run log
           </Button>
           <Button size="sm" variant="primary" icon={<Plus />} onClick={() => scheduleWorkRoutine(projectId, workspaceId)}>
-            New routine
+            New schedule
           </Button>
         </div>
       </div>
@@ -61,7 +61,7 @@ export function WorkRoutinesTab({ projectId, workspaceId }: { projectId: string;
           ))}
         </ul>
       ) : (
-        <EmptyState compact icon={<CalendarClock />} title="No routines yet" description="Have an agent check dependencies every Monday, run the tests each night, or review open work every morning." />
+        <EmptyState compact icon={<CalendarClock />} title="No schedules yet" description="Have an agent check dependencies every Monday, run the tests each night, or review open work every morning." />
       )}
     </div>
   )

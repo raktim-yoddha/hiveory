@@ -12,7 +12,7 @@ import styles from './Bots.module.css'
 const TABS: Array<{ value: BotPanelTab; label: string; icon: ReactNode }> = [
   { value: 'overview', label: 'Overview', icon: <LayoutGrid aria-hidden /> },
   { value: 'computer', label: 'Computer', icon: <Monitor aria-hidden /> },
-  { value: 'routines', label: 'Routines', icon: <CalendarClock aria-hidden /> },
+  { value: 'routines', label: 'Schedules', icon: <CalendarClock aria-hidden /> },
   { value: 'browser', label: 'Browser', icon: <Globe aria-hidden /> }
 ]
 

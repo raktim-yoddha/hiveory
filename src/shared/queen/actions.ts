@@ -8,7 +8,7 @@ export type QueenSettingsSection = (typeof QUEEN_SETTINGS_SECTIONS)[number]
 /** Bots mode's pages beyond a bot's conversation (ADR 0028). */
 export const QUEEN_BOTS_PAGES = ['work', 'routines', 'triggers', 'team-map'] as const
 export type QueenBotsPage = (typeof QUEEN_BOTS_PAGES)[number]
-export const BOTS_PAGE_LABEL: Record<QueenBotsPage, string> = { work: 'Work board', routines: 'Routines', triggers: 'Triggers', 'team-map': 'Team map' }
+export const BOTS_PAGE_LABEL: Record<QueenBotsPage, string> = { work: 'Work board', routines: 'Schedules', triggers: 'Triggers', 'team-map': 'Team map' }
 
 /**
  * Everything Queen Bee can do: a closed set. The rule parser and (later) a model

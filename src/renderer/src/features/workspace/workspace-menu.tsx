@@ -29,7 +29,7 @@ export const workspaceMenuEntries = (workspace: WorkspaceView, onDelete: () => v
   {
     type: 'item',
     id: 'schedule',
-    label: 'Schedule a routine…',
+    label: 'New schedule…',
     icon: <CalendarClock />,
     onSelect: () => scheduleWorkRoutine(workspace.projectId, workspace.id)
   },

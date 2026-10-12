@@ -20,15 +20,15 @@ Chiefs reach General's Chief, so work crosses teams Chief to Chief. Bots that al
 consult each other in any team. Delegation is bounded (only Chiefs delegate, at most two levels
 deep, 20 handoffs an hour per thread). The team map shows each team and the work bots are handing
 each other; dragging a bot onto another team moves it there. The **work board** lists what the team owes: handoffs
-and routine and trigger runs, as Working, Didn't finish or Done, by their real state; finished work
+and schedule and trigger runs, as Working, Didn't finish or Done, by their real state; finished work
 stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in your apps** (ADR
 0029): by default before it sends or posts as you, or before any change, or never, per bot; reading is
 never asked. The request waits in its thread and on the work board for Allow or Decline, and is
 declined after 15 minutes. A trigger's read-only run can't change or send anything in apps.
-Routines can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
+Schedules can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
 a new agent in a Work worktree, whose card then moves on the Kanban by its real state like any agent.
-Work's routines belong to Work (ADR 0040): they are made and listed in the Workspace's Dashboard ›
-Routines (or a worktree's "Schedule a routine…") and never appear on the Bots calendar.
+Work's schedules belong to Work (ADR 0040): they are made and listed in the Workspace's Dashboard ›
+Schedules (or a worktree's "New schedule…") and never appear on the Bots calendar.
 While a chat or bot is answering, the user can type the **next message**: it waits above the box and
 goes in when the reply ends (Stop drops it). **Saved prompts** (the bookmark in every message box) are
 reusable text the user inserts, saves or removes (ADR 0031). Bots never appear on a
@@ -40,10 +40,10 @@ never the user's screen), its Linux computer, this computer (the user's screen, 
 the browser only, or none. Settings' Browser use and Computer use still switch those off for every
 agent. A bot's threads share one set of browser pages in the bot's own browser profile; the user
 signs in to sites for it in the bot panel's Browser tab, never by putting a password in a chat.
-A bot the user allows to run on a schedule can have **routines** (ADR 0028): instructions run in a
+A bot the user allows to run on a schedule can have **schedules** (ADR 0028): instructions run in a
 fresh thread once, every few minutes, or on a calendar rule in a chosen timezone. They run while
 Hiveory (or the user's Hiveory server) is running; a run missed by less than 12 hours still happens
-when it is back, and every run is kept in a run log. A bot can save routines for itself when asked
+when it is back, and every run is kept in a run log. A bot can save schedules for itself when asked
 ("send me this every morning"); they arrive paused until the user switches them on. When a run ends
 or is missed while the user is elsewhere, a desktop notification opens its thread. Each bot's
 Overview says in plain words what it does, what it can reach and what it won't do, shows the exact
@@ -82,7 +82,7 @@ Open/Create Workspace
                 ├── Tasks / Kanban (All | Here)
                 ├── Worktrees (and their pull / merge requests)
                 ├── Issues
-                ├── Routines
+                ├── Schedules
                 └── Settings
 ```
 
@@ -318,7 +318,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; Terminal and Chat side by side, starting from the Workspace's "New agents open as" setting (ADR 0037)
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It starts with the Dashboard (the Workspace page; ADR 0038, 0039), Sessions and the Explorer, and "+" adds the Workspace's Routines and Settings (ADR 0042). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It starts with the Dashboard (the Workspace page; ADR 0038, 0039), Sessions and the Explorer, and "+" adds the Workspace's Schedules and Settings (ADR 0042). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)
@@ -347,8 +347,8 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 - Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
   close agents (always after a yes), restart, jump to an agent, load a preset, switch
   Work/Chat, open Home, a workspace, a worktree or a Settings section, show or hide the
-  side panel, and open a browser or the Explorer. In Bots: open the work board, Routines,
-  Triggers or the team map, and pause or resume a routine or trigger by its name ("pause
+  side panel, and open a browser or the Explorer. In Bots: open the work board, Schedules,
+  Triggers or the team map, and pause or resume a schedule or trigger by its name ("pause
   Morning brief"; a model's plan asks first).
 - Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
   live state. The current workspace, or every workspace from Home.
@@ -480,7 +480,7 @@ Initial version does not include:
 - free-form agent-to-agent chat (Work agents coordinate through agent tools; bots through the Chief of Staff, ADR 0022)
 - remote collaboration (planned as one host layer for Work and Bots, ADR 0022)
 - global Kanban across workspaces
-- task history in Work (Bots keeps a bounded run log for routines, ADR 0028)
+- task history in Work (Bots keeps a bounded run log for schedules, ADR 0028)
 - Done Kanban column
 - user-controlled manual Kanban status
 - multiple user-facing Tasks inside a Worktree

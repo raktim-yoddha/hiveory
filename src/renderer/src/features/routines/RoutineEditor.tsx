@@ -256,7 +256,7 @@ function EditorDialog({ target }: { target: Target }) {
     <>
       <Modal
         open={!confirmDelete}
-        title={`${routine ? 'Edit routine' : 'New routine'}${draft.doer === 'workspace' ? ` · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}` : ''}`}
+        title={`${routine ? 'Edit schedule' : 'New schedule'}${draft.doer === 'workspace' ? ` · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}` : ''}`}
         width="lg"
         onClose={close}
         footer={
@@ -276,7 +276,7 @@ function EditorDialog({ target }: { target: Target }) {
               Cancel
             </Button>
             <Button variant="primary" onClick={() => void save()} loading={busy} disabled={problem !== null} title={problem ?? undefined}>
-              {routine ? 'Save' : 'Schedule routine'}
+              {routine ? 'Save' : 'Save schedule'}
             </Button>
           </>
         }
@@ -424,7 +424,7 @@ function EditorDialog({ target }: { target: Target }) {
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete "${routine.name}"?`}
-          confirmLabel="Delete routine"
+          confirmLabel="Delete schedule"
           danger
           onConfirm={() => void remove(routine.id).then(close)}
           onClose={() => setConfirmDelete(false)}

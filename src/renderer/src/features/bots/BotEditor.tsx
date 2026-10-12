@@ -173,7 +173,7 @@ function EditorDialog({ target }: { target: string }) {
           <div className={styles.switchRow}>
             <span className={styles.switchText}>
               <span className={styles.switchTitle}>Runs on a schedule</span>
-              <span className={styles.switchHint}>May have routines: work it starts on its own at the times you set. Off: it only works when asked.</span>
+              <span className={styles.switchHint}>May have schedules: work it starts on its own at the times you set. Off: it only works when asked.</span>
             </span>
             <Toggle label="Runs on a schedule" checked={draft.routines} onChange={(v) => set('routines', v)} />
           </div>

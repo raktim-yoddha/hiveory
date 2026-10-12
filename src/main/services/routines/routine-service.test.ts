@@ -121,7 +121,7 @@ describe('routines', () => {
     expect(routine.nextRunAt).toBe('2026-10-07T09:00:00.000Z')
     advance(HOUR)
     expect(chats.sent).toHaveLength(1)
-    expect(chats.sent[0]!.text).toContain('scheduled run of your routine "Morning report"')
+    expect(chats.sent[0]!.text).toContain('scheduled run of your schedule "Morning report"')
     expect(chats.sent[0]!.text).toContain('Summarise the inbox.')
     expect(runs()[0]).toMatchObject({ status: 'running', trigger: 'schedule', scheduledFor: '2026-10-07T09:00:00.000Z', threadId: 't1' })
     chats.end('t1')

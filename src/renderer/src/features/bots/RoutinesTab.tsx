@@ -26,9 +26,9 @@ export function RoutinesTab({ bot }: { bot: BotView }) {
 
   return (
     <div className={styles.tabBody}>
-      <section className={styles.card} aria-label={`${bot.name}'s routines`}>
+      <section className={styles.card} aria-label={`${bot.name}'s schedules`}>
         <div className={routines.cardHead}>
-          <h3 className={styles.cardTitle}>Routines</h3>
+          <h3 className={styles.cardTitle}>Schedules</h3>
           <span className={routines.count}>{mine.length}</span>
         </div>
         {!bot.routines && (

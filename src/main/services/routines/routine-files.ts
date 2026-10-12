@@ -17,7 +17,7 @@ export class RoutineFiles {
   /** Keeps a copy of a file the user picked in the routine editor. */
   add(name: string, base64: string): ChatAttachment {
     const data = Buffer.from(base64, 'base64')
-    if (data.length > MAX_ROUTINE_FILE_BYTES) fail('INVALID_INPUT', `A routine's file can be ${MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB at most.`)
+    if (data.length > MAX_ROUTINE_FILE_BYTES) fail('INVALID_INPUT', `A schedule's file can be ${MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB at most.`)
     mkdirSync(this.dir, { recursive: true })
     const clean = safeName(name)
     const path = join(this.dir, `${randomUUID().slice(0, 8)}-${clean}`)

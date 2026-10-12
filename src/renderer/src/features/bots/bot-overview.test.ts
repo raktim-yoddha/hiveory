@@ -40,19 +40,19 @@ describe('bot overview', () => {
     expect(o.wont).toEqual(["Won't edit files or run commands without your approval.", "Won't act on a schedule.", "Won't touch your screen."])
   })
 
-  it('follows the settings: a Chief with full access, routines and a server computer', () => {
+  it('follows the settings: a Chief with full access, schedules and a server computer', () => {
     const o = botOverview(bot({ chief: true, autoApprove: true, routines: true, worksOn: 'container', computer: { kind: 'docker', host: { kind: 'ssh', destination: 'devbox' } }, memory: ['a'] }), {
       ...base,
       teamName: 'Sales',
       routines: [routine(true, '2026-10-09T03:30:00.000Z'), routine(false)]
     })
     expect(o.does[0]).toBe('Leads the Sales team: hands work to its bots and brings the results back.')
-    expect(o.does[1]).toMatch(/^1 routine on, next /)
+    expect(o.does[1]).toMatch(/^1 schedule on, next /)
     expect(o.does[2]).toBe('Remembers 1 note.')
     expect(o.reach).toContain('Its Linux computer on devbox.')
     expect(o.reach).not.toContain('The built-in browser, signed in as itself.')
     expect(o.reach).toContain('Full access: it edits files and runs commands without asking.')
-    expect(o.wont).toEqual(['Routines it saves itself stay paused until you switch them on.', "Won't touch your screen."])
+    expect(o.wont).toEqual(['Schedules it saves itself stay paused until you switch them on.', "Won't touch your screen."])
   })
 
   it('never claims the browser when Settings switched it off', () => {

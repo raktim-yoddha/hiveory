@@ -113,7 +113,7 @@ Project
 │
 ├── Worktrees and their pull / merge requests
 ├── Issues
-├── Routines
+├── Schedules
 └── Settings
 ```
 

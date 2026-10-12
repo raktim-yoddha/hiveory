@@ -27,8 +27,8 @@ export function botOverview(
     .map((r) => r.nextRunAt)
     .filter((t): t is string => Boolean(t))
     .sort()[0]
-  if (on.length) does.push(`${plural(on.length, 'routine')} on${next ? `, next ${when(next)}` : ''}.`)
-  else if (c.routines.length) does.push(`${plural(c.routines.length, 'routine')}, all paused.`)
+  if (on.length) does.push(`${plural(on.length, 'schedule')} on${next ? `, next ${when(next)}` : ''}.`)
+  else if (c.routines.length) does.push(`${plural(c.routines.length, 'schedule')}, all paused.`)
   else does.push('Nothing scheduled yet.')
   does.push(bot.memory.length ? `Remembers ${plural(bot.memory.length, 'note')}.` : 'Remembers nothing yet.')
 
@@ -55,7 +55,7 @@ export function botOverview(
   if (!bot.autoApprove) wont.push("Won't edit files or run commands without your approval.")
   if (bot.approvals === 'changes') wont.push("Won't change anything in your apps without asking.")
   else if (bot.approvals === 'sends') wont.push("Won't send or post as you without asking.")
-  wont.push(bot.routines ? 'Routines it saves itself stay paused until you switch them on.' : "Won't act on a schedule.")
+  wont.push(bot.routines ? 'Schedules it saves itself stay paused until you switch them on.' : "Won't act on a schedule.")
   if (bot.worksOn !== 'this-computer') wont.push("Won't touch your screen.")
   if (!bot.messaging && !bot.chief) wont.push("Won't message other bots.")
   return { does, reach, wont }

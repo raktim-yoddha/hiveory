@@ -145,7 +145,7 @@ export class RoutineService {
   }
 
   get(routineId: string): Routine {
-    return this.d.store.state.routines.find((r) => r.id === routineId) ?? fail('NOT_FOUND', 'Routine not found.')
+    return this.d.store.state.routines.find((r) => r.id === routineId) ?? fail('NOT_FOUND', 'Schedule not found.')
   }
 
   /**
@@ -199,7 +199,7 @@ export class RoutineService {
   create(input: RoutineInput): RoutineView {
     this.checkDoer(input)
     if (this.d.store.state.routines.filter((r) => r.botId === input.botId).length >= MAX_ROUTINES_PER_BOT) {
-      fail('INVALID_INPUT', `${input.botId ? (this.d.bots.find(input.botId)?.name ?? 'This bot') : 'You'} already ${input.botId ? 'has' : 'have'} ${MAX_ROUTINES_PER_BOT} routines${input.botId ? '' : ' without a bot'}. Remove one first.`)
+      fail('INVALID_INPUT', `${input.botId ? (this.d.bots.find(input.botId)?.name ?? 'This bot') : 'You'} already ${input.botId ? 'has' : 'have'} ${MAX_ROUTINES_PER_BOT} schedules${input.botId ? '' : ' without a bot'}. Remove one first.`)
     }
     const now = iso(this.now())
     const routine: Routine = {
@@ -313,7 +313,7 @@ export class RoutineService {
           if (now - when <= CATCH_UP_MS) this.dispatch(routine, when, 'schedule')
           else this.record(this.receipt(routine, when, 'schedule', 'missed', 'Hiveory was closed or this computer was asleep at that time.'))
         } catch (error) {
-          this.d.log.warn(`Routine "${routine.name}" could not run`, error)
+          this.d.log.warn(`Schedule "${routine.name}" could not run`, error)
         }
       }
       this.changed()
@@ -336,8 +336,8 @@ export class RoutineService {
       thread = this.d.bots.newThread(bot.id, `${routine.name} · ${label}`)
       const intro =
         trigger === 'schedule'
-          ? `This is a scheduled run of your routine "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
-          : `The user started your routine "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
+          ? `This is a scheduled run of your schedule "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
+          : `The user started your schedule "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
       this.d.chats.send(thread.id, `${intro}\n\n${routine.prompt}`, this.filesFor(thread.id, routine))
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error)
@@ -355,15 +355,15 @@ export class RoutineService {
   private dispatchTarget(routine: Routine, target: RoutineTarget, when: number, trigger: RunTrigger): RoutineRun {
     const targets = this.d.targets
     const where = targets?.describe(target) ?? 'Nobody'
-    if (!targets) return this.record({ ...this.receipt(routine, when, trigger, 'failed', 'Routines run only on bots here.'), where })
+    if (!targets) return this.record({ ...this.receipt(routine, when, trigger, 'failed', 'Schedules run only on bots here.'), where })
     if (this.d.store.state.routineRuns.some((r) => r.routineId === routine.id && r.status === 'running')) {
       return this.record({ ...this.receipt(routine, when, trigger, 'skipped', 'The previous run was still going.'), where })
     }
     const label = this.label(when, routine.timezone)
     const intro =
       trigger === 'schedule'
-        ? `This is a scheduled run of the routine "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
-        : `The user started the routine "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
+        ? `This is a scheduled run of the schedule "${routine.name}" (${label}). Nobody is watching it live: do the work, then end with a short report of what you did and found.`
+        : `The user started the schedule "${routine.name}" now. Do the work, then end with a short report of what you did and found.`
     const prompt = `${intro}\n\n${routine.prompt}`
     let run: RoutineRun
     try {
@@ -434,7 +434,7 @@ export class RoutineService {
     try {
       this.d.outcome?.(run)
     } catch (error) {
-      this.d.log.warn('Could not announce a routine run', error)
+      this.d.log.warn('Could not announce a scheduled run', error)
     }
   }
 
@@ -488,7 +488,7 @@ ${outcome || '(No reply.)'}`)
 
   /** A routine's files must be copies Hiveory made (`routines.addFile`), never any other path. */
   private checkFiles(files: ChatAttachment[]): ChatAttachment[] {
-    if (files.length > MAX_ROUTINE_FILES) fail('INVALID_INPUT', `A routine can carry ${MAX_ROUTINE_FILES} files at most.`)
+    if (files.length > MAX_ROUTINE_FILES) fail('INVALID_INPUT', `A schedule can carry ${MAX_ROUTINE_FILES} files at most.`)
     if (!this.d.files || files.some((f) => !this.d.files!.owns(f.path))) fail('INVALID_INPUT', 'Add the files again.')
     return files
   }
@@ -506,7 +506,7 @@ ${outcome || '(No reply.)'}`)
       try {
         return [this.d.chats.attachPath(threadId, f.path)]
       } catch (error) {
-        this.d.log.warn(`Routine "${routine.name}": file ${f.name} is missing`, error)
+        this.d.log.warn(`Schedule "${routine.name}": file ${f.name} is missing`, error)
         return []
       }
     })
@@ -516,7 +516,7 @@ ${outcome || '(No reply.)'}`)
   private checkDoer(r: { botId?: string | null; target?: RoutineTarget | null }): void {
     if (Boolean(r.botId) === Boolean(r.target)) fail('INVALID_INPUT', 'Pick a bot, a chat or a Work agent.')
     if (r.target) {
-      if (!this.d.targets) fail('INVALID_INPUT', 'Routines run only on bots here.')
+      if (!this.d.targets) fail('INVALID_INPUT', 'Schedules run only on bots here.')
       return
     }
     const bot = this.d.bots.find(r.botId!) ?? fail('NOT_FOUND', 'Bot not found.')
@@ -541,7 +541,7 @@ ${outcome || '(No reply.)'}`)
   }
 
   private view(routineId: string): RoutineView {
-    return this.list().find((r) => r.id === routineId) ?? fail('NOT_FOUND', 'Routine not found.')
+    return this.list().find((r) => r.id === routineId) ?? fail('NOT_FOUND', 'Schedule not found.')
   }
 
   private changed(): void {

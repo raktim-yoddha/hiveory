@@ -111,7 +111,7 @@ export function WeekCalendar({
                   key={h}
                   type="button"
                   className={cx(styles.slot, over === at.toISOString() && styles.slotOver)}
-                  aria-label={`New routine ${WEEKDAYS[d.getDay()]} ${d.getDate()} at ${String(h).padStart(2, '0')}:00`}
+                  aria-label={`New schedule ${WEEKDAYS[d.getDay()]} ${d.getDate()} at ${String(h).padStart(2, '0')}:00`}
                   onClick={() => onSlot(at)}
                   {...dropOn(at)}
                 />

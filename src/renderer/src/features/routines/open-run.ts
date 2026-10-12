@@ -1,5 +1,4 @@
 import type { RoutineTarget } from '@shared/domain/routine'
-import { useBots } from '../../stores/bots'
 import { useChat } from '../../stores/chat'
 import { useNavigation } from '../../stores/navigation'
 import { useRoutineEditor } from './RoutineEditor'
@@ -10,10 +9,8 @@ export function openRunChat(chatId: string): void {
   void useChat.getState().open(chatId)
 }
 
-/** "Schedule a chat" (Chat): the Routines page with the editor open on that target. */
+/** "Schedule a chat" (Chat): the editor opens right here; Chat never jumps to Bots (ADR 0030, 0046). */
 export function scheduleRoutine(target: RoutineTarget): void {
-  useNavigation.getState().setMode('bots')
-  useBots.getState().showRoutines()
   useRoutineEditor.getState().open({ target })
 }
 

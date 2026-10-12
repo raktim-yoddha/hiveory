@@ -91,7 +91,7 @@ export function OverviewTab({ bot }: { bot: BotView }) {
         <div className={styles.switchRow}>
           <span className={styles.switchText}>
             <span className={styles.switchTitle}>Notifications</span>
-            <span className={styles.switchHint}>When it replies or a routine of its ends while you are away from Hiveory.</span>
+            <span className={styles.switchHint}>When it replies or a schedule of its ends while you are away from Hiveory.</span>
           </span>
           <Toggle label={`Notifications from ${bot.name}`} checked={bot.notify} onChange={(notify) => void update(bot.id, { notify })} />
         </div>

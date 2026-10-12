@@ -10,7 +10,7 @@ type WorkTarget = Extract<RoutineTarget, { kind: 'workspace' }>
 const MAX_WORK_RUN_MS = 24 * 60 * 60 * 1000
 
 const NOT_READY = {
-  waiting: 'asked a question before it could start. Answer it in Work, then run the routine again.',
+  waiting: 'asked a question before it could start. Answer it in Work, then run the schedule again.',
   stopped: 'stopped before it could start.',
   timeout: 'was not ready after a minute.'
 } as const

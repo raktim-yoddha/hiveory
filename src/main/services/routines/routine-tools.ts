@@ -40,10 +40,10 @@ export class RoutineTools implements ToolFamily {
 
   definitions(): ToolDefinition[] {
     return [
-      tool('list_routines', 'Your routines: work you start on your own on a schedule. Shows whether each is on or paused and when it runs next.'),
+      tool('list_routines', 'Your schedules: work you start on your own on a schedule. Shows whether each is on or paused and when it runs next.'),
       tool(
         'schedule_routine',
-        'Save a routine for yourself: work you start on your own on a schedule, each run in a fresh conversation with these instructions. It is saved PAUSED: tell the user it waits for them to switch it on (your Routines tab). Only works if the user allowed you to run on a schedule.',
+        'Save a schedule for yourself: work you start on your own on a schedule, each run in a fresh conversation with these instructions. It is saved PAUSED: tell the user it waits for them to switch it on (your Schedules tab). Only works if the user allowed you to run on a schedule.',
         {
           name: { type: 'string', description: 'A short title, e.g. "Morning inbox report".' },
           instructions: { type: 'string', description: 'What to do on every run, complete on its own: what to look at, what to produce, what needs approval.' },
@@ -61,7 +61,7 @@ export class RoutineTools implements ToolFamily {
 
   async call(caller: { id: string }, name: string, args: Record<string, unknown>): Promise<ToolResult> {
     const botId = this.botOf(caller.id)
-    if (!botId) return { text: 'Only bots have routines.', isError: true }
+    if (!botId) return { text: 'Only bots have schedules.', isError: true }
     try {
       return name === 'list_routines' ? this.list(botId) : this.schedule(botId, args)
     } catch (error) {
@@ -72,7 +72,7 @@ export class RoutineTools implements ToolFamily {
 
   private list(botId: string): ToolResult {
     const mine = this.routines().list(botId)
-    if (!mine.length) return { text: 'You have no routines yet.' }
+    if (!mine.length) return { text: 'You have no schedules yet.' }
     return {
       text: mine
         .map((r) => {
@@ -105,7 +105,7 @@ export class RoutineTools implements ToolFamily {
       enabled: false
     })
     return {
-      text: `Saved "${routine.name}", paused. Next runs once it is on: ${upcoming.map((d) => at(d, timezone)).join(' · ')} (${timezone}). Tell the user it waits for them to switch it on in your Routines tab.`
+      text: `Saved "${routine.name}", paused. Next runs once it is on: ${upcoming.map((d) => at(d, timezone)).join(' · ')} (${timezone}). Tell the user it waits for them to switch it on in your Schedules tab.`
     }
   }
 

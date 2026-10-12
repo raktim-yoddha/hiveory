@@ -242,7 +242,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'The side panel',
         body: (
           <p>
-            Inside a worktree the side panel holds the Dashboard, Sessions (every CLI conversation, resumable), the Explorer, Routines and the
+            Inside a worktree the side panel holds the Dashboard, Sessions (every CLI conversation, resumable), the Explorer, Schedules and the
             workspace&rsquo;s Settings. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
             button.
           </p>
@@ -361,14 +361,14 @@ export const GUIDE: GuideChapter[] = [
         keywords: 'approval allow decline computer docker'
       },
       {
-        heading: 'Routines and triggers',
+        heading: 'Schedules and triggers',
         body: (
           <p>
-            A bot can run instructions on a schedule (routines) or when something happens in a connected app (triggers, read-only). The work
+            A bot can run instructions at set times (schedules) or when something happens in a connected app (triggers, read-only). The work
             board lists what the team owes: Working, Didn&rsquo;t finish or Done.
           </p>
         ),
-        keywords: 'routine trigger schedule work board'
+        keywords: 'schedule routine trigger work board'
       }
     ]
   },
@@ -392,7 +392,7 @@ export const GUIDE: GuideChapter[] = [
   },
   {
     id: 'routines',
-    title: 'Routines',
+    title: 'Schedules',
     summary: 'Scheduled agents, chats and bot runs.',
     icon: CalendarClock,
     sections: [
@@ -400,11 +400,11 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Three kinds',
         body: (
           <p>
-            A Work routine starts an agent in a worktree (its card moves on the Kanban like any agent); make one in the Dashboard&rsquo;s Routines
-            tab. A chat routine starts a new chat. A bot routine runs in a fresh thread of that bot.
+            A Work schedule starts an agent in a worktree (its card moves on the Kanban like any agent); make one in the side panel&rsquo;s Schedules
+            tab. A chat schedule starts a new chat. A bot schedule runs in a fresh thread of that bot.
           </p>
         ),
-        keywords: 'schedule cron calendar'
+        keywords: 'schedule routine cron calendar'
       },
       {
         heading: 'When they run',

@@ -532,7 +532,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'switch-automation': {
           const item = ctx.automations?.find((x) => x.id === action.automationId)
-          if (!item) throw new QueenError('that routine or trigger no longer exists.')
+          if (!item) throw new QueenError('that schedule or trigger no longer exists.')
           const flip = async (enabled: boolean): Promise<void> => {
             if (item.kind === 'routine') {
               await api('routines.update', { routineId: item.id, enabled })

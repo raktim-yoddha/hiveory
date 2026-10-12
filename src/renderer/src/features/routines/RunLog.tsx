@@ -24,7 +24,7 @@ export function RunLog({ botId, only }: { botId?: string; only?: (run: RoutineRu
   const { bots, openBotThread } = useBots()
   const doer = useDoerName()
   const shown = runs.filter((r) => (botId ? r.botId === botId : true) && (only ? only(r) : true))
-  if (shown.length === 0) return <EmptyState compact title="No runs yet" description="Each run of a routine is listed here, with how it went." />
+  if (shown.length === 0) return <EmptyState compact title="No runs yet" description="Each run of a schedule is listed here, with how it went." />
   return (
     <ul className={styles.runs} aria-label="Run log">
       {shown.map((run) => (

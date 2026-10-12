@@ -117,12 +117,14 @@ describe('Queen Bee app commands', () => {
     }
     expect(actions('open the work board')).toEqual([{ type: 'navigate', to: 'bots', page: 'work' }])
     expect(actions('go to routines')).toEqual([{ type: 'navigate', to: 'bots', page: 'routines' }])
+    expect(actions('open schedules')).toEqual([{ type: 'navigate', to: 'bots', page: 'routines' }])
+    expect(actions('pause the morning brief schedule', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: false }])
     expect(actions('show the team map')).toEqual([{ type: 'navigate', to: 'bots', page: 'team-map' }])
     expect(actions('pause Morning brief', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: false }])
     expect(actions('resume the morning brief routine', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: true }])
     expect(actions('turn the New issue trigger back on', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't1', on: true }])
     expect(actions('pause digest trigger', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't2', on: false }])
-    expect(parseCommand('pause digest', withAutomations)).toMatchObject({ kind: 'ask', question: { choices: [{ command: 'pause Digest routine' }, { command: 'pause Digest trigger' }] } })
+    expect(parseCommand('pause digest', withAutomations)).toMatchObject({ kind: 'ask', question: { choices: [{ command: 'pause Digest schedule' }, { command: 'pause Digest trigger' }] } })
     // An agent with the same name wins.
     expect(actions('stop Bruno', withAutomations)).toEqual([{ type: 'interrupt-agent', agentId: 'a1' }])
     // A model may switch them too, but only ids it was shown, and only after a yes.
