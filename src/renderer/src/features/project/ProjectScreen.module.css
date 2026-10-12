@@ -151,6 +151,7 @@
 .lookRow {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-2);
 }
 
@@ -217,6 +218,23 @@
   border-radius: var(--radius-sm);
   background: var(--color-surface-active);
   color: var(--color-text-muted);
+}
+
+.emojiPreview {
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+.emojiPreview svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+/* Settings › Icon and color › Emoji: the picker's popover. */
+.emojiPanel {
+  display: flex;
+  min-height: 0;
+  padding: var(--space-4);
 }
 
 .avatarImage {

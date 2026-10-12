@@ -160,7 +160,14 @@
   container-type: inline-size;
 }
 
-@container (max-width: 380px) {
+/* A panel too narrow for every title keeps the open tab's, so no tab is clipped at the strip's edge. */
+@container (max-width: 500px) {
+  .tab:not(.active) .tabTitle {
+    display: none;
+  }
+}
+
+@container (max-width: 260px) {
   .tabTitle {
     display: none;
   }

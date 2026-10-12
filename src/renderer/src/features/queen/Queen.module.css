@@ -2,6 +2,7 @@
 
 /* Docked: only the bar takes room. Her card hovers above the panes, so it never shifts them. */
 .dock {
+  container: queen-dock / inline-size;
   position: relative;
   display: flex;
   flex: none;
@@ -355,8 +356,14 @@
   color: var(--color-accent);
 }
 
-/* Narrow windows: the shortcut hint goes first. */
+/* Narrow windows, or a docked bar under a narrow main area: the shortcut hint goes first. */
 @media (max-width: 720px) {
+  .hint {
+    display: none;
+  }
+}
+
+@container queen-dock (max-width: 520px) {
   .hint {
     display: none;
   }

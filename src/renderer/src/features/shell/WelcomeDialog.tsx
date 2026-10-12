@@ -31,10 +31,12 @@ export function WelcomeDialog() {
         </Button>
       }
     >
-      <p className={styles.groupNote}>How should your agents, terminals and pages sit side by side? You can change this later in Settings › Appearance.</p>
-      <PaneStylePicker value={style} onChange={setStyle} />
-      <p className={styles.groupNote}>With air and rounded corners between them, or attached edge to edge?</p>
-      <PaneSpacingPicker value={spacing} onChange={setSpacing} />
+      <div className={styles.welcome}>
+        <p className={styles.groupNote}>How should your agents, terminals and pages sit side by side? You can change this later in Settings › Appearance.</p>
+        <PaneStylePicker value={style} onChange={setStyle} />
+        <p className={styles.groupNote}>With air and rounded corners between them, or attached edge to edge?</p>
+        <PaneSpacingPicker value={spacing} onChange={setSpacing} />
+      </div>
     </Modal>
   )
 }

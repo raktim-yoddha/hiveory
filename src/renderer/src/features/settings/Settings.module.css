@@ -196,6 +196,21 @@
   line-height: var(--leading-normal);
 }
 
+/* The first-run welcome: two questions, each above its picker, lined up with the cards. */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.welcome > .groupNote {
+  padding: 0;
+}
+
+.welcome > .groupNote:not(:first-child) {
+  margin-top: var(--space-5);
+}
+
 /* A group that opens with its note (no title above it) still has room at the top. */
 .group > .groupNote:first-child {
   padding-top: var(--space-6);

@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react'
-import { CircleUserRound, ImagePlus, Pipette, Trash2 } from 'lucide-react'
+import { CircleUserRound, ImagePlus, Pipette, Smile, Trash2 } from 'lucide-react'
 import { WORKSPACE_COLORS, WORKSPACE_ICONS, workspaceColor, type Project } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { EmojiPicker } from '../../components/ui/EmojiPicker'
+import { Popover } from '../../components/ui/Popover'
 import { Tabs } from '../../components/ui/Tabs'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
@@ -73,7 +74,28 @@ export function WorkspaceLook({ project }: { project: Project }) {
         ]}
       />
       {mode === 'emoji' ? (
-        <EmojiPicker value={usingEmoji ? project.settings?.emoji : undefined} onPick={(emoji) => void update(project.id, { settings: { emoji, avatar: null } })} />
+        // The full picker is tall: it opens in a popover so the settings row keeps its height.
+        <div className={styles.lookRow}>
+          <span className={cx(styles.avatarPreview, styles.emojiPreview)}>{usingEmoji ? project.settings?.emoji : <Smile aria-hidden />}</span>
+          <Popover label="Choose emoji" width="lg" align="end" trigger={(props) => <Button {...props} size="sm" icon={<Smile />}>{usingEmoji ? 'Change emoji' : 'Choose emoji'}</Button>}>
+            {(close) => (
+              <div className={styles.emojiPanel}>
+                <EmojiPicker
+                  value={usingEmoji ? project.settings?.emoji : undefined}
+                  onPick={(emoji) => {
+                    void update(project.id, { settings: { emoji, avatar: null } })
+                    close()
+                  }}
+                />
+              </div>
+            )}
+          </Popover>
+          {usingEmoji && (
+            <Button size="sm" variant="ghost" icon={<Trash2 />} onClick={() => void update(project.id, { settings: { emoji: null } })}>
+              Remove
+            </Button>
+          )}
+        </div>
       ) : mode === 'avatar' ? (
         <div className={styles.lookRow}>
           <span className={styles.avatarPreview}>{usingAvatar ? <WorkspaceMark project={project} className={styles.avatarImage} /> : <ImagePlus aria-hidden />}</span>
