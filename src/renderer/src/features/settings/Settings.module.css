@@ -1048,6 +1048,11 @@
     align-items: stretch;
     gap: var(--space-4);
   }
+
+  /* Stacked, the text's flex basis would become a height. */
+  .rowText {
+    flex: none;
+  }
 }
 
 /* Settings › Appearance › Pane style (ADR 0042). */
