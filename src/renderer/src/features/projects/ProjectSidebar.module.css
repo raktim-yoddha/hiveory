@@ -207,7 +207,6 @@
 }
 
 .childRow:hover {
-  background: var(--color-surface-hover);
   color: var(--color-text);
 }
 
@@ -263,6 +262,12 @@
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+/* Hover lights the whole worktree, its row and its panes' bar together. */
+.childItem:hover {
+  background: var(--color-surface-hover);
 }
 
 /* The open Worktree: its row and its agents' bar highlighted as one. */
