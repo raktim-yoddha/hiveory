@@ -1,3 +1,4 @@
+import type { Keybindings } from '../keys/keybindings'
 import type { Viewport } from './browser'
 
 /** The built-in themes (ADR 0044: three; VS Code themes cover the rest). */
@@ -87,8 +88,10 @@ export interface AppSettings {
   queenNudgeMinutes: number
   /** Short replies drop the second sentence. */
   queenLength: 'short' | 'normal'
-  /** Tap to focus Queen Bee, hold to talk: "Meta+Alt" = Win+Alt / ⌘⌥ (see shared/queen/shortcut.ts). */
+  /** Tap to focus Queen Bee, hold to talk; '' = the platform's standard keys (shared/queen/shortcut.ts, ADR 0047). */
   queenShortcut: string
+  /** The user's changes to the app's shortcuts (Settings › Keyboard, ADR 0047); '' clears one. */
+  keybindings: Keybindings
   /** The language Queen Bee listens in (picks the speech pack). */
   queenSpeechLanguage: 'en' | 'es' | 'pt' | 'de' | 'fr' | 'hi'
   /** Talkback: when she answers out loud (Kokoro when installed, otherwise the system voice). */
@@ -206,7 +209,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenHype: 'lively',
   queenNudgeMinutes: 10,
   queenLength: 'normal',
-  queenShortcut: 'Meta+Alt',
+  queenShortcut: '',
+  keybindings: {},
   queenSpeechLanguage: 'en',
   queenTalkback: 'always',
   queenSounds: true,

@@ -520,7 +520,7 @@ export const GUIDE: GuideChapter[] = [
   {
     id: 'keys',
     title: 'Keyboard & clipboard',
-    summary: 'Copy, paste, newlines and dictation in terminals.',
+    summary: 'App shortcuts, and copy, paste and newlines in terminals.',
     icon: Keyboard,
     sections: [
       {
@@ -543,6 +543,17 @@ export const GUIDE: GuideChapter[] = [
           </ul>
         ),
         keywords: 'shortcut copy paste wispr voice dictation'
+      },
+      {
+        heading: 'App shortcuts',
+        body: (
+          <p>
+            Settings › Keyboard lists every shortcut with your system&rsquo;s standard keys: <K>Ctrl</K> on Windows and Linux, <K>⌘</K> on a
+            Mac. Queen Bee is <K>Ctrl</K> <K>Shift</K> <K>Space</K> (<K>⌥</K> <K>Space</K> on a Mac), Settings <K>Ctrl</K> <K>,</K>, Work, Bots
+            and Chat <K>Ctrl</K> <K>1</K> <K>2</K> <K>3</K>. Click Change and press new keys to make any of them yours.
+          </p>
+        ),
+        keywords: 'keyboard shortcuts key bindings hotkeys change'
       }
     ]
   },

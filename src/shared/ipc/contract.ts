@@ -33,6 +33,7 @@ import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
 import type { BrainAccountView, BrainResult } from '../queen/brain'
 import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
+import { cleanKeybindings, isAppCommand } from '../keys/keybindings'
 import { parseShortcut, type HotkeySignal, type HotkeyStatus } from '../queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '../queen/actions'
 import { customNameProblem } from '../queen/personas'
@@ -447,7 +448,11 @@ export const requestSchemas = {
       queenHype: z.enum(['calm', 'lively', 'max']),
       queenNudgeMinutes: z.number().int().min(0).max(240),
       queenLength: z.enum(['short', 'normal']),
-      queenShortcut: z.string().max(60).refine((s) => parseShortcut(s) !== null, 'Use two or three keys, at least one of them a modifier.'),
+      queenShortcut: z.string().max(60).refine((s) => s === '' || parseShortcut(s) !== null, 'Use two or three keys, at least one of them a modifier.'),
+      keybindings: z
+        .record(z.string().max(40), z.string().max(60))
+        .refine((r) => Object.keys(r).length <= 40 && Object.entries(r).every(([id, s]) => isAppCommand(id) && (s === '' || parseShortcut(s) !== null)), 'Unknown command or shortcut.')
+        .transform(cleanKeybindings),
       queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']),
       queenTalkback: z.enum(['always', 'after-voice', 'never']),
       queenSounds: z.boolean(),

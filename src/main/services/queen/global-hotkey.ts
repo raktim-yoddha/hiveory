@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { parseShortcut, ShortcutTracker, type HotkeySignal, type HotkeyStatus, type Shortcut } from '@shared/queen/shortcut'
+import { queenShortcutOf, ShortcutTracker, type HotkeySignal, type HotkeyStatus, type Shortcut } from '@shared/queen/shortcut'
 import type { Logger } from '../../app/logger'
 
 /** The parts of uiohook-napi Hiveory uses. */
@@ -79,8 +79,7 @@ export class GlobalHotkey {
     if (!enabled) return (this.status = { state: 'off' })
     if (this.env.wayland) return (this.status = { state: 'unsupported', reason: 'Wayland doesn’t let apps watch keys in other windows. The shortcut still works inside Hiveory.' })
     if (this.env.platform === 'darwin' && !this.env.trusted(false)) return (this.status = { state: 'needs-permission' })
-    const shortcut = parseShortcut(shortcutText)
-    if (!shortcut) return (this.status = { state: 'error', error: 'The shortcut is not valid.' })
+    const shortcut = queenShortcutOf(shortcutText, this.env.platform)
     try {
       const mod = this.env.load()
       this.codes = this.keyCodes(mod.UiohookKey, shortcut)

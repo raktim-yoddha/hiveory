@@ -8,9 +8,9 @@ import { StatusDot } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
 import { useApprovals } from '../../stores/approvals'
 import { useBots } from '../../stores/bots'
-import { useApp } from '../../stores/data'
 import { useBotActions } from './bot-actions'
 import { BOT_DRAG_TYPE } from './bot-drag'
+import { useCommandKeys } from '../shell/useAppShortcuts'
 import { useBotEditor } from './BotEditor'
 import { TeamDialog, useTeamDialog } from './TeamDialog'
 import { TemplatesDialog } from './TemplatesDialog'
@@ -24,21 +24,9 @@ export function BotsSidebar() {
   const openEditor = useBotEditor((s) => s.open)
   const openTeam = useTeamDialog((s) => s.open)
   const actions = useBotActions()
-  const mac = useApp((s) => s.info?.platform === 'darwin')
+  const newKeys = useCommandKeys('new-item')
   const [templates, setTemplates] = useState(false)
   const [folded, setFolded] = useState<Set<string>>(new Set())
-
-  // New bot: Ctrl N (⌘N), while the bots sidebar is shown. Bots mode has no terminals to take the key from.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key.toLowerCase() !== 'n' || e.altKey || e.shiftKey || !(mac ? e.metaKey : e.ctrlKey)) return
-      if (document.querySelector('dialog[open]')) return
-      e.preventDefault()
-      useBotEditor.getState().open('new')
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mac])
 
   useEffect(() => {
     void load()
@@ -101,7 +89,7 @@ export function BotsSidebar() {
           label="New"
           align="end"
           items={[
-            { type: 'item', id: 'bot', label: 'New bot', icon: <BotIcon />, hint: mac ? '⌘N' : 'Ctrl N', onSelect: () => openEditor('new') },
+            { type: 'item', id: 'bot', label: 'New bot', icon: <BotIcon />, hint: newKeys, onSelect: () => openEditor('new') },
             { type: 'item', id: 'team', label: 'Create team', icon: <Users />, onSelect: () => openTeam('new') },
             { type: 'item', id: 'templates', label: 'Templates', icon: <LayoutTemplate />, onSelect: () => setTemplates(true) }
           ]}

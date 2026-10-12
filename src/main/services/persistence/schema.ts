@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { APPROVAL_LEVELS, DEFAULT_APPROVAL_LEVEL } from '@shared/domain/approval'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
+import { cleanKeybindings } from '@shared/keys/keybindings'
 import { parseShortcut } from '@shared/queen/shortcut'
 import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
 import { customNameProblem } from '@shared/queen/personas'
@@ -184,7 +185,13 @@ const settingsSchema = z.object({
   queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),
   queenNudgeMinutes: z.number().int().min(0).max(240).catch(DEFAULT_SETTINGS.queenNudgeMinutes),
   queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength),
-  queenShortcut: z.string().refine((s) => parseShortcut(s) !== null).catch(DEFAULT_SETTINGS.queenShortcut),
+  // '' = the platform's standard; the old default Win+Alt / ⌘⌥ moves to it (ADR 0047).
+  queenShortcut: z
+    .string()
+    .refine((s) => s === '' || parseShortcut(s) !== null)
+    .transform((s) => (s === 'Meta+Alt' ? '' : s))
+    .catch(DEFAULT_SETTINGS.queenShortcut),
+  keybindings: z.record(z.string(), z.unknown()).transform(cleanKeybindings).catch(DEFAULT_SETTINGS.keybindings),
   queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']).catch(DEFAULT_SETTINGS.queenSpeechLanguage),
   queenTalkback: z.enum(['always', 'after-voice', 'never']).catch(DEFAULT_SETTINGS.queenTalkback),
   queenSounds: z.boolean().catch(DEFAULT_SETTINGS.queenSounds),

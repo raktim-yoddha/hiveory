@@ -1,13 +1,21 @@
 /**
  * Queen Bee's shortcut (ADR 0019): two or three keys, either modifiers only
- * ("Meta+Alt": Win+Alt on Windows, ⌘⌥ on macOS) or modifiers plus one key
- * ("Control+Shift+Space"). Stored as modifiers in a fixed order, then the key's
- * `KeyboardEvent.code`, so it works on any keyboard layout.
+ * ("Control+Meta") or modifiers plus one key ("Control+Shift+Space"). Stored as
+ * modifiers in a fixed order, then the key's `KeyboardEvent.code`, so it works on
+ * any keyboard layout. '' stored means the platform's standard (ADR 0047).
  */
 
 export type Modifier = 'Control' | 'Alt' | 'Shift' | 'Meta'
 export const MODIFIERS: Modifier[] = ['Control', 'Alt', 'Shift', 'Meta']
-export const DEFAULT_SHORTCUT = 'Meta+Alt'
+
+/**
+ * The standard assistant keys of each platform (ADR 0047): ⌥ Space on macOS; Ctrl Shift Space on
+ * Windows and Linux, where Alt Space opens the window menu and the Windows/Super key is the system's.
+ */
+export const defaultQueenShortcut = (platform: string): string => (platform === 'darwin' ? 'Alt+Space' : 'Control+Shift+Space')
+
+/** The shortcut that calls her: the stored one, or the platform's standard when none (or a broken one) is stored. */
+export const queenShortcutOf = (text: string, platform: string): Shortcut => parseShortcut(text) ?? parseShortcut(defaultQueenShortcut(platform))!
 
 export interface Shortcut {
   mods: Modifier[]
@@ -38,9 +46,10 @@ export const formatShortcut = (s: Shortcut): string => [...MODIFIERS.filter((m) 
  * and the OS rely on: Ctrl+letter is a terminal control code, Ctrl+Alt is AltGr
  * on many keyboards, Alt+Shift and Ctrl+Shift switch keyboard layouts on Windows.
  */
-export function shortcutProblem(s: Shortcut, platform: string): string | null {
+export function shortcutProblem(s: Shortcut, platform: string, { terminals = true }: { terminals?: boolean } = {}): string | null {
   const only = (...mods: Modifier[]) => s.mods.length === mods.length && mods.every((m) => s.mods.includes(m))
-  if (s.code && only('Control') && /^Key[A-Z]$/.test(s.code)) return 'Terminals use Ctrl + a letter. Add another modifier.'
+  // `terminals: false`: a shortcut that never fires where a terminal is (ADR 0047).
+  if (terminals && s.code && only('Control') && /^Key[A-Z]$/.test(s.code)) return 'Terminals use Ctrl + a letter. Add another modifier.'
   if (s.code && only('Shift')) return 'Shift + a key types a character. Use Ctrl, Alt or the Windows/⌘ key.'
   if (platform !== 'darwin' && !s.code && (only('Control', 'Alt') || only('Alt', 'Shift') || only('Control', 'Shift'))) {
     return 'Windows uses this for AltGr or keyboard layouts. Pick another.'
@@ -67,9 +76,9 @@ export function shortcutLabel(s: Shortcut, platform: string): string {
   return [...order.filter((m) => s.mods.includes(m)).map((m) => word[m]), ...(key ? [key] : [])].join(' + ')
 }
 
-/** Ready-made choices per platform. */
+/** Ready-made choices per platform, the standard one first. */
 export const SHORTCUT_PRESETS = (platform: string): string[] =>
-  platform === 'darwin' ? ['Meta+Alt', 'Control+Meta', 'Control+Shift+Space'] : ['Meta+Alt', 'Control+Meta', 'Control+Shift+Space']
+  platform === 'darwin' ? ['Alt+Space', 'Meta+Shift+Space', 'Control+Alt+Space'] : ['Control+Shift+Space', 'Alt+Shift+Space', 'Control+Shift+KeyK']
 
 /**
  * Tracks one shortcut through key events: a tap (pressed and released quickly with

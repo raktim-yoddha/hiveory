@@ -2,7 +2,7 @@ import type { CliStatus, ThemeId } from '../domain'
 import type { SmallTalk } from './chat'
 
 /** Settings sections Queen Bee can open (mirrors the renderer's Settings navigation). */
-export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'integrations', 'queen', 'remote', 'updates', 'guide', 'about'] as const
+export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'integrations', 'queen', 'keyboard', 'remote', 'updates', 'guide', 'about'] as const
 export type QueenSettingsSection = (typeof QUEEN_SETTINGS_SECTIONS)[number]
 
 /** Bots mode's pages beyond a bot's conversation (ADR 0028). */

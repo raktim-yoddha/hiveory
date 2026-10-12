@@ -12,6 +12,7 @@ import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
+import { useAppShortcuts } from './useAppShortcuts'
 import { WelcomeDialog } from './WelcomeDialog'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
@@ -53,6 +54,7 @@ export function AppShell() {
     panelMaximized,
     workMinWidth
   } = useNavigation()
+  useAppShortcuts()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'

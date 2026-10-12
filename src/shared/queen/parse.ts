@@ -140,6 +140,7 @@ function findPlace(target: string, ctx: QueenContext, projectOnly: boolean): { n
 }
 
 const SETTINGS_KEYWORDS: Array<[RegExp, QueenSettingsSection]> = [
+  [/\b(keyboard|shortcuts?|key ?bindings?|hotkeys?)\b/, 'keyboard'],
   [/\b(appearance|theme|themes|wallpaper|colou?rs?|transparency|look)\b/, 'appearance'],
   [/\b(queen|personality|persona|voice|assistant)\b/, 'queen'],
   [/\b(agents?|clis?)\b/, 'agents'],

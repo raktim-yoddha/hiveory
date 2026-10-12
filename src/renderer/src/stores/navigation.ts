@@ -8,7 +8,7 @@ export type ProjectTab = 'tasks' | 'workspaces' | 'issues'
 /** Where `openProject` lands: a Dashboard section, or the Routines or Settings tab. */
 export type ProjectPlace = ProjectTab | 'routines' | 'settings'
 
-export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'queen' | 'remote' | 'updates' | 'guide' | 'about'
+export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'queen' | 'keyboard' | 'remote' | 'updates' | 'guide' | 'about'
 
 export type View =
   | { type: 'home' }

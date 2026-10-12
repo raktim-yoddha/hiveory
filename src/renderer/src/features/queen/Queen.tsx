@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Check, Ellipsis, Loader2, MessageSquare, Mic, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
-import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
+import { queenShortcutOf, shortcutLabel } from '@shared/queen/shortcut'
 import { SPEECH_LANGUAGES } from '@shared/queen/voice'
 import { Button, IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
@@ -149,7 +149,7 @@ function QueenBar() {
   const language = useSettings((s) => s.settings.queenSpeechLanguage)
   const listenPack = SPEECH_LANGUAGES.find((l) => l.id === language)?.pack ?? 'parakeet'
   const voiceReady = useVoice((s) => s.packs.some((p) => p.id === listenPack && p.state === 'ready'))
-  const keys = shortcutLabel(parseShortcut(shortcut) ?? parseShortcut(DEFAULT_SHORTCUT)!, platform)
+  const keys = shortcutLabel(queenShortcutOf(shortcut, platform), platform)
   const update = useSettings((s) => s.update)
   const openSettings = useNavigation((s) => s.openSettings)
   const [text, setText] = useState('')

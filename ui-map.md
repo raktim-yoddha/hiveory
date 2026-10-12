@@ -162,6 +162,12 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 - Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
   placement.
 
+Settings › Keyboard (ADR 0047), after Queen Bee: Queen Bee (Call Queen Bee), General (Settings,
+sidebar, side panel), Modes (Work, Bots, Chat), Chat and Bots (New chat or bot): each row shows its keys
+as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
+is named under it. Built in: the fixed keys, read-only. "Reset every shortcut" when any was changed.
+Title bar tooltips show the keys ("Hide sidebar (Ctrl Shift B)").
+
 ### Browser pane (ADR 0015; a pane among the agents since ADR 0042, opened from a pane's "+" › Browser)
 
 Annotate (ADR 0042): strip "N notes ready. Click another element, or send them below." [Done]; note bar

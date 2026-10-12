@@ -14,13 +14,14 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Workspace settings', 'Name, icon, emoji or avatar (its own image, or its GitHub or GitLab avatar) and color; how new agents open (terminal or chat); chat models; branch prefix and base branch; code host and issue source.'],
   ['Bots', 'Bots mode: assistants with threads, teams and a Chief of Staff, schedules on a calendar, triggers from connected apps, the work board and the team map.'],
   ['Chat', 'Chat mode: conversations with a CLI in a chat view, read-only by default; schedule one to run on its own.'],
-  ['Queen Bee', 'The voice and text operator: opens, messages and reports on agents, navigates and changes a few settings. Her shortcut is in Settings › Queen Bee; there (Bar & shortcut › Where she sits) or in her menu she can be docked, floating, or put away in the title bar, where only her mark stays and her bar drops down when called.'],
+  ['Queen Bee', 'The voice and text operator: opens, messages and reports on agents, navigates and changes a few settings. Her shortcut is in Settings › Queen Bee and Settings › Keyboard; there (Bar & shortcut › Where she sits) or in her menu she can be docked, floating, or put away in the title bar, where only her mark stays and her bar drops down when called.'],
   ['Settings › Appearance', 'In sections: Theme (Dark, Bronze, Silver, then VS Code color themes); Panes (pane style: Tiles, or Tabs where each area holds several panes as tabs; pane spacing: Spaced, or Attached edge to edge); Background (wallpaper, transparency, blur, dim); Terminal font.'],
   ['Settings › Agents', 'Hiveory tools for agents, default auto-approve and chat view, computer use, keep running in the background.'],
   ['Settings › Browser', 'Browser use for agents, the agent cursor, home page, profiles and viewport sizes.'],
   ['Settings › Skills, MCPs & Apps', 'Skills across every CLI (and skills.sh to find more), MCP servers Hiveory runs for every agent (and the MCP Registry), and apps through Composio.'],
   ['Settings › Integrations', 'GitHub and GitLab sign-in status (gh, glab) and Jira or Linear keys.'],
   ['Settings › Remote', 'Share this computer over Tailscale or the local network, pair the phone, SSH hosts and Hiveory servers.'],
+  ['Settings › Keyboard', 'Every shortcut, with the platform standard keys (⌘ on macOS, Ctrl on Windows and Linux): Queen Bee, Settings, sidebar, side panel, Work/Bots/Chat, New chat or bot. Change, remove or reset each; fixed terminal and editor keys are listed too.'],
   ['Settings › Updates', 'Check for updates and how often.'],
   ['Settings › Guide', 'A short chapter for every part of the app: getting started, worktrees and Git, panes, the Kanban, the browser, Queen Bee, bots, chat, schedules, skills and apps, integrations, remote and phone, keyboard, appearance and troubleshooting.']
 ]

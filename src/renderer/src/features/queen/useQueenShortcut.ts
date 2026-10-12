@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
-import { DEFAULT_SHORTCUT, parseShortcut, ShortcutTracker } from '@shared/queen/shortcut'
+import { queenShortcutOf, ShortcutTracker } from '@shared/queen/shortcut'
 import { subscribe } from '../../lib/api'
+import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { useQueen } from './useQueen'
 import { queenVoice } from './voice'
@@ -15,8 +16,9 @@ export const shortcutRecording = { active: false }
  */
 export function useQueenShortcut(): void {
   const text = useSettings((s) => s.settings.queenShortcut)
+  const platform = usePlatform()
   useEffect(() => {
-    const shortcut = parseShortcut(text) ?? parseShortcut(DEFAULT_SHORTCUT)!
+    const shortcut = queenShortcutOf(text, platform)
     const tracker = new ShortcutTracker(shortcut)
     let timer: number | null = null
     const stopTimer = (): void => {
@@ -76,5 +78,5 @@ export function useQueenShortcut(): void {
       window.removeEventListener('keyup', onUp, true)
       window.removeEventListener('blur', onBlur)
     }
-  }, [text])
+  }, [text, platform])
 }

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { Check, CheckCircle2, Download, Keyboard, ShieldCheck, Trash2, Volume2, X } from 'lucide-react'
-import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
+import { queenShortcutOf, shortcutLabel } from '@shared/queen/shortcut'
 import { packSize, PERSONA_VOICES, QUEEN_VOICES, SPEECH_LANGUAGES, VOICE_PACKS, voiceFor, type VoicePack, type VoicePackState } from '@shared/queen/voice'
 import { Button, IconButton } from '../../components/ui/Button'
 import { RangeField } from '../../components/ui/RangeField'
@@ -25,7 +25,7 @@ export function QueenVoiceSettings() {
   const { settings, update } = useSettings()
   const packs = useVoice((s) => s.packs)
   const platform = usePlatform()
-  const keys = shortcutLabel(parseShortcut(settings.queenShortcut) ?? parseShortcut(DEFAULT_SHORTCUT)!, platform)
+  const keys = shortcutLabel(queenShortcutOf(settings.queenShortcut, platform), platform)
   const listenPack = SPEECH_LANGUAGES.find((l) => l.id === settings.queenSpeechLanguage)?.pack ?? 'parakeet'
   const state = (id: VoicePack['id']): VoicePackState => packs.find((p) => p.id === id) ?? { id, state: 'missing' }
   const listenName = VOICE_PACKS.find((p) => p.id === listenPack)!.name

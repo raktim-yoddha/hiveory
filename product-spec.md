@@ -342,8 +342,12 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   the mark to shrink or open the bar; a single click on the small mark does nothing (Enter opens
   it, ← → move it; ⋯ also has Position and Shrink). Her shortcut opens a small bar. Her card keeps
   the full bar's width, lined up with the bar's side. The mode is remembered.
-- Her shortcut (default Win+Alt, ⌘⌥ on macOS, any 2–3 keys in Settings) taps to focus
-  her and holds to talk.
+- Her shortcut (the platform's standard: Ctrl Shift Space on Windows and Linux, ⌥ Space on macOS;
+  any 2–3 keys in Settings) taps to focus her and holds to talk.
+- Settings › Keyboard (ADR 0047) lists every shortcut with its platform's standard keys (⌘ on macOS,
+  Ctrl on Windows and Linux, never the Windows/Super key): Queen Bee, Settings, the sidebar, the side
+  panel, Work/Bots/Chat and New chat or bot. Each can be changed, removed or reset; fixed terminal,
+  editor and pane keys are listed read-only.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
   close agents (always after a yes), restart, jump to an agent, load a preset, switch
   Work/Chat, open Home, a workspace, a worktree or a Settings section, show or hide the
