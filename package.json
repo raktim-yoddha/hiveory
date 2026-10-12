@@ -76,6 +76,7 @@
     "zod": "^4.6.5"
   },
   "author": "Raktim Yoddha",
+  "license": "MIT",
   "homepage": "https://github.com/raktim-yoddha/hiveory",
   "repository": {
     "type": "git",
