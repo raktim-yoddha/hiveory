@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.22.1 — Browser panes, Tabs style, Queen Bee in title bar, Linux arm64
+_2026-10-12_
+
+- The browser opens as a pane beside your agents, and an agent's pages open next to it; mark several elements on a page and send them to an agent.
+- Panes can be shown as tabs, like Orca's tab groups, and placed attached edge to edge or spaced; both are chosen at the first run and in Settings › Appearance.
+- Queen Bee can sit in the title bar and drop down only when called; her updates wait behind a message button instead of popping up.
+- Terminals show what they printed after Hiveory restarts, and the app starts faster and uses less memory.
+- GitHub, GitLab, Jira and Linear reviews and issues sit in each Workspace's Dashboard, and skills.sh and the MCP Registry are inside Skills, MCPs & Apps.
+- Linux arm64 (aarch64) installers ship with every release; Midnight, Jade and Rose themes are gone and fall back to Dark.
+
 ## v0.22.0 — Workspace settings, chat or terminal per agent, phone chat
 _2026-10-09_
 
