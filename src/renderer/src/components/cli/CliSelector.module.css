@@ -40,10 +40,7 @@
 }
 
 .check input {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
   margin: 0;
-  accent-color: var(--color-accent);
 }
 
 .name {

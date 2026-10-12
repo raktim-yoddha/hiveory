@@ -40,13 +40,106 @@ const theme = EditorView.theme(
     '.cm-matchingBracket': { backgroundColor: 'var(--color-surface-active)', outline: 'none' },
     '.cm-selectionMatch': { backgroundColor: 'var(--color-bronze-soft)' },
     '.cm-searchMatch': { backgroundColor: 'var(--color-waiting-soft)', outline: '1px solid var(--color-waiting-edge)' },
-    '.cm-panels': { backgroundColor: 'var(--color-surface-raised-solid)', color: 'var(--color-text)', borderTop: 'none' },
+    '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'var(--color-bronze-soft)', outline: '1px solid var(--color-focus)' },
+    '.cm-panels': { backgroundColor: 'var(--color-surface-raised-solid)', color: 'var(--color-text)', fontFamily: 'var(--font-ui)' },
+    '.cm-panels.cm-panels-bottom': { borderTop: 'var(--border-width) solid var(--color-border-subtle)' },
+    '.cm-panels.cm-panels-top': { borderBottom: 'var(--border-width) solid var(--color-border-subtle)' },
     '.cm-panels input, .cm-panels button': { fontFamily: 'var(--font-ui)' },
+    // Panel controls (find/replace, go to line) look like the app's own inputs and buttons.
+    '.cm-textfield': {
+      height: 'var(--control-sm)',
+      padding: '0 var(--space-4)',
+      border: 'var(--border-width) solid transparent',
+      borderRadius: 'var(--radius-sm)',
+      backgroundColor: 'var(--color-surface-inset)',
+      color: 'var(--color-text)',
+      fontSize: 'var(--text-sm)',
+      outline: 'none',
+      transition: 'border-color var(--duration-fast) var(--ease-out)'
+    },
+    '.cm-textfield::placeholder': { color: 'var(--color-text-faint)' },
+    '.cm-textfield:hover': { borderColor: 'var(--color-border-strong)' },
+    '.cm-textfield:focus': { borderColor: 'var(--color-focus)' },
+    '.cm-button': {
+      height: 'var(--control-sm)',
+      padding: '0 var(--space-4)',
+      border: 'var(--border-width) solid var(--color-border)',
+      borderRadius: 'var(--radius-sm)',
+      backgroundImage: 'none',
+      backgroundColor: 'var(--fill-raised)',
+      color: 'var(--color-text)',
+      fontSize: 'var(--text-sm)',
+      fontWeight: 'var(--weight-medium)',
+      transition: 'background-color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out)'
+    },
+    '.cm-button:hover': { backgroundColor: 'var(--color-surface-hover)', borderColor: 'var(--color-border-strong)' },
+    '.cm-button:active': { backgroundImage: 'none', backgroundColor: 'var(--color-surface-active)' },
+    // Two rows, find and replace; a narrow pane wraps within a row, the line break keeps them apart.
+    '.cm-panel.cm-search': {
+      display: 'flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: 'var(--space-2)',
+      padding: 'var(--space-3) var(--space-10) var(--space-3) var(--space-4)',
+      '& input, & button, & label': { margin: 0 },
+      '& br': { flexBasis: '100%', height: 0 },
+      '& input[name=search], & input[name=replace]': { flex: '0 1 calc(var(--space-10) * 6)', minWidth: 'calc(var(--space-10) * 3)' },
+      // Options read as toggle chips, tinted when on.
+      '& label': {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        height: 'var(--control-sm)',
+        padding: '0 var(--space-3)',
+        borderRadius: 'var(--radius-sm)',
+        verticalAlign: 'middle',
+        color: 'var(--color-text-secondary)',
+        fontSize: 'var(--text-sm)',
+        cursor: 'pointer'
+      },
+      '& label:hover': { backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text)' },
+      '& label:has(:checked)': { backgroundColor: 'var(--fill-selected)', color: 'var(--color-text)' },
+      // The box itself is the app's checkbox (base.css).
+      '& input[type=checkbox]': { margin: 0 },
+      '& [name=close]': {
+        position: 'absolute',
+        top: 'var(--space-3)',
+        right: 'var(--space-3)',
+        display: 'grid',
+        placeItems: 'center',
+        width: 'var(--control-sm)',
+        height: 'var(--control-sm)',
+        borderRadius: 'var(--radius-sm)',
+        backgroundColor: 'transparent',
+        color: 'var(--color-text-muted)',
+        fontSize: 'var(--text-lg)',
+        lineHeight: '1',
+        cursor: 'pointer'
+      },
+      '& [name=close]:hover': { backgroundColor: 'var(--color-surface-hover)', color: 'var(--color-text)' }
+    },
     '.cm-tooltip': { backgroundColor: 'var(--color-surface-raised-solid)', border: 'none', borderRadius: 'var(--radius-sm)' },
     '.cm-tooltip-autocomplete ul li[aria-selected]': { backgroundColor: 'var(--color-surface-active)', color: 'var(--color-text)' }
   },
   { dark: true }
 )
+
+/** The search panel's labels, in the app's sentence case (CodeMirror's own are lower case). */
+const phrases = EditorState.phrases.of({
+  Find: 'Find',
+  Replace: 'Replace',
+  next: 'Next',
+  previous: 'Previous',
+  all: 'Select all',
+  'match case': 'Match case',
+  regexp: 'Regex',
+  'by word': 'Whole word',
+  replace: 'Replace',
+  'replace all': 'Replace all',
+  close: 'Close',
+  'Go to line': 'Go to line',
+  go: 'Go'
+})
 
 interface CodeEditorProps {
   /** Shown when the editor mounts (and whenever `revision` changes, e.g. the file changed on disk). */
@@ -82,6 +175,7 @@ export function CodeEditor({ value, revision, filename, onChange, onSave }: Code
           Prec.highest(keymap.of([{ key: 'Mod-s', preventDefault: true, run: () => (callbacks.current.onSave(), true) }])),
           syntaxHighlighting(highlight),
           theme,
+          phrases,
           language.of([]),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) callbacks.current.onChange(update.state.doc.toString())

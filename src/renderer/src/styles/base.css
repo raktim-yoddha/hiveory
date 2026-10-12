@@ -47,6 +47,59 @@ p {
   outline-offset: var(--space-1);
 }
 
+/* Native controls (radios, date pickers, progress) pick up the theme's accent. */
+:root {
+  accent-color: var(--color-accent);
+}
+
+/* Checkboxes drawn in the app's colors; the native one ignores the theme. */
+input[type='checkbox'] {
+  appearance: none;
+  display: inline-grid;
+  flex: none;
+  place-content: center;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  margin: 0;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-inset);
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+input[type='checkbox']:hover {
+  border-color: var(--color-focus);
+}
+
+/* The tick: two borders of a box, turned. */
+input[type='checkbox']::after {
+  content: '';
+  width: calc(var(--icon-sm) * 0.28);
+  height: calc(var(--icon-sm) * 0.52);
+  border: solid var(--color-accent-contrast);
+  border-width: 0 var(--focus-ring-width) var(--focus-ring-width) 0;
+  transform: translateY(-12%) rotate(45deg) scale(0);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+input[type='checkbox']:checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+input[type='checkbox']:checked::after {
+  transform: translateY(-12%) rotate(45deg) scale(1);
+}
+
+input[type='checkbox']:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 ::selection {
   background: var(--color-surface-active);
 }
