@@ -406,7 +406,8 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   whether or not she started the work.
 - Her reply card hovers above the panes; it never moves them.
 - Her mark is a waveform that moves with your voice while you hold her shortcut and with hers
-  while she answers. There is no mic button: the shortcut is how you talk.
+  while she answers. Her mic button talks by hand (tap to listen, tap again to send); holding her
+  shortcut does the same.
 - Small talk works with no model: greetings, thanks, "how are you", "who are you".
 - "Go to primary" (or "main") means the current workspace's Primary; from Home, or for a name several workspaces
   share, she asks which workspace's ("primary of api" names it directly).

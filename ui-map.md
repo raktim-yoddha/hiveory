@@ -120,15 +120,16 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 │              │ ┌───────────────────────────────────────────────┐ │
 │              │ │ Reply card: answer, report rows, receipts, Undo│ │
 │              │ └───────────────────────────────────────────────┘ │
-│              │ [∿ Ada  Your instructions…  Win + Alt ✉ ▁ ⋯]     │
+│              │ [∿ Ada  Your instructions…  🎙 ✉ ▁ ⋯]     │
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
 The reply card hovers over the panes (it never pushes them); only the bar takes room. Live
 updates wait behind ✉ (a dot marks an unseen one); ✉ opens and closes the card (ADR 0038).
 
-∿ is her waveform mark (still at rest, moving while you or she speaks). The shortcut chip
-opens Settings › Queen Bee › Voice until a speech pack is installed. ▁ switches docked ↔
+∿ is her waveform mark (still at rest, moving while you or she speaks). 🎙 talks by hand: tap
+to listen, tap again to send (holding her shortcut still works); it opens Settings › Queen Bee ›
+Voice until a speech pack is installed (ADR 0019 amendment). ▁ switches docked ↔
 floating. ⋯ holds Personality, Talk back and Configure….
 
 Floating: the same bar at a fixed width over the bottom of the window, always there; the panes
@@ -136,9 +137,9 @@ don't lift for it. Drag ∿ to the left, middle or right; double-click ∿ to sh
 open again). Six modes: full/small × left/middle/right.
 
 ```text
-Full left    [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
-Full middle                 [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
-Full right                                [∿ Ada  Your instructions…  Win + Alt ▁ ⋯]
+Full left    [∿ Ada  Your instructions…  🎙 ▁ ⋯]
+Full middle                 [∿ Ada  Your instructions…  🎙 ▁ ⋯]
+Full right                                [∿ Ada  Your instructions…  🎙 ▁ ⋯]
 Small        [∿]            [∿]                                              [∿]
 ```
 

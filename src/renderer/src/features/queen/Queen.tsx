@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Ellipsis, Loader2, MessageSquare, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
+import { Check, Ellipsis, Loader2, MessageSquare, Mic, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { DEFAULT_SHORTCUT, parseShortcut, shortcutLabel } from '@shared/queen/shortcut'
@@ -16,7 +16,7 @@ import { QUEEN_SPOTS, useQueen, type QueenCard } from './useQueen'
 import { useMarkGestures } from './useMarkGestures'
 import { useQueenShortcut } from './useQueenShortcut'
 import { useQueenUpdates } from './useQueenUpdates'
-import { stopSpeaking, useVoice } from './voice'
+import { queenVoice, stopSpeaking, useVoice } from './voice'
 import styles from './Queen.module.css'
 
 /** Queen Bee docked under the main area (the screens above lift to make room). */
@@ -230,18 +230,19 @@ function QueenBar() {
       {busy || phase === 'transcribing' ? (
         <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
       ) : (
-        <button
-          type="button"
-          className={styles.hint}
-          title={voiceReady ? 'Tap to type, hold to talk' : 'Set up talking to her'}
+        // Talk by hand (ADR 0019 amendment): tap to listen, tap again to send; holding her shortcut still works.
+        <IconButton
+          label={phase === 'listening' ? 'Stop and send' : voiceReady ? `Talk to Queen Bee (or hold ${keys})` : 'Set up talking to Queen Bee'}
+          icon={<Mic />}
+          active={phase === 'listening'}
+          aria-pressed={phase === 'listening'}
           onClick={() => {
-            if (voiceReady) return input.current?.focus()
+            if (queenVoice.listening()) return void queenVoice.stop()
+            if (voiceReady) return void queenVoice.start()
             setSettingsTab('voice')
             openSettings('queen')
           }}
-        >
-          {keys}
-        </button>
+        />
       )}
       {phase === 'speaking' && <IconButton label="Stop talking" icon={<VolumeX />} onClick={stopSpeaking} />}
       <span className={styles.cardToggle} data-unseen={unseen || undefined}>

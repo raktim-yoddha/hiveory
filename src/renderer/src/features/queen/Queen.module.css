@@ -2,7 +2,6 @@
 
 /* Docked: only the bar takes room. Her card hovers above the panes, so it never shifts them. */
 .dock {
-  container: queen-dock / inline-size;
   position: relative;
   display: flex;
   flex: none;
@@ -188,19 +187,6 @@
   color: var(--color-text-muted);
 }
 
-.hint {
-  flex: none;
-  border: 0;
-  margin-right: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-active);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  white-space: nowrap;
-}
-
 /* Listening: an accent chip whose fill rises with the voice level. */
 .heard {
   color: var(--color-text-muted);
@@ -356,19 +342,6 @@
   color: var(--color-accent);
 }
 
-/* Narrow windows, or a docked bar under a narrow main area: the shortcut hint goes first. */
-@media (max-width: 720px) {
-  .hint {
-    display: none;
-  }
-}
-
-@container queen-dock (max-width: 520px) {
-  .hint {
-    display: none;
-  }
-}
-
 /* Her mark: a waveform in her accent chip. Bars scale from the centre with the voice's loudness. */
 .wave {
   display: flex;
@@ -445,8 +418,9 @@
 
 .titlePanel {
   position: fixed;
-  top: calc(var(--titlebar-height) - var(--space-2));
-  right: var(--space-7);
+  /* Clear of the title bar, lined up with the main area's right edge. */
+  top: calc(var(--titlebar-height) + var(--space-2));
+  right: var(--page-padding);
   z-index: var(--z-menu);
   display: flex;
   flex-direction: column;
@@ -455,6 +429,15 @@
   max-width: calc(100vw - var(--space-8));
   animation: title-drop var(--duration-base) var(--ease-liquid);
   transform-origin: top right;
+}
+
+/* Her mark is already in the title bar right above: the dropped bar starts with her name. */
+.titlePanel .bar > .mark {
+  display: none;
+}
+
+.titlePanel .persona {
+  padding-left: var(--space-4);
 }
 
 .titlePanel .bar,

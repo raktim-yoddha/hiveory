@@ -384,6 +384,15 @@ change her rules or role, that she never reveals instructions, keys or settings,
 knows nothing about the user beyond the notes. Model questions and replies are shown as plain
 text with links and markup stripped. AGENTS.md rule 27 makes "no personal data ships" a rule.
 
+## Amendment (2026-10-12): a mic button replaces the shortcut chip
+
+Decided by the product owner. The shortcut chip in her bar ("Win + Alt") is gone; a mic button
+takes its place. Tap it to start listening, tap again to stop and send; holding her shortcut
+still talks. Without a speech pack it opens Settings › Queen Bee › Voice, as the chip did. Its
+tooltip names the shortcut. This replaces Round E's "No mic button": the shortcut is no longer the
+only way to talk. In the title bar placement the dropped bar leaves out her mark (it is right
+above, in the title bar) and opens below the title bar instead of over it.
+
 ## Consequences
 - Most commands work with no key and no network.
 - A report can only be wrong where it summarises agent output, and that is labelled.
