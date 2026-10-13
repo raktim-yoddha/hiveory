@@ -10,15 +10,14 @@ import { nowIso } from '../events'
 import { GitCommandError } from '../git/git-service'
 import { MAX_ARCHIVED, type ArchivedProject } from '../persistence/schema'
 import type { StateStore } from '../persistence/state-store'
-import { mainTreeOwner } from '../workspaces/workspace-repository'
+import { mainTreeOwner, realFolder, treeKey } from '../workspaces/workspace-repository'
 
 /** A project's activity time moves at most this often. */
 const ACTIVE_THROTTLE_MS = 30_000
 import type { KitSource } from '../workspaces/workspace-service'
 import type { HostKit } from '../hosts/host-kit'
 
-export const samePath = (a: string, b: string): boolean =>
-  process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
+export const samePath = (a: string, b: string): boolean => treeKey(a) === treeKey(b)
 
 /** The same folder on the same machine: a remote path compares as written, on its own host only. */
 const sameFolder = (project: Project, path: string, host?: HostRef): boolean =>
@@ -56,7 +55,8 @@ export class ProjectService {
     } catch {
       fail('NOT_FOUND', 'That folder does not exist.', { operation: 'Open workspace' })
     }
-    return this.add(path, name)
+    // Git reports real paths; a folder reached through a link or a short name must match them.
+    return this.add(realFolder(path), name)
   }
 
   /**

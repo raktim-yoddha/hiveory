@@ -1,5 +1,5 @@
 import { accessSync, constants, statSync } from 'node:fs'
-import { delimiter, join } from 'node:path'
+import { posix, win32 } from 'node:path'
 
 export interface DiscoveryEnv {
   platform: NodeJS.Platform
@@ -26,7 +26,8 @@ const defaultIsExecutable =
  */
 export const findExecutable = (name: string, env: DiscoveryEnv): string | undefined => {
   const isExecutable = env.isExecutable ?? defaultIsExecutable(env.platform)
-  const sep = env.platform === 'win32' ? ';' : delimiter
+  // Paths of the platform asked about, not the one running (tests check Windows from Linux and macOS).
+  const { delimiter: sep, join } = env.platform === 'win32' ? win32 : posix
   const dirs = env.path.split(sep).map((d) => d.trim().replace(/^"(.*)"$/, '$1')).filter(Boolean)
   const extensions =
     env.platform === 'win32'

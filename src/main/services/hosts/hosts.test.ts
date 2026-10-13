@@ -71,13 +71,20 @@ describe('execution host (hiveoryd protocol)', () => {
     expect(result.text).toContain('hosted-ok')
   }, 20_000)
 
-  it('reports a spawn the host refuses as the session error', async () => {
+  // Windows (ConPTY) refuses a missing program at spawn; macOS and Linux fork first, so the program
+  // "starts" and exits at once with a failure code. Either way the session ends with nothing running.
+  it('reports a program the host cannot start: a session error on Windows, a failed exit elsewhere', async () => {
     const client = connect()
     const pty = new PtySession(false, hostPtyBackend(() => Promise.resolve(client), inProcessPty))
-    const failed = new Promise<string>((resolve) => pty.on('error', (e) => resolve(e.message)))
+    const ended = new Promise<{ error?: string; code?: number | null }>((resolve) => {
+      pty.on('error', (e) => resolve({ error: e.message }))
+      pty.on('exit', (code) => resolve({ code }))
+    })
     pty.start({ file: 'definitely-not-a-program-hv', args: [], cwd: tmpdir(), env })
     pty.resize(80, 20)
-    expect(await failed).toBeTruthy()
+    const result = await ended
+    if (process.platform === 'win32') expect(result.error).toBeTruthy()
+    else expect(result.code).not.toBe(0)
     expect(pty.hasProcess).toBe(false)
   }, 20_000)
 })

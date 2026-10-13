@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { win32 } from 'node:path'
 import { findExecutable, type DiscoveryEnv } from '../discovery'
 import { SHELL_ICONS } from './shell-icons'
 import type { CliAdapter } from './types'
@@ -9,8 +9,8 @@ export const locateGitBash = (env: DiscoveryEnv, exists: (path: string) => boole
   if (env.platform !== 'win32') return undefined
   const git = findExecutable('git', env)
   if (!git) return undefined
-  for (let dir = dirname(git), i = 0; i < 3; i++, dir = dirname(dir)) {
-    const bash = join(dir, 'bin', 'bash.exe')
+  for (let dir = win32.dirname(git), i = 0; i < 3; i++, dir = win32.dirname(dir)) {
+    const bash = win32.join(dir, 'bin', 'bash.exe')
     if (exists(bash)) return bash
   }
   return undefined

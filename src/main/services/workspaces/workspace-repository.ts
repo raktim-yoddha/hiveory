@@ -11,13 +11,20 @@ import type { StateStore } from '../persistence/state-store'
  */
 export const treeKey = (path: string, host?: Project['host']): string => {
   if (host) return `${hostKey(host)}|${path}`
-  let real = resolve(path)
-  try {
-    real = realpathSync.native(real)
-  } catch {
-    // A missing folder still compares by its resolved path.
-  }
+  const real = realFolder(path)
   return `local|${process.platform === 'win32' ? real.toLowerCase() : real}`
+}
+
+/**
+ * A folder on this computer as Git and the OS report it: symlinks and junctions followed, Windows
+ * short (8.3) names expanded (macOS's /var is /private/var). A missing folder stays as resolved.
+ */
+export const realFolder = (path: string): string => {
+  try {
+    return realpathSync.native(resolve(path))
+  } catch {
+    return resolve(path)
+  }
 }
 
 /** The working tree a workspace runs agents in: a Main workspace uses the project's whole checkout. */
