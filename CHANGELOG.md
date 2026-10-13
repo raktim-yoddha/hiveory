@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.22.2 — Queen Bee arranges panes, phone terminals fit, keyboard settings
+_2026-10-13_
+
+- Queen Bee lays out panes on request: a grid, columns or rows, one agent as the main pane, and she swaps, moves and resizes panes by agent name.
+- On the phone, a terminal fits the phone's screen while it is open there and goes back to its desktop size afterwards.
+- The phone's keys stay above the keyboard on Android, and now include Ctrl, Alt and all four arrows.
+- Settings › Keyboard lists every shortcut with the platform's standard keys, and each can be changed, removed or reset.
+- Schedules are called Schedules everywhere, and panes ease in and out as they change.
+- Settings rows, the emoji picker, side panel tabs and Queen Bee's bar fit narrow windows, and narrow panes no longer resize when you switch back to Work.
+
 ## v0.22.1 — Browser panes, Tabs style, Queen Bee in title bar, Linux arm64
 _2026-10-12_
 
