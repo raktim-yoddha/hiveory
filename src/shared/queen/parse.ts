@@ -339,7 +339,9 @@ function parseMemory(input: string): QueenParse | null {
 const HELP = /^(help|what can you do|what do you do|what can i say|commands|show commands|list commands|how do i use you|how to use you|kya kar sakti ho|kya kya kar sakti ho|madad)$/
 /** "What are your features?", "what can you offer?", "how can you help me?": answered by the rules, the same with any model or none. */
 const CAPABILITIES =
-  /^(?:(?:so|and|ok|okay) )?(?:(?:what|which) (?:are|r) (?:your|the|all the|all your|hiveorys?) (?:main |key )?(?:features|capabilities|abilities|skills|functions|commands|options)|what (?:all |main |other )?(?:features|capabilities) (?:do you have|do you offer|do you support|does hiveory have|are there|you have)|what (?:all |else |exactly |more )?(?:can|could) (?:you|i) (?:do|offer|help with|help me with|ask|ask you|ask for|say)(?: here| for me| in hiveory)?|what do you (?:offer|support|help with)|how (?:can|could|do) you help(?: me)?|what are you (?:capable of|able to do|good at|for)|(?:show|list|tell)(?: me)? (?:your |the |all )?(?:features|capabilities|commands)|features|capabilities)$/
+  /^(?:(?:so|and|ok|okay|hey) )?(?:(?:what|which|tell me|show me|list|give me)\b.*\b(?:features|capabilities|abilities|functions|can you (?:do|offer|help)|(?:do|can|could) you (?:offer|support|help with)|are you (?:capable of|able to do|good at))(?: .*)?|how (?:can|could|do|will) you help(?: me)?|features|capabilities)$/
+/** Short questions only: "how can you help me fix the build" is a request, not a question about her. */
+const isCapabilityQuestion = (plain: string): boolean => plain.split(' ').length <= 9 && CAPABILITIES.test(plain)
 const MUTE = /^(mute|be quiet|quiet|shut up|stop talking|silence|no voice|voice off|talkback off|sound off|chup|chup raho)$/
 const UNMUTE = /^(unmute|speak|talk|talk to me|speak up|voice on|talkback on|sound on|bolo|bol ke batao)$/
 const THEME_WORDS = new Set(['go', 'use', 'set', 'change', 'apply', 'switch', 'to', 'theme', 'mode', 'color', 'colors', 'colour', 'colours', 'a', 'on', 'turn'])
@@ -351,7 +353,7 @@ function parseQuick(input: string, ctx: QueenContext): QueenParse | null {
   // Filler-free and as said: "what can you do" must keep its "can you".
   const plain = norm(input).replace(/^(hey |hi |ok |okay )?(queen bee |queen )?(please )?/, '').replace(/ please$/, '')
   const is = (re: RegExp) => re.test(text) || re.test(plain)
-  if (is(HELP) || CAPABILITIES.test(plain)) return { kind: 'actions', actions: [{ type: 'help' }] }
+  if (is(HELP) || isCapabilityQuestion(plain)) return { kind: 'actions', actions: [{ type: 'help' }] }
   if (is(MUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: false }] }
   if (is(UNMUTE)) return { kind: 'actions', actions: [{ type: 'speak', on: true }] }
   // "bronze theme", "switch to the silver theme", "dark mode" — the whole sentence, nothing else in it.
