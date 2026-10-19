@@ -148,6 +148,16 @@ describe('Queen Bee brain service', () => {
     expect((q.calls[0]!.init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_abc')
   })
 
+  it('a model still thinking when the time runs out says so, not "Every model failed"', async () => {
+    // OpenRouter sends the headers at once and the body only when the model is done.
+    const { brain, calls } = setup(
+      () => new Response(new ReadableStream({ start: (c) => c.error(new DOMException('The operation was aborted due to timeout', 'TimeoutError')) }), { status: 200 })
+    )
+    brain.save({ provider: 'openrouter', label: '', baseUrl: '', model: 'openai/gpt-5-mini', apiKey: 'k' })
+    await expect(brain.plan('arrange a grid', ctx, ADA)).rejects.toThrow(/took longer than 12 s/)
+    expect(calls[0]!.body.reasoning_effort).toBe('minimal')
+  })
+
   it('retries once without the reasoning hint when a model refuses it', async () => {
     let n = 0
     const { brain, calls } = setup(() =>

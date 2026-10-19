@@ -222,7 +222,7 @@ export class QueenBrain {
         last = error
       }
     }
-    const message = last instanceof AppException ? last.error.message : 'Every model failed.'
+    const message = last instanceof AppException ? last.error.message : last instanceof Error && last.message ? last.message : 'Every model failed.'
     return fail('INVALID_INPUT', accounts.length > 1 ? `All ${accounts.length} accounts failed. Last: ${message}` : message)
   }
 
@@ -281,14 +281,16 @@ export class QueenBrain {
   private async request(a: StoredBrainAccount, key: string, system: string, user: string, mode: WireMode): Promise<unknown> {
     const { url, headers, body } = build(a.kind, a, key, system, user, mode)
     let res: Response
+    let text: string
+    // The budget covers the body too: OpenRouter sends headers at once and the answer only when the model is done.
     try {
       res = await this.http(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(BRAIN_BUDGET_MS) })
+      text = await res.text()
     } catch (error) {
       const name = (error as { name?: string })?.name
-      if (name === 'TimeoutError' || name === 'AbortError') fail('INVALID_INPUT', `${accountName(a)} took longer than ${BRAIN_BUDGET_MS / 1000} s.`)
+      if (name === 'TimeoutError' || name === 'AbortError') fail('INVALID_INPUT', `${accountName(a)} took longer than ${BRAIN_BUDGET_MS / 1000} s. Try a faster model.`)
       return fail('INVALID_INPUT', `Could not reach ${new URL(url).host}.`)
     }
-    const text = await res.text()
     if (!res.ok) {
       const detail = scrub(text, key)
       const failure = new AppException({ code: 'INVALID_INPUT', message: `${accountName(a)}: ${httpMessage(res.status)}`, detail: detail.slice(0, 300) })
@@ -393,7 +395,8 @@ function build(kind: BrainKind, b: { baseUrl: string; model: string }, key: stri
             tools: [{ type: 'function', function: { name: PLAN_TOOL.name, description: PLAN_TOOL.description, parameters: PLAN_TOOL.parameters } }],
             tool_choice: mode.tools === 'forced' ? { type: 'function', function: { name: PLAN_TOOL.name } } : 'required'
           }),
-      ...(hint ? { reasoning_effort: b.baseUrl.includes('api.openai.com') ? 'minimal' : 'low' } : {})
+      // GPT-5 models (direct or through OpenRouter) accept 'minimal': the fastest answer.
+      ...(hint ? { reasoning_effort: b.baseUrl.includes('api.openai.com') || /^openai\/gpt-5/.test(b.model) ? 'minimal' : 'low' } : {})
     }
   }
 }
