@@ -183,7 +183,9 @@ function AccountDialog({ account, onClose, onSaved }: { account: BrainAccountVie
 
   const suggestions = useMemo(() => {
     const q = model.trim().toLowerCase()
-    return (models ?? []).filter((m) => !q || m.toLowerCase().includes(q)).slice(0, 8)
+    const list = models ?? []
+    // A chosen model (or the preset's default) shows the whole list; typing narrows it.
+    return !q || list.some((m) => m.toLowerCase() === q) ? list : list.filter((m) => m.toLowerCase().includes(q))
   }, [models, model])
 
   const save = async (): Promise<void> => {

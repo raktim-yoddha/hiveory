@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, nativeImage, net, Notification, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
@@ -98,7 +98,9 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const connections = new ConnectionService(store, secrets, emit)
   const integrations = new IntegrationService(git, { github, gitlab: new GitlabService(git) }, new TrackerService(store, secrets))
   // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
-  const queenBrain = new QueenBrain(store, secrets, fetch, {
+  // Provider calls use Chromium's network stack (system proxy, reliable connects): Node's fetch
+  // intermittently hit 10 s connect timeouts to Cloudflare-fronted APIs (Groq, OpenRouter).
+  const queenBrain = new QueenBrain(store, secrets, net.fetch as typeof fetch, {
     executable: (cliId) => registry.executable(cliId),
     models: async (cliId) => (await chats.catalog(cliId)).models.map((m) => m.id)
   })

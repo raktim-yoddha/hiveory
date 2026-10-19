@@ -44,6 +44,9 @@ export interface AccountInput {
 
 const newId = (): string => `q${randomBytes(6).toString('hex')}`
 
+/** Keys are printable ASCII: a pasted key loses the spaces, line breaks and invisible characters copied with it (they make a request throw). */
+export const cleanKey = (key: string): string => key.replace(/[^!-~]/g, '')
+
 /** Who she is, for the prompt: name, tagline and (custom only) the user's style text. */
 export interface PromptPersona {
   name: string
@@ -122,7 +125,7 @@ export class QueenBrain {
     if (clash) fail('INVALID_INPUT', `${accountName(clash)} already exists. Give this account another name (for example Work or Personal).`)
     const key = cli
       ? ''
-      : input.apiKey === undefined ? (existing && existing.provider === input.provider ? existing.key : '') : input.apiKey ? this.box.seal(input.apiKey.trim()) : ''
+      : input.apiKey === undefined ? (existing && existing.provider === input.provider ? existing.key : '') : input.apiKey && cleanKey(input.apiKey) ? this.box.seal(cleanKey(input.apiKey)) : ''
     const next: StoredBrainAccount = {
       id: existing?.id ?? newId(),
       provider: preset.id,
@@ -181,7 +184,7 @@ export class QueenBrain {
     const baseUrl = (input.baseUrl.trim() || preset.baseUrl).replace(/\/+$/, '')
     if (!isAllowedBrainUrl(baseUrl)) fail('INVALID_INPUT', 'Use an https address (plain http only for this computer).')
     const saved = input.id ? this.all().find((a) => a.id === input.id) : undefined
-    const key = input.apiKey?.trim() || (saved?.key ? this.box.open(saved.key) : '')
+    const key = cleanKey(input.apiKey ?? '') || (saved?.key ? this.box.open(saved.key) : '')
     const { url, headers } =
       kind === 'anthropic'
         ? { url: `${baseUrl}/models?limit=1000`, headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } }
@@ -191,7 +194,9 @@ export class QueenBrain {
     let res: Response
     try {
       res = await this.http(url, { headers, signal: AbortSignal.timeout(LIST_BUDGET_MS) })
-    } catch {
+    } catch (error) {
+      const name = (error as { name?: string })?.name
+      if (name === 'TimeoutError' || name === 'AbortError') fail('INVALID_INPUT', `${new URL(url).host} took longer than ${LIST_BUDGET_MS / 1000} s. Try again.`)
       return fail('INVALID_INPUT', `Could not reach ${new URL(url).host}.`)
     }
     if (!res.ok) fail('INVALID_INPUT', httpMessage(res.status))

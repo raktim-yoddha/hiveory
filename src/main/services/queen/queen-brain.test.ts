@@ -142,6 +142,12 @@ describe('Queen Bee brain service', () => {
     expect(g.calls[0]!.url).not.toContain('key=')
   })
 
+  it('drops invisible characters pasted with a key', async () => {
+    const q = setup(() => json(200, { data: [{ id: 'openai/gpt-oss-120b' }] }))
+    await q.brain.listModels({ provider: 'groq', baseUrl: '', apiKey: ' gsk_abc​\n' })
+    expect((q.calls[0]!.init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_abc')
+  })
+
   it('retries once without the reasoning hint when a model refuses it', async () => {
     let n = 0
     const { brain, calls } = setup(() =>
