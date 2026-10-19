@@ -253,7 +253,8 @@ export function strictSchema(node: Record<string, unknown> = PLAN_TOOL.parameter
   return { type: 'object', properties, required: Object.keys(props), additionalProperties: false }
 }
 
-export type BrainResult = QueenParse | { kind: 'reply'; text: string }
+/** `via`: the account and model that answered, shown on her card so the user knows a model was asked. */
+export type BrainResult = (QueenParse | { kind: 'reply'; text: string }) & { via?: string }
 
 /**
  * A model's question or reply, shown and spoken as plain text: one short line, no
@@ -427,9 +428,9 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
   const list = Array.isArray(raw.actions) ? raw.actions : []
   if (!list.length) {
     if (question) return { kind: 'ask', question: { text: question } }
-    return reply ? { kind: 'reply', text: reply } : { kind: 'unknown' }
+    return reply ? { kind: 'reply', text: reply } : { kind: 'unknown', reason: 'it sent no steps and no answer' }
   }
-  if (list.length > 12) return { kind: 'unknown' }
+  if (list.length > 12) return { kind: 'unknown', reason: `it planned ${list.length} steps; I run at most 12 at once` }
 
   const actions: QueenAction[] = []
   const known = {
@@ -443,9 +444,19 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
   // Steps run one after another (ADR 0019 amendment): each is read on the page the earlier ones lead to,
   // and a worktree created earlier in the plan can be used by its name.
   let step = ctx
-  for (const item of list) {
-    const parsed = actionSchema.safeParse(repair(item, step))
-    if (!parsed.success) return { kind: 'unknown' }
+  for (const [index, item] of list.entries()) {
+    const repaired = repair(item, step)
+    const label = `step ${index + 1}${typeof repaired.type === 'string' && repaired.type ? ` (${repaired.type})` : ''}`
+    const parsed = actionSchema.safeParse(repaired)
+    if (!parsed.success) {
+      const missing = parsed.error.issues.flatMap((i) => i.path.slice(-1)).filter((k) => typeof k === 'string' && k !== 'type')
+      return {
+        kind: 'unknown',
+        reason: (ACTION_TYPES as readonly string[]).includes(String(repaired.type))
+          ? `${label} was missing or had a wrong ${[...new Set(missing)].join(', ') || 'detail'}`
+          : `${label} is not something I can do`
+      }
+    }
     const a = parsed.data as QueenAction & Record<string, unknown>
     const where = new Map([...step.workspaces.map((w) => [w.id, step.projectId] as const), ...(step.otherWorkspaces ?? []).map((w) => [w.id, w.projectId] as const)])
     // Every id must be one the model was shown, or a worktree an earlier step creates.
@@ -459,7 +470,11 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
       (typeof a.presetId === 'string' ? known.preset.has(a.presetId) : true) &&
       (typeof a.botId === 'string' ? known.bot.has(a.botId) : true) &&
       (typeof a.automationId === 'string' ? known.automation.has(a.automationId) : true)
-    if (!ok) return { kind: 'unknown' }
+    if (!ok) {
+      const names = ['cliId', 'workspaceId', 'projectId', 'agentId', 'targetAgentId', 'presetId', 'botId', 'automationId']
+      const named = names.map((k) => repaired[k]).find((v) => typeof v === 'string')
+      return { kind: 'unknown', reason: `${label} named ${named ? `"${String(named).replace(/^new:/, '')}", which` : 'something that'} isn't here` }
+    }
     actions.push(a)
     step = advance(step, a)
   }

@@ -147,7 +147,7 @@ export type QueenParse =
   /** `soft`: the rules did not understand a name; a model, when set up, gets to try before this is asked. */
   | { kind: 'ask'; question: QueenQuestion; soft?: boolean }
   /** Not a command the rules understand; a model brain (phase 2) takes these. */
-  | { kind: 'unknown' }
+  | { kind: 'unknown'; /** Why a model's plan could not run, shown to the user. */ reason?: string }
 
 /** Things she's learned: at most this many notes, each at most this long. */
 export const MAX_NOTES = 50

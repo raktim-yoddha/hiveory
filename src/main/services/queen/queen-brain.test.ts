@@ -43,10 +43,10 @@ describe('Queen Bee model plans', () => {
   })
 
   it('runs nothing when any action is invalid or uses an id it was not shown', () => {
-    expect(planFromToolArgs({ actions: [{ type: 'restart-agent', agentId: 'a9' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'report', focus: 'all' }, { type: 'delete-everything' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'claude', count: 20, workspaceId: 'w1', projectId: 'p1' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs('nonsense', ctx)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'restart-agent', agentId: 'a9' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'report', focus: 'all' }, { type: 'delete-everything' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'claude', count: 20, workspaceId: 'w1', projectId: 'p1' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs('nonsense', ctx)).toMatchObject({ kind: 'unknown' })
   })
 
   it('needs a yes before a model closes or messages an agent', () => {
@@ -109,7 +109,7 @@ describe('Queen Bee brain service', () => {
     expect(view).toMatchObject({ provider: 'openai', kind: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5-mini', hasKey: true, encrypted: true })
     expect(JSON.stringify(view)).not.toContain('sk-secret-123')
     expect(JSON.stringify(store.state.queenBrains)).not.toContain('sk-secret-123')
-    expect(await brain.plan('who needs me', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'report', focus: 'waiting-for-you' }] })
+    expect(await brain.plan('who needs me', ctx, ADA)).toMatchObject({ kind: 'actions', actions: [{ type: 'report', focus: 'waiting-for-you' }] })
     const [call] = calls
     expect(call!.url).toBe('https://api.openai.com/v1/chat/completions')
     expect((call!.init.headers as Record<string, string>).Authorization).toBe('Bearer sk-secret-123')
@@ -131,6 +131,15 @@ describe('Queen Bee brain service', () => {
     expect(calls.map((c) => new URL(c.url).host)).toEqual(['primary.example', 'backup.example'])
     // Reordering makes the backup primary.
     expect(brain.move(accounts[1]!.id, 0).map((a) => a.label)).toEqual(['Backup', 'Primary'])
+  })
+
+  it('says which model answered; a plan that cannot run goes to the next account, then says why', async () => {
+    const call = (args: unknown) => json(200, { choices: [{ message: { tool_calls: [{ function: { arguments: JSON.stringify(args) } }] } }] })
+    const { brain } = setup((url) => (url.includes('weak.example') ? call({ actions: [{ type: 'open-agents', cliId: 'nope' }] }) : call({ actions: [{ type: 'navigate', to: 'home' }] })))
+    brain.save({ provider: 'custom', label: 'Weak', baseUrl: 'https://weak.example/v1', model: 'tiny', apiKey: 'k' })
+    expect(await brain.plan('home', ctx, ADA)).toEqual({ kind: 'unknown', reason: `step 1 (open-agents) named "nope", which isn't here`, via: 'Custom · Weak · tiny' })
+    brain.save({ provider: 'custom', label: 'Strong', baseUrl: 'https://strong.example/v1', model: 'big', apiKey: 'k' })
+    expect(await brain.plan('home', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'home' }], via: 'Custom · Strong · big' })
   })
 
   it('lists models in each provider format, with the typed key', async () => {
@@ -244,7 +253,7 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     const brain = setup(fn)
     brain.save({ provider: 'codexcli', label: '', baseUrl: 'https://ignored', model: '', apiKey: 'ignored' })
     expect(brain.accounts()[0]).toMatchObject({ kind: 'codex', baseUrl: '', hasKey: false })
-    expect(await brain.plan('home', ctx, ADA, ['I review with Claude'])).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'home' }] })
+    expect(await brain.plan('home', ctx, ADA, ['I review with Claude'])).toMatchObject({ kind: 'actions', actions: [{ type: 'navigate', to: 'home' }] })
     const { file, args, input } = calls[0]!
     expect(file).toBe('/bin/codex')
     for (const flag of ['--ephemeral', '--ignore-user-config', '--ignore-rules', 'shell_tool', 'read-only']) expect(args).toContain(flag)
@@ -270,7 +279,7 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     const { fn, calls } = run(() => ok(JSON.stringify({ is_error: false, structured_output: { actions: [{ type: 'report', focus: 'all' }] } })))
     const brain = setup(fn)
     brain.save({ provider: 'claudecli', label: 'Me', baseUrl: '', model: 'haiku' })
-    expect(await brain.plan('status', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'report', focus: 'all' }] })
+    expect(await brain.plan('status', ctx, ADA)).toMatchObject({ kind: 'actions', actions: [{ type: 'report', focus: 'all' }] })
     const args = calls[0]!.args
     expect(args[args.indexOf('--tools') + 1]).toBe('')
     expect(args[args.indexOf('--setting-sources') + 1]).toBe('')

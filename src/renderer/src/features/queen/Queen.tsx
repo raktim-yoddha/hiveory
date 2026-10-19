@@ -135,7 +135,7 @@ function QueenWave() {
 }
 
 function QueenBar() {
-  const { placement, setPlacement, busy, thinking, card, cardOpen, setCardOpen, unseen, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
+  const { placement, setPlacement, busy, thinking, thinkingWith, thinkingSince, card, cardOpen, setCardOpen, unseen, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
   const floating = placement === 'floating'
   const small = floating && compact
   const gestures = useMarkGestures(floating)
@@ -153,6 +153,14 @@ function QueenBar() {
   const update = useSettings((s) => s.update)
   const openSettings = useNavigation((s) => s.openSettings)
   const [text, setText] = useState('')
+  // Seconds she has been waiting on a model, so a long answer visibly keeps working.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!thinking) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [thinking])
+  const thinkingSeconds = thinking ? Math.max(0, Math.floor((now - thinkingSince) / 1000)) : 0
   const history = useRef<string[]>([])
   const input = useRef<HTMLInputElement>(null)
 
@@ -208,7 +216,15 @@ function QueenBar() {
         ref={input}
         className={styles.input}
         value={text}
-        placeholder={phase === 'listening' ? 'Listening… let go to send' : phase === 'transcribing' ? 'Transcribing…' : info.placeholder}
+        placeholder={
+          thinking
+            ? `Thinking${thinkingWith ? ` with ${thinkingWith}` : ''}… ${thinkingSeconds} s · Esc to stop`
+            : phase === 'listening'
+              ? 'Listening… let go to send'
+              : phase === 'transcribing'
+                ? 'Transcribing…'
+                : info.placeholder
+        }
         aria-label="Tell Queen Bee"
         spellCheck={false}
         onChange={(e) => setText(e.target.value)}
@@ -229,8 +245,11 @@ function QueenBar() {
         }}
       />
       {thinking ? (
-        // A model has no time limit (ADR 0019): the spinner becomes Stop while she waits on it.
-        <IconButton label="Stop (Esc)" icon={<Square />} onClick={stopQueen} />
+        // A model has no time limit (ADR 0019): a spinner says she is working, Stop ends the wait.
+        <>
+          <Loader2 className={cx(styles.busy, 'spin')} aria-label={`Thinking${thinkingWith ? ` with ${thinkingWith}` : ''}`} />
+          <IconButton label="Stop (Esc)" icon={<Square />} onClick={stopQueen} />
+        </>
       ) : busy || phase === 'transcribing' ? (
         <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
       ) : (
@@ -405,6 +424,7 @@ function CardBody({ card, busy }: { card: QueenCard; busy: boolean }) {
   return (
     <>
       <p className={styles.text}>{card.text}</p>
+      {card.via && <p className={styles.via}>Planned by {card.via}</p>}
       {card.quote && (
         <figure className={styles.quote}>
           <figcaption>On its screen</figcaption>

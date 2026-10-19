@@ -1,6 +1,6 @@
 import { THEMES, type CliStatus, type KanbanCard } from '@shared/domain'
 import type { QueenAction, QueenContext } from '@shared/queen/actions'
-import { newWorkspaceRef, type BrainResult } from '@shared/queen/brain'
+import { accountName, newWorkspaceRef, type BrainResult } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
 import { clauses, norm } from '@shared/queen/words'
 import { smallTalkLine } from '@shared/queen/chat'
@@ -154,7 +154,7 @@ async function report(focus: 'all' | CliStatus, projectId: string | undefined, o
 }
 
 /** Runs actions in order. Stops at the first failure; what already ran stays (and is reported). */
-async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanCard[]): Promise<void> {
+async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanCard[], via?: string): Promise<void> {
   const queen = useQueen.getState()
   const p = prefs()
   const outcomes: QueenOutcome[] = []
@@ -634,7 +634,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     }
   } catch (error) {
     const message = error instanceof QueenError ? error.message : error instanceof Error ? error.message : String(error)
-    queen.show({ kind: 'reply', text: failedLine(message, p), receipts: outcomes.map(receipt) })
+    queen.show({ kind: 'reply', text: failedLine(message, p), receipts: outcomes.map(receipt), ...(via ? { via } : {}) })
     return
   }
 
@@ -646,6 +646,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     report: reportData,
     ...(quote ? { quote } : {}),
     ...(spoken && !outcomes.length ? { spoken } : {}),
+    ...(via ? { via } : {}),
     undo: undos.length
       ? async () => {
           for (const undo of undos.reverse()) await undo()
@@ -660,7 +661,11 @@ let currentRun = 0
 
 /** The model tier. No model configured reads as "unknown"; any other failure is shown as it is. */
 async function askBrain(input: string, ctx: QueenContext): Promise<BrainResult> {
-  useQueen.getState().setThinking(true)
+  // Name the account she waits on (the first switched-on one), so the cue says who is thinking.
+  const first = await api('queen.accounts')
+    .then((list) => list.find((a) => a.enabled))
+    .catch(() => undefined)
+  useQueen.getState().setThinking(true, first ? `${accountName(first)} · ${first.model || 'CLI default'}` : '')
   try {
     return await api('queen.plan', { utterance: input, context: ctx })
   } catch (error) {
@@ -712,15 +717,19 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
       if (planned.kind === 'actions') parsed = planned
     }
     if (stopped()) return
-    if (parsed.kind === 'unknown') queen.show({ kind: 'reply', text: unknownLine(p), receipts: [] })
-    else if (parsed.kind === 'reply') queen.show({ kind: 'reply', text: parsed.text, receipts: [] })
+    const via = parsed.via
+    // A model was asked but its plan can't run: say so and why, never the generic line.
+    if (parsed.kind === 'unknown' && via)
+      queen.show({ kind: 'reply', text: `I asked the model, but ${parsed.reason ?? 'its plan was not one I can run'}. Try saying it another way, or choose a stronger model in Settings › Queen Bee › Providers.`, receipts: [], via })
+    else if (parsed.kind === 'unknown') queen.show({ kind: 'reply', text: unknownLine(p), receipts: [] })
+    else if (parsed.kind === 'reply') queen.show({ kind: 'reply', text: parsed.text, receipts: [], ...(via ? { via } : {}) })
     else if (parsed.kind === 'ask') queen.show({ kind: 'ask', question: parsed.question })
     else if (parsed.confirm) {
       const types = new Set(parsed.actions.map((a) => a.type))
       const label = types.size === 1 && types.has('close-agents') ? 'Close' : types.size === 1 && types.has('message-agent') ? 'Send' : 'Confirm'
-      queen.show({ kind: 'confirm', text: parsed.confirm, label, run: () => execute(parsed.actions, ctx, cards) })
+      queen.show({ kind: 'confirm', text: parsed.confirm, label, run: () => execute(parsed.actions, ctx, cards, via) })
     }
-    else await execute(parsed.actions, ctx, cards)
+    else await execute(parsed.actions, ctx, cards, via)
   } catch (error) {
     if (stopped()) return
     queen.show({ kind: 'reply', text: failedLine(error instanceof Error ? error.message : String(error), prefs()), receipts: [] })

@@ -16,6 +16,8 @@ export type QueenCard = (
       quote?: string
       /** What she says aloud instead of the card text, read in full (her help answer is a list on screen, sentences in speech). */
       spoken?: string
+      /** The provider and model that planned this, when one did. */
+      via?: string
     }
   | { kind: 'confirm'; text: string; /** The yes button: Close, Send or Confirm. */ label: string; run: () => Promise<void> }
   | { kind: 'ask'; question: QueenQuestion }
@@ -52,6 +54,9 @@ interface QueenState {
   busy: boolean
   /** Waiting on a model (no time limit): her bar offers Stop. */
   thinking: boolean
+  /** Which account she is waiting on, and since when, for the cue in her bar. */
+  thinkingWith: string
+  thinkingSince: number
   /** Bumped to move focus into the input (shortcut, menu). */
   focusTick: number
   /** Which tab Settings › Queen Bee opens on. */
@@ -64,7 +69,7 @@ interface QueenState {
   show(card: QueenCard | null, quiet?: boolean): void
   setCardOpen(open: boolean): void
   setBusy(busy: boolean): void
-  setThinking(thinking: boolean): void
+  setThinking(thinking: boolean, withName?: string): void
   focus(): void
 }
 
@@ -103,6 +108,8 @@ export const useQueen = create<QueenState>((set, get) => ({
   unseen: false,
   busy: false,
   thinking: false,
+  thinkingWith: '',
+  thinkingSince: 0,
   focusTick: 0,
   settingsTab: 'personality',
   setSettingsTab: (settingsTab) => set({ settingsTab }),
@@ -128,7 +135,7 @@ export const useQueen = create<QueenState>((set, get) => ({
   },
   setCardOpen: (cardOpen) => set(cardOpen ? { cardOpen, unseen: false } : { cardOpen }),
   setBusy: (busy) => set(busy ? { busy } : { busy, thinking: false }),
-  setThinking: (thinking) => set({ thinking }),
+  setThinking: (thinking, thinkingWith = '') => set({ thinking, thinkingWith, thinkingSince: thinking ? Date.now() : 0 }),
   // Her shortcut or menu wants the input: a shrunk bar opens up first.
   focus: () => {
     if (get().compact) get().setCompact(false)

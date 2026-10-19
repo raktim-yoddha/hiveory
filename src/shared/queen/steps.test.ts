@@ -50,8 +50,8 @@ describe('Queen Bee plans of several steps', () => {
   })
 
   it('a worktree no earlier step created still fails', () => {
-    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'claude', workspaceId: 'new:ghost' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'arrange', layout: 'columns', workspaceId: 'ghost' }] }, ctx)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'claude', workspaceId: 'new:ghost' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'arrange', layout: 'columns', workspaceId: 'ghost' }] }, ctx)).toMatchObject({ kind: 'unknown' })
   })
 
   it('her help answer is the capability reference, one line per area, in her voice', () => {

@@ -60,10 +60,10 @@ describe('Queen Bee model plans: repaired, never guessed', () => {
   })
 
   it('never guesses: an unknown name, a wrong type or a near miss runs nothing', () => {
-    expect(planFromToolArgs({ actions: [{ type: 'interrupt-agent', agentId: 'Brunoo' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'aider' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'format-disk' }] }, ctx)).toEqual({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'set-theme', theme: 'neon' }] }, ctx)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'interrupt-agent', agentId: 'Brunoo' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'open-agents', cliId: 'aider' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'format-disk' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'set-theme', theme: 'neon' }] }, ctx)).toMatchObject({ kind: 'unknown' })
   })
 
   it('the user’s own words go straight through; a model’s rewording needs a yes', () => {
@@ -104,7 +104,7 @@ describe('Queen Bee and providers that refuse parts of a request', () => {
       if (body.tools) return refuse('This model does not support tools')
       return ok({ content: '<think>hm</think>{"actions":[{"type":"set-mode","mode":"chat"}]}' })
     })
-    expect(await brain.plan('switch to the chat view please', ctx, ADA)).toEqual({ kind: 'actions', actions: [{ type: 'set-mode', mode: 'chatspace' }] })
+    expect(await brain.plan('switch to the chat view please', ctx, ADA)).toMatchObject({ kind: 'actions', actions: [{ type: 'set-mode', mode: 'chatspace' }] })
     expect(bodies.length).toBe(4)
     expect(bodies[3]!.tools).toBeUndefined()
     // Next time it asks the way that worked, once.

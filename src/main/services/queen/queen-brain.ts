@@ -223,15 +223,21 @@ export class QueenBrain {
     const running = new AbortController()
     this.running = running
     let last: unknown
+    // A plan that can't run is a failure too: the next account gets the request; the last one's reason is shown.
+    let unusable: BrainResult | null = null
     try {
       for (const account of accounts) {
         try {
-          return await this.planWith(account, utterance, ctx, persona, notes, running.signal)
+          const result = await this.planWith(account, utterance, ctx, persona, notes, running.signal)
+          const via = `${accountName(account)} · ${account.model || 'CLI default'}`
+          if (result.kind !== 'unknown') return { ...result, via }
+          unusable = { ...result, via }
         } catch (error) {
           if (running.signal.aborted) fail('INVALID_INPUT', STOPPED)
           last = error
         }
       }
+      if (unusable) return unusable
     } finally {
       if (this.running === running) this.running = null
     }

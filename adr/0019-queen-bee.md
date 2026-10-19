@@ -450,3 +450,16 @@ another workspace (project) were refused.
   gets a go first; its plan wins, otherwise the rules' question stands.
 - Left for later: agents opened by a plan have no names until they exist, so a plan cannot message
   or move one of them by name in the same request.
+
+## Amendment (2026-10-19): she says when a model planned, and why a plan could not run
+
+With a provider connected, a model plan that failed validation showed the same "I don't do that
+yet" line as having no model, and a long wait showed only a Stop icon, so the user could not tell
+whether the model was asked or working.
+
+- Every model result carries `via` ("OpenRouter · Work · model-name"); her card shows "Planned by …".
+- A plan that cannot run says why ("step 2 (open-agents) named "Claud", which isn't here") and
+  points to rephrasing or a stronger model. The next switched-on account tries first; the reason
+  shown is the last account's.
+- While she waits on a model, her bar shows a spinner, Stop, and "Thinking with <account · model>…
+  N s · Esc to stop" in the input.

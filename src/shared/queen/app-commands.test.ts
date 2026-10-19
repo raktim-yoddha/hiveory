@@ -126,9 +126,9 @@ describe('Queen Bee app commands', () => {
       actions: [{ type: 'message-bot', botId: 'b1', text: 'hello there' }],
       confirm: 'Send to Scout: “hello there”?'
     })
-    expect(planFromToolArgs({ actions: [{ type: 'message-bot', botId: 'Ghost', text: 'hi' }] }, ctx)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'message-bot', botId: 'Ghost', text: 'hi' }] }, ctx)).toMatchObject({ kind: 'unknown' })
     expect(planFromToolArgs({ actions: [{ type: 'set-setting', setting: 'computer-use', on: 'true' }] }, ctx)).toMatchObject({ confirm: 'Turn computer use on?' })
-    expect(planFromToolArgs({ actions: [{ type: 'open-url', url: 'javascript:alert(1)' }] }, ctx)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'open-url', url: 'javascript:alert(1)' }] }, ctx)).toMatchObject({ kind: 'unknown' })
   })
 
   it('opens Bots pages and pauses or resumes routines and triggers by name', () => {
@@ -159,7 +159,7 @@ describe('Queen Bee app commands', () => {
       actions: [{ type: 'switch-automation', automationId: 'r1', on: false }],
       confirm: 'Turn Morning brief off?'
     })
-    expect(planFromToolArgs({ actions: [{ type: 'switch-automation', automationId: 'Ghost', on: true }] }, withAutomations)).toEqual({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'switch-automation', automationId: 'Ghost', on: true }] }, withAutomations)).toMatchObject({ kind: 'unknown' })
     expect(planFromToolArgs({ actions: [{ type: 'navigate', page: 'triggers' }] }, ctx)).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'bots', page: 'triggers' }] })
   })
 })
