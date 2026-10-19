@@ -256,6 +256,8 @@
   color: var(--color-text);
   font-size: var(--text-md);
   line-height: 1.55;
+  /* Her help answer is one line per area. */
+  white-space: pre-line;
 }
 
 .choices {

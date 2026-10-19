@@ -1,7 +1,8 @@
 import { THEMES, type CliStatus, type KanbanCard } from '@shared/domain'
 import type { QueenAction, QueenContext } from '@shared/queen/actions'
-import type { BrainResult } from '@shared/queen/brain'
+import { newWorkspaceRef, type BrainResult } from '@shared/queen/brain'
 import { parseCommand } from '@shared/queen/parse'
+import { clauses, norm } from '@shared/queen/words'
 import { smallTalkLine } from '@shared/queen/chat'
 import {
   cancelledLine,
@@ -162,7 +163,10 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   /** The agent's own last words, shown labelled under the reply. */
   let quote: string | undefined
   const nav = useNavigation.getState
-  const workspaceName = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? [])].find((w) => w.id === id)?.name ?? 'this worktree'
+  /** Worktrees this command created, by the plan's `new:<name>` reference (ADR 0019 amendment). */
+  const made = new Map<string, { id: string; name: string }>()
+  const known = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? [])].some((w) => w.id === id) || [...made.values()].some((w) => w.id === id)
+  const workspaceName = (id: string) => [...ctx.workspaces, ...(ctx.otherWorkspaces ?? []), ...made.values()].find((w) => w.id === id)?.name ?? 'this worktree'
   const agent = (id: string) => {
     const card = cards.find((c) => c.instanceId === id)
     if (!card) throw new QueenError('that agent is no longer open.')
@@ -182,10 +186,14 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   }
 
   try {
-    for (const action of actions) {
+    for (const planned of actions) {
+      // A step may use a worktree an earlier step created: swap the reference for its id.
+      const ref = 'workspaceId' in planned ? made.get(planned.workspaceId ?? '') : undefined
+      const action = ref ? ({ ...planned, workspaceId: ref.id } as QueenAction) : planned
+      if ('workspaceId' in planned && planned.workspaceId?.startsWith('new:') && !ref) throw new QueenError('that worktree was not created.')
       switch (action.type) {
         case 'open-agents': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
+          if (!known(action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
             remember()
             nav().openWorkspace(action.projectId, action.workspaceId)
@@ -232,7 +240,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'open-and-message': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
+          if (!known(action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           if (selectedWorkspaceId(nav().view) !== action.workspaceId) {
             remember()
             nav().openWorkspace(action.projectId, action.workspaceId)
@@ -304,6 +312,8 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
             autoApprove: settings.defaultAutoApprove,
             chatUi: settings.defaultChatUi
           })
+          made.set(newWorkspaceRef(action.name), { id: created.id, name: created.name })
+          await useWorkspaces.getState().load(action.projectId)
           remember()
           nav().openWorkspace(action.projectId, created.id)
           outcomes.push({ kind: 'workspace', name: created.name })
@@ -590,7 +600,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           break
         }
         case 'resume-session': {
-          if (!ctx.workspaces.some((w) => w.id === action.workspaceId)) throw new QueenError('that worktree no longer exists.')
+          if (!known(action.workspaceId)) throw new QueenError('that worktree no longer exists.')
           const sessions = await api('sessions.list', { scope: 'workspace', workspaceId: action.workspaceId })
           const latest = sessions.filter((s) => s.cliId === action.cliId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0]
           if (!latest) throw new QueenError(`there's no earlier ${cliName(action.cliId)} conversation here.`)
@@ -690,8 +700,9 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
     const p = prefs()
     // Tier 1: only what the rules could not place goes to the model (when one is set up).
     if (parsed.kind === 'unknown') parsed = await askBrain(input, ctx)
-    // The rules didn't know a name: a model may. Its plan wins; otherwise the rules' question stands.
-    else if (parsed.kind === 'ask' && parsed.soft) {
+    // The rules didn't know a name, or asked about a request of several steps: a model may know.
+    // Its plan wins; otherwise the rules' question stands.
+    else if (parsed.kind === 'ask' && (parsed.soft || clauses(norm(input)).length > 1)) {
       const planned = await askBrain(input, ctx).catch(() => ({ kind: 'unknown' }) as const)
       if (planned.kind === 'actions') parsed = planned
     }

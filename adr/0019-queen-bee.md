@@ -428,3 +428,25 @@ failed" or "took longer than 12 s".
 - Loading a provider's model list keeps its 10 s limit: that is a form lookup, not a task.
 - Left for later: the Settings Test button and the phone have no Stop; a hung provider leaves
   them waiting until the connection drops.
+
+## Amendment (2026-10-19): one capability reference; plans of several steps
+
+Decided by the product owner. Her help answer was a flat list of 25 example commands, and a
+request of several steps ("open demo website, make a worktree called secondary, then two Claude
+side by side") failed: a step could not use a worktree an earlier step creates, and steps in
+another workspace (project) were refused.
+
+- `src/shared/queen/capabilities.ts` is the one reference of what she can do, by area. Her help
+  answer is built from it in her personality's voice (lead line, one line per area, close), and
+  every model gets the same list, so all providers describe her alike. A new skill adds a line there.
+- Model plans run step by step. Each step is read on the page the earlier steps lead to: after
+  navigating to a project, its primary worktree; after create-workspace, the new worktree. A later
+  step refers to a worktree the plan creates by its name; validation carries it as `new:<name>`
+  and the executor swaps in the real id once it exists. Any step may act in another project's
+  worktree. Everything else is still validated all or nothing before anything runs.
+- The prompt asks models to map loose wording to the closest action ("let's hop into bots",
+  "side by side").
+- When the rules can only answer a request of several clauses with a question, a configured model
+  gets a go first; its plan wins, otherwise the rules' question stands.
+- Left for later: agents opened by a plan have no names until they exist, so a plan cannot message
+  or move one of them by name in the same request.

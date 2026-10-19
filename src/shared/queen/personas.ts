@@ -4,6 +4,7 @@ import type { QueenLayout, QueenPaneSize } from './actions'
 import type { QueenReport } from './report'
 import type { QueenPeek, QueenUpdate } from './updates'
 import { formatWait } from './report'
+import { QUEEN_CAPABILITIES } from './capabilities'
 
 export type PersonaId = 'ada' | 'sunny' | 'frankie' | 'custom'
 /** The three fixed cores. A custom personality borrows the phrasing of the one its sliders lean to. */
@@ -432,36 +433,21 @@ export function nobodyWaitingLine(prefs: QueenPrefs): string {
 }
 
 /** Things to try, from the rules (no model needed for any of them). */
-export const HELP_EXAMPLES = [
-  'codex run the tests',
-  'Bruno, fix the failing build',
-  'tell everyone to commit',
-  'open two claude in feature-x',
-  'status of everything',
-  'what is Luna doing?',
-  'take me to whoever needs me',
-  'stop Bruno',
-  'close idle agents',
-  'remember that I review with Claude',
-  'what changed',
-  'show open PRs',
-  'open localhost:3000',
-  'open README.md',
-  'arrange them in a grid',
-  'make Bruno bigger',
-  'resume my last claude session',
-  'new chat with codex about the API',
-  'which apps are connected',
-  'turn off browser use',
-  'pause Morning brief',
-  'open the work board',
-  'save this as preset Backend',
-  'bronze theme',
-  'mute'
-]
-
+/** What she can do, from the one capability reference, in her own voice: a lead line, one line per area, a close. */
 export function helpLine(prefs: QueenPrefs): string {
   const p = effective(prefs)
-  const lead = { ada: `At your service${address(p)}. For example:`, sunny: 'Here are a few things I can do!', frankie: 'Say what you need. For example:' }[p.persona]
-  return `${lead} ${HELP_EXAMPLES.map((e) => `“${e}”`).join(', ')}.`
+  const lead = {
+    ada: `Certainly${address(p)}. This is what I handle:`,
+    sunny: 'Oh, lots! Here is what I can do:',
+    frankie: 'Here is what I do:'
+  }[p.persona]
+  const close = {
+    ada: 'Name the task in your own words and I will see to it.',
+    sunny: 'Say it however you like and I will figure it out!',
+    frankie: 'Say it plainly. I will handle the rest.'
+  }[p.persona]
+  const lines = QUEEN_CAPABILITIES.map(
+    (c) => `• ${c.area}${c.needsModel ? ' (with a model provider)' : ''}: ${c.what}. Try “${c.examples[0]}”.`
+  )
+  return [lead, ...lines, close].join('\n')
 }
