@@ -368,6 +368,8 @@ export const requestSchemas = {
   'queen.removeAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
   'queen.moveAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/), to: z.number().int().min(0).max(50) }),
   'queen.testAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
+  /** Stops the model request in flight: models have no time limit, so the user stops them (ADR 0019). */
+  'queen.cancelPlan': none,
   /** The provider's model list, with the key typed in the form or the saved key of `id`. */
   'queen.listModels': z.object({
     id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
@@ -840,6 +842,7 @@ export interface ResponseMap {
   'queen.removeAccount': BrainAccountView[]
   'queen.moveAccount': BrainAccountView[]
   'queen.testAccount': { ms: number; detail: string }
+  'queen.cancelPlan': void
   'queen.listModels': string[]
   'voice.status': VoicePackState[]
   'voice.download': void

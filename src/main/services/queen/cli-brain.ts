@@ -22,15 +22,19 @@ export interface ProcessResult {
   code: number | null
   stdout: string
   stderr: string
-  timedOut: boolean
+  /** Killed because the user stopped the request. */
+  stopped: boolean
 }
 
-export type RunProcess = (file: string, args: string[], input: string, options: { cwd: string; timeoutMs: number }) => Promise<ProcessResult>
+export type RunProcess = (file: string, args: string[], input: string, options: { cwd: string; signal?: AbortSignal }) => Promise<ProcessResult>
 
 const MAX_OUTPUT = 1024 * 1024
 
-/** Spawns without a shell, feeds stdin, and kills the whole tree past the budget. */
-export const runProcess: RunProcess = (file, args, input, { cwd, timeoutMs }) =>
+/** What a request the user stopped fails with; the renderer shows its own line instead. */
+export const STOPPED = 'Stopped.'
+
+/** Spawns without a shell, feeds stdin, and kills the whole tree when the user stops it (no time limit: ADR 0019). */
+export const runProcess: RunProcess = (file, args, input, { cwd, signal }) =>
   new Promise((resolve, reject) => {
     let target: ReturnType<typeof resolveSpawnTarget>
     try {
@@ -41,11 +45,14 @@ export const runProcess: RunProcess = (file, args, input, { cwd, timeoutMs }) =>
     const child = spawn(target.file, target.args, { cwd, env: sanitizeEnv(process.env), windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     let stdout = ''
     let stderr = ''
-    let timedOut = false
-    const timer = setTimeout(() => {
-      timedOut = true
+    let stopped = false
+    const stop = (): void => {
+      stopped = true
       killTree(child)
-    }, timeoutMs)
+    }
+    if (signal?.aborted) stop()
+    else signal?.addEventListener('abort', stop, { once: true })
+    const done = (): void => signal?.removeEventListener('abort', stop)
     child.stdout.on('data', (d: Buffer) => {
       if (stdout.length < MAX_OUTPUT) stdout += d.toString()
     })
@@ -53,12 +60,12 @@ export const runProcess: RunProcess = (file, args, input, { cwd, timeoutMs }) =>
       if (stderr.length < MAX_OUTPUT) stderr += d.toString()
     })
     child.on('error', (error) => {
-      clearTimeout(timer)
+      done()
       reject(error)
     })
     child.on('close', (code) => {
-      clearTimeout(timer)
-      resolve({ code, stdout, stderr, timedOut })
+      done()
+      resolve({ code, stdout, stderr, stopped })
     })
     child.stdin.on('error', () => undefined)
     child.stdin.end(input)
@@ -91,7 +98,8 @@ export interface CliPlanInput {
   user: string
   /** Ask for low reasoning effort (Codex). */
   hint: boolean
-  timeoutMs: number
+  /** Aborted when the user stops the request; there is no time limit. */
+  signal?: AbortSignal
 }
 
 /**
@@ -139,8 +147,8 @@ export async function planWithCli(input: CliPlanInput, run: RunProcess = runProc
         out,
         '-'
       ]
-      const result = await run(input.executable, args, `${input.system}\n\n${input.user}`, { cwd: dir, timeoutMs: input.timeoutMs })
-      if (result.timedOut) fail('INVALID_INPUT', `${name} took longer than ${input.timeoutMs / 1000} s.`)
+      const result = await run(input.executable, args, `${input.system}\n\n${input.user}`, { cwd: dir, signal: input.signal })
+      if (result.stopped) fail('INVALID_INPUT', STOPPED)
       if (result.code !== 0) {
         const text = `${result.stderr}\n${result.stdout}`
         if (input.hint && isEffortRejection(text)) throw new EffortRejected()
@@ -167,8 +175,8 @@ export async function planWithCli(input: CliPlanInput, run: RunProcess = runProc
       '--model',
       input.model || 'haiku'
     ]
-    const result = await run(input.executable, args, input.user, { cwd: dir, timeoutMs: input.timeoutMs })
-    if (result.timedOut) fail('INVALID_INPUT', `${name} took longer than ${input.timeoutMs / 1000} s.`)
+    const result = await run(input.executable, args, input.user, { cwd: dir, signal: input.signal })
+    if (result.stopped) fail('INVALID_INPUT', STOPPED)
     const data = parseJson(result.stdout) as { is_error?: boolean; result?: unknown; structured_output?: unknown }
     if (data.is_error || (result.code !== 0 && !data.structured_output)) {
       const message = typeof data.result === 'string' && data.result ? data.result : cliError(`${result.stderr}\n${result.stdout}`)

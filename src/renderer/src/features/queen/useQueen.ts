@@ -48,6 +48,8 @@ interface QueenState {
   /** A closed card holds something not seen yet (her button shows a dot). */
   unseen: boolean
   busy: boolean
+  /** Waiting on a model (no time limit): her bar offers Stop. */
+  thinking: boolean
   /** Bumped to move focus into the input (shortcut, menu). */
   focusTick: number
   /** Which tab Settings › Queen Bee opens on. */
@@ -60,6 +62,7 @@ interface QueenState {
   show(card: QueenCard | null, quiet?: boolean): void
   setCardOpen(open: boolean): void
   setBusy(busy: boolean): void
+  setThinking(thinking: boolean): void
   focus(): void
 }
 
@@ -97,6 +100,7 @@ export const useQueen = create<QueenState>((set, get) => ({
   cardOpen: false,
   unseen: false,
   busy: false,
+  thinking: false,
   focusTick: 0,
   settingsTab: 'personality',
   setSettingsTab: (settingsTab) => set({ settingsTab }),
@@ -121,7 +125,8 @@ export const useQueen = create<QueenState>((set, get) => ({
     set(card ? (hold ? { card, cardOpen: false, unseen: true } : { card, cardOpen: true, unseen: false, ...summon }) : { cardOpen: false })
   },
   setCardOpen: (cardOpen) => set(cardOpen ? { cardOpen, unseen: false } : { cardOpen }),
-  setBusy: (busy) => set({ busy }),
+  setBusy: (busy) => set(busy ? { busy } : { busy, thinking: false }),
+  setThinking: (thinking) => set({ thinking }),
   // Her shortcut or menu wants the input: a shrunk bar opens up first.
   focus: () => {
     if (get().compact) get().setCompact(false)

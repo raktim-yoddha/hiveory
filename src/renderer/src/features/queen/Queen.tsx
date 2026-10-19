@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { Check, Ellipsis, Loader2, MessageSquare, Mic, PanelBottom, PanelBottomClose, Undo2, VolumeX, X } from 'lucide-react'
+import { Check, Ellipsis, Loader2, MessageSquare, Mic, PanelBottom, PanelBottomClose, Square, Undo2, VolumeX, X } from 'lucide-react'
 import { PERSONAS, personaInfo, type PersonaId } from '@shared/queen/personas'
 import { formatWait } from '@shared/queen/report'
 import { queenShortcutOf, shortcutLabel } from '@shared/queen/shortcut'
@@ -11,7 +11,7 @@ import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
-import { cancelQueen, runQueen } from './queen-run'
+import { cancelQueen, runQueen, stopQueen } from './queen-run'
 import { QUEEN_SPOTS, useQueen, type QueenCard } from './useQueen'
 import { useMarkGestures } from './useMarkGestures'
 import { useQueenShortcut } from './useQueenShortcut'
@@ -135,7 +135,7 @@ function QueenWave() {
 }
 
 function QueenBar() {
-  const { placement, setPlacement, busy, card, cardOpen, setCardOpen, unseen, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
+  const { placement, setPlacement, busy, thinking, card, cardOpen, setCardOpen, unseen, focusTick, setSettingsTab, spot, setSpot, compact, setCompact } = useQueen()
   const floating = placement === 'floating'
   const small = floating && compact
   const gestures = useMarkGestures(floating)
@@ -217,8 +217,9 @@ function QueenBar() {
             e.preventDefault()
             submit()
           } else if (e.key === 'Escape') {
-            // Esc first silences her, then dismisses the card, then leaves the field.
-            if (phase === 'speaking') stopSpeaking()
+            // Esc first stops a model she is waiting on, then silences her, then dismisses the card, then leaves the field.
+            if (thinking) stopQueen()
+            else if (phase === 'speaking') stopSpeaking()
             else if (cardOpen) setCardOpen(false)
             else e.currentTarget.blur()
           } else if (e.key === 'ArrowUp' && !text && history.current[0]) {
@@ -227,7 +228,10 @@ function QueenBar() {
           }
         }}
       />
-      {busy || phase === 'transcribing' ? (
+      {thinking ? (
+        // A model has no time limit (ADR 0019): the spinner becomes Stop while she waits on it.
+        <IconButton label="Stop (Esc)" icon={<Square />} onClick={stopQueen} />
+      ) : busy || phase === 'transcribing' ? (
         <Loader2 className={cx(styles.busy, 'spin')} aria-label="Working" />
       ) : (
         // Talk by hand (ADR 0019 amendment): tap to listen, tap again to send; holding her shortcut still works.

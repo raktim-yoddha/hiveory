@@ -148,14 +148,29 @@ describe('Queen Bee brain service', () => {
     expect((q.calls[0]!.init.headers as Record<string, string>).Authorization).toBe('Bearer gsk_abc')
   })
 
-  it('a model still thinking when the time runs out says so, not "Every model failed"', async () => {
-    // OpenRouter sends the headers at once and the body only when the model is done.
+  it('waits as long as the model needs, and Stop ends it without trying the next account', async () => {
+    // No time limit: no signal but the user's own Stop. OpenRouter-style: the answer comes only when the model is done.
+    let release!: () => void
     const { brain, calls } = setup(
-      () => new Response(new ReadableStream({ start: (c) => c.error(new DOMException('The operation was aborted due to timeout', 'TimeoutError')) }), { status: 200 })
+      (_url, init) =>
+        new Promise<Response>((resolve, reject) => {
+          release = () => resolve(json(200, { choices: [{ message: { tool_calls: [{ function: { arguments: '{"actions":[{"type":"navigate","to":"home"}]}' } }] } }] }))
+          init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        })
     )
-    brain.save({ provider: 'openrouter', label: '', baseUrl: '', model: 'openai/gpt-5-mini', apiKey: 'k' })
-    await expect(brain.plan('arrange a grid', ctx, ADA)).rejects.toThrow(/took longer than 12 s/)
+    brain.save({ provider: 'openrouter', label: 'A', baseUrl: '', model: 'openai/gpt-5-mini', apiKey: 'k' })
+    brain.save({ provider: 'openrouter', label: 'B', baseUrl: '', model: 'other', apiKey: 'k' })
+    const slow = brain.plan('home', ctx, ADA)
+    await new Promise((r) => setTimeout(r, 30))
+    release()
+    expect(await slow).toMatchObject({ actions: [{ type: 'navigate', to: 'home' }] })
     expect(calls[0]!.body.reasoning_effort).toBe('minimal')
+
+    const stopped = brain.plan('home', ctx, ADA)
+    await new Promise((r) => setTimeout(r, 10))
+    brain.stop()
+    await expect(stopped).rejects.toThrow('Stopped.')
+    expect(calls).toHaveLength(2)
   })
 
   it('retries once without the reasoning hint when a model refuses it', async () => {
@@ -216,7 +231,7 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     const clis = { executable: (id: string) => (installed ? `/bin/${id}` : undefined), models: async () => ['', 'gpt-x', 'haiku'] }
     return new QueenBrain(store, new SecretBox(sealer), fetch, clis, runner)
   }
-  const ok = (stdout: string): ProcessResult => ({ code: 0, stdout, stderr: '', timedOut: false })
+  const ok = (stdout: string): ProcessResult => ({ code: 0, stdout, stderr: '', stopped: false })
 
   it('Codex: locked down (no shell, read-only, no user config), strict schema, answer read from its output file', async () => {
     const { fn, calls } = run(async (_f, args) => {
@@ -240,7 +255,7 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
   it('Codex: a model that refuses the low-effort hint is asked again without it', async () => {
     let n = 0
     const { fn, calls } = run(async (_f, args) => {
-      if (n++ === 0) return { code: 1, stdout: '', stderr: '"message": "Unsupported value: \'low\' is not supported for reasoning.effort"', timedOut: false }
+      if (n++ === 0) return { code: 1, stdout: '', stderr: '"message": "Unsupported value: \'low\' is not supported for reasoning.effort"', stopped: false }
       await writeFile(args[args.indexOf('--output-last-message') + 1]!, JSON.stringify({ actions: [{ type: 'set-mode', mode: 'chatspace' }] }))
       return ok('')
     })
@@ -261,7 +276,7 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     expect(args[args.indexOf('--setting-sources') + 1]).toBe('')
     for (const flag of ['--strict-mcp-config', '--no-session-persistence', '--disable-slash-commands']) expect(args).toContain(flag)
 
-    const failing = setup(run(() => ({ code: 1, stdout: JSON.stringify({ is_error: true, result: 'Failed to authenticate' }), stderr: '', timedOut: false })).fn)
+    const failing = setup(run(() => ({ code: 1, stdout: JSON.stringify({ is_error: true, result: 'Failed to authenticate' }), stderr: '', stopped: false })).fn)
     failing.save({ provider: 'claudecli', label: '', baseUrl: '', model: '' })
     await expect(failing.plan('x', ctx, ADA)).rejects.toThrow(/Claude Code CLI: Failed to authenticate/)
   })
@@ -276,11 +291,11 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     expect(await brain.listModels({ provider: 'codexcli', baseUrl: '' })).toEqual(['gpt-x', 'haiku'])
   })
 
-  it('a timed-out CLI hands the request to the next account', async () => {
-    const { fn } = run(() => ({ code: null, stdout: '', stderr: '', timedOut: true }))
+  it('a stopped CLI ends the request: no time limit, only the user stops it', async () => {
+    const { fn } = run(() => ({ code: null, stdout: '', stderr: '', stopped: true }))
     const brain = setup(fn)
     brain.save({ provider: 'claudecli', label: '', baseUrl: '', model: '' })
-    await expect(brain.plan('x', ctx, ADA)).rejects.toThrow(/took longer/)
+    await expect(brain.plan('x', ctx, ADA)).rejects.toThrow('Stopped.')
   })
 })
 

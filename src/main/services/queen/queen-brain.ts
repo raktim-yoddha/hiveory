@@ -18,13 +18,10 @@ import { AppException, fail } from '@shared/errors'
 import type { SecretBox } from '../connections/secret-box'
 import type { StateStore } from '../persistence/state-store'
 import type { StoredBrainAccount } from '../persistence/schema'
-import { EffortRejected, planWithCli, runProcess, type RunProcess } from './cli-brain'
+import { EffortRejected, planWithCli, runProcess, STOPPED, type RunProcess } from './cli-brain'
 
-/** A model gets this long to plan; past it, Queen Bee moves to the next account or says so. */
-export const BRAIN_BUDGET_MS = 12_000
+// A model may take as long as it needs to plan (ADR 0019 amendment); the user can stop it instead.
 const LIST_BUDGET_MS = 10_000
-/** A CLI starts a whole agent runtime first: it gets longer. */
-export const CLI_BUDGET_MS = 30_000
 const MAX_ACCOUNTS = 20
 
 type Fetch = typeof fetch
@@ -78,6 +75,8 @@ export class QueenBrain {
   private readonly noHint = new Set<string>()
   /** Per model: what it turned out to accept (the hint, a forced tool call, any tool call, or plain JSON). */
   private readonly modes = new Map<string, WireMode>()
+  /** The request in flight; stop() aborts it. */
+  private running: AbortController | null = null
 
   constructor(
     private readonly store: StateStore,
@@ -210,17 +209,31 @@ export class QueenBrain {
     return [...new Set(ids.filter((m) => typeof m === 'string' && m.length > 0 && m.length < 200))].sort((a, b) => a.localeCompare(b))
   }
 
-  /** Plans with the first enabled account; any failure hands the request to the next. */
+  /** Stops the request in flight (the user pressed Stop); a no-op when there is none. */
+  stop(): void {
+    this.running?.abort()
+    this.running = null
+  }
+
+  /** Plans with the first enabled account; any failure hands the request to the next. A stop ends it. */
   async plan(utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[] = []): Promise<BrainResult> {
     const accounts = this.all().filter((a) => this.usable(a))
     if (!accounts.length) fail('NOT_FOUND', 'Queen Bee has no model yet. Add one in Settings › Queen Bee › Providers.')
+    this.running?.abort()
+    const running = new AbortController()
+    this.running = running
     let last: unknown
-    for (const account of accounts) {
-      try {
-        return await this.planWith(account, utterance, ctx, persona, notes)
-      } catch (error) {
-        last = error
+    try {
+      for (const account of accounts) {
+        try {
+          return await this.planWith(account, utterance, ctx, persona, notes, running.signal)
+        } catch (error) {
+          if (running.signal.aborted) fail('INVALID_INPUT', STOPPED)
+          last = error
+        }
       }
+    } finally {
+      if (this.running === running) this.running = null
     }
     const message = last instanceof AppException ? last.error.message : last instanceof Error && last.message ? last.message : 'Every model failed.'
     return fail('INVALID_INPUT', accounts.length > 1 ? `All ${accounts.length} accounts failed. Last: ${message}` : message)
@@ -231,21 +244,21 @@ export class QueenBrain {
     return cli ? this.clis.executable(cli) : undefined
   }
 
-  private async planWith(account: StoredBrainAccount, utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[]): Promise<BrainResult> {
+  private async planWith(account: StoredBrainAccount, utterance: string, ctx: QueenContext, persona: PromptPersona, notes: string[], signal?: AbortSignal): Promise<BrainResult> {
     const system = systemPrompt(persona)
     const user = stateMessage(ctx, utterance, notes)
-    if (isCliKind(account.kind)) return planFromToolArgs(await this.callCli(account, system, user), ctx, utterance)
+    if (isCliKind(account.kind)) return planFromToolArgs(await this.callCli(account, system, user, signal), ctx, utterance)
     const key = account.key ? this.box.open(account.key) : ''
     if (account.key && !key) fail('INVALID_INPUT', `The key of ${accountName(account)} can't be read on this account. Enter it again.`)
-    return planFromToolArgs(await this.call(account, key, system, user), ctx, utterance)
+    return planFromToolArgs(await this.call(account, key, system, user, signal), ctx, utterance)
   }
 
   /** A subscription brain: the user's own CLI, once, locked down (see cli-brain.ts). */
-  private async callCli(a: StoredBrainAccount, system: string, user: string): Promise<unknown> {
+  private async callCli(a: StoredBrainAccount, system: string, user: string, signal?: AbortSignal): Promise<unknown> {
     const executable = this.cliPath(a)
     if (!executable) return fail('INVALID_INPUT', `${accountName(a)}: the CLI is no longer installed.`)
     const hintKey = `${a.provider}:${a.model}`
-    const input = { kind: a.kind as 'codex' | 'claude-code', executable, model: a.model, system, user, timeoutMs: CLI_BUDGET_MS }
+    const input = { kind: a.kind as 'codex' | 'claude-code', executable, model: a.model, system, user, signal }
     const withHint = !this.noHint.has(hintKey)
     try {
       return await planWithCli({ ...input, hint: withHint }, this.runCli)
@@ -261,12 +274,12 @@ export class QueenBrain {
    * "think less" hint, then (OpenAI-compatible only) a forced tool call becomes
    * "any tool call", then a plain JSON answer. What worked is remembered per model.
    */
-  private async call(a: StoredBrainAccount, key: string, system: string, user: string): Promise<unknown> {
+  private async call(a: StoredBrainAccount, key: string, system: string, user: string, signal?: AbortSignal): Promise<unknown> {
     const modeKey = `${a.baseUrl}:${a.model}`
     let mode: WireMode = this.modes.get(modeKey) ?? { hint: true, tools: 'forced' }
     for (let attempt = 0; ; attempt++) {
       try {
-        const result = await this.request(a, key, system, user, mode)
+        const result = await this.request(a, key, system, user, mode, signal)
         this.modes.set(modeKey, mode)
         return result
       } catch (error) {
@@ -278,18 +291,18 @@ export class QueenBrain {
     }
   }
 
-  private async request(a: StoredBrainAccount, key: string, system: string, user: string, mode: WireMode): Promise<unknown> {
+  private async request(a: StoredBrainAccount, key: string, system: string, user: string, mode: WireMode, signal?: AbortSignal): Promise<unknown> {
     const { url, headers, body } = build(a.kind, a, key, system, user, mode)
     let res: Response
     let text: string
-    // The budget covers the body too: OpenRouter sends headers at once and the answer only when the model is done.
+    // No time limit: the model takes as long as it needs. The body is read inside the guard
+    // (OpenRouter sends headers at once and the answer only when the model is done).
     try {
-      res = await this.http(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), signal: AbortSignal.timeout(BRAIN_BUDGET_MS) })
+      res = await this.http(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body), ...(signal ? { signal } : {}) })
       text = await res.text()
-    } catch (error) {
-      const name = (error as { name?: string })?.name
-      if (name === 'TimeoutError' || name === 'AbortError') fail('INVALID_INPUT', `${accountName(a)} took longer than ${BRAIN_BUDGET_MS / 1000} s. Try a faster model.`)
-      return fail('INVALID_INPUT', `Could not reach ${new URL(url).host}.`)
+    } catch {
+      if (signal?.aborted) fail('INVALID_INPUT', STOPPED)
+      return fail('INVALID_INPUT', `${accountName(a)}: the connection to ${new URL(url).host} failed. Try again.`)
     }
     if (!res.ok) {
       const detail = scrub(text, key)

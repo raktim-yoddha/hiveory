@@ -413,3 +413,18 @@ often answered with nothing usable.
   that gets a variant runs the help action.
 - The `plan` tool no longer requires `actions`: a reply-only answer is valid, so strict providers
   stop refusing it.
+
+## Amendment (2026-10-19): no time limit on models; the user stops them
+
+Decided by the product owner. The 12 s budget for API models and the 30 s budget for CLI brains
+cut off slower providers and reasoning models before they finished, which surfaced as "Every model
+failed" or "took longer than 12 s".
+
+- A model, API or CLI, now takes as long as it needs. There is no time limit on planning.
+- While Queen Bee waits on a model her spinner becomes **Stop**, and Esc stops too. Stop aborts
+  the request (an API call is aborted; a CLI's process tree is killed), says nothing changed, and
+  does not hand the request to the next account.
+- New IPC channel `queen.cancelPlan` (no input) carries the stop. It is not a phone channel.
+- Loading a provider's model list keeps its 10 s limit: that is a form lookup, not a task.
+- Left for later: the Settings Test button and the phone have no Stop; a hung provider leaves
+  them waiting until the connection drops.

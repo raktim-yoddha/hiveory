@@ -210,6 +210,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'queen.removeAccount': ({ id }) => c.queenBrain.remove(id),
   'queen.moveAccount': ({ id, to }) => c.queenBrain.move(id, to),
   'queen.testAccount': ({ id }) => c.queenBrain.test(id),
+  'queen.cancelPlan': () => c.queenBrain.stop(),
   'queen.listModels': (input) => c.queenBrain.listModels(input),
   'voice.status': () => c.voice.status(),
   'voice.download': ({ pack }) => c.voice.download(pack),

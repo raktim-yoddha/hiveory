@@ -640,14 +640,29 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   })
 }
 
+/** Bumped by each command and by Stop: a stopped command's late answer, error or cleanup is dropped. */
+let currentRun = 0
+
 /** The model tier. No model configured reads as "unknown"; any other failure is shown as it is. */
 async function askBrain(input: string, ctx: QueenContext): Promise<BrainResult> {
+  useQueen.getState().setThinking(true)
   try {
     return await api('queen.plan', { utterance: input, context: ctx })
   } catch (error) {
     if (error instanceof HiveoryError && error.error.code === 'NOT_FOUND') return { kind: 'unknown' }
     throw error
+  } finally {
+    useQueen.getState().setThinking(false)
   }
+}
+
+/** Stop: a model may take as long as it needs (ADR 0019), so the user ends the wait. */
+export function stopQueen(): void {
+  if (!useQueen.getState().thinking) return
+  currentRun++
+  void api('queen.cancelPlan').catch(() => undefined)
+  useQueen.getState().show({ kind: 'reply', text: cancelledLine(prefs()), receipts: [] })
+  useQueen.getState().setBusy(false)
 }
 
 /** The words of the card on screen, for speaking it. */
@@ -667,6 +682,8 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
   if (!input.trim() || queen.busy) return
   if (!AGAIN.test(input)) lastCommand = input
   queen.setBusy(true)
+  const run = ++currentRun
+  const stopped = (): boolean => run !== currentRun
   try {
     const { ctx, cards } = await buildContext()
     let parsed: BrainResult = parseCommand(input, ctx)
@@ -678,6 +695,7 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
       const planned = await askBrain(input, ctx).catch(() => ({ kind: 'unknown' }) as const)
       if (planned.kind === 'actions') parsed = planned
     }
+    if (stopped()) return
     if (parsed.kind === 'unknown') queen.show({ kind: 'reply', text: unknownLine(p), receipts: [] })
     else if (parsed.kind === 'reply') queen.show({ kind: 'reply', text: parsed.text, receipts: [] })
     else if (parsed.kind === 'ask') queen.show({ kind: 'ask', question: parsed.question })
@@ -688,14 +706,18 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
     }
     else await execute(parsed.actions, ctx, cards)
   } catch (error) {
+    if (stopped()) return
     queen.show({ kind: 'reply', text: failedLine(error instanceof Error ? error.message : String(error), prefs()), receipts: [] })
   } finally {
-    useQueen.getState().setBusy(false)
-    if (options.spoken) useQueen.setState((s) => (s.card ? { card: { ...s.card, heard: input } } : {}))
-    // Talkback: she answers out loud (or, when she stays quiet, a short "done" cue).
-    const when = useSettings.getState().settings.queenTalkback
-    if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(cardText())
-    else cue('done')
+    // Stop already said so and freed her bar: a stopped command leaves the new one alone.
+    if (!stopped()) {
+      useQueen.getState().setBusy(false)
+      if (options.spoken) useQueen.setState((s) => (s.card ? { card: { ...s.card, heard: input } } : {}))
+      // Talkback: she answers out loud (or, when she stays quiet, a short "done" cue).
+      const when = useSettings.getState().settings.queenTalkback
+      if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(cardText())
+      else cue('done')
+    }
   }
 }
 
