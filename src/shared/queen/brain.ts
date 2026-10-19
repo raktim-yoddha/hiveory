@@ -334,6 +334,17 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
       delete a.text
       break
     case 'navigate':
+      // Models often "navigate" to a mode: Chat and Work are modes, Bots opens on its work board.
+      if (/^(chat|chatspace|work|workspaces?)$/.test(lower(a.to))) {
+        a.type = 'set-mode'
+        a.mode = lower(a.to).startsWith('chat') ? 'chatspace' : 'workspace'
+        delete a.to
+        break
+      }
+      if (lower(a.to) === 'bots' || lower(a.to) === 'bot') {
+        a.to = 'bots'
+        a.page ??= 'work'
+      }
       a.to ??= a.section ? 'settings' : a.page ? 'bots' : a.workspaceId ? 'workspace' : a.projectId ? 'project' : undefined
       if (a.to === 'settings' && !(QUEEN_SETTINGS_SECTIONS as readonly string[]).includes(String(a.section))) a.section = 'appearance'
       if (a.to === 'workspace') a.projectId ??= elsewhere?.projectId ?? ctx.projectId
