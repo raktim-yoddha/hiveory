@@ -433,6 +433,26 @@ export function nobodyWaitingLine(prefs: QueenPrefs): string {
 }
 
 /** Things to try, from the rules (no model needed for any of them). */
+/** "a, b and c". */
+const series = (items: string[]): string => (items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`)
+
+/**
+ * The help answer said aloud: a few whole sentences in her voice, never the list read out
+ * (the card shows the list). From the same capability reference.
+ */
+export function helpSpoken(prefs: QueenPrefs): string {
+  const p = effective(prefs)
+  const base = QUEEN_CAPABILITIES.filter((c) => !c.needsModel).map((c) => c.say)
+  const model = QUEEN_CAPABILITIES.filter((c) => c.needsModel).map((c) => c.say)
+  // Two areas per sentence, each sentence opened differently, so it sounds spoken rather than listed.
+  const openers = ['I can', 'I also', 'I can also', 'And I']
+  const middle = Array.from({ length: Math.ceil(base.length / 2) }, (_, i) => `${openers[i % openers.length]} ${base.slice(i * 2, i * 2 + 2).join(', and ')}.`)
+  const lead = { ada: `I run this hive for you${address(p)}.`, sunny: 'I run the whole hive for you!', frankie: 'I run the hive.' }[p.persona]
+  const more = model.length ? `With a model provider set up, I can even ${series(model)}.` : ''
+  const close = { ada: 'Simply tell me what you need.', sunny: 'Just tell me what you need!', frankie: 'Tell me what you need.' }[p.persona]
+  return [lead, ...middle, more, close].filter(Boolean).join(' ')
+}
+
 /** What she can do, from the one capability reference, in her own voice: a lead line, one line per area, a close. */
 export function helpLine(prefs: QueenPrefs): string {
   const p = effective(prefs)

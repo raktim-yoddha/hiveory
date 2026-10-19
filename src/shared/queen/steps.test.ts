@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { QueenContext } from './actions'
 import { planFromToolArgs } from './brain'
 import { QUEEN_CAPABILITIES } from './capabilities'
-import { helpLine } from './personas'
+import { helpLine, helpSpoken } from './personas'
 
 /** Model plans of several steps (ADR 0019 amendment): each step is read where the earlier ones lead. */
 const ctx: QueenContext = {
@@ -65,5 +65,14 @@ describe('Queen Bee plans of several steps', () => {
     expect(planFromToolArgs({ actions: [{ type: 'navigate', to: 'bots' }] }, ctx)).toMatchObject({ actions: [{ type: 'navigate', to: 'bots', page: 'work' }] })
     expect(planFromToolArgs({ actions: [{ type: 'navigate', to: 'chat' }] }, ctx)).toMatchObject({ actions: [{ type: 'set-mode', mode: 'chatspace' }] })
     expect(planFromToolArgs({ actions: [{ type: 'set-mode', mode: 'bots' }] }, ctx)).toMatchObject({ actions: [{ type: 'set-mode', mode: 'bots' }] })
+  })
+
+  it('said aloud, her help is whole sentences covering every area, never the list read out', () => {
+    for (const persona of ['ada', 'sunny', 'frankie'] as const) {
+      const said = helpSpoken({ persona, callMe: '' } as Parameters<typeof helpSpoken>[0])
+      expect(said).not.toMatch(/[•“\n]/)
+      for (const c of QUEEN_CAPABILITIES) expect(said).toContain(c.say)
+      expect(said.trim()).toMatch(/[.!]$/)
+    }
   })
 })

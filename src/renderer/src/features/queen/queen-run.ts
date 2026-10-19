@@ -10,6 +10,7 @@ import {
   doneLine,
   failedLine,
   helpLine,
+  helpSpoken,
   nobodyWaitingLine,
   nothingToForgetLine,
   personaInfo,
@@ -159,6 +160,8 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
   const outcomes: QueenOutcome[] = []
   const undos: Array<() => Promise<void> | void> = []
   let reportText: string | null = null
+  /** Her words aloud when they differ from the card. */
+  let spoken: string | undefined
   let reportData: Awaited<ReturnType<typeof report>> | undefined
   /** The agent's own last words, shown labelled under the reply. */
   let quote: string | undefined
@@ -321,6 +324,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
         }
         case 'help': {
           reportText = helpLine(p)
+          spoken = helpSpoken(p)
           break
         }
         case 'apply-preset': {
@@ -641,6 +645,7 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     receipts: outcomes.map(receipt),
     report: reportData,
     ...(quote ? { quote } : {}),
+    ...(spoken && !outcomes.length ? { spoken } : {}),
     undo: undos.length
       ? async () => {
           for (const undo of undos.reverse()) await undo()
@@ -726,7 +731,9 @@ export async function runQueen(said: string, options: { spoken?: boolean } = {})
       if (options.spoken) useQueen.setState((s) => (s.card ? { card: { ...s.card, heard: input } } : {}))
       // Talkback: she answers out loud (or, when she stays quiet, a short "done" cue).
       const when = useSettings.getState().settings.queenTalkback
-      if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(cardText())
+      const card = useQueen.getState().card
+      const own = card?.kind === 'reply' ? card.spoken : undefined
+      if (when === 'always' || (when === 'after-voice' && options.spoken)) void speak(own ?? cardText(), own ? { whole: true } : {})
       else cue('done')
     }
   }

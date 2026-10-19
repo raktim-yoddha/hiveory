@@ -14,6 +14,8 @@ export type QueenCard = (
       report?: QueenReport
       /** An agent's own last words (its screen or chat), shown labelled — never rephrased. */
       quote?: string
+      /** What she says aloud instead of the card text, read in full (her help answer is a list on screen, sentences in speech). */
+      spoken?: string
     }
   | { kind: 'confirm'; text: string; /** The yes button: Close, Send or Confirm. */ label: string; run: () => Promise<void> }
   | { kind: 'ask'; question: QueenQuestion }
