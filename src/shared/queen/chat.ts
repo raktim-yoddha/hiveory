@@ -12,7 +12,8 @@ const CALL = String.raw`(?: (?:queen bee|queen|bee|ada|sunny|frankie|there|buddy
 const TALK: Array<[SmallTalk, RegExp]> = [
   ['greet', new RegExp(String.raw`^(?:hi|hii+|hello|helo|hey|heya|hiya|yo|sup|hola|namaste|namaskar|salaam|howdy|greetings|good (?:morning|afternoon|evening|day)|whats up|wassup)${CALL}$`)],
   ['how-are-you', /^(?:(?:hi|hey|hello) )?(?:how are you(?: doing| today)?|how r u|how you doing|hows it going|how is it going|hows your day|how is your day|are you (?:ok|okay|there|awake)|you there|kaise ho|kaisi ho|kya haal hai|sab theek)(?: (?:queen bee|queen|ada|sunny|frankie))?$/],
-  ['who', /^(?:who are you|what are you|whats your name|what is your name|your name|introduce yourself|tell me about yourself|what do you do|tum kaun ho|aap kaun ho)$/],
+  // Any model would answer this its own way (some with the model's name): the rules answer it, always as her.
+  ['who', /^(?:who (?:are|r) (?:you|u)(?: exactly| really)?|what (?:are|r) (?:you|u)|whats (?:your|ur) name|what is (?:your|ur) name|your name|introduce yourself|tell me about yourself|what do you do|are you (?:queen bee|the queen|a bot|an ai|ai|human|a human|chatgpt|gpt|claude|gemini|grok|llama)|(?:which|what) (?:ai |llm |language )?model (?:are you|do you use|is this|powers you|runs you)|who (?:made|built|created) you|tum kaun ho|aap kaun ho)$/],
   ['thanks', new RegExp(String.raw`^(?:thanks|thank you|thank u|thx|ty|cheers|much appreciated|appreciate it|shukriya|dhanyavad|dhanyawad)(?: (?:so much|a lot|a ton))?${CALL}$`)],
   ['bye', new RegExp(String.raw`^(?:bye|bye bye|goodbye|good bye|see you|see ya|cya|later|good night|gn|alvida|chalo bye)${CALL}$`)],
   ['praise', new RegExp(String.raw`^(?:good job|well done|nice work|nice job|great job|great work|nice|great|awesome|amazing|perfect|brilliant|you rock|love you|you are (?:great|awesome|amazing|the best)|youre (?:great|awesome|amazing|the best)|shabash|badhiya|mast)${CALL}$`)],
@@ -43,9 +44,9 @@ export function smallTalkLine(topic: SmallTalk, prefs: QueenPrefs, name: string,
       frankie: ['Running fine.', 'Your agents matter more. Ask me “what’s left?”']
     },
     who: {
-      ada: [`I am ${name}, Hiveory's operator${address(p)}.`, 'I open, close and find your agents, report their status and move you around the app. Say “help” for examples.'],
-      sunny: [`I'm ${name}, the queen of this hive!`, 'I run your agents, tell you who needs you and take you anywhere in the app. Say “help” to see more.'],
-      frankie: [`${name}. I run this hive.`, 'Agents, status, navigation. Say “help” for the list.']
+      ada: [`I am ${name}, Hiveory's Queen Bee${address(p)}.`, 'I open, close and find your agents, report their status and move you around the app. Say “help” for examples.'],
+      sunny: [`I'm ${name}, Hiveory's Queen Bee!`, 'I run your agents, tell you who needs you and take you anywhere in the app. Say “help” to see more.'],
+      frankie: [`${name}, Hiveory's Queen Bee.`, 'Agents, status, navigation. Say “help” for the list.']
     },
     thanks: {
       ada: [`You are welcome${address(p)}.`],

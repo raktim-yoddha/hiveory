@@ -26,6 +26,9 @@ const ctx: QueenContext = {
 describe('Queen Bee small talk', () => {
   it('recognises a whole sentence of small talk, never a command', () => {
     expect(parseSmallTalk('Hi')).toBe('greet')
+    expect(parseSmallTalk('Who are you?')).toBe('who')
+    expect(parseSmallTalk('which model are you')).toBe('who')
+    expect(parseSmallTalk('are you ChatGPT?')).toBe('who')
     expect(parseSmallTalk('hello queen bee!')).toBe('greet')
     expect(parseSmallTalk('Good morning')).toBe('greet')
     expect(parseSmallTalk('how are you doing?')).toBe('how-are-you')

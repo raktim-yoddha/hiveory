@@ -397,3 +397,19 @@ above, in the title bar) and opens below the title bar instead of over it.
 - Most commands work with no key and no network.
 - A report can only be wrong where it summarises agent output, and that is labelled.
 - One more always-visible surface. It stays one bar and four controls.
+
+## Amendment (2026-10-19): one identity, and capability questions answered by the rules
+
+Different models answered "who are you?" differently: some as the personality (Frankie), some as
+"Queen Bee", some by their own model name. And "what are the features?" reached the model, which
+often answered with nothing usable.
+
+- She is always "<personality name>, Hiveory's Queen Bee", from the rules and from every model.
+  The rules answer more identity questions themselves ("which model are you", "are you ChatGPT",
+  "who made you"); the model prompt states the same identity and forbids naming a model, provider
+  or company.
+- Questions about what she can do ("what are your features", "what can you offer", "how can you
+  help me") are answered by the rules with the help line, the same with any model or none. A model
+  that gets a variant runs the help action.
+- The `plan` tool no longer requires `actions`: a reply-only answer is valid, so strict providers
+  stop refusing it.

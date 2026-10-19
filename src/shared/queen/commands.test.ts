@@ -75,6 +75,11 @@ const CASES: Array<[string, QueenAction[]]> = [
   // One-liners.
   ['help', [{ type: 'help' }]],
   ['what can you do?', [{ type: 'help' }]],
+  ['What are the features?', [{ type: 'help' }]],
+  ["what are your capabilities", [{ type: 'help' }]],
+  ['What can you offer?', [{ type: 'help' }]],
+  ['what capabilities do you offer', [{ type: 'help' }]],
+  ['how can you help me?', [{ type: 'help' }]],
   ['mute', [{ type: 'speak', on: false }]],
   ['stop talking', [{ type: 'speak', on: false }]],
   ['talk to me', [{ type: 'speak', on: true }]],
