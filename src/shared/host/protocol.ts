@@ -9,7 +9,8 @@ import type { AppError } from '../errors'
 // 2: remote daemons outlive their connection; pty.attach takes a terminal back after a reconnect (ADR 0025).
 // 3: terminals have keys and pty.list; a local daemon outlives the app and needs a mutual hello (ADR 0050).
 // Frozen core (ADR 0050 §8), never changed in meaning: hello, auth, hold, pty.list, pty.attach, pty.kill,
-// pty.write, pty.resize, pty.data, pty.exit. A breaking change only adds frames and bumps this number.
+// pty.write, pty.resize, pty.data, pty.exit, relay.kept, relay.hook, relay.mcp, relay.reply. A breaking
+// change only adds frames and bumps this number.
 export const HOST_PROTOCOL = 3
 
 export interface PtySpawnParams {
@@ -23,6 +24,14 @@ export interface PtySpawnParams {
   inheritEnv?: boolean
   /** Who the terminal belongs to (an agent instance id, a shell id), so a later app can find it again (ADR 0050). */
   key?: string
+}
+
+/** A hook a CLI reported to the daemon's relay while no app was attached (ADR 0050 §6). */
+export interface KeptHook {
+  instanceId: string
+  event: string
+  payload: unknown
+  at: number
 }
 
 /** A terminal the host holds, as `pty.list` reports it. */
@@ -79,6 +88,10 @@ export interface HostCalls {
   hold: { params: null; result: null }
   /** Ends every terminal and the daemon itself ("Quit and stop agents"). */
   shutdown: { params: null; result: null }
+  /** The hooks the relay kept while no app was attached, oldest first; they are handed over once. */
+  'relay.kept': { params: null; result: KeptHook[] }
+  /** How long terminals stay once no app is attached: null keeps them until they end (ADR 0050 §7). */
+  'grace.set': { params: { ms: number | null }; result: null }
   'pty.spawn': { params: PtySpawnParams; result: { ptyId: string; pid: number } }
   'pty.kill': { params: { ptyId: string }; result: null }
   /**
@@ -98,6 +111,8 @@ export interface HostCalls {
 export interface HostNotifications {
   'pty.write': { ptyId: string; data: string }
   'pty.resize': { ptyId: string; cols: number; rows: number }
+  /** The app's answer to a `relay.mcp` request (null: accepted, no reply). */
+  'relay.reply': { requestId: string; body: unknown }
 }
 
 /** What the host reports on its own. */
@@ -106,6 +121,10 @@ export interface HostEvents {
   'pty.exit': { ptyId: string; code: number | null; signal: number | null }
   /** A watched folder changed (`scope` is the id the watch was opened with). */
   'files.changed': { scope: string; paths: string[] }
+  /** A CLI's hook reached the daemon's relay (ADR 0050 §6). */
+  'relay.hook': { instanceId: string; event: string; payload: unknown }
+  /** An agent's MCP request reached the relay; the app answers with `relay.reply`. */
+  'relay.mcp': { requestId: string; instanceId: string; body: unknown }
 }
 
 export type HostCall = keyof HostCalls

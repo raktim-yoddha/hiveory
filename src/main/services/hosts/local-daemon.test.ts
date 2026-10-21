@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HOST_PROTOCOL, transportPair, type HostTransport } from '@shared/host/protocol'
 import { publish } from '../../../host/endpoint-owner'
+import { createRelay } from '../../../host/relay'
 import { createHostState, disposeHostState, gateHost, type HostState } from '../../../host/host-server'
 import { HookServer } from '../cli/hooks/hook-server'
 import { CliRuntimeManager } from '../cli/runtime/runtime-manager'
@@ -216,7 +217,7 @@ describe('agents and shells take their kept terminals back', () => {
     const adapter = { id: 'x', displayName: 'X', supportsAutoApprove: false, buildLaunch: () => ({ args: [] }), heuristics: () => null }
     const registry = { adapter: () => adapter, executable: () => process.execPath, displayName: () => 'X' } as unknown as CliRegistry
     const runtime = new CliRuntimeManager(registry, log, mkdtempSync(join(tmpdir(), 'hv-rt-')), () => undefined, () => undefined, backend, (id) =>
-      id === 'agent-9' ? 'p3' : undefined
+      id === 'agent-9' ? { ptyId: 'p3', hooks: [] } : undefined
     )
     const instance = { id: 'agent-9', projectId: 'p', workspaceId: 'w', cliId: 'x', petName: 'Milo', conversationId: 'c', hasConversation: true, autoApprove: false, createdAt: '' }
     runtime.launch(instance, tmpdir())
@@ -227,5 +228,85 @@ describe('agents and shells take their kept terminals back', () => {
     links[0]!(true)
     expect(runtime.details('agent-9').activity).toBeUndefined()
     runtime.detachAll()
+  })
+})
+
+describe('the relay: hooks and tools outlive the app (ADR 0050 §6)', () => {
+  const post = (url: string, token: string, body: unknown, bearer = false) =>
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${token}` } : { 'X-Hiveory-Token': token }) },
+      body: JSON.stringify(body)
+    })
+
+  it('keeps hooks while no app is attached and forwards them once one is', async () => {
+    const [appSide, daemonSide] = transportPair()
+    let attached: HostTransport | null = null
+    const relay = createRelay(() => attached, join(mkdtempSync(join(tmpdir(), 'hv-relay-')), 'relay.json'), log)
+    await relay.server.start()
+    const { baseUrl, token } = relay.server.endpoint!
+    expect((await post(`${baseUrl}/hooks/agent-1/PermissionRequest`, token, { tool_name: 'Bash' })).status).toBe(204)
+    expect((await post(`${baseUrl}/hooks/agent-1/Stop`, 'wrong', {})).status).toBe(403)
+    expect(relay.calls['relay.kept']()).toEqual([expect.objectContaining({ instanceId: 'agent-1', event: 'PermissionRequest', payload: { tool_name: 'Bash' } })])
+    expect(relay.calls['relay.kept']()).toEqual([])
+
+    attached = daemonSide
+    const events: unknown[] = []
+    appSide.onFrame((f) => events.push(f))
+    await post(`${baseUrl}/hooks/agent-1/Stop`, token, {})
+    await until(() => events.length > 0)
+    expect(events[0]).toMatchObject({ kind: 'event', event: 'relay.hook', params: { instanceId: 'agent-1', event: 'Stop' } })
+    relay.server.stop()
+  })
+
+  it('answers tool calls through the app, and says Hiveory is not open without one', async () => {
+    const [appSide, daemonSide] = transportPair()
+    let attached: HostTransport | null = null
+    const relay = createRelay(() => attached, join(mkdtempSync(join(tmpdir(), 'hv-relay-')), 'relay.json'), log)
+    await relay.server.start()
+    const { baseUrl, token } = relay.server.endpoint!
+    const closed = await (await post(`${baseUrl}/mcp/agent-1`, token, { jsonrpc: '2.0', id: 7, method: 'tools/list' }, true)).json()
+    expect(closed).toMatchObject({ id: 7, error: { message: expect.stringContaining('not open') } })
+
+    attached = daemonSide
+    appSide.onFrame((f) => {
+      if (f.kind !== 'event' || f.event !== 'relay.mcp') return
+      const { requestId } = f.params as { requestId: string }
+      relay.notifications['relay.reply']({ requestId, body: { jsonrpc: '2.0', id: 8, result: { tools: [] } } })
+    })
+    const open = await (await post(`${baseUrl}/mcp/agent-1`, token, { jsonrpc: '2.0', id: 8, method: 'tools/list' }, true)).json()
+    expect(open).toEqual({ jsonrpc: '2.0', id: 8, result: { tools: [] } })
+    relay.server.stop()
+  })
+
+  it('a taken-back agent shows the status it had, then what its kept hooks say', () => {
+    const { backend } = recordingBackend()
+    const adapter = {
+      id: 'x',
+      displayName: 'X',
+      supportsAutoApprove: false,
+      buildLaunch: () => ({ args: [] }),
+      heuristics: () => null,
+      mapHookEvent: (event: string) => (event === 'PermissionRequest' ? ({ type: 'needs-user', reason: 'permission' } as const) : null)
+    }
+    const registry = { adapter: () => adapter, executable: () => process.execPath, displayName: () => 'X' } as unknown as CliRegistry
+    const root = mkdtempSync(join(tmpdir(), 'hv-rt-'))
+    const instance = { id: 'agent-5', projectId: 'p', workspaceId: 'w', cliId: 'x', petName: 'Kai', conversationId: 'c', hasConversation: true, autoApprove: false, createdAt: '' }
+    // First run: working when Hiveory quits with agents kept.
+    const before = new CliRuntimeManager(registry, log, root, () => undefined, () => undefined, backend)
+    before.launch(instance, tmpdir())
+    ;(before as unknown as { sessions: Map<string, { details: object }> }).sessions.get('agent-5')!.details = { status: 'working', running: true, activity: 'Using Bash' }
+    before.detachAll()
+    // Next run: the same status, then the permission prompt its CLI reported meanwhile.
+    const after = new CliRuntimeManager(registry, log, root, () => undefined, () => undefined, backend, () => ({
+      ptyId: 'p1',
+      hooks: [{ instanceId: 'agent-5', event: 'PermissionRequest', payload: {}, at: 1 }]
+    }))
+    const seen: string[] = []
+    after.on('changed', (_i, d) => seen.push(d.status))
+    after.launch(instance, tmpdir())
+    expect(seen).toContain('working')
+    expect(after.details('agent-5')).toMatchObject({ status: 'waiting-for-you', waitingReason: 'permission', running: true })
+    after.detachAll()
   })
 })

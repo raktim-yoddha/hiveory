@@ -250,7 +250,7 @@ Three things stop the remote design from simply running locally:
 - **Frame limit.** It is 16 MiB, not 1 MiB: a `pty.attach` result carries up to 2 MiB of kept
   output, which JSON escaping can more than double.
 - **Interim for §6.** Until the relay exists, the hook server keeps its port and token in
-  `<Runtime>/hook-endpoint.json` (mode `0600`). An agent kept across a restart therefore still
+  `<Runtime>/hook-endpoint.json` (mode `0600`; still kept, now behind the relay of phase 2). An agent kept across a restart therefore still
   reaches Hiveory for hooks and tools with the URL it was started with. If that port has been taken
   meanwhile, a new one is used, and kept agents fall back to heuristics.
 - **Windows handle inheritance.** A child inherits every inheritable handle its parent holds, so a
@@ -264,3 +264,25 @@ Three things stop the remote design from simply running locally:
   and stop agents" ended the daemon and removed `endpoint.json`.
 - **Not yet:** phases 2–4. Kept remote terminals are not yet adopted across an app restart (their
   daemon has `pty.list`, but nothing calls it yet).
+
+## Amendment (2026-10-21): phase 2 as built
+
+- **The relay is the hook server class itself,** run inside the daemon (`src/host/relay.ts`). It keeps
+  its port and token in `<Runtime>/hiveoryd/relay.json` and publishes them in `endpoint.json`.
+- **Agents are launched with the relay's URL** whenever the durable daemon serves this app
+  (`LocalHost.relayEndpoint`, used for hooks and for `mcpFor`). Otherwise they get Hiveory's own hook
+  server. That server keeps its port too (phase 1), and stays for chats and remote tunnels.
+- **Start-up starts the daemon,** if none is running, before any agent launches, so the relay
+  exists first.
+- **While no app is attached:**
+  - hooks are kept, the newest 64 per agent, and handed over once by `relay.kept`;
+  - MCP calls get a JSON-RPC error: "Hiveory is not open…".
+- **With an app attached:** `relay.mcp` events are answered with `relay.reply`. Pending calls end at
+  once if the app leaves.
+- **A taken-back agent starts from a saved status.** At detach each running agent's runtime details
+  are saved (`<Runtime>/<id>/status.json`). On adopt they are restored, then its kept hooks are
+  applied in order.
+- **Verified** in the built app with a Claude Code agent:
+  - its tools went through the relay;
+  - they were refused while Hiveory was closed and worked again after it reopened;
+  - the kept agent came back with its real status (**Needs you**).

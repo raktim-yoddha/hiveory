@@ -3,8 +3,9 @@ import { mkdirSync, openSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
-import { HOST_PROTOCOL, type HostFrame, type HostTransport } from '@shared/host/protocol'
+import { HOST_PROTOCOL, type HostFrame, type HostTransport, type KeptHook } from '@shared/host/protocol'
 import type { Logger } from '../../app/logger'
+import type { HookEndpoint } from '../cli/adapters/types'
 import { newNonce, prove, verifyProof } from './handshake'
 import { HostClient } from './host-client'
 import { lineTransport } from './line-transport'
@@ -26,6 +27,18 @@ const utilityTransport = (child: UtilityProcess): HostTransport => ({
   onClose: (listener) => void child.once('exit', () => listener()),
   close: () => void child.kill()
 })
+
+/** What the app does with what the daemon's relay receives (the same handlers as its own hook server). */
+export interface RelayHandlers {
+  hook(instanceId: string, event: string, payload: unknown): void
+  mcp(instanceId: string, body: unknown): Promise<unknown>
+}
+
+/** A kept terminal handed back to its agent or shell, with the hooks its CLI reported meanwhile. */
+export interface KeptTerminal {
+  ptyId: string
+  hooks: KeptHook[]
+}
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -61,6 +74,10 @@ export class LocalHost {
   private closed = false
   /** Live terminals the daemon held at start-up, by key, until their agent or shell takes them. */
   private readonly live = new Map<string, string>()
+  /** Hooks the relay kept while Hiveory was closed, by agent. */
+  private readonly keptHooks = new Map<string, KeptHook[]>()
+  private relayValue: HookEndpoint | undefined
+  private relayHandlers: RelayHandlers | null = null
 
   constructor(
     private readonly entry: string,
@@ -79,6 +96,19 @@ export class LocalHost {
     return this.mode === 'daemon' && Boolean(this.client?.alive)
   }
 
+  /**
+   * The relay's URL and token while the durable daemon serves this app: agents launched with it
+   * keep reporting hooks and reaching their tools across restarts (ADR 0050 §6).
+   */
+  get relayEndpoint(): HookEndpoint | undefined {
+    return this.durable ? this.relayValue : undefined
+  }
+
+  /** Where the relay's hooks and MCP requests go: set once, before `prepare`. */
+  setRelayHandlers(handlers: RelayHandlers): void {
+    this.relayHandlers = handlers
+  }
+
   get(): Promise<HostClient | null> {
     if (this.client?.alive) return Promise.resolve(this.client)
     if (this.closed || this.failures >= MAX_FAILURES) return Promise.resolve(null)
@@ -87,14 +117,23 @@ export class LocalHost {
   }
 
   /**
-   * At start-up: reaches a daemon that kept running since Hiveory last quit (never starts one) and
-   * notes its live terminals, so agents and shells take them back instead of starting anew.
-   * Terminals for keys Hiveory no longer knows are ended; ones that ended meanwhile are cleared.
+   * At start-up: reaches the daemon that kept running since Hiveory last quit, or starts it, so
+   * its relay exists before any agent launches. Notes its live terminals, so agents and shells take
+   * them back instead of starting anew, and the hooks their CLIs reported meanwhile. Terminals for
+   * keys Hiveory no longer knows are ended; ones that ended meanwhile are cleared.
    */
   async prepare(known: (key: string) => boolean): Promise<void> {
-    const client = await this.connect().catch(() => null)
-    if (!client) return
+    if (this.mode !== 'daemon') return
+    const client = (await this.connect().catch(() => null)) ?? (await this.startDaemon())
+    if (!client) {
+      this.mode = 'utility'
+      this.notice('Agents will stop when Hiveory quits this time: the background terminal host could not start.')
+      return
+    }
     this.use(client)
+    for (const hook of await client.call('relay.kept', null).catch(() => [])) {
+      this.keptHooks.set(hook.instanceId, [...(this.keptHooks.get(hook.instanceId) ?? []), hook])
+    }
     const terminals = await client.call('pty.list', null).catch(() => [])
     for (const t of terminals) {
       if (!t.alive) void client.call('pty.attach', { ptyId: t.ptyId }).catch(() => undefined)
@@ -109,10 +148,12 @@ export class LocalHost {
   }
 
   /** The daemon's live terminal for `key`, once (the caller attaches to it instead of spawning). */
-  take(key: string): string | undefined {
+  take(key: string): KeptTerminal | undefined {
     const ptyId = this.live.get(key)
     this.live.delete(key)
-    return ptyId
+    const hooks = this.keptHooks.get(key) ?? []
+    this.keptHooks.delete(key)
+    return ptyId ? { ptyId, hooks } : undefined
   }
 
   /** Quitting with agents kept: the daemon keeps every terminal's output from here (call before saving it). */
@@ -158,6 +199,7 @@ export class LocalHost {
       return null
     }
     if (endpoint.protocol !== HOST_PROTOCOL || typeof endpoint.token !== 'string') return null
+    this.relayValue = endpoint.relay
     const socket = await reach(endpoint.path)
     if (!socket) return null
     const client = new HostClient(lineTransport(socket, socket, () => socket.destroy()), { keepPtys: true })
@@ -209,6 +251,15 @@ export class LocalHost {
   private use(client: HostClient): void {
     this.failures = 0
     this.client = client
+    client.onRelay(
+      ({ instanceId, event, payload }) => this.relayHandlers?.hook(instanceId, event, payload),
+      ({ requestId, instanceId, body }) => {
+        const answer = this.relayHandlers?.mcp(instanceId, body) ?? Promise.resolve(null)
+        void answer
+          .catch(() => ({ jsonrpc: '2.0', id: null, error: { code: -32603, message: 'Internal error' } }))
+          .then((reply) => client.notify('relay.reply', { requestId, body: reply }))
+      }
+    )
     client.onClosed(() => {
       if (this.client === client) this.client = null
       if (this.closed) return

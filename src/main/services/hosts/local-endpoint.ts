@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { posix } from 'node:path'
+import type { HookEndpoint } from '../cli/adapters/types'
 
 /** Where this computer's daemon (ADR 0050) says how to reach it: its endpoint, pid and token. */
 export const LOCAL_ENDPOINT_FILE = 'endpoint.json'
@@ -11,6 +12,8 @@ export interface LocalEndpoint {
   incarnation: string
   path: string
   token: string
+  /** The relay agents report hooks to and reach their tools through (ADR 0050 §6). */
+  relay?: HookEndpoint
 }
 
 /**

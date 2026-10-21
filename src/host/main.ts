@@ -10,6 +10,7 @@ import { newToken } from '../main/services/hosts/handshake'
 import { lineTransport } from '../main/services/hosts/line-transport'
 import { LOCAL_ENDPOINT_FILE, localEndpointPath, type LocalEndpoint } from '../main/services/hosts/local-endpoint'
 import { publish } from './endpoint-owner'
+import { createRelay } from './relay'
 import { attachHost, createHostState, disposeHostState, gateHost, serveHost, type HostState } from './host-server'
 
 /**
@@ -109,15 +110,21 @@ const runLocalDaemon = async (dir: string): Promise<void> => {
       // Gone already.
     }
   }
-  const state = createHostState({
+  // Hooks and agent tools reach the app through here, so their URLs outlive it (ADR 0050 §6).
+  const relay = createRelay(() => state.out, join(dir, 'relay.json'), quiet)
+  const state: HostState = createHostState({
     onShutdown: () => {
       forget()
       process.exit(0)
-    }
+    },
+    calls: relay.calls,
+    notifications: relay.notifications,
+    onDetach: relay.detached
   })
+  await relay.server.start()
   const server = createServer((socket) => gateHost(state, lineTransport(socket, socket, () => socket.destroy()), token))
   if (!(await publish(server, path).catch(() => false))) process.exit(0)
-  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token }
+  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token, relay: relay.server.endpoint }
   writeFileSync(`${file}.tmp`, JSON.stringify(endpoint), { mode: 0o600 })
   renameSync(`${file}.tmp`, file)
   idleExit(state, server, (idle) => state.terminals.size > 0 || idle < IDLE_MS, forget)

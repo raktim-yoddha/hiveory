@@ -108,9 +108,12 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
   const appService = new AppService(connections, openBrowser)
+  // Hooks and agent tools go through the terminal host's relay when it serves this app, so they
+  // outlive a restart (ADR 0050 §6); else through Hiveory's own hook server.
+  const agentEndpoint = () => localHost.relayEndpoint ?? hookServer?.endpoint
   // Agent tools ride on the same loopback server and token as status hooks; route id = agent or chat id.
   const mcpFor = (id: string, baseUrl?: string) => {
-    const endpoint = hookServer?.endpoint
+    const endpoint = agentEndpoint()
     if (!endpoint || !settings) return undefined
     const s = settings.get()
     const apps = connections.appNames()
@@ -166,7 +169,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // The user's own Tailscale (ADR 0025): finding their devices, and serving this one to them.
   const tailscale = new Tailscale()
   const sharing = new Sharing(tailscale, log, paths.serverDevicesFile, app.getVersion())
-  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend, (id) => localHost.take(id))
+  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, agentEndpoint, mcpFor, ptyBackend, (id) => localHost.take(id))
   hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log, join(paths.runtimeDir, 'hook-endpoint.json'))
 
   const workspaceRepo = new WorkspaceRepository(store)
@@ -342,7 +345,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       load: () => loadHook()
     }
   )
-  const shells = new ShellService(ptyBackend, (id) => localHost.take(id))
+  const shells = new ShellService(ptyBackend, (id) => localHost.take(id)?.ptyId)
   const sessions = new SessionHistoryService(log)
   const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)
@@ -420,7 +423,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     browser: () => (settings?.get().browserUse ? browserTools : null),
     extraTools
   }
-  hookServer.setMcpHandler(async (instanceId, body) => {
+  const handleMcp = async (instanceId: string, body: unknown): Promise<unknown> => {
     const refuse = (message: string) => ({ jsonrpc: '2.0', id: null, error: { code: -32001, message } })
     if (!settings) return refuse('Hiveory is starting.')
     const agent = agents.find(instanceId)
@@ -454,7 +457,10 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
         return family ? family.call(caller, name, args) : Promise.resolve({ text: `Unknown tool: ${name}`, isError: true })
       }
     })
-  })
+  }
+  hookServer.setMcpHandler(handleMcp)
+  // The terminal host's relay hands its agents' hooks and tool calls to the same handlers (ADR 0050 §6).
+  localHost.setRelayHandlers({ hook: (id, event, payload) => runtime.ingestHook(id, event, payload), mcp: handleMcp })
 
   return {
     paths,

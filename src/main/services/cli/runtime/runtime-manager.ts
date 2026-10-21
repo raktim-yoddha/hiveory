@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
+import type { KeptHook } from '@shared/host/protocol'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../../app/logger'
 import { sanitizeEnv } from '../../pty/env'
@@ -67,8 +68,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     private readonly mcpEndpoint: (instanceId: string, baseUrl?: string) => McpEndpoint | undefined = () => undefined,
     /** Where agent PTYs run: the local host daemon in the app (ADR 0022). */
     private readonly ptyBackend: PtyBackend = inProcessPty,
-    /** The daemon's kept terminal for an agent, once, after Hiveory restarted (ADR 0050). */
-    private readonly adoptable: (instanceId: string) => string | undefined = () => undefined
+    /** The daemon's kept terminal for an agent, once, after Hiveory restarted, with its kept hooks (ADR 0050). */
+    private readonly adoptable: (instanceId: string) => { ptyId: string; hooks: KeptHook[] } | undefined = () => undefined
   ) {
     super()
     this.ticker = setInterval(() => this.tick(), 1000)
@@ -165,8 +166,9 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     const env = sanitizeEnv(process.env, spec.env)
     env.HIVEORY_INSTANCE_ID = instance.id
     const [file, args] = resolveCommand(executable!, spec.args)
-    session.pty.start({ file, args, cwd, env, key: instance.id, adopt })
+    session.pty.start({ file, args, cwd, env, key: instance.id, adopt: adopt?.ptyId })
     this.apply(session, { type: 'started' }, 'process')
+    if (adopt) this.resume(session, adopt.hooks)
   }
 
   /** Records a launch failure that happened before a process existed. */
@@ -198,12 +200,21 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
 
   /**
    * Quitting with agents kept (ADR 0050): every terminal stays with the daemon and its output so far
-   * is saved, so the next start shows it before what the agent printed meanwhile.
+   * is saved, so the next start shows it before what the agent printed meanwhile. So is its status,
+   * the starting point the kept hooks then bring up to date.
    */
   detachAll(): void {
     clearInterval(this.ticker)
     for (const [id, session] of this.sessions) {
       saveOutput(this.outputFile(id), session.pty.snapshot().data, true)
+      if (session.details.running) {
+        try {
+          mkdirSync(dirname(this.statusFile(id)), { recursive: true })
+          writeFileSync(this.statusFile(id), JSON.stringify(session.details), 'utf8')
+        } catch {
+          // A status is a convenience; the hooks and the screen correct it anyway.
+        }
+      }
       session.pty.detach()
     }
     this.sessions.clear()
@@ -217,6 +228,38 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
       session.pty.killNow()
     }
     this.sessions.clear()
+  }
+
+  private statusFile(instanceId: string): string {
+    return join(this.runtimeRoot, instanceId, 'status.json')
+  }
+
+  /**
+   * A taken-back terminal (ADR 0050 §6): the status it had when Hiveory quit, then every hook its CLI
+   * reported meanwhile, in order, so a prompt that appeared while Hiveory was closed reads Needs you.
+   */
+  private resume(session: Session, hooks: KeptHook[]): void {
+    try {
+      const saved = JSON.parse(readFileSync(this.statusFile(session.instance.id), 'utf8')) as CliRuntimeDetails
+      rmSync(this.statusFile(session.instance.id), { force: true })
+      const details: CliRuntimeDetails = { status: saved.status, running: true, ...(saved.waitingReason ? { waitingReason: saved.waitingReason } : {}), ...(saved.activity ? { activity: saved.activity } : {}) }
+      if (['idle', 'working', 'waiting-for-you'].includes(details.status)) {
+        session.details = session.model ? { ...details, model: session.model } : details
+        session.detector?.sync(phaseOf(details), Date.now(), details.waitingReason)
+        this.emit('changed', session.instance, session.details)
+      }
+    } catch {
+      // No saved status: it starts idle, as a fresh launch does.
+    }
+    const adapter = this.registry.adapter(session.instance.cliId)
+    for (const hook of hooks) {
+      try {
+        const mapped = adapter?.mapHookEvent?.(hook.event, hook.payload)
+        if (mapped) this.apply(session, mapped, 'hook')
+      } catch (error) {
+        this.log.warn(`Kept hook mapping failed for ${session.instance.cliId}/${hook.event}`, error)
+      }
+    }
   }
 
   private outputFile(instanceId: string): string {

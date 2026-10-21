@@ -28,6 +28,8 @@ export class HostClient {
   private readonly ptys = new Map<string, PtyListeners>()
   private readonly closeListeners: Array<() => void> = []
   private readonly fileListeners: Array<(e: HostEvents['files.changed']) => void> = []
+  private readonly relayHookListeners: Array<(e: HostEvents['relay.hook']) => void> = []
+  private readonly relayMcpListeners: Array<(e: HostEvents['relay.mcp']) => void> = []
   private closed = false
 
   constructor(
@@ -98,6 +100,12 @@ export class HostClient {
     this.fileListeners.push(listener)
   }
 
+  /** The daemon's relay (ADR 0050 §6): hooks and MCP requests from agents, for this app to handle. */
+  onRelay(hook: (e: HostEvents['relay.hook']) => void, mcp: (e: HostEvents['relay.mcp']) => void): void {
+    this.relayHookListeners.push(hook)
+    this.relayMcpListeners.push(mcp)
+  }
+
   /**
    * A service object whose methods run on the host (git, worktrees, files, fs), with the
    * same signatures as the local classes — so a service can be local or remote without
@@ -124,6 +132,10 @@ export class HostClient {
       else call.reject(rebuild(frame.failure ?? { message: frame.error }))
     } else if (frame.kind === 'event' && frame.event === 'files.changed') {
       for (const l of this.fileListeners) l(frame.params as HostEvents['files.changed'])
+    } else if (frame.kind === 'event' && frame.event === 'relay.hook') {
+      for (const l of this.relayHookListeners) l(frame.params as HostEvents['relay.hook'])
+    } else if (frame.kind === 'event' && frame.event === 'relay.mcp') {
+      for (const l of this.relayMcpListeners) l(frame.params as HostEvents['relay.mcp'])
     } else if (frame.kind === 'event') {
       const p = frame.params as { ptyId: string; data?: string; code?: number | null; signal?: number | null }
       const target = this.ptys.get(p.ptyId)

@@ -63,6 +63,11 @@ export interface HostServeOptions {
   home?: string
   /** After `shutdown` ended every terminal: the daemon process exits (ADR 0050). */
   onShutdown?: () => void
+  /** Calls and notifications the daemon adds (its relay, its grace policy: ADR 0050). */
+  calls?: Partial<Record<string, (params: unknown) => unknown>>
+  notifications?: Partial<Record<string, (params: unknown) => void>>
+  /** The attached client went away. */
+  onDetach?: () => void
 }
 
 /** Output kept per terminal while no client is attached (the newest part wins). */
@@ -91,11 +96,14 @@ export interface HostState {
   out: HostTransport | null
   seq: number
   onShutdown?: () => void
+  calls?: HostServeOptions['calls']
+  notifications?: HostServeOptions['notifications']
+  onDetach?: () => void
 }
 
 export const createHostState = (options: HostServeOptions = {}): HostState => {
   const git = new GitService()
-  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0, onShutdown: options.onShutdown }
+  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0, onShutdown: options.onShutdown, calls: options.calls, notifications: options.notifications, onDetach: options.onDetach }
   state.services = {
     git,
     worktrees: new WorktreeService(git),
@@ -249,8 +257,11 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
       }
       case 'invoke':
         return invoke(params as HostCalls['invoke']['params'])
-      default:
+      default: {
+        const extra = state.calls?.[method]
+        if (extra) return extra(params)
         throw new Error(`Unknown host call: ${method}`)
+      }
     }
   }
 
@@ -264,6 +275,8 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
           send({ kind: 'result', id: frame.id, ok: false, error: failure.message, failure })
         }
       )
+    } else if (frame.kind === 'notify' && state.notifications?.[frame.method]) {
+      state.notifications[frame.method]!(frame.params)
     } else if (frame.kind === 'notify') {
       const p = frame.params as { ptyId: string; data?: string; cols?: number; rows?: number }
       const child = state.terminals.get(p.ptyId)?.child
@@ -279,6 +292,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
   transport.onClose(() => {
     if (state.out !== transport) return
     state.out = null
+    state.onDetach?.()
     if (!persist) return disposeHostState(state)
     for (const t of state.terminals.values()) t.kept ??= []
   })
