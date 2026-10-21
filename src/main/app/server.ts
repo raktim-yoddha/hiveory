@@ -141,6 +141,8 @@ export interface ServerOptions {
   ownerPairing?: (remoteAddress: string) => Promise<boolean>
   /** A phone watching a terminal at its own size (`key` is that watch), or null when it stops (ADR 0048). */
   fitTerminal?: (instanceId: string, key: string, size: { cols: number; rows: number } | null) => void
+  /** Every address this computer is reachable at (Tailscale, Wi-Fi), told to a device as it pairs (ADR 0052). */
+  addresses?: () => string[]
 }
 
 /** `cols` and `rows` from a stream's query, within the bounds `terminal.resize` accepts; else undefined. */
@@ -214,7 +216,7 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
           // No code: only the owner's own devices, proven by Tailscale from the socket address (never from the request).
           if (options.ownerPairing && (await options.ownerPairing(req.socket.remoteAddress ?? ''))) {
             log.info("One of the owner's devices paired with this Hiveory server")
-            return json(res, 200, { token: devices.add(name, scope) })
+            return json(res, 200, { token: devices.add(name, scope), addresses: options.addresses?.() ?? [] })
           }
           failures.push(now)
           return json(res, 403, { error: 'This device needs the pairing code that computer shows.', needsCode: true })
@@ -226,7 +228,7 @@ export const startServer = async (options: ServerOptions): Promise<HiveoryServer
         const token = devices.add(name, scope)
         log.info('A device paired with this Hiveory server')
         freshCode()
-        return json(res, 200, { token })
+        return json(res, 200, { token, addresses: options.addresses?.() ?? [] })
       }
       const device = deviceOf(req)
       if (!device) return json(res, 401, { error: 'Pair this device first.' })

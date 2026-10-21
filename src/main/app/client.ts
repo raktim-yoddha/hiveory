@@ -3,17 +3,18 @@ import { hostname } from 'node:os'
 import { AppException, fail, type Result } from '@shared/errors'
 import type { Channel } from '@shared/ipc/contract'
 import type { ServerEvent } from '@shared/ipc/remote'
-import type { DiscoveredDevice, Discovery } from '@shared/domain/tailnet'
+import type { DiscoveredDevice, Discovery, LanServer } from '@shared/domain/tailnet'
 import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
 import type { SshHostConnector } from '../services/hosts/ssh-host'
 import type { Tailscale } from '../services/tailscale/tailscale'
+import { findLanServers } from './lan-discovery'
 import type { Logger } from './logger'
 
 /** Where a Hiveory server is: a loopback port on an SSH host (tunnelled), an address, or a device on the user's tailnet. */
 export type ServerAddress =
   | { via: 'ssh'; destination: string; port: number }
-  | { via: 'direct'; url: string }
-  | { via: 'tailnet'; ip: string; port: number; name: string }
+  | { via: 'direct'; url: string; alternates?: string[] }
+  | { via: 'tailnet'; ip: string; port: number; name: string; alternates?: string[] }
 
 /** How this desktop reaches its Hiveory server; the token is sealed by the OS keychain. */
 export type ClientConfig = ServerAddress & { token: string }
@@ -52,25 +53,45 @@ export const clearClientConfig = (file: string): void => rmSync(file, { force: t
  * The server's base URL from here: an SSH tunnel to its loopback port, or its address. A tailnet
  * device is looked up by name each time, so it is found again if its Tailscale address changed.
  */
-export const openBase = async (config: ServerAddress, ssh: SshHostConnector, tailscale: Tailscale): Promise<{ base: string; close(): void }> => {
-  if (config.via === 'direct') return { base: config.url.replace(/\/+$/, ''), close: () => undefined }
+export const openBase = async (config: ServerAddress, ssh: SshHostConnector, tailscale: Tailscale, probe: typeof fetch = fetch): Promise<{ base: string; close(): void }> => {
+  if (config.via === 'direct') return { base: await firstAnswering([config.url.replace(/\/+$/, ''), ...(config.alternates ?? [])], probe), close: () => undefined }
   if (config.via === 'tailnet') {
-    const found = (await tailscale.status()).devices.find((d) => d.name === config.name)
-    return { base: hostUrl(found?.ip ?? config.ip, config.port), close: () => undefined }
+    const found = (await tailscale.status().catch(() => null))?.devices.find((d) => d.name === config.name)
+    return { base: await firstAnswering([hostUrl(found?.ip ?? config.ip, config.port), ...(config.alternates ?? [])], probe), close: () => undefined }
   }
   const tunnel = await ssh.forward({ destination: config.destination }, '127.0.0.1', config.port)
   return { base: `http://127.0.0.1:${tunnel.port}`, close: tunnel.close }
 }
 
+/** How long one address gets to answer before the next is tried. */
+const ANSWER_MS = 1500
+
+/**
+ * The first base URL that answers as a Hiveory server, in order (ADR 0052): a computer reached
+ * over Tailscale and over Wi-Fi is still found when one of the two is off. None answering: the
+ * first, so the error names the address the user chose.
+ */
+export const firstAnswering = async (bases: string[], probe: typeof fetch = fetch): Promise<string> => {
+  if (bases.length < 2) return bases[0]!
+  for (const base of bases) {
+    const ok = await probe(`${base}/health`, { signal: AbortSignal.timeout(ANSWER_MS) })
+      .then(async (r) => r.ok && ((await r.json()) as { app?: string }).app === 'hiveory')
+      .catch(() => false)
+    if (ok) return base
+  }
+  return bases[0]!
+}
+
 /** Trades the server's one-time pairing code (none: the owner's own tailnet device) for this device's token. */
-export const pair = async (base: string, code?: string): Promise<string> => {
+export const pair = async (base: string, code?: string): Promise<{ token: string; addresses: string[] }> => {
   const health = await fetch(`${base}/health`).catch(() => null)
   const info = (await health?.json().catch(() => null)) as { app?: string } | null
   if (!health?.ok || info?.app !== 'hiveory') fail('NOT_FOUND', 'No Hiveory server answers there.', { hint: 'Start it with "hiveory --serve" and check the port.' })
   const res = await fetch(`${base}/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code?.toUpperCase(), name: hostname() }) })
-  const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string }
+  const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string; addresses?: unknown }
   if (!res.ok || !body.token) fail('FORBIDDEN', body.error ?? 'The server refused the pairing.')
-  return body.token!
+  const addresses = Array.isArray(body.addresses) ? body.addresses.filter((a): a is string => typeof a === 'string' && /^[A-Za-z0-9.:-]{1,253}$/.test(a)).slice(0, 8) : []
+  return { token: body.token!, addresses }
 }
 
 /**
@@ -186,8 +207,11 @@ export const connectAndSave = async (request: ConnectRequest, ssh: SshHostConnec
         : { via: 'direct', url: request.url }
   const opened = await openBase(where, ssh, tailscale)
   try {
-    const token = await pair(opened.base, request.code)
-    writeClientConfig(file, { ...where, token }, sealer)
+    const { token, addresses } = await pair(opened.base, request.code)
+    // Its other addresses (Tailscale, Wi-Fi), so it is still reached when one way is off (ADR 0052).
+    const port = Number(new URL(opened.base).port) || DEFAULT_SERVER_PORT
+    const alternates = where.via === 'ssh' ? [] : addresses.map((a) => hostUrl(a, port)).filter((b) => b !== opened.base)
+    writeClientConfig(file, { ...where, ...(alternates.length ? { alternates } : {}), token } as ClientConfig, sealer)
   } finally {
     opened.close()
   }
@@ -201,7 +225,9 @@ const PROBE_MS = 1500
  * The user's tailnet devices (ADR 0025), each online one probed once on the default
  * port so the picker can show which ones already run a Hiveory server.
  */
-export const discover = async (tailscale: Tailscale, probe: typeof fetch = fetch): Promise<Discovery> => {
+export const discover = async (tailscale: Tailscale, probe: typeof fetch = fetch, lan: () => Promise<LanServer[]> = findLanServers): Promise<Discovery> => {
+  // The same Wi-Fi or office network, Tailscale or not (ADR 0052).
+  const nearby = lan().catch(() => [])
   const status = await tailscale.status()
   const me = status.self?.owner ?? ''
   const devices = await Promise.all(
@@ -216,5 +242,5 @@ export const discover = async (tailscale: Tailscale, probe: typeof fetch = fetch
   )
   // Hiveory servers first, then the user's own devices, then the rest.
   devices.sort((a, b) => Number(Boolean(b.hiveory)) - Number(Boolean(a.hiveory)) || Number(b.mine) - Number(a.mine) || Number(b.online) - Number(a.online))
-  return { state: status.state, devices }
+  return { state: status.state, devices, lan: await nearby }
 }

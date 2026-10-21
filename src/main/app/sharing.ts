@@ -1,8 +1,9 @@
-import { networkInterfaces } from 'node:os'
+import { hostname, networkInterfaces } from 'node:os'
 import type { ShareStatus, TailnetDevice } from '@shared/domain/tailnet'
 import type { Handlers } from '../ipc/router'
 import type { Tailscale } from '../services/tailscale/tailscale'
 import type { Logger } from './logger'
+import { answerLanProbes } from './lan-discovery'
 import { sendPush } from './push'
 import { startServer, type HiveoryServer, type ServerOptions } from './server'
 
@@ -48,6 +49,8 @@ export class Sharing {
   private detail: string | undefined
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly pushedAt = new Map<string, number>()
+  /** Answers "is a Hiveory here?" on the local network while sharing there (ADR 0052). */
+  private probes: { close(): void } | null = null
 
   constructor(
     private readonly tailscale: Tailscale,
@@ -74,7 +77,8 @@ export class Sharing {
         log: this.log,
         devicesFile: this.devicesFile,
         version: this.version,
-        ownerPairing: options.tailnet ? (address) => this.isOwnersDevice(address) : undefined
+        ownerPairing: options.tailnet ? (address) => this.isOwnersDevice(address) : undefined,
+        addresses: () => this.addresses()
       })
     } catch (error) {
       this.state = 'error'
@@ -82,6 +86,9 @@ export class Sharing {
       throw error
     }
     this.state = 'on'
+    if (options.lan) {
+      this.probes = answerLanProbes(() => (this.server && this.lan.length ? { name: hostname(), port: this.server.port, version: this.version } : null), this.log)
+    }
     if (!options.tailnet && !options.lan) return
     await this.follow()
     this.timer = setInterval(() => void this.follow(), FOLLOW_MS)
@@ -99,6 +106,12 @@ export class Sharing {
       devices: this.server.devices(),
       detail: this.detail
     }
+  }
+
+  /** Where devices reach this computer: its Tailscale name and address, then its Wi-Fi addresses. */
+  addresses(): string[] {
+    const tailnet = this.self ? [this.self.dnsName, this.self.ip].filter(Boolean) : []
+    return [...new Set([...tailnet, ...this.lan])]
   }
 
   revoke(id: string): void {
@@ -133,6 +146,8 @@ export class Sharing {
     this.timer = null
     this.server?.close()
     this.server = null
+    this.probes?.close()
+    this.probes = null
     this.self = undefined
     this.lan = []
     this.state = 'off'

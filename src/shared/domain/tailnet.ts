@@ -27,9 +27,20 @@ export interface DiscoveredDevice extends TailnetDevice {
   mine: boolean
 }
 
+/** A computer sharing Hiveory on the same Wi-Fi or office network, found by a local probe (ADR 0052). */
+export interface LanServer {
+  name: string
+  /** Its private IPv4 address on that network. */
+  address: string
+  port: number
+  version: string
+}
+
 export interface Discovery {
   state: TailnetStatus['state']
   devices: DiscoveredDevice[]
+  /** Sharing computers on this computer's local networks (no Tailscale needed; pairing takes the code). */
+  lan?: LanServer[]
 }
 
 /** One host the SSH picker offers: a Tailscale device or a ~/.ssh/config alias (ADR 0025). */
@@ -88,21 +99,31 @@ export interface RemotePort {
   localPort?: number
 }
 
+/** A host name or IP a pairing link may carry. */
+const HOST = /^[A-Za-z0-9.:-]{1,253}$/
+
 /**
- * What the phone app scans to pair (ADR 0027): where this computer is on the
- * tailnet and its one-time code. The app opens `hiveory://pair` links itself.
+ * What the phone app scans to pair (ADR 0027): where this computer is and its one-time code.
+ * `alternates` are its other addresses (its Tailscale name and its Wi-Fi address, ADR 0052), tried
+ * when the first one does not answer. The app opens `hiveory://pair` links itself.
  */
-export const pairingLink = (address: string, port: number, code: string): string =>
-  `hiveory://pair?a=${encodeURIComponent(address)}&p=${port}&c=${encodeURIComponent(code)}`
+export const pairingLink = (address: string, port: number, code: string, alternates: string[] = []): string => {
+  const others = alternates.filter((a) => a !== address && HOST.test(a)).slice(0, 4)
+  return `hiveory://pair?a=${encodeURIComponent(address)}&p=${port}&c=${encodeURIComponent(code)}${others.length ? `&b=${encodeURIComponent(others.join(','))}` : ''}`
+}
 
 /** The reverse of pairingLink; null for anything that is not a Hiveory pairing link. */
-export const parsePairingLink = (link: string): { address: string; port: number; code?: string } | null => {
+export const parsePairingLink = (link: string): { address: string; port: number; code?: string; alternates?: string[] } | null => {
   const match = /^hiveory:\/\/pair\?(.*)$/.exec(link.trim())
   if (!match) return null
   const params = new URLSearchParams(match[1])
   const address = params.get('a') ?? ''
   const port = Number(params.get('p'))
-  if (!/^[A-Za-z0-9.:-]{1,253}$/.test(address) || !Number.isInteger(port) || port < 1 || port > 65535) return null
+  if (!HOST.test(address) || !Number.isInteger(port) || port < 1 || port > 65535) return null
   const code = params.get('c') ?? undefined
-  return { address, port, ...(code && /^[A-Za-z0-9]{8}$/.test(code) ? { code } : {}) }
+  const alternates = (params.get('b') ?? '')
+    .split(',')
+    .filter((a) => a && a !== address && HOST.test(a))
+    .slice(0, 4)
+  return { address, port, ...(code && /^[A-Za-z0-9]{8}$/.test(code) ? { code } : {}), ...(alternates.length ? { alternates } : {}) }
 }
