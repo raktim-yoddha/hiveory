@@ -3,7 +3,8 @@ import { mkdirSync, openSync, readdirSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
-import { HOST_PROTOCOL, type HostFrame, type HostTransport, type KeptHook } from '@shared/host/protocol'
+import { HOST_PROTOCOL, type HostFrame, type HostTransport, type KeptHook, type TerminalHostStatus } from '@shared/host/protocol'
+import { findExecutable } from '../cli/discovery'
 import type { Logger } from '../../app/logger'
 import type { HookEndpoint } from '../cli/adapters/types'
 import { newNonce, prove, verifyProof } from './handshake'
@@ -44,6 +45,17 @@ export interface KeptTerminal {
   ptyId: string
   hooks: KeptHook[]
 }
+
+/**
+ * How the daemon is started. On Linux, in its own `systemd-run --user --scope` when there is one, so
+ * closing the desktop session's cgroup (the app's) never takes the terminals with it (ADR 0050 §10).
+ */
+export const daemonCommand = (
+  exe: string,
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+  systemdRun: string | undefined = platform === 'linux' && process.env.XDG_RUNTIME_DIR ? findExecutable('systemd-run', { platform, path: process.env.PATH ?? '' }) : undefined
+): [string, string[]] => (platform === 'linux' && systemdRun ? [systemdRun, ['--user', '--scope', '--quiet', '--collect', '--', exe, ...args]] : [exe, args])
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -121,6 +133,37 @@ export class LocalHost {
    */
   get relayEndpoint(): HookEndpoint | undefined {
     return this.durable ? this.relayValue : undefined
+  }
+
+  /** Where this computer's terminals run now, for Settings › Agents › Terminal host. */
+  async status(): Promise<TerminalHostStatus> {
+    const client = this.client?.alive ? this.client : null
+    if (this.mode === 'daemon' && client) {
+      const endpoint = this.endpointOf(HOST_PROTOCOL)
+      const terminals = (await client.call('pty.list', null).catch(() => [])).filter((t) => t.alive).length
+      const runtime = runtimeVersionOf(this.dir, endpoint?.exe)
+      return { mode: 'daemon', pid: endpoint?.pid, since: endpoint?.since, terminals, protocol: HOST_PROTOCOL, ...(runtime ? { runtime } : {}) }
+    }
+    if (client) return { mode: 'utility', terminals: client.terminalCount, protocol: HOST_PROTOCOL }
+    return { mode: this.failures >= MAX_FAILURES ? 'in-process' : this.mode === 'daemon' ? 'daemon' : 'utility', terminals: 0, protocol: HOST_PROTOCOL }
+  }
+
+  /**
+   * Settings › Agents › Restart terminal host: ends the daemon and every terminal it holds, so the
+   * next terminal starts a fresh one (agents then resume their conversations).
+   */
+  async restart(): Promise<void> {
+    const client = this.client
+    this.client = null
+    this.live.clear()
+    this.keptHooks.clear()
+    // While it shuts down, a dropped link is not a reconnect.
+    this.closed = true
+    if (client?.alive && this.mode === 'daemon') await client.call('shutdown', null, 3000).catch(() => undefined)
+    client?.close()
+    this.closed = false
+    this.failures = 0
+    if (this.mode === 'daemon') await this.get()
   }
 
   /** Settings › Agents › keep kept terminals for…: told to the daemon now and on every connect. */
@@ -298,7 +341,8 @@ export class LocalHost {
     try {
       mkdirSync(this.dir, { recursive: true })
       const log = openSync(join(this.dir, 'daemon.log'), 'a')
-      spawn(staged?.exe ?? process.execPath, [staged?.entry ?? this.entry, '--daemon', '--local', this.dir], {
+      const [file, args] = daemonCommand(staged?.exe ?? process.execPath, [staged?.entry ?? this.entry, '--daemon', '--local', this.dir])
+      spawn(file, args, {
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         detached: true,
         windowsHide: true,

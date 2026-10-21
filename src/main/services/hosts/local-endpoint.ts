@@ -28,6 +28,8 @@ export interface LocalEndpoint {
   relay?: HookEndpoint
   /** The executable the daemon runs from (a staged runtime copy, or the app itself). */
   exe?: string
+  /** When it started (ms since the epoch). */
+  since?: number
 }
 
 /**

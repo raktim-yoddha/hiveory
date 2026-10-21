@@ -23,6 +23,7 @@ import type {
   HostLinkStatus
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
+import type { TerminalHostStatus } from '../host/protocol'
 import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
 import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
@@ -478,6 +479,9 @@ export const requestSchemas = {
   'themes.installed': none,
   'themes.install': z.object({ namespace: z.string().regex(THEME_SEGMENT), name: z.string().regex(THEME_SEGMENT) }),
   'themes.remove': z.object({ id: z.string().regex(THEME_EXTENSION_ID) }),
+  /** Settings › Agents › Terminal host (ADR 0050 §11). */
+  'terminalHost.status': none,
+  'terminalHost.restart': none,
   'updates.status': none,
   'updates.check': none,
   'updates.download': none,
@@ -860,6 +864,8 @@ export interface ResponseMap {
   'queen.hotkeyAccess': HotkeyStatus
   'settings.get': AppSettings
   'settings.update': AppSettings
+  'terminalHost.status': TerminalHostStatus
+  'terminalHost.restart': TerminalHostStatus
   'updates.status': UpdateStatus
   'updates.check': UpdateStatus
   'updates.download': UpdateStatus

@@ -587,8 +587,10 @@ CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, rep
 
 ### Durable terminal host (ADR 0050)
 
-The local hiveoryd outlives the app, as remote ones do (phase 1 built: daemon, mutual hello,
-ownership, keys, `pty.list`, adopt on start, quit detaches; the relay and update drain are next).
+The local hiveoryd outlives the app, as remote ones do: daemon, mutual hello, ownership, keys,
+`pty.list`, adopt on start, quit detaches (phase 1); the relay for hooks and MCP (2); its own
+runtime copy, protocol drain, one keep-for rule (3); server mode, Linux scope, Settings ›
+Agents › Terminal host (`terminalHost.status` / `terminalHost.restart`) (4).
 The utility process above remains the fallback, and automated runs (`HIVEORY_STOP_AGENTS_ON_QUIT`)
 use it.
 

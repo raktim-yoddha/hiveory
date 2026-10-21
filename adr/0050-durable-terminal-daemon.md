@@ -320,3 +320,29 @@ Three things stop the remote design from simply running locally:
   - the installed folder was replaced (renamed away) while an agent's loop ran;
   - Hiveory, started from the replaced folder, reached the same daemon, with the agent still
     running and its output continuing.
+
+## Amendment (2026-10-21): phase 4 as built
+
+- **Server mode** (`--serve`) needed no code of its own: it creates the same container, so it adopts
+  the profile's daemon and detaches on quit.
+  - It now quits properly on `SIGTERM` and `SIGINT`, so a supervisor stopping it keeps the agents.
+  - A server killed outright cannot save what it showed. The terminals survive, but the lines it
+    received before it died are missing from the next pane.
+- **Linux:** `daemonCommand` starts the daemon through `systemd-run --user --scope --quiet --collect`
+  when `systemd-run` is on PATH and a user session exists (`XDG_RUNTIME_DIR`).
+- **Settings › Agents › Terminal host** (`TerminalHostSettings.tsx`) replaces the "When you quit
+  Hiveory" group. It has:
+  - a status line: in the background since when, how many terminals, which version;
+  - **Keep agents running when Hiveory quits** and **Keep them for**;
+  - **Restart terminal host**, after a confirmation. It shuts the daemon down, ends every terminal,
+    starts a fresh daemon, and lets the agents resume their conversations.
+- **New IPC channels:** `terminalHost.status` and `terminalHost.restart`. They are also in
+  `REMOTE_CHANNELS`, so a desktop paired with a server shows and restarts the server's terminal host.
+- **The tray count:** the tray already shows "N agents running" while the window is closed. Quitting
+  with agents kept now also shows a notification ("N agents keep running"), since no window or tray
+  remains.
+- **Verified** in the built app:
+  - the status line read the daemon;
+  - a server on the same profile took the kept terminal back;
+  - the desktop then took it back from the same daemon;
+  - Restart started a new daemon.

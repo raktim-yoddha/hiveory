@@ -591,6 +591,18 @@ export const GUIDE: GuideChapter[] = [
         keywords: 'update version release'
       },
       {
+        heading: 'Agents keep running after you quit',
+        body: (
+          <p>
+            Agents and terminals run in Hiveory&rsquo;s terminal host, which keeps going after you quit and through updates; when Hiveory
+            opens again every pane takes its terminal back, with what it printed meanwhile. Settings › Agents › Terminal host shows where
+            they run, sets how long they are kept (until they finish, or 1 hour to 7 days), and restarts the host. To stop everything
+            once, use Quit and stop agents in the tray menu.
+          </p>
+        ),
+        keywords: 'quit background keep running terminal host daemon update restart durable'
+      },
+      {
         heading: 'An agent shows "Not running"',
         body: (
           <p>

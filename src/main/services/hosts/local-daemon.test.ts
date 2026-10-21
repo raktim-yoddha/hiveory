@@ -384,3 +384,15 @@ describe('updates keep terminals (ADR 0050 §7–8)', () => {
     await exited
   }, 20_000)
 })
+
+describe('per platform (ADR 0050 §10)', () => {
+  it('starts the daemon in its own systemd scope on Linux when there is one', async () => {
+    const { daemonCommand } = await import('./local-host')
+    expect(daemonCommand('/opt/hiveory/hiveory', ['host.js', '--daemon'], 'linux', '/usr/bin/systemd-run')).toEqual([
+      '/usr/bin/systemd-run',
+      ['--user', '--scope', '--quiet', '--collect', '--', '/opt/hiveory/hiveory', 'host.js', '--daemon']
+    ])
+    expect(daemonCommand('/opt/hiveory/hiveory', ['host.js'], 'linux', undefined)).toEqual(['/opt/hiveory/hiveory', ['host.js']])
+    expect(daemonCommand('C:\\Hiveory\\Hiveory.exe', ['host.js'], 'win32', '/usr/bin/systemd-run')).toEqual(['C:\\Hiveory\\Hiveory.exe', ['host.js']])
+  })
+})

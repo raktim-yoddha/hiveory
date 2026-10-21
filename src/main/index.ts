@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, net, powerMonitor, protocol, safeStorage } from 'electron'
+import { app, BrowserWindow, Menu, net, Notification, powerMonitor, protocol, safeStorage } from 'electron'
 import electronUpdater from 'electron-updater'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -225,6 +225,8 @@ app.whenReady().then(async () => {
     const shared = c.sharing.status()
     console.log(`Hiveory server ready on ${serveHost}:${shared.port}${shared.address ? ` and ${shared.address}:${shared.port} (Tailscale)` : ''}`)
     if (serveTailnet && !shared.address) console.log(`${shared.detail ?? 'Tailscale is not connected.'} Clients can reach it once it is.`)
+    // A supervisor stopping the server (systemd, Ctrl+C) quits properly, so its agents are kept (ADR 0050 §9).
+    for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => app.quit())
   } else {
     openWindow()
     if (startup.shareOnTailnet || startup.shareOnLan) void guard(log, 'Sharing', () => share(startup.shareOnTailnet, startup.shareOnLan))
@@ -287,7 +289,13 @@ app.on('before-quit', (event) => {
     event.preventDefault()
     hostSettled = true
     quitting = true
-    void (keepAgents() ? c0.localHost.hold() : c0.localHost.shutdown()).finally(() => app.quit())
+    const kept = keepAgents()
+    const running = c0.store.state.instances.filter((i) => c0.agents.details(i).running).length
+    // No window or tray remains to show it, so say that the agents keep working (ADR 0050 §7).
+    if (kept && running && Notification.isSupported()) {
+      new Notification({ title: 'Hiveory', body: `${running} ${running === 1 ? 'agent keeps' : 'agents keep'} running. Open Hiveory to see ${running === 1 ? 'it' : 'them'}.`, silent: true }).show()
+    }
+    void (kept ? c0.localHost.hold() : c0.localHost.shutdown()).finally(() => app.quit())
     return
   }
   quitting = true

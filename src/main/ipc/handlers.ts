@@ -272,6 +272,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
 
   'settings.get': () => c.settings.get(),
   'settings.update': (patch) => c.settings.update(patch),
+  'terminalHost.status': () => c.localHost.status(),
+  // Every terminal ends with it; agents come back resuming their conversations, as after a reboot.
+  'terminalHost.restart': async () => {
+    await c.localHost.restart()
+    c.agents.resumeAll()
+    return c.localHost.status()
+  },
   'updates.status': () => c.updates.current(),
   'updates.check': () => c.updates.check(),
   'updates.download': () => c.updates.download(),

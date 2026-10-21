@@ -124,7 +124,7 @@ const runLocalDaemon = async (dir: string): Promise<void> => {
   await relay.server.start()
   const server = createServer((socket) => gateHost(state, lineTransport(socket, socket, () => socket.destroy()), token))
   if (!(await publish(server, path).catch(() => false))) process.exit(0)
-  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token, relay: relay.server.endpoint, exe: process.execPath }
+  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token, relay: relay.server.endpoint, exe: process.execPath, since: Date.now() }
   writeFileSync(`${file}.tmp`, JSON.stringify(endpoint), { mode: 0o600 })
   renameSync(`${file}.tmp`, file)
   idleExit(state, server, (idle) => grace.keep(state, idle), forget)

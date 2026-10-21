@@ -11,7 +11,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'projects.list', 'projects.add', 'projects.addDefaults', 'projects.remove', 'projects.touch', 'projects.update',
   'workspaces.list', 'workspaces.suggestName', 'workspaces.create', 'workspaces.delete', 'workspaces.gitStatus', 'workspaces.repair',
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.rename', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
-  'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot',
+  'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot', 'terminalHost.status', 'terminalHost.restart',
   'layout.get', 'layout.apply', 'presets.list', 'presets.save', 'presets.delete', 'kanban.board',
   'queen.plan', 'queen.peek', 'queen.accounts', 'queen.saveAccount', 'queen.removeAccount', 'queen.moveAccount', 'queen.testAccount', 'queen.listModels',
   'settings.get', 'settings.update', 'shell.open', 'shell.restart', 'shell.close', 'extensions.scan',

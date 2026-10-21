@@ -26,6 +26,20 @@ export interface PtySpawnParams {
   key?: string
 }
 
+/** Settings › Agents › Terminal host (ADR 0050 §11): where this computer's terminals run, and how many. */
+export interface TerminalHostStatus {
+  /** daemon: outlives Hiveory; utility: a separate process that ends with it; in-process: inside Hiveory. */
+  mode: 'daemon' | 'utility' | 'in-process'
+  pid?: number
+  /** When the daemon started (ms since the epoch). */
+  since?: number
+  /** Live terminals it holds now. */
+  terminals: number
+  protocol: number
+  /** The app version its own runtime copy is (installed builds); absent: it runs from the app. */
+  runtime?: string
+}
+
 /** A hook a CLI reported to the daemon's relay while no app was attached (ADR 0050 §6). */
 export interface KeptHook {
   instanceId: string

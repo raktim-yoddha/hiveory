@@ -3,6 +3,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { Select } from '../../components/ui/Select'
 import { useApp, useClis, useSettings } from '../../stores/data'
 import { SettingRow, SettingsPage } from './SettingsPage'
+import { TerminalHostSettings } from './TerminalHostSettings'
 import styles from './Settings.module.css'
 
 /** CLIs whose sessions load Hiveory's MCP server (mirrors adapters with `injectMcp`). */
@@ -77,38 +78,7 @@ export function AgentsSection() {
           }
         />
       </div>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>When you quit Hiveory</div>
-        <SettingRow
-          title="Keep agents running when Hiveory quits"
-          description="Agents and terminals keep working in Hiveory's terminal host after you quit, and through updates. When Hiveory opens again, every pane takes its terminal back where it is. Off: quitting stops them, and they resume their conversations next time. Quit and stop agents in the tray menu stops them once."
-          control={
-            <Toggle
-              label="Keep agents running when Hiveory quits"
-              checked={settings.keepAgentsAfterQuit}
-              onChange={(keepAgentsAfterQuit) => void update({ keepAgentsAfterQuit })}
-            />
-          }
-        />
-        <SettingRow
-          title="Keep them for"
-          description="How long agents and terminals keep running while Hiveory is closed, on this computer and on remote machines. Until they finish, or a limit after which they are stopped."
-          control={
-            <Select
-              label="Keep them for"
-              hideLabel
-              value={settings.detachedGrace}
-              options={[
-                { value: 'until-exit', label: 'Until they finish' },
-                { value: '1h', label: '1 hour' },
-                { value: '1d', label: '1 day' },
-                { value: '7d', label: '7 days' }
-              ]}
-              onChange={(detachedGrace) => void update({ detachedGrace: detachedGrace as typeof settings.detachedGrace })}
-            />
-          }
-        />
-      </div>
+      <TerminalHostSettings />
       <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>
         <p className={styles.groupNote}>

@@ -490,6 +490,14 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   stops them.
 - While the link to the terminal host is down, an agent says "Reconnecting to its terminal…" rather
   than ended; if the host is gone for good, its terminals end and Hiveory says so.
+- Quitting with agents running says so in a notification ("3 agents keep running"). Updates keep
+  them too: the terminal host runs from its own copy of the app.
+- Settings › Agents › Terminal host shows where terminals run (in the background since when, how
+  many, which version), "Keep them for" (until they finish, 1 hour, 1 day, 7 days; the same rule on
+  remote machines) and Restart terminal host, which ends every terminal after a confirmation;
+  agents then resume their conversations.
+- Server mode (`--serve`) uses the same terminal host, so switching a computer between desktop and
+  server keeps its terminals.
 - After a reboot, or a quit that stopped them, every terminal agent comes back on start-up, resuming
   its own conversation (ADR 0014); the CLIs keep their history on disk, listed in the Sessions tab.
 
