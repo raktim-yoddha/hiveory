@@ -483,8 +483,15 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 - Closing the window keeps Hiveory in the system tray and every agent keeps working (Settings ›
   Agents › "Keep agents running in the background", on by default). The tray reopens the window
   and shows how many agents run; "Quit Hiveory" stops them.
-- After a real quit or a reboot every terminal agent comes back on start-up, resuming its own
-  conversation (ADR 0014); the CLIs keep their history on disk, listed in the Sessions tab.
+- Quitting leaves agents and terminals running in Hiveory's terminal host (Settings › Agents ›
+  "Keep agents running when Hiveory quits", on by default, ADR 0050). When Hiveory opens again,
+  each pane takes its terminal back, with what it printed meanwhile. The tray menu then offers
+  "Quit Hiveory (agents keep running)" and "Quit and stop agents". With the setting off, quitting
+  stops them.
+- While the link to the terminal host is down, an agent says "Reconnecting to its terminal…" rather
+  than ended; if the host is gone for good, its terminals end and Hiveory says so.
+- After a reboot, or a quit that stopped them, every terminal agent comes back on start-up, resuming
+  its own conversation (ADR 0014); the CLIs keep their history on disk, listed in the Sessions tab.
 
 ## Important Non-Features
 

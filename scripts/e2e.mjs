@@ -262,9 +262,11 @@ await test('appearance: an added image becomes the wallpaper; transparency reach
   await value('settings.update', { surfaceOpacity: 0 })
   for (const theme of ['dark', 'bronze', 'silver']) {
     await value('settings.update', { theme })
-    await page.waitForTimeout(450)
-    const alphas = [await alphaOf('nav[aria-label="Settings sections"]'), await alphaOf('div:has(> [role="radiogroup"][aria-label="Wallpaper"])')]
-    expect(alphas.every((a) => a === 0), `${theme}: surfaces not fully transparent (${alphas})`)
+    // The theme's surfaces fade in their transition; wait for it rather than a fixed delay.
+    const alphas = async () => [await alphaOf('nav[aria-label="Settings sections"]'), await alphaOf('div:has(> [role="radiogroup"][aria-label="Wallpaper"])')]
+    await waitFor(async () => (await alphas()).every((a) => a === 0), `${theme}: surfaces fully transparent`, 5000).catch(() => undefined)
+    const seen = await alphas()
+    expect(seen.every((a) => a === 0), `${theme}: surfaces not fully transparent (${seen})`)
   }
   await value('settings.update', { theme: 'dark', surfaceOpacity: 0.6 })
   await page.waitForTimeout(400)
@@ -360,7 +362,7 @@ await test('apps: a Composio key once; Connect goes straight to the app; a label
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Agents' }).click()
   await choose(page, 'New agents open as', 'Chat')
-  await page.getByRole('switch', { name: 'Auto-approve permissions by default' }).click()
+  await page.getByRole('switch', { name: 'Skip permissions (YOLO) for every agent' }).click()
   await waitFor(async () => {
     const s = await value('settings.get')
     return s.defaultChatUi && s.defaultAutoApprove
@@ -413,7 +415,7 @@ await test('"+" opens New worktree with the Settings defaults', async () => {
   const dialog = await newWorktree('demo-app')
   await dialog.waitFor()
   expect((await dialog.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'true', 'chat UI default not applied')
-  expect((await dialog.getByRole('switch', { name: 'Auto-approve permissions' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
+  expect((await dialog.getByRole('switch', { name: 'Skip permissions (YOLO)' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
   await page.keyboard.press('Escape')
   await value('settings.update', { defaultChatUi: false, defaultAutoApprove: false })
 })
@@ -1252,7 +1254,7 @@ await test('Queen Bee: messages by CLI name, stops work, reports everything, tel
     expect((await value('agents.list', { workspaceId: mainWs.id })).some((a) => a.id === shell.id), 'stop closed the agent')
 
     await say('status of everything')
-    await waitFor(async () => /waiting for you|working|idle/i.test(await card.innerText()), 'status of everything')
+    await waitFor(async () => /needs you|need you|working|idle/i.test(await card.innerText()), 'status of everything')
 
     // A Claude agent's own hooks report a finished turn: she tells it, and says it.
     const claude = (await value('agents.list', { workspaceId: mainWs.id })).find((a) => a.cliId === 'claude')

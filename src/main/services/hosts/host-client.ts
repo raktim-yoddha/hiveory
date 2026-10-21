@@ -1,7 +1,7 @@
 import { AppException } from '@shared/errors'
 import type { HostCall, HostCalls, HostEvents, HostFailure, HostFrame, HostNotifications, HostService, HostTransport, PtySpawnParams } from '@shared/host/protocol'
 import { GitCommandError } from '../git/git-service'
-import type { PtyBackend, PtyHandle } from '../pty/pty-backend'
+import type { PtyBackend, PtyHandle, PtyStart } from '../pty/pty-backend'
 
 const CALL_TIMEOUT_MS = 30_000
 
@@ -12,6 +12,8 @@ interface PtyListeners {
   exit: ExitListener
   /** The terminal now lives on another client (after a reconnect). */
   moved?: (client: HostClient) => void
+  /** The link to the daemon dropped; the terminal may still run there (ADR 0050 §5). */
+  lost?: () => void
 }
 
 /**
@@ -142,9 +144,10 @@ export class HostClient {
       call.reject(new Error('The host disconnected.'))
     }
     this.calls.clear()
-    // A local host takes its PTYs with it; the processes are gone, so their panes say so.
-    // A remote daemon keeps them for a while: they wait to be adopted by the next connection.
+    // A utility host takes its PTYs with it; the processes are gone, so their panes say so.
+    // A daemon keeps them: they wait to be adopted by the next connection, and say they are unreachable.
     if (!this.options.keepPtys) this.abandon()
+    else for (const pty of this.ptys.values()) pty.lost?.()
     for (const l of this.closeListeners) l()
   }
 }
@@ -166,12 +169,13 @@ class HostedPty implements PtyHandle {
   private readonly dataListeners: Array<(d: string) => void> = []
   private readonly exitListeners: ExitListener[] = []
   private readonly errorListeners: Array<(e: Error) => void> = []
+  private readonly linkListeners: Array<(linked: boolean) => void> = []
   private target: { write(d: string): void; resize(c: number, r: number): void; kill(): void } | null = null
   private queued: string[] = []
   private size: { cols: number; rows: number } | null = null
   private killed = false
 
-  constructor(spec: PtySpawnParams, host: Promise<HostClient | null>, fallback: PtyBackend) {
+  constructor(spec: PtyStart, host: Promise<HostClient | null>, fallback: PtyBackend) {
     void host.then(
       (client) => (client?.alive ? this.startRemote(client, spec) : this.startLocal(spec, fallback)),
       () => this.startLocal(spec, fallback)
@@ -186,6 +190,9 @@ class HostedPty implements PtyHandle {
   }
   onError(l: (e: Error) => void): void {
     this.errorListeners.push(l)
+  }
+  onLink(l: (linked: boolean) => void): void {
+    this.linkListeners.push(l)
   }
 
   write(data: string): void {
@@ -211,19 +218,28 @@ class HostedPty implements PtyHandle {
     if (this.size && (this.size.cols !== spec.cols || this.size.rows !== spec.rows)) target.resize(this.size.cols, this.size.rows)
   }
 
-  private startRemote(client: HostClient, spec: PtySpawnParams): void {
+  private startRemote(client: HostClient, start: PtyStart): void {
+    const { adopt, ...spec } = start
     const at = this.size ?? { cols: spec.cols, rows: spec.rows }
     // The client this terminal talks through; a reconnect moves it to the new one.
     let live = client
-    client.call('pty.spawn', { ...spec, ...at }).then(
-      ({ ptyId }) => {
+    // A daemon's kept terminal is taken back with what it printed meanwhile (ADR 0050 §5).
+    const begin: Promise<{ ptyId: string; kept: string }> = adopt
+      ? client.call('pty.attach', { ptyId: adopt }).then((r) =>
+          r.alive ? { ptyId: adopt, kept: r.data } : Promise.reject(Object.assign(new Error('ended'), { exit: { exitCode: r.code, signal: r.signal } }))
+        )
+      : client.call('pty.spawn', { ...spec, ...at }).then(({ ptyId }) => ({ ptyId, kept: '' }))
+    begin.then(
+      ({ ptyId, kept }) => {
         client.bind(ptyId, {
           data: (d) => this.dataListeners.forEach((l) => l(d)),
           exit: (e) => this.exitListeners.forEach((l) => l(e)),
           moved: (next) => {
             live = next
             if (this.size) next.notify('pty.resize', { ptyId, ...this.size })
-          }
+            this.linkListeners.forEach((l) => l(true))
+          },
+          lost: () => this.linkListeners.forEach((l) => l(false))
         })
         this.ready(
           {
@@ -233,12 +249,23 @@ class HostedPty implements PtyHandle {
           },
           { ...spec, ...at }
         )
+        if (adopt) {
+          if (kept) this.dataListeners.forEach((l) => l(kept))
+          // A size change makes full-screen CLIs draw their whole screen again, at the pane's size.
+          live.notify('pty.resize', { ptyId, cols: at.cols, rows: Math.max(2, at.rows - 1) })
+          setTimeout(() => live.notify('pty.resize', { ptyId, ...(this.size ?? at) }), 60)
+        }
       },
-      (error: Error) => this.errorListeners.forEach((l) => l(error))
+      (error: Error & { exit?: { exitCode: number | null; signal: number | null } }) => {
+        if (error.exit) return this.exitListeners.forEach((l) => l(error.exit!))
+        this.errorListeners.forEach((l) => l(error))
+      }
     )
   }
 
-  private startLocal(spec: PtySpawnParams, fallback: PtyBackend): void {
+  private startLocal(start: PtyStart, fallback: PtyBackend): void {
+    // No daemon to take a kept terminal back from: start it anew (a resume, as after a reboot).
+    const { adopt: _adopt, ...spec } = start
     let inner: PtyHandle
     try {
       inner = fallback.spawn({ ...spec, ...(this.size ?? {}) })

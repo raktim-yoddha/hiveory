@@ -16,6 +16,10 @@ export interface PtySpawnSpec {
   env: Record<string, string>
   /** On a remote host: start from that machine's environment, `env` on top. */
   inheritEnv?: boolean
+  /** Who the terminal belongs to, so a daemon can hand it back after Hiveory restarts (ADR 0050). */
+  key?: string
+  /** Take back the daemon's kept terminal with this id instead of starting a process. */
+  adopt?: string
 }
 
 export interface PtySessionEvents {
@@ -25,6 +29,8 @@ export interface PtySessionEvents {
   raw: [data: string]
   exit: [code: number | null, signal: number | null]
   error: [error: Error]
+  /** The link to the daemon running this terminal dropped (false) or came back (true). */
+  link: [linked: boolean]
 }
 
 /** Longest wait for a terminal size before spawning anyway (pane not visible). */
@@ -153,6 +159,21 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     return wasRunning
   }
 
+  /**
+   * Quitting with the terminal kept by its daemon (ADR 0050): lets go of the process without
+   * ending it. Its output so far stays in `snapshot` for saving.
+   */
+  detach(): void {
+    if (this.resizeTimer) clearTimeout(this.resizeTimer)
+    this.resizeTimer = null
+    if (this.pending) clearTimeout(this.pending.timer)
+    this.pending = null
+    this.flush()
+    this.process = null
+    this.mirror?.dispose()
+    this.mirror = null
+  }
+
   /** Synchronous kill for app shutdown. */
   killNow(): void {
     if (this.resizeTimer) clearTimeout(this.resizeTimer)
@@ -226,6 +247,9 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
         this.process = null
         this.flush()
         this.emit('exit', exitCode, signal)
+      })
+      child.onLink?.((linked) => {
+        if (this.process === child) this.emit('link', linked)
       })
       // A host daemon reports a failed spawn after the fact.
       child.onError((error) => {

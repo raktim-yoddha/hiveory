@@ -585,10 +585,12 @@ CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, rep
         └──────────────▶ inProcessPty (node-pty in main)
 ```
 
-### Durable terminal host (ADR 0050, being built in phases)
+### Durable terminal host (ADR 0050)
 
-The target that replaces the utility process above: the local hiveoryd outlives the app, as remote
-ones do.
+The local hiveoryd outlives the app, as remote ones do (phase 1 built: daemon, mutual hello,
+ownership, keys, `pty.list`, adopt on start, quit detaches; the relay and update drain are next).
+The utility process above remains the fallback, and automated runs (`HIVEORY_STOP_AGENTS_ON_QUIT`)
+use it.
 
 ```text
 Hiveory (desktop or --serve) ─HostClient═ named pipe / 0600 socket (mutual HMAC hello) ═▶ hiveoryd --daemon

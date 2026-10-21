@@ -227,3 +227,40 @@ Three things stop the remote design from simply running locally:
   - spilling kept output to disk beyond 2 MiB;
   - giving remote hosts a relay of their own (their hooks still use the SSH tunnel);
   - escaping kill-on-close jobs on Windows.
+
+## Amendment (2026-10-21): phase 1 as built
+
+- **Built.**
+  - `hiveoryd --daemon --local <Runtime>/hiveoryd` is started detached by `LocalHost`, with
+    `endpoint.json` (mode `0600`).
+  - The endpoint is a pipe named from the profile's folder and the protocol (`localEndpointPath`).
+  - The mutual hello is `hello` then `auth` (`handshake.ts`, `gateHost`).
+  - Endpoint ownership is `publish` in `src/host/endpoint-owner.ts`.
+  - Terminals carry keys; `pty.list` and `shutdown` are new calls.
+  - Live terminals are adopted at start-up (`LocalHost.prepare` / `take`) by agents and shells.
+  - Quit detaches; the setting is `keepAgentsAfterQuit`, with "Quit and stop agents" in the tray.
+  - A dropped link means "Reconnecting to its terminal…", then reconnect and `adopt`; only after
+    that fails are the terminals given up.
+- **`hold`, a frozen-core call.** Before letting go, the app asks the daemon to keep output from
+  that moment, and saves each terminal's exact tail only after the answer. The stream is ordered,
+  so no byte falls between the saved tail and the kept output. The saved tail is exact
+  (`exactTail`), not ADR 0044's trimmed replay.
+- **Redraw after adopting.** Adopting resizes the terminal one row smaller and back, so full-screen
+  CLIs draw their whole screen at the pane's size.
+- **Frame limit.** It is 16 MiB, not 1 MiB: a `pty.attach` result carries up to 2 MiB of kept
+  output, which JSON escaping can more than double.
+- **Interim for §6.** Until the relay exists, the hook server keeps its port and token in
+  `<Runtime>/hook-endpoint.json` (mode `0600`). An agent kept across a restart therefore still
+  reaches Hiveory for hooks and tools with the URL it was started with. If that port has been taken
+  meanwhile, a new one is used, and kept agents fall back to heuristics.
+- **Windows handle inheritance.** A child inherits every inheritable handle its parent holds, so a
+  daemon started by an app whose stdio is a pipe (Playwright, a supervisor) holds that pipe open.
+  Installed builds started from the shell have no such pipe.
+  - Automated runs set `HIVEORY_STOP_AGENTS_ON_QUIT=1`. They use the utility host and never leave a
+    daemon behind.
+  - Escaping inherited handles is left with the Windows job question (§10).
+- **Verified** in the built app: an agent's loop kept printing after quit, the daemon stayed up, and
+  the next start attached the same daemon and showed every line, with none lost or doubled. "Quit
+  and stop agents" ended the daemon and removed `endpoint.json`.
+- **Not yet:** phases 2–4. Kept remote terminals are not yet adopted across an app restart (their
+  daemon has `pty.list`, but nothing calls it yet).

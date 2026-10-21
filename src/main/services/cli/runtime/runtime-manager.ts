@@ -66,7 +66,9 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     /** Hiveory's MCP endpoint for an agent; `baseUrl` replaces the local one for agents on another machine. */
     private readonly mcpEndpoint: (instanceId: string, baseUrl?: string) => McpEndpoint | undefined = () => undefined,
     /** Where agent PTYs run: the local host daemon in the app (ADR 0022). */
-    private readonly ptyBackend: PtyBackend = inProcessPty
+    private readonly ptyBackend: PtyBackend = inProcessPty,
+    /** The daemon's kept terminal for an agent, once, after Hiveory restarted (ADR 0050). */
+    private readonly adoptable: (instanceId: string) => string | undefined = () => undefined
   ) {
     super()
     this.ticker = setInterval(() => this.tick(), 1000)
@@ -125,8 +127,14 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     const heuristics = adapter!.heuristics(Boolean(hook))
     session.detector = heuristics ? new HeuristicDetector(heuristics, () => session.pty.visibleText()) : null
     this.sessions.set(instance.id, session)
+    // Its terminal kept running while Hiveory was closed: take it back rather than start a new one.
+    const adopt = kit ? undefined : this.adoptable(instance.id)
     if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
-    else {
+    else if (adopt) {
+      // What it showed until Hiveory quit; the daemon adds what it printed since (ADR 0044, 0050).
+      const before = takeOutput(this.outputFile(instance.id))
+      if (before) session.pty.annotate(before)
+    } else {
       // What it showed before Hiveory quit or its Workspace was removed (ADR 0044). A resumed
       // conversation is redrawn by its CLI, so only a fresh start gets it back.
       const before = takeOutput(this.outputFile(instance.id))
@@ -157,7 +165,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     const env = sanitizeEnv(process.env, spec.env)
     env.HIVEORY_INSTANCE_ID = instance.id
     const [file, args] = resolveCommand(executable!, spec.args)
-    session.pty.start({ file, args, cwd, env })
+    session.pty.start({ file, args, cwd, env, key: instance.id, adopt })
     this.apply(session, { type: 'started' }, 'process')
   }
 
@@ -186,6 +194,19 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     this.stop(instanceId)
     session?.pty.removeAllListeners()
     this.sessions.delete(instanceId)
+  }
+
+  /**
+   * Quitting with agents kept (ADR 0050): every terminal stays with the daemon and its output so far
+   * is saved, so the next start shows it before what the agent printed meanwhile.
+   */
+  detachAll(): void {
+    clearInterval(this.ticker)
+    for (const [id, session] of this.sessions) {
+      saveOutput(this.outputFile(id), session.pty.snapshot().data, true)
+      session.pty.detach()
+    }
+    this.sessions.clear()
   }
 
   /** Quitting: every terminal's output is kept for the next start (ADR 0044). */
@@ -277,6 +298,13 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
       if (event) this.apply(session, event, 'heuristic')
     })
     session.pty.on('exit', (code, signal) => this.apply(session, { type: 'exited', code, signal }, 'process'))
+    // Unreachable is not ended (ADR 0050 §5): the status stays, the reason says why it is quiet.
+    session.pty.on('link', (linked) => {
+      const activity = linked ? undefined : 'Reconnecting to its terminal…'
+      if (session.details.activity === activity || !session.details.running) return
+      session.details = { ...session.details, activity }
+      this.emit('changed', session.instance, session.details)
+    })
     session.pty.on('error', (error) => {
       this.log.warn(`Spawn failed for ${session.instance.cliId}`, error)
       this.apply(session, { type: 'failed', error: error.message }, 'process')

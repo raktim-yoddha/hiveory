@@ -81,10 +81,19 @@ let window: BrowserWindow | null = null
 let container: Container | null = null
 /** Set once a real quit starts (tray, Cmd+Q, an update): closing the window then really closes it. */
 let quitting = false
+/** "Quit and stop agents": this quit ends the terminals even though agents are normally kept (ADR 0050). */
+let stopAgents = false
+/** Agents outlive this quit when the setting says so and the durable terminal host serves them. Automation never leaves them behind. */
+const keepAgents = (): boolean =>
+  !stopAgents && process.env.HIVEORY_STOP_AGENTS_ON_QUIT !== '1' && Boolean(container?.settings.get().keepAgentsAfterQuit)
 const tray = new BackgroundTray(
   () => window,
   () => (container ? container.store.state.instances.filter((i) => container!.agents.details(i).running).length : 0),
-  () => app.quit()
+  keepAgents,
+  (stop) => {
+    stopAgents = stop
+    app.quit()
+  }
 )
 
 // A window that is closing, or a payload that cannot be sent, never breaks the service that emitted.
@@ -161,6 +170,9 @@ app.whenReady().then(async () => {
   powerMonitor.on('on-battery', recheckRoutines)
   // Status detection degrades to PTY heuristics without the hook server (ADR 0006).
   await guard(log, 'Hook server', () => c.hookServer.start())
+  // Terminals kept by the terminal host since Hiveory last quit: agents and shells take them back (ADR 0050).
+  const knownTerminal = (key: string): boolean => key.startsWith('shell-') || c.store.state.instances.some((i) => i.id === key)
+  await guard(log, 'Terminal host', () => c.localHost.prepare(knownTerminal))
   container.runtime.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   container.shells.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   // What paired devices may do here: REMOTE_CHANNELS only, validated again, folders named directly.
@@ -266,7 +278,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' && servePort === undefined) app.quit()
 })
 
-app.on('before-quit', () => {
+/** Keeping or ending the daemon's terminals talks to it, so a quit waits for that once (ADR 0050). */
+let hostSettled = false
+
+app.on('before-quit', (event) => {
+  const c0 = container
+  if (c0 && !hostSettled && c0.localHost.durable) {
+    event.preventDefault()
+    hostSettled = true
+    quitting = true
+    void (keepAgents() ? c0.localHost.hold() : c0.localHost.shutdown()).finally(() => app.quit())
+    return
+  }
   quitting = true
   tray.destroy()
   guard(log, 'Client shutdown', () => stopClient?.())
@@ -279,9 +302,16 @@ app.on('before-quit', () => {
   guard(log, 'Hotkey shutdown', () => c.hotkey.stop())
   guard(log, 'MCP gateway shutdown', () => c.gateway.closeAll())
   guard(log, 'File watcher shutdown', () => c.files.closeAll())
-  guard(log, 'Agent shutdown', () => c.runtime.disposeAll())
-  guard(log, 'Terminal shutdown', () => c.shells.disposeAll())
-  guard(log, 'Terminal host shutdown', () => c.localHost.dispose())
+  if (keepAgents() && c.localHost.durable) {
+    // Quit detaches: agents and terminals keep running in the terminal host for the next start.
+    guard(log, 'Agent detach', () => c.runtime.detachAll())
+    guard(log, 'Terminal detach', () => c.shells.detachAll())
+    guard(log, 'Terminal host detach', () => c.localHost.detach())
+  } else {
+    guard(log, 'Agent shutdown', () => c.runtime.disposeAll())
+    guard(log, 'Terminal shutdown', () => c.shells.disposeAll())
+    guard(log, 'Terminal host shutdown', () => c.localHost.detach())
+  }
   guard(log, 'Remote host shutdown', () => c.hosts.closeAll())
   guard(log, 'SSH questions shutdown', () => c.sshAuth.close())
   guard(log, 'Port forwards shutdown', () => c.ports.closeAll())

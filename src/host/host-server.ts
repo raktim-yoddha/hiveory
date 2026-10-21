@@ -14,12 +14,14 @@ import {
   type HostFrame,
   type HostService,
   type HostTransport,
+  type HostedTerminalInfo,
   type PtySpawnParams
 } from '@shared/host/protocol'
 import { findExecutable } from '../main/services/cli/discovery'
 import { FileService } from '../main/services/files/file-service'
 import { GitCommandError, GitService } from '../main/services/git/git-service'
 import { WorktreeService } from '../main/services/git/worktree-service'
+import { newNonce, prove, verifyProof } from '../main/services/hosts/handshake'
 import { SessionHistoryService } from '../main/services/sessions/session-history'
 
 const MAX_EXEC_OUTPUT = 32 * 1024 * 1024
@@ -59,6 +61,8 @@ export interface HostServeOptions {
   trash?: (path: string) => Promise<void>
   /** Where the CLIs keep their history (the user's home; tests use a folder of their own). */
   home?: string
+  /** After `shutdown` ended every terminal: the daemon process exits (ADR 0050). */
+  onShutdown?: () => void
 }
 
 /** Output kept per terminal while no client is attached (the newest part wins). */
@@ -66,6 +70,8 @@ const MAX_KEPT = 2 * 1024 * 1024
 
 interface HostedTerminal {
   child: pty.IPty
+  key?: string
+  startedAt: number
   /** Output since the last client went away; null while a client is attached. */
   kept: string[] | null
   keptSize: number
@@ -79,16 +85,17 @@ interface HostedTerminal {
 export interface HostState {
   terminals: Map<string, HostedTerminal>
   /** Terminals that ended while no client was attached, with how they ended. */
-  ended: Map<string, { code: number | null; signal: number | null }>
+  ended: Map<string, { code: number | null; signal: number | null; key?: string; pid: number; startedAt: number }>
   services: Record<HostService, object>
   /** The attached client, if any. */
   out: HostTransport | null
   seq: number
+  onShutdown?: () => void
 }
 
 export const createHostState = (options: HostServeOptions = {}): HostState => {
   const git = new GitService()
-  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0 }
+  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0, onShutdown: options.onShutdown }
   state.services = {
     git,
     worktrees: new WorktreeService(git),
@@ -157,7 +164,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
     const ptyId = `p${++state.seq}`
-    const terminal: HostedTerminal = { child, kept: null, keptSize: 0 }
+    const terminal: HostedTerminal = { child, key: p.key, startedAt: Date.now(), kept: null, keptSize: 0 }
     state.terminals.set(ptyId, terminal)
     child.onData((data) => {
       if (terminal.kept && state.terminals.get(ptyId) === terminal) {
@@ -169,7 +176,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     child.onExit(({ exitCode, signal }) => {
       state.terminals.delete(ptyId)
       const exit = { code: exitCode, signal: signal ?? null }
-      if (terminal.kept || !state.out) state.ended.set(ptyId, exit)
+      if (terminal.kept || !state.out) state.ended.set(ptyId, { ...exit, key: terminal.key, pid: child.pid, startedAt: terminal.startedAt })
       else state.out.send({ kind: 'event', event: 'pty.exit', params: { ptyId, ...exit } })
     })
     return { ptyId, pid: child.pid }
@@ -188,6 +195,11 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     return { alive: true, data }
   }
 
+  const list = (): HostedTerminalInfo[] => [
+    ...[...state.terminals].map(([ptyId, t]) => ({ ptyId, key: t.key, pid: t.child.pid, alive: true, startedAt: t.startedAt })),
+    ...[...state.ended].map(([ptyId, e]) => ({ ptyId, key: e.key, pid: e.pid, alive: false, startedAt: e.startedAt, exit: { code: e.code, signal: e.signal } }))
+  ]
+
   const invoke = async ({ service, method, args }: HostCalls['invoke']['params']): Promise<unknown> => {
     const allowed = HOST_SERVICES[service] as readonly string[] | undefined
     if (!allowed?.includes(method)) throw new Error(`Not allowed on this host: ${service}.${method}`)
@@ -203,6 +215,18 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
         return spawn(params as PtySpawnParams)
       case 'pty.attach':
         return attach(params as { ptyId: string })
+      case 'pty.list':
+        return list()
+      case 'auth':
+        return null
+      case 'hold':
+        for (const t of state.terminals.values()) t.kept ??= []
+        return null
+      case 'shutdown':
+        disposeHostState(state)
+        state.ended.clear()
+        if (state.onShutdown) setImmediate(state.onShutdown)
+        return null
       case 'pty.kill': {
         const { ptyId } = params as { ptyId: string }
         try {
@@ -257,6 +281,31 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     state.out = null
     if (!persist) return disposeHostState(state)
     for (const t of state.terminals.values()) t.kept ??= []
+  })
+}
+
+/**
+ * A connection to a daemon with a token (the local one, ADR 0050 §2): only `hello` and `auth`
+ * are answered until the client proves the token, then it is served like any other. A
+ * connection that calls anything else first, or answers wrongly, is closed.
+ */
+export const gateHost = (state: HostState, transport: HostTransport, token: string): void => {
+  const nonce = newNonce()
+  let open = false
+  transport.onFrame((frame) => {
+    if (open) return
+    const p = (frame.kind === 'call' ? frame.params : null) as { nonce?: unknown; proof?: unknown } | null
+    if (frame.kind === 'call' && frame.method === 'hello' && typeof p?.nonce === 'string') {
+      const value = { protocol: HOST_PROTOCOL, pid: process.pid, platform: process.platform, home: homedir(), nonce, proof: prove(token, 'daemon', p.nonce) }
+      return transport.send({ kind: 'result', id: frame.id, ok: true, value })
+    }
+    if (frame.kind === 'call' && frame.method === 'auth' && verifyProof(token, 'client', nonce, p?.proof)) {
+      open = true
+      transport.send({ kind: 'result', id: frame.id, ok: true, value: null })
+      // After this frame's delivery, so the server never sees (and answers) the auth call twice.
+      return queueMicrotask(() => attachHost(state, transport, true))
+    }
+    transport.close()
   })
 }
 

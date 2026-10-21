@@ -7,7 +7,10 @@ import type { AppError } from '../errors'
  * share one remote layer. Bump HOST_PROTOCOL only for breaking changes.
  */
 // 2: remote daemons outlive their connection; pty.attach takes a terminal back after a reconnect (ADR 0025).
-export const HOST_PROTOCOL = 2
+// 3: terminals have keys and pty.list; a local daemon outlives the app and needs a mutual hello (ADR 0050).
+// Frozen core (ADR 0050 §8), never changed in meaning: hello, auth, hold, pty.list, pty.attach, pty.kill,
+// pty.write, pty.resize, pty.data, pty.exit. A breaking change only adds frames and bumps this number.
+export const HOST_PROTOCOL = 3
 
 export interface PtySpawnParams {
   file: string
@@ -18,6 +21,19 @@ export interface PtySpawnParams {
   rows: number
   /** Start from the host's own environment and apply `env` on top (remote hosts: never ship this computer's env). */
   inheritEnv?: boolean
+  /** Who the terminal belongs to (an agent instance id, a shell id), so a later app can find it again (ADR 0050). */
+  key?: string
+}
+
+/** A terminal the host holds, as `pty.list` reports it. */
+export interface HostedTerminalInfo {
+  ptyId: string
+  key?: string
+  pid: number
+  alive: boolean
+  startedAt: number
+  /** How it ended, for one that ended while no client was attached. */
+  exit?: { code: number | null; signal: number | null }
 }
 
 export interface ExecParams {
@@ -43,7 +59,26 @@ export type HostService = keyof typeof HOST_SERVICES
 
 /** Calls that get exactly one result. */
 export interface HostCalls {
-  hello: { params: { protocol: number }; result: { protocol: number; pid: number; platform: string; home: string } }
+  /**
+   * First call on every connection. A daemon with a token (the local one, ADR 0050) answers `proof`,
+   * HMAC(token, "daemon" + nonce), and its own `nonce`; nothing but `auth` is served until the client
+   * answers it. A daemon without a token (utility process, SSH stdio) answers neither.
+   */
+  hello: {
+    params: { protocol: number; nonce?: string }
+    result: { protocol: number; pid: number; platform: string; home: string; nonce?: string; proof?: string }
+  }
+  /** The client's answer to the daemon's nonce: HMAC(token, "client" + nonce). A wrong one closes the connection. */
+  auth: { params: { proof: string }; result: null }
+  /** Every terminal the host holds, live or ended while no client was attached. */
+  'pty.list': { params: null; result: HostedTerminalInfo[] }
+  /**
+   * The client is about to leave with its terminals kept: from now on their output is kept for the
+   * next client. Answered after every frame sent before it, so nothing falls between the two.
+   */
+  hold: { params: null; result: null }
+  /** Ends every terminal and the daemon itself ("Quit and stop agents"). */
+  shutdown: { params: null; result: null }
   'pty.spawn': { params: PtySpawnParams; result: { ptyId: string; pid: number } }
   'pty.kill': { params: { ptyId: string }; result: null }
   /**

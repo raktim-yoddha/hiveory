@@ -425,6 +425,7 @@ export const requestSchemas = {
       browserViewports: z.array(viewportSchema).max(32),
       computerUse: z.boolean(),
       keepRunningInBackground: z.boolean(),
+      keepAgentsAfterQuit: z.boolean(),
       keepAwakeForRoutines: z.boolean(),
       shareOnTailnet: z.boolean(),
       shareOnLan: z.boolean(),

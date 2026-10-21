@@ -195,7 +195,7 @@ await test('terminals carry no status: no dot on the pane or in the sidebar; Kan
   await page.locator('aside[aria-label="Side panel"]').getByRole('tab', { name: 'Dashboard' }).click()
   const card = page.locator(`aside[aria-label="Side panel"] button[aria-label^="${agent.petName},"]`)
   await card.waitFor()
-  expect(/Idle|Working|Waiting for you|Stopped/.test(await card.innerText()), `the card does not say its state: ${await card.innerText()}`)
+  expect(/Idle|Working|Needs you|Stopped/.test(await card.innerText()), `the card does not say its state: ${await card.innerText()}`)
   expect((await page.locator(`aside[aria-label="Side panel"] button[aria-label^="${shell.petName},"]`).count()) === 0, 'a terminal has a Kanban card')
   await shot('p6-terminal-and-card')
   await page.getByRole('button', { name: 'Hide side panel' }).click()

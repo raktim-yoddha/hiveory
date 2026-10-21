@@ -160,6 +160,7 @@ const settingsSchema = z.object({
   browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
   computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse),
   keepRunningInBackground: z.boolean().catch(DEFAULT_SETTINGS.keepRunningInBackground),
+  keepAgentsAfterQuit: z.boolean().catch(DEFAULT_SETTINGS.keepAgentsAfterQuit),
   keepAwakeForRoutines: z.boolean().catch(DEFAULT_SETTINGS.keepAwakeForRoutines),
   shareOnTailnet: z.boolean().catch(DEFAULT_SETTINGS.shareOnTailnet),
   shareOnLan: z.boolean().catch(DEFAULT_SETTINGS.shareOnLan),

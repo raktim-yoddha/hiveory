@@ -14,7 +14,10 @@ export class BackgroundTray {
   constructor(
     private readonly window: () => BrowserWindow | null,
     private readonly runningAgents: () => number,
-    private readonly quit: () => void
+    /** Quitting leaves agents running (ADR 0050). */
+    private readonly keepsAgents: () => boolean,
+    /** `stop`: this quit ends every agent and terminal. */
+    private readonly quit: (stop: boolean) => void
   ) {}
 
   /** Hides the window into the tray. The first time, says so (agents are still working). */
@@ -30,7 +33,7 @@ export class BackgroundTray {
       this.tray?.displayBalloon({
         iconType: 'info',
         title: 'Hiveory is still running',
-        content: `${n ? `${n} ${n === 1 ? 'agent keeps' : 'agents keep'} working.` : 'Your agents keep working.'} Open Hiveory from here; Quit stops them.`
+        content: `${n ? `${n} ${n === 1 ? 'agent keeps' : 'agents keep'} working.` : 'Your agents keep working.'} Open Hiveory from here.`
       })
     }
   }
@@ -67,7 +70,12 @@ export class BackgroundTray {
         { label: 'Open Hiveory', click: () => this.show() },
         { label: running, enabled: false },
         { type: 'separator' },
-        { label: 'Quit Hiveory (stops agents)', click: () => this.quit() }
+        ...(this.keepsAgents()
+          ? [
+              { label: 'Quit Hiveory (agents keep running)', click: () => this.quit(false) },
+              { label: 'Quit and stop agents', click: () => this.quit(true) }
+            ]
+          : [{ label: 'Quit Hiveory (stops agents)', click: () => this.quit(true) }])
       ])
     )
   }

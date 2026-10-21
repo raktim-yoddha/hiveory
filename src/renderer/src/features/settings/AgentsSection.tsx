@@ -78,6 +78,20 @@ export function AgentsSection() {
         />
       </div>
       <div className={styles.group}>
+        <div className={styles.groupTitle}>When you quit Hiveory</div>
+        <SettingRow
+          title="Keep agents running when Hiveory quits"
+          description="Agents and terminals keep working in Hiveory's terminal host after you quit, and through updates. When Hiveory opens again, every pane takes its terminal back where it is. Off: quitting stops them, and they resume their conversations next time. Quit and stop agents in the tray menu stops them once."
+          control={
+            <Toggle
+              label="Keep agents running when Hiveory quits"
+              checked={settings.keepAgentsAfterQuit}
+              onChange={(keepAgentsAfterQuit) => void update({ keepAgentsAfterQuit })}
+            />
+          }
+        />
+      </div>
+      <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>
         <p className={styles.groupNote}>
           Agents you open in Hiveory get a private, local MCP server so they can see and coordinate each other. It listens on

@@ -130,8 +130,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       ...(bot ? { bot: bot.chief ? ('chief' as const) : bot.messaging ? ('member' as const) : ('solo' as const), botComputer: Boolean(bot.computer) } : {})
     }
   }
-  // Agent and shell PTYs run in the host daemon's own process (ADR 0022), in-process if it cannot start.
-  const localHost = new LocalHost(join(import.meta.dirname, 'host.js'), log, (message) => emit('app.notice', { level: 'warning', message }))
+  // Agent and shell PTYs run in the host daemon (ADR 0022), which outlives Hiveory (ADR 0050); a
+  // utility process, or in-process, when it cannot start.
+  const localHost = new LocalHost(
+    join(import.meta.dirname, 'host.js'),
+    join(paths.runtimeDir, 'hiveoryd'),
+    log,
+    (message) => emit('app.notice', { level: 'warning', message }),
+    process.env.HIVEORY_STOP_AGENTS_ON_QUIT !== '1'
+  )
   const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
   // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
   // HIVEORY_SSH_CONFIG points automated runs at their own ssh config (like HIVEORY_USER_DATA); users rely on ~/.ssh/config.
@@ -159,8 +166,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   // The user's own Tailscale (ADR 0025): finding their devices, and serving this one to them.
   const tailscale = new Tailscale()
   const sharing = new Sharing(tailscale, log, paths.serverDevicesFile, app.getVersion())
-  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend)
-  hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log)
+  const runtime = new CliRuntimeManager(registry, log, paths.runtimeDir, () => hookServer?.endpoint, mcpFor, ptyBackend, (id) => localHost.take(id))
+  hookServer = new HookServer((id, event, payload) => runtime.ingestHook(id, event, payload), log, join(paths.runtimeDir, 'hook-endpoint.json'))
 
   const workspaceRepo = new WorkspaceRepository(store)
   const layouts = new LayoutService(store, emit)
@@ -335,7 +342,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       load: () => loadHook()
     }
   )
-  const shells = new ShellService(ptyBackend)
+  const shells = new ShellService(ptyBackend, (id) => localHost.take(id))
   const sessions = new SessionHistoryService(log)
   const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)

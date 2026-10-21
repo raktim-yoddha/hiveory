@@ -10,11 +10,16 @@ export interface PtyHandle {
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
+  /** A host daemon's terminal: false while the link to it is down (the process may still run), true again once back. */
+  onLink?(listener: (linked: boolean) => void): void
 }
+
+/** What a backend starts: a new process, or with `adopt` a daemon's kept terminal by its id (ADR 0050). */
+export type PtyStart = PtySpawnParams & { adopt?: string }
 
 /** Where PtySession starts its processes (ADR 0022). `spawn` may throw for a synchronous failure. */
 export interface PtyBackend {
-  spawn(spec: PtySpawnParams): PtyHandle
+  spawn(spec: PtyStart): PtyHandle
 }
 
 /** node-pty inside the current process: the fallback when no host daemon is available, and the test default. */

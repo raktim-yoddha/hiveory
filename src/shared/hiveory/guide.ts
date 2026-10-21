@@ -16,7 +16,7 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Chat', 'Chat mode: conversations with a CLI in a chat view, read-only by default; schedule one to run on its own.'],
   ['Queen Bee', 'The voice and text operator: opens, messages and reports on agents, lays out the panes of a worktree (a grid, columns, rows, one agent big; swaps, moves and resizes them by agent name), navigates and changes a few settings. Her shortcut is in Settings › Queen Bee and Settings › Keyboard; there (Bar & shortcut › Where she sits) or in her menu she can be docked, floating, or put away in the title bar, where only her mark stays and her bar drops down when called.'],
   ['Settings › Appearance', 'In sections: Theme (Dark, Bronze, Silver, then VS Code color themes); Panes (pane style: Tiles, or Tabs where each area holds several panes as tabs; pane spacing: Spaced, or Attached edge to edge); Background (wallpaper, transparency, blur, dim); Terminal font.'],
-  ['Settings › Agents', 'Hiveory tools for agents, default auto-approve and chat view, computer use, keep running in the background.'],
+  ['Settings › Agents', 'Hiveory tools for agents, default auto-approve and chat view, computer use, keep running in the background, keep agents running when Hiveory quits.'],
   ['Settings › Browser', 'Browser use for agents, the agent cursor, home page, profiles and viewport sizes.'],
   ['Settings › Skills, MCPs & Apps', 'Skills across every CLI (and skills.sh to find more), MCP servers Hiveory runs for every agent (and the MCP Registry), and apps through Composio.'],
   ['Settings › Integrations', 'GitHub and GitLab sign-in status (gh, glab) and Jira or Linear keys.'],

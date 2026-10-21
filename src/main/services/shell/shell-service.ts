@@ -50,7 +50,11 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
   private readonly shells = new Map<string, { pty: PtySession; cwd: string }>()
 
   /** `ptyBackend`: where shell PTYs run — the local host daemon in the app (ADR 0022). */
-  constructor(private readonly ptyBackend: PtyBackend = inProcessPty) {
+  constructor(
+    private readonly ptyBackend: PtyBackend = inProcessPty,
+    /** The daemon's kept terminal for a shell, once, after Hiveory restarted (ADR 0050). */
+    private readonly adoptable: (id: string) => string | undefined = () => undefined
+  ) {
     super()
   }
 
@@ -62,7 +66,7 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     if (!existsSync(cwd)) fail('NOT_FOUND', 'That folder no longer exists.')
     const pty = existing?.pty ?? this.createPty(id)
     this.shells.set(id, { pty, cwd })
-    this.spawn(pty, cwd)
+    this.spawn(pty, cwd, id, existing ? undefined : this.adoptable(id))
     return { id, cwd }
   }
 
@@ -70,7 +74,7 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     const shell = this.shells.get(id)
     if (!shell) fail('NOT_FOUND', 'Terminal not found.')
     shell!.pty.annotate('\r\n\x1b[2m── terminal restarted ──\x1b[0m\r\n')
-    this.spawn(shell!.pty, shell!.cwd)
+    this.spawn(shell!.pty, shell!.cwd, id)
   }
 
   close(id: string): void {
@@ -114,6 +118,12 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     this.shells.clear()
   }
 
+  /** Quitting with terminals kept (ADR 0050): the daemon keeps every shell for the next start. */
+  detachAll(): void {
+    for (const shell of this.shells.values()) shell.pty.detach()
+    this.shells.clear()
+  }
+
   private createPty(id: string): PtySession {
     const pty = new PtySession(true, this.ptyBackend)
     pty.on('data', (data, offset) => this.emit('data', id, data, offset))
@@ -121,8 +131,8 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     return pty
   }
 
-  private spawn(pty: PtySession, cwd: string): void {
+  private spawn(pty: PtySession, cwd: string, key: string, adopt?: string): void {
     const shell = defaultShell()
-    pty.start({ file: shell.file, args: shell.args, cwd, env: sanitizeEnv(process.env) })
+    pty.start({ file: shell.file, args: shell.args, cwd, env: sanitizeEnv(process.env), key, adopt })
   }
 }

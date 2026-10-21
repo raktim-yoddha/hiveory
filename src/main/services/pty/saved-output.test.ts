@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { replayable, SAVED_OUTPUT_BYTES, savedOutputFile, saveOutput, takeOutput } from './saved-output'
+import { exactTail, replayable, SAVED_OUTPUT_BYTES, savedOutputFile, saveOutput, takeOutput } from './saved-output'
 
 describe('saved terminal output (ADR 0044)', () => {
   it('keeps whole lines of the tail and drops alternate-screen switches', () => {
@@ -12,6 +12,12 @@ describe('saved terminal output (ADR 0044)', () => {
     expect(out).not.toContain('\x1b[?1049')
     expect(out.length).toBeLessThanOrEqual(SAVED_OUTPUT_BYTES)
     expect(replayable('short\r\n')).toBe('short')
+  })
+
+  it('keeps the tail of a kept terminal exactly, so what its daemon prints next continues it (ADR 0050)', () => {
+    expect(exactTail('tick-3\r\n\x1b[?1049h')).toBe('tick-3\r\n\x1b[?1049h')
+    const long = `${'x'.repeat(SAVED_OUTPUT_BYTES)}\ncut\nkept\r\n`
+    expect(exactTail(long)).toBe('cut\nkept\r\n')
   })
 
   it('is read once, and an empty terminal leaves nothing behind', () => {

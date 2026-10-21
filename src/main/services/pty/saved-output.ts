@@ -23,8 +23,18 @@ export const replayable = (data: string): string => {
   return tail.replace(ALT_SCREEN, '').replace(/\s+$/, '')
 }
 
-export const saveOutput = (file: string, data: string): void => {
-  const text = replayable(data)
+/**
+ * The tail of `data` exactly as it was drawn (from a line start, nothing trimmed or removed), for a
+ * terminal its daemon keeps (ADR 0050): what it prints meanwhile continues this very stream.
+ */
+export const exactTail = (data: string): string => {
+  if (data.length <= SAVED_OUTPUT_BYTES) return data
+  const tail = data.slice(data.length - SAVED_OUTPUT_BYTES)
+  return tail.slice(tail.indexOf('\n') + 1)
+}
+
+export const saveOutput = (file: string, data: string, exact = false): void => {
+  const text = exact ? exactTail(data) : replayable(data)
   try {
     if (!text) return rmSync(file, { force: true })
     mkdirSync(dirname(file), { recursive: true })
