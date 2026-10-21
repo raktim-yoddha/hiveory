@@ -1,11 +1,13 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { HOST_PROTOCOL, transportPair, type HostTransport } from '@shared/host/protocol'
 import { publish } from '../../../host/endpoint-owner'
+import { gracePolicy, IDLE_MS } from '../../../host/grace'
 import { createRelay } from '../../../host/relay'
+import { pruneRuntimes, runtimeVersionOf, stageRuntime } from './daemon-runtime'
 import { createHostState, disposeHostState, gateHost, type HostState } from '../../../host/host-server'
 import { HookServer } from '../cli/hooks/hook-server'
 import { CliRuntimeManager } from '../cli/runtime/runtime-manager'
@@ -14,7 +16,7 @@ import { ShellService } from '../shell/shell-service'
 import type { PtyBackend, PtyHandle, PtyStart } from '../pty/pty-backend'
 import { newNonce, newToken, prove, verifyProof } from './handshake'
 import { HostClient, hostPtyBackend } from './host-client'
-import { localEndpointPath } from './local-endpoint'
+import { localEndpointPath, otherProtocols } from './local-endpoint'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const states: HostState[] = []
@@ -309,4 +311,76 @@ describe('the relay: hooks and tools outlive the app (ADR 0050 §6)', () => {
     expect(after.details('agent-5')).toMatchObject({ status: 'waiting-for-you', waitingReason: 'permission', running: true })
     after.detachAll()
   })
+})
+
+describe('updates keep terminals (ADR 0050 §7–8)', () => {
+  it('keeps terminals until they end by default, or for the limit the app sets', () => {
+    const grace = gracePolicy()
+    const busy = { terminals: new Map([['p1', {}]]) } as never
+    const empty = { terminals: new Map() } as never
+    expect(grace.keep(busy, 30 * 86_400_000)).toBe(true)
+    expect(grace.keep(empty, IDLE_MS + 1)).toBe(false)
+    grace.calls['grace.set']({ ms: 3_600_000 })
+    expect(grace.keep(busy, 3_599_000)).toBe(true)
+    expect(grace.keep(busy, 3_601_000)).toBe(false)
+    grace.calls['grace.set']({ ms: null })
+    expect(grace.keep(busy, 30 * 86_400_000)).toBe(true)
+  })
+
+  it('stages its own copy of the app once, rebuilds a broken one, and prunes old ones', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'hv-app-'))
+    mkdirSync(join(root, 'resources', 'out'), { recursive: true })
+    writeFileSync(join(root, 'Hiveory.exe'), 'exe')
+    writeFileSync(join(root, 'resources', 'out', 'host.js'), 'host')
+    const dir = mkdtempSync(join(tmpdir(), 'hv-daemon-dir-'))
+    const run = () => stageRuntime(dir, '1.2.0', join(root, 'Hiveory.exe'), join(root, 'resources', 'out', 'host.js'), 'win32')
+    const staged = await run()
+    expect(staged).toEqual({ exe: join(dir, 'runtime', '1.2.0', 'Hiveory.exe'), entry: join(dir, 'runtime', '1.2.0', 'resources', 'out', 'host.js') })
+    expect(readFileSync(staged!.entry, 'utf8')).toBe('host')
+    // A complete copy is reused; a damaged one is built again.
+    writeFileSync(join(root, 'resources', 'out', 'host.js'), 'host v2')
+    await run()
+    expect(readFileSync(staged!.entry, 'utf8')).toBe('host')
+    writeFileSync(staged!.exe, '')
+    await run()
+    expect(readFileSync(staged!.entry, 'utf8')).toBe('host v2')
+    expect(runtimeVersionOf(dir, staged!.exe)).toBe('1.2.0')
+    expect(runtimeVersionOf(dir, join(root, 'Hiveory.exe'))).toBeNull()
+    mkdirSync(join(dir, 'runtime', '1.1.0'))
+    mkdirSync(join(dir, 'runtime', '1.0.0'))
+    pruneRuntimes(dir, ['1.2.0', '1.1.0'])
+    expect(() => readFileSync(staged!.exe)).not.toThrow()
+    expect(() => readFileSync(join(dir, 'runtime', '1.0.0'))).toThrow()
+    // An entry outside the app has no copy to run from.
+    expect(await stageRuntime(dir, '1.2.0', join(root, 'Hiveory.exe'), join(tmpdir(), 'elsewhere.js'), 'win32')).toBeNull()
+  })
+
+  it('finds older daemons by their endpoint files', () => {
+    expect(otherProtocols(['endpoint-3.json', 'endpoint-4.json', 'relay.json', 'endpoint-x.json', 'endpoint-2.json'], 4)).toEqual([2, 3])
+  })
+
+  it('takes a terminal back from an older daemon, which never gets a new one', async () => {
+    const older = createHostState()
+    const current = createHostState()
+    states.push(older, current)
+    const token = newToken()
+    const old = await connect(older, token)
+    const now = await connect(current, token)
+    const cwd = mkdtempSync(join(tmpdir(), 'hv-drain-'))
+    const { ptyId } = await old.client.call('pty.spawn', { ...talker(cwd), key: 'agent-7' })
+    const fresh = () => {
+      throw new Error('must not start a new process')
+    }
+    const backend = hostPtyBackend(() => Promise.resolve(now.client), { spawn: fresh }, (adopt) =>
+      adopt.startsWith('2/') ? { client: old.client, ptyId: adopt.slice(2) } : undefined
+    )
+    const handle = backend.spawn({ ...talker(cwd), key: 'agent-7', adopt: `2/${ptyId}` })
+    const text: string[] = []
+    handle.onData((d) => text.push(d))
+    await until(() => text.join('').includes('later'))
+    expect(current.terminals.size).toBe(0)
+    const exited = new Promise((r) => handle.onExit(r))
+    handle.kill()
+    await exited
+  }, 20_000)
 })

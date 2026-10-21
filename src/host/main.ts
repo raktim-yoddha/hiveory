@@ -8,7 +8,8 @@ import { HOST_PROTOCOL, type HostFrame, type HostTransport } from '@shared/host/
 import { adoptLoginShellPath } from '../main/app/shell-path'
 import { newToken } from '../main/services/hosts/handshake'
 import { lineTransport } from '../main/services/hosts/line-transport'
-import { LOCAL_ENDPOINT_FILE, localEndpointPath, type LocalEndpoint } from '../main/services/hosts/local-endpoint'
+import { localEndpointFile, localEndpointPath, type LocalEndpoint } from '../main/services/hosts/local-endpoint'
+import { gracePolicy } from './grace'
 import { publish } from './endpoint-owner'
 import { createRelay } from './relay'
 import { attachHost, createHostState, disposeHostState, gateHost, serveHost, type HostState } from './host-server'
@@ -30,10 +31,7 @@ interface ParentPort {
 
 const parentPort = (process as unknown as { parentPort?: ParentPort }).parentPort
 
-/** A remote daemon with nobody attached keeps its terminals this long, then ends. */
-const GRACE_MS = 5 * 60_000
-/** …and lingers only briefly when it has no terminals to keep. */
-const IDLE_MS = 60_000
+
 
 const portTransport = (port: ParentPort): HostTransport => {
   const closes: Array<() => void> = []
@@ -82,11 +80,12 @@ const runDaemon = async (): Promise<void> => {
   // Started from a non-login shell: take the login PATH so CLIs in ~/.local/bin, nvm, Homebrew… are found.
   await adoptLoginShellPath(quiet)
   keepOwnNodeOnPath()
-  const state = createHostState()
+  const grace = gracePolicy()
+  const state = createHostState({ calls: grace.calls })
   const server = createServer((socket) => attachHost(state, lineTransport(socket, socket, () => socket.destroy()), true))
   // Another daemon won the race to start; it serves everyone.
   if (!(await publish(server, socketPath()).catch(() => false))) process.exit(0)
-  idleExit(state, server, (idle) => idle < (state.terminals.size ? GRACE_MS : IDLE_MS), () => undefined)
+  idleExit(state, server, (idle) => grace.keep(state, idle), () => undefined)
 }
 
 /**
@@ -101,7 +100,7 @@ const runLocalDaemon = async (dir: string): Promise<void> => {
   const token = newToken()
   const incarnation = randomBytes(8).toString('hex')
   const path = localEndpointPath(dir, HOST_PROTOCOL)
-  const file = join(dir, LOCAL_ENDPOINT_FILE)
+  const file = join(dir, localEndpointFile(HOST_PROTOCOL))
   const forget = (): void => {
     // Only our own record: a newer daemon may already have written its own.
     try {
@@ -112,22 +111,23 @@ const runLocalDaemon = async (dir: string): Promise<void> => {
   }
   // Hooks and agent tools reach the app through here, so their URLs outlive it (ADR 0050 §6).
   const relay = createRelay(() => state.out, join(dir, 'relay.json'), quiet)
+  const grace = gracePolicy()
   const state: HostState = createHostState({
     onShutdown: () => {
       forget()
       process.exit(0)
     },
-    calls: relay.calls,
+    calls: { ...relay.calls, ...grace.calls },
     notifications: relay.notifications,
     onDetach: relay.detached
   })
   await relay.server.start()
   const server = createServer((socket) => gateHost(state, lineTransport(socket, socket, () => socket.destroy()), token))
   if (!(await publish(server, path).catch(() => false))) process.exit(0)
-  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token, relay: relay.server.endpoint }
+  const endpoint: LocalEndpoint = { protocol: HOST_PROTOCOL, pid: process.pid, incarnation, path, token, relay: relay.server.endpoint, exe: process.execPath }
   writeFileSync(`${file}.tmp`, JSON.stringify(endpoint), { mode: 0o600 })
   renameSync(`${file}.tmp`, file)
-  idleExit(state, server, (idle) => state.terminals.size > 0 || idle < IDLE_MS, forget)
+  idleExit(state, server, (idle) => grace.keep(state, idle), forget)
 }
 
 const reach = (): Promise<Socket> =>

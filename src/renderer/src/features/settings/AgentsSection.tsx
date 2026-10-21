@@ -90,6 +90,24 @@ export function AgentsSection() {
             />
           }
         />
+        <SettingRow
+          title="Keep them for"
+          description="How long agents and terminals keep running while Hiveory is closed, on this computer and on remote machines. Until they finish, or a limit after which they are stopped."
+          control={
+            <Select
+              label="Keep them for"
+              hideLabel
+              value={settings.detachedGrace}
+              options={[
+                { value: 'until-exit', label: 'Until they finish' },
+                { value: '1h', label: '1 hour' },
+                { value: '1d', label: '1 day' },
+                { value: '7d', label: '7 days' }
+              ]}
+              onChange={(detachedGrace) => void update({ detachedGrace: detachedGrace as typeof settings.detachedGrace })}
+            />
+          }
+        />
       </div>
       <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>

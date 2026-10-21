@@ -40,6 +40,8 @@ export interface AppSettings {
   keepRunningInBackground: boolean
   /** Quitting Hiveory leaves agents and terminals running in the terminal host; the next start takes them back (ADR 0050). */
   keepAgentsAfterQuit: boolean
+  /** How long kept terminals stay with no Hiveory attached, here and on remote machines (ADR 0050 §7). */
+  detachedGrace: DetachedGrace
   /** While plugged in, keep this computer from idle-sleeping in the hour before a routine and while one runs (ADR 0028). */
   keepAwakeForRoutines: boolean
   /** Share this computer with the user's other devices over Tailscale (ADR 0025). Off by default. */
@@ -116,6 +118,11 @@ export interface AppSettings {
 
 export const PANE_STYLES = ['tiles', 'tabs'] as const
 export type PaneStyle = (typeof PANE_STYLES)[number]
+/** How long terminals stay once no Hiveory is attached: until they end, or a limit (ADR 0050 §7). */
+export const DETACHED_GRACES = ['until-exit', '1h', '1d', '7d'] as const
+export type DetachedGrace = (typeof DETACHED_GRACES)[number]
+export const DETACHED_GRACE_MS: Record<DetachedGrace, number | null> = { 'until-exit': null, '1h': 3_600_000, '1d': 86_400_000, '7d': 604_800_000 }
+
 export const PANE_SPACINGS = ['spaced', 'attached'] as const
 export type PaneSpacing = (typeof PANE_SPACINGS)[number]
 
@@ -187,6 +194,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   computerUse: false,
   keepRunningInBackground: true,
   keepAgentsAfterQuit: true,
+  detachedGrace: 'until-exit',
   keepAwakeForRoutines: true,
   shareOnTailnet: false,
   shareOnLan: false,

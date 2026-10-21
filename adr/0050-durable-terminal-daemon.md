@@ -286,3 +286,37 @@ Three things stop the remote design from simply running locally:
   - its tools went through the relay;
   - they were refused while Hiveory was closed and worked again after it reopened;
   - the kept agent came back with its real status (**Needs you**).
+
+## Amendment (2026-10-21): phase 3 as built
+
+- **Relocated runtime** (`daemon-runtime.ts`, installed builds only).
+  - On the first daemon start of a version, the whole app (its folder, or the `.app` bundle) is
+    copied with `original-fs` to `<Runtime>/hiveoryd/runtime/<version>/`.
+    - `original-fs` copies `app.asar` as an archive, not a folder.
+    - The copy is built beside its final name and renamed into place whole.
+  - **Integrity:** the copy is checked against a manifest of every file's size, not SHA-256. Hashing
+    ~300 MB on each start costs more than it guards against, since the folder is this user's own.
+    A broken copy is built again.
+  - **Waiting for it:** starting the daemon waits up to 60 s for the copy, and otherwise runs it from
+    the installed app that one time.
+  - **Pruning:** copies other than this version's and the running daemon's are removed. On Windows,
+    one still in use cannot be removed until it is free.
+- **Endpoint files per protocol:** `endpoint-<protocol>.json`, which also names the daemon's
+  executable.
+- **Drain:**
+  - At start-up the app reaches every daemon of an older protocol through the frozen core.
+  - It takes back that daemon's known terminals: `take` names them `<protocol>/<ptyId>`, and
+    `LocalHost.route` sends them through that daemon's client.
+  - It serves that daemon's relay too, never spawns anything on it, and lets go of it once it holds
+    no terminals (checked every 30 s).
+- **Grace policy** (`src/host/grace.ts`), unified with remote machines:
+  - **Setting:** Settings › Agents › **Keep them for**: until they finish (default), 1 hour, 1 day
+    or 7 days.
+  - **Delivery:** `grace.set` is sent to the local daemon and to every remote daemon on connect and
+    on change.
+  - **Older remote daemons** refuse the call and keep their own five minutes.
+- **Verified** with a packaged build:
+  - the daemon ran from its copy;
+  - the installed folder was replaced (renamed away) while an agent's loop ran;
+  - Hiveory, started from the replaced folder, reached the same daemon, with the agent still
+    running and its output continuing.

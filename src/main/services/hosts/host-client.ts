@@ -45,6 +45,11 @@ export class HostClient {
     return !this.closed
   }
 
+  /** Terminals this client serves now (an older daemon being drained is let go at zero). */
+  get terminalCount(): number {
+    return this.ptys.size
+  }
+
   call<M extends HostCall>(method: M, params: HostCalls[M]['params'], timeoutMs = CALL_TIMEOUT_MS): Promise<HostCalls[M]['result']> {
     if (this.closed) return Promise.reject(new Error('The host is not connected.'))
     const id = ++this.seq
@@ -187,7 +192,13 @@ class HostedPty implements PtyHandle {
   private size: { cols: number; rows: number } | null = null
   private killed = false
 
-  constructor(spec: PtyStart, host: Promise<HostClient | null>, fallback: PtyBackend) {
+  constructor(spec: PtyStart, host: Promise<HostClient | null>, fallback: PtyBackend, route?: AdoptRoute) {
+    // A terminal kept by an older daemon is taken back from that daemon (ADR 0050 §8).
+    const routed = spec.adopt ? route?.(spec.adopt) : undefined
+    if (routed) {
+      this.startRemote(routed.client, { ...spec, adopt: routed.ptyId })
+      return
+    }
     void host.then(
       (client) => (client?.alive ? this.startRemote(client, spec) : this.startLocal(spec, fallback)),
       () => this.startLocal(spec, fallback)
@@ -292,7 +303,10 @@ class HostedPty implements PtyHandle {
   }
 }
 
+/** Which client holds a kept terminal another daemon kept (`adopt` as `LocalHost.take` named it). */
+export type AdoptRoute = (adopt: string) => { client: HostClient; ptyId: string } | undefined
+
 /** PTYs on a host daemon (falling back to `fallback` while it is unavailable). */
-export const hostPtyBackend = (host: () => Promise<HostClient | null>, fallback: PtyBackend): PtyBackend => ({
-  spawn: (spec) => new HostedPty(spec, host(), fallback)
+export const hostPtyBackend = (host: () => Promise<HostClient | null>, fallback: PtyBackend, route?: AdoptRoute): PtyBackend => ({
+  spawn: (spec) => new HostedPty(spec, host(), fallback, route)
 })

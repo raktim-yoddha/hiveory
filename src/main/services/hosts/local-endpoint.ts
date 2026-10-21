@@ -2,8 +2,20 @@ import { createHash } from 'node:crypto'
 import { posix } from 'node:path'
 import type { HookEndpoint } from '../cli/adapters/types'
 
-/** Where this computer's daemon (ADR 0050) says how to reach it: its endpoint, pid and token. */
-export const LOCAL_ENDPOINT_FILE = 'endpoint.json'
+/**
+ * Where this computer's daemon for a protocol (ADR 0050) says how to reach it: its endpoint, pid
+ * and token. One file per protocol, so a newer app still finds an older daemon to drain (§8).
+ */
+export const localEndpointFile = (protocol: number): string => `endpoint-${protocol}.json`
+
+/** The protocols of the endpoint files in `names` (a folder listing), other than `current`. */
+export const otherProtocols = (names: string[], current: number): number[] =>
+  names
+    .map((name) => /^endpoint-(\d+)\.json$/.exec(name)?.[1])
+    .filter((p): p is string => p !== undefined)
+    .map(Number)
+    .filter((p) => p !== current)
+    .sort((a, b) => a - b)
 
 export interface LocalEndpoint {
   protocol: number
@@ -14,6 +26,8 @@ export interface LocalEndpoint {
   token: string
   /** The relay agents report hooks to and reach their tools through (ADR 0050 §6). */
   relay?: HookEndpoint
+  /** The executable the daemon runs from (a staged runtime copy, or the app itself). */
+  exe?: string
 }
 
 /**

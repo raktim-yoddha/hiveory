@@ -120,7 +120,7 @@ export const localKit = (parts: LocalKitParts): HostKit => ({
   runtimeRoot: parts.runtimeRoot
 })
 
-/** How long a dropped host is retried while its daemon keeps the terminals (as long as the daemon keeps them). */
+/** How long a dropped host is retried; its daemon keeps the terminals as Settings › Agents says (ADR 0050 §7). */
 export const RECONNECT_GRACE_MS = 5 * 60_000
 const FIRST_RETRY_MS = 1000
 const MAX_RETRY_MS = 15_000
@@ -144,6 +144,8 @@ interface Connection {
 export class HostRegistry {
   private readonly connections = new Map<string, Connection>()
   private closing = false
+  /** How long remote daemons keep terminals with no Hiveory attached (null: until they end). */
+  private graceMs: number | null = null
 
   constructor(
     private readonly local: HostKit,
@@ -213,7 +215,15 @@ export class HostRegistry {
     return hook ? new URL(hook.baseUrl).port : undefined
   }
 
+  /** The same keep-for rule as this computer's daemon, told to every connected host now and on each connect. */
+  setGrace(ms: number | null): void {
+    this.graceMs = ms
+    for (const connection of this.connections.values()) void connection.link?.client.call('grace.set', { ms }).catch(() => undefined)
+  }
+
   private watch(host: HostRef, connection: Connection, client: HostClient): void {
+    // A daemon from before ADR 0050 refuses the call and keeps its own five minutes.
+    void client.call('grace.set', { ms: this.graceMs }).catch(() => undefined)
     client.onFilesChanged(({ scope, paths: changed }) => this.onFilesChanged(scope, changed))
     client.onClosed(() => {
       if (this.closing || connection.link?.client !== client) return

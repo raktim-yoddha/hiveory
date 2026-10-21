@@ -33,12 +33,13 @@ import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
 import { HookServer } from '../services/cli/hooks/hook-server'
 import { hostPtyBackend } from '../services/hosts/host-client'
+import { stageRuntime } from '../services/hosts/daemon-runtime'
 import { LocalHost } from '../services/hosts/local-host'
 import { SshHostConnector } from '../services/hosts/ssh-host'
 import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
 import { PortForwards } from '../services/hosts/ports'
-import { appById, COMPOSIO, hostKey, type HostLinkStatus, type HostRef } from '@shared/domain'
+import { appById, COMPOSIO, DETACHED_GRACE_MS, hostKey, type DetachedGrace, type HostLinkStatus, type HostRef } from '@shared/domain'
 import { botScope } from '@shared/domain/bot'
 import { botReach } from '@shared/domain/bot-reach'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
@@ -140,9 +141,17 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     join(paths.runtimeDir, 'hiveoryd'),
     log,
     (message) => emit('app.notice', { level: 'warning', message }),
-    process.env.HIVEORY_STOP_AGENTS_ON_QUIT !== '1'
+    process.env.HIVEORY_STOP_AGENTS_ON_QUIT !== '1',
+    // Installed builds run the daemon from its own copy of this version, so updates never end it (ADR 0050 §8).
+    app.isPackaged
+      ? {
+          version: app.getVersion(),
+          stage: () => stageRuntime(join(paths.runtimeDir, 'hiveoryd'), app.getVersion(), process.execPath, join(import.meta.dirname, 'host.js'))
+        }
+      : undefined
   )
-  const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty)
+  // Terminals an older daemon kept come back from it (ADR 0050 §8).
+  const ptyBackend = hostPtyBackend(() => localHost.get(), inProcessPty, (adopt) => localHost.route(adopt))
   // The same daemon on other machines, over the user's own OpenSSH (ADR 0022).
   // HIVEORY_SSH_CONFIG points automated runs at their own ssh config (like HIVEORY_USER_DATA); users rely on ~/.ssh/config.
   // Its questions (passwords, passphrases, codes, new host keys) are asked in the window (ADR 0025).
@@ -374,6 +383,15 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     (scope, changed) => emit('files.changed', { scope, paths: changed }),
     (host, status) => onHostStatus(host, status)
   )
+  // One keep-for rule for kept terminals, on this computer and remote machines (ADR 0050 §7).
+  const applyGrace = (grace: DetachedGrace): void => {
+    localHost.setGrace(DETACHED_GRACE_MS[grace])
+    hosts!.setGrace(DETACHED_GRACE_MS[grace])
+  }
+  applyGrace(store.state.settings.detachedGrace)
+  settings.on('changed', (next, previous) => {
+    if (next.detachedGrace !== previous.detachedGrace) applyGrace(next.detachedGrace)
+  })
   // Remote projects' ports, forwarded to this computer on request (ADR 0025).
   const ports = new PortForwards((host) => hosts!.kit(host))
   const editors = new EditorService(store, layouts, (workspaceId) => agents.paneIds(workspaceId), emit)

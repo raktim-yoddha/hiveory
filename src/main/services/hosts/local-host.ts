@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, openSync, readFileSync } from 'node:fs'
+import { mkdirSync, openSync, readdirSync, readFileSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { join } from 'node:path'
 import { utilityProcess, type UtilityProcess } from 'electron'
@@ -9,7 +9,8 @@ import type { HookEndpoint } from '../cli/adapters/types'
 import { newNonce, prove, verifyProof } from './handshake'
 import { HostClient } from './host-client'
 import { lineTransport } from './line-transport'
-import { LOCAL_ENDPOINT_FILE, type LocalEndpoint } from './local-endpoint'
+import { pruneRuntimes, runtimeVersionOf, type DaemonRuntime } from './daemon-runtime'
+import { localEndpointFile, otherProtocols, type LocalEndpoint } from './local-endpoint'
 
 /** After this many failed starts in a row, PTYs stay in-process for the session. */
 const MAX_FAILURES = 3
@@ -20,6 +21,10 @@ const DAEMON_START_MS = 10_000
 const RECONNECT_TRIES = 5
 /** Live terminals no agent or shell took back after start-up are ended this long after it. */
 const UNCLAIMED_MS = 2 * 60_000
+/** How often an older daemon being drained is checked for terminals left (none: it is let go). */
+const DRAIN_CHECK_MS = 30_000
+/** Longest wait for this version's runtime copy before a daemon starts from the installed app. */
+const STAGE_WAIT_MS = 60_000
 
 const utilityTransport = (child: UtilityProcess): HostTransport => ({
   send: (frame) => child.postMessage(frame),
@@ -78,6 +83,8 @@ export class LocalHost {
   private readonly keptHooks = new Map<string, KeptHook[]>()
   private relayValue: HookEndpoint | undefined
   private relayHandlers: RelayHandlers | null = null
+  /** How long the daemon keeps terminals with no app attached (null: until they end). */
+  private graceMs: number | null = null
 
   constructor(
     private readonly entry: string,
@@ -86,9 +93,21 @@ export class LocalHost {
     private readonly log: Logger,
     private readonly notice: (message: string) => void,
     /** False: never the durable daemon, only the utility process (automated runs leave nothing behind). */
-    durable = true
+    durable = true,
+    /** This version's own runtime copy (installed builds, ADR 0050 §8); absent: run from the app. */
+    private readonly runtime?: { version: string; stage: () => Promise<DaemonRuntime | null> }
   ) {
     if (!durable) this.mode = 'utility'
+  }
+
+  /** Older daemons (an earlier protocol) whose terminals this app took back and serves until they end. */
+  private readonly drains = new Map<number, HostClient>()
+
+  /** The daemon holding a kept terminal `take` named, and its own id there (ADR 0050 §8). */
+  route(adopt: string): { client: HostClient; ptyId: string } | undefined {
+    const [protocol, ptyId] = adopt.split('/')
+    const client = ptyId ? this.drains.get(Number(protocol)) : undefined
+    return client?.alive ? { client, ptyId: ptyId! } : undefined
   }
 
   /** Whether terminals started now outlive the app (the durable daemon serves them). */
@@ -102,6 +121,12 @@ export class LocalHost {
    */
   get relayEndpoint(): HookEndpoint | undefined {
     return this.durable ? this.relayValue : undefined
+  }
+
+  /** Settings › Agents › keep kept terminals for…: told to the daemon now and on every connect. */
+  setGrace(ms: number | null): void {
+    this.graceMs = ms
+    if (this.mode === 'daemon') void this.client?.call('grace.set', { ms }).catch(() => undefined)
   }
 
   /** Where the relay's hooks and MCP requests go: set once, before `prepare`. */
@@ -131,15 +156,16 @@ export class LocalHost {
       return
     }
     this.use(client)
-    for (const hook of await client.call('relay.kept', null).catch(() => [])) {
-      this.keptHooks.set(hook.instanceId, [...(this.keptHooks.get(hook.instanceId) ?? []), hook])
+    await this.collect(client, known, (ptyId) => ptyId)
+    // A daemon from before an update to a new protocol: its terminals come back from it (ADR 0050 §8).
+    for (const protocol of this.olderProtocols()) {
+      const old = await this.connect(protocol).catch(() => null)
+      if (!old) continue
+      this.drain(protocol, old)
+      await this.collect(old, known, (ptyId) => `${protocol}/${ptyId}`)
     }
-    const terminals = await client.call('pty.list', null).catch(() => [])
-    for (const t of terminals) {
-      if (!t.alive) void client.call('pty.attach', { ptyId: t.ptyId }).catch(() => undefined)
-      else if (t.key && known(t.key)) this.live.set(t.key, t.ptyId)
-      else void client.call('pty.kill', { ptyId: t.ptyId }).catch(() => undefined)
-    }
+    const running = runtimeVersionOf(this.dir, this.endpointOf(HOST_PROTOCOL)?.exe)
+    if (this.runtime) pruneRuntimes(this.dir, [this.runtime.version, ...(running ? [running] : [])])
     if (this.live.size) this.log.info(`Terminal host kept ${this.live.size} terminal(s) while Hiveory was closed.`)
     setTimeout(() => {
       for (const ptyId of this.live.values()) void this.client?.call('pty.kill', { ptyId }).catch(() => undefined)
@@ -158,7 +184,8 @@ export class LocalHost {
 
   /** Quitting with agents kept: the daemon keeps every terminal's output from here (call before saving it). */
   async hold(): Promise<void> {
-    if (this.mode === 'daemon') await this.client?.call('hold', null, 2000).catch(() => undefined)
+    if (this.mode !== 'daemon') return
+    await Promise.all([this.client, ...this.drains.values()].map((c) => c?.call('hold', null, 2000).catch(() => undefined)))
   }
 
   /** Quitting with agents kept: the connection closes, the daemon and its terminals carry on (a utility host ends). */
@@ -166,6 +193,8 @@ export class LocalHost {
     this.closed = true
     this.client?.close()
     this.client = null
+    for (const old of this.drains.values()) old.close()
+    this.drains.clear()
   }
 
   /** Quitting with agents stopped: every terminal ends, and so does the daemon. */
@@ -175,6 +204,11 @@ export class LocalHost {
     this.client = null
     if (client?.alive && this.mode === 'daemon') await client.call('shutdown', null, 3000).catch(() => undefined)
     client?.close()
+    for (const old of this.drains.values()) {
+      await old.call('shutdown', null, 3000).catch(() => undefined)
+      old.close()
+    }
+    this.drains.clear()
   }
 
   private async start(): Promise<HostClient | null> {
@@ -190,22 +224,59 @@ export class LocalHost {
     return this.startUtility()
   }
 
-  /** Reaches the daemon that endpoint.json names, and checks both sides hold its token (ADR 0050 §2). */
-  private async connect(): Promise<HostClient | null> {
-    let endpoint: LocalEndpoint
+  /** Notes a kept terminal per known key (`name` says how `take` will name it); ends the rest. */
+  private async collect(client: HostClient, known: (key: string) => boolean, name: (ptyId: string) => string): Promise<void> {
+    for (const hook of await client.call('relay.kept', null).catch(() => [])) {
+      this.keptHooks.set(hook.instanceId, [...(this.keptHooks.get(hook.instanceId) ?? []), hook])
+    }
+    for (const t of await client.call('pty.list', null).catch(() => [])) {
+      if (!t.alive) void client.call('pty.attach', { ptyId: t.ptyId }).catch(() => undefined)
+      else if (t.key && known(t.key)) this.live.set(t.key, name(t.ptyId))
+      else void client.call('pty.kill', { ptyId: t.ptyId }).catch(() => undefined)
+    }
+  }
+
+  /** An older daemon: served for its kept terminals only (never a new one), let go once they end. */
+  private drain(protocol: number, client: HostClient): void {
+    this.drains.set(protocol, client)
+    this.relay(client)
+    const check = setInterval(() => {
+      if (client.alive && client.terminalCount > 0) return
+      clearInterval(check)
+      this.drains.delete(protocol)
+      client.close()
+    }, DRAIN_CHECK_MS)
+    check.unref()
+    this.log.info(`Taking terminals back from an older terminal host (protocol ${protocol}).`)
+  }
+
+  private olderProtocols(): number[] {
     try {
-      endpoint = JSON.parse(readFileSync(join(this.dir, LOCAL_ENDPOINT_FILE), 'utf8')) as LocalEndpoint
+      return otherProtocols(readdirSync(this.dir), HOST_PROTOCOL).filter((p) => p < HOST_PROTOCOL)
+    } catch {
+      return []
+    }
+  }
+
+  private endpointOf(protocol: number): LocalEndpoint | null {
+    try {
+      return JSON.parse(readFileSync(join(this.dir, localEndpointFile(protocol)), 'utf8')) as LocalEndpoint
     } catch {
       return null
     }
-    if (endpoint.protocol !== HOST_PROTOCOL || typeof endpoint.token !== 'string') return null
-    this.relayValue = endpoint.relay
+  }
+
+  /** Reaches the daemon its endpoint file names, and checks both sides hold its token (ADR 0050 §2). */
+  private async connect(protocol = HOST_PROTOCOL): Promise<HostClient | null> {
+    const endpoint = this.endpointOf(protocol)
+    if (!endpoint || endpoint.protocol !== protocol || typeof endpoint.token !== 'string') return null
+    if (protocol === HOST_PROTOCOL) this.relayValue = endpoint.relay
     const socket = await reach(endpoint.path)
     if (!socket) return null
     const client = new HostClient(lineTransport(socket, socket, () => socket.destroy()), { keepPtys: true })
     try {
       const nonce = newNonce()
-      const hello = await client.call('hello', { protocol: HOST_PROTOCOL, nonce }, HELLO_TIMEOUT_MS)
+      const hello = await client.call('hello', { protocol, nonce }, HELLO_TIMEOUT_MS)
       if (!verifyProof(endpoint.token, 'daemon', nonce, hello.proof) || !hello.nonce) {
         this.log.error('Something answered on the terminal host endpoint without its token; not using it.')
         throw new Error('The terminal host endpoint did not prove its token.')
@@ -220,10 +291,14 @@ export class LocalHost {
 
   /** Starts the daemon detached, so it outlives this process, and waits for it to answer. */
   private async startDaemon(): Promise<HostClient | null> {
+    // From this version's own copy when there is one, so an update never ends it (ADR 0050 §8).
+    const staged = this.runtime
+      ? await Promise.race([this.runtime.stage().catch((error: unknown) => (this.log.warn('Could not copy the terminal host runtime', error), null)), delay(STAGE_WAIT_MS).then(() => null)])
+      : null
     try {
       mkdirSync(this.dir, { recursive: true })
       const log = openSync(join(this.dir, 'daemon.log'), 'a')
-      spawn(process.execPath, [this.entry, '--daemon', '--local', this.dir], {
+      spawn(staged?.exe ?? process.execPath, [staged?.entry ?? this.entry, '--daemon', '--local', this.dir], {
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         detached: true,
         windowsHide: true,
@@ -251,6 +326,17 @@ export class LocalHost {
   private use(client: HostClient): void {
     this.failures = 0
     this.client = client
+    this.relay(client)
+    client.onClosed(() => {
+      if (this.client === client) this.client = null
+      if (this.closed) return
+      void this.reconnect(client)
+    })
+  }
+
+  /** Hooks and tool calls from a daemon's relay go to the app's handlers; it is told the keep-for rule. */
+  private relay(client: HostClient): void {
+    void client.call('grace.set', { ms: this.graceMs }).catch(() => undefined)
     client.onRelay(
       ({ instanceId, event, payload }) => this.relayHandlers?.hook(instanceId, event, payload),
       ({ requestId, instanceId, body }) => {
@@ -260,11 +346,6 @@ export class LocalHost {
           .then((reply) => client.notify('relay.reply', { requestId, body: reply }))
       }
     )
-    client.onClosed(() => {
-      if (this.client === client) this.client = null
-      if (this.closed) return
-      void this.reconnect(client)
-    })
   }
 
   private async reconnect(lost: HostClient): Promise<void> {
