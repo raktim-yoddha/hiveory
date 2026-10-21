@@ -136,6 +136,10 @@ Preset
 Create empty Worktree
 ```
 
+Settings › Agents › Auto-approve permissions is global (ADR 0049): while it is on, every agent
+starts with permissions skipped (YOLO) in every Workspace and Worktree, the Primary included,
+whatever the Worktree or preset chose. While it is off, the Worktree's or preset's own choice applies.
+
 ## CLI Configuration
 
 Example:
@@ -161,7 +165,7 @@ The Workspace Tasks view is:
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ Idle             │ Working          │ Waiting for You       │
+│ Idle             │ Working          │ Needs You             │
 ├──────────────────┼──────────────────┼───────────────────────┤
 │ Worktree 1       │ Worktree 2       │ Worktree 1            │
 │ [CLI logo] Milo  │ [CLI logo] Luna  │ [CLI logo] Kai        │
@@ -178,14 +182,14 @@ Each running card also shows the model the agent is using right now (live: it fo
 
 Cards move automatically based on runtime state.
 
-## Waiting for You
+## Needs You
 
 Examples:
 
 ```text
-Waiting for permission
-Waiting for input
-Waiting for confirmation
+Needs your permission
+Needs your answer
+Needs you to confirm
 ```
 
 These appear as card details.
@@ -308,7 +312,7 @@ and opens the place when she can.
 
 ## Appearance
 
-Appearance is in sections, one at a time: Theme, Panes, Background, Terminal font (ADR 0043, 0044). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, like Orca). The first-run welcome asks both.
+Appearance is in sections, one at a time: Theme, Panes, Background, Terminal font (ADR 0043, 0044). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, split by a thin line). The first-run welcome asks both.
 
 Three flat themes (Dark, Bronze, Silver), with VS Code themes right under them in the same Theme section (ADR 0044). A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
 

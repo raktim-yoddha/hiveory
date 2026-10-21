@@ -15,7 +15,7 @@ export interface QueenCapability {
 
 export const QUEEN_CAPABILITIES: QueenCapability[] = [
   { area: 'Agents', what: 'open, close, restart or stop coding agents, and send them your exact words', examples: ['open two Claude in feature-x', 'Bruno, fix the failing build', 'stop Bruno'], say: 'open, stop or restart your coding agents and pass them your messages' },
-  { area: 'Status', what: 'who is working, idle or waiting on you, and what one agent is doing', examples: ['status of everything', 'what is Luna doing?', 'take me to whoever needs me'], say: 'tell you who is working, who is idle and who is waiting on you' },
+  { area: 'Status', what: 'who is working, idle or needs you, and what one agent is doing', examples: ['status of everything', 'what is Luna doing?', 'take me to whoever needs me'], say: 'tell you who is working, who is idle and who needs you' },
   { area: 'Workspaces and worktrees', what: 'switch workspaces and worktrees, create worktrees, load or save presets', examples: ['go to demo website', 'create a worktree called login-fix', 'save this as preset Backend'], say: 'take you to any workspace or worktree, make new worktrees and load your presets' },
   { area: 'Panes', what: 'lay out, move, swap and resize agent panes', examples: ['put them side by side', 'make Bruno bigger', 'swap Bruno and Luna'], say: 'arrange and resize their panes' },
   { area: 'Pages', what: 'Home, Settings, Chat, and Bots (work board, schedules, triggers, team map)', examples: ['open the work board', 'new chat with Codex about the API', 'open Settings'], say: 'take you to Chat, Bots or Settings' },

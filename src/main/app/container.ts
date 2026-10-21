@@ -268,7 +268,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     changed: () => emit('state.changed', { topic: 'approvals' }),
     notify: (request) => {
       const bot = bots?.find(request.botId)
-      notifyDesktop({ title: `${bot?.name ?? 'A bot'} is waiting for you`, body: `Allow ${request.tool}?` }, request.botId, request.threadId)
+      notifyDesktop({ title: `${bot?.name ?? 'A bot'} needs you`, body: `Allow ${request.tool}?` }, request.botId, request.threadId)
     }
   })
   // Outside events start read-only runs (ADR 0028): Composio's webhook, over Tailscale Funnel, to a loopback listener.

@@ -24,7 +24,6 @@
 
 .frame[data-tone='waiting'] {
   border-color: var(--color-waiting-edge);
-  box-shadow: 0 0 0 var(--hairline) var(--color-waiting-soft);
 }
 
 .highlighted {

@@ -69,7 +69,7 @@ export function BotsSidebar() {
               <span className={chat.chatMeta}>{bot.blurb || bot.brief.split('\n')[0] || 'No brief yet'}</span>
             </span>
             {waiting.has(bot.id) ? (
-              <StatusDot status="waiting-for-you" detail="Waiting for your yes" />
+              <StatusDot status="waiting-for-you" detail="Needs your yes" />
             ) : (
               bot.running > 0 && <StatusDot status="working" detail={`${bot.running} working`} />
             )}

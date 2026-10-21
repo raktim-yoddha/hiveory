@@ -12,7 +12,7 @@ interface PaneFrameProps {
   highlighted?: boolean
   /** Selected though DOM focus is elsewhere: a browser page's native view has the keyboard (ADR 0043). */
   focused?: boolean
-  /** Tints the frame so state reads at a glance (e.g. an agent waiting for you). */
+  /** Tints the frame so state reads at a glance (e.g. an agent that needs you). */
   tone?: 'waiting'
   /** Tabbed panes (ADR 0042): the area's tab strip replaces this pane's own header. */
   tabStrip?: ReactNode

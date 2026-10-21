@@ -127,7 +127,7 @@ describe('Queen Bee personas', () => {
       'all'
     )
     expect(r.waiting.map((a) => a.petName)).toEqual(['Luna', 'Bruno'])
-    expect(reportLine(r, prefs('ada'))).toBe('2 waiting for you, 1 working, 0 idle, sir. Luna in feature-x has been waiting for 14 min.')
+    expect(reportLine(r, prefs('ada'))).toBe('2 need you, 1 working, 0 idle, sir. Luna in feature-x has been waiting for 14 min.')
     expect(reportLine(r, prefs('frankie'))).toBe("Alex, Luna has waited on you for 14 min. That's the bottleneck, not the agents. Answer it and the hive moves again.")
   })
 

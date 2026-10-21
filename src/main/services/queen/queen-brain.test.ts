@@ -61,7 +61,7 @@ describe('Queen Bee model plans', () => {
 
   it('shows the model ids and statuses, with a fixed system prompt', () => {
     const state = stateMessage(ctx, 'who needs me?')
-    expect(state).toContain('a1 Bruno (cli claude, workspace w1, waiting for you)')
+    expect(state).toContain('a1 Bruno (cli claude, workspace w1, needs you)')
     expect(state).toContain('page: workspace Main (w1) in project demo-app (p1)')
     expect(state.endsWith('REQUEST\nwho needs me?')).toBe(true)
     expect(systemPrompt({ name: 'Ada', tagline: 'Strict' })).toBe(systemPrompt({ name: 'Ada', tagline: 'Strict' }))

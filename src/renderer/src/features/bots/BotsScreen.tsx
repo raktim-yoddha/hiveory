@@ -115,7 +115,7 @@ export function BotsScreen() {
         </div>
         <StatusDot
           status={approvals.some((r) => r.botId === bot.id) ? 'waiting-for-you' : bot.running > 0 ? 'working' : 'idle'}
-          detail={approvals.some((r) => r.botId === bot.id) ? 'Waiting for your yes' : bot.running > 0 ? `${bot.running} working` : 'Ready'}
+          detail={approvals.some((r) => r.botId === bot.id) ? 'Needs your yes' : bot.running > 0 ? `${bot.running} working` : 'Ready'}
         />
         <IconButton label="Computer and browser" icon={<Monitor />} active={panelOpen} aria-pressed={panelOpen} onClick={() => setPanelOpen(!panelOpen)} />
         <IconButton label={`Edit ${bot.name}`} icon={<Settings2 />} onClick={() => openEditor(bot.id)} />

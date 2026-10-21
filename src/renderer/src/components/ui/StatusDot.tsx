@@ -5,7 +5,7 @@ import styles from './StatusDot.module.css'
 export const STATUS_LABEL: Record<CliStatus, string> = {
   idle: 'Idle',
   working: 'Working',
-  'waiting-for-you': 'Waiting for you'
+  'waiting-for-you': 'Needs you'
 }
 
 interface StatusDotProps {

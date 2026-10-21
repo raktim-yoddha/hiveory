@@ -37,7 +37,7 @@ export function AgentsSection() {
         <div className={styles.groupTitle}>Defaults</div>
         <SettingRow
           title="Auto-approve permissions"
-          description="Start with auto-approve on when creating a worktree or preset. You can still turn it off each time."
+          description="On: every agent starts with permissions skipped (YOLO), in every workspace and worktree. Off: each worktree and preset chooses for itself."
           control={
             <Toggle
               label="Auto-approve permissions by default"

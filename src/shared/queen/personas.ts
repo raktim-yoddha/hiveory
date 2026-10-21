@@ -305,9 +305,10 @@ export function reportLine(r: QueenReport, prefs: QueenPrefs): string {
     return { ada: `There are no agents in this workspace${address(p)}.`, sunny: 'No agents yet. Open a few and let the hive buzz!', frankie: 'No agents running. Nothing ships by itself.' }[p.persona]
   }
   if (r.focus === 'waiting-for-you' && !r.waiting.length) {
-    return { ada: `No agent is waiting for you${address(p)}.`, sunny: "Nobody's waiting on you. All clear!", frankie: "Nothing's blocked on you. No excuses, then." }[p.persona]
+    return { ada: `No agent needs you${address(p)}.`, sunny: 'Nobody needs you. All clear!', frankie: "Nothing's blocked on you. No excuses, then." }[p.persona]
   }
-  const counts = `${r.counts['waiting-for-you']} waiting for you, ${r.counts.working} working, ${r.counts.idle} idle`
+  const needing = r.counts['waiting-for-you']
+  const counts = `${needing} ${needing === 1 ? 'needs' : 'need'} you, ${r.counts.working} working, ${r.counts.idle} idle`
   switch (p.persona) {
     case 'ada':
       return finish([`${cap(counts)}${address(p)}.`, top ? `${top.petName} in ${top.workspaceName} has been waiting${waitText}.` : ''], p)
@@ -381,9 +382,9 @@ export function nothingToForgetLine(prefs: QueenPrefs): string {
 
 const WAIT_WORDS: Record<string, string> = {
   permission: 'needs your permission',
-  input: 'is waiting for your input',
+  input: 'needs your answer',
   confirmation: 'wants you to confirm something',
-  other: 'is waiting for you'
+  other: 'needs you'
 }
 
 /** An agent's live update, in her voice. The excerpt is shown (and labelled) separately. */
@@ -429,7 +430,7 @@ export function detailLine(d: QueenPeek, prefs: QueenPrefs, cliName: string): st
 
 export function nobodyWaitingLine(prefs: QueenPrefs): string {
   const p = effective(prefs)
-  return { ada: `No agent is waiting for you${address(p)}.`, sunny: 'Nobody needs you right now!', frankie: 'Nobody is blocked on you.' }[p.persona]
+  return { ada: `No agent needs you${address(p)}.`, sunny: 'Nobody needs you right now!', frankie: 'Nobody is blocked on you.' }[p.persona]
 }
 
 /** Things to try, from the rules (no model needed for any of them). */

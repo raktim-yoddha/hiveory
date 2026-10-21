@@ -18,7 +18,7 @@ const TRUST_PROMPT = { pattern: /one you trust\?|Do you trust the files/i, reaso
 /** Tools that hand control back to the user rather than doing work. */
 const USER_TOOLS: Record<string, StatusEvent> = {
   AskUserQuestion: { type: 'needs-user', reason: 'input' },
-  ExitPlanMode: { type: 'needs-user', reason: 'confirmation', activity: 'Waiting for plan approval' }
+  ExitPlanMode: { type: 'needs-user', reason: 'confirmation', activity: 'Needs your plan approval' }
 }
 
 export const mapClaudeHookEvent = (event: string, payload: unknown): StatusEvent | null => {
@@ -32,15 +32,10 @@ export const mapClaudeHookEvent = (event: string, payload: unknown): StatusEvent
       return { type: 'working' }
     case 'PermissionRequest':
       return { type: 'needs-user', reason: 'permission', activity: tool ? `Permission for ${tool}` : undefined }
-    case 'Notification': {
-      const kind = field(payload, 'notification_type')
-      if (kind === 'permission_prompt') return { type: 'needs-user', reason: 'permission' }
-      if (kind === 'elicitation_dialog') return { type: 'needs-user', reason: 'input' }
-      if (!kind && /permission/i.test(field(payload, 'message') ?? '')) {
-        return { type: 'needs-user', reason: 'permission' }
-      }
-      return null
-    }
+    case 'Notification':
+      // Permission prompts are reported by PermissionRequest. Their Notification can arrive after
+      // the user already answered, and would flag a working agent as needing them (ADR 0049).
+      return field(payload, 'notification_type') === 'elicitation_dialog' ? { type: 'needs-user', reason: 'input' } : null
     case 'Stop':
       return { type: 'turn-complete' }
     default:

@@ -22,7 +22,7 @@ interface SshHostFieldProps {
 
 /**
  * An SSH host, typed or picked (ADR 0025): the user's Tailscale devices and the
- * hosts in their ~/.ssh/config, like Orca's config picker. Picking fills the
+ * hosts in their ~/.ssh/config. Picking fills the
  * field; anything else (user@host, an IP) can still be typed.
  */
 export function SshHostField({ value, onChange, label = 'SSH host', onKeyDown, adornment }: SshHostFieldProps) {

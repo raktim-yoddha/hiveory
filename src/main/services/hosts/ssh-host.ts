@@ -16,8 +16,8 @@ export const MIN_REMOTE_NODE = 20
 export const REMOTE_DIR = `.hiveory-host/v${HOST_PROTOCOL}`
 
 /**
- * Hiveory's own Node for machines without a usable one (ADR 0025, Orca's
- * "Orca-managed Node"): the official build, checked against these pinned
+ * Hiveory's own Node for machines without a usable one (ADR 0025):
+ * the official build, checked against these pinned
  * SHA-256 sums, unpacked to ~/.hiveory-host/node and put first on PATH for
  * everything Hiveory runs there.
  */

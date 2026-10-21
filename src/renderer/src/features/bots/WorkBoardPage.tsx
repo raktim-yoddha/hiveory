@@ -63,7 +63,7 @@ export function WorkBoardPage() {
                 <span className={styles.teamCount}>{requests.length}</span>
               </header>
               {requests.length === 0 ? (
-                <p className={styles.switchHint}>Nothing is waiting for your yes.</p>
+                <p className={styles.switchHint}>Nothing needs your yes.</p>
               ) : (
                 <ul className={styles.handoffList}>
                   {requests.map((r) => (

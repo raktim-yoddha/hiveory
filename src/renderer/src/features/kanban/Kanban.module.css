@@ -124,9 +124,9 @@
   overflow: hidden;
 }
 
-/* Waiting for you: the whole card is tinted, so it is found at a glance. */
+/* Needs you: the whole card is tinted, so it is found at a glance. */
 .card[data-status='waiting-for-you'] {
-  background: color-mix(in srgb, var(--color-waiting) 12%, var(--color-surface-active));
+  background: color-mix(in srgb, var(--color-waiting) 7%, var(--color-surface-active));
 }
 
 /* Working: a short bar runs along the bottom edge while the agent works. */
@@ -139,7 +139,8 @@
   height: var(--nudge-sm);
   border-radius: var(--radius-pill);
   background: var(--color-working);
-  animation: card-run 1.8s var(--ease-out) infinite;
+  opacity: 0.6;
+  animation: card-run 2.6s var(--ease-in-out) infinite;
 }
 
 @keyframes card-run {

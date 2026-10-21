@@ -358,7 +358,7 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
       delete a.name
       break
     case 'report':
-      a.focus = { waiting: 'waiting-for-you', 'waiting for you': 'waiting-for-you', busy: 'working' }[lower(a.focus)] ?? (a.focus || 'all')
+      a.focus = { waiting: 'waiting-for-you', 'waiting for you': 'waiting-for-you', 'needs you': 'waiting-for-you', busy: 'working' }[lower(a.focus)] ?? (a.focus || 'all')
       break
     case 'open-url':
     case 'open-file':
@@ -506,7 +506,7 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
   return confirms.length ? { kind: 'actions', actions, confirm: confirms.join(' ') } : { kind: 'actions', actions }
 }
 
-const STATUS_WORD: Record<string, string> = { idle: 'idle', working: 'working', 'waiting-for-you': 'waiting for you' }
+const STATUS_WORD: Record<string, string> = { idle: 'idle', working: 'working', 'waiting-for-you': 'needs you' }
 
 /** The fixed part of every request: identical bytes each time, so providers can cache it. */
 export function systemPrompt(persona: { name: string; tagline: string; text?: string }): string {

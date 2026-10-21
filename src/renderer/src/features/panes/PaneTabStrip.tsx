@@ -27,7 +27,7 @@ interface PaneTabStripProps {
 }
 
 /**
- * An area's tabs (tabbed panes, ADR 0042, like Orca's tab groups): click a tab to show it; drag it along
+ * An area's tabs (tabbed panes, ADR 0042): click a tab to show it; drag it along
  * the strip to reorder, onto another strip or area to move it there, to an area's edge to split, or hold
  * Space to swap; double-click to maximize; right-click for its actions, right-click twice to rename.
  */

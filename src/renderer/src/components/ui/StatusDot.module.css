@@ -14,15 +14,15 @@
   box-shadow: var(--glow-working);
 }
 
-.working::after,
+/* Only "needs you" moves, and gently: a slow, faint ring that asks for attention without flashing. */
 .waiting-for-you::after {
   content: '';
   position: absolute;
   inset: calc(var(--space-1) * -1);
   border-radius: inherit;
   background: inherit;
-  opacity: 0.35;
-  animation: pulse 1.6s var(--ease-out) infinite;
+  opacity: 0;
+  animation: pulse 2.4s var(--ease-out) infinite;
 }
 
 .waiting-for-you {
@@ -41,11 +41,11 @@
 
 @keyframes pulse {
   0% {
-    transform: scale(0.8);
-    opacity: 0.45;
+    transform: scale(0.9);
+    opacity: 0.25;
   }
   100% {
-    transform: scale(1.9);
+    transform: scale(1.5);
     opacity: 0;
   }
 }

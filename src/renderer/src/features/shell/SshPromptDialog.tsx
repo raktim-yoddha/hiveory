@@ -9,7 +9,7 @@ import { runAction } from '../../stores/notices'
 import styles from './SshPromptDialog.module.css'
 
 /**
- * Questions ssh asks while Hiveory connects (ADR 0025, like Orca): a password,
+ * Questions ssh asks while Hiveory connects (ADR 0025): a password,
  * a key passphrase, a one-time code, or whether to trust a new host's key. The
  * answer goes straight back to ssh; passwords and passphrases are kept in
  * memory for this session only, never on disk.

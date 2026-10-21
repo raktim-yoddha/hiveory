@@ -1,7 +1,7 @@
 import type { IconReference, WaitingReason } from '@shared/domain'
 import { GENERIC_WAITING_PATTERNS } from '../status/heuristics'
 import { officialIcon } from './icons'
-import { mcpServersJson, opencodeConfigJson } from './mcp-injection'
+import { ALLOW_ALL_PERMISSIONS, mcpServersJson, opencodeConfigJson } from './mcp-injection'
 import type { CliAdapter, McpEndpoint, SkillFolders } from './types'
 
 /**
@@ -45,7 +45,6 @@ const COMMON_PROMPTS: NonNullable<CliSpec['waitingPatterns']> = [
   { pattern: /Allow (?:once|always)|Approve (?:once|always)/i, reason: 'permission' },
   { pattern: /(?:Allow|Approve|Run) (?:this )?(?:command|execution|tool|edit)\?/i, reason: 'permission' }
 ]
-
 
 export const defineCli = (spec: CliSpec): CliAdapter => ({
   id: spec.id,
@@ -108,7 +107,9 @@ export const CATALOG: CliAdapter[] = [
     // Measured: below 14 rows its footer is drawn over the prompt; 17 leaves room for a two-line
     // placeholder and a two-line folder footer.
     minRows: 17,
+    // --auto is newer than many installs, which ignore it; the permission override works in every version.
     autoApproveArgs: ['--auto'],
+    autoApproveEnv: { OPENCODE_PERMISSION: ALLOW_ALL_PERMISSIONS },
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { OPENCODE_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
     waitingPatterns: [{ pattern: /Permission required/i, reason: 'permission' }],
@@ -229,6 +230,7 @@ export const CATALOG: CliAdapter[] = [
     // drawn over the footer or squashed into one garbled line, at every height.
     minRows: 28,
     autoApproveArgs: ['--auto'],
+    autoApproveEnv: { KILO_PERMISSION: ALLOW_ALL_PERMISSIONS },
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ env: { KILO_CONFIG_CONTENT: opencodeConfigJson(endpoint) } }),
     skills: { dir: '.kilo/skills', shared: true, alsoReads: ['.claude/skills'] }

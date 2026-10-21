@@ -311,7 +311,18 @@ export class AgentService {
     })
   }
 
-  private launch(instance: CliInstance, workspace: Workspace): void {
+  /**
+   * Settings › Auto-approve permissions on: every agent starts with permissions skipped, in every
+   * Workspace and Worktree, whatever the Worktree or preset chose (ADR 0049). Off: their choice.
+   */
+  private withAutoApprove(instance: CliInstance): CliInstance {
+    if (instance.autoApprove || !this.store.state.settings.defaultAutoApprove) return instance
+    if (!this.registry.adapter(instance.cliId)?.supportsAutoApprove) return instance
+    return { ...instance, autoApprove: true }
+  }
+
+  private launch(stored: CliInstance, workspace: Workspace): void {
+    const instance = this.withAutoApprove(stored)
     const host = this.workspaces.findProject(workspace.projectId)?.host
     if (host) {
       // Runs on the project's machine: the folder is checked there; chat view needs a local CLI, so the terminal is used.

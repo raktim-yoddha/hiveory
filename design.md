@@ -337,7 +337,7 @@ The Workspace's Task view is a three-column board:
 ┌─────────────────────────────────────────────────────────────────┐
 │ Tasks                                                           │
 ├──────────────────────┬──────────────────────┬───────────────────┤
-│ IDLE                 │ WORKING              │ WAITING FOR YOU   │
+│ IDLE                 │ WORKING              │ NEEDS YOU         │
 ├──────────────────────┼──────────────────────┼───────────────────┤
 │ ┌──────────────────┐ │ ┌──────────────────┐ │ ┌───────────────┐ │
 │ │ [logo] Milo      │ │ │ [logo] Luna      │ │ │ [logo] Kai    │ │
@@ -358,12 +358,15 @@ Exactly:
 ```text
 Idle
 Working
-Waiting for You
+Needs You
 ```
 
 The board is automatically driven by runtime state.
 
-## Waiting for You Details
+## Needs You Details
+
+Status colors are warm, muted and matte (ADR 0049): taupe for Idle, sage for
+Working, ochre for Needs You. No glow; only Needs You moves, as a slow faint ring.
 
 Status is shown by color only — no reason text on cards or pane headers
 (ADR 0011). The reason (permission / input / confirmation) is kept in

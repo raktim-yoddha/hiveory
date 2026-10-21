@@ -102,9 +102,9 @@ export interface AppSettings {
   queenUpdates: 'all' | 'waiting' | 'off'
   /** Her replies pop open over the work; off (default), they wait behind her message button (ADR 0039). */
   queenPopups: boolean
-  /** Tiles: one pane per area. Tabs: each area holds several panes as tabs, like Orca (ADR 0042). */
+  /** Tiles: one pane per area. Tabs: each area holds several panes as tabs (ADR 0042). */
   paneStyle: PaneStyle
-  /** Spaced: air and rounded corners between surfaces. Attached: edge to edge, like Orca (ADR 0043). */
+  /** Spaced: air and rounded corners between surfaces. Attached: edge to edge (ADR 0043). */
   paneSpacing: PaneSpacing
   /** The welcome that asks for the pane style has been answered (shown once). */
   welcomed: boolean

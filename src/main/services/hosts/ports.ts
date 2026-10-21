@@ -42,7 +42,7 @@ export const parseLsofListen = (text: string): Array<{ port: number; address: st
 }
 
 /**
- * Ports on a remote project's machine (ADR 0025, Orca's Ports tab): what is
+ * Ports on a remote project's machine (ADR 0025): what is
  * listening there, and one-click forwards to this computer's loopback — the
  * same port number when it is free (privileged ports move up by 10000).
  */

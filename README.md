@@ -20,7 +20,7 @@
 Hiveory runs the agent CLIs you already use (Claude Code, Codex, Gemini CLI, OpenCode and any
 other CLI it detects on your computer) in real terminals, next to each other. Each piece of work
 gets its own **Worktree**, so agents never step on each other's changes, and a Kanban board shows
-which agents are **Idle**, **Working** or **Waiting for you**, by their real state.
+which agents are **Idle**, **Working** or **Needs you**, by their real state.
 
 Everything runs on your computer. Hiveory has no account and no server of its own.
 
@@ -32,8 +32,8 @@ Everything runs on your computer. Hiveory has no account and no server of its ow
 - **Many agents, many panes.** Open several instances of any CLI in one Worktree. Each has its own
   name, process, status and conversation. Split panes right or down, drag them to an edge, swap
   them, or show them as tabs.
-- **A live Kanban.** Cards move between Idle, Working and Waiting for you as the agents work, with
-  the reason an agent is waiting and the model it is using right now.
+- **A live Kanban.** Cards move between Idle, Working and Needs you as the agents work, with
+  the reason an agent needs you and the model it is using right now.
 - **Terminal or chat.** Open any agent as its real terminal or as a chat, and pick the model and
   effort per agent.
 - **Presets.** Save which CLIs to open, and how many of each, then load them into any Worktree.

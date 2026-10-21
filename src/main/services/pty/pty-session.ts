@@ -198,6 +198,11 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     return out.join('\n')
   }
 
+  /** The visible rows of the rendered screen as plain text, without scrollback (status detection). */
+  visibleText(): string {
+    return this.screenText(this.mirror?.rows ?? 0)
+  }
+
   private spawnNow(): void {
     const pending = this.pending
     if (!pending) return

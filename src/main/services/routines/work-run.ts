@@ -34,7 +34,7 @@ export function startWorkRun(
     await waitIdle(deps, agent, MAX_WORK_RUN_MS, 2500)
     const after = deps.agents.details(agent)
     if (!after.running) return { ok: false, detail: `${agent.petName} stopped.` }
-    return after.status === 'waiting-for-you' ? { ok: true, detail: `${agent.petName} is waiting for you in Work.` } : { ok: true }
+    return after.status === 'waiting-for-you' ? { ok: true, detail: `${agent.petName} needs you in Work.` } : { ok: true }
   })()
   return { agentId: agent.id, done }
 }

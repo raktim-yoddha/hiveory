@@ -142,3 +142,11 @@ export const codexMcpArgs = (mcp: McpEndpoint, coordination = true): string[] =>
 const CODEX_OWN_BROWSER_FEATURES = ['browser_use', 'browser_use_external', 'computer_use', 'in_app_browser']
 /** Bundled plugins that bring their own browser (the `cua_repl` server). */
 const CODEX_OWN_BROWSER_PLUGINS = ['browser@openai-bundled', 'chrome@openai-bundled', 'computer-use@openai-bundled', 'unified-computer-use@openai-bundled']
+
+/**
+ * OpenCode's (and its fork Kilo's) inline permission config: every tool allowed. `*` is today's
+ * wildcard; the named keys cover versions from before it (ADR 0049).
+ */
+export const ALLOW_ALL_PERMISSIONS = JSON.stringify(
+  Object.fromEntries(['*', 'edit', 'bash', 'shell', 'webfetch', 'external_directory', 'doom_loop'].map((key) => [key, 'allow']))
+)

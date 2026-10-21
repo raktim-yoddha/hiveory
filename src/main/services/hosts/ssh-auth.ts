@@ -42,7 +42,7 @@ if (process.env.HIVEORY_ASKPASS_EXEC && process.env.HIVEORY_ASKPASS_EXEC === pro
 const reusable = (prompt: string): boolean => /passphrase|password/i.test(prompt) && !/code|otp|token|verif|one-time/i.test(prompt)
 
 /**
- * SSH's questions, asked in Hiveory's window (ADR 0025, like Orca): passwords,
+ * SSH's questions, asked in Hiveory's window (ADR 0025): passwords,
  * key passphrases and one-time codes reach the user through ssh's own askpass
  * hook. Answers live in memory for this session only and are never written to
  * disk; a host's are forgotten as soon as it refuses a login.

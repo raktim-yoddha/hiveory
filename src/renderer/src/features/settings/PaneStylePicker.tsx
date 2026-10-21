@@ -5,12 +5,12 @@ import styles from './PaneStylePicker.module.css'
 
 const STYLE_LABEL: Record<PaneStyle, { name: string; text: string }> = {
   tiles: { name: 'Tiles', text: 'Every agent, terminal and page in its own area, side by side.' },
-  tabs: { name: 'Tabs', text: 'Areas hold several as tabs, like Orca. New ones open as a tab where you are.' }
+  tabs: { name: 'Tabs', text: 'Each area holds several panes as tabs, like a browser. New ones open as a tab in the area you are in.' }
 }
 
 const SPACING_LABEL: Record<PaneSpacing, { name: string; text: string }> = {
   spaced: { name: 'Spaced', text: 'Air and rounded corners between the sidebars, panes and panels.' },
-  attached: { name: 'Attached', text: 'No gaps and square corners: everything meets edge to edge, like Orca.' }
+  attached: { name: 'Attached', text: 'No gaps and square corners: sidebars, panes and panels meet edge to edge, split by a thin line.' }
 }
 
 const area = (key: string, tabs: number) => (

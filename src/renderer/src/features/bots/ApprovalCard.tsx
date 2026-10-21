@@ -6,7 +6,7 @@ import styles from './Bots.module.css'
 /** One bot call waiting for the user's yes (ADR 0029): what it wants to do, its arguments as plain text, Allow or Decline. */
 export function ApprovalCard({ request, botName, onAnswer }: { request: ApprovalRequest; botName: string; onAnswer(allow: boolean): void }) {
   return (
-    <section className={styles.approval} aria-label={`${botName} is waiting for you`}>
+    <section className={styles.approval} aria-label={`${botName} needs you`}>
       <div className={styles.approvalHead}>
         <ShieldAlert aria-hidden className={styles.approvalIcon} />
         <span className={styles.switchText}>

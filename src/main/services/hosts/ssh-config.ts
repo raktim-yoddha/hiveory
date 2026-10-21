@@ -31,7 +31,7 @@ const globFiles = (pattern: string): string[] => {
 }
 
 /**
- * The named hosts in an OpenSSH config (Orca's "OpenSSH config picker"): `Host`
+ * The named hosts in an OpenSSH config: `Host`
  * aliases without wildcards or negations, with the HostName/User/Port that
  * apply to them (first value wins, like ssh), following `Include`.
  */

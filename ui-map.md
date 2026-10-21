@@ -310,7 +310,7 @@ panel's "+" or from a workspace's right-click › Workspace settings. It has no 
 │ ▦ Tasks │ ⑂ Worktrees │ ◉ Issues   (icons only when narrow)
 ├────────────────────────────────────────┤
 │ [ All | Here ]                         │
-│ ● WAITING FOR YOU                   0  │
+│ ● NEEDS YOU                         0  │
 │ ● WORKING                           1  │
 │ ● IDLE                              2  │
 └────────────────────────────────────────┘
@@ -342,7 +342,7 @@ the form with a link to create the key; connected: site · email, Disconnect).
 ┌──────────────────────────────────────────────────────────────────────────┐
 │ Tasks                                                                    │
 ├──────────────────────┬──────────────────────┬─────────────────────────────┤
-│ Waiting for You      │ Working              │ Idle                        │
+│ Needs You            │ Working              │ Idle                        │
 ├──────────────────────┼──────────────────────┼─────────────────────────────┤
 │ ┌──────────────────┐ │ ┌──────────────────┐ │ ┌─────────────────────────┐ │
 │ │ [logo] Milo      │ │ │ [logo] Luna      │ │ │ [logo] Kai              │ │

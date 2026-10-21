@@ -123,7 +123,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     if (kit) session.pty.useBackend(kit.pty)
     session.instance = instance
     const heuristics = adapter!.heuristics(Boolean(hook))
-    session.detector = heuristics ? new HeuristicDetector(heuristics) : null
+    session.detector = heuristics ? new HeuristicDetector(heuristics, () => session.pty.visibleText()) : null
     this.sessions.set(instance.id, session)
     if (existing) session.pty.annotate('\r\n\x1b[2m── session restarted ──\x1b[0m\r\n')
     else {
@@ -294,7 +294,7 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   private apply(session: Session, event: StatusEvent, source: 'hook' | 'heuristic' | 'process'): void {
     const reduced = reduceStatus(session.details, event)
     const next = session.model ? { ...reduced, model: session.model } : reduced
-    if (source !== 'heuristic') session.detector?.sync(phaseOf(next))
+    if (source !== 'heuristic') session.detector?.sync(phaseOf(next), Date.now(), next.waitingReason)
     if (sameDetails(session.details, next)) return
     session.details = next
     this.emit('changed', session.instance, next)

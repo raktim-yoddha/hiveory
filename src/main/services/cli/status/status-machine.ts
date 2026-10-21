@@ -15,10 +15,10 @@ export type StatusEvent =
 export const NOT_RUNNING: CliRuntimeDetails = { status: 'idle', running: false, activity: 'Not running' }
 
 const WAITING_LABEL: Record<WaitingReason, string> = {
-  permission: 'Waiting for permission',
-  input: 'Waiting for input',
-  confirmation: 'Waiting for confirmation',
-  other: 'Waiting for you'
+  permission: 'Needs your permission',
+  input: 'Needs your answer',
+  confirmation: 'Needs you to confirm',
+  other: 'Needs you'
 }
 
 export const waitingLabel = (reason: WaitingReason): string => WAITING_LABEL[reason]

@@ -12,7 +12,7 @@ describe('status normalization', () => {
     expect(run({ type: 'started' }).status).toBe('idle')
     expect(run({ type: 'started' }, { type: 'working' }).status).toBe('working')
     const waiting = run({ type: 'started' }, { type: 'working' }, { type: 'needs-user', reason: 'permission' })
-    expect(waiting).toMatchObject({ status: 'waiting-for-you', waitingReason: 'permission', activity: 'Waiting for permission' })
+    expect(waiting).toMatchObject({ status: 'waiting-for-you', waitingReason: 'permission', activity: 'Needs your permission' })
     expect(reduceStatus(waiting, { type: 'working' }).waitingReason).toBeUndefined()
     expect(run({ type: 'started' }, { type: 'working' }, { type: 'turn-complete' }).status).toBe('idle')
   })
@@ -44,7 +44,9 @@ describe('claude hook mapping', () => {
 
   it('maps permission and questions to waiting reasons', () => {
     expect(mapClaudeHookEvent('PermissionRequest', { tool_name: 'Edit' })).toMatchObject({ reason: 'permission' })
-    expect(mapClaudeHookEvent('Notification', { notification_type: 'permission_prompt' })).toMatchObject({ reason: 'permission' })
+    // PermissionRequest reports the prompt; a late Notification must not flag a working agent.
+    expect(mapClaudeHookEvent('Notification', { notification_type: 'permission_prompt' })).toBeNull()
+    expect(mapClaudeHookEvent('Notification', { notification_type: 'elicitation_dialog' })).toMatchObject({ reason: 'input' })
     expect(mapClaudeHookEvent('PreToolUse', { tool_name: 'AskUserQuestion' })).toMatchObject({ reason: 'input' })
     expect(mapClaudeHookEvent('Notification', { notification_type: 'idle_prompt' })).toBeNull()
   })
@@ -101,6 +103,49 @@ describe('heuristic detector', () => {
     const d = new HeuristicDetector({ ...config, workingOnSubmit: false })
     d.sync('working')
     expect(d.onOutput('⎿ Interrupted', 0)).toEqual({ type: 'turn-complete' })
+  })
+
+  it('ends waiting when the prompt is answered with a choice key, and ignores its last frames', () => {
+    const d = new HeuristicDetector(config)
+    d.onInput('\r', 0)
+    expect(d.onOutput('Allow command?', 10)).toMatchObject({ type: 'needs-user' })
+    expect(d.onInput('1', 20)).toEqual({ type: 'working' })
+    // The prompt drawn once more while the CLI removes it is not a new prompt.
+    expect(d.onOutput('Allow command?', 30)).toBeNull()
+    expect(d.tick(100)).toBeNull()
+    // A real second prompt later is.
+    expect(d.onOutput('Allow command?', 2000)).toMatchObject({ type: 'needs-user', reason: 'permission' })
+  })
+
+  it('typing into a question does not answer it until Enter', () => {
+    const d = new HeuristicDetector(config)
+    d.sync('waiting', 0, 'input')
+    expect(d.onInput('y', 10)).toBeNull()
+    expect(d.onInput('\r', 20)).toEqual({ type: 'working' })
+  })
+
+  it('confirms prompts against the screen and ends waiting when the prompt leaves it', () => {
+    let screen = 'working…'
+    const d = new HeuristicDetector(config, () => screen)
+    d.onInput('\r', 0)
+    // A prompt that flashed by and is not on screen is ignored.
+    expect(d.onOutput('Allow command?', 10)).toBeNull()
+    expect(d.tick(500)).toBeNull()
+    // One that stays on screen counts.
+    screen = '│ Allow\n│ command?'
+    expect(d.onOutput('Allow command?', 600)).toBeNull()
+    expect(d.tick(700)).toEqual({ type: 'needs-user', reason: 'permission' })
+    expect(d.tick(1700)).toBeNull()
+    // Answered some other way (phone, Queen): it leaves the screen and the agent is working again.
+    screen = 'running tests'
+    expect(d.tick(2700)).toEqual({ type: 'working' })
+  })
+
+  it('leaves hook-reported waiting to the hooks and the user', () => {
+    const d = new HeuristicDetector(config, () => 'nothing matching here')
+    d.sync('waiting', 0, 'permission')
+    expect(d.tick(5000)).toBeNull()
+    expect(d.onInput('\u001b', 5100)).toEqual({ type: 'working' })
   })
 
   it('strips ANSI sequences', () => {

@@ -191,7 +191,9 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   ensureAgentChat(instance: CliInstance, cwd: string, defaults?: ChatChoice): void {
     const existing = this.store.get(instance.id)
     if (existing) {
-      if (existing.cwd !== cwd) this.store.save({ ...existing, cwd })
+      // Auto-approve turned on (the agent's or Settings', ADR 0049) gives an existing chat full access too.
+      const autoApprove = existing.autoApprove || (instance.autoApprove && !existing.readOnly)
+      if (existing.cwd !== cwd || autoApprove !== existing.autoApprove) this.store.save({ ...existing, cwd, autoApprove })
       return
     }
     const now = nowIso()

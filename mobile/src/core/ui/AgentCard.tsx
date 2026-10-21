@@ -9,9 +9,9 @@ import { Text } from './Text'
 
 const WAITING: Record<WaitingReason, string> = {
   permission: 'Wants your permission',
-  input: 'Waiting for your answer',
+  input: 'Needs your answer',
   confirmation: 'Asks you to confirm',
-  other: 'Waiting for you'
+  other: 'Needs you'
 }
 
 /** What an agent is doing, in one line: why it waits, its activity, or its error. */

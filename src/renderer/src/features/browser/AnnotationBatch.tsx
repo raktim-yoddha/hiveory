@@ -16,7 +16,7 @@ import styles from './BrowserPane.module.css'
 const NO_AGENTS: CliInstanceView[] = []
 
 /**
- * A page's notes as one batch (ADR 0042, like Orca): numbered as marked on the page, each a change or a
+ * A page's notes as one batch (ADR 0042): numbered as marked on the page, each a change or a
  * question. Send them to an agent of this worktree or to a new one, or copy them; sent notes clear.
  */
 export function AnnotationBatch({ scope, notes, onSent }: { scope: string; notes: BrowserAnnotation[]; onSent: (message: string) => void }) {

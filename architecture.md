@@ -237,7 +237,7 @@ React must never own the process directly.
                      │ needs user
                      ▼
         ┌──────────────────────────┐
-        │     WAITING FOR YOU      │
+        │        NEEDS YOU         │
         └────────────┬─────────────┘
                      │ user responds
                      ▼
@@ -254,7 +254,7 @@ React must never own the process directly.
 A CLI may also transition:
 
 ```text
-IDLE → WAITING FOR YOU
+IDLE → NEEDS YOU
 ```
 
 if it immediately needs user input.

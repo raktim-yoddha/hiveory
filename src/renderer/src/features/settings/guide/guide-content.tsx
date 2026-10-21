@@ -78,7 +78,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Your first choices',
         body: (
           <p>
-            The welcome asks how panes share a worktree (<b>Tiles</b> side by side, or <b>Tabs</b> like Orca) and whether surfaces have
+            The welcome asks how panes share a worktree (<b>Tiles</b> side by side, or <b>Tabs</b> like a browser) and whether surfaces have
             air between them (<b>Spaced</b>) or meet edge to edge (<b>Attached</b>). Both change any time in Settings › Appearance › Panes.
           </p>
         ),
@@ -150,7 +150,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Status',
         body: (
           <p>
-            Grey is idle, green is working, amber is waiting for you (a permission, question or confirmation) — the pane gets an amber edge
+            Taupe is idle, sage is working, ochre means it needs you (a permission, question or confirmation) — the pane gets an ochre edge
             too. Hover the dot for the reason. Terminals are not agents: they have no status and no Kanban card.
           </p>
         ),
@@ -233,7 +233,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Three columns, no manual moves',
         body: (
           <p>
-            The Dashboard&rsquo;s <b>Tasks</b> tab sorts the workspace&rsquo;s agents into Idle, Working and Waiting for you by their real state.
+            The Dashboard&rsquo;s <b>Tasks</b> tab sorts the workspace&rsquo;s agents into Idle, Working and Needs you by their real state.
             Cards move by themselves; click one to jump to its pane.
           </p>
         )

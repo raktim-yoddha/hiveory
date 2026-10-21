@@ -8,7 +8,7 @@ import { runAction } from '../../stores/notices'
 import styles from './PortsMenu.module.css'
 
 /**
- * Ports on a remote project's machine (ADR 0025, like Orca's Ports tab): what
+ * Ports on a remote project's machine (ADR 0025): what
  * is listening there, forwarded to this computer in one click and opened in
  * the browser. Forwards last until stopped or Hiveory quits.
  */

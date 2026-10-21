@@ -90,19 +90,19 @@
   --shadow-raised: none;
   --shadow-button: none;
 
-  /* Status */
-  --color-idle: #776d61;
-  --color-working: #6fcf8e;
-  --color-waiting: #e8b04f;
-  --color-success: #6fcf8e;
-  --color-warning: #e8b04f;
+  /* Status: warm, muted and matte — sage for working, ochre for needs you, no glow (ADR 0049). */
+  --color-idle: #7a7064;
+  --color-working: #9fb08a;
+  --color-waiting: #d29b5b;
+  --color-success: #9fb08a;
+  --color-warning: #d29b5b;
   --color-danger: #e6806c;
-  --color-working-soft: rgb(111 207 142 / 0.12);
-  --color-waiting-soft: rgb(232 176 79 / 0.13);
-  --color-waiting-edge: rgb(232 176 79 / 0.42);
+  --color-working-soft: rgb(159 176 138 / 0.12);
+  --color-waiting-soft: rgb(210 155 91 / 0.12);
+  --color-waiting-edge: rgb(210 155 91 / 0.34);
   --color-danger-soft: rgb(230 128 108 / 0.12);
-  --glow-working: 0 0 8px rgb(111 207 142 / 0.55);
-  --glow-waiting: 0 0 8px rgb(232 176 79 / 0.6);
+  --glow-working: none;
+  --glow-waiting: none;
 
   /* Bot avatars (Bots mode): soft identity tiles, picked per bot from its id; theme-independent */
   --bot-tile-1: #e8766a;
@@ -376,7 +376,7 @@
 
 /*
  * Attached panes (Settings › Appearance › Pane spacing, ADR 0043, 0044): no air and no rounded corners —
- * sidebars, side panel and panes meet edge to edge, like Orca, split by a one-pixel line: the shell
+ * sidebars, side panel and panes meet edge to edge, split by a one-pixel line: the shell
  * shows --color-pane-line through a one-pixel gutter. --gutter is the air between surfaces only;
  * content grids use the spacing scale.
  */

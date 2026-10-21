@@ -24,7 +24,7 @@ export const useApprovals = create<ApprovalsState>((set, get) => ({
       if (useNavigation.getState().mode === 'bots') return
       for (const r of requests.filter((x) => !known.has(x.id))) {
         const name = useBots.getState().bots.find((b) => b.id === r.botId)?.name ?? 'A bot'
-        useNotices.getState().push({ level: 'warning', message: `${name} is waiting for you: allow ${r.tool}? Open Bots to answer.` })
+        useNotices.getState().push({ level: 'warning', message: `${name} needs you: allow ${r.tool}? Open Bots to answer.` })
       }
     } catch (error) {
       reportError(error, 'Load approvals')

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import type { ChatAttachment, ChatModel } from '@shared/domain/chat'
-import { claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
+import { ALLOW_ALL_PERMISSIONS, claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
 import type { McpEndpoint } from '../cli/adapters/types'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
 
@@ -177,7 +177,11 @@ const opencodeLike = (cliId: string): ChatProvider => ({
   resumable: true,
   models: async (run) => [DEFAULT_MODEL, ...parseOpencodeModels(await run(['models', '--verbose']))],
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => ({
-    ...(mcp ? { env: { [cliId === 'kilocode' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: opencodeConfigJson(mcp.endpoint) } } : {}),
+    env: {
+      ...(mcp ? { [cliId === 'kilocode' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: opencodeConfigJson(mcp.endpoint) } : {}),
+      // Versions without --auto still honour the permission override (ADR 0049).
+      ...(autoApprove ? { [cliId === 'kilocode' ? 'KILO_PERMISSION' : 'OPENCODE_PERMISSION']: ALLOW_ALL_PERMISSIONS } : {})
+    },
     args: [
       'run',
       '--format',
