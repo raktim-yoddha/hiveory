@@ -45,7 +45,7 @@ edge without a halo. The phone's palette is generated from the same tokens.
 - For 1.5 s after an answer, output never counts as a new prompt.
 - Waiting reported by a hook is left to hooks and the user, never ended by the screen check.
 
-**Auto-approve for every agent.** While Settings › Agents › Auto-approve permissions is on, every
+**Skip permissions (YOLO) for every agent.** While Settings › Agents › Skip permissions (YOLO) is on, every
 agent starts with permissions skipped, in every Workspace and Worktree, the Primary included,
 whatever its Worktree or preset chose (`AgentService.withAutoApprove`, applied at each launch). An
 agent in chat view gets full access too. While it is off, the Worktree's or preset's choice applies.

@@ -20,7 +20,7 @@ export interface AppSettings {
   updateRemindEvery: UpdateRemindEvery
   /** Give agents Hiveory's tools (list/read/message/open/arrange agents, terminal) over MCP. */
   agentTools: boolean
-  /** Starting value of "Auto-approve permissions" when creating workspaces and presets. */
+  /** Skip permissions (YOLO) for every agent at launch (ADR 0049); also the starting value in the worktree and preset dialogs. */
   defaultAutoApprove: boolean
   /** Starting value of "Use chat UI" when creating workspaces and presets. */
   defaultChatUi: boolean

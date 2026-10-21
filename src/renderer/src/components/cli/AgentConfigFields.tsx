@@ -32,15 +32,15 @@ export function AgentConfigFields({ value, onChange }: AgentConfigFieldsProps) {
       <div className={styles.toggleRow}>
         <div className={styles.toggleText}>
           <span className={styles.toggleLabel}>
-            Auto-approve permissions
+            Skip permissions (YOLO)
           </span>
           <span className={styles.toggleHint}>
-            Agents run without asking before edits and commands.
+            Agents start in their dangerous skip-permissions mode: no prompts before edits and commands.
             {value.autoApprove && unsupported.length > 0 && ` Not available for ${unsupported.join(', ')}.`}
           </span>
         </div>
         <Toggle
-          label="Auto-approve permissions"
+          label="Skip permissions (YOLO)"
           checked={value.autoApprove}
           onChange={(autoApprove) => onChange({ ...value, autoApprove })}
         />

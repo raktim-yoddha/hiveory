@@ -36,11 +36,11 @@ export function AgentsSection() {
       <div className={styles.group}>
         <div className={styles.groupTitle}>Defaults</div>
         <SettingRow
-          title="Auto-approve permissions"
-          description="On: every agent starts with permissions skipped (YOLO), in every workspace and worktree. Off: each worktree and preset chooses for itself."
+          title="Skip permissions (YOLO)"
+          description="On: every agent, in every workspace and worktree, starts in its CLI's dangerous skip-permissions mode (Claude Code --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox, Gemini --yolo…). Running agents switch on their next start. Off: each worktree and preset chooses."
           control={
             <Toggle
-              label="Auto-approve permissions by default"
+              label="Skip permissions (YOLO) for every agent"
               checked={settings.defaultAutoApprove}
               onChange={(defaultAutoApprove) => void update({ defaultAutoApprove })}
             />

@@ -131,12 +131,12 @@ Issue / PR association
 CLI selection
 Add all CLIs
 CLI instance count
-Auto-approve permissions
+Skip permissions (YOLO)
 Preset
 Create empty Worktree
 ```
 
-Settings › Agents › Auto-approve permissions is global (ADR 0049): while it is on, every agent
+Settings › Agents › Skip permissions (YOLO) is global (ADR 0049): while it is on, every agent
 starts with permissions skipped (YOLO) in every Workspace and Worktree, the Primary included,
 whatever the Worktree or preset chose. While it is off, the Worktree's or preset's own choice applies.
 
@@ -241,7 +241,7 @@ Presets store:
 
 ```text
 CLI counts
-Auto-approve
+Skip permissions (YOLO)
 ```
 
 Presets do not store layout.

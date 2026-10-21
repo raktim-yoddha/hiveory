@@ -414,7 +414,7 @@ pane's name for restart, move and close (ADR 0018).
 │                                               │
 │ [ Add all CLIs ]                              │
 │                                               │
-│ Auto-approve permissions              [ ON ]  │
+│ Skip permissions (YOLO)               [ ON ]  │
 │                                               │
 │                 [ Create  /  Create with N ]  │
 └───────────────────────────────────────────────┘

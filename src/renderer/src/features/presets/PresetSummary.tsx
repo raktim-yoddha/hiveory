@@ -13,8 +13,8 @@ export function PresetSummary({ preset }: { preset: AgentPreset }) {
         </span>
       ))}
       {preset.autoApprove && (
-        <span className={styles.summaryItem} title="Auto-approve on">
-          <ShieldCheck aria-label="Auto-approve on" />
+        <span className={styles.summaryItem} title="Skip permissions (YOLO) on">
+          <ShieldCheck aria-label="Skip permissions (YOLO) on" />
         </span>
       )}
       {preset.chatUi && (

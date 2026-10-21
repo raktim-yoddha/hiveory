@@ -104,7 +104,7 @@ export const QUEEN_SETTINGS = {
   'agent-tools': { key: 'agentTools', label: 'Agent tools' },
   'browser-use': { key: 'browserUse', label: 'Browser use' },
   'computer-use': { key: 'computerUse', label: 'Computer use' },
-  'auto-approve': { key: 'defaultAutoApprove', label: 'Auto-approve for every agent' },
+  'auto-approve': { key: 'defaultAutoApprove', label: 'Skip permissions (YOLO) for every agent' },
   'chat-ui': { key: 'defaultChatUi', label: 'Chat view for new agents' }
 } as const
 export type QueenSetting = keyof typeof QUEEN_SETTINGS

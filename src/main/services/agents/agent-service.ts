@@ -312,7 +312,7 @@ export class AgentService {
   }
 
   /**
-   * Settings › Auto-approve permissions on: every agent starts with permissions skipped, in every
+   * Settings › Skip permissions (YOLO) on: every agent starts in its dangerous skip-permissions mode, in every
    * Workspace and Worktree, whatever the Worktree or preset chose (ADR 0049). Off: their choice.
    */
   private withAutoApprove(instance: CliInstance): CliInstance {

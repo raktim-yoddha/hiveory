@@ -60,11 +60,24 @@ const setup = (workspacePatch: Partial<Workspace> = {}, settings?: ProjectSettin
     details.set(instance.id, next)
     runtime.emit('changed', instance, next)
   }
-  return { agents, runtime, chats, report, emitted }
+  return { agents, runtime, chats, report, emitted, store }
 }
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('skip permissions (YOLO) from Settings', () => {
+  it('starts every agent with permissions skipped while the setting is on, whatever its worktree chose', () => {
+    const { agents, runtime, store } = setup({ autoApprove: false })
+    agents.open('w1', 'claude')
+    expect(runtime.launch).toHaveBeenLastCalledWith(expect.objectContaining({ autoApprove: false }), expect.any(String), expect.anything())
+    store.update((s) => {
+      s.settings.defaultAutoApprove = true
+    })
+    const yolo = agents.open('w1', 'claude').agent
+    expect(runtime.launch).toHaveBeenLastCalledWith(expect.objectContaining({ id: yolo.id, autoApprove: true }), expect.any(String), expect.anything())
+  })
 })
 
 describe('agents in chat view', () => {
