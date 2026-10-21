@@ -1,4 +1,4 @@
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { MAX_QUEUED } from '@shared/domain/prompt'
 import { EventEmitter } from 'node:events'
@@ -14,7 +14,8 @@ import type { CliRegistry } from '../cli/registry'
 import type { Emit } from '../events'
 import { nowIso } from '../events'
 import { sanitizeEnv } from '../pty/env'
-import { killTree, resolveSpawnTarget } from '../pty/spawn-target'
+import { resolveSpawnTarget } from '../pty/spawn-target'
+import { localChatProcesses, type ChatProcess, type ChatProcessBackend } from './chat-process'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { ChatAccumulator } from './accumulator'
 import type { ChatStore } from './chat-store'
@@ -42,7 +43,7 @@ export const attachmentKind = (name: string): ChatAttachment['kind'] => KIND_BY_
 export const safeName = (name: string): string => basename(name).replace(/[^\w.() -]+/g, '_').slice(0, 120) || 'file'
 
 interface Run {
-  child: ChildProcess
+  proc: ChatProcess
   stopped: boolean
 }
 
@@ -70,7 +71,9 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     /** Per-run generated files (MCP configs). */
     private readonly runtimeDir = join(attachmentsDir, '..', '.runtime'),
     /** Text sent ahead of a conversation's first turn (a bot's identity, brief and memory). */
-    private readonly preamble: (chat: ChatSession) => string | undefined = () => undefined
+    private readonly preamble: (chat: ChatSession) => string | undefined = () => undefined,
+    /** Where each turn's CLI runs: the terminal host, so a reply outlives Hiveory (ADR 0051). */
+    private readonly processes: ChatProcessBackend = localChatProcesses
   ) {
     super()
   }
@@ -333,8 +336,28 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     })
     if (spec.assignedSessionId) chat.providerSessionId = spec.assignedSessionId
 
+    let proc: ChatProcess
+    try {
+      const target = resolveSpawnTarget(executable!, spec.args)
+      for (const file of spec.files ?? []) {
+        mkdirSync(dirname(file.path), { recursive: true })
+        writeFileSync(file.path, file.content)
+      }
+      proc = this.processes.spawn({ key: chatId, file: target.file, args: target.args, cwd: chat.cwd, env: { ...sanitizeEnv(process.env), ...spec.env }, stdin: spec.stdin })
+    } catch (error) {
+      this.finish(chat, reply, new ChatAccumulator(reply), error instanceof Error ? error.message : String(error))
+      return
+    }
+    this.follow(chat, reply, proc, provider!.parser())
+  }
+
+  /**
+   * Streams a turn's output into its reply until it ends. A run taken back after a restart (ADR 0051)
+   * comes here too, with its whole output from the first byte, so the reply is rebuilt as it was.
+   */
+  private follow(chat: ChatSession, reply: ChatMessage, proc: ChatProcess, parse: ReturnType<(typeof CHAT_PROVIDERS)[string]['parser']>): void {
+    const chatId = chat.id
     const acc = new ChatAccumulator(reply)
-    const parse = provider!.parser()
     let stderr = ''
     let lastEmit = 0
     let pending: NodeJS.Timeout | null = null
@@ -351,27 +374,14 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary: this.summary(chat) })
     }
 
-    let child: ChildProcess
-    try {
-      const target = resolveSpawnTarget(executable!, spec.args)
-      for (const file of spec.files ?? []) {
-        mkdirSync(dirname(file.path), { recursive: true })
-        writeFileSync(file.path, file.content)
-      }
-      child = spawn(target.file, target.args, { cwd: chat.cwd, env: { ...sanitizeEnv(process.env), ...spec.env }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
-    } catch (error) {
-      this.finish(chat, reply, acc, error instanceof Error ? error.message : String(error))
-      return
-    }
-    const run: Run = { child, stopped: false }
+    const run: Run = { proc, stopped: false }
     this.runs.set(chatId, run)
     this.broadcast('state.changed', { topic: 'chats' })
     this.emit('run', chatId, true)
     push(true)
 
     let buffer = ''
-    child.stdout?.setEncoding('utf8')
-    child.stdout?.on('data', (chunk: string) => {
+    proc.onStdout((chunk) => {
       buffer += chunk
       const lines = buffer.split(/\r?\n/)
       buffer = lines.pop() ?? ''
@@ -385,30 +395,53 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       }
       push()
     })
-    child.stderr?.setEncoding('utf8')
-    child.stderr?.on('data', (chunk: string) => {
+    proc.onStderr((chunk) => {
       stderr = (stderr + chunk).slice(-MAX_STDERR)
     })
-    child.on('error', (error) => {
-      this.runs.delete(chatId)
-      this.finish(chat, reply, acc, error.message)
-    })
-    child.on('close', (code) => {
+    proc.onClose((code, failure) => {
       if (buffer.trim()) for (const event of parse(buffer)) acc.apply(event)
       if (pending) clearTimeout(pending)
       this.runs.delete(chatId)
       let error: string | undefined
       if (run.stopped) error = 'Stopped'
+      else if (failure && !acc.text()) error = failure
       else if (acc.errors.length) error = acc.errors.join('\n')
       else if (code !== 0 && !acc.text()) error = stderr.trim().split(/\r?\n/).slice(-6).join('\n') || `Exited with code ${code}`
       this.finish(chat, reply, acc, error)
     })
-    if (spec.stdin !== undefined) {
-      child.stdin?.on('error', () => undefined)
-      child.stdin?.end(spec.stdin)
-    } else {
-      child.stdin?.end()
+  }
+
+  /**
+   * At start-up (ADR 0051): every reply that was still streaming when Hiveory last ran is taken back
+   * from the terminal host, rebuilt from its run's whole output, and streams on, or is finished if
+   * the run ended meanwhile. One whose run is gone (after a reboot) is marked interrupted.
+   */
+  recover(): void {
+    for (const chat of this.store.all()) {
+      const reply = chat.messages.at(-1)
+      const stale = chat.messages.filter((m) => m.streaming && m !== reply)
+      for (const m of stale) Object.assign(m, { streaming: false, error: m.error ?? 'Interrupted' })
+      const provider = chat.cliId ? CHAT_PROVIDERS[chat.cliId] : undefined
+      const proc = reply?.streaming && provider ? this.processes.adopt(chat.id) : undefined
+      if (reply?.streaming && proc && provider) {
+        reply.parts = []
+        delete reply.error
+        this.follow(chat, reply, proc, provider.parser())
+        continue
+      }
+      if (reply?.streaming) Object.assign(reply, { streaming: false, error: reply.error ?? 'Interrupted' })
+      if (stale.length || reply?.error === 'Interrupted') this.store.save(chat)
     }
+  }
+
+  /** Quitting with agents kept: every running turn carries on in the terminal host for the next start. */
+  detachAll(): void {
+    for (const [chatId, run] of this.runs) {
+      run.proc.detach()
+      const chat = this.store.get(chatId)
+      if (chat) this.store.save(chat)
+    }
+    this.runs.clear()
   }
 
   /** Sends now, or, while the chat is still answering, lines it up as the next turn (ADR 0031). */
@@ -443,7 +476,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       this.store.save(chat)
     }
     run.stopped = true
-    killTree(run.child)
+    run.proc.kill()
   }
 
   stopAll(): void {

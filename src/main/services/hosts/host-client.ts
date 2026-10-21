@@ -7,6 +7,11 @@ const CALL_TIMEOUT_MS = 30_000
 
 type ExitListener = (exit: { exitCode: number | null; signal: number | null }) => void
 
+interface ProcListeners {
+  data: (stream: 'out' | 'err', data: string) => void
+  exit: (code: number | null) => void
+}
+
 interface PtyListeners {
   data: (d: string) => void
   exit: ExitListener
@@ -28,6 +33,8 @@ export class HostClient {
   private readonly ptys = new Map<string, PtyListeners>()
   private readonly closeListeners: Array<() => void> = []
   private readonly fileListeners: Array<(e: HostEvents['files.changed']) => void> = []
+  /** Headless runs this client streams (ADR 0051), with how much of their stdout was delivered. */
+  private readonly procs = new Map<string, ProcListeners & { delivered: number }>()
   private readonly relayHookListeners: Array<(e: HostEvents['relay.hook']) => void> = []
   private readonly relayMcpListeners: Array<(e: HostEvents['relay.mcp']) => void> = []
   private closed = false
@@ -71,12 +78,35 @@ export class HostClient {
     this.ptys.set(ptyId, listeners)
   }
 
+  /** Routes a headless run's output and end to `listeners`; `delivered` is how much stdout they already have. */
+  bindProc(procId: string, listeners: ProcListeners, delivered = 0): void {
+    this.procs.set(procId, { ...listeners, delivered })
+  }
+
+  /** Stops routing a run here (its chat let go of it: Hiveory quits with the run kept). */
+  unbindProc(procId: string): void {
+    this.procs.delete(procId)
+  }
+
   /**
    * Takes over the terminals of a client whose link dropped (ADR 0025): each one the
    * daemon still runs continues here with the output it produced meanwhile; one that
    * ended meanwhile reports its exit.
    */
   async adopt(from: HostClient): Promise<void> {
+    // Headless runs: what they printed while the link was down is the part past what was delivered.
+    const runs = [...from.procs]
+    from.procs.clear()
+    for (const [procId, listeners] of runs) {
+      const result = await this.call('proc.attach', { procId }).catch(() => ({ alive: false, out: '', err: '', code: null }))
+      const rest = result.out.slice(listeners.delivered)
+      if (rest) listeners.data('out', rest)
+      if (!result.alive) {
+        listeners.exit(result.code)
+        continue
+      }
+      this.procs.set(procId, { ...listeners, delivered: result.out.length })
+    }
     const moving = [...from.ptys]
     from.ptys.clear()
     for (const [ptyId, listeners] of moving) {
@@ -95,6 +125,8 @@ export class HostClient {
   abandon(): void {
     for (const pty of this.ptys.values()) pty.exit({ exitCode: null, signal: null })
     this.ptys.clear()
+    for (const proc of this.procs.values()) proc.exit(null)
+    this.procs.clear()
   }
 
   onClosed(listener: () => void): void {
@@ -137,6 +169,16 @@ export class HostClient {
       else call.reject(rebuild(frame.failure ?? { message: frame.error }))
     } else if (frame.kind === 'event' && frame.event === 'files.changed') {
       for (const l of this.fileListeners) l(frame.params as HostEvents['files.changed'])
+    } else if (frame.kind === 'event' && (frame.event === 'proc.data' || frame.event === 'proc.exit')) {
+      const p = frame.params as { procId: string; stream?: 'out' | 'err'; data?: string; code?: number | null }
+      const target = this.procs.get(p.procId)
+      if (!target) return
+      if (frame.event === 'proc.exit') {
+        this.procs.delete(p.procId)
+        return target.exit(p.code ?? null)
+      }
+      if (p.stream === 'out') target.delivered += (p.data ?? '').length
+      target.data(p.stream ?? 'out', p.data ?? '')
     } else if (frame.kind === 'event' && frame.event === 'relay.hook') {
       for (const l of this.relayHookListeners) l(frame.params as HostEvents['relay.hook'])
     } else if (frame.kind === 'event' && frame.event === 'relay.mcp') {

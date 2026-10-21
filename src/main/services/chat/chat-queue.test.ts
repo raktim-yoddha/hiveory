@@ -25,7 +25,7 @@ const setup = () => {
     store,
     sent,
     id: chat.id,
-    busy: (on: boolean) => (on ? internals.runs.set(chat.id, {}) : internals.runs.delete(chat.id)),
+    busy: (on: boolean) => (on ? internals.runs.set(chat.id, { proc: { kill: () => undefined }, stopped: false }) : internals.runs.delete(chat.id)),
     turnEnds: (failed = false) => internals.sendQueued(chat.id, failed)
   }
 }
@@ -65,8 +65,8 @@ describe('queued messages (ADR 0031)', () => {
     busy(true)
     for (let i = 0; i < MAX_QUEUED; i++) chats.enqueue(id, `m${i}`)
     expect(() => chats.enqueue(id, 'one more')).toThrow(`At most ${MAX_QUEUED}`)
-    const internals = chats as unknown as { runs: Map<string, { child: unknown; stopped: boolean }> }
-    internals.runs.set(id, { child: { pid: undefined, kill: () => true }, stopped: false })
+    const internals = chats as unknown as { runs: Map<string, { proc: { kill(): void }; stopped: boolean }> }
+    internals.runs.set(id, { proc: { kill: () => undefined }, stopped: false })
     chats.stop(id)
     expect(store.get(id)?.queued).toBeUndefined()
   })

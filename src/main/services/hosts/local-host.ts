@@ -91,6 +91,8 @@ export class LocalHost {
   private closed = false
   /** Live terminals the daemon held at start-up, by key, until their agent or shell takes them. */
   private readonly live = new Map<string, string>()
+  /** Headless runs (chat turns, ADR 0051) the daemon held at start-up, by chat id, until their chat takes them. */
+  private readonly runs = new Map<string, string>()
   /** Hooks the relay kept while Hiveory was closed, by agent. */
   private readonly keptHooks = new Map<string, KeptHook[]>()
   private relayValue: HookEndpoint | undefined
@@ -199,7 +201,7 @@ export class LocalHost {
       return
     }
     this.use(client)
-    await this.collect(client, known, (ptyId) => ptyId)
+    await this.collect(client, known, (ptyId) => ptyId, true)
     // A daemon from before an update to a new protocol: its terminals come back from it (ADR 0050 §8).
     for (const protocol of this.olderProtocols()) {
       const old = await this.connect(protocol).catch(() => null)
@@ -213,6 +215,8 @@ export class LocalHost {
     setTimeout(() => {
       for (const ptyId of this.live.values()) void this.client?.call('pty.kill', { ptyId }).catch(() => undefined)
       this.live.clear()
+      for (const procId of this.runs.values()) void this.client?.call('proc.kill', { procId }).catch(() => undefined)
+      this.runs.clear()
     }, UNCLAIMED_MS).unref()
   }
 
@@ -268,7 +272,7 @@ export class LocalHost {
   }
 
   /** Notes a kept terminal per known key (`name` says how `take` will name it); ends the rest. */
-  private async collect(client: HostClient, known: (key: string) => boolean, name: (ptyId: string) => string): Promise<void> {
+  private async collect(client: HostClient, known: (key: string) => boolean, name: (ptyId: string) => string, takeRuns = false): Promise<void> {
     for (const hook of await client.call('relay.kept', null).catch(() => [])) {
       this.keptHooks.set(hook.instanceId, [...(this.keptHooks.get(hook.instanceId) ?? []), hook])
     }
@@ -277,6 +281,21 @@ export class LocalHost {
       else if (t.key && known(t.key)) this.live.set(t.key, name(t.ptyId))
       else void client.call('pty.kill', { ptyId: t.ptyId }).catch(() => undefined)
     }
+    // Chat turns: an ended one is taken too, so a reply finished while Hiveory was closed is kept whole.
+    // Only this protocol's daemon: an older one's runs are left to end there.
+    if (!takeRuns) return
+    for (const r of await client.call('proc.list', null).catch(() => [])) {
+      if (known(r.key)) this.runs.set(r.key, r.procId)
+      else if (r.alive) void client.call('proc.kill', { procId: r.procId }).catch(() => undefined)
+      else void client.call('proc.attach', { procId: r.procId }).catch(() => undefined)
+    }
+  }
+
+  /** The daemon's run for a chat that outlived the last Hiveory, once (ADR 0051). */
+  takeRun(chatId: string): string | undefined {
+    const procId = this.runs.get(chatId)
+    this.runs.delete(chatId)
+    return procId
   }
 
   /** An older daemon: served for its kept terminals only (never a new one), let go once they end. */

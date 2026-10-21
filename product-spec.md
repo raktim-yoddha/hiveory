@@ -498,6 +498,10 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   agents then resume their conversations.
 - Server mode (`--serve`) uses the same terminal host, so switching a computer between desktop and
   server keeps its terminals.
+- Chat replies keep streaming too (Chat mode, bot threads, chat-view agents, ADR 0051): a reply
+  that was streaming when Hiveory quit carries on in the terminal host and is finished, rebuilt in
+  full, when Hiveory opens again. Schedules and triggers fire only while Hiveory (or its server mode)
+  runs; what they start then outlives it.
 - After a reboot, or a quit that stopped them, every terminal agent comes back on start-up, resuming
   its own conversation (ADR 0014); the CLIs keep their history on disk, listed in the Sessions tab.
 

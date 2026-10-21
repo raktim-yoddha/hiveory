@@ -13,6 +13,10 @@ import { HookServer } from '../cli/hooks/hook-server'
 import { CliRuntimeManager } from '../cli/runtime/runtime-manager'
 import type { CliRegistry } from '../cli/registry'
 import { ShellService } from '../shell/shell-service'
+import { hostedChatProcesses } from '../chat/chat-process'
+import { ChatService } from '../chat/chat-service'
+import { ChatStore } from '../chat/chat-store'
+import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { PtyBackend, PtyHandle, PtyStart } from '../pty/pty-backend'
 import { newNonce, newToken, prove, verifyProof } from './handshake'
 import { HostClient, hostPtyBackend } from './host-client'
@@ -394,5 +398,103 @@ describe('per platform (ADR 0050 §10)', () => {
     ])
     expect(daemonCommand('/opt/hiveory/hiveory', ['host.js'], 'linux', undefined)).toEqual(['/opt/hiveory/hiveory', ['host.js']])
     expect(daemonCommand('C:\\Hiveory\\Hiveory.exe', ['host.js'], 'win32', '/usr/bin/systemd-run')).toEqual(['C:\\Hiveory\\Hiveory.exe', ['host.js']])
+  })
+})
+
+describe('chat turns outlive the app (ADR 0051)', () => {
+  /** A run that prints `first`, then `second` after a pause, then ends with code 0. */
+  const turn = (cwd: string) => ({
+    key: 'chat-1',
+    file: process.execPath,
+    args: ['-e', "console.log('first'); setTimeout(() => console.log('second'), 700)"],
+    cwd,
+    env: { ...process.env } as Record<string, string>
+  })
+  const collect = (proc: ReturnType<ReturnType<typeof hostedChatProcesses>['spawn']>) => {
+    const out: string[] = []
+    const closed = new Promise<number | null>((resolve) => proc.onClose((code) => resolve(code)))
+    proc.onStdout((d) => out.push(d))
+    return { text: () => out.join(''), closed }
+  }
+
+  it('a turn that ended while no app was attached is handed back whole', async () => {
+    const state = createHostState()
+    states.push(state)
+    const token = newToken()
+    const first = await connect(state, token)
+    const { procId } = await first.client.call('proc.spawn', turn(tmpdir()))
+    first.client.close()
+    await until(() => [...state.procs.values()].every((p) => p.code !== undefined), 10_000)
+    const second = await connect(state, token)
+    expect(await second.client.call('proc.list', null)).toEqual([{ procId, key: 'chat-1', alive: false, code: 0 }])
+    const run = collect(hostedChatProcesses(() => Promise.resolve(second.client), () => procId).adopt('chat-1')!)
+    expect(await run.closed).toBe(0)
+    expect(run.text()).toMatch(/first[^]*second/)
+    expect(state.procs.size).toBe(0)
+  }, 20_000)
+
+  it('a turn still running is handed back from its first byte and streams on', async () => {
+    const state = createHostState()
+    states.push(state)
+    const token = newToken()
+    const first = await connect(state, token)
+    const { procId } = await first.client.call('proc.spawn', turn(tmpdir()))
+    await until(() => (state.procs.get(procId)?.out ?? '').includes('first'))
+    first.client.close()
+    const second = await connect(state, token)
+    const run = collect(hostedChatProcesses(() => Promise.resolve(second.client), () => procId).adopt('chat-1')!)
+    await until(() => run.text().includes('first'))
+    expect(run.text()).not.toContain('second')
+    expect(await run.closed).toBe(0)
+    expect(run.text()).toMatch(/first[^]*second/)
+  }, 20_000)
+
+  it('recover rebuilds a reply that streamed while Hiveory was closed, and marks the rest interrupted', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'hv-chat-'))
+    const store = new ChatStore(join(dir, 'chats'), log)
+    store.load()
+    const now = new Date().toISOString()
+    const streaming = (id: string) => ({
+      id,
+      title: 'A',
+      cwd: tmpdir(),
+      cliId: 'claude',
+      autoApprove: false,
+      messages: [
+        { id: 'u', role: 'user' as const, parts: [{ kind: 'text' as const, text: 'hi' }], createdAt: now },
+        { id: 'r', role: 'assistant' as const, parts: [], createdAt: now, streaming: true }
+      ],
+      createdAt: now,
+      updatedAt: now
+    })
+    store.save(streaming('kept'))
+    store.save(streaming('gone'))
+    const lines = [
+      '{"type":"system","subtype":"init","session_id":"s-1"}',
+      '{"type":"assistant","message":{"id":"m1","content":[{"type":"text","text":"Hello!"}]}}',
+      '{"type":"result","subtype":"success","is_error":false,"result":"Hello!","session_id":"s-1"}'
+    ]
+    const backend = {
+      spawn: () => {
+        throw new Error('not used')
+      },
+      adopt: (key: string) => {
+        if (key !== 'kept') return undefined
+        const out: Array<(d: string) => void> = []
+        const close: Array<(code: number | null) => void> = []
+        queueMicrotask(() => {
+          out.forEach((l) => l(lines.join('\n') + '\n'))
+          close.forEach((l) => l(0))
+        })
+        return { onStdout: (l: (d: string) => void) => void out.push(l), onStderr: () => undefined, onClose: (l: (c: number | null) => void) => void close.push(l), kill: () => undefined, detach: () => undefined }
+      }
+    }
+    const chats = new ChatService(store, {} as CliRegistry, {} as WorkspaceRepository, log, () => undefined, join(dir, 'att'), undefined, undefined, undefined, backend)
+    chats.recover()
+    await until(() => !store.get('kept')!.messages[1]!.streaming)
+    expect(store.get('kept')!.messages[1]).toMatchObject({ parts: [{ kind: 'text', text: 'Hello!' }], streaming: false })
+    expect(store.get('kept')!.messages[1]!.error).toBeUndefined()
+    expect(store.get('kept')!.providerSessionId).toBe('s-1')
+    expect(store.get('gone')!.messages[1]).toMatchObject({ streaming: false, error: 'Interrupted' })
   })
 })

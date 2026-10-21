@@ -594,8 +594,9 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Agents keep running after you quit',
         body: (
           <p>
-            Agents and terminals run in Hiveory&rsquo;s terminal host, which keeps going after you quit and through updates; when Hiveory
-            opens again every pane takes its terminal back, with what it printed meanwhile. Settings › Agents › Terminal host shows where
+            Agents, terminals and chat replies (Chat, bots, chat-view agents) run in Hiveory&rsquo;s terminal host, which keeps going after
+            you quit and through updates; when Hiveory opens again every pane takes its terminal back, with what it printed meanwhile, and
+            a reply that was still streaming finishes. Schedules need Hiveory open (or running as a server). Settings › Agents › Terminal host shows where
             they run, sets how long they are kept (until they finish, or 1 hour to 7 days), and restarts the host. To stop everything
             once, use Quit and stop agents in the tray menu.
           </p>

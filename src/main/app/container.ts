@@ -33,6 +33,7 @@ import { ChatStore } from '../services/chat/chat-store'
 import { BUILT_IN_ADAPTERS } from '../services/cli/adapters'
 import { HookServer } from '../services/cli/hooks/hook-server'
 import { hostPtyBackend } from '../services/hosts/host-client'
+import { hostedChatProcesses } from '../services/chat/chat-process'
 import { stageRuntime } from '../services/hosts/daemon-runtime'
 import { LocalHost } from '../services/hosts/local-host'
 import { SshHostConnector } from '../services/hosts/ssh-host'
@@ -193,7 +194,9 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     join(paths.chatsDir, 'attachments'),
     mcpFor,
     join(paths.runtimeDir, 'chat'),
-    (chat) => bots?.preamble(chat)
+    (chat) => bots?.preamble(chat),
+    // Chat, chat-view agents and bot threads run their CLI in the terminal host too (ADR 0051).
+    hostedChatProcesses(() => localHost.get(), (chatId) => localHost.takeRun(chatId))
   )
   // Every project's machine: this computer, or an SSH host reached through hiveoryd (ADR 0022).
   let hosts: HostRegistry | null = null

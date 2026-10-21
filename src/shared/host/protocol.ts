@@ -9,8 +9,9 @@ import type { AppError } from '../errors'
 // 2: remote daemons outlive their connection; pty.attach takes a terminal back after a reconnect (ADR 0025).
 // 3: terminals have keys and pty.list; a local daemon outlives the app and needs a mutual hello (ADR 0050).
 // Frozen core (ADR 0050 §8), never changed in meaning: hello, auth, hold, pty.list, pty.attach, pty.kill,
-// pty.write, pty.resize, pty.data, pty.exit, relay.kept, relay.hook, relay.mcp, relay.reply. A breaking
-// change only adds frames and bumps this number.
+// pty.write, pty.resize, pty.data, pty.exit, relay.kept, relay.hook, relay.mcp, relay.reply, proc.spawn,
+// proc.list, proc.attach, proc.kill, proc.data, proc.exit. A breaking change only adds frames and bumps
+// this number.
 export const HOST_PROTOCOL = 3
 
 export interface PtySpawnParams {
@@ -38,6 +39,30 @@ export interface TerminalHostStatus {
   protocol: number
   /** The app version its own runtime copy is (installed builds); absent: it runs from the app. */
   runtime?: string
+}
+
+/**
+ * A headless CLI run (a chat turn, ADR 0051): a plain process, no terminal. The daemon keeps its
+ * whole output (bounded), so an app that restarts mid-turn rebuilds the reply from the start.
+ */
+export interface ProcSpawnParams {
+  /** Whose run it is (the chat id), so a later app finds it again. */
+  key: string
+  file: string
+  args: string[]
+  cwd: string
+  env: Record<string, string>
+  /** Written to its stdin, which is then closed. */
+  stdin?: string
+}
+
+/** A run the daemon holds, as `proc.list` reports it. */
+export interface HostedProcInfo {
+  procId: string
+  key: string
+  alive: boolean
+  /** Its exit code, once it ended. */
+  code?: number | null
 }
 
 /** A hook a CLI reported to the daemon's relay while no app was attached (ADR 0050 §6). */
@@ -102,6 +127,17 @@ export interface HostCalls {
   hold: { params: null; result: null }
   /** Ends every terminal and the daemon itself ("Quit and stop agents"). */
   shutdown: { params: null; result: null }
+  /** Starts a headless run; its output arrives as `proc.data`, its end as `proc.exit`. */
+  'proc.spawn': { params: ProcSpawnParams; result: { procId: string; pid: number } }
+  /** Every run the daemon holds, running or ended while no app was attached. */
+  'proc.list': { params: null; result: HostedProcInfo[] }
+  /**
+   * Takes a run back: its whole output so far (`out` from its first byte) and, if it ended, its code;
+   * one that is still running streams on to this client.
+   */
+  'proc.attach': { params: { procId: string }; result: { alive: boolean; out: string; err: string; code: number | null } }
+  /** Ends a run and the processes it started. */
+  'proc.kill': { params: { procId: string }; result: null }
   /** The hooks the relay kept while no app was attached, oldest first; they are handed over once. */
   'relay.kept': { params: null; result: KeptHook[] }
   /** How long terminals stay once no app is attached: null keeps them until they end (ADR 0050 §7). */
@@ -135,6 +171,9 @@ export interface HostEvents {
   'pty.exit': { ptyId: string; code: number | null; signal: number | null }
   /** A watched folder changed (`scope` is the id the watch was opened with). */
   'files.changed': { scope: string; paths: string[] }
+  /** Output of a headless run (`stream`: stdout or stderr). */
+  'proc.data': { procId: string; stream: 'out' | 'err'; data: string }
+  'proc.exit': { procId: string; code: number | null }
   /** A CLI's hook reached the daemon's relay (ADR 0050 §6). */
   'relay.hook': { instanceId: string; event: string; payload: unknown }
   /** An agent's MCP request reached the relay; the app answers with `relay.reply`. */

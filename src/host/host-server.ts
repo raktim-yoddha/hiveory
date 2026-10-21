@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn as spawnProcess, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, statSync } from 'node:fs'
 import { mkdir, readdir, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -14,9 +14,12 @@ import {
   type HostFrame,
   type HostService,
   type HostTransport,
+  type HostedProcInfo,
   type HostedTerminalInfo,
+  type ProcSpawnParams,
   type PtySpawnParams
 } from '@shared/host/protocol'
+import { killTree } from '../main/services/pty/spawn-target'
 import { findExecutable } from '../main/services/cli/discovery'
 import { FileService } from '../main/services/files/file-service'
 import { GitCommandError, GitService } from '../main/services/git/git-service'
@@ -72,6 +75,20 @@ export interface HostServeOptions {
 
 /** Output kept per terminal while no client is attached (the newest part wins). */
 const MAX_KEPT = 2 * 1024 * 1024
+/** A headless run's whole stdout is kept up to this much (a reply is rebuilt from it, ADR 0051). */
+const MAX_PROC_OUT = 8 * 1024 * 1024
+const MAX_PROC_ERR = 64 * 1024
+
+interface HostedProc {
+  child: ChildProcess
+  key: string
+  out: string
+  err: string
+  /** Undefined while it runs. */
+  code?: number | null
+  /** An attached client receives its output as it comes. */
+  watched: boolean
+}
 
 interface HostedTerminal {
   child: pty.IPty
@@ -89,6 +106,8 @@ interface HostedTerminal {
  */
 export interface HostState {
   terminals: Map<string, HostedTerminal>
+  /** Headless runs (chat turns, ADR 0051), running or ended while nobody watched. */
+  procs: Map<string, HostedProc>
   /** Terminals that ended while no client was attached, with how they ended. */
   ended: Map<string, { code: number | null; signal: number | null; key?: string; pid: number; startedAt: number }>
   services: Record<HostService, object>
@@ -103,7 +122,7 @@ export interface HostState {
 
 export const createHostState = (options: HostServeOptions = {}): HostState => {
   const git = new GitService()
-  const state: HostState = { terminals: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0, onShutdown: options.onShutdown, calls: options.calls, notifications: options.notifications, onDetach: options.onDetach }
+  const state: HostState = { terminals: new Map(), procs: new Map(), ended: new Map(), services: {} as HostState['services'], out: null, seq: 0, onShutdown: options.onShutdown, calls: options.calls, notifications: options.notifications, onDetach: options.onDetach }
   state.services = {
     git,
     worktrees: new WorktreeService(git),
@@ -140,6 +159,8 @@ export const disposeHostState = (state: HostState): void => {
     }
   }
   state.terminals.clear()
+  for (const proc of state.procs.values()) killTree(proc.child)
+  state.procs.clear()
   ;(state.services.files as FileService).closeAll()
 }
 
@@ -154,6 +175,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
   state.out = transport
   // Terminals wait for their new client to take them back; their output is kept meanwhile.
   for (const t of state.terminals.values()) t.kept ??= []
+  for (const proc of state.procs.values()) proc.watched = false
   previous?.close()
 
   const send = (frame: HostFrame): void => {
@@ -203,6 +225,51 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     return { alive: true, data }
   }
 
+  const spawnProc = (p: ProcSpawnParams): HostCalls['proc.spawn']['result'] => {
+    const child = spawnProcess(p.file, p.args, { cwd: p.cwd, env: p.env, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
+    const procId = `r${++state.seq}`
+    const proc: HostedProc = { child, key: p.key, out: '', err: '', watched: true }
+    state.procs.set(procId, proc)
+    const deliver = (stream: 'out' | 'err', data: string): void => {
+      if (stream === 'out') proc.out = (proc.out + data).slice(-MAX_PROC_OUT)
+      else proc.err = (proc.err + data).slice(-MAX_PROC_ERR)
+      if (proc.watched) state.out?.send({ kind: 'event', event: 'proc.data', params: { procId, stream, data } })
+    }
+    child.stdout?.setEncoding('utf8')
+    child.stdout?.on('data', (d: string) => deliver('out', d))
+    child.stderr?.setEncoding('utf8')
+    child.stderr?.on('data', (d: string) => deliver('err', d))
+    const ended = (code: number | null): void => {
+      if (proc.code !== undefined) return
+      proc.code = code
+      // Seen ending by its client: done. Otherwise it waits, whole, for the next one (proc.attach).
+      if (proc.watched && state.out) {
+        state.out.send({ kind: 'event', event: 'proc.exit', params: { procId, code } })
+        state.procs.delete(procId)
+      }
+    }
+    child.on('close', (code) => ended(code))
+    child.on('error', (error) => {
+      proc.err = (proc.err + error.message).slice(-MAX_PROC_ERR)
+      ended(null)
+    })
+    child.stdin?.on('error', () => undefined)
+    child.stdin?.end(p.stdin ?? '')
+    return { procId, pid: child.pid ?? 0 }
+  }
+
+  const attachProc = ({ procId }: { procId: string }): HostCalls['proc.attach']['result'] => {
+    const proc = state.procs.get(procId)
+    if (!proc) return { alive: false, out: '', err: '', code: null }
+    const alive = proc.code === undefined
+    if (alive) proc.watched = true
+    else state.procs.delete(procId)
+    return { alive, out: proc.out, err: proc.err, code: proc.code ?? null }
+  }
+
+  const listProcs = (): HostedProcInfo[] =>
+    [...state.procs].map(([procId, p]) => ({ procId, key: p.key, alive: p.code === undefined, ...(p.code !== undefined ? { code: p.code } : {}) }))
+
   const list = (): HostedTerminalInfo[] => [
     ...[...state.terminals].map(([ptyId, t]) => ({ ptyId, key: t.key, pid: t.child.pid, alive: true, startedAt: t.startedAt })),
     ...[...state.ended].map(([ptyId, e]) => ({ ptyId, key: e.key, pid: e.pid, alive: false, startedAt: e.startedAt, exit: { code: e.code, signal: e.signal } }))
@@ -225,6 +292,17 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
         return attach(params as { ptyId: string })
       case 'pty.list':
         return list()
+      case 'proc.spawn':
+        return spawnProc(params as ProcSpawnParams)
+      case 'proc.attach':
+        return attachProc(params as { procId: string })
+      case 'proc.list':
+        return listProcs()
+      case 'proc.kill': {
+        const proc = state.procs.get((params as { procId: string }).procId)
+        if (proc) killTree(proc.child)
+        return null
+      }
       case 'auth':
         return null
       case 'hold':
@@ -292,6 +370,8 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
   transport.onClose(() => {
     if (state.out !== transport) return
     state.out = null
+    // Runs carry on unwatched; the next client takes them back whole.
+    for (const proc of state.procs.values()) proc.watched = false
     state.onDetach?.()
     if (!persist) return disposeHostState(state)
     for (const t of state.terminals.values()) t.kept ??= []

@@ -171,8 +171,10 @@ app.whenReady().then(async () => {
   // Status detection degrades to PTY heuristics without the hook server (ADR 0006).
   await guard(log, 'Hook server', () => c.hookServer.start())
   // Terminals kept by the terminal host since Hiveory last quit: agents and shells take them back (ADR 0050).
-  const knownTerminal = (key: string): boolean => key.startsWith('shell-') || c.store.state.instances.some((i) => i.id === key)
+  const knownTerminal = (key: string): boolean => key.startsWith('shell-') || c.store.state.instances.some((i) => i.id === key) || Boolean(c.chatStore.get(key))
   await guard(log, 'Terminal host', () => c.localHost.prepare(knownTerminal))
+  // Replies that were still streaming carry on, or are finished from what they printed (ADR 0051).
+  guard(log, 'Chat recovery', () => c.chats.recover())
   container.runtime.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   container.shells.on('data', (instanceId, data, offset) => emit('terminal.data', { instanceId, data, offset }))
   // What paired devices may do here: REMOTE_CHANNELS only, validated again, folders named directly.
@@ -327,7 +329,9 @@ app.on('before-quit', (event) => {
   guard(log, 'Routine scheduler shutdown', () => c.routines.dispose())
   guard(log, 'Approvals shutdown', () => c.approvals.dispose())
   guard(log, 'Trigger link shutdown', () => void c.triggers.close())
-  guard(log, 'Chat shutdown', () => c.chats.stopAll())
+  // Chat turns are kept with the agents (ADR 0051), else stopped.
+  if (keepAgents() && c.localHost.durable) guard(log, 'Chat detach', () => c.chats.detachAll())
+  else guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())
   guard(log, 'State flush', () => c.store.flush())
 })

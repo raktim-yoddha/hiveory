@@ -26,8 +26,7 @@ export class ChatStore {
       try {
         const chat = JSON.parse(readFileSync(join(this.dir, file), 'utf8')) as ChatSession
         if (!chat?.id || !ID.test(chat.id) || !Array.isArray(chat.messages)) continue
-        // A run cannot survive a restart; finish any message that was mid-stream.
-        for (const m of chat.messages) if (m.streaming) Object.assign(m, { streaming: false, error: m.error ?? 'Interrupted' })
+        // A message still streaming is settled by ChatService.recover: its run may have outlived Hiveory (ADR 0051).
         this.chats.set(chat.id, chat)
       } catch (error) {
         this.log.warn(`Skipping unreadable chat ${file}`, error)
