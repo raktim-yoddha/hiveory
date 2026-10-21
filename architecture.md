@@ -585,6 +585,18 @@ CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, rep
         └──────────────▶ inProcessPty (node-pty in main)
 ```
 
+### Durable terminal host (ADR 0050, being built in phases)
+
+The target that replaces the utility process above: the local hiveoryd outlives the app, as remote
+ones do.
+
+```text
+Hiveory (desktop or --serve) ─HostClient═ named pipe / 0600 socket (mutual HMAC hello) ═▶ hiveoryd --daemon
+   ▲ start: pty.list ─▶ attach live terminals by key (instance id) ─▶ PtySession replay      │ detached, own runtime copy
+   │ quit: detach (default) │ Quit and stop agents: end them                                 ├─ node-pty ─▶ agent CLIs, shells
+   └── relay.hook / relay.mcp frames ◀── relay 127.0.0.1:<kept port> ◀── CLI hooks, MCP ─────┘  (hooks kept while detached)
+```
+
 ### Server and client data flow (ADR 0022)
 
 ```text
