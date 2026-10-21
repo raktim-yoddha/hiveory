@@ -152,6 +152,12 @@ describe('heuristic detector', () => {
     expect(stripAnsi('\u001b[31mred\u001b[0m \u001b]0;title\u0007ok')).toBe('red ok')
   })
 
+  it('reads words separated by column jumps (Claude Code 2.1 trust prompt)', () => {
+    const drawn = '[2GQuick[8Gsafety[15Gcheck:[22GIs[25Gthis[30Ga[32Gproject[40Gyou[44Gcreated[52Gor[55Gone[59Gyou[63Gtrust?'
+    const d = new HeuristicDetector(claudeAdapter.heuristics(true)!)
+    expect(d.onOutput(drawn, 0)).toMatchObject({ type: 'needs-user', reason: 'confirmation' })
+  })
+
   it('restores ConPTY cursor-forward spaces and positioned lines', () => {
     const conpty = '\u001b[13;2HIs\u001b[1Cthis\u001b[1Cone\u001b[1Cyou\u001b[1Ctrust?\u001b[14;2Hnext'
     expect(stripAnsi(conpty)).toBe('\nIs this one you trust?\nnext')

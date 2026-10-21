@@ -49,7 +49,22 @@ let stopClient: (() => void) | null = null
 process.on('uncaughtException', (error) => log.error('Uncaught exception', error))
 process.on('unhandledRejection', (reason) => log.error('Unhandled rejection', reason))
 
-if (!app.requestSingleInstanceLock()) app.quit()
+/**
+ * One instance per profile. An installed build hands over to the one already running. A development
+ * build replaces an older one (often hidden in the tray), so `pnpm dev` always runs the code just
+ * built: the old one quits on `replace`, and this one waits for its lock.
+ */
+const singleInstance = (async (): Promise<boolean> => {
+  const replace = !app.isPackaged
+  for (let attempt = 0; attempt < (replace ? 60 : 1); attempt++) {
+    if (app.requestSingleInstanceLock({ replace })) return true
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  return false
+})()
+void singleInstance.then((locked) => {
+  if (!locked) app.quit()
+})
 
 // Wallpapers load through Hiveory's own scheme, limited to its wallpapers folder (never arbitrary files).
 protocol.registerSchemesAsPrivileged([{ scheme: WALLPAPER_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } }])
@@ -101,9 +116,16 @@ const openWindow = (): void => {
   container?.browser.setWindow(window)
 }
 
-app.on('second-instance', () => tray.show())
+app.on('second-instance', (_event, _argv, _cwd, data) => {
+  if (!app.isPackaged && (data as { replace?: boolean } | null)?.replace) {
+    log.info('A newer development build started; quitting so it runs.')
+    return app.quit()
+  }
+  tray.show()
+})
 
 app.whenReady().then(async () => {
+  if (!(await singleInstance)) return
   // No application menu on Windows/Linux: its hidden Alt accelerators would swallow
   // Alt-shortcuts (Alt+V, Alt+C…) that CLIs rely on. Copy/paste are handled by the terminal.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)

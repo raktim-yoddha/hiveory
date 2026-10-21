@@ -24,17 +24,21 @@ const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u00
 // eslint-disable-next-line no-control-regex
 const CURSOR_FORWARD = /\u001b\[(\d*)C/g
 // eslint-disable-next-line no-control-regex
+const CURSOR_COLUMN = /\u001b\[\d*G/g
+// eslint-disable-next-line no-control-regex
 const CURSOR_POSITION = /\u001b\[\d*(?:;\d*)?[Hf]/g
 
 /**
  * Plain text from terminal output. Windows ConPTY encodes spaces as
- * cursor-forward and line breaks as cursor positioning, so those become
- * whitespace before the remaining escapes are dropped.
+ * cursor-forward and line breaks as cursor positioning, and TUIs jump to a
+ * column between words, so those become whitespace before the remaining
+ * escapes are dropped.
  */
 export const stripAnsi = (text: string): string =>
   text
     .replace(CURSOR_FORWARD, (_m, n: string) => ' '.repeat(Math.min(Number(n) || 1, 200)))
     .replace(CURSOR_POSITION, '\n')
+    .replace(CURSOR_COLUMN, ' ')
     .replace(ANSI, '')
 
 const TAIL_LIMIT = 4000
