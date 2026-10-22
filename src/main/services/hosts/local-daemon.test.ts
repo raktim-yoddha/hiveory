@@ -396,7 +396,7 @@ describe('per platform (ADR 0050 §10)', () => {
       '/usr/bin/systemd-run',
       ['--user', '--scope', '--quiet', '--collect', '--', '/opt/hiveory/hiveory', 'host.js', '--daemon']
     ])
-    expect(daemonCommand('/opt/hiveory/hiveory', ['host.js'], 'linux', undefined)).toEqual(['/opt/hiveory/hiveory', ['host.js']])
+    expect(daemonCommand('/opt/hiveory/hiveory', ['host.js'], 'linux', null)).toEqual(['/opt/hiveory/hiveory', ['host.js']])
     expect(daemonCommand('C:\\Hiveory\\Hiveory.exe', ['host.js'], 'win32', '/usr/bin/systemd-run')).toEqual(['C:\\Hiveory\\Hiveory.exe', ['host.js']])
   })
 })

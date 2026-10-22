@@ -205,7 +205,8 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     })
     child.onExit(({ exitCode, signal }) => {
       state.terminals.delete(ptyId)
-      const exit = { code: exitCode, signal: signal ?? null }
+      // node-pty says 0 on POSIX when no signal ended it.
+      const exit = { code: exitCode, signal: signal || null }
       if (terminal.kept || !state.out) state.ended.set(ptyId, { ...exit, key: terminal.key, pid: child.pid, startedAt: terminal.startedAt })
       else state.out.send({ kind: 'event', event: 'pty.exit', params: { ptyId, ...exit } })
     })

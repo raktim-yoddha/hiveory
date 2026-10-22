@@ -54,7 +54,8 @@ export const daemonCommand = (
   exe: string,
   args: string[],
   platform: NodeJS.Platform = process.platform,
-  systemdRun: string | undefined = platform === 'linux' && process.env.XDG_RUNTIME_DIR ? findExecutable('systemd-run', { platform, path: process.env.PATH ?? '' }) : undefined
+  /** null: none (found on PATH by default). */
+  systemdRun: string | null = platform === 'linux' && process.env.XDG_RUNTIME_DIR ? (findExecutable('systemd-run', { platform, path: process.env.PATH ?? '' }) ?? null) : null
 ): [string, string[]] => (platform === 'linux' && systemdRun ? [systemdRun, ['--user', '--scope', '--quiet', '--collect', '--', exe, ...args]] : [exe, args])
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
