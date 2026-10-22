@@ -6,7 +6,7 @@ import { dirname } from 'node:path'
 import type { CliStatus } from '@shared/domain/cli'
 import type { Logger } from '../../app/logger'
 
-/** One agent as Hiveory Pet sees it (ADR 0054): names and status only, never paths, terminal text or activity. */
+/** One agent as Pluto sees it (ADR 0054): names and status only, never paths, terminal text or activity. */
 export interface PetAgent {
   id: string
   name: string
@@ -23,7 +23,7 @@ const SETTLE_MS = 150
 const KEEPALIVE_MS = 25_000
 
 /**
- * The link Hiveory Pet follows (ADR 0054), a separate app that shows every agent session on this computer.
+ * The link Pluto follows (ADR 0054), a separate app that shows every agent session on this computer.
  * Loopback only. The port and a random token go to `pet-link.json` in this user's Runtime folder: reading that
  * file is the pairing, so only this user's own apps get in. One read-only stream, `GET /pet/events`, sends the
  * running agents whenever they change. The file goes when the link stops.

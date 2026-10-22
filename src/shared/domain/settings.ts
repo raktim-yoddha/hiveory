@@ -48,7 +48,7 @@ export interface AppSettings {
   shareOnTailnet: boolean
   /** Also share it on this computer's local network (Wi-Fi, Ethernet); devices pair with the code (ADR 0039). Off by default. */
   shareOnLan: boolean
-  /** Let Hiveory Pet, the separate desktop pet app, follow this computer's agents (names and status only; ADR 0054). */
+  /** Let Pluto, the separate desktop pet app, follow this computer's agents (names and status only; ADR 0054). */
   petLink: boolean
   /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
   wallpaper: string

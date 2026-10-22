@@ -112,7 +112,7 @@ const emit: Emit = (event, payload) => {
   guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
   // Paired phones hear when an agent needs the user, even with the app closed (ADR 0027).
   if (event === 'queen.update') guard(log, 'Push', () => container?.sharing.notifyWaiting(payload as QueenUpdate))
-  // Hiveory Pet sees agents start, stop and change status (ADR 0054).
+  // Pluto sees agents start, stop and change status (ADR 0054).
   if (event === 'runtime.changed' || event === 'state.changed') guard(log, 'Pet link', () => container?.petLink.changed())
 }
 

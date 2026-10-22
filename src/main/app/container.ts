@@ -339,7 +339,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
   const projects = new ProjectService(store, kits, agents, emit)
-  // Hiveory Pet, the separate desktop pet app, follows the agents that run (ADR 0054): names and status only.
+  // Pluto (formerly Hiveory Pet), the separate desktop pet app, follows the agents that run (ADR 0054): names and status only.
   const petLink = new PetLink(
     join(paths.runtimeDir, 'pet-link.json'),
     () =>

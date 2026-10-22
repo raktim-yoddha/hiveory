@@ -57,3 +57,11 @@ The pet no longer has a Connect button: it follows every Hiveory whose link is o
 switch in Settings › Agents is the only control. Agents that run in Hiveory show in the pet only
 through this link, under their pet names; without it the pet leaves them out rather than listing them
 by process.
+
+## Amendment (2026-10-23): the pet is now Pluto, and it asks first
+
+The pet app is renamed **Pluto**, with its own logo. Settings › Agents calls the group Pluto and the
+switch **Let Pluto see your agents**; the link, `pet-link.json` and the setting `petLink` keep their
+names, and the Download button still opens the same GitHub releases. Pluto now has its own Hiveory
+switch, off by default: it follows Hiveory only after the user turns it on there, so both apps must
+agree. With it on, Pluto shows Hiveory's agents in a tab of their own.
