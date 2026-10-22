@@ -28,7 +28,7 @@ describe('PetLink (ADR 0054)', () => {
   afterEach(() => link?.stop())
 
   it('writes its port and token for this user, streams agents to the token holder only, and cleans up', async () => {
-    let agents: PetAgent[] = [{ id: 'a1', name: 'Maple', cli: 'Claude Code', workspace: 'Shop', worktree: 'Primary', status: 'working' }]
+    let agents: PetAgent[] = [{ id: 'a1', name: 'Maple', cli: 'Claude Code', cliId: 'claude', workspace: 'Shop', worktree: 'Primary', status: 'working' }]
     link = new PetLink(file, () => agents, log, '1.0.0')
     await link.start()
     const { port, token } = JSON.parse(readFileSync(file, 'utf8')) as { port: number; token: string }

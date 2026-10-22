@@ -11,6 +11,8 @@ export interface PetAgent {
   id: string
   name: string
   cli: string
+  /** The CLI's catalog id ("claude", "codex"…), so the pet shows its official mark (ADR 0054 amendment). */
+  cliId: string
   workspace: string
   worktree: string
   status: CliStatus

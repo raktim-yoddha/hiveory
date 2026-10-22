@@ -351,6 +351,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
           id: i.id,
           name: i.petName,
           cli: registry.displayName(i.cliId),
+          cliId: i.cliId,
           workspace: workspaceRepo.findProject(i.projectId)?.name ?? '',
           worktree: workspaceRepo.find(i.workspaceId)?.name ?? '',
           status: runtime.status

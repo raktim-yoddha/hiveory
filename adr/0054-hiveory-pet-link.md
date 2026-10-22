@@ -42,3 +42,10 @@ way to tell the pet about its agents, and a place to say the pet exists.
   is not shown. The pet answers no permissions in v1: it shows who needs you, and clicking a row
   brings that window forward.
 - macOS and Linux pets, and approving from the pet, are left for later.
+
+## Amendment (2026-10-22): the CLI id travels too
+
+Each agent in a frame also carries `cliId`, the CLI's catalog id (`claude`, `codex`, `gemini`…), so the pet shows
+the same official mark Hiveory does instead of guessing from the display name. It is an identifier from Hiveory's
+own catalog, not user data, so rule 27 still holds. The pet copies the marks from `icon-data.ts` with its
+`scripts/import-icons.mjs`.
