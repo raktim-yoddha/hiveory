@@ -49,3 +49,11 @@ Each agent in a frame also carries `cliId`, the CLI's catalog id (`claude`, `cod
 the same official mark Hiveory does instead of guessing from the display name. It is an identifier from Hiveory's
 own catalog, not user data, so rule 27 still holds. The pet copies the marks from `icon-data.ts` with its
 `scripts/import-icons.mjs`.
+
+## Amendment (2026-10-22): the pet connects on its own, to every build
+
+The pet no longer has a Connect button: it follows every Hiveory whose link is open, the release
+(`%LOCALAPPDATA%\Hiveory`) and a dev build (`%LOCALAPPDATA%\Hiveory Dev`) at the same time, so this
+switch in Settings › Agents is the only control. Agents that run in Hiveory show in the pet only
+through this link, under their pet names; without it the pet leaves them out rather than listing them
+by process.

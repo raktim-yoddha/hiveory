@@ -24,7 +24,7 @@ export function HiveoryPetSettings() {
       </p>
       <SettingRow
         title="Get Hiveory Pet"
-        description="Download it from GitHub, run it, and click Connect Hiveory in the pet."
+        description="Download it from GitHub and run it. It finds Hiveory on its own while the switch below is on."
         control={
           <Button icon={<Download />} onClick={() => openUrl(RELEASES)}>
             Download
