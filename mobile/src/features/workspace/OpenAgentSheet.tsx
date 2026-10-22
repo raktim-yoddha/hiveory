@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { router } from 'expo-router'
 import { opensAsChat } from '@shared/domain/project'
+import { Trash2 } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
 import { routes } from '@/core/routes'
-import { CliLogo, ListRow, Section, Segmented, Sheet, Text } from '@/core/ui'
+import { CliLogo, confirm, IconButton, ListRow, Section, Segmented, Sheet, Text } from '@/core/ui'
 
 /**
  * Open an agent here: the CLIs installed on the project's machine (from the
@@ -18,6 +19,7 @@ export function OpenAgentSheet({ workspaceId, projectId, open, onClose }: { work
   const chatClis = useCall('chat.clis', undefined, { enabled: open })
   const openAgent = useAction('agents.open')
   const applyPreset = useAction('agents.applyPreset')
+  const deletePreset = useAction('presets.delete')
   const [picked, setPicked] = useState<'chat' | 'terminal' | null>(null)
   const available = (clis.data ?? []).filter((c) => c.available)
   // Chat view runs the CLI headless on the computer itself, so SSH Workspaces only get terminals.
@@ -74,6 +76,7 @@ export function OpenAgentSheet({ workspaceId, projectId, open, onClose }: { work
               key={p.id}
               title={p.name}
               subtitle={[p.cliSelections.map((s) => `${s.count}× ${s.cliId}`).join(', '), p.chatUi ? 'chat' : null].filter(Boolean).join(' · ')}
+              action={<IconButton label={`Delete preset ${p.name}`} icon={Trash2} onPress={() => confirm(`Delete ${p.name}?`, 'Agents it opened keep running.', 'Delete', () => deletePreset.mutate({ presetId: p.id }))} />}
               onPress={() => applyPreset.mutate({ workspaceId, presetId: p.id }, { onSuccess: onClose })}
             />
           ))}

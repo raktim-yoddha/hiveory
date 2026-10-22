@@ -1,20 +1,22 @@
 import { useState, type ComponentProps } from 'react'
 import { ScrollView, StyleSheet, Switch, View } from 'react-native'
-import { Stack } from 'expo-router'
+import { router, Stack } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, GitBranch } from 'lucide-react-native'
+import { Check, GitBranch, Trash2 } from 'lucide-react-native'
 import { DEFAULT_BRANCH_PREFIX, type AgentView, type ChatChoice } from '@shared/domain/project'
 import type { ChatModel } from '@shared/domain/chat'
 import { useAction, useCall, useCliIcons, useConnection, type Request, type Response } from '@/core/api'
 import { space, useTheme } from '@/core/theme'
-import { Card, CliLogo, EffortSheet, effortLabel, ListRow, Loading, ModelSheet, Screen, Section, Segmented, Sheet, Text, TextField } from '@/core/ui'
+import { routes } from '@/core/routes'
+import { Button, Card, CliLogo, confirm, EffortSheet, effortLabel, ListRow, Loading, ModelSheet, Screen, Section, Segmented, Sheet, Text, TextField } from '@/core/ui'
 
 type Settings = NonNullable<Request<'projects.update'>['settings']>
 
 /**
  * A Workspace's own settings on the phone (ADR 0037), the same ones as the computer's Settings tab:
  * its name, how new agents open, the model each chat CLI starts with, how new worktrees are
- * branched, and whether its agents announce themselves.
+ * branched, and whether its agents announce themselves. Git can be set up here, and the Workspace
+ * removed from Hiveory (its folder stays, ADR 0053).
  */
 export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
   const { colors } = useTheme()
@@ -33,6 +35,8 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
       })
   }
   const [picking, setPicking] = useState<'base' | null>(null)
+  const initGit = useAction('git.init')
+  const remove = useAction('projects.remove')
 
   if (projects.isLoading) return <Loading />
   if (!project) return <Text tone="muted">This workspace is gone.</Text>
@@ -111,6 +115,23 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
             />
           </Section>
         ) : null}
+
+        <Section title="Manage">
+          {project.repositoryRoot || remote ? null : (
+            <Button label="Set up Git here" icon={GitBranch} block loading={initGit.isPending} onPress={() => initGit.mutate({ projectId, commit: true })} />
+          )}
+          <Button
+            label="Remove from Hiveory"
+            icon={Trash2}
+            variant="danger"
+            block
+            onPress={() =>
+              confirm(`Remove ${project.name}?`, 'Its agents close and Hiveory forgets it. The folder and its files stay on the computer.', 'Remove', () =>
+                remove.mutate({ projectId }, { onSuccess: () => router.replace(routes.projects) })
+              )
+            }
+          />
+        </Section>
       </Screen>
 
       <Sheet open={picking === 'base'} title="New worktrees start from" onClose={() => setPicking(null)}>

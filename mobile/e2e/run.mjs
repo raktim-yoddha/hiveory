@@ -117,7 +117,10 @@ const call = async (channel, payload) => {
   return res.value
 }
 const project = await call('projects.add', { mode: 'folder', path: repo })
-const primary = await call('workspaces.create', { projectId: project.id, kind: 'main', name: 'Primary', cliSelections: [], autoApprove: false })
+// Adding a workspace makes its Primary worktree; older servers left it to the caller.
+const primary =
+  (await call('workspaces.list', { projectId: project.id })).find((w) => w.kind === 'main') ??
+  (await call('workspaces.create', { projectId: project.id, kind: 'main', name: 'Primary', cliSelections: [], autoApprove: false }))
 await call('agents.open', { workspaceId: primary.id, cliId: 'aider' })
 const phoneCode = await waitFor(() => codes[1], 'a fresh pairing code for the phone')
 

@@ -7,7 +7,7 @@ export function ConnectionBanner() {
   const { computer, status, retry } = useConnection()
   if (!computer || status === 'online') return null
   return status === 'offline' ? (
-    <Banner icon={CloudOff} tone="danger" message={`Can't reach ${computer.name}. Is Tailscale on, and the computer awake?`} action="Retry" onPress={retry} />
+    <Banner icon={CloudOff} tone="danger" message={`Can't reach ${computer.name}. Is it awake, with Tailscale on or this phone on its Wi-Fi?`} action="Retry" onPress={retry} />
   ) : (
     <Banner icon={RefreshCw} message={`Connecting to ${computer.name}…`} />
   )

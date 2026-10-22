@@ -124,6 +124,12 @@ describe('live updates', () => {
     expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats', chatId: 'c1' } })).toEqual(['chat.get', 'chat.list', 'bots.threads'])
     // Chats came or went: only the lists, never an open chat mid-stream.
     expect(staleChannels({ event: 'state.changed', payload: { topic: 'chats' } })).toEqual(['chat.list', 'bots.threads', 'bots.list'])
+    // What the phone now edits refreshes the same way (ADR 0052, 0053).
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'approvals' } })).toEqual(['approvals.list'])
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'routines' } })).toEqual(['routines.list', 'routines.runs'])
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'prompts' } })).toEqual(['prompts.list'])
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'triggers' } })).toEqual(['triggers.list', 'triggers.status'])
+    expect(staleChannels({ event: 'state.changed', payload: { topic: 'bots' } })).toEqual(['bots.list', 'teams.list'])
   })
 
   it('a listener that throws never stops the others', () => {

@@ -1,42 +1,11 @@
 import { Cron } from 'croner'
-import type { RepeatPreset, Routine, RoutineSchedule } from './routine'
+import type { Routine, RoutineSchedule } from './routine'
+
+export { compileRepeat, wallClock } from './routine-text'
 
 /** One date engine for the editor's preview and the scheduler (ADR 0028). */
 
 type Timing = Pick<Routine, 'schedule' | 'startsAt' | 'timezone' | 'endsAt'>
-
-/** The wall-clock fields of `at` in `timezone`. */
-export function wallClock(at: Date, timezone: string): { minute: number; hour: number; day: number; month: number; weekday: number } {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone, hourCycle: 'h23', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', weekday: 'short' })
-      .formatToParts(at)
-      .map((p) => [p.type, p.value])
-  )
-  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday ?? '')
-  return { minute: Number(parts.minute), hour: Number(parts.hour), day: Number(parts.day), month: Number(parts.month), weekday }
-}
-
-/** The cron rule an editor preset means, at the wall-clock time of `startsAt`. */
-export function compileRepeat(preset: Exclude<RepeatPreset, 'custom'>, startsAt: Date, timezone: string, days: number[] = []): string {
-  const w = wallClock(startsAt, timezone)
-  const at = `${w.minute} ${w.hour}`
-  switch (preset) {
-    case 'daily':
-      return `${at} * * *`
-    case 'weekdays':
-      return `${at} * * 1-5`
-    case 'weekly':
-      return `${at} * * ${w.weekday}`
-    case 'selected-days':
-      return `${at} * * ${[...new Set(days.filter((d) => d >= 0 && d <= 6))].sort().join(',') || w.weekday}`
-    case 'monthly':
-      return `${at} ${w.day} * *`
-    case 'month-end':
-      return `${at} L * *`
-    case 'yearly':
-      return `${at} ${w.day} ${w.month} *`
-  }
-}
 
 /** Whether `timezone` is a zone this runtime knows. */
 export function validTimezone(timezone: string): boolean {

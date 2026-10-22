@@ -2,3 +2,6 @@
 export { BotsScreen } from './BotsScreen'
 export { BotScreen } from './BotScreen'
 export { Approvals } from './Approvals'
+export { BotEditScreen } from './BotEditScreen'
+export { TeamsScreen } from './TeamsScreen'
+export { TriggersScreen } from './TriggersScreen'

@@ -1,7 +1,8 @@
 # Hiveory for phones
 
-Watch and steer your agents from your phone: what needs you, every workspace's board, live
-terminals, answering prompts, and push notifications. The app talks only to your own computers,
+Everything the desktop does in Work, Bots and Chat, from your phone (ADR 0053): what needs you,
+every workspace's board, live terminals, files, worktrees, bots, Schedules, triggers, chats with
+attachments, and push notifications. The app talks only to your own computers,
 over your own Tailscale network or the same Wi-Fi (ADR 0025, 0027, 0052). The one exception: the Android app asks GitHub for
 the latest release when it opens (Settings › Updates turns it off).
 

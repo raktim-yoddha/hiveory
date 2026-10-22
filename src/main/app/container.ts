@@ -244,6 +244,10 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     outcome: (run) => {
       const bot = run.botId ? bots?.find(run.botId) : undefined
       if (bot?.notify !== false) notifyDesktop(runNotice(run, bot?.name ?? run.where), run.botId ?? '', bot ? run.threadId : undefined)
+      // Paired phones hear it too (ADR 0053): ids only.
+      if (bot?.notify !== false && run.status !== 'skipped') {
+        sharing.notifyPhones(run.status === 'completed' ? 'A schedule finished.' : 'A schedule needs a look.', { kind: 'run', ...(run.threadId ? { threadId: run.threadId } : {}) })
+      }
     },
     // Scheduled chats and Work routines (ADR 0030).
     targets: {
@@ -291,6 +295,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     notify: (request) => {
       const bot = bots?.find(request.botId)
       notifyDesktop({ title: `${bot?.name ?? 'A bot'} needs you`, body: `Allow ${request.tool}?` }, request.botId, request.threadId)
+      sharing.notifyPhones('A bot needs your yes.', { kind: 'approval', botId: request.botId })
     }
   })
   // Outside events start read-only runs (ADR 0028): Composio's webhook, over Tailscale Funnel, to a loopback listener.

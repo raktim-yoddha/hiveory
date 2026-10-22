@@ -514,13 +514,14 @@ export const GUIDE: GuideChapter[] = [
             With Tailscale, Settings › Remote › Share this computer lets your other devices and the Hiveory phone app connect — one tap on the
             same Tailscale account, a pairing code otherwise. Turn on &ldquo;On this network&rdquo; to do the same on your Wi-Fi without
             Tailscale: other computers there list it under Your devices › On this network and connect with its code. A paired computer
-            or phone keeps every address and uses whichever answers, Tailscale or Wi-Fi. Remove a device to cut it off at once. On the
-            phone, the Bots tab also answers a bot&rsquo;s requests for your yes and lists your Schedules with Run now. A terminal opened on
+            or phone keeps every address and uses whichever answers, Tailscale or Wi-Fi. Remove a device to cut it off at once. The phone
+            does what this window does in Work, Bots and Chat: files, worktrees, bots, teams, Schedules, triggers, chat files and saved
+            prompts; settings, accounts and keys stay on the computer. A terminal opened on
             the phone is sized to the phone while you look at it there, and goes back to its pane&rsquo;s size when you leave; the keys
             above the phone&rsquo;s keyboard add Esc, Tab, Ctrl, Alt and the arrows.
           </p>
         ),
-        keywords: 'phone mobile tailscale wifi wi-fi lan network share devices approvals schedules keyboard ctrl alt resize'
+        keywords: 'phone mobile tailscale wifi wi-fi lan network share devices approvals schedules files bots triggers attachments keyboard ctrl alt resize'
       }
     ]
   },

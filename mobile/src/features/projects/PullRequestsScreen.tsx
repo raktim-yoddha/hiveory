@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Linking } from 'react-native'
 import { Stack } from 'expo-router'
-import { ExternalLink, GitBranch, GitPullRequest, GitPullRequestDraft } from 'lucide-react-native'
+import { CircleDot, ExternalLink, GitBranch, GitPullRequest, GitPullRequestDraft } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
 import { useNotices } from '@/core/notices'
 import { useTheme } from '@/core/theme'
@@ -9,13 +9,15 @@ import { Button, EmptyState, ListRow, Loading, Screen, Section } from '@/core/ui
 
 /**
  * A Workspace's pull requests on the phone (ADR 0037), as on the computer's tab: each worktree
- * branch with its pull request (or a button to open one), then every open pull request.
+ * branch with its pull request (or a button to open one), every open pull request, then the
+ * repository's open issues (ADR 0053).
  */
 export function PullRequestsScreen({ projectId }: { projectId: string }) {
   const { colors } = useTheme()
   const status = useCall('github.status', { projectId })
   const prs = useCall('github.pullRequests', { projectId }, { enabled: Boolean(status.data?.available) })
   const workspaces = useCall('workspaces.list', { projectId })
+  const issues = useCall('github.issues', { projectId }, { enabled: Boolean(status.data?.available) })
   const create = useAction('github.createPullRequest')
   const [creating, setCreating] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -45,7 +47,7 @@ export function PullRequestsScreen({ projectId }: { projectId: string }) {
         refreshing={refreshing}
         onRefresh={() => {
           setRefreshing(true)
-          void Promise.all([prs.refetch(), workspaces.refetch()]).finally(() => setRefreshing(false))
+          void Promise.all([prs.refetch(), workspaces.refetch(), issues.refetch()]).finally(() => setRefreshing(false))
         }}
       >
         <Section title="Worktree branches">
@@ -103,6 +105,21 @@ export function PullRequestsScreen({ projectId }: { projectId: string }) {
             />
           ))}
           {prs.data && !prs.data.length ? <EmptyState compact icon={GitPullRequest} title="No open pull requests" /> : null}
+        </Section>
+        <Section title={`Open issues · ${issues.data?.length ?? 0}`}>
+          {issues.isLoading ? <Loading /> : null}
+          {issues.data?.map((issue) => (
+            <ListRow
+              key={issue.number}
+              title={issue.title}
+              subtitle={`#${issue.number}`}
+              leading={<CircleDot size={18} color={colors.working} />}
+              trailing={<ExternalLink size={16} color={colors.textFaint} />}
+              label={`${issue.title}, issue ${issue.number}`}
+              onPress={() => open(issue.url)}
+            />
+          ))}
+          {issues.data && !issues.data.length ? <EmptyState compact icon={CircleDot} title="No open issues" /> : null}
         </Section>
       </Screen>
     </>

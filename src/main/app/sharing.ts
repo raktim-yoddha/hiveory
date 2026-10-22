@@ -134,9 +134,20 @@ export class Sharing {
     const now = Date.now()
     if (!tokens.length || now - (this.pushedAt.get(update.instanceId) ?? 0) < PUSH_QUIET_MS) return
     this.pushedAt.set(update.instanceId, now)
+    this.notifyPhones('An agent needs you.', { instanceId: update.instanceId, projectId: update.projectId, workspaceId: update.workspaceId })
+  }
+
+  /**
+   * One notification to every paired phone (ADR 0027, 0053): a fixed sentence and opaque ids only,
+   * never a name or what the work is about, as it passes through Expo and Apple or Google.
+   */
+  notifyPhones(body: string, ids: Record<string, string>): void {
+    const server = this.server
+    const tokens = server?.pushTokens() ?? []
+    if (!server || !tokens.length) return
     // `from`: the address the phone paired with, so it opens the right computer.
-    const data = { instanceId: update.instanceId, projectId: update.projectId, workspaceId: update.workspaceId, from: this.self?.dnsName || this.self?.ip || this.lan[0] || '' }
-    void sendPush(tokens, { title: 'Hiveory', body: 'An agent needs you.', data }).then(
+    const data = { ...ids, from: this.self?.dnsName || this.self?.ip || this.lan[0] || '' }
+    void sendPush(tokens, { title: 'Hiveory', body, data }).then(
       (gone) => gone.forEach((t) => server.dropPushToken(t)),
       (error: unknown) => this.log.warn('Could not send a push notification', error)
     )

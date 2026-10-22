@@ -155,7 +155,8 @@ describe('Hiveory server', () => {
     const token = await pairPhone()
     expect(server!.devices()[0]).toMatchObject({ name: 'Phone', kind: 'mobile' })
     expect(await call(token, 'projects.list')).toMatchObject({ ok: true })
-    expect(await call(token, 'projects.remove', { projectId: 'p1' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    // Accounts and keys stay on the computer (ADR 0053).
+    expect(await call(token, 'queen.removeAccount', { id: 'q000000000000' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     expect(await call(token, 'settings.update', { theme: 'dark' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     expect(await call(token, 'terminal.resize', { instanceId: 'a1', cols: 40, rows: 20 })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     for (const c of MOBILE_CHANNELS) expect(REMOTE_CHANNELS.has(c)).toBe(true)

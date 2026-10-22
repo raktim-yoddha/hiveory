@@ -470,21 +470,27 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   phone" (Settings › Remote › Share this computer), open its `hiveory://pair` link, or type the
   computer's Tailscale name or Wi-Fi address. Same Tailscale account = no code. The code carries
   every address of the computer, and the phone uses whichever answers.
-- A phone may do everyday things only: watch every workspace and agent, open agents and presets,
-  type in terminals, send messages, interrupt, restart and close agents, create worktrees, chat,
-  answer the computer's SSH questions, answer a bot's requests for a yes, and follow Schedules and
-  run one now (ADR 0052). Deleting, settings and accounts stay on the computer
-  (enforced by the server). Paired devices show as Phone or Desktop.
+- A phone does what a paired desktop does in all three modes (ADR 0053): Workspaces (add by path
+  or clone, set up Git, remove), worktrees (create, repair, delete, save their agents as a preset),
+  agents (open, rename, restart, close, type in terminals), files (browse, find, read, edit, new,
+  rename, delete), pull requests and issues; bots (make, edit, delete), teams, Schedules (make,
+  edit, run, delete, recent runs), triggers (link on or off, each on or off, rename, delete),
+  answering a bot's requests for a yes; chats with files, messages lined up while it answers,
+  saved prompts, rename and delete; and the computer's SSH questions. App settings, accounts and
+  keys, folder pickers, pane layout, the built-in browser, making triggers and a bot's own computer
+  stay on the computer (enforced by the server). Paired devices show as Phone or Desktop.
 - Tabs: **Inbox** (agents that need you across workspaces, then those working; badge on the tab),
   **Workspaces** (each with live counts; a workspace's board one status at a time, most urgent first,
-  and its worktrees), **Bots** (bot calls waiting for a yes, Schedules with Run now, and every
-  bot's threads, ADR 0039, 0052), **Chat**, **Settings** (computers, notifications, theme, privacy).
+  and its worktrees, each with its Files), **Bots** (bot calls waiting for a yes, Schedules,
+  Triggers, Teams, and every bot's threads, ADR 0039, 0052, 0053), **Chat**, **Settings**
+  (computers, notifications, theme, privacy).
 - An agent screen shows its terminal sized to the phone while it is open there (the computer's
   pane gets its own size back when the phone leaves it, ADR 0048), a bar that says why it waits
   with Esc and Enter, and the keys a phone lacks right above the keyboard, which never covers
   them: Esc, Tab, Ctrl and Alt (held for the next key), the arrows, / and Enter.
 - Notifications (opt-in): "An agent needs you." through Expo push, at most once a minute per
-  agent; only ids travel. Tapping opens that agent on the right computer.
+  agent, plus "A bot needs your yes." and "A schedule finished." / "A schedule needs a look."
+  (ADR 0053); only ids travel. Tapping opens that agent, bot or run thread on the right computer.
 - The phone wears the theme picked on the computer.
 
 ## Running in the background (ADR 0020)

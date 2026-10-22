@@ -28,10 +28,20 @@ function PushRouter({ notifications }: { notifications: NotificationsModule }) {
 
   useEffect(() => {
     const data = lastResponse?.notification.request.content.data as Record<string, string> | undefined
-    if (!data?.instanceId || !data.workspaceId || !data.projectId) return
+    if (!data) return
+    // An agent that needs you, a bot asking for a yes, or a Schedule run that ended (ADR 0053).
+    const open =
+      data.instanceId && data.workspaceId && data.projectId
+        ? () => router.push(routes.agent(data.instanceId!, data.workspaceId!, data.projectId!))
+        : data.kind === 'approval' && data.botId
+          ? () => router.push(routes.bot(data.botId!))
+          : data.kind === 'run'
+            ? () => router.push(data.threadId ? routes.chat(data.threadId) : routes.schedules)
+            : null
+    if (!open) return
     const { computers, setActive } = useComputers.getState()
     const from = computers.find((c) => c.address === data.from || c.alternates?.includes(data.from ?? ''))
-    void (from ? setActive(from.id) : Promise.resolve()).then(() => router.push(routes.agent(data.instanceId!, data.workspaceId!, data.projectId!)))
+    void (from ? setActive(from.id) : Promise.resolve()).then(open)
   }, [lastResponse])
 
   // A rolled push token stops delivering silently: hand the new one to every computer.

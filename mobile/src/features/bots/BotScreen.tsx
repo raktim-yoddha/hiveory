@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { router, Stack } from 'expo-router'
-import { MessageSquarePlus, MessagesSquare } from 'lucide-react-native'
+import { MessageSquarePlus, MessagesSquare, Settings2 } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
 import { routes } from '@/core/routes'
 import { Button, EmptyState, IconButton, ListRow, Loading, Screen, Section, StatusDot } from '@/core/ui'
@@ -18,7 +18,12 @@ export function BotScreen({ botId }: { botId: string }) {
 
   return (
     <>
-      <Stack.Screen options={{ title: bot?.name ?? 'Bot', headerRight: () => <IconButton label="New thread" icon={MessageSquarePlus} onPress={newThread} /> }} />
+      <Stack.Screen options={{ title: bot?.name ?? 'Bot', headerRight: () => (
+            <>
+              <IconButton label="Edit bot" icon={Settings2} onPress={() => router.push(routes.botEdit(botId))} />
+              <IconButton label="New thread" icon={MessageSquarePlus} onPress={newThread} />
+            </>
+          ) }} />
       {threads.isLoading ? (
         <Loading />
       ) : !list.length ? (

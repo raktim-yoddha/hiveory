@@ -61,11 +61,12 @@ export const PAIRING_TTL_MS = 15 * 60_000
 export const DEFAULT_SERVER_PORT = 7788
 
 /**
- * What a paired phone may do (ADR 0027): everyday control. It watches and steers
- * agents, terminals, chats and SSH questions, and opens workspaces. A Workspace's own
- * settings and its pull requests are reachable too (ADR 0037). Deleting, app settings and
- * accounts stay on the desktop. A terminal is sized to the phone only while the phone's stream
- * of it is open, never through a call (ADR 0048). A subset of REMOTE_CHANNELS (a test checks).
+ * What a paired phone may do (ADR 0027, widened by ADR 0053): the three modes as on a paired
+ * desktop — agents, terminals, files, worktrees, presets, bots, teams, Schedules, triggers, chats,
+ * attachments and saved prompts. App settings, accounts and keys, and what needs the computer's
+ * own screen (folder pickers, pane layout, the browser) stay on the desktop. A terminal is sized
+ * to the phone only while the phone's stream of it is open, never through a call (ADR 0048).
+ * A subset of REMOTE_CHANNELS (a test checks).
  */
 export const MOBILE_CHANNELS = new Set<Channel>([
   'projects.list', 'projects.update', 'github.status', 'github.pullRequests', 'github.createPullRequest', 'workspaces.list', 'workspaces.create', 'workspaces.suggestName', 'workspaces.gitStatus',
@@ -76,7 +77,11 @@ export const MOBILE_CHANNELS = new Set<Channel>([
   'bots.list', 'bots.threads', 'bots.newThread',
   // Answer a bot's approval requests, and follow and run Schedules (ADR 0052).
   'approvals.list', 'approvals.answer', 'routines.list', 'routines.runNow',
-  'hosts.status', 'ssh.pending', 'ssh.answer', 'git.info'
+  'hosts.status', 'ssh.pending', 'ssh.answer', 'git.info',
+  // The phone matches the desktop in every mode (ADR 0053).
+  'projects.add', 'projects.remove', 'workspaces.delete', 'workspaces.repair', 'git.init', 'agents.rename', 'presets.save', 'presets.delete', 'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'github.issues',
+  'bots.create', 'bots.update', 'bots.delete', 'teams.list', 'teams.create', 'teams.rename', 'teams.delete', 'triggers.status', 'triggers.list', 'triggers.update', 'triggers.delete', 'triggers.enableLink', 'triggers.disableLink', 'routines.create', 'routines.update', 'routines.delete', 'routines.runs',
+  'chat.update', 'chat.delete', 'chat.attach', 'chat.queue', 'chat.unqueue', 'prompts.list', 'prompts.save', 'prompts.delete'
 ])
 
 /** Who a paired device is: a desktop window (everything remote) or a phone (MOBILE_CHANNELS). */
