@@ -48,6 +48,8 @@ export interface AppSettings {
   shareOnTailnet: boolean
   /** Also share it on this computer's local network (Wi-Fi, Ethernet); devices pair with the code (ADR 0039). Off by default. */
   shareOnLan: boolean
+  /** Let Hiveory Pet, the separate desktop pet app, follow this computer's agents (names and status only; ADR 0054). */
+  petLink: boolean
   /** Background behind the app: '' (none) or 'image:<file in the wallpapers folder>'. */
   wallpaper: string
   /** How opaque every surface is over a wallpaper (0 = fully transparent, 1 = solid). */
@@ -198,6 +200,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   keepAwakeForRoutines: true,
   shareOnTailnet: false,
   shareOnLan: false,
+  petLink: true,
   wallpaper: '',
   surfaceOpacity: 0.6,
   wallpaperBlur: 0,

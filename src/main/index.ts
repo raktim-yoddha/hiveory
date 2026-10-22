@@ -112,6 +112,8 @@ const emit: Emit = (event, payload) => {
   guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
   // Paired phones hear when an agent needs the user, even with the app closed (ADR 0027).
   if (event === 'queen.update') guard(log, 'Push', () => container?.sharing.notifyWaiting(payload as QueenUpdate))
+  // Hiveory Pet sees agents start, stop and change status (ADR 0054).
+  if (event === 'runtime.changed' || event === 'state.changed') guard(log, 'Pet link', () => container?.petLink.changed())
 }
 
 const openWindow = (): void => {
@@ -204,6 +206,9 @@ app.whenReady().then(async () => {
     if ((next.shareOnTailnet !== previous.shareOnTailnet || next.shareOnLan !== previous.shareOnLan) && servePort === undefined) {
       void guard(log, 'Sharing', () => share(next.shareOnTailnet, next.shareOnLan))
     }
+    if (next.petLink !== previous.petLink && servePort === undefined) {
+      void guard(log, 'Pet link', () => (next.petLink ? c.petLink.start() : c.petLink.stop()))
+    }
     if (next.computerUse && !previous.computerUse) guard(log, 'Computer use', () => c.computer.warm())
     // Back to tiles: tabbed areas become side-by-side panes, so none stays hidden (ADR 0042).
     if (next.paneStyle === 'tiles' && previous.paneStyle === 'tabs') guard(log, 'Pane style', () => c.layouts.flattenAll())
@@ -236,6 +241,7 @@ app.whenReady().then(async () => {
   } else {
     openWindow()
     if (startup.shareOnTailnet || startup.shareOnLan) void guard(log, 'Sharing', () => share(startup.shareOnTailnet, startup.shareOnLan))
+    if (startup.petLink) void guard(log, 'Pet link', () => c.petLink.start())
   }
   // Durable sessions: every agent comes back on its own, resuming its conversation.
   guard(log, 'Agent resume', () => c.agents.resumeAll(), report('Resuming agents'))
@@ -337,5 +343,6 @@ app.on('before-quit', (event) => {
   if (keepAgents() && c.localHost.durable) guard(log, 'Chat detach', () => c.chats.detachAll())
   else guard(log, 'Chat shutdown', () => c.chats.stopAll())
   guard(log, 'Hook server shutdown', () => c.hookServer.stop())
+  guard(log, 'Pet link shutdown', () => c.petLink.stop())
   guard(log, 'State flush', () => c.store.flush())
 })

@@ -14,8 +14,8 @@ import { SkillFolderList } from './SkillFolderList'
 import form from '../../../components/ui/form.module.css'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
+import { openUrl } from '../../../lib/open-url'
 
-const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 const folderOf = (skillId: string): string => skillId.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
 const installs = (n: number): string => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : String(n))
 

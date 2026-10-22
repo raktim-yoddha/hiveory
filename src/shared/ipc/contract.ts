@@ -431,6 +431,7 @@ export const requestSchemas = {
       keepAwakeForRoutines: z.boolean(),
       shareOnTailnet: z.boolean(),
       shareOnLan: z.boolean(),
+      petLink: z.boolean(),
       wallpaper: wallpaperSchema,
       surfaceOpacity: z.number().min(0).max(1),
       wallpaperBlur: z.number().min(0).max(40),

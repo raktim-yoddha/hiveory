@@ -10,6 +10,7 @@ import { runAction } from '../../../stores/notices'
 import { AppMark } from './AppMark'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
+import { openUrl } from '../../../lib/open-url'
 
 const CATEGORIES: Array<AppCategory | 'All' | 'Connected'> = ['All', 'Connected', 'Work', 'Code', 'Data', 'Business', 'Search', 'Media']
 
@@ -20,7 +21,6 @@ const STATUS_TEXT: Record<AppAccount['status'], string> = {
   expired: 'expired'
 }
 
-const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 
 /**
  * Apps every agent can use — terminal, chat and bots — through the user's own

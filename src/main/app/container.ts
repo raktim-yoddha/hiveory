@@ -79,6 +79,7 @@ import { guard } from './guard'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
 import { Sharing } from './sharing'
+import { PetLink } from '../services/pet/pet-link'
 import { Tailscale } from '../services/tailscale/tailscale'
 
 export type Container = ReturnType<typeof createContainer>
@@ -338,6 +339,25 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
   const projects = new ProjectService(store, kits, agents, emit)
+  // Hiveory Pet, the separate desktop pet app, follows the agents that run (ADR 0054): names and status only.
+  const petLink = new PetLink(
+    join(paths.runtimeDir, 'pet-link.json'),
+    () =>
+      store.state.instances
+        .filter((i) => registry.adapter(i.cliId)?.kind !== 'shell')
+        .map((i) => ({ i, runtime: agents.details(i) }))
+        .filter(({ runtime }) => runtime.running || runtime.status !== 'idle')
+        .map(({ i, runtime }) => ({
+          id: i.id,
+          name: i.petName,
+          cli: registry.displayName(i.cliId),
+          workspace: workspaceRepo.findProject(i.projectId)?.name ?? '',
+          worktree: workspaceRepo.find(i.workspaceId)?.name ?? '',
+          status: runtime.status
+        })),
+    log,
+    app.getVersion()
+  )
   const workspaces = new WorkspaceService(workspaceRepo, kits, agents, emit)
   const presets = new PresetService(store, emit)
   settings = new SettingsService(store, emit)
@@ -507,6 +527,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     sharing,
     hosts,
     hookServer,
+    petLink,
     workspaceRepo,
     layouts,
     agents,

@@ -13,8 +13,8 @@ import { runAction, useNotices } from '../../../stores/notices'
 import form from '../../../components/ui/form.module.css'
 import settings from '../Settings.module.css'
 import styles from './Extensions.module.css'
+import { openUrl } from '../../../lib/open-url'
 
-const openUrl = (url: string): void => void api('system.openUrl', { url }).catch(() => undefined)
 const RUNNER: Record<'npm' | 'pypi' | 'oci', string> = { npm: 'npx', pypi: 'uvx', oci: 'Docker' }
 const optionLabel = (o: McpOption): string => (o.kind === 'remote' ? 'Hosted' : `${RUNNER[o.registry]} · ${o.identifier}`)
 const titleOf = (s: StoreMcpServer): string => s.title || s.name.split('/').at(-1) || s.name

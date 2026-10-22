@@ -3,6 +3,7 @@ import { Toggle } from '../../components/ui/Toggle'
 import { Select } from '../../components/ui/Select'
 import { useApp, useClis, useSettings } from '../../stores/data'
 import { SettingRow, SettingsPage } from './SettingsPage'
+import { HiveoryPetSettings } from './HiveoryPetSettings'
 import { TerminalHostSettings } from './TerminalHostSettings'
 import styles from './Settings.module.css'
 
@@ -79,6 +80,7 @@ export function AgentsSection() {
         />
       </div>
       <TerminalHostSettings />
+      <HiveoryPetSettings />
       <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>
         <p className={styles.groupNote}>
