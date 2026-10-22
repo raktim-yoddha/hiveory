@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.23.0 — Agents outlive Hiveory, Wi-Fi pairing, full phone app
+_2026-10-22_
+
+- Agents, terminals and chat replies keep running after Hiveory quits or updates, and each pane takes its own back when Hiveory opens again.
+- Other computers and phones connect over Tailscale or your Wi-Fi, whichever answers; computers sharing on the same Wi-Fi show up under Settings › Remote.
+- The phone does what the desktop does in Work, Bots and Chat: files, worktrees, bots, teams, Schedules, triggers, chat attachments and saved prompts.
+- Phones are told when a bot needs your yes and when a Schedule finishes.
+- Agents that need you say "Needs you" in calmer colors, and the status no longer gets stuck after a permission prompt.
+- Queen Bee waits as long as a model needs, says which model planned, and answers questions about what she can do.
+
 ## v0.22.2 — Queen Bee arranges panes, phone terminals fit, keyboard settings
 _2026-10-13_
 
