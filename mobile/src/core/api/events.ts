@@ -1,5 +1,5 @@
 import EventSource from 'react-native-sse'
-import { baseUrl, type Computer } from './client'
+import { findAddress, reachUrl, type Computer } from './client'
 import type { ServerEvent } from './contract'
 
 const FIRST_RETRY_MS = 1000
@@ -31,12 +31,14 @@ export const openStream = (
   let timer: ReturnType<typeof setTimeout> | null = null
   let delay = FIRST_RETRY_MS
   let closed = false
+  /** Counts reconnects, so only the latest one opens a stream. */
+  let attempt = 0
 
   const connect = (): void => {
     if (closed) return
     onStatus('connecting')
     const fit = size ? `&cols=${size.cols}&rows=${size.rows}` : ''
-    const es = new EventSource(`${baseUrl(computer)}/events?terminal=${encodeURIComponent(terminal)}${fit}`, {
+    const es = new EventSource(`${reachUrl(computer)}/events?terminal=${encodeURIComponent(terminal)}${fit}`, {
       headers: { authorization: `Bearer ${token}` },
       // Reconnects are ours (with backoff and status), not the library's fixed interval.
       pollingInterval: 0
@@ -59,7 +61,13 @@ export const openStream = (
       es.close()
       if (closed || source !== es) return
       onStatus('offline')
-      timer = setTimeout(connect, delay)
+      const mine = ++attempt
+      // Before reconnecting, find which of its addresses answers now (Tailscale or Wi-Fi, ADR 0052).
+      timer = setTimeout(() => {
+        void (computer.alternates?.length ? findAddress(computer) : Promise.resolve(null)).finally(() => {
+          if (mine === attempt) connect()
+        })
+      }, delay)
       delay = Math.min(MAX_RETRY_MS, delay * 2)
     })
   }
@@ -68,6 +76,7 @@ export const openStream = (
   return {
     close: () => {
       closed = true
+      attempt++
       if (timer) clearTimeout(timer)
       source?.removeAllEventListeners()
       source?.close()
@@ -78,6 +87,7 @@ export const openStream = (
       source?.removeAllEventListeners()
       source?.close()
       delay = FIRST_RETRY_MS
+      attempt++
       connect()
     }
   }

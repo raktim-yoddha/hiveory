@@ -448,7 +448,13 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   the sharing computer's code otherwise. Other online devices show Use over SSH. "Share this
   computer" (off by default) serves this desktop to them on its Tailscale address only, shows its
   pairing code and paired devices, and removing a device cuts it off at once. A headless server
-  does the same with `hiveory --serve 7788 --tailscale`.
+  does the same with `hiveory --serve 7788 --tailscale`, and `--lan` on the local network.
+- Without Tailscale (ADR 0052): a computer sharing "On this network" is listed on the other
+  computers of the same Wi-Fi under Your devices › On this network, and connects with its pairing
+  code. A paired computer or phone keeps every address of the computer it paired with (Tailscale
+  name and IP, Wi-Fi) and uses whichever answers, so turning Tailscale off at home, or leaving the
+  Wi-Fi, keeps it connected while one way is still there. A paired computer can do everything that
+  runs on the server, including stopping a Queen Bee plan, skills and the Trigger link.
 
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
   installs Hiveory's small host program in `~/.hiveory-host` there (with its own Node if needed).
@@ -459,17 +465,20 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 ## Phone app (ADR 0027)
 
-- Hiveory for phones (`mobile/`) uses the user's own computer over their own Tailscale network;
-  no Hiveory server sits in between. Pairing: scan "Connect your phone" (Settings › Remote ›
-  Share this computer), open its `hiveory://pair` link, or type the computer's Tailscale name.
-  Same Tailscale account = no code.
+- Hiveory for phones (`mobile/`) uses the user's own computer over their own Tailscale network
+  or the same Wi-Fi (ADR 0052); no Hiveory server sits in between. Pairing: scan "Connect your
+  phone" (Settings › Remote › Share this computer), open its `hiveory://pair` link, or type the
+  computer's Tailscale name or Wi-Fi address. Same Tailscale account = no code. The code carries
+  every address of the computer, and the phone uses whichever answers.
 - A phone may do everyday things only: watch every workspace and agent, open agents and presets,
   type in terminals, send messages, interrupt, restart and close agents, create worktrees, chat,
-  answer the computer's SSH questions. Deleting, settings and accounts stay on the computer
+  answer the computer's SSH questions, answer a bot's requests for a yes, and follow Schedules and
+  run one now (ADR 0052). Deleting, settings and accounts stay on the computer
   (enforced by the server). Paired devices show as Phone or Desktop.
 - Tabs: **Inbox** (agents that need you across workspaces, then those working; badge on the tab),
   **Workspaces** (each with live counts; a workspace's board one status at a time, most urgent first,
-  and its worktrees), **Settings** (computers, notifications, theme, privacy).
+  and its worktrees), **Bots** (bot calls waiting for a yes, Schedules with Run now, and every
+  bot's threads, ADR 0039, 0052), **Chat**, **Settings** (computers, notifications, theme, privacy).
 - An agent screen shows its terminal sized to the phone while it is open there (the computer's
   pane gets its own size back when the phone leaves it, ADR 0048), a bar that says why it waits
   with Esc and Enter, and the keys a phone lacks right above the keyboard, which never covers

@@ -4,6 +4,7 @@ import { MessageSquarePlus, MessagesSquare } from 'lucide-react-native'
 import { useAction, useCall } from '@/core/api'
 import { routes } from '@/core/routes'
 import { Button, EmptyState, IconButton, ListRow, Loading, Screen, Section, StatusDot } from '@/core/ui'
+import { Approvals } from './Approvals'
 
 /** One bot's threads, newest first (ADR 0039); open one to continue it, or start a new one. */
 export function BotScreen({ botId }: { botId: string }) {
@@ -30,6 +31,7 @@ export function BotScreen({ botId }: { botId: string }) {
             void threads.refetch().finally(() => setRefreshing(false))
           }}
         >
+          <Approvals botId={botId} />
           <Section>
             {list.map((t) => (
               <ListRow key={t.id} title={t.title} subtitle={new Date(t.updatedAt).toLocaleString()} trailing={t.running ? <StatusDot status="working" /> : null} onPress={() => router.push(routes.chat(t.id))} />

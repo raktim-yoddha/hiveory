@@ -3,7 +3,7 @@ import { hostname } from 'node:os'
 import { AppException, fail, type Result } from '@shared/errors'
 import type { Channel } from '@shared/ipc/contract'
 import type { ServerEvent } from '@shared/ipc/remote'
-import type { DiscoveredDevice, Discovery, LanServer } from '@shared/domain/tailnet'
+import { isHostAddress, type DiscoveredDevice, type Discovery, type LanServer } from '@shared/domain/tailnet'
 import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
 import type { SshHostConnector } from '../services/hosts/ssh-host'
 import type { Tailscale } from '../services/tailscale/tailscale'
@@ -90,7 +90,7 @@ export const pair = async (base: string, code?: string): Promise<{ token: string
   const res = await fetch(`${base}/pair`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code?.toUpperCase(), name: hostname() }) })
   const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string; addresses?: unknown }
   if (!res.ok || !body.token) fail('FORBIDDEN', body.error ?? 'The server refused the pairing.')
-  const addresses = Array.isArray(body.addresses) ? body.addresses.filter((a): a is string => typeof a === 'string' && /^[A-Za-z0-9.:-]{1,253}$/.test(a)).slice(0, 8) : []
+  const addresses = Array.isArray(body.addresses) ? body.addresses.filter(isHostAddress).slice(0, 8) : []
   return { token: body.token!, addresses }
 }
 

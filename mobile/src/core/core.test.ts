@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pairingLink } from '@shared/domain/tailnet'
 import { MOBILE_CHANNELS, REMOTE_CHANNELS } from '@shared/ipc/remote'
+import { addressesOf } from './api/client'
 import { PHONE_CHANNELS } from './api/contract'
 import { createEmitter } from './api/emitter'
 import { staleChannels } from './api/invalidation'
@@ -32,6 +33,13 @@ describe('the phone and the computer agree', () => {
   it('reads the pairing link the computer shows', () => {
     expect(parsePairingLink(pairingLink('devbox.tail1.ts.net', 7788, 'ABCD2345'))).toEqual({ address: 'devbox.tail1.ts.net', port: 7788, code: 'ABCD2345' })
     expect(parsePairingLink('hiveory://pair?a=100.64.0.2&p=7788')).toEqual({ address: '100.64.0.2', port: 7788 })
+    // Its other addresses (ADR 0052): the same one twice, or a bad one, is dropped.
+    expect(parsePairingLink(pairingLink('devbox.tail1.ts.net', 7788, 'ABCD2345', ['devbox.tail1.ts.net', '192.168.1.20', 'bad host']))).toEqual({
+      address: 'devbox.tail1.ts.net',
+      port: 7788,
+      code: 'ABCD2345',
+      alternates: ['192.168.1.20']
+    })
     expect(parsePairingLink('https://evil.example/pair?a=x&p=1')).toBeNull()
     expect(parsePairingLink('hiveory://pair?a=bad host&p=7788')).toBeNull()
     expect(computerName('devbox.tail1.ts.net')).toBe('devbox')
@@ -60,6 +68,23 @@ describe('pairing', () => {
     const post = computer((b) => (b.code === 'ABCD2345' ? { status: 200, body: { token: 't2' } } : { status: 403, body: { needsCode: true, error: 'needs code' } }))
     await expect(pairWith({ address: 'box', port: 7788 }, 'Phone', post)).rejects.toBeInstanceOf(NeedsCodeError)
     await expect(pairWith({ address: 'box', port: 7788, code: 'abcd2345' }, 'Phone', post)).resolves.toMatchObject({ token: 't2' })
+  })
+
+  it('reaches the computer at another of its addresses, and keeps every address it reports (ADR 0052)', async () => {
+    const asked: string[] = []
+    const post = (async (url: string, init?: RequestInit) => {
+      asked.push(url)
+      // Tailscale is off on this phone: only its Wi-Fi address answers.
+      if (url.startsWith('http://devbox.tail1.ts.net')) throw new Error('no route')
+      if (url.endsWith('/health')) return new Response(JSON.stringify({ ok: true, app: 'hiveory' }))
+      expect(JSON.parse(String(init?.body))).toMatchObject({ client: 'mobile' })
+      return new Response(JSON.stringify({ token: 't3', addresses: ['devbox.tail1.ts.net', '100.64.0.2', '192.168.1.20', 'bad host'] }))
+    }) as never
+    const result = await pairWith({ address: 'devbox.tail1.ts.net', port: 7788, alternates: ['192.168.1.20'] }, 'Phone', post)
+    expect(asked.at(-1)).toBe('http://192.168.1.20:7788/pair')
+    expect(result.computer).toEqual({ id: 'devbox.tail1.ts.net:7788', name: 'devbox', address: 'devbox.tail1.ts.net', port: 7788, alternates: ['192.168.1.20', '100.64.0.2'] })
+    // Later calls go to the address that answered first.
+    expect(addressesOf(result.computer)[0]).toBe('192.168.1.20')
   })
 
   it('says plainly when nothing answers', async () => {

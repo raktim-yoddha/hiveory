@@ -629,7 +629,7 @@ PortForwards ─exec cat /proc/net/tcp─▶ list;  ─ssh -L─▶ localhost:<s
 ```
 
 `Tailscale` (`services/tailscale`) only reads the user's own Tailscale. `Sharing` (`app/sharing.ts`)
-owns the server for both the desktop switch and `--serve [--tailscale]`.
+owns the server for both the desktop switch and `--serve [--tailscale] [--lan]`.
 
 ### Bots data flow (ADR 0022)
 

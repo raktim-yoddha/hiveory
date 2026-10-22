@@ -40,6 +40,11 @@ export const PHONE_CHANNELS = [
   'bots.list',
   'bots.threads',
   'bots.newThread',
+  // Bot approvals and Schedules (ADR 0052).
+  'approvals.list',
+  'approvals.answer',
+  'routines.list',
+  'routines.runNow',
   'hosts.status',
   'ssh.pending',
   'ssh.answer'

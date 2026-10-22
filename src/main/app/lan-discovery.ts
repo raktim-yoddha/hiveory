@@ -69,6 +69,8 @@ export const answerLanProbes = (info: () => { name: string; port: number; versio
 /** The computers on this machine's local networks that share Hiveory, found within `ms`. */
 export const findLanServers = (ms = 1200): Promise<LanServer[]> =>
   new Promise((resolve) => {
+    // This computer answers its own broadcast when it shares too: never list it.
+    const own = new Set(Object.values(networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address)))
     const found = new Map<string, LanServer>()
     const socket = createSocket('udp4')
     const done = (): void => {
@@ -82,7 +84,7 @@ export const findLanServers = (ms = 1200): Promise<LanServer[]> =>
     socket.on('error', done)
     socket.on('message', (message, from) => {
       const server = parseAnswer(message.toString('utf8'), from.address)
-      if (server) found.set(`${server.address}:${server.port}`, server)
+      if (server && !own.has(server.address)) found.set(`${server.address}:${server.port}`, server)
     })
     socket.bind(0, () => {
       socket.setBroadcast(true)

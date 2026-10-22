@@ -2,7 +2,7 @@
 
 Watch and steer your agents from your phone: what needs you, every workspace's board, live
 terminals, answering prompts, and push notifications. The app talks only to your own computers,
-over your own Tailscale network (ADR 0025, 0027). The one exception: the Android app asks GitHub for
+over your own Tailscale network or the same Wi-Fi (ADR 0025, 0027, 0052). The one exception: the Android app asks GitHub for
 the latest release when it opens (Settings › Updates turns it off).
 
 ## Run it
@@ -24,8 +24,8 @@ pnpm mobile start
   `extra.eas.projectId`, which Expo push requires.
 
 Then, on the computer, open Hiveory › Settings › Remote and turn on **Share this computer**. In
-the app, scan **Connect your phone**. Both devices need Tailscale signed in; with the same
-account, no code is asked.
+the app, scan **Connect your phone**. Both devices need Tailscale signed in (with the same
+account, no code is asked), or turn on **On this network** too and keep the phone on the same Wi-Fi.
 
 ## Checks
 

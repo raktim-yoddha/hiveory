@@ -100,6 +100,7 @@ export class Sharing {
       state: this.state,
       address: this.self ? this.self.dnsName || this.self.ip : undefined,
       ...(this.lan[0] ? { lan: this.lan[0] } : {}),
+      addresses: this.addresses(),
       port: this.server.port,
       code: this.server.pairingCode(),
       owner: this.self?.owner || undefined,

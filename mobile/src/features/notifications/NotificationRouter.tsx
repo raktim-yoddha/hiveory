@@ -30,7 +30,7 @@ function PushRouter({ notifications }: { notifications: NotificationsModule }) {
     const data = lastResponse?.notification.request.content.data as Record<string, string> | undefined
     if (!data?.instanceId || !data.workspaceId || !data.projectId) return
     const { computers, setActive } = useComputers.getState()
-    const from = computers.find((c) => c.address === data.from)
+    const from = computers.find((c) => c.address === data.from || c.alternates?.includes(data.from ?? ''))
     void (from ? setActive(from.id) : Promise.resolve()).then(() => router.push(routes.agent(data.instanceId!, data.workspaceId!, data.projectId!)))
   }, [lastResponse])
 

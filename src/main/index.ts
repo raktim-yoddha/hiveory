@@ -32,7 +32,7 @@ const log = createLogger(paths.logDir)
 /** How often Worktrees are matched to Git while the app runs (ADR 0038). */
 const WORKTREE_SYNC_MS = 30_000
 
-/** `--serve <port>` (or `--serve=<port>`): run as a Hiveory server without a window (ADR 0022); `--tailscale` also serves the tailnet (ADR 0025). */
+/** `--serve <port>` (or `--serve=<port>`): run as a Hiveory server without a window (ADR 0022); `--tailscale` also serves the tailnet (ADR 0025), `--lan` the local network (ADR 0052). */
 const argValue = (flag: string): string | undefined => {
   const at = process.argv.findIndex((a) => a === flag || a.startsWith(`${flag}=`))
   if (at < 0) return undefined
@@ -43,6 +43,8 @@ const servePort = argValue('--serve')
 /** Loopback by default: clients come through an SSH tunnel. Another address (e.g. Tailscale) is explicit. */
 const serveHost = argValue('--serve-host') ?? '127.0.0.1'
 const serveTailnet = process.argv.includes('--tailscale')
+/** Also on this computer's Wi-Fi or office network, found there by other computers (ADR 0039, 0052). */
+const serveLan = process.argv.includes('--lan')
 let stopClient: (() => void) | null = null
 
 // A bug in one service must never take the whole app down.
@@ -222,10 +224,12 @@ app.whenReady().then(async () => {
   )
   if (servePort !== undefined) {
     // Server mode: no window; paired clients drive it (only REMOTE_CHANNELS, validated again).
-    await c.sharing.apply({ port: Number(servePort) || 0, hosts: [serveHost], tailnet: serveTailnet, handlers: serverHandlers, fitTerminal })
+    await c.sharing.apply({ port: Number(servePort) || 0, hosts: [serveHost], tailnet: serveTailnet, lan: serveLan, handlers: serverHandlers, fitTerminal })
     // Supervisors and the person starting it read the addresses and the pairing code from stdout.
     const shared = c.sharing.status()
-    console.log(`Hiveory server ready on ${serveHost}:${shared.port}${shared.address ? ` and ${shared.address}:${shared.port} (Tailscale)` : ''}`)
+    console.log(
+      `Hiveory server ready on ${serveHost}:${shared.port}${shared.address ? ` and ${shared.address}:${shared.port} (Tailscale)` : ''}${shared.lan ? ` and ${shared.lan}:${shared.port} (this network)` : ''}`
+    )
     if (serveTailnet && !shared.address) console.log(`${shared.detail ?? 'Tailscale is not connected.'} Clients can reach it once it is.`)
     // A supervisor stopping the server (systemd, Ctrl+C) quits properly, so its agents are kept (ADR 0050 §9).
     for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => app.quit())

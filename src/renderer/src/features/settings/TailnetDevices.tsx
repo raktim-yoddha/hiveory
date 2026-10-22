@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link2, RefreshCw, Terminal } from 'lucide-react'
-import type { DiscoveredDevice, Discovery } from '@shared/domain/tailnet'
+import type { DiscoveredDevice, Discovery, LanServer } from '@shared/domain/tailnet'
 import { Button, IconButton } from '../../components/ui/Button'
 import { TextField } from '../../components/ui/TextField'
 import { api } from '../../lib/api'
@@ -15,6 +15,13 @@ const STATE_NOTE: Record<Exclude<Discovery['state'], 'running'>, string> = {
 /** Phones run no SSH and share no Hiveory: they pair from their own app, scanning this computer's code. */
 const isPhone = (d: DiscoveredDevice): boolean => /^(android|ios)$/i.test(d.os)
 
+/** A pairing code as typed: eight letters and digits. */
+const cleanCode = (v: string): string =>
+  v
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8)
+
 const describe = (d: DiscoveredDevice): string => {
   const where = [d.dnsName || d.ip, d.os].filter(Boolean).join(' · ')
   if (!d.online) return `${where} · offline`
@@ -27,7 +34,8 @@ const describe = (d: DiscoveredDevice): string => {
  * The user's own devices, found through Tailscale (ADR 0025). A device that
  * shares Hiveory connects in one click when it is signed in to the same
  * Tailscale account, or with its pairing code otherwise; any other online
- * device can be used over SSH.
+ * device can be used over SSH. Computers sharing on this Wi-Fi are listed too
+ * and pair with their code (ADR 0052).
  */
 export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) => void }) {
   const [discovery, setDiscovery] = useState<Discovery | null>(null)
@@ -35,6 +43,8 @@ export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) =
   const [connecting, setConnecting] = useState<string | null>(null)
   /** The device that asked for a code, and the code typed so far. */
   const [asking, setAsking] = useState<{ ip: string; code: string } | null>(null)
+  /** Codes typed for computers on this Wi-Fi, by address. */
+  const [lanCodes, setLanCodes] = useState<Record<string, string>>({})
 
   const refresh = async (): Promise<void> => {
     setLoading(true)
@@ -69,12 +79,21 @@ export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) =
     if (!result) setAsking({ ip: d.ip, code: '' })
   }
 
+  /** A computer on this Wi-Fi (ADR 0052): always paired with its code, as anyone nearby could find it. */
+  const connectLan = async (s: LanServer): Promise<void> => {
+    const code = lanCodes[s.address] ?? ''
+    if (code.length !== 8) return
+    setConnecting(s.address)
+    await runAction(`Connect to ${s.name}`, () => api('client.connect', { via: 'direct', url: `http://${s.address}:${s.port}`, code }))
+    setConnecting(null)
+  }
+
   return (
     <div className={styles.group}>
       <div className={styles.row}>
         <div className={styles.rowText}>
           <span className={styles.rowTitle}>Your devices</span>
-          <span className={styles.rowDescription}>Computers on your Tailscale network. Pick one to use its Hiveory from this window.</span>
+          <span className={styles.rowDescription}>Computers on your Tailscale network and on this Wi-Fi. Pick one to use its Hiveory from this window.</span>
         </div>
         <div className={styles.rowControl}>
           <IconButton label="Refresh devices" icon={<RefreshCw />} disabled={loading} onClick={() => void refresh()} />
@@ -94,15 +113,7 @@ export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) =
                     label={`Pairing code shown on ${d.name}`}
                     value={asking.code}
                     placeholder="8 characters"
-                    onChange={(v) =>
-                      setAsking({
-                        ip: d.ip,
-                        code: v
-                          .toUpperCase()
-                          .replace(/[^A-Z0-9]/g, '')
-                          .slice(0, 8)
-                      })
-                    }
+                    onChange={(v) => setAsking({ ip: d.ip, code: cleanCode(v) })}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && asking.code.length === 8) void connect(d, asking.code)
                     }}
@@ -129,6 +140,45 @@ export function TailnetDevices({ onUseSsh }: { onUseSsh: (destination: string) =
             </li>
           ))}
         </ul>
+      )}
+      {discovery && (
+        <>
+          <div className={styles.groupTitle}>On this network</div>
+          {!discovery.lan?.length && <p className={styles.empty}>No computer on this Wi-Fi shares Hiveory. Turn on “On this network” under Share this computer there.</p>}
+          {!!discovery.lan?.length && (
+            <ul className={styles.list} aria-busy={loading}>
+              {discovery.lan.map((s) => (
+                <li key={`${s.address}:${s.port}`} className={styles.listItem}>
+                  <div className={styles.listMain}>
+                    <span className={styles.listTitle}>{s.name}</span>
+                    <span className={styles.listMeta}>
+                      {s.address} · Hiveory {s.version} · needs its pairing code
+                    </span>
+                    <TextField
+                      label={`Pairing code shown on ${s.name}`}
+                      value={lanCodes[s.address] ?? ''}
+                      placeholder="8 characters"
+                      onChange={(v) => setLanCodes({ ...lanCodes, [s.address]: cleanCode(v) })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void connectLan(s)
+                      }}
+                    />
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Link2 />}
+                    loading={connecting === s.address}
+                    disabled={(lanCodes[s.address] ?? '').length !== 8}
+                    onClick={() => void connectLan(s)}
+                  >
+                    Connect
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   )

@@ -7,6 +7,7 @@ export const routes = {
   projects: '/projects' as const,
   settings: '/settings' as const,
   bots: '/bots' as const,
+  schedules: '/schedules' as const,
   chats: '/chat' as const,
   chat: (chatId: string) => ({ pathname: '/chat/[chatId]' as const, params: { chatId } }),
   bot: (botId: string) => ({ pathname: '/bot/[botId]' as const, params: { botId } }),

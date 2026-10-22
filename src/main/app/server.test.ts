@@ -20,11 +20,11 @@ const handlers = new Proxy({} as Handlers, {
 let server: HiveoryServer | null = null
 /** Every phone-sized terminal the server asked for (ADR 0048), null when given back. */
 let fits: Array<[string, { cols: number; rows: number } | null]> = []
-const start = async (ownerPairing?: (address: string) => Promise<boolean>) => {
+const start = async (ownerPairing?: (address: string) => Promise<boolean>, addresses?: () => string[]) => {
   const dir = mkdtempSync(join(tmpdir(), 'hv-server-'))
   fits = []
   const fitTerminal = (id: string, _key: string, size: { cols: number; rows: number } | null) => void fits.push([id, size])
-  server = await startServer({ port: 0, hosts: ['127.0.0.1'], handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0', ownerPairing, fitTerminal })
+  server = await startServer({ port: 0, hosts: ['127.0.0.1'], handlers, log, devicesFile: join(dir, 'devices.json'), version: '0.0.0', ownerPairing, fitTerminal, addresses })
   const base = `http://127.0.0.1:${server.port}`
   /** null sends no code at all (the owner's code-less pairing). */
   const pair = async (code: string | null = server!.pairingCode()) =>
@@ -135,6 +135,12 @@ describe('Hiveory server', () => {
     for (;;) if ((await reader.read()).done) break
     expect(server!.devices()).toEqual([])
     expect(await call(token, 'projects.list')).toMatchObject({ error: 'Pair this device first.' })
+  })
+
+  it('tells a newly paired device every address it is reached at (ADR 0052)', async () => {
+    const { pair, pairPhone } = await start(undefined, () => ['devbox.tail1.ts.net', '100.64.0.2', '192.168.1.20'])
+    expect(((await (await pair()).json()) as { addresses: string[] }).addresses).toEqual(['devbox.tail1.ts.net', '100.64.0.2', '192.168.1.20'])
+    expect(await pairPhone()).toBeTruthy()
   })
 
   it('keeps serving when an extra address cannot be opened', async () => {

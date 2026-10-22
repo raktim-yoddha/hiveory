@@ -12,6 +12,8 @@ export interface PairParams {
   a?: string
   p?: string
   c?: string
+  /** Its other addresses (ADR 0052). */
+  b?: string
   manual?: string
 }
 
@@ -32,7 +34,7 @@ export function PairScreen({ params }: { params: PairParams }) {
   // Opened from a pairing link: pair at once.
   useEffect(() => {
     if (!params.a) return
-    const link = parsePairingLink(`hiveory://pair?a=${encodeURIComponent(params.a)}&p=${params.p ?? DEFAULT_SERVER_PORT}${params.c ? `&c=${params.c}` : ''}`)
+    const link = parsePairingLink(`hiveory://pair?a=${encodeURIComponent(params.a)}&p=${params.p ?? DEFAULT_SERVER_PORT}${params.c ? `&c=${params.c}` : ''}${params.b ? `&b=${encodeURIComponent(params.b)}` : ''}`)
     if (link) void pair(link)
     // Only for the link the screen was opened with.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -53,7 +55,7 @@ export function PairScreen({ params }: { params: PairParams }) {
       <Screen>
         <Card>
           <Text variant="lead">Enter the pairing code</Text>
-          <Text tone="muted">This phone is on another Tailscale account, so the computer asks for its code: Settings › Remote › Share this computer.</Text>
+          <Text tone="muted">This phone is on another Tailscale account or connects over Wi-Fi, so the computer asks for its code: Settings › Remote › Share this computer.</Text>
           <TextField label="Pairing code" value={code} onChangeText={(v) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} autoCapitalize="characters" mono autoFocus maxLength={8} />
           <Button label="Connect" variant="primary" icon={Link2} disabled={code.length !== 8} onPress={() => void pair({ ...state.target, code })} />
         </Card>
@@ -99,7 +101,7 @@ export function PairScreen({ params }: { params: PairParams }) {
         </View>
       ) : (
         <Card>
-          <TextField label="Computer" placeholder="devbox.tail1234.ts.net or 100.x.y.z" value={address} onChangeText={setAddress} autoCapitalize="none" keyboardType="url" hint="Its Tailscale name or address." />
+          <TextField label="Computer" placeholder="devbox.tail1234.ts.net or 192.168.1.20" value={address} onChangeText={setAddress} autoCapitalize="none" keyboardType="url" hint="Its Tailscale name or address, or its address on this Wi-Fi." />
           <TextField label="Port" value={port} onChangeText={(v) => setPort(v.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" />
           <TextField
             label="Pairing code (if asked)"

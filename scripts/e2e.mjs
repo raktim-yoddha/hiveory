@@ -199,6 +199,13 @@ await test('settings: every section renders', async () => {
   }
 })
 
+await test('settings: Remote looks for computers on this Wi-Fi, never listing this one (ADR 0052)', async () => {
+  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Remote' }).click()
+  await page.getByText('No computer on this Wi-Fi shares Hiveory', { exact: false }).waitFor({ timeout: 15000 })
+  const found = await value('client.discover')
+  expect(Array.isArray(found.lan), `lan: ${JSON.stringify(found.lan)}`)
+})
+
 await test('settings: silver theme applies instantly and persists', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Appearance' }).click()
   await page.getByRole('radio', { name: /Silver/ }).click()

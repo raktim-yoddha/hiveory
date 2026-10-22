@@ -70,6 +70,8 @@ export interface ShareStatus {
   address?: string
   /** Its address on the local network, when shared there too ("On this network", ADR 0039). */
   lan?: string
+  /** Every address it is reached at (Tailscale name and IP, Wi-Fi), for the phone's pairing code (ADR 0052). */
+  addresses?: string[]
   port?: number
   /** For devices signed in to another Tailscale account (or over SSH). */
   code?: string
@@ -102,13 +104,16 @@ export interface RemotePort {
 /** A host name or IP a pairing link may carry. */
 const HOST = /^[A-Za-z0-9.:-]{1,253}$/
 
+/** A host name or IP as a computer reports its own addresses (ADR 0052); anything else is dropped. */
+export const isHostAddress = (a: unknown): a is string => typeof a === 'string' && HOST.test(a)
+
 /**
  * What the phone app scans to pair (ADR 0027): where this computer is and its one-time code.
  * `alternates` are its other addresses (its Tailscale name and its Wi-Fi address, ADR 0052), tried
  * when the first one does not answer. The app opens `hiveory://pair` links itself.
  */
 export const pairingLink = (address: string, port: number, code: string, alternates: string[] = []): string => {
-  const others = alternates.filter((a) => a !== address && HOST.test(a)).slice(0, 4)
+  const others = alternates.filter((a) => a !== address && isHostAddress(a)).slice(0, 4)
   return `hiveory://pair?a=${encodeURIComponent(address)}&p=${port}&c=${encodeURIComponent(code)}${others.length ? `&b=${encodeURIComponent(others.join(','))}` : ''}`
 }
 
@@ -123,7 +128,7 @@ export const parsePairingLink = (link: string): { address: string; port: number;
   const code = params.get('c') ?? undefined
   const alternates = (params.get('b') ?? '')
     .split(',')
-    .filter((a) => a && a !== address && HOST.test(a))
+    .filter((a) => a !== address && isHostAddress(a))
     .slice(0, 4)
   return { address, port, ...(code && /^[A-Za-z0-9]{8}$/.test(code) ? { code } : {}), ...(alternates.length ? { alternates } : {}) }
 }

@@ -18,6 +18,8 @@ export const staleChannels = (event: ServerEvent): PhoneChannel[] => {
       // Chats and bot threads came or went (the Chat and Bots tabs, ADR 0039).
       if (topic === 'chats') return ['chat.list', 'bots.threads', 'bots.list']
       if (topic === 'bots') return ['bots.list']
+      if (topic === 'approvals') return ['approvals.list']
+      if (topic === 'routines') return ['routines.list']
       return []
     }
     case 'runtime.changed':

@@ -78,8 +78,8 @@ export function ShareThisComputer() {
       {on && status?.code && reach && status.port && (
         <SettingRow
           title="Connect your phone"
-          description={`Open the Hiveory app on your phone and scan this. ${status.address ? 'Your phone needs Tailscale, signed in like this computer.' : 'Your phone needs to be on this network.'} Phones can watch and steer agents but not delete or change settings.`}
-          control={<QrCode value={pairingLink(reach, status.port, status.code)} label="Pairing code for the Hiveory phone app" />}
+          description={`Open the Hiveory app on your phone and scan this. ${status.address && status.lan ? 'Your phone connects over Tailscale or this Wi-Fi, whichever answers.' : status.address ? 'Your phone needs Tailscale, signed in like this computer.' : 'Your phone needs to be on this network.'} Phones can watch and steer agents but not delete or change settings.`}
+          control={<QrCode value={pairingLink(reach, status.port, status.code, status.addresses)} label="Pairing code for the Hiveory phone app" />}
         />
       )}
       {on && status && status.devices.length > 0 && (

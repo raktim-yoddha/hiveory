@@ -27,7 +27,10 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'hosts.check', 'hosts.suggest', 'hosts.status', 'hosts.listDir', 'ssh.pending', 'ssh.answer', 'git.info', 'git.validateBranch', 'git.init',
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest',
   'store.searchSkills', 'store.topSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
-  'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list'
+  'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list',
+  // Everything a mode needs that runs on the server itself, not this window (ADR 0052): stop a Queen Bee
+  // plan, write and remove skills, and the Trigger link.
+  'queen.cancelPlan', 'extensions.createSkill', 'extensions.removeSkill', 'extensions.copySkill', 'triggers.enableLink', 'triggers.disableLink'
 ])
 
 /**
@@ -71,6 +74,8 @@ export const MOBILE_CHANNELS = new Set<Channel>([
   'chat.clis', 'chat.list', 'chat.get', 'chat.create', 'chat.send', 'chat.stop', 'chat.catalog', 'chat.setModel',
   // The phone's Bots tab (ADR 0039): see bots, read and continue their threads, start one.
   'bots.list', 'bots.threads', 'bots.newThread',
+  // Answer a bot's approval requests, and follow and run Schedules (ADR 0052).
+  'approvals.list', 'approvals.answer', 'routines.list', 'routines.runNow',
   'hosts.status', 'ssh.pending', 'ssh.answer', 'git.info'
 ])
 

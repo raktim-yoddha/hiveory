@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { router } from 'expo-router'
-import { Bot, Crown } from 'lucide-react-native'
+import { Bot, CalendarClock, Crown } from 'lucide-react-native'
 import { useCall } from '@/core/api'
 import { routes } from '@/core/routes'
 import { useTheme } from '@/core/theme'
 import { EmptyState, ListRow, Loading, Screen, Section, StatusDot } from '@/core/ui'
+import { Approvals } from './Approvals'
 
-/** Bots on the phone (ADR 0039): every bot, Chiefs first, with whether it is working; tap for its threads. */
+/**
+ * Bots on the phone (ADR 0039): every bot, Chiefs first, with whether it is working; tap for its threads.
+ * Above them, bot calls waiting for a yes, and the way to the computer's Schedules (ADR 0052).
+ */
 export function BotsScreen() {
   const { colors } = useTheme()
   const bots = useCall('bots.list', undefined)
@@ -24,6 +28,10 @@ export function BotsScreen() {
         void bots.refetch().finally(() => setRefreshing(false))
       }}
     >
+      <Approvals />
+      <Section>
+        <ListRow title="Schedules" subtitle="Work that runs on its own at set times" leading={<CalendarClock size={18} color={colors.textMuted} />} onPress={() => router.push(routes.schedules)} />
+      </Section>
       <Section>
         {list.map((b) => (
           <ListRow

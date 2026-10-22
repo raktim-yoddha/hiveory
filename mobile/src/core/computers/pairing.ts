@@ -1,6 +1,6 @@
-import { parsePairingLink } from '@shared/domain/tailnet'
+import { isHostAddress, parsePairingLink } from '@shared/domain/tailnet'
 import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
-import { baseUrl, fetchWithin, HiveoryError, type Computer } from '../api/client'
+import { baseUrl, fetchWithin, findAddress, HiveoryError, type Computer } from '../api/client'
 
 export { parsePairingLink, DEFAULT_SERVER_PORT }
 
@@ -15,6 +15,8 @@ export interface PairTarget {
   address: string
   port: number
   code?: string
+  /** Its other addresses, from the pairing link (ADR 0052). */
+  alternates?: string[]
 }
 
 /**
@@ -30,26 +32,36 @@ export const computerName = (address: string, port = DEFAULT_SERVER_PORT): strin
  * Pairs with a computer that shares Hiveory (ADR 0025, 0027). The phone asks
  * as a phone, so the computer gives it the phone's channels only. With the
  * same Tailscale account no code is needed; otherwise the code from the QR.
+ * Its addresses are tried in turn, and every address it reports is kept, so
+ * the phone reaches it over Tailscale or the same Wi-Fi, whichever answers (ADR 0052).
  */
 export const pairWith = async (target: PairTarget, deviceName: string, post: typeof fetchWithin = fetchWithin): Promise<{ computer: Computer; token: string }> => {
-  const base = baseUrl(target)
-  const health = await post(`${base}/health`, {}, 8000).catch(() => null)
-  const info = (await health?.json().catch(() => null)) as { app?: string } | null
-  if (!health?.ok || info?.app !== 'hiveory') {
+  const computer: Computer = {
+    id: `${target.address}:${target.port}`,
+    name: computerName(target.address, target.port),
+    address: target.address,
+    port: target.port,
+    ...(target.alternates?.length ? { alternates: target.alternates } : {})
+  }
+  const at = await findAddress(computer, post, 8000)
+  if (!at) {
     throw new HiveoryError({
       code: 'NOT_FOUND',
       message: `No Hiveory answers at ${target.address}.`,
-      hint: 'On the computer, turn on Settings › Remote › Share this computer, and keep Tailscale on both devices.'
+      hint: 'On the computer, turn on Settings › Remote › Share this computer. Keep Tailscale on both devices, or join the same Wi-Fi.'
     })
   }
+  const base = baseUrl({ address: at, port: target.port })
   const res = await post(`${base}/pair`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...(target.code ? { code: target.code.toUpperCase() } : {}), name: deviceName.slice(0, 80), client: 'mobile' })
   })
-  const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string; needsCode?: boolean }
+  const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string; needsCode?: boolean; addresses?: unknown }
   if (res.ok && body.token) {
-    return { computer: { id: `${target.address}:${target.port}`, name: computerName(target.address, target.port), address: target.address, port: target.port }, token: body.token }
+    const reported = Array.isArray(body.addresses) ? body.addresses.filter(isHostAddress) : []
+    const alternates = [...new Set([...(target.alternates ?? []), ...reported])].filter((a) => a !== target.address).slice(0, 8)
+    return { computer: { ...computer, ...(alternates.length ? { alternates } : {}) }, token: body.token }
   }
   if (body.needsCode && !target.code) throw new NeedsCodeError()
   throw new HiveoryError({ code: 'FORBIDDEN', message: body.error ?? 'The computer refused to pair.' })
