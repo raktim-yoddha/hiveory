@@ -6,6 +6,14 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.24.0 — Pluto shows your Hiveory agents from a notch
+_2026-10-25_
+
+- Pluto, a separate little app for Windows, can show every agent running in Hiveory by its pet name, CLI, Workspace and Worktree, from a notch at the top of your screen. Turn it on in Settings › Agents › Let Pluto see your agents.
+- Pluto finds Hiveory on its own, including a dev build running alongside, and only ever sees names and statuses.
+- Settings › Agents has a Download button that opens Pluto's latest release.
+- A terminal that ended on its own on macOS or Linux no longer reads as killed by a signal.
+
 ## v0.23.0 — Agents outlive Hiveory, Wi-Fi pairing, full phone app
 _2026-10-22_
 
