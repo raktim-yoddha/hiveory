@@ -6,7 +6,7 @@ import { useSettings } from '../../stores/data'
 import { SettingRow } from './SettingsPage'
 import styles from './Settings.module.css'
 
-const RELEASES = 'https://github.com/raktim-yoddha/hiveory-pet/releases/latest'
+const RELEASES = 'https://github.com/raktim-yoddha/pluto/releases/latest'
 
 /**
  * Pluto, formerly Hiveory Pet (ADR 0054): a separate little app at the top of the screen that shows every agent session on this

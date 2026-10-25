@@ -65,3 +65,8 @@ switch **Let Pluto see your agents**; the link, `pet-link.json` and the setting 
 names, and the Download button still opens the same GitHub releases. Pluto now has its own Hiveory
 switch, off by default: it follows Hiveory only after the user turns it on there, so both apps must
 agree. With it on, Pluto shows Hiveory's agents in a tab of their own.
+
+## Amendment (2026-10-26): Pluto has its own repository
+
+Pluto now lives in `raktim-yoddha/pluto`, so the Download button in Settings › Agents opens that repository's
+latest release instead of `hiveory-pet`'s.
