@@ -274,7 +274,7 @@ The browser is a real browser (ADR 0015), opened as a pane among the agents from
 
 - toolbar: back, forward, reload, address bar (bare hosts and searches work), pick element, annotate element, viewport sizes, developer tools, and a menu with profiles, cookie import/export/clear and Browser settings
 - agents drive it through `browser_*` MCP tools with a visible cursor; it is on by default and works while the panel is closed
-- pages an agent opens appear as panes beside that agent (a tab in its area in the Tabs style), named after it (ADR 0043)
+- pages an agent opens appear as a tab in that agent's area, named after it (ADR 0043)
 - profiles keep separate cookies and logins; viewports emulate phones, tablets and desktops
 - Settings › Browser: browser use, agent cursor, home page, default profile, profiles, custom viewport sizes
 - device mode: a toolbar above the page with 22 devices, editable width × height, pixel ratio, rotate and drag handles (ADR 0016); agents use the same
@@ -312,7 +312,7 @@ and opens the place when she can.
 
 ## Appearance
 
-Appearance is in sections, one at a time: Theme, Panes, Background, Terminal font (ADR 0043, 0044). Panes holds the pane style (Tiles or Tabs) and the pane spacing: Spaced (air and rounded corners between sidebars, panes and panels) or Attached (edge to edge, square corners, split by a thin line). The first-run welcome asks both.
+Appearance is in sections, one at a time: Theme, Background, Terminal font (ADR 0043, 0044). Panes are always tabs (each area holds several panes as tabs, like a browser) with air and rounded corners between sidebars, panes and panels; there is no setting for it and no first-run welcome (ADR 0042 amendment 2026-10-26).
 
 Three flat themes (Dark, Bronze, Silver), with VS Code themes right under them in the same Theme section (ADR 0044). A background wallpaper (any image the user adds) with transparency (0–100%, applied to every surface), blur and dim. Dragging a sidebar past its minimum width hides it (ADR 0017, 0018).
 

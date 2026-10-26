@@ -3,7 +3,7 @@ import { FileCode2, FolderX, Globe } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { useAgents, useClis, useLayouts, useProjects, useSettings, useWorkspaces } from '../../stores/data'
+import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { api } from '../../lib/api'
@@ -45,8 +45,6 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const allPages = useBrowser((s) => s.pages)
   const runtime = useAgents((s) => s.runtime)
-  // Tabbed panes (ADR 0042): each area shows its panes as tabs.
-  const tabbed = useSettings((s) => s.settings.paneStyle) === 'tabs'
   const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
   const setWorkMinWidth = useNavigation((s) => s.setWorkMinWidth)
@@ -66,18 +64,18 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
     void loadLayout(workspaceId)
   }, [workspaceId, loadAgents, loadEditors, loadLayout])
 
-  // Arriving from a Kanban card or the sidebar's pane list: bring the pane's tab forward (Tabs style,
-  // ADR 0043), focus its terminal and briefly mark it.
+  // Arriving from a Kanban card or the sidebar's pane list: bring the pane's tab forward (ADR 0042),
+  // focus its terminal and briefly mark it.
   useEffect(() => {
     if (!focusPaneId) return
-    if (tabbed) void apply(workspaceId, { type: 'activate', paneId: focusPaneId })
+    void apply(workspaceId, { type: 'activate', paneId: focusPaneId })
     const focus = setTimeout(() => focusTerminal(focusPaneId), 150)
     const clear = setTimeout(() => setClearedHighlight(focusPaneId), 1200)
     return () => {
       clearTimeout(focus)
       clearTimeout(clear)
     }
-    // Only a new pane to focus re-runs this; switching style or worktree must not re-activate it.
+    // Only a new pane to focus re-runs this; switching worktree must not re-activate it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPaneId])
 
@@ -124,7 +122,6 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
               tree={tree}
               onOperation={(operation) => void apply(workspaceId, operation)}
               onMinSizeChange={onMinSizeChange}
-              tabbed={tabbed}
               paneMinWidth={(paneId) => {
                 // A CLI whose terminal breaks (or crashes) when too narrow locks its pane's width.
                 const agent = byId.get(paneId)
@@ -132,15 +129,14 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                 return minColumns ? terminalMinWidth(minColumns) : undefined
               }}
               renderPane={(paneId, props) => {
-                const fits = { right: props.rect.width >= props.minSize.width * 2 + props.gutter, bottom: props.rect.height >= props.minSize.height * 2 + props.gutter }
-                const tabStrip = props.area ? (
+                const tabStrip = (
                   <PaneTabStrip
                     area={props.area}
                     describe={describe}
                     onOperation={(operation) => void apply(workspaceId, operation)}
-                    add={<AddAgentMenu workspaceId={workspaceId} paneId={paneId} fits={fits} tabbed />}
+                    add={<AddAgentMenu workspaceId={workspaceId} paneId={paneId} />}
                   />
-                ) : undefined
+                )
                 const editor = editorById.get(paneId)
                 if (editor) {
                   return (

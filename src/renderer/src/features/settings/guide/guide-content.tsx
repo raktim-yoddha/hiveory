@@ -73,16 +73,6 @@ export const GUIDE: GuideChapter[] = [
           </p>
         ),
         keywords: 'cli claude codex gemini pet name'
-      },
-      {
-        heading: 'Your first choices',
-        body: (
-          <p>
-            The welcome asks how panes share a worktree (<b>Tiles</b> side by side, or <b>Tabs</b> like a browser) and whether surfaces have
-            air between them (<b>Spaced</b>) or meet edge to edge (<b>Attached</b>). Both change any time in Settings › Appearance › Panes.
-          </p>
-        ),
-        keywords: 'tiles tabs spaced attached welcome onboarding'
       }
     ]
   },
@@ -186,7 +176,7 @@ export const GUIDE: GuideChapter[] = [
   {
     id: 'layout',
     title: 'Arranging panes',
-    summary: 'Tiles or tabs, dock, swap, resize and one-drop layouts.',
+    summary: 'Tabs, dock, swap, resize and one-drop layouts.',
     icon: LayoutGrid,
     sections: [
       {
@@ -205,7 +195,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Tabs',
         body: (
           <p>
-            In the Tabs style each area holds several panes as tabs; <b>+</b> after the last tab opens one there. Drag a tab along its strip to
+            Each area holds its panes as tabs, like a browser; <b>+</b> after the last tab opens one there. Drag a tab along its strip to
             reorder, onto another strip to move it, into an area to add it, or to an edge to split it out. Middle-click closes.
           </p>
         ),
@@ -575,11 +565,10 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Make it yours',
         body: (
           <p>
-            Settings › Appearance: <b>Theme</b> (Dark, Bronze, Silver, or any VS Code theme from Open VSX), <b>Panes</b> (Tiles or Tabs, Spaced
-            or Attached), <b>Background</b> (your own image, with transparency, blur and dim) and <b>Terminal font</b>.
+            Settings › Appearance: <b>Theme</b> (Dark, Bronze, Silver, or any VS Code theme from Open VSX), <b>Background</b> (your own image, with transparency, blur and dim) and <b>Terminal font</b>.
           </p>
         ),
-        keywords: 'theme vs code wallpaper font tiles tabs attached'
+        keywords: 'theme vs code wallpaper font'
       }
     ]
   },

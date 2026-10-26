@@ -13,7 +13,6 @@ import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
 import { useAppShortcuts } from './useAppShortcuts'
-import { WelcomeDialog } from './WelcomeDialog'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
@@ -207,8 +206,6 @@ export function AppShell() {
       <RoutineEditor />
       <SshPromptDialog />
       <UpdatePrompt />
-      {/* First run: Tiles or Tabs (ADR 0042). */}
-      <WelcomeDialog />
       <Toasts />
     </div>
   )

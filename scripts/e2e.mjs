@@ -174,22 +174,6 @@ await test('home renders with DEV badge and Work/Chat modes', async () => {
   await shot('a1-home')
 })
 
-await test('the first-run welcome asks the pane style and spacing; Attached removes the air', async () => {
-  const welcome = page.getByRole('dialog').filter({ hasText: 'How should your agents' })
-  await welcome.waitFor()
-  expect(await welcome.getByRole('radiogroup', { name: 'Pane style' }).isVisible(), 'no pane style choice')
-  await welcome.getByRole('radio', { name: /Attached/ }).click()
-  await welcome.getByRole('radio', { name: /Tiles/ }).click()
-  await welcome.getByRole('button', { name: 'Start' }).click()
-  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === 'attached', 'attached spacing applied')
-  const s = await value('settings.get')
-  expect(s.welcomed && s.paneStyle === 'tiles' && s.paneSpacing === 'attached', `saved: ${s.paneStyle} ${s.paneSpacing}`)
-  expect((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--surface-radius').trim())) === '0px', 'attached panes keep rounded corners')
-  await shot('a1-attached')
-  await value('settings.update', { paneSpacing: 'spaced' })
-  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === undefined, 'spaced again')
-})
-
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   for (const section of ['Appearance', 'Agents', 'Skills, MCPs & Apps', 'Updates', 'Guide', 'About']) {
@@ -215,9 +199,9 @@ await test('settings: silver theme applies instantly and persists', async () => 
   await page.getByRole('radio', { name: /Bronze/ }).click()
   // Appearance is in sections, one at a time (ADR 0043).
   const sections = page.getByRole('tablist', { name: 'Appearance sections' })
-  await sections.getByRole('tab', { name: 'Panes' }).click()
-  await page.getByRole('radiogroup', { name: 'Pane spacing' }).waitFor()
-  expect(!(await page.getByRole('radio', { name: /Silver/ }).count()), 'theme cards still shown beside Panes')
+  await sections.getByRole('tab', { name: 'Background' }).click()
+  await page.getByRole('radiogroup', { name: 'Wallpaper' }).waitFor()
+  expect(!(await page.getByRole('radio', { name: /Silver/ }).count()), 'theme cards still shown beside Background')
   await sections.getByRole('tab', { name: 'Theme', exact: true }).click()
 })
 
@@ -800,14 +784,11 @@ await test('dragging a sidebar well past its minimum hides it; showing it again 
 })
 
 let shellPane
-await test('pane "+": terminals first, search, Right and Bottom side by side; PowerShell opens as a pane', async () => {
+await test('pane "+": terminals first, search; PowerShell opens as a tab', async () => {
   await page.getByRole('button', { name: 'Add agent' }).first().click()
   const picker = page.getByRole('dialog', { name: 'Add pane' })
   await picker.waitFor()
   await page.waitForTimeout(400)
-  const right = await picker.getByRole('radio', { name: 'Right' }).boundingBox()
-  const bottom = await picker.getByRole('radio', { name: 'Bottom' }).boundingBox()
-  expect(Math.abs(right.y - bottom.y) < 1 && bottom.x > right.x, 'Right and Bottom are not on one line')
   const names = await picker.getByRole('menuitem').allInnerTexts()
   // The browser, then terminals, then agents (ADR 0042).
   expect(names[0] === 'Browser' && names[1] === 'PowerShell' && names.includes('Command Prompt'), `terminals not right after the browser: ${names}`)
@@ -1474,17 +1455,14 @@ const fixturePort = String(fixtureServer.address().port)
 /** Whether the fixture page's native view is drawn (it must step aside whenever its pane can't be seen). */
 const fixtureShown = () => nativeShown(fixturePort)
 
-await test('the agent page opens as a pane beside its agent, under its name; viewport emulation', async () => {
+await test("the agent page opens as a tab in its agent's area, under its name; viewport emulation", async () => {
   const agents = await value('agents.list', { workspaceId: mainWs.id })
   await openSidebarWorkspace('demo-app', 'Main')
   const pane = page.locator('section[aria-label$=" browser"]').filter({ hasText: `${agents[0].petName} · Fixture` })
   await pane.waitFor()
   expect(!(await sidePanel().getByLabel('Address').count()), 'the page opened in the side panel')
-  // Beside its agent, not docked at the far right.
-  const own = await page.locator(`section[aria-label="${agents[0].petName} agent"]`).boundingBox()
-  const box = await pane.boundingBox()
-  const gap = box.x - (own.x + own.width)
-  expect(Math.abs(box.y - own.y) < 2 && gap >= -1 && gap < 24, `page pane is not beside its agent (gap ${gap}, dy ${box.y - own.y})`)
+  // A tab in its agent's area (ADR 0042), not docked at the far right.
+  expect(await pane.getByRole('tab', { name: new RegExp(agents[0].petName) }).count(), 'the page is not a tab beside its agent')
   await waitFor(fixtureShown, 'the page drawn over its pane')
   // "is using this page" shows only while the agent acts, not forever.
   await waitFor(async () => !(await pane.getByText('is using this page').isVisible()), 'agent strip to clear once the agent is idle', 6000)

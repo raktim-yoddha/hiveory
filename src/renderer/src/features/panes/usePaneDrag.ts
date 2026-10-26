@@ -18,8 +18,7 @@ interface Options {
   containerRef: RefObject<HTMLElement | null>
   panes: Record<string, Rect>
   onOperation: (op: LayoutOperation) => void
-  /** Tabbed panes (ADR 0042): an area's middle takes the pane as a tab; a tab strip reorders. */
-  stacking?: boolean
+  /** Each pane's area (ADR 0042): an area's middle takes the pane as a tab; a tab strip reorders. */
   areas?: Record<string, { paneIds: string[]; active: string }>
 }
 
@@ -58,7 +57,7 @@ const toOperation = (paneId: string, target: DropTarget): LayoutOperation =>
  * Pane drag-and-drop: drag toward an edge for a docking preview; hold Space
  * while dragging and release over another pane to swap (design.md).
  */
-export const usePaneDrag = ({ containerRef, panes, onOperation, stacking = false, areas }: Options) => {
+export const usePaneDrag = ({ containerRef, panes, onOperation, areas }: Options) => {
   const [drag, setDragState] = useState<DragState | null>(null)
   /** Source of truth for event handlers; React state only drives rendering, so a fast release never races a render. */
   const dragRef = useRef<DragState | null>(null)
@@ -69,9 +68,9 @@ export const usePaneDrag = ({ containerRef, panes, onOperation, stacking = false
   const pending = useRef<{ paneId: string; x: number; y: number } | null>(null)
   const pointer = useRef({ x: 0, y: 0 })
   const swapHeld = useRef(false)
-  const live = useRef({ panes, onOperation, stacking, areas })
+  const live = useRef({ panes, onOperation, areas })
   useLayoutEffect(() => {
-    live.current = { panes, onOperation, stacking, areas }
+    live.current = { panes, onOperation, areas }
   })
 
   const resolve = useCallback(
@@ -81,9 +80,9 @@ export const usePaneDrag = ({ containerRef, panes, onOperation, stacking = false
       const container = { x: 0, y: 0, width: box.width, height: box.height }
       const x = pointer.current.x - box.left
       const y = pointer.current.y - box.top
-      const overTab = live.current.stacking ? tabTarget(pointer.current.x, pointer.current.y, box, paneId, swapHeld.current) : null
+      const overTab = tabTarget(pointer.current.x, pointer.current.y, box, paneId, swapHeld.current)
       const target =
-        overTab ?? resolveDropTarget({ x, y, panes: live.current.panes, container, draggedPaneId: paneId, swap: swapHeld.current, stacking: live.current.stacking, areas: live.current.areas })
+        overTab ?? resolveDropTarget({ x, y, panes: live.current.panes, container, draggedPaneId: paneId, swap: swapHeld.current, areas: live.current.areas })
       // Over a tab strip the tabs win, even inside the top band that otherwise shows the arrange bar.
       return { paneId, swap: swapHeld.current, target, inArrangeBand: !overTab && !swapHeld.current && inArrangeBand(container, y, x) }
     },

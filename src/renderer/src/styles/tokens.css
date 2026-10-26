@@ -242,10 +242,8 @@
   --page-padding: 10px;
   /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
   --surface-radius: var(--radius-lg);
-  /* A pane's edge at rest: none (attached panes are split by the shell's line instead). */
+  /* A pane's edge at rest: none; the gutter's air separates panes. */
   --pane-rest-border: transparent;
-  /* The line between attached surfaces (ADR 0044): visible on every theme's darkest surfaces. */
-  --color-pane-line: var(--color-border);
 
   /* Elevation: restrained, warm-tinted. Light VS Code themes lighten the tint. */
   --shadow-tint: rgb(0 0 0 / 0.6);
@@ -372,17 +370,4 @@
   --term-bright-black: #5c5c5c;
   --term-white: #d0d0d0;
   --term-bright-white: #f5f5f5;
-}
-
-/*
- * Attached panes (Settings › Appearance › Pane spacing, ADR 0043, 0044): no air and no rounded corners —
- * sidebars, side panel and panes meet edge to edge, split by a one-pixel line: the shell
- * shows --color-pane-line through a one-pixel gutter. --gutter is the air between surfaces only;
- * content grids use the spacing scale.
- */
-:root[data-panes='attached'] {
-  --gutter: 1px;
-  --page-padding: 0px;
-  --surface-radius: 0px;
-  --shadow-surface: none;
 }

@@ -20,9 +20,7 @@ export interface DropQuery {
   swap: boolean
   /** Distance from the container edge that docks along the whole layout edge. */
   edgeThreshold?: number
-  /** Tabbed panes: the middle of another area adds the pane there as a tab. */
-  stacking?: boolean
-  /** Tabbed panes: each pane's area. Only an area's shown tab is a target (another of its tabs while that one is dragged). */
+  /** Each pane's area (its tabs). Only an area's shown tab is a target (another of its tabs while that one is dragged). */
   areas?: Record<string, { paneIds: string[]; active: string }>
 }
 
@@ -86,11 +84,10 @@ export const resolveDropTarget = (q: DropQuery): DropTarget | null => {
   if (!targetPaneId) return null
   const rect = q.panes[targetPaneId] as Rect
   if (q.swap) return { kind: 'swap', targetPaneId, preview: rect }
-  if (q.stacking) {
-    const fx = (q.x - rect.x) / rect.width
-    const fy = (q.y - rect.y) / rect.height
-    if (Math.abs(fx - 0.5) <= STACK_ZONE && Math.abs(fy - 0.5) <= STACK_ZONE) return { kind: 'stack', targetPaneId, preview: rect }
-  }
+  // The middle of another area adds the pane there as a tab (ADR 0042).
+  const fx = (q.x - rect.x) / rect.width
+  const fy = (q.y - rect.y) / rect.height
+  if (Math.abs(fx - 0.5) <= STACK_ZONE && Math.abs(fy - 0.5) <= STACK_ZONE) return { kind: 'stack', targetPaneId, preview: rect }
   const [side] = closest([
     ['left', (q.x - rect.x) / rect.width],
     ['right', (rect.x + rect.width - q.x) / rect.width],

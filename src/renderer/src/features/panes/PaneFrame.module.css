@@ -48,11 +48,6 @@
   padding-left: calc(var(--space-3) / 2);
 }
 
-/* Attached panes (ADR 0044): tabs fill the header edge to edge, from the pane's very corner. */
-:global(:root[data-panes='attached']) .header[data-tabs] {
-  padding-left: 0;
-}
-
 .header:active {
   cursor: grabbing;
 }
@@ -61,11 +56,4 @@
   position: relative;
   flex: 1;
   min-height: 0;
-}
-
-/* Narrow panes: only the status detail drops; the three controls (add, maximize, close) always stay and the name truncates. */
-@container pane (max-width: 300px) {
-  .header :global([data-pane-optional='status']) {
-    display: none;
-  }
 }

@@ -4,7 +4,6 @@ import styles from './PaneFrame.module.css'
 
 interface PaneFrameProps {
   label: string
-  header: ReactNode
   children: ReactNode
   onHeaderPointerDown?: (event: ReactPointerEvent) => void
   /** Double-clicking empty header space (or the pane's name, marked data-pane-grip) toggles maximize. */
@@ -14,23 +13,23 @@ interface PaneFrameProps {
   focused?: boolean
   /** Tints the frame so state reads at a glance (e.g. an agent that needs you). */
   tone?: 'waiting'
-  /** Tabbed panes (ADR 0042): the area's tab strip replaces this pane's own header. */
-  tabStrip?: ReactNode
+  /** The area's tab strip (ADR 0042): every pane shows its area's tabs as its header. */
+  tabStrip: ReactNode
 }
 
-/** A pane surface: draggable header + content. Content-agnostic. */
-export function PaneFrame({ label, header, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, focused, tone, tabStrip }: PaneFrameProps) {
+/** A pane surface: its area's tabs as a draggable header + content. Content-agnostic. */
+export function PaneFrame({ label, children, onHeaderPointerDown, onHeaderDoubleClick, highlighted, focused, tone, tabStrip }: PaneFrameProps) {
   return (
     <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} data-focused={focused || undefined} aria-label={label}>
       <header
         className={styles.header}
-        data-tabs={tabStrip ? '' : undefined}
+        data-tabs
         onPointerDown={onHeaderPointerDown}
         onDoubleClick={(e) => {
           if (!(e.target as HTMLElement).closest('button:not([data-pane-grip])')) onHeaderDoubleClick?.()
         }}
       >
-        {tabStrip ?? header}
+        {tabStrip}
       </header>
       <div className={styles.body}>{children}</div>
     </section>

@@ -9,7 +9,6 @@ import {
   dockPane,
   insertBeside,
   listPanes,
-  flattenTabs,
   growPane,
   normalize,
   removePane,
@@ -356,11 +355,6 @@ describe('panes as tabs in an area (ADR 0042)', () => {
     expect(geometry.panes.a).toEqual(geometry.panes.b)
   })
 
-  it('lays tabs out side by side again for the tiles style', () => {
-    const v = (...children: LayoutNode[]): LayoutNode => ({ type: 'split', direction: 'vertical', children, ratios: children.map(() => 1 / children.length) })
-    expect(flattenTabs(v(tabs('a', 'a', 'b'), p('c')))).toEqual(v(h(p('a'), p('b')), p('c')))
-  })
-
   it('splits beside an area when the target is one of its tabs, and swaps ids inside tabs', () => {
     expect(insertBeside(tabs('a', 'a', 'b'), 'c', 'b', 'bottom')).toMatchObject({ type: 'split', direction: 'vertical', children: [tabs('a', 'a', 'b'), p('c')] })
     expect(applyOperation(h(tabs('a', 'a', 'b'), p('c')), { type: 'swap', paneId: 'b', targetPaneId: 'c' })).toMatchObject({ children: [tabs('a', 'a', 'c'), p('b')] })
@@ -370,10 +364,9 @@ describe('panes as tabs in an area (ADR 0042)', () => {
 describe('dropping a pane into an area as a tab (ADR 0042)', () => {
   const panes = { a: { x: 0, y: 0, width: 400, height: 400 }, b: { x: 410, y: 0, width: 400, height: 400 } }
   const container = { x: 0, y: 0, width: 810, height: 400 }
-  it('stacks in the middle of an area only in the tabbed style; edges still split', () => {
-    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: false, stacking: true })).toMatchObject({ kind: 'stack', targetPaneId: 'b' })
-    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: false })).toMatchObject({ kind: 'move', targetPaneId: 'b' })
-    expect(resolveDropTarget({ x: 780, y: 200, panes, container, draggedPaneId: 'a', swap: false, stacking: true, edgeThreshold: 10 })).toMatchObject({ kind: 'move', side: 'right' })
+  it('stacks in the middle of an area; edges still split', () => {
+    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: false })).toMatchObject({ kind: 'stack', targetPaneId: 'b' })
+    expect(resolveDropTarget({ x: 780, y: 200, panes, container, draggedPaneId: 'a', swap: false, edgeThreshold: 10 })).toMatchObject({ kind: 'move', side: 'right' })
   })
 })
 
@@ -388,7 +381,7 @@ describe('reordering tabs and dragging out of an area (ADR 0042)', () => {
     const panes = { a: { x: 0, y: 0, width: 400, height: 400 }, b: { x: 0, y: 0, width: 400, height: 400 }, c: { x: 410, y: 0, width: 400, height: 400 } }
     const areas = { a: { paneIds: ['a', 'b'], active: 'a' }, b: { paneIds: ['a', 'b'], active: 'a' }, c: { paneIds: ['c'], active: 'c' } }
     const container = { x: 0, y: 0, width: 810, height: 400 }
-    expect(resolveDropTarget({ x: 390, y: 200, panes, container, draggedPaneId: 'a', swap: false, stacking: true, areas, edgeThreshold: 0 })).toMatchObject({ kind: 'move', targetPaneId: 'b', side: 'right' })
-    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: true, stacking: true, areas })).toMatchObject({ kind: 'swap', targetPaneId: 'c' })
+    expect(resolveDropTarget({ x: 390, y: 200, panes, container, draggedPaneId: 'a', swap: false, areas, edgeThreshold: 0 })).toMatchObject({ kind: 'move', targetPaneId: 'b', side: 'right' })
+    expect(resolveDropTarget({ x: 610, y: 200, panes, container, draggedPaneId: 'a', swap: true, areas })).toMatchObject({ kind: 'swap', targetPaneId: 'c' })
   })
 })

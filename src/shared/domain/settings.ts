@@ -108,25 +108,14 @@ export interface AppSettings {
   queenUpdates: 'all' | 'waiting' | 'off'
   /** Her replies pop open over the work; off (default), they wait behind her message button (ADR 0039). */
   queenPopups: boolean
-  /** Tiles: one pane per area. Tabs: each area holds several panes as tabs (ADR 0042). */
-  paneStyle: PaneStyle
-  /** Spaced: air and rounded corners between surfaces. Attached: edge to edge (ADR 0043). */
-  paneSpacing: PaneSpacing
-  /** The welcome that asks for the pane style has been answered (shown once). */
-  welcomed: boolean
   /** Speaking speed (0.8–1.4). */
   queenVoiceSpeed: number
 }
 
-export const PANE_STYLES = ['tiles', 'tabs'] as const
-export type PaneStyle = (typeof PANE_STYLES)[number]
 /** How long terminals stay once no Hiveory is attached: until they end, or a limit (ADR 0050 §7). */
 export const DETACHED_GRACES = ['until-exit', '1h', '1d', '7d'] as const
 export type DetachedGrace = (typeof DETACHED_GRACES)[number]
 export const DETACHED_GRACE_MS: Record<DetachedGrace, number | null> = { 'until-exit': null, '1h': 3_600_000, '1d': 86_400_000, '7d': 604_800_000 }
-
-export const PANE_SPACINGS = ['spaced', 'attached'] as const
-export type PaneSpacing = (typeof PANE_SPACINGS)[number]
 
 export const FONT_WEIGHTS = ['100', '200', '300', '400', '500', '600', '700', '800', '900'] as const
 export type FontWeight = (typeof FONT_WEIGHTS)[number]
@@ -230,9 +219,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   queenSounds: true,
   queenUpdates: 'all',
   queenPopups: false,
-  paneStyle: 'tiles',
-  paneSpacing: 'spaced',
-  welcomed: false,
   queenVoiceSpeed: 1.05
 }
 

@@ -49,7 +49,6 @@ console.log(`Hiveory E2E: panes — sandbox ${sandbox}`)
 await launch()
 
 await test('setup: a Workspace with an agent in its primary worktree', async () => {
-  await value('settings.update', { welcomed: true, paneStyle: 'tiles', paneSpacing: 'spaced' })
   // Hiveory adds only folders the user picked: stub the picker, then pick.
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
@@ -65,15 +64,12 @@ await test('setup: a Workspace with an agent in its primary worktree', async () 
   await openWorktree()
 })
 
-await test("an agent's page opens as a pane beside its agent, never in the side panel", async () => {
+await test("an agent's page opens as a tab in its agent's area, never in the side panel", async () => {
   const nav = await tool('browser_navigate', { url: host })
   expect(!nav.isError, JSON.stringify(nav).slice(0, 300))
   const pane = page.locator('section[aria-label$=" browser"]').filter({ hasText: `${agent.petName} · Fixture` })
   await pane.waitFor()
-  const own = await agentPane().boundingBox()
-  const box = await pane.boundingBox()
-  const gap = box.x - (own.x + own.width)
-  expect(Math.abs(box.y - own.y) < 2 && gap >= -1 && gap < 24, `page pane is not beside its agent (gap ${gap}, dy ${box.y - own.y})`)
+  expect(await pane.getByRole('tab', { name: new RegExp(agent.petName) }).count(), "the page is not a tab in its agent's area")
   expect(!(await page.locator('aside[aria-label="Side panel"]').getByLabel('Address').count()), 'a browser in the side panel')
   await waitFor(shown, 'the page drawn over its pane')
   await waitFor(async () => (await viewInPane()).inside, 'the page inside its pane')
@@ -85,12 +81,11 @@ await test('a click in the page selects its pane, like any pane', async () => {
   expect(view, 'browser page target not found')
   await view.click('h1')
   await waitFor(async () => (await browserPane().getAttribute('data-focused')) === 'true', 'the browser pane marked selected')
-  const selected = await browserPane().evaluate((el) => getComputedStyle(el).borderColor)
-  const resting = await agentPane().evaluate((el) => getComputedStyle(el).borderColor)
-  expect(selected !== resting, 'the selected page pane looks like a resting one')
   await shot('p2-page-selected')
-  await agentPane().locator('header').click({ position: { x: 60, y: 10 } })
+  await browserPane().getByRole('tab', { name: new RegExp(agent.petName) }).click()
   await waitFor(async () => (await browserPane().getAttribute('data-focused')) === null, 'the mark moves off the page pane')
+  await agentPane().getByRole('tab', { name: /Fixture/ }).click()
+  await waitFor(shown, 'the page shown again', 3000)
 })
 
 await test('the page steps aside for a menu and under a maximized side panel', async () => {
@@ -107,25 +102,8 @@ await test('the page steps aside for a menu and under a maximized side panel', a
   await waitFor(shown, 'the page back once the panel is restored', 3000)
 })
 
-await test('attached spacing: panes meet edge to edge and the page follows its pane', async () => {
-  await value('settings.update', { paneSpacing: 'attached' })
-  await waitFor(async () => (await page.evaluate(() => document.documentElement.dataset.panes)) === 'attached', 'attached applied')
-  await waitFor(async () => {
-    const own = await agentPane().boundingBox()
-    const box = await browserPane().boundingBox()
-    return Math.abs(box.x - (own.x + own.width)) <= 1
-  }, 'the panes to touch')
-  await waitFor(async () => (await viewInPane()).inside, 'the page re-placed inside its pane')
-  const radius = await browserPane().evaluate((el) => getComputedStyle(el).borderTopLeftRadius)
-  expect(radius === '0px', `attached panes keep rounded corners (${radius})`)
-  await shot('p4-attached')
-  await value('settings.update', { paneSpacing: 'spaced' })
-  await waitFor(async () => (await viewInPane()).inside, 'the page re-placed after going back to spaced')
-})
-
-await test('Tabs style: the page hides behind another tab; jumping to it from the sidebar shows it', async () => {
+await test('tabs: the page hides behind another tab; jumping to it from the sidebar shows it', async () => {
   const pageId = (await value('browser.state')).pages.find((p) => p.scope === worktree.id).id
-  await value('settings.update', { paneStyle: 'tabs' })
   await value('layout.apply', { workspaceId: worktree.id, operation: { type: 'stack', paneId: pageId, targetPaneId: agent.id } })
   await value('layout.apply', { workspaceId: worktree.id, operation: { type: 'activate', paneId: agent.id } })
   await waitFor(async () => !(await shown()), 'the page hidden behind its tab', 3000)
@@ -139,15 +117,6 @@ await test('Tabs style: the page hides behind another tab; jumping to it from th
   await sidebar().getByRole('button', { name: /Fixture · Browser/ }).click()
   await waitFor(shown, 'the page brought forward from the sidebar', 3000)
   await shot('p5-tabs')
-  // Tabs + attached: the first tab starts at the pane's corner, not inset from it.
-  await value('settings.update', { paneSpacing: 'attached' })
-  await waitFor(async () => {
-    const pane = await browserPane().boundingBox()
-    const tab = await browserPane().getByRole('tab').first().boundingBox()
-    return tab.x - pane.x <= 2 && tab.y - pane.y <= 2
-  }, 'the first tab at the pane corner', 3000)
-  await shot('p5-tabs-attached')
-  await value('settings.update', { paneStyle: 'tiles', paneSpacing: 'spaced' })
 })
 
 await test('an agent browses a page nobody has seen: a worktree that is not open', async () => {

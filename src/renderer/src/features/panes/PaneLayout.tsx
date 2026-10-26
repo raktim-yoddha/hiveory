@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import type { LayoutNode, LayoutOperation } from '@shared/domain'
-import { computeGeometry, dragDivider, fitToMinimums, minSizeOf, neighborOf, relativeGeometry, type Divider, type MinPaneSize, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
+import { computeGeometry, dragDivider, fitToMinimums, minSizeOf, relativeGeometry, type Divider, type MinPaneSize, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
 import { paneGroups, resizeSplit } from '@shared/layout/operations'
 import { cx } from '../../lib/cx'
 import { PaneDropPreview } from './PaneDropPreview'
@@ -16,15 +16,8 @@ export interface PaneRenderProps {
   /** Another pane fills the layout: this one is mounted but out of sight (a browser page hides its view). */
   concealed: boolean
   toggleMaximize: () => void
-  /** The pane's current rect within the layout (for placement decisions). */
-  rect: Rect
-  /** Smallest size a pane may take; used to decide whether a split still fits. */
-  minSize: { width: number; height: number }
-  gutter: number
-  /** Swaps this pane with its nearest neighbour in a direction (keyboard-accessible rearranging). */
-  moveTo: ((direction: 'left' | 'right' | 'up' | 'down') => void) | null
-  /** Tabbed panes (ADR 0042): the area this pane is a tab of. Absent in the tiles style. */
-  area?: PaneArea
+  /** The area this pane is a tab of (ADR 0042). */
+  area: PaneArea
 }
 
 /** An area of tabbed panes: its tabs in order, the one shown, and how to switch or drag a tab. */
@@ -44,8 +37,6 @@ interface PaneLayoutProps {
   paneMinWidth?: (paneId: string) => number | undefined
   /** The smallest size the whole layout can take (every pane at its minimum, plus gutters). */
   onMinSizeChange?: (size: MinPaneSize) => void
-  /** Tabbed panes (ADR 0042): areas hold tabs, and an area's middle takes a dragged pane as a tab. */
-  tabbed?: boolean
 }
 
 const readPx = (el: HTMLElement, token: string, fallback: number): number => {
@@ -69,7 +60,7 @@ const dividerKey = (d: Divider): string => `${d.path.join('.')}:${d.index}`
  * (architecture.md "Pane Layout"). Panes are absolutely positioned from the
  * tree so a pane's DOM node — and its terminal — survives rearrangement.
  */
-export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinSizeChange, tabbed = false }: PaneLayoutProps) {
+export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinSizeChange }: PaneLayoutProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [bounds, setBounds] = useState<Rect>({ x: 0, y: 0, width: 0, height: 0 })
   const [metrics, setMetrics] = useState({ gutter: 10, minWidth: 240, minHeight: 140 })
@@ -87,9 +78,6 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
         minHeight: readPx(el, '--pane-min-height', 140)
       })
     measure()
-    // Spaced or attached panes (ADR 0043) change --gutter at the root.
-    const spacing = new MutationObserver(measure)
-    spacing.observe(document.documentElement, { attributes: true, attributeFilter: ['data-panes'] })
     // Pixel bounds are for drag targets and limits only; pane positions are relative (see placed()).
     // A hidden layout (another mode shown) measures 0×0: keep the last real bounds, so showing it
     // again paints the fitted layout at once instead of the raw ratios, which would squeeze narrow
@@ -102,7 +90,6 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
     observer.observe(el)
     return () => {
       observer.disconnect()
-      spacing.disconnect()
     }
   }, [])
 
@@ -123,7 +110,7 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
     return () => onMinSizeChange?.({ width: 0, height: 0 })
   }, [minWidth, minHeight, onMinSizeChange])
   const groups = useMemo(() => paneGroups(shownTree), [shownTree])
-  const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation, stacking: tabbed, areas: tabbed ? groups : undefined })
+  const { drag, startDrag } = usePaneDrag({ containerRef, panes: geometry.panes, onOperation, areas: groups })
   // Falls back to the normal layout if the maximized pane was closed.
   const maximized = maximizedId && geometry.panes[maximizedId] ? maximizedId : null
 
@@ -162,11 +149,11 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
 
   return (
     <div ref={containerRef} className={cx(styles.layout, (resizing || drag) && styles.interacting)}>
-      {Object.entries(geometry.panes).map(([paneId, layoutRect]) => {
+      {Object.keys(geometry.panes).map((paneId) => {
         const isMax = maximized === paneId
-        const group = tabbed ? groups[paneId] : undefined
+        const group = groups[paneId] ?? { paneIds: [paneId], active: paneId }
         // A tab not chosen in its area stays mounted (its terminal keeps running) but out of sight.
-        const hiddenTab = Boolean(group && group.active !== paneId && !isMax)
+        const hiddenTab = group.active !== paneId && !isMax
         // Hidden panes keep their own size so their terminals are not resized needlessly.
         return (
           <div
@@ -186,25 +173,12 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
               maximized: isMax,
               concealed: Boolean(maximized && !isMax) || hiddenTab,
               toggleMaximize: () => setMaximizedId(isMax ? null : paneId),
-              rect: layoutRect,
-              minSize: minFor(paneId),
-              gutter: metrics.gutter,
-              ...(tabbed && group
-                ? {
-                    area: {
-                      paneIds: group.paneIds,
-                      active: group.active,
-                      activate: (id: string) => onOperation({ type: 'activate', paneId: id }),
-                      dragHandle: (id: string) => (event: ReactPointerEvent) => (maximized ? undefined : startDrag(id, event))
-                    }
-                  }
-                : {}),
-              moveTo: maximized
-                ? null
-                : (direction) => {
-                    const target = neighborOf(geometry.panes, paneId, direction)
-                    if (target) onOperation({ type: 'swap', paneId, targetPaneId: target })
-                  }
+              area: {
+                paneIds: group.paneIds,
+                active: group.active,
+                activate: (id: string) => onOperation({ type: 'activate', paneId: id }),
+                dragHandle: (id: string) => (event: ReactPointerEvent) => (maximized ? undefined : startDrag(id, event))
+              }
             })}
           </div>
         )

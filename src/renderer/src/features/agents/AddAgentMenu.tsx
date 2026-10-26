@@ -1,12 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDown, ArrowRight, Globe, Plus, Search } from 'lucide-react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { Globe, Plus, Search } from 'lucide-react'
 import { opensAsChat, type CliDescriptor } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
 import { Select } from '../../components/ui/Select'
-import { cx } from '../../lib/cx'
 import { useHostClis, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { openBrowserPane } from '../browser/open-browser'
@@ -15,29 +14,25 @@ import styles from './AddAgentMenu.module.css'
 
 interface AddAgentMenuProps {
   workspaceId: string
-  /** The pane the new pane is placed beside. */
+  /** A pane of the area the new pane opens in, as a tab (ADR 0042). */
   paneId: string
-  /** Whether a split in each direction still leaves both panes above their minimum size. */
-  fits: { right: boolean; bottom: boolean }
-  /** Tabbed panes (ADR 0042): "Tab" (the default) opens the new pane as a tab of this area. */
-  tabbed?: boolean
 }
 
 /**
- * The pane header "+": where (Right | Bottom, side by side), how (a Terminal | Chat dropdown,
+ * An area's "+": a new tab in that area (ADR 0042). How (a Terminal | Chat dropdown,
  * starting from the Workspace's, Worktree's or app's setting, ADR 0037, ADR 0038), then what — a terminal
  * (PowerShell, Command Prompt, Git Bash) or a detected agent CLI — with search.
  * Nothing is hardcoded: entries come from the CLI registry.
  */
-export function AddAgentMenu({ workspaceId, paneId, fits, tabbed }: AddAgentMenuProps) {
+export function AddAgentMenu({ workspaceId, paneId }: AddAgentMenuProps) {
   return (
     <Popover label="Add pane" align="end" trigger={(props) => <IconButton {...props} label="Add agent" icon={<Plus />} />}>
-      {(close) => <AddPanePicker workspaceId={workspaceId} paneId={paneId} fits={fits} tabbed={tabbed} onDone={close} />}
+      {(close) => <AddPanePicker workspaceId={workspaceId} paneId={paneId} onDone={close} />}
     </Popover>
   )
 }
 
-function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMenuProps & { onDone: () => void }) {
+function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { onDone: () => void }) {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const { clis, loaded, load } = useHostClis(projectId)
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
@@ -47,13 +42,10 @@ function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMe
   const appDefault = useSettings((s) => s.settings.defaultChatUi)
   const [chosenView, setView] = useState<boolean | null>(null)
   const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree, appDefault))
-  const [preferred, setSide] = useState<'right' | 'bottom' | 'tab'>(tabbed ? 'tab' : 'right')
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const searchId = useId()
-  // Fall back to whichever direction fits; if neither does, the pane docks along the layout edge.
-  const side = preferred === 'tab' ? 'tab' : fits[preferred] ? preferred : fits.right ? 'right' : fits.bottom ? 'bottom' : null
 
   useEffect(() => {
     if (!loaded) void load()
@@ -70,13 +62,13 @@ function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMe
 
   const open = (cli: CliDescriptor): void => {
     onDone()
-    const placement = side === 'tab' ? { targetPaneId: paneId, side: 'right' as const, asTab: true } : side ? { targetPaneId: paneId, side } : undefined
+    const placement = { targetPaneId: paneId, side: 'right' as const, asTab: true }
     void agentActions.open(workspaceId, cli.id, placement, undefined, cli.kind === 'shell' ? false : chat)
   }
 
   const browser = (): void => {
     onDone()
-    void openBrowserPane(workspaceId, side ? { beside: { paneId, side } } : {})
+    void openBrowserPane(workspaceId, { beside: { paneId, side: 'tab' } })
   }
   const showBrowser = !query.trim() || 'browser'.includes(query.trim().toLowerCase())
 
@@ -90,30 +82,8 @@ function AddPanePicker({ workspaceId, paneId, fits, tabbed, onDone }: AddAgentMe
     event.preventDefault()
   }
 
-  const placement = (value: 'right' | 'bottom' | 'tab', label: string, icon: ReactNode, hint: string) => (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={side === value}
-      disabled={value !== 'tab' && !fits[value]}
-      title={value === 'tab' || fits[value] ? undefined : hint}
-      className={cx(styles.side, side === value && styles.sideOn)}
-      onClick={() => setSide(value)}
-    >
-      {icon}
-      {label}
-    </button>
-  )
-
   return (
     <div className={styles.picker}>
-      {/* In the Tabs style "+" always opens a tab here; splitting is a drag or a tab's menu (ADR 0042). */}
-      {!tabbed && (
-        <div className={styles.sides} role="radiogroup" aria-label="Placement">
-          {placement('right', 'Right', <ArrowRight aria-hidden />, 'Too narrow')}
-          {placement('bottom', 'Bottom', <ArrowDown aria-hidden />, 'Too short')}
-        </div>
-      )}
       {chatPossible && (
         <Select
           label="Open agents as"

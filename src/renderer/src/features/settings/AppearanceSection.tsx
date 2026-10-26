@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import { Ban, Check, Columns2, ImagePlus, Image as ImageIcon, Palette, SquareTerminal, X } from 'lucide-react'
+import { Ban, Check, ImagePlus, Image as ImageIcon, Palette, SquareTerminal, X } from 'lucide-react'
 import { THEMES, type ThemeId } from '@shared/domain'
 import type { WallpaperImage } from '@shared/ipc/contract'
 import { RangeField } from '../../components/ui/RangeField'
@@ -13,7 +13,6 @@ import { SettingsPage } from './SettingsPage'
 import { ThemeCard, type ThemePreview } from './ThemeCard'
 import { TerminalFontSettings } from './TerminalFontSettings'
 import { VsCodeThemes } from './VsCodeThemes'
-import { PaneSpacingPicker, PaneStylePicker } from './PaneStylePicker'
 import styles from './Settings.module.css'
 
 /** Literal swatches: each card previews its own theme regardless of the active one. */
@@ -26,10 +25,9 @@ const PREVIEW: Record<ThemeId, ThemePreview> = {
 const percent = (value: number): string => `${Math.round(value * 100)}%`
 
 /** Appearance in sections, one at a time (ADR 0043, 0044): the same section bar as every Settings page. */
-type Section = 'theme' | 'panes' | 'background' | 'terminal'
+type Section = 'theme' | 'background' | 'terminal'
 const SECTIONS = [
   { value: 'theme' as const, label: 'Theme', icon: <Palette /> },
-  { value: 'panes' as const, label: 'Panes', icon: <Columns2 /> },
   { value: 'background' as const, label: 'Background', icon: <ImageIcon /> },
   { value: 'terminal' as const, label: 'Terminal font', icon: <SquareTerminal /> }
 ]
@@ -115,25 +113,6 @@ export function AppearanceSection() {
         ))}
       </div>
       <VsCodeThemes />
-      </>
-      )}
-
-      {section === 'panes' && (
-      <>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>Pane style</div>
-        <p className={styles.groupNote}>How agents, terminals, files and pages share a worktree. Going back to Tiles spreads every tab into its own area.</p>
-        <div className={styles.paneStyle}>
-          <PaneStylePicker value={settings.paneStyle} onChange={(paneStyle) => void update({ paneStyle })} />
-        </div>
-      </div>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>Pane spacing</div>
-        <p className={styles.groupNote}>Spaced keeps air and rounded corners between surfaces. Attached puts everything edge to edge.</p>
-        <div className={styles.paneStyle}>
-          <PaneSpacingPicker value={settings.paneSpacing} onChange={(paneSpacing) => void update({ paneSpacing })} />
-        </div>
-      </div>
       </>
       )}
 

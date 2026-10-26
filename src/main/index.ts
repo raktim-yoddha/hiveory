@@ -210,8 +210,6 @@ app.whenReady().then(async () => {
       void guard(log, 'Pet link', () => (next.petLink ? c.petLink.start() : c.petLink.stop()))
     }
     if (next.computerUse && !previous.computerUse) guard(log, 'Computer use', () => c.computer.warm())
-    // Back to tiles: tabbed areas become side-by-side panes, so none stays hidden (ADR 0042).
-    if (next.paneStyle === 'tiles' && previous.paneStyle === 'tabs') guard(log, 'Pane style', () => c.layouts.flattenAll())
     if (!next.computerUse && previous.computerUse) guard(log, 'Computer use', () => c.computer.dispose())
     if (next.queenGlobalShortcut !== previous.queenGlobalShortcut || next.queenShortcut !== previous.queenShortcut) {
       guard(log, 'Queen Bee shortcut', () => c.hotkey.apply(next.queenGlobalShortcut, next.queenShortcut))

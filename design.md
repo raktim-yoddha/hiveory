@@ -98,9 +98,8 @@ pane's header shares its body's surface (no dividing line) (ADR 0018).
 
 Selection is a tinted fill, never an outline: selected chips, option cards and "on"
 badges use `--fill-accent-soft` with `--color-accent` text or check, which reads in every
-theme; a chosen card among cards (theme, pane style) uses the brighter `--fill-chosen`, and its
+theme; a chosen card among cards (a theme) uses the brighter `--fill-chosen`, and its
 hover is a fill too (ADR 0044). A border is reserved for keyboard focus and the active pane (ADR 0018).
-Attached panes are split by `--color-pane-line` showing through a one-pixel gutter (ADR 0044).
 
 Themes set opaque `--base-*` surfaces; components use `--color-surface*`, which
 become translucent over a wallpaper — one `--surface-alpha` for every surface. Dialogs use

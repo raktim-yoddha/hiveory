@@ -100,3 +100,17 @@ Decided by the product owner after trying round 11.
   check in the browser), and questions to answer from the code and the page without changing
   anything for them, each under its page number. Each note in the batch can be edited in place (text
   and intent), as in Orca's tray (`browser.askNote`, `browser.updateAnnotation`).
+
+## Amendment (2026-10-26): Tabs and Spaced are the only layout
+
+Decided by the product owner. Supersedes the pane style choice above and ADR 0043's pane spacing.
+
+- Panes are always **Tabs** (each area holds several panes as tabs) with **Spaced** surfaces (air and
+  rounded corners). Tiles and Attached are gone, and so are Settings › Appearance › Panes and the
+  first-run welcome that asked for them.
+- Code: `AppSettings.paneStyle`, `paneSpacing` and `welcomed` are removed (stored values are dropped
+  on load), with `PaneStylePicker`, `WelcomeDialog`, `LayoutService.flattenAll`, `flattenTabs`, the
+  `data-panes='attached'` styles and `--color-pane-line`. `PaneLayout` always passes an `area`, the
+  tab strip is every pane's header (the per-pane headers are gone), drops into an area's middle
+  always stack, and an agent's browser page always opens as a tab in its agent's area.
+- A layout saved under Tiles keeps its splits; each area simply shows its one pane as a tab.

@@ -436,14 +436,9 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     if (!workspaceRepo.find(scope)) return
     const panes = agents.paneIds(scope)
     // An agent's page, or a popup, opens beside its agent or opener, not at the far right: a tab in
-    // its area in the Tabs style, else to its right (ADR 0043).
-    if (opened && panes.includes(opened.beside)) {
-      const operation =
-        settings?.get().paneStyle === 'tabs'
-          ? { type: 'stack' as const, paneId: opened.pageId, targetPaneId: opened.beside }
-          : { type: 'move' as const, paneId: opened.pageId, targetPaneId: opened.beside, side: 'right' as const }
-      layouts.apply(scope, panes, operation)
-    } else layouts.get(scope, panes)
+    // its area (ADR 0042).
+    if (opened && panes.includes(opened.beside)) layouts.apply(scope, panes, { type: 'stack', paneId: opened.pageId, targetPaneId: opened.beside })
+    else layouts.get(scope, panes)
     emit('state.changed', { topic: 'layout', workspaceId: scope })
   })
   const browserTools = new BrowserTools(browser, join(paths.runtimeDir, 'browser'), () => settings?.get().browserViewports ?? [])

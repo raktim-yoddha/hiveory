@@ -1,7 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { FileCode2, Maximize2, Minimize2, Save, X } from 'lucide-react'
+import { FileCode2 } from 'lucide-react'
 import type { EditorView } from '@shared/domain'
-import { IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { api, subscribe } from '../../lib/api'
@@ -11,12 +10,11 @@ import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 // CodeMirror is large: it loads with the first file opened (ADR 0044).
 const CodeEditor = lazy(() => import('./CodeEditor').then((m) => ({ default: m.CodeEditor })))
-import styles from './Editor.module.css'
 
 interface EditorPaneProps extends PaneRenderProps {
   editor: EditorView
-  /** Tabbed panes (ADR 0042): the area's tabs, in place of this header. */
-  tabStrip?: ReactNode
+  /** The area's tabs (ADR 0042), the pane's header. */
+  tabStrip: ReactNode
 }
 
 type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { state: 'ready'; saved: string; revision: number }
@@ -26,7 +24,7 @@ type Loaded = { state: 'loading' } | { state: 'error'; message: string } | { sta
  * file changes on disk (an agent edited it) and there are no unsaved edits,
  * the pane reloads it.
  */
-export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleMaximize, tabStrip }: EditorPaneProps) {
+export function EditorPane({ editor, onDragHandlePointerDown, toggleMaximize, tabStrip }: EditorPaneProps) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [dirty, setDirty] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
@@ -86,28 +84,6 @@ export function EditorPane({ editor, onDragHandlePointerDown, maximized, toggleM
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
       tabStrip={tabStrip}
-      header={
-        <>
-          <span className={styles.identity} title={editor.path}>
-            <FileCode2 aria-hidden className={styles.fileIcon} />
-            <span className={styles.name}>{editor.name}</span>
-            {dirty && <span className={styles.dirty} role="img" aria-label="Unsaved changes" />}
-            <span className={styles.path} data-pane-optional="status">
-              {editor.path.includes('/') ? editor.path.slice(0, editor.path.lastIndexOf('/')) : ''}
-            </span>
-          </span>
-          <span className={styles.actions}>
-            {dirty && <IconButton label={`Save ${editor.name}`} icon={<Save />} onClick={() => void save()} />}
-            <IconButton
-              data-pane-optional="maximize"
-              label={maximized ? `Restore ${editor.name}` : `Maximize ${editor.name}`}
-              icon={maximized ? <Minimize2 /> : <Maximize2 />}
-              onClick={toggleMaximize}
-            />
-            <IconButton label={`Close ${editor.name}`} icon={<X />} onClick={() => (dirty ? setConfirmClose(true) : close())} />
-          </span>
-        </>
-      }
     >
       {loaded.state === 'loading' ? null : loaded.state === 'error' ? (
         <EmptyState compact icon={<FileCode2 />} title="Can't open this file" description={loaded.message} />

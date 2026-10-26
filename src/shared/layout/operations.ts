@@ -158,13 +158,6 @@ export const stackPane = (tree: LayoutNode | null, paneId: string, targetPaneId:
   return without ? add(without) : pane(paneId)
 }
 
-/** Every area's tabs laid out side by side again (back to the tiles style, ADR 0042). */
-export const flattenTabs = (tree: LayoutNode | null): LayoutNode | null => {
-  if (!tree) return tree
-  if (tree.type === 'pane') return tree.tabs ? split('horizontal', tree.tabs.map(pane)) : tree
-  return normalize({ ...tree, children: tree.children.map((c) => flattenTabs(c) as LayoutNode) })
-}
-
 /** Shows a pane in its area (chooses its tab). */
 export const activatePane = (tree: LayoutNode | null, paneId: string): LayoutNode | null => {
   if (!tree) return tree

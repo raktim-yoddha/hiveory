@@ -1,20 +1,13 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Maximize2, Minimize2, Pencil, Play, RotateCcw, Square, X } from 'lucide-react'
+import { useEffect, type ReactNode } from 'react'
+import { Play } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
-import { CliLogo } from '../../components/cli/CliLogo'
-import { Button, IconButton } from '../../components/ui/Button'
+import { Button } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { InlineRename } from '../../components/ui/InlineRename'
-import { Menu } from '../../components/ui/Menu'
-import { StatusDot } from '../../components/ui/StatusDot'
 import { useAgents, useClis } from '../../stores/data'
-import { api } from '../../lib/api'
-import { runAction } from '../../stores/notices'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
 import { TerminalView } from '../terminal/TerminalView'
-import { AddAgentMenu } from './AddAgentMenu'
 import { AgentChatView } from './AgentChatView'
 import { agentActions } from './agent-actions'
 import styles from './AgentPane.module.css'
@@ -22,45 +15,20 @@ import styles from './AgentPane.module.css'
 interface AgentPaneProps extends PaneRenderProps {
   agent: CliInstanceView
   highlighted?: boolean
-  /** Tabbed panes (ADR 0042): the area's tabs, in place of this header. */
-  tabStrip?: ReactNode
+  /** The area's tabs (ADR 0042), the pane's header. */
+  tabStrip: ReactNode
 }
 
 /**
- * One agent instance's pane: identity header + its own terminal. Status is
- * conveyed by the dot's color alone; the reason is in its accessible label.
+ * One agent instance's pane: its area's tabs + its own terminal (or chat). An agent that needs
+ * you tints the frame.
  */
-export function AgentPane({
-  agent,
-  onDragHandlePointerDown,
-  highlighted,
-  maximized,
-  toggleMaximize,
-  rect,
-  minSize,
-  gutter,
-  moveTo,
-  tabStrip
-}: AgentPaneProps) {
+export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleMaximize, tabStrip }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
   // A terminal has no status to show: Hiveory tracks agents, not shells (ADR 0044).
   const tracked = cli?.kind !== 'shell'
-  const [renaming, setRenaming] = useState(false)
   useEffect(() => registerPaneCloser(agent.id, () => void agentActions.close(agent)), [agent])
-  // A new name shows everywhere: sidebar, board, other agents' tools, Queen Bee and the phone (ADR 0042).
-  const rename = (name: string): void => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
-  const fits = { right: rect.width >= minSize.width * 2 + gutter, bottom: rect.height >= minSize.height * 2 + gutter }
-  const moves = moveTo
-    ? (['left', 'right', 'up', 'down'] as const).map((direction) => ({
-        type: 'item' as const,
-        id: `move-${direction}`,
-        label: `Move ${direction}`,
-        icon: { left: <ArrowLeft />, right: <ArrowRight />, up: <ArrowUp />, down: <ArrowDown /> }[direction],
-        onSelect: () => moveTo(direction)
-      }))
-    : []
-
   return (
     <PaneFrame
       label={`${agent.petName} agent`}
@@ -69,69 +37,6 @@ export function AgentPane({
       onHeaderPointerDown={onDragHandlePointerDown}
       onHeaderDoubleClick={toggleMaximize}
       tabStrip={tabStrip}
-      header={
-        <>
-          {/* Right-click the name for the agent's actions; right-click twice to rename it (ADR 0042). */}
-          {renaming ? (
-            <span className={styles.identity}>
-              <CliLogo cliId={agent.cliId} />
-              <InlineRename value={agent.petName} label={`Rename ${agent.petName}`} onCommit={rename} onDone={() => setRenaming(false)} />
-            </span>
-          ) : (
-            <Menu
-              label={`${agent.petName} actions`}
-              context
-              onDoubleContext={() => setRenaming(true)}
-              items={[
-                agent.chatUi
-                  ? {
-                      type: 'item',
-                      id: 'restart',
-                      label: 'Stop reply',
-                      icon: <Square />,
-                      disabled: runtime.status !== 'working',
-                      onSelect: () => void agentActions.restart(agent.id)
-                    }
-                  : {
-                      type: 'item',
-                      id: 'restart',
-                      label: runtime.running ? 'Restart' : 'Start',
-                      icon: runtime.running ? <RotateCcw /> : <Play />,
-                      onSelect: () => void agentActions.restart(agent.id)
-                    },
-                { type: 'item', id: 'rename', label: 'Rename', icon: <Pencil />, hint: 'Right-click twice', onSelect: () => setRenaming(true) },
-                ...(moves.length ? [{ type: 'separator' as const }, ...moves] : []),
-                { type: 'separator' },
-                { type: 'item', id: 'close', label: 'Close', icon: <X />, danger: true, onSelect: () => void agentActions.close(agent) }
-              ]}
-              trigger={(props) => (
-                <button type="button" {...props} className={styles.identity} data-pane-grip aria-label={`${agent.petName} actions`} title="Right-click for actions, twice to rename">
-                  <CliLogo cliId={agent.cliId} />
-                  <span className={styles.name}>{agent.petName}</span>
-                  {/* The dot is the only status signal and takes no room, so it stays at any width. */}
-                  {tracked && (
-                    <span className={styles.status}>
-                      <StatusDot status={runtime.status} running={runtime.running} detail={runtime.activity} />
-                    </span>
-                  )}
-                </button>
-              )}
-            />
-          )}
-          <span className={styles.actions}>
-            <span data-pane-optional="add">
-              <AddAgentMenu workspaceId={agent.workspaceId} paneId={agent.id} fits={fits} />
-            </span>
-            <IconButton
-              data-pane-optional="maximize"
-              label={maximized ? `Restore ${agent.petName}` : `Maximize ${agent.petName}`}
-              icon={maximized ? <Minimize2 /> : <Maximize2 />}
-              onClick={toggleMaximize}
-            />
-            <IconButton label={`Close ${agent.petName}`} icon={<X />} onClick={() => void agentActions.close(agent)} />
-          </span>
-        </>
-      }
     >
       <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
         {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} />}
