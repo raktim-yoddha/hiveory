@@ -180,6 +180,13 @@
 }
 
 /* Page */
+/* In Work's side panel the page fills its tab; the panel draws the surface. */
+.embedded {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .pageHeader {
   display: flex;
   flex: none;

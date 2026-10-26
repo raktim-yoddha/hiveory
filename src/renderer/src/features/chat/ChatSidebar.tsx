@@ -7,15 +7,16 @@ import { Menu } from '../../components/ui/Menu'
 import { StatusDot } from '../../components/ui/StatusDot'
 import { cx } from '../../lib/cx'
 import { useChat } from '../../stores/chat'
-import { useProjects } from '../../stores/data'
+import { useProjects, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { scheduleRoutine } from '../routines/open-run'
 import styles from './Chat.module.css'
 
 /** Chat mode's sidebar: every chat, newest first. Right-click (or double-click) a chat to rename it. */
 export function ChatSidebar() {
-  const { summaries, activeId, loadList, open, create, remove, rename } = useChat()
+  const { summaries, activeId, page, showSchedules, loadList, open, create, remove, rename } = useChat()
   const projects = useProjects((s) => s.projects)
+  const worktrees = useWorkspaces((s) => s.byProject)
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const [renaming, setRenaming] = useState<string | null>(null)
 
@@ -60,15 +61,19 @@ export function ChatSidebar() {
                     <button
                       {...props}
                       type="button"
-                      className={cx(styles.chatRow, chat.id === activeId && styles.chatActive)}
+                      className={cx(styles.chatRow, page === 'chat' && chat.id === activeId && styles.chatActive)}
                       onClick={() => void open(chat.id)}
                       onDoubleClick={() => setRenaming(chat.id)}
-                      aria-current={chat.id === activeId ? 'page' : undefined}
+                      aria-current={page === 'chat' && chat.id === activeId ? 'page' : undefined}
                     >
                       {chat.cliId ? <CliLogo cliId={chat.cliId} size="sm" /> : <span className={styles.chatDot} aria-hidden />}
                       <span className={styles.chatText}>
                         <span className={styles.chatTitle}>{chat.title}</span>
-                        <span className={styles.chatMeta}>{projects.find((p) => p.id === chat.projectId)?.name ?? 'Home folder'}</span>
+                        <span className={styles.chatMeta}>
+                          {[projects.find((p) => p.id === chat.projectId)?.name ?? 'Home folder', chat.workspaceId && worktrees[chat.projectId ?? '']?.find((w) => w.id === chat.workspaceId)?.name]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </span>
                       </span>
                       {chat.running && <StatusDot status="working" />}
                     </button>
@@ -81,6 +86,13 @@ export function ChatSidebar() {
         ))}
         {summaries.length === 0 && <li className={styles.sidebarEmpty}>No chats yet.</li>}
       </ul>
+      {/* The scheduled chats' calendar, as Bots has its own (ADR 0055). */}
+      <div className={styles.sidebarFooter}>
+        <button type="button" className={cx(styles.chatRow, page === 'schedules' && styles.chatActive)} aria-current={page === 'schedules' ? 'page' : undefined} onClick={showSchedules}>
+          <CalendarClock aria-hidden className={styles.footerIcon} />
+          <span className={styles.chatTitle}>Schedules</span>
+        </button>
+      </div>
     </nav>
   )
 }

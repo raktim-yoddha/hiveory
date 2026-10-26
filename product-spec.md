@@ -28,10 +28,15 @@ declined after 15 minutes. A trigger's read-only run can't change or send anythi
 Schedules can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
 a new agent in a Work worktree, whose card then moves on the Kanban by its real state like any agent.
 Work's schedules belong to Work (ADR 0040): they are made and listed in the Workspace's Dashboard ›
-Schedules (or a worktree's "New schedule…") and never appear on the Bots calendar.
+Schedules (or a worktree's "New schedule…") and never appear on the Bots calendar. Every mode has its
+own Schedules calendar (ADR 0055): Bots shows bots' schedules and scheduled chats, Chat (its sidebar's
+Schedules) its scheduled chats, and Work's Schedules tab the Workspace's schedules, each by day, week,
+list or run log.
 While a chat or bot is answering, the user can type the **next message**: it waits above the box and
-goes in when the reply ends (Stop drops it). **Saved prompts** (the bookmark in every message box) are
-reusable text the user inserts, saves or removes (ADR 0031). Bots never appear on a
+goes in when the reply ends (Stop drops it). The desktop message box has no saved-prompts button
+(ADR 0055); the phone keeps its saved prompts (ADR 0031). A new chat picks where it works: the home
+folder, or a Workspace and one of its Worktrees (Primary or an isolated one); it is fixed once the
+chat has started and shown as "demo-app · fix-login" (ADR 0055). Bots never appear on a
 workspace's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

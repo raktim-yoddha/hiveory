@@ -47,6 +47,8 @@ export interface ChatSession {
   id: string
   title: string
   projectId?: string
+  /** The Worktree of `projectId` it works in (ADR 0055); absent = the Workspace's own folder. */
+  workspaceId?: string
   cwd: string
   /** Locked once the first message is sent (ADR 0012). */
   cliId?: string
@@ -75,6 +77,7 @@ export interface ChatSummary {
   title: string
   cliId?: string
   projectId?: string
+  workspaceId?: string
   updatedAt: string
   running: boolean
   /** Backs a Work agent in chat view (never listed in Chat mode). */

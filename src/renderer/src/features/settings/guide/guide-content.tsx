@@ -375,10 +375,11 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             Choose a CLI, a model (searchable) and, when the model has one, an effort level; the CLI locks after the first message. While it
-            answers you can type the next message — it waits and goes in when the reply ends. The bookmark in the box holds saved prompts.
+            answers you can type the next message — it waits and goes in when the reply ends. Pick where it works: your home folder, or a
+            workspace and any of its worktrees. <b>Schedules</b> under the chat list shows your scheduled chats on a calendar.
           </p>
         ),
-        keywords: 'model effort thinking saved prompts queue'
+        keywords: 'model effort thinking queue worktree folder schedules calendar'
       }
     ]
   },

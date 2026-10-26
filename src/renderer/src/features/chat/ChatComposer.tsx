@@ -3,14 +3,13 @@ import { ArrowUp, ChevronDown, Eye, FolderClosed, ListPlus, LockOpen, Paperclip,
 import type { ChatModel, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
-import { Menu } from '../../components/ui/Menu'
+import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { Popover } from '../../components/ui/Popover'
 import { cx } from '../../lib/cx'
 import { useChat } from '../../stores/chat'
-import { useClis, useProjects } from '../../stores/data'
+import { useClis, useProjects, useWorkspaces } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { EffortIcon } from './EffortIcon'
-import { PromptsMenu } from './PromptsMenu'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
 import { focusChatInput } from './focus-input'
 import styles from './Chat.module.css'
@@ -24,7 +23,7 @@ interface ChatComposerProps {
    * model, effort and permissions are offered.
    */
   agent?: boolean
-  /** Offer the folder picker (off for bot threads, which work in the bot's own folder). */
+  /** Offer the Workspace › Worktree picker (off for bot threads, which work in the bot's own folder). */
   folder?: boolean
   placeholder?: string
 }
@@ -38,6 +37,8 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   const { send, stop, queue, unqueue, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
   const clis = useClis((s) => s.clis)
   const projects = useProjects((s) => s.projects)
+  const worktrees = useWorkspaces((s) => s.byProject)
+  const loadWorktrees = useWorkspaces((s) => s.load)
   const [text, setText] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -50,6 +51,10 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   const efforts = model?.efforts ?? []
   const update = (patch: Parameters<typeof updateChat>[1]): Promise<void> => updateChat(chat.id, patch)
   const cliName = clis.find((c) => c.id === chat.cliId)?.displayName
+  // Where it works, as the user reads it: "demo-app" (its Primary) or "demo-app · fix-login".
+  const project = projects.find((p) => p.id === chat.projectId)
+  const worktree = chat.workspaceId ? worktrees[chat.projectId ?? '']?.find((w) => w.id === chat.workspaceId) : undefined
+  const place = project ? (worktree ? `${project.name} · ${worktree.name}` : project.name) : 'Home folder'
   const canSend = Boolean(chat.cliId) && !chat.running && files.ready && (text.trim().length > 0 || files.attachments.length > 0)
   // While it answers, text (not files) waits as the next turn (ADR 0031).
   const canQueue = Boolean(chat.cliId) && chat.running && text.trim().length > 0 && files.items.length === 0
@@ -57,6 +62,12 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   useEffect(() => {
     if (chat.cliId) void loadCatalog(chat.cliId)
   }, [chat.cliId, loadCatalog])
+
+  // The picker lists every Workspace's Worktrees: load the ones not seen yet.
+  useEffect(() => {
+    if (locked || !folder) return
+    for (const p of projects) if (!worktrees[p.id]) void loadWorktrees(p.id)
+  }, [locked, folder, projects, worktrees, loadWorktrees])
 
   // Auto-pick the only available CLI so a new chat is one step shorter.
   useEffect(() => {
@@ -171,7 +182,6 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
             disabled={!chat.cliId}
             onClick={() => fileRef.current?.click()}
           />
-          <PromptsMenu text={text} disabled={!chat.cliId} onInsert={(value) => setText((t) => (t.trim() ? `${t.trimEnd()}\n\n${value}` : value))} />
           <input
             ref={fileRef}
             type="file"
@@ -242,22 +252,42 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
               )}
             />
           )}
-          {!locked && folder && (
-            <Menu
-              label="Folder"
-              items={[
-                { type: 'item', id: 'home', label: 'Home folder', checked: !chat.projectId, onSelect: () => void update({ projectId: '' }) },
-                ...projects.map((p) => ({ type: 'item' as const, id: p.id, label: p.name, checked: chat.projectId === p.id, onSelect: () => void update({ projectId: p.id }) }))
-              ]}
-              trigger={(props) => (
-                <button type="button" {...props} className={styles.pill} title={chat.cwd}>
-                  <FolderClosed aria-hidden />
-                  <span className={styles.pillLabel}>{projects.find((p) => p.id === chat.projectId)?.name ?? 'Home folder'}</span>
-                  <ChevronDown aria-hidden className={styles.chevron} />
-                </button>
-              )}
-            />
-          )}
+          {folder &&
+            (locked ? (
+              <span className={cx(styles.pill, styles.pillStatic)} title={`${chat.cwd}\nThe folder is fixed once a chat has started`}>
+                <FolderClosed aria-hidden />
+                <span className={styles.pillLabel}>{place}</span>
+              </span>
+            ) : (
+              <Menu
+                label="Workspace and worktree"
+                items={[
+                  { type: 'item', id: 'home', label: 'Home folder', checked: !chat.projectId, onSelect: () => void update({ projectId: '' }) },
+                  ...projects.flatMap((p): MenuEntry[] => [
+                    { type: 'label', label: p.name },
+                    ...(worktrees[p.id]?.length ? worktrees[p.id]! : [undefined]).map((w): MenuEntry => {
+                      // The Primary is the Workspace's own folder (no workspaceId).
+                      const workspaceId = w && w.kind !== 'main' ? w.id : ''
+                      return {
+                        type: 'item',
+                        id: `${p.id}:${workspaceId}`,
+                        label: workspaceId ? w!.name : 'Primary',
+                        hint: w?.git?.branch,
+                        checked: chat.projectId === p.id && (chat.workspaceId ?? '') === workspaceId,
+                        onSelect: () => void update({ projectId: p.id, workspaceId })
+                      }
+                    })
+                  ])
+                ]}
+                trigger={(props) => (
+                  <button type="button" {...props} className={styles.pill} title={chat.cwd}>
+                    <FolderClosed aria-hidden />
+                    <span className={styles.pillLabel}>{place}</span>
+                    <ChevronDown aria-hidden className={styles.chevron} />
+                  </button>
+                )}
+              />
+            ))}
           <span className={styles.flex} />
           <Menu
             label="Permissions"

@@ -820,3 +820,17 @@ button.pill:hover,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Pages under the list (Schedules; in Bots also the work board, triggers and team map). */
+.sidebarFooter {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.footerIcon {
+  flex: none;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  color: var(--color-text-muted);
+}

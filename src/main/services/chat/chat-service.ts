@@ -217,12 +217,13 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     })
   }
 
-  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title' | 'projectId'>>): ChatSession {
+  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title' | 'projectId' | 'workspaceId'>>): ChatSession {
     const chat = this.get(chatId)
-    if (chat.agentId && ((patch.cliId && patch.cliId !== chat.cliId) || patch.projectId !== undefined)) {
+    const moving = patch.projectId !== undefined || patch.workspaceId !== undefined
+    if (chat.agentId && ((patch.cliId && patch.cliId !== chat.cliId) || moving)) {
       fail('FORBIDDEN', "An agent's CLI and folder are fixed.")
     }
-    if (chat.botId && patch.projectId !== undefined) fail('FORBIDDEN', "A bot's threads work in the bot's own folder.")
+    if (chat.botId && moving) fail('FORBIDDEN', "A bot's threads work in the bot's own folder.")
     if (chat.readOnly && patch.autoApprove) fail('FORBIDDEN', 'A trigger run stays read-only.', { hint: 'Start a new thread to give the bot full access.' })
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
@@ -233,10 +234,18 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       chat.model = undefined
       chat.effort = undefined
     }
-    if (patch.projectId !== undefined && patch.projectId !== chat.projectId) {
-      if (started) fail('FORBIDDEN', 'The folder is fixed once a chat has started.')
-      chat.projectId = patch.projectId || undefined
-      chat.cwd = chat.projectId ? this.workspaces.project(chat.projectId).path : homedir()
+    if (moving) {
+      const projectId = patch.projectId !== undefined ? patch.projectId || undefined : chat.projectId
+      // A Worktree of that Workspace, or of one mirroring its repository (ADR 0039); none = its own folder.
+      const workspaceId = patch.workspaceId !== undefined ? patch.workspaceId || undefined : patch.projectId !== undefined ? undefined : chat.workspaceId
+      const worktree = workspaceId ? this.workspaces.get(workspaceId) : undefined
+      if (worktree && (!projectId || !this.workspaces.mirrors(projectId).includes(worktree.projectId))) fail('INVALID_INPUT', 'That worktree is not in this workspace.')
+      if (projectId !== chat.projectId || workspaceId !== chat.workspaceId) {
+        if (started) fail('FORBIDDEN', 'The folder is fixed once a chat has started.')
+        chat.projectId = projectId
+        chat.workspaceId = workspaceId
+        chat.cwd = worktree?.path ?? (projectId ? this.workspaces.project(projectId).path : homedir())
+      }
     }
     if ('model' in patch) chat.model = patch.model || undefined
     if ('effort' in patch) chat.effort = patch.effort || undefined
@@ -547,6 +556,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       title: chat.title,
       cliId: chat.cliId,
       projectId: chat.projectId,
+      ...(chat.workspaceId ? { workspaceId: chat.workspaceId } : {}),
       updatedAt: chat.updatedAt,
       running: this.runs.has(chat.id),
       agentId: chat.agentId,

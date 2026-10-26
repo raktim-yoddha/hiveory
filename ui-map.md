@@ -67,9 +67,12 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
   is opened from Work and picks only its Worktree and CLI; its title names the Workspace. Below the instructions:
   the schedule's files (chips) and "Add files for every run". Chat's sidebar header: Schedule a chat (calendar
   icon) beside New chat (the editor opens in place, in Chat). A worktree's menu: New schedule… (the editor opens in place, in Work).
-  The Schedules page, calendar, run logs and work board show bots' schedules and scheduled chats only.
-- Message box (Chat, bot threads, Work chat view): bookmark button (Saved prompts: insert · Save what is typed
-  as a prompt · Remove); while answering, the box stays open, a queue button sits beside Stop, and waiting
+  The Bots Schedules page, calendar, run logs and work board show bots' schedules and scheduled chats only.
+  Chat's sidebar footer: **Schedules** opens the same page for scheduled chats; Work's Schedules tab is the
+  same page for the Workspace's schedules, opening on Day (ADR 0055).
+- Message box (Chat, bot threads, Work chat view): attach; CLI · model · effort · where (Chat only:
+  Home folder, or a Workspace's Primary or Worktree, grouped by Workspace; a fixed pill once started) ·
+  permissions (ADR 0055). While answering, the box stays open, a queue button sits beside Stop, and waiting
   messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 - Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
   send or post as you / change something in your apps", the tool, "What it will send" (the arguments
@@ -324,8 +327,9 @@ review state, open on the host; without a code host, the reason and Code host se
 Issues tab: "Issues · GitHub/GitLab/Jira/Linear", refresh, a filter past 8 issues, rows (title, key ·
 state, Start worktree, open); without a source, the reason and Issue settings.
 
-Schedules tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): this Workspace's schedules (name, CLI · Worktree, schedule, next run, Run now,
-Edit, on/off), Run log, New schedule (for the open Worktree).
+Schedules tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): the Schedules page for this
+Workspace's schedules (ADR 0055): Day · Week · List · Run logs (Day first), the calendar, the keep-awake switch,
+New schedule (for the open Worktree; an empty hour on the calendar starts one there).
 
 Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
 Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and

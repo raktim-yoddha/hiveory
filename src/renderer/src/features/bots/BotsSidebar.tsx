@@ -115,14 +115,14 @@ export function BotsSidebar() {
           : bots.map(row)}
         {bots.length === 0 && !grouped && <li className={chat.sidebarEmpty}>No bots yet.</li>}
       </ul>
-      <div className={styles.sidebarFooter}>
+      <div className={chat.sidebarFooter}>
         <button
           type="button"
           className={cx(chat.chatRow, page === 'work' && chat.chatActive)}
           aria-current={page === 'work' ? 'page' : undefined}
           onClick={showWorkBoard}
         >
-          <ListChecks aria-hidden className={styles.footerIcon} />
+          <ListChecks aria-hidden className={chat.footerIcon} />
           <span className={chat.chatTitle}>Work board</span>
         </button>
         <button
@@ -131,7 +131,7 @@ export function BotsSidebar() {
           aria-current={page === 'routines' ? 'page' : undefined}
           onClick={() => showRoutines()}
         >
-          <CalendarClock aria-hidden className={styles.footerIcon} />
+          <CalendarClock aria-hidden className={chat.footerIcon} />
           <span className={chat.chatTitle}>Schedules</span>
         </button>
         <button
@@ -140,7 +140,7 @@ export function BotsSidebar() {
           aria-current={page === 'triggers' ? 'page' : undefined}
           onClick={showTriggers}
         >
-          <Zap aria-hidden className={styles.footerIcon} />
+          <Zap aria-hidden className={chat.footerIcon} />
           <span className={chat.chatTitle}>Triggers</span>
         </button>
         <button
@@ -149,7 +149,7 @@ export function BotsSidebar() {
           aria-current={page === 'team-map' ? 'page' : undefined}
           onClick={showTeamMap}
         >
-          <Network aria-hidden className={styles.footerIcon} />
+          <Network aria-hidden className={chat.footerIcon} />
           <span className={chat.chatTitle}>Team map</span>
         </button>
       </div>

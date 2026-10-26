@@ -9,6 +9,9 @@ type LoadedChat = ChatSession & { running: boolean }
 interface ChatState {
   summaries: ChatSummary[]
   activeId: string | null
+  /** Chat mode shows the open chat, or its Schedules calendar (ADR 0055). */
+  page: 'chat' | 'schedules'
+  showSchedules(): void
   chats: Record<string, LoadedChat>
   catalogs: Record<string, ChatCatalog | 'loading'>
   clis: string[]
@@ -34,6 +37,8 @@ interface ChatState {
 export const useChat = create<ChatState>((set, get) => ({
   summaries: [],
   activeId: null,
+  page: 'chat',
+  showSchedules: () => set({ page: 'schedules' }),
   chats: {},
   catalogs: {},
   clis: [],
@@ -58,7 +63,7 @@ export const useChat = create<ChatState>((set, get) => ({
   },
 
   open: async (chatId) => {
-    set({ activeId: chatId })
+    set({ activeId: chatId, page: 'chat' })
     await get().load(chatId)
   },
 
@@ -70,7 +75,7 @@ export const useChat = create<ChatState>((set, get) => ({
   create: async (projectId) => {
     const chat = await runAction('New chat', () => api('chat.create', { projectId }))
     if (!chat) return
-    set((s) => ({ activeId: chat.id, chats: { ...s.chats, [chat.id]: { ...chat, running: false } } }))
+    set((s) => ({ activeId: chat.id, page: 'chat', chats: { ...s.chats, [chat.id]: { ...chat, running: false } } }))
     void get().loadList()
   },
 

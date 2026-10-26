@@ -607,6 +607,8 @@ export const requestSchemas = {
     chatId: id,
     cliId: id.optional(),
     projectId: z.union([id, z.literal('')]).optional(),
+    /** A Worktree of the chat's Workspace ('' = the Workspace's own folder; ADR 0055). */
+    workspaceId: z.union([id, z.literal('')]).optional(),
     // Model ids like "opencode-go/kimi-k2.7-code" or "sonnet[1m]"; never shell syntax.
     model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
     effort: z.string().max(40).regex(/^[\w-]*$/).optional(),

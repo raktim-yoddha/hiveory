@@ -8,13 +8,16 @@ import { InlineEdit } from '../../components/ui/InlineEdit'
 import { useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
+import { RoutinesPage, type ScheduleScope } from '../routines/RoutinesPage'
 import { ChatComposer } from './ChatComposer'
 import { ChatMessages } from './ChatMessages'
 import styles from './Chat.module.css'
 
-/** Chat mode: a clean conversation over any detected CLI. */
+const CHAT_SCHEDULES: ScheduleScope = { kind: 'chat' }
+
+/** Chat mode: a clean conversation over any detected CLI, or the scheduled chats' calendar. */
 export function ChatScreen() {
-  const { activeId, chats, create, loadClis, rename } = useChat()
+  const { activeId, page, chats, create, loadClis, rename } = useChat()
   const [renaming, setRenaming] = useState(false)
   const chat = activeId ? chats[activeId] : undefined
   const projectId = useNavigation((s) => selectedProjectId(s.view))
@@ -24,6 +27,7 @@ export function ChatScreen() {
     void loadClis()
   }, [loadClis])
 
+  if (page === 'schedules') return <RoutinesPage scope={CHAT_SCHEDULES} />
   if (!chat) {
     return (
       <div className={styles.surface}>
