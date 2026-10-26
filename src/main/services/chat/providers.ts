@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import type { ChatAttachment, ChatModel } from '@shared/domain/chat'
 import { ALLOW_ALL_PERMISSIONS, claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
 import type { McpEndpoint } from '../cli/adapters/types'
+import { CLAUDE_CONTROL_ARGS, claudeControl, claudeControlReply } from './cli-probe'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
 
 export interface RunInput {
@@ -37,8 +38,11 @@ export interface RunSpec {
   files?: Array<{ path: string; content: string }>
 }
 
-/** Runs a CLI subcommand and returns stdout (used for model discovery). */
-export type CatalogRunner = (args: string[]) => Promise<string>
+/** How a provider reaches its CLI for discovery: run a subcommand for its stdout, or ask over JSON lines (`probeCli`). */
+export interface CatalogRunner {
+  run(args: string[]): Promise<string>
+  ask<T>(args: string[], messages: unknown[], answer: (message: Record<string, unknown>) => T | undefined): Promise<T>
+}
 
 export interface ChatProvider {
   cliId: string
@@ -51,6 +55,37 @@ export interface ChatProvider {
 
 const DEFAULT_MODEL: ChatModel = { id: '', label: 'Default', description: "Uses the CLI's configured model" }
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
+/** Claude's aliases, for when the CLI cannot list its own models. */
+const CLAUDE_ALIASES: ChatModel[] = [
+  { ...DEFAULT_MODEL, efforts: CLAUDE_EFFORTS },
+  { id: 'opus', label: 'Opus', efforts: CLAUDE_EFFORTS, description: 'Most capable' },
+  { id: 'sonnet', label: 'Sonnet', efforts: CLAUDE_EFFORTS, description: 'Balanced' },
+  { id: 'haiku', label: 'Haiku', description: 'Fastest' }
+]
+
+/** "Opus 5.5" at the start of a description: a family and its version. */
+const VERSIONED = /^[A-Z][\w-]* \d+(\.\d+)*\b/
+
+/**
+ * Claude Code's own model list (its `initialize` reply): each alias with the model it runs now, so the
+ * picker says "Opus 5.5" or "Fable 5.1", not just "Opus". Prices are left out of the descriptions.
+ */
+export const parseClaudeModels = (models: unknown): ChatModel[] => {
+  if (!Array.isArray(models)) return []
+  return models.flatMap((raw): ChatModel[] => {
+    const m = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+    if (typeof m.value !== 'string') return []
+    const parts = (typeof m.description === 'string' ? m.description : '').split(' · ').filter((p) => p && !p.includes('$'))
+    const efforts = m.supportsEffort === true && Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e): e is string => typeof e === 'string') : []
+    if (m.value === 'default') {
+      const current = /\(currently ([^)]+)\)/.exec(parts[0] ?? '')?.[1]
+      return [{ ...DEFAULT_MODEL, label: current ? `Default (${current})` : 'Default', efforts }]
+    }
+    const version = VERSIONED.exec(parts[0] ?? '')?.[0]
+    const name = typeof m.displayName === 'string' && m.displayName ? m.displayName : m.value
+    return [{ id: m.value, label: version ?? name, description: (version ? parts.slice(1) : parts).join(' · ') || undefined, efforts }]
+  })
+}
 
 /** `codex debug models` → models with their own reasoning levels. */
 export const parseCodexModels = (json: string): ChatModel[] => {
@@ -118,12 +153,14 @@ const claude: ChatProvider = {
   cliId: 'claude',
   parser: claudeParser,
   resumable: true,
-  models: async () => [
-    { ...DEFAULT_MODEL, efforts: CLAUDE_EFFORTS },
-    { id: 'opus', label: 'Opus', efforts: CLAUDE_EFFORTS, description: 'Most capable' },
-    { id: 'sonnet', label: 'Sonnet', efforts: CLAUDE_EFFORTS, description: 'Balanced' },
-    { id: 'haiku', label: 'Haiku', description: 'Fastest' }
-  ],
+  // Asked of the CLI itself (no model call); the aliases still work when it cannot answer.
+  models: async (cli) => {
+    const models = await cli
+      .ask(CLAUDE_CONTROL_ARGS, [claudeControl('models', { subtype: 'initialize' })], (m) => claudeControlReply(m, 'models'))
+      .then((reply) => parseClaudeModels(reply.models))
+      .catch(() => [])
+    return models.length ? models : CLAUDE_ALIASES
+  },
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments, mcp }) => {
     const assigned = sessionId ? undefined : randomUUID()
     return {
@@ -151,7 +188,7 @@ const codex: ChatProvider = {
   cliId: 'codex',
   parser: codexParser,
   resumable: true,
-  models: async (run) => [DEFAULT_MODEL, ...parseCodexModels(await run(['debug', 'models']))],
+  models: async (cli) => [DEFAULT_MODEL, ...parseCodexModels(await cli.run(['debug', 'models']))],
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => {
     // Images go in natively; other files are read by path.
     const images = attachments.filter((a) => a.kind === 'image')
@@ -175,7 +212,7 @@ const opencodeLike = (cliId: string): ChatProvider => ({
   cliId,
   parser: opencodeParser,
   resumable: true,
-  models: async (run) => [DEFAULT_MODEL, ...parseOpencodeModels(await run(['models', '--verbose']))],
+  models: async (cli) => [DEFAULT_MODEL, ...parseOpencodeModels(await cli.run(['models', '--verbose']))],
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => ({
     env: {
       ...(mcp ? { [cliId === 'kilocode' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: opencodeConfigJson(mcp.endpoint) } : {}),

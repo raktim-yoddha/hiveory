@@ -19,7 +19,8 @@ import { localChatProcesses, type ChatProcess, type ChatProcessBackend } from '.
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { ChatAccumulator } from './accumulator'
 import type { ChatStore } from './chat-store'
-import { CHAT_PROVIDERS, transcriptPrompt, type ChatMcp } from './providers'
+import { probeCli } from './cli-probe'
+import { CHAT_PROVIDERS, transcriptPrompt, type CatalogRunner, type ChatMcp } from './providers'
 
 const CATALOG_TTL_MS = 10 * 60 * 1000
 const EMIT_EVERY_MS = 50
@@ -266,15 +267,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     const provider = CHAT_PROVIDERS[cliId]
     const executable = this.registry.executable(cliId)
     if (!provider || !executable) return Promise.resolve({ cliId, models: [], error: 'This CLI is not available for chat.' })
-    const run = (args: string[]): Promise<string> =>
-      new Promise((resolve, reject) => {
-        const target = resolveSpawnTarget(executable, args)
-        execFile(target.file, target.args, { timeout: 30_000, windowsHide: true, maxBuffer: 32 * 1024 * 1024, env: sanitizeEnv(process.env) }, (error, stdout) =>
-          error ? reject(error) : resolve(stdout.toString())
-        )
-      })
     const catalog = provider
-      .models(run)
+      .models(this.cliRunner(executable))
       .then((models) => ({ cliId, models }))
       .catch((error: Error) => {
         this.log.warn(`Model discovery failed for ${cliId}`, error)
@@ -283,6 +277,20 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       })
     this.catalogs.set(cliId, { at: Date.now(), catalog })
     return catalog
+  }
+
+  /** Reaches an installed CLI for discovery: its stdout, or an answer over its JSON-lines protocol. */
+  private cliRunner(executable: string): CatalogRunner {
+    return {
+      run: (args) =>
+        new Promise((resolve, reject) => {
+          const target = resolveSpawnTarget(executable, args)
+          execFile(target.file, target.args, { timeout: 30_000, windowsHide: true, maxBuffer: 32 * 1024 * 1024, env: sanitizeEnv(process.env) }, (error, stdout) =>
+            error ? reject(error) : resolve(stdout.toString())
+          )
+        }),
+      ask: (args, messages, answer) => probeCli(resolveSpawnTarget(executable, args), messages, answer, { env: sanitizeEnv(process.env), cwd: homedir() })
+    }
   }
 
   send(chatId: string, text: string, attachments: ChatAttachment[] = []): void {

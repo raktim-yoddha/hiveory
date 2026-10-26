@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ChatMessage } from '@shared/domain/chat'
 import { ChatAccumulator } from './accumulator'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
-import { CHAT_PROVIDERS, parseCodexModels, parseOpencodeModels, promptArg, transcriptPrompt } from './providers'
+import { CHAT_PROVIDERS, parseClaudeModels, parseCodexModels, parseOpencodeModels, promptArg, transcriptPrompt } from './providers'
 
 const fold = (parser: LineParser, lines: string[]) => {
   const message: ChatMessage = { id: 'a', role: 'assistant', parts: [], createdAt: '' }
@@ -151,6 +151,26 @@ describe('model discovery', () => {
       ]
     })
     expect(parseCodexModels(json)).toEqual([{ id: 'gpt-6-astra', label: 'GPT-6-Astra', description: undefined, efforts: ['low', 'max'], defaultEffort: 'low' }])
+  })
+
+  it("names Claude's models by the version each alias runs (its initialize reply), without prices", () => {
+    const effort = { supportsEffort: true, supportedEffortLevels: ['low', 'max'] }
+    const models = [
+      { value: 'default', displayName: 'Default (recommended)', description: 'Use the default model (currently Opus 5.5) · $4/$20 per Mtok', ...effort },
+      { value: 'opus', displayName: 'Opus', description: 'Opus 5.5 · Best for everyday, complex tasks · $4/$20 per Mtok', ...effort },
+      { value: 'claude-fable-5-1[1m]', displayName: 'Fable', description: 'Fable 5.1 · Most capable for your hardest and longest-running tasks', ...effort },
+      { value: 'haiku', displayName: 'Haiku', description: 'Haiku 5.5 · Fastest for quick answers', supportsEffort: false },
+      { value: 'my-proxy-model', displayName: 'my-proxy-model', description: 'Custom model' },
+      { displayName: 'no value' }
+    ]
+    expect(parseClaudeModels(models)).toEqual([
+      { id: '', label: 'Default (Opus 5.5)', description: "Uses the CLI's configured model", efforts: ['low', 'max'] },
+      { id: 'opus', label: 'Opus 5.5', description: 'Best for everyday, complex tasks', efforts: ['low', 'max'] },
+      { id: 'claude-fable-5-1[1m]', label: 'Fable 5.1', description: 'Most capable for your hardest and longest-running tasks', efforts: ['low', 'max'] },
+      { id: 'haiku', label: 'Haiku 5.5', description: 'Fastest for quick answers', efforts: [] },
+      { id: 'my-proxy-model', label: 'my-proxy-model', description: 'Custom model', efforts: [] }
+    ])
+    expect(parseClaudeModels(undefined)).toEqual([])
   })
 })
 

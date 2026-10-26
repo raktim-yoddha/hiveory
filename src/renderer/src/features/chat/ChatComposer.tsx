@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, Check, ChevronDown, Eye, FolderClosed, ListPlus, LockOpen, Paperclip, RefreshCw, Search, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronDown, Eye, FolderClosed, ListPlus, LockOpen, Paperclip, RefreshCw, Search, Square, X } from 'lucide-react'
 import type { ChatModel, ChatSession } from '@shared/domain/chat'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
@@ -384,7 +384,6 @@ function ModelPicker({ models, loading, error, value, onChange, onRefresh }: Mod
                       <span className={styles.modelId}>{m.description ?? m.id}</span>
                     </span>
                     {m.efforts && m.efforts.length > 0 && <span className={styles.modelBadge}>effort</span>}
-                    {m.id === value && <Check aria-hidden className={styles.modelCheck} />}
                   </button>
                 ))}
               </div>

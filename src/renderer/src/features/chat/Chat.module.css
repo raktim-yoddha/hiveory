@@ -762,12 +762,6 @@ button.pill:hover,
   line-height: var(--control-xs);
 }
 
-.modelCheck {
-  flex: none;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--color-bronze);
-}
 
 .modelNote {
   padding: var(--space-4) var(--space-5);
