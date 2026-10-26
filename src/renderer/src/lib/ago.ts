@@ -19,3 +19,14 @@ export const ago = (iso: string, now = Date.now()): string => {
   if (now - ms >= 30 * 24 * 60 * MINUTE) return new Date(iso).toLocaleDateString()
   return `${short} ago`
 }
+
+/** How long until `iso`, short: "in 45 min", "in 2 h 13 min", "in 3 d 4 h"; "now" once it has passed. */
+export const until = (iso: string, now = Date.now()): string => {
+  const minutes = Math.ceil((Date.parse(iso) - now) / MINUTE)
+  if (!Number.isFinite(minutes)) return ''
+  if (minutes <= 0) return 'now'
+  if (minutes < 60) return `in ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `in ${hours} h${minutes % 60 ? ` ${minutes % 60} min` : ''}`
+  return `in ${Math.floor(hours / 24)} d${hours % 24 ? ` ${hours % 24} h` : ''}`
+}

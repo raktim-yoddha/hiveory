@@ -6,7 +6,7 @@ import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import type { ChatChoice, CliInstance } from '@shared/domain'
-import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary } from '@shared/domain/chat'
+import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary, type UsageLimits } from '@shared/domain/chat'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
 import type { McpEndpoint } from '../cli/adapters/types'
@@ -23,6 +23,8 @@ import { probeCli } from './cli-probe'
 import { CHAT_PROVIDERS, transcriptPrompt, type CatalogRunner, type ChatMcp } from './providers'
 
 const CATALOG_TTL_MS = 10 * 60 * 1000
+/** Limits move with every turn: a fresh reading at most this often unless the user refreshes. */
+const LIMITS_TTL_MS = 60 * 1000
 const EMIT_EVERY_MS = 50
 const MAX_STDERR = 4000
 /** Files dropped from disk are sent by path; anything bigger than this is refused. */
@@ -59,6 +61,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   /** Attachment paths main created or the user picked, per chat; `send` accepts nothing else. */
   private readonly attachments = new Map<string, Set<string>>()
   private readonly catalogs = new Map<string, { at: number; catalog: Promise<ChatCatalog> }>()
+  private readonly limitReadings = new Map<string, { at: number; limits: Promise<UsageLimits> }>()
 
   constructor(
     private readonly store: ChatStore,
@@ -278,7 +281,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if (!provider || !executable) return Promise.resolve({ cliId, models: [], error: 'This CLI is not available for chat.' })
     const catalog = provider
       .models(this.cliRunner(executable))
-      .then((models) => ({ cliId, models }))
+      .then((models) => ({ cliId, models, ...(provider.limits ? { limits: true } : {}) }))
       .catch((error: Error) => {
         this.log.warn(`Model discovery failed for ${cliId}`, error)
         // Default model always works; discovery errors never block chatting.
@@ -286,6 +289,26 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       })
     this.catalogs.set(cliId, { at: Date.now(), catalog })
     return catalog
+  }
+
+  /** The CLI's plan limits (5-hour, weekly…), as the CLI itself reports them (ADR 0055). */
+  limits(cliId: string, refresh = false): Promise<UsageLimits> {
+    const cached = this.limitReadings.get(cliId)
+    if (cached && !refresh && Date.now() - cached.at < LIMITS_TTL_MS) return cached.limits
+    const provider = CHAT_PROVIDERS[cliId]
+    const executable = this.registry.executable(cliId)
+    const name = this.registry.displayName(cliId)
+    if (!provider?.limits || !executable) return Promise.resolve({ cliId, windows: [], note: `${name} does not report usage limits.`, checkedAt: nowIso() })
+    const limits = provider
+      .limits(this.cliRunner(executable))
+      .then((reading) => ({ cliId, ...reading, checkedAt: nowIso() }))
+      .catch((error: Error) => {
+        this.log.warn(`Usage limits failed for ${cliId}`, error)
+        this.limitReadings.delete(cliId)
+        return { cliId, windows: [], note: `${name} could not report its limits: ${error.message}`, checkedAt: nowIso() }
+      })
+    this.limitReadings.set(cliId, { at: Date.now(), limits })
+    return limits
   }
 
   /** Reaches an installed CLI for discovery: its stdout, or an answer over its JSON-lines protocol. */

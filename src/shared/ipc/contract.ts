@@ -22,7 +22,7 @@ import type {
   WorkspaceView,
   HostLinkStatus
 } from '../domain'
-import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '../domain/chat'
+import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { TerminalHostStatus } from '../host/protocol'
 import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
@@ -643,6 +643,8 @@ export const requestSchemas = {
   'prompts.save': z.object({ id: id.optional(), title: z.string().trim().max(MAX_PROMPT_TITLE).optional(), text: z.string().trim().min(1).max(MAX_SAVED_PROMPT_TEXT) }),
   'prompts.delete': z.object({ promptId: id }),
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
+  /** The CLI's plan limits (5-hour, weekly), as it reports them (ADR 0055). */
+  'chat.limits': z.object({ cliId: id, refresh: z.boolean().optional() }),
   // Bots mode (ADR 0022). A bot's threads are chats: send, stop, attach and delete them through chat.*.
   'bots.list': none,
   'bots.create': botFields.extend({ name: botName }),
@@ -958,6 +960,7 @@ export interface ResponseMap {
   'prompts.save': SavedPrompt
   'prompts.delete': void
   'chat.catalog': ChatCatalog
+  'chat.limits': UsageLimits
   'bots.list': BotView[]
   'bots.create': BotView
   'bots.update': BotView

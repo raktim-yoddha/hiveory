@@ -12,6 +12,7 @@ import { AttachmentChips } from './AttachmentChips'
 import { EffortIcon } from './EffortIcon'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
 import { focusChatInput } from './focus-input'
+import { UsageLimitsButton } from './UsageLimitsButton'
 import styles from './Chat.module.css'
 
 const MAX_VISIBLE_MODELS = 250
@@ -289,6 +290,7 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
               />
             ))}
           <span className={styles.flex} />
+          {chat.cliId && catalog && catalog !== 'loading' && catalog.limits && <UsageLimitsButton cliId={chat.cliId} cliName={cliName} />}
           <Menu
             label="Permissions"
             align="end"

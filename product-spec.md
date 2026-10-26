@@ -36,7 +36,9 @@ While a chat or bot is answering, the user can type the **next message**: it wai
 goes in when the reply ends (Stop drops it). The desktop message box has no saved-prompts button
 (ADR 0055); the phone keeps its saved prompts (ADR 0031). A new chat picks where it works: the home
 folder, or a Workspace and one of its Worktrees (Primary or an isolated one); it is fixed once the
-chat has started and shown as "demo-app · fix-login" (ADR 0055). Bots never appear on a
+chat has started and shown as "demo-app · fix-login" (ADR 0055). Every message box whose CLI can
+report it (Claude Code, Codex) has a **usage limits** button: the plan's 5-hour and weekly windows (and
+per-model weekly ones) with the share used and when each resets, read from the CLI itself (ADR 0055). Bots never appear on a
 workspace's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
 terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
 and the user can take control from the bot panel. Each bot's **Works on** choice decides which

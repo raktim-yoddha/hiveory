@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import type { ChatAttachment, ChatModel } from '@shared/domain/chat'
+import type { ChatAttachment, ChatModel, UsageLimits, UsageWindow } from '@shared/domain/chat'
 import { ALLOW_ALL_PERMISSIONS, claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
 import type { McpEndpoint } from '../cli/adapters/types'
 import { CLAUDE_CONTROL_ARGS, claudeControl, claudeControlReply } from './cli-probe'
@@ -50,8 +50,12 @@ export interface ChatProvider {
   /** True when the CLI resumes its own sessions; otherwise Hiveory replays a transcript. */
   resumable: boolean
   models(run: CatalogRunner): Promise<ChatModel[]>
+  /** The plan's usage limits, asked of the CLI itself (ADR 0055); absent when the CLI cannot say. */
+  limits?(run: CatalogRunner): Promise<PlanLimits>
   run(input: RunInput): RunSpec
 }
+
+export type PlanLimits = Pick<UsageLimits, 'windows' | 'plan' | 'note'>
 
 const DEFAULT_MODEL: ChatModel = { id: '', label: 'Default', description: "Uses the CLI's configured model" }
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max']
@@ -135,6 +139,75 @@ export const parseOpencodeModels = (text: string): ChatModel[] => {
   return models
 }
 
+const record = (v: unknown): Record<string, unknown> => (typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {})
+const percent = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : null)
+
+/**
+ * Claude Code's `get_usage` control reply: the claude.ai plan's 5-hour and weekly windows (each 0–100
+ * with its reset), the per-model weekly ones, and the plan. API keys and cloud providers have none.
+ */
+export const parseClaudeUsage = (reply: Record<string, unknown>): PlanLimits => {
+  const plan = typeof reply.subscription_type === 'string' ? reply.subscription_type : undefined
+  const limits = reply.rate_limits_available === false ? null : reply.rate_limits
+  if (!limits || typeof limits !== 'object') {
+    return { windows: [], plan, note: 'Claude Code reports no plan limits for this sign-in: only a Claude subscription has 5-hour and weekly limits (an API key or a cloud provider has none).' }
+  }
+  const r = limits as Record<string, unknown>
+  const windows: UsageWindow[] = []
+  const add = (id: string, label: string, raw: unknown): void => {
+    if (!raw || typeof raw !== 'object' || windows.some((w) => w.label === label)) return
+    const w = record(raw)
+    windows.push({ id, label, usedPercent: percent(w.utilization), ...(typeof w.resets_at === 'string' ? { resetsAt: w.resets_at } : {}) })
+  }
+  add('five_hour', '5-hour limit', r.five_hour)
+  add('seven_day', 'Weekly · all models', r.seven_day)
+  add('seven_day_opus', 'Weekly · Opus', r.seven_day_opus)
+  add('seven_day_sonnet', 'Weekly · Sonnet', r.seven_day_sonnet)
+  if (Array.isArray(r.model_scoped)) {
+    for (const m of r.model_scoped) {
+      const name = record(m).display_name
+      if (typeof name === 'string' && name) add(`model:${name}`, `Weekly · ${name}`, m)
+    }
+  }
+  return { windows, plan }
+}
+
+/** A window's length in words: 300 minutes is the "5-hour limit", 10 080 the "Weekly limit". */
+const windowLabel = (minutes: unknown): string => {
+  if (typeof minutes !== 'number' || minutes <= 0) return 'Limit'
+  if (minutes === 7 * 24 * 60) return 'Weekly limit'
+  if (minutes % (24 * 60) === 0) return `${minutes / (24 * 60)}-day limit`
+  if (minutes % 60 === 0) return `${minutes / 60}-hour limit`
+  return `${minutes}-minute limit`
+}
+
+/**
+ * Codex app-server's `account/rateLimits/read` result: each metered bucket's primary and secondary
+ * window (used percent, length in minutes, reset in epoch seconds), and the ChatGPT plan.
+ */
+export const parseCodexLimits = (result: Record<string, unknown>): PlanLimits => {
+  const byId = Object.values(record(result.rateLimitsByLimitId)).filter((s) => s && typeof s === 'object')
+  const snapshots = (byId.length ? byId : [result.rateLimits]).map(record)
+  const windows: UsageWindow[] = []
+  let plan: string | undefined
+  for (const snap of snapshots) {
+    if (typeof snap.planType === 'string') plan ??= snap.planType
+    const prefix = byId.length > 1 && typeof snap.limitName === 'string' && snap.limitName ? `${snap.limitName} · ` : ''
+    for (const key of ['primary', 'secondary'] as const) {
+      const w = snap[key]
+      if (!w || typeof w !== 'object') continue
+      const { usedPercent, windowDurationMins, resetsAt } = record(w)
+      windows.push({
+        id: `${String(snap.limitId ?? 'codex')}:${key}`,
+        label: prefix + windowLabel(windowDurationMins),
+        usedPercent: percent(usedPercent),
+        ...(typeof resetsAt === 'number' ? { resetsAt: new Date(resetsAt < 1e12 ? resetsAt * 1000 : resetsAt).toISOString() } : {})
+      })
+    }
+  }
+  return windows.length ? { windows, plan } : { windows, plan, note: 'Codex reports no plan limits for this sign-in.' }
+}
+
 const flag = (name: string, value?: string): string[] => (value ? [name, value] : [])
 
 /** A prompt passed as an argument must never be mistaken for a flag. */
@@ -161,6 +234,8 @@ const claude: ChatProvider = {
       .catch(() => [])
     return models.length ? models : CLAUDE_ALIASES
   },
+  limits: async (cli) =>
+    parseClaudeUsage(await cli.ask(CLAUDE_CONTROL_ARGS, [claudeControl('usage', { subtype: 'get_usage', skip_behaviors: true })], (m) => claudeControlReply(m, 'usage'))),
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments, mcp }) => {
     const assigned = sessionId ? undefined : randomUUID()
     return {
@@ -189,6 +264,23 @@ const codex: ChatProvider = {
   parser: codexParser,
   resumable: true,
   models: async (cli) => [DEFAULT_MODEL, ...parseCodexModels(await cli.run(['debug', 'models']))],
+  // The app-server answers from the ChatGPT sign-in Codex already has.
+  limits: (cli) =>
+    cli
+      .ask(
+        ['app-server'],
+        [{ id: 1, method: 'initialize', params: { clientInfo: { name: 'hiveory', title: 'Hiveory', version: '1' } } }, { method: 'initialized' }, { id: 2, method: 'account/rateLimits/read' }],
+        (m) => {
+          if (m.id !== 2) return undefined
+          if (m.error) throw new Error(String(record(m.error).message ?? 'Codex could not read its limits.'))
+          return record(m.result)
+        }
+      )
+      .then(parseCodexLimits)
+      .catch((error: Error) => {
+        if (/auth/i.test(error.message)) return { windows: [], note: 'Sign in to Codex with ChatGPT (codex login) to see your plan limits; an API key has none.' }
+        throw error
+      }),
   run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => {
     // Images go in natively; other files are read by path.
     const images = attachments.filter((a) => a.kind === 'image')

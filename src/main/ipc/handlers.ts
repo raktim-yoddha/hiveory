@@ -520,6 +520,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return c.chats.stop(chatId)
   },
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
+  'chat.limits': ({ cliId, refresh }) => c.chats.limits(cliId, refresh ?? false),
   'bots.list': () => c.bots.list(),
   'bots.create': (input) => c.bots.create(input),
   'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),

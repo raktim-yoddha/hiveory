@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ChatMessage } from '@shared/domain/chat'
 import { ChatAccumulator } from './accumulator'
 import { claudeParser, codexParser, geminiParser, opencodeParser, plainParser, type LineParser } from './parsers'
-import { CHAT_PROVIDERS, parseClaudeModels, parseCodexModels, parseOpencodeModels, promptArg, transcriptPrompt } from './providers'
+import { CHAT_PROVIDERS, parseClaudeModels, parseClaudeUsage, parseCodexLimits, parseCodexModels, parseOpencodeModels, promptArg, transcriptPrompt } from './providers'
 
 const fold = (parser: LineParser, lines: string[]) => {
   const message: ChatMessage = { id: 'a', role: 'assistant', parts: [], createdAt: '' }
@@ -171,6 +171,47 @@ describe('model discovery', () => {
       { id: 'my-proxy-model', label: 'my-proxy-model', description: 'Custom model', efforts: [] }
     ])
     expect(parseClaudeModels(undefined)).toEqual([])
+  })
+})
+
+describe('plan usage limits (ADR 0055)', () => {
+  it("reads Claude Code's get_usage reply: 5-hour, weekly and per-model windows, without duplicates", () => {
+    const reply = {
+      subscription_type: 'max',
+      rate_limits_available: true,
+      rate_limits: {
+        five_hour: { utilization: 42.5, resets_at: '2026-10-26T15:00:00Z' },
+        seven_day: { utilization: 12, resets_at: '2026-10-30T00:00:00Z' },
+        seven_day_opus: null,
+        seven_day_sonnet: { utilization: 130, resets_at: null },
+        model_scoped: [{ display_name: 'Fable', utilization: 3, resets_at: '2026-10-30T00:00:00Z' }, { display_name: 'Sonnet', utilization: 1, resets_at: null }]
+      }
+    }
+    expect(parseClaudeUsage(reply)).toEqual({
+      plan: 'max',
+      windows: [
+        { id: 'five_hour', label: '5-hour limit', usedPercent: 42.5, resetsAt: '2026-10-26T15:00:00Z' },
+        { id: 'seven_day', label: 'Weekly · all models', usedPercent: 12, resetsAt: '2026-10-30T00:00:00Z' },
+        { id: 'seven_day_sonnet', label: 'Weekly · Sonnet', usedPercent: 100 },
+        { id: 'model:Fable', label: 'Weekly · Fable', usedPercent: 3, resetsAt: '2026-10-30T00:00:00Z' }
+      ]
+    })
+    // An API key or a cloud provider: no plan limits, and a reason.
+    expect(parseClaudeUsage({ subscription_type: null, rate_limits_available: false, rate_limits: null })).toMatchObject({ windows: [], note: expect.stringMatching(/no plan limits/) })
+  })
+
+  it("reads Codex's account/rateLimits/read result: windows named by length, resets from epoch seconds", () => {
+    const window = (usedPercent: number, windowDurationMins: number) => ({ usedPercent, windowDurationMins, resetsAt: 1_793_030_400 })
+    expect(parseCodexLimits({ rateLimits: { limitId: 'codex', planType: 'plus', primary: window(20, 300), secondary: window(55, 10_080) }, rateLimitsByLimitId: null })).toEqual({
+      plan: 'plus',
+      windows: [
+        { id: 'codex:primary', label: '5-hour limit', usedPercent: 20, resetsAt: new Date(1_793_030_400_000).toISOString() },
+        { id: 'codex:secondary', label: 'Weekly limit', usedPercent: 55, resetsAt: new Date(1_793_030_400_000).toISOString() }
+      ]
+    })
+    const buckets = parseCodexLimits({ rateLimitsByLimitId: { codex: { limitId: 'codex', limitName: 'Codex', primary: window(1, 300) }, mini: { limitId: 'mini', limitName: 'Mini', primary: window(2, 1440) } } })
+    expect(buckets.windows.map((w) => w.label)).toEqual(['Codex · 5-hour limit', 'Mini · 1-day limit'])
+    expect(parseCodexLimits({ rateLimits: { primary: null, secondary: null } })).toMatchObject({ windows: [], note: expect.any(String) })
   })
 })
 

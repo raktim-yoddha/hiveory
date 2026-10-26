@@ -16,6 +16,29 @@ export interface ChatCatalog {
   models: ChatModel[]
   /** Set when model discovery failed; the default model still works. */
   error?: string
+  /** The CLI can report its plan's usage limits (`chat.limits`, ADR 0055). */
+  limits?: boolean
+}
+
+/** One window of a CLI plan's usage limit (ADR 0055): "5-hour limit", "Weekly · Opus". */
+export interface UsageWindow {
+  id: string
+  label: string
+  /** Share used, 0–100; null when the CLI does not say. */
+  usedPercent: number | null
+  /** When the window starts over (ISO). */
+  resetsAt?: string
+}
+
+/** A CLI's plan limits as the CLI itself reports them; Hiveory never reads its sign-in files. */
+export interface UsageLimits {
+  cliId: string
+  windows: UsageWindow[]
+  /** The plan, as the CLI names it ("max", "pro", "plus"). */
+  plan?: string
+  /** Why there are no windows (an API key has no plan limits, not signed in…). */
+  note?: string
+  checkedAt: string
 }
 
 export type ChatPart =

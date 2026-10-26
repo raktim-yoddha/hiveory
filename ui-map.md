@@ -72,7 +72,8 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
   same page for the Workspace's schedules, opening on Day (ADR 0055).
 - Message box (Chat, bot threads, Work chat view): attach; CLI · model · effort · where (Chat only:
   Home folder, or a Workspace's Primary or Worktree, grouped by Workspace; a fixed pill once started) ·
-  permissions (ADR 0055). While answering, the box stays open, a queue button sits beside Stop, and waiting
+  usage limits (gauge; a popover: plan, each window's label, % used, bar, "Resets in … · day time", Check
+  again; a note when the sign-in has none) · permissions (ADR 0055). While answering, the box stays open, a queue button sits beside Stop, and waiting
   messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 - Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
   send or post as you / change something in your apps", the tool, "What it will send" (the arguments
