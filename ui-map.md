@@ -166,8 +166,10 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
 - Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
   placement.
 
-Settings › Keyboard (ADR 0047), after Queen Bee: Queen Bee (Call Queen Bee), General (Settings,
-sidebar, side panel), Modes (Work, Bots, Chat), Chat and Bots (New chat or bot): each row shows its keys
+Settings › Keyboard (ADR 0047), after Queen Bee: Queen Bee (Call Queen Bee), General (Settings, shortcuts,
+sidebar, side panel, maximize side panel, Schedules), Modes (Work, Bots, Chat), Lists (New chat or bot,
+New worktree, Next / Previous chat, bot or worktree), Panes and tabs (New tab, New terminal, Close, Next /
+Previous tab, Next / Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
 as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
 is named under it. Built in: the fixed keys, read-only. "Reset every shortcut" when any was changed.
 Title bar tooltips show the keys ("Hide sidebar (Ctrl Shift B)").

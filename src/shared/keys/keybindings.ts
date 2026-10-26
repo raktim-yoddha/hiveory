@@ -8,13 +8,31 @@ import { formatShortcut, parseShortcut, type Modifier, type Shortcut } from '../
  */
 export const APP_COMMANDS = [
   { id: 'open-settings', label: 'Open or close Settings', group: 'General', mac: 'Meta+Comma', other: 'Control+Comma' },
+  { id: 'show-shortcuts', label: 'Show keyboard shortcuts', group: 'General', mac: 'Meta+Slash', other: 'Control+Shift+Slash' },
   { id: 'toggle-sidebar', label: 'Show or hide the sidebar', group: 'General', mac: 'Meta+KeyB', other: 'Control+Shift+KeyB' },
   { id: 'toggle-side-panel', label: 'Show or hide the side panel', group: 'General', mac: 'Meta+KeyJ', other: 'Control+Shift+KeyJ' },
+  { id: 'maximize-side-panel', label: 'Maximize or restore the side panel', group: 'General', mac: 'Meta+Shift+KeyM', other: 'Control+Shift+KeyM' },
+  { id: 'open-schedules', label: 'Open Schedules (this mode’s calendar)', group: 'General', mac: 'Meta+Shift+KeyS', other: 'Control+Shift+KeyS' },
   { id: 'mode-work', label: 'Go to Work', group: 'Modes', mac: 'Meta+Digit1', other: 'Control+Digit1' },
   { id: 'mode-bots', label: 'Go to Bots', group: 'Modes', mac: 'Meta+Digit2', other: 'Control+Digit2' },
   { id: 'mode-chat', label: 'Go to Chat', group: 'Modes', mac: 'Meta+Digit3', other: 'Control+Digit3' },
   // Only in Chat and Bots, where no terminal needs Ctrl N; in Work the key reaches the terminal.
-  { id: 'new-item', label: 'New chat (in Chat) or new bot (in Bots)', group: 'Chat and Bots', mac: 'Meta+KeyN', other: 'Control+KeyN' }
+  { id: 'new-item', label: 'New chat (in Chat) or new bot (in Bots)', group: 'Lists', mac: 'Meta+KeyN', other: 'Control+KeyN' },
+  { id: 'new-worktree', label: 'New worktree in this workspace', group: 'Lists', mac: 'Meta+Shift+KeyN', other: 'Control+Shift+KeyN' },
+  { id: 'next-item', label: 'Next chat, bot or worktree', group: 'Lists', mac: 'Meta+Alt+ArrowDown', other: 'Alt+ArrowDown' },
+  { id: 'previous-item', label: 'Previous chat, bot or worktree', group: 'Lists', mac: 'Meta+Alt+ArrowUp', other: 'Alt+ArrowUp' },
+  // Panes and tabs of the open worktree (ADR 0042); elsewhere the keys pass through.
+  { id: 'new-tab', label: 'New tab: pick an agent, terminal or browser', group: 'Panes and tabs', mac: 'Meta+KeyT', other: 'Control+Shift+KeyT' },
+  { id: 'new-terminal', label: 'New terminal tab', group: 'Panes and tabs', mac: 'Meta+Alt+KeyT', other: 'Control+Shift+Backquote' },
+  { id: 'close-tab', label: 'Close the tab', group: 'Panes and tabs', mac: 'Meta+Shift+KeyW', other: 'Control+Shift+KeyW' },
+  { id: 'next-tab', label: 'Next tab in the area', group: 'Panes and tabs', mac: 'Meta+Shift+BracketRight', other: 'Control+Tab' },
+  { id: 'previous-tab', label: 'Previous tab in the area', group: 'Panes and tabs', mac: 'Meta+Shift+BracketLeft', other: 'Control+Shift+Tab' },
+  { id: 'next-pane', label: 'Next area', group: 'Panes and tabs', mac: 'Meta+Alt+ArrowRight', other: 'Control+Alt+ArrowRight' },
+  { id: 'previous-pane', label: 'Previous area', group: 'Panes and tabs', mac: 'Meta+Alt+ArrowLeft', other: 'Control+Alt+ArrowLeft' },
+  { id: 'maximize-pane', label: 'Maximize or restore the pane', group: 'Panes and tabs', mac: 'Meta+Shift+Enter', other: 'Control+Shift+Enter' },
+  { id: 'split-right', label: 'Split the tab out to the right', group: 'Panes and tabs', mac: 'Meta+KeyD', other: 'Alt+Shift+Equal' },
+  { id: 'split-down', label: 'Split the tab out below', group: 'Panes and tabs', mac: 'Meta+Shift+KeyD', other: 'Alt+Shift+Minus' },
+  { id: 'focus-message', label: 'Type in the message box', group: 'Chat', mac: 'Meta+KeyL', other: 'Control+Shift+KeyL' }
 ] as const satisfies ReadonlyArray<{ id: string; label: string; group: string; mac: string; other: string }>
 
 export type AppCommandId = (typeof APP_COMMANDS)[number]['id']

@@ -171,6 +171,10 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
             if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               void submit()
+            } else if (e.key === 'Escape' && chat.running && !e.nativeEvent.isComposing) {
+              // Esc stops the reply, as in the CLIs (ADR 0047).
+              e.preventDefault()
+              void stop(chat.id)
             }
           }}
           aria-label="Message"

@@ -13,6 +13,7 @@ const fixedKeys = (mac: boolean): Array<{ title: string; keys: string[] }> => [
   { title: 'Copy a selection in a terminal; with none, interrupt the agent', keys: mac ? ['⌘C', '⌃C'] : ['Ctrl C'] },
   { title: 'Paste into a terminal', keys: [mac ? '⌘V' : 'Ctrl V'] },
   { title: 'New line in an agent prompt', keys: [mac ? '⇧↩' : 'Shift Enter'] },
+  { title: 'Stop a chat reply (in its message box)', keys: ['Esc'] },
   { title: 'Find in a file, save a file', keys: mac ? ['⌘F', '⌘S'] : ['Ctrl F', 'Ctrl S'] },
   { title: 'Rename or delete in the Explorer', keys: ['F2', mac ? '⌫' : 'Delete'] },
   { title: 'Move a side panel tab', keys: [mac ? '⌃⇧ Arrows' : 'Ctrl Shift Arrows'] },

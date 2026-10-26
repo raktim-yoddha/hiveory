@@ -550,10 +550,35 @@ export const GUIDE: GuideChapter[] = [
           <p>
             Settings › Keyboard lists every shortcut with your system&rsquo;s standard keys: <K>Ctrl</K> on Windows and Linux, <K>⌘</K> on a
             Mac. Queen Bee is <K>Ctrl</K> <K>Shift</K> <K>Space</K> (<K>⌥</K> <K>Space</K> on a Mac), Settings <K>Ctrl</K> <K>,</K>, Work, Bots
-            and Chat <K>Ctrl</K> <K>1</K> <K>2</K> <K>3</K>. Click Change and press new keys to make any of them yours.
+            and Chat <K>Ctrl</K> <K>1</K> <K>2</K> <K>3</K>, this list <K>Ctrl</K> <K>Shift</K> <K>/</K> (<K>⌘</K> <K>/</K>). Click Change and press
+            new keys to make any of them yours.
           </p>
         ),
         keywords: 'keyboard shortcuts key bindings hotkeys change'
+      },
+      {
+        heading: 'Tabs, panes and lists',
+        body: (
+          <ul>
+            <li>
+              New tab <K>Ctrl</K> <K>Shift</K> <K>T</K>, new terminal <K>Ctrl</K> <K>Shift</K> <K>`</K>, close a tab <K>Ctrl</K> <K>Shift</K> <K>W</K>.
+            </li>
+            <li>
+              Next and previous tab <K>Ctrl</K> <K>Tab</K> / <K>Ctrl</K> <K>Shift</K> <K>Tab</K>; next and previous area <K>Ctrl</K> <K>Alt</K> <K>→</K> / <K>←</K>.
+            </li>
+            <li>
+              Maximize a pane <K>Ctrl</K> <K>Shift</K> <K>Enter</K>; split a tab out <K>Alt</K> <K>Shift</K> <K>=</K> (right) or <K>-</K> (below).
+            </li>
+            <li>
+              Next or previous chat, bot or worktree <K>Alt</K> <K>↓</K> / <K>↑</K>; new worktree <K>Ctrl</K> <K>Shift</K> <K>N</K>; Schedules{' '}
+              <K>Ctrl</K> <K>Shift</K> <K>S</K>.
+            </li>
+            <li>
+              Jump to the message box <K>Ctrl</K> <K>Shift</K> <K>L</K>; <K>Esc</K> there stops a reply.
+            </li>
+          </ul>
+        ),
+        keywords: 'keyboard shortcuts tabs panes split maximize terminal worktree next previous stop escape focus'
       }
     ]
   },

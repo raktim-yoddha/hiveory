@@ -12,3 +12,15 @@ export const registerPaneCloser = (paneId: string, close: () => void): (() => vo
 }
 
 export const closePane = (paneId: string): void => closers.get(paneId)?.()
+
+/** The open worktree's layout maximizes a pane (its double-click, or the shortcut, ADR 0047). */
+let maximizer: ((paneId: string) => void) | null = null
+
+export const registerPaneMaximizer = (toggle: (paneId: string) => void): (() => void) => {
+  maximizer = toggle
+  return () => {
+    if (maximizer === toggle) maximizer = null
+  }
+}
+
+export const togglePaneMaximized = (paneId: string): void => maximizer?.(paneId)

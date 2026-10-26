@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { defaultQueenShortcut, parseShortcut, queenShortcutOf, shortcutProblem } from '../queen/shortcut'
-import { APP_COMMANDS, bindingClash, bindingOf, cleanKeybindings, commandFor } from './keybindings'
+import { APP_COMMANDS, bindingClash, bindingOf, cleanKeybindings, commandFor, defaultBinding } from './keybindings'
 
 const key = (code: string, mods: Partial<Record<'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey', boolean>> = {}) => ({
   code,
@@ -31,6 +31,21 @@ describe('keybindings', () => {
     }
     expect(commandFor(key('KeyB', { ctrlKey: true }), {}, 'win32')).toBeNull()
     expect(commandFor(key('KeyB', { ctrlKey: true, shiftKey: true }), {}, 'win32')).toBe('toggle-sidebar')
+  })
+
+  it('gives every command its own keys on every platform, none of them reserved there', () => {
+    for (const platform of ['darwin', 'win32', 'linux']) {
+      const keys = APP_COMMANDS.map((c) => defaultBinding(c.id, platform))
+      expect(new Set(keys).size, platform).toBe(keys.length)
+      expect(keys.includes(defaultQueenShortcut(platform)), platform).toBe(false)
+      // ⌘N is New in every Mac app; the recorder only keeps the user from taking it for something else.
+      for (const c of APP_COMMANDS.filter((c) => !(platform === 'darwin' && c.id === 'new-item'))) {
+        expect(shortcutProblem(parseShortcut(defaultBinding(c.id, platform))!, platform, { terminals: c.id !== 'new-item' }), `${platform} ${c.id}`).toBeNull()
+      }
+    }
+    expect(commandFor(key('Tab', { ctrlKey: true }), {}, 'win32')).toBe('next-tab')
+    expect(commandFor(key('Tab', { ctrlKey: true, shiftKey: true }), {}, 'win32')).toBe('previous-tab')
+    expect(commandFor(key('KeyT', { metaKey: true }), {}, 'darwin')).toBe('new-tab')
   })
 
   it('matches exactly: an extra modifier is a different shortcut', () => {

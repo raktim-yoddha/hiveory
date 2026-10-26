@@ -3,6 +3,7 @@ import type { LayoutNode, LayoutOperation } from '@shared/domain'
 import { computeGeometry, dragDivider, fitToMinimums, minSizeOf, relativeGeometry, type Divider, type MinPaneSize, type Rect, type RelativeRect, type Span } from '@shared/layout/geometry'
 import { paneGroups, resizeSplit } from '@shared/layout/operations'
 import { cx } from '../../lib/cx'
+import { registerPaneMaximizer } from './pane-commands'
 import { PaneDropPreview } from './PaneDropPreview'
 import { usePaneDrag } from './usePaneDrag'
 import styles from './PaneLayout.module.css'
@@ -67,6 +68,7 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
   /** Local ratios while a divider is being dragged; committed on release. */
   const [resizing, setResizing] = useState<{ key: string; tree: LayoutNode | null } | null>(null)
   const [maximizedId, setMaximizedId] = useState<string | null>(null)
+  useEffect(() => registerPaneMaximizer((paneId) => setMaximizedId((m) => (m === paneId ? null : paneId))), [])
 
   useLayoutEffect(() => {
     const el = containerRef.current
@@ -158,6 +160,7 @@ export function PaneLayout({ tree, renderPane, onOperation, paneMinWidth, onMinS
         return (
           <div
             key={paneId}
+            data-pane-id={paneId}
             className={cx(
               styles.slot,
               drag?.paneId === paneId && styles.dragging,

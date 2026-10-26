@@ -14,6 +14,8 @@ import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
 import { useAppShortcuts } from './useAppShortcuts'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
+import { CreateWorkspaceDialog } from '../workspace-create/CreateWorkspaceDialog'
+import { useNewWorktree } from '../workspace-create/new-worktree'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
@@ -54,6 +56,7 @@ export function AppShell() {
     workMinWidth
   } = useNavigation()
   useAppShortcuts()
+  const newWorktree = useNewWorktree()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const queenPlacement = useQueen((s) => s.placement)
   const inSettings = view.type === 'settings'
@@ -205,6 +208,7 @@ export function AppShell() {
       {/* Opened from Bots, Chat and Work (ADR 0040). */}
       <RoutineEditor />
       <SshPromptDialog />
+      {newWorktree.projectId && <CreateWorkspaceDialog projectId={newWorktree.projectId} onClose={newWorktree.close} />}
       <UpdatePrompt />
       <Toasts />
     </div>
