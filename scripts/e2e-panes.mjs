@@ -1,4 +1,3 @@
-/* global document, getComputedStyle */
 // End-to-end: browser pages follow every pane rule (ADR 0042, 0043), and round 13's pane promises (ADR 0044):
 // terminals without status, Kanban states in words, terminals that remember, lazily loaded screens.
 // Self-contained: sets up its own Workspace and agent over IPC, so it runs on its own and quickly.
