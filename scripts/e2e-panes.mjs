@@ -81,7 +81,7 @@ await test('a click in the page selects its pane, like any pane', async () => {
   await view.click('h1')
   await waitFor(async () => (await browserPane().getAttribute('data-focused')) === 'true', 'the browser pane marked selected')
   await shot('p2-page-selected')
-  await browserPane().getByRole('tab', { name: new RegExp(agent.petName) }).click()
+  await browserPane().getByRole('tab', { name: new RegExp(`${agent.petName}(?! ·)`) }).click()
   await waitFor(async () => (await browserPane().getAttribute('data-focused')) === null, 'the mark moves off the page pane')
   await agentPane().getByRole('tab', { name: /Fixture/ }).click()
   await waitFor(shown, 'the page shown again', 3000)
