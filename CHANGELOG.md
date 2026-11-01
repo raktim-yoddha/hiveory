@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.25.0 — Usage limits in chat, more shortcuts, tabs-only panes
+_2026-11-01_
+
+- Breaking: Panes are always tabs with spaced, rounded surfaces. Tiles, Attached, Settings › Appearance › Panes and the first-run welcome are gone; a saved layout keeps its splits.
+- Breaking: The desktop message box no longer has saved prompts; they stay on the phone.
+- Every message box has a usage limits button showing your plan's 5-hour, weekly and per-model limits, the share used and when each resets, for Claude Code and Codex.
+- Claude's models are named by version, such as Opus 5.5 and Fable 5.1, from the list Claude Code itself offers, so new models show up on their own.
+- A new chat can work in any Worktree of a Workspace and shows where it works once started, and Chat and Work now have the same Schedules calendar as Bots.
+- 16 new shortcuts cover tabs, panes, lists, Schedules and the message box, and Esc in a message box stops the reply; all can be changed in Settings › Keyboard.
+
 ## v0.24.0 — Pluto shows your Hiveory agents from a notch
 _2026-10-25_
 
