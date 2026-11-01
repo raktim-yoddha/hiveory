@@ -39,8 +39,9 @@ jobs:
           node scripts/release-notes.mjs "$TAG" > notes.txt
           head -n 1 notes.txt | sed 's/^title: //' > title.txt
           tail -n +2 notes.txt > body.md
+      # A re-run keeps the draft the tag already has (ADR 0035).
       - name: Create the draft
-        run: gh release create "$TAG" --draft --verify-tag --title "$(cat title.txt)" --notes-file body.md
+        run: gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --draft --verify-tag --title "$(cat title.txt)" --notes-file body.md
 
   desktop:
     name: Desktop (${{ matrix.os }})
@@ -49,7 +50,7 @@ jobs:
       fail-fast: false
       matrix:
         # ubuntu-24.04-arm builds the Linux arm64 (aarch64) installers natively (ADR 0035).
-        os: [windows-latest, macos-14, ubuntu-latest, ubuntu-24.04-arm]
+        os: [windows-latest, macos-latest, ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     env:
       # No Apple Developer certificate yet: build unsigned instead of searching the keychain.
@@ -114,7 +115,7 @@ jobs:
             --out "$APK" mobile/android/app/build/outputs/apk/release/app-release.apk
           "$BUILD_TOOLS/apksigner" verify "$APK"
           rm "$RUNNER_TEMP/hiveory.p12"
-          gh release upload "$TAG" "$APK"
+          gh release upload "$TAG" "$APK" --clobber
 
   publish:
     name: Publish

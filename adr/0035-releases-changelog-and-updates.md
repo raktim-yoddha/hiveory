@@ -70,3 +70,14 @@ on GitHub's `ubuntu-24.04-arm` runner builds the AppImage and deb natively, so t
 shortcut addons install their arm64 prebuilds. Linux file names carry the architecture
 (`Hiveory-X.Y.Z-<arch>.AppImage`) so the two jobs never overwrite each other; electron-updater reads
 `latest-linux.yml` on x64 and `latest-linux-arm64.yml` on arm64, which electron-builder writes per job.
+
+## Amendment (2026-11-02): macOS runner and re-running a tag
+
+GitHub retired its macOS 14 runner while v0.25.0 was building, so the macOS job never started and the
+release stayed a draft. CI and releases now use `macos-latest` (still Apple Silicon), like the
+`-latest` Windows and Linux jobs, so a retired image can't stop a release again.
+
+A tag can be re-run by hand (Actions › Release › Run workflow) with the workflow on `main`, without
+moving the tag: the draft step keeps a draft the tag already has, electron-builder overwrites its files
+in that draft, and the APK upload replaces its file. A CI-only fix like this one has nothing to release,
+so it re-runs the tag rather than cutting a new version.
