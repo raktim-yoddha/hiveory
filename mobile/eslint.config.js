@@ -15,7 +15,7 @@ const features = fs
   .map((d) => d.name)
 
 /** Desktop modules with no imports of their own: safe to bundle on the phone. */
-const SHARED_AT_RUNTIME = ['domain/tailnet', 'domain/cli', 'domain/project', 'domain/workspace', 'domain/bot', 'domain/approval', 'domain/prompt', 'domain/routine', 'domain/routine-text', 'ipc/remote']
+const SHARED_AT_RUNTIME = ['domain/tailnet', 'domain/cli', 'domain/project', 'domain/workspace', 'domain/prompt', 'domain/routine', 'domain/routine-text', 'ipc/remote']
 
 // Climbing more than one folder must use the @/ alias, so the rules below see every crossing.
 const noDeepRelative = { group: ['../../*'], message: 'Import across folders with @/… so boundaries stay checkable.' }

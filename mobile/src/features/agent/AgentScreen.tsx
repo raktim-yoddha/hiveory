@@ -8,8 +8,9 @@ import { useAction, useCall, useCliIcons } from '@/core/api'
 import { KEYS, TerminalView, withModifiers, type Modifiers, type TerminalHandle } from '@/core/terminal'
 import { space, useTheme } from '@/core/theme'
 import { agentLine, Button, CliLogo, EmptyState, IconButton, Loading, Screen, StatusPill, Text } from '@/core/ui'
+import { ChatThread } from '@/core/chat'
 import { AgentActions } from './AgentActions'
-import { ChatThread, Composer, ModelBar } from '@/core/chat'
+import { ChatDock } from './ChatDock'
 import { KeyBar } from './KeyBar'
 import { TerminalInput } from './TerminalInput'
 
@@ -25,7 +26,6 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
   const agent = agents.data?.find((a) => a.id === instanceId)
   const icons = useCliIcons(agent?.projectId)
   const write = useAction('terminal.write', { quiet: true })
-  const message = useAction('agents.sendMessage')
   const terminal = useRef<TerminalHandle>(null)
   const [actions, setActions] = useState(false)
   // Bumped each time the key bar's Enter sends the prompt, so the typing box starts fresh.
@@ -94,10 +94,7 @@ export function AgentScreen({ instanceId, workspaceId }: { instanceId: string; w
           ) : null}
           {/* A chat-view agent gets a message box; a terminal is typed into directly, keys right above the keyboard (ADR 0039). */}
           {agent.chatUi ? (
-            <>
-              <ModelBar chatId={instanceId} />
-              <Composer petName={agent.petName} busy={message.isPending} onSend={(text) => message.mutateAsync({ instanceId, message: text })} />
-            </>
+            <ChatDock instanceId={instanceId} petName={agent.petName} />
           ) : (
             <>
               {/* Keyed by the sent line: after the key bar's Enter the box starts fresh. */}

@@ -17,7 +17,7 @@ export interface ComposerProps {
   ready?: boolean
 }
 
-/** Writes to the agent like typing in its prompt and pressing Enter (agents.sendMessage), on Send. */
+/** A message box for a chat-view agent: Send hands the text to `onSend`, which decides how it goes. */
 export function Composer({ petName, onSend, busy, text: controlled, onText, tools, ready }: ComposerProps) {
   const { colors } = useTheme()
   const [own, setOwn] = useState('')

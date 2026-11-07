@@ -6,20 +6,13 @@ export const routes = {
   inbox: '/' as const,
   projects: '/projects' as const,
   settings: '/settings' as const,
-  bots: '/bots' as const,
-  schedules: '/schedules' as const,
-  /** A new Schedule, or one to edit (ADR 0053). */
-  schedule: (routineId?: string) => ({ pathname: '/schedule' as const, params: routineId ? { routineId } : {} }),
-  triggers: '/triggers' as const,
-  teams: '/teams' as const,
-  /** A new bot, or one to edit. */
-  botEdit: (botId?: string) => ({ pathname: '/bot-edit' as const, params: botId ? { botId } : {} }),
+  /** Schedules, one Workspace's or all of them (ADR 0053, 0056). */
+  schedules: (projectId?: string) => ({ pathname: '/schedules' as const, params: projectId ? { projectId } : {} }),
+  /** A new Schedule (in a Workspace, when known), or one to edit. */
+  schedule: (routineId?: string, projectId?: string) => ({ pathname: '/schedule' as const, params: { ...(routineId ? { routineId } : {}), ...(projectId ? { projectId } : {}) } }),
   /** A folder of a worktree ('' = its top), and one file in it (ADR 0053). */
   files: (workspaceId: string, projectId: string, dir = '') => ({ pathname: '/files/[workspaceId]' as const, params: { workspaceId, projectId, dir } }),
   file: (workspaceId: string, projectId: string, path: string) => ({ pathname: '/file/[workspaceId]' as const, params: { workspaceId, projectId, path } }),
-  chats: '/chat' as const,
-  chat: (chatId: string) => ({ pathname: '/chat/[chatId]' as const, params: { chatId } }),
-  bot: (botId: string) => ({ pathname: '/bot/[botId]' as const, params: { botId } }),
   pair: '/pair' as const,
   project: (projectId: string) => ({ pathname: '/project/[projectId]' as const, params: { projectId } }),
   projectSettings: (projectId: string) => ({ pathname: '/project-settings/[projectId]' as const, params: { projectId } }),

@@ -7,7 +7,7 @@ import { pageX, radius, space, useTheme } from '@/core/theme'
 import { CliLogo, EmptyState, Loading, Logo, Markdown, Text } from '@/core/ui'
 
 /**
- * A conversation, live: a chat, a bot's thread, or a chat-view agent (whose chat shares its id). The
+ * A chat-view agent's conversation, live (its chat shares the agent's id). The
  * question shows as soon as it is sent, and the reply streams in as the computer reports it
  * (chat.event). Empty, it shows the chat's CLI logo, or Hiveory's before one is chosen (ADR 0039).
  */

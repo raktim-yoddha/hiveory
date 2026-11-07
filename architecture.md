@@ -646,12 +646,12 @@ Bots, teams, triggers, approvals and bot computers were removed (ADR 0056).
 ```text
 mobile/ (own pnpm workspace, Expo Router)
   src/app        routes: compose features, RouteErrorBoundary each
-  src/features   islands (inbox, projects, workspace, agent, files, bots, schedules, chats, onboarding, ssh-prompts, notifications, settings)
+  src/features   islands (inbox, projects, workspace, agent, files, schedules, onboarding, ssh-prompts, notifications, settings, updates)
   src/core       api (call · SSE · query invalidation) · computers · theme (from tokens.css) · ui · terminal
        │ import type @shared/*  (one contract with the desktop)
        ▼
 phone ──HTTP /call (MOBILE_CHANNELS) · SSE /events?terminal=none|<id> · POST /push──▶ Sharing/server
 desktop agent waits ─queen.update─▶ Sharing.notifyWaiting ─┐
-bot approval / Schedule run ─────────▶ Sharing.notifyPhones ─┴▶ Expo push (ids only, ADR 0053)
+Schedule run ────────────────────────▶ Sharing.notifyPhones ─┴▶ Expo push (ids only, ADR 0053)
 phone reaches the computer at any of its addresses (Tailscale, Wi-Fi), the last that answered first (ADR 0052)
 ```
