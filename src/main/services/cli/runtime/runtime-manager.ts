@@ -55,6 +55,9 @@ export const resolveCommand = (executable: string, args: string[]): [string, str
  * providers: adapters supply launch arguments and status mapping; PtySession
  * supplies the terminal plumbing.
  */
+/** How often heuristics look at each agent's status (confirm a prompt, notice silence). */
+export const STATUS_TICK_MS = 250
+
 export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
   private readonly sessions = new Map<string, Session>()
   private readonly ticker: NodeJS.Timeout
@@ -72,7 +75,8 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     private readonly adoptable: (instanceId: string) => { ptyId: string; hooks: KeptHook[] } | undefined = () => undefined
   ) {
     super()
-    this.ticker = setInterval(() => this.tick(), 1000)
+    // A quarter second: a prompt on screen or a turn's end shows on the board almost at once.
+    this.ticker = setInterval(() => this.tick(), STATUS_TICK_MS)
     this.ticker.unref()
   }
 

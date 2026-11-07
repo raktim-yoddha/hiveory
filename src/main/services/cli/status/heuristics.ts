@@ -114,7 +114,9 @@ export class HeuristicDetector {
   }
 
   tick(now: number): StatusEvent | null {
-    const shown = this.visible()
+    // The screen is read only when something needs it: a prompt to confirm, or one to watch leave.
+    const needsScreen = this.candidate || (this.phase === 'waiting' && this.ownWaiting)
+    const shown = needsScreen ? this.visible() : null
     if (this.candidate) {
       this.candidate = false
       const reason = this.match(shown ?? this.tail)

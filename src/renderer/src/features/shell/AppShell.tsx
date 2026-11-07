@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { lazy, Suspense, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { ResizeHandle } from '../../components/ui/ResizeHandle'
@@ -32,19 +33,21 @@ const SettingsScreen = lazy(() => import('../settings/SettingsScreen').then((m) 
  * (which keeps its size, so agent terminals never reflow).
  */
 export function AppShell() {
-  const {
-    view,
-    sidebarCollapsed,
-    sidebarWidth,
-    setSidebarWidth,
-    toggleSidebar,
-    panelOpen,
-    panelWidth,
-    setPanelWidth,
-    togglePanel,
-    panelMaximized,
-    workMinWidth
-  } = useNavigation()
+  const { view, sidebarCollapsed, sidebarWidth, setSidebarWidth, toggleSidebar, panelOpen, panelWidth, setPanelWidth, togglePanel, panelMaximized, workMinWidth } = useNavigation(
+    useShallow((s) => ({
+      view: s.view,
+      sidebarCollapsed: s.sidebarCollapsed,
+      sidebarWidth: s.sidebarWidth,
+      setSidebarWidth: s.setSidebarWidth,
+      toggleSidebar: s.toggleSidebar,
+      panelOpen: s.panelOpen,
+      panelWidth: s.panelWidth,
+      setPanelWidth: s.setPanelWidth,
+      togglePanel: s.togglePanel,
+      panelMaximized: s.panelMaximized,
+      workMinWidth: s.workMinWidth
+    }))
+  )
   useAppShortcuts()
   const newWorktree = useNewWorktree()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))

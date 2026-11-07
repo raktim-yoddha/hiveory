@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { PanelLeft, PanelRight, Settings } from 'lucide-react'
 import { AppLogo } from '../../components/brand/AppLogo'
 import { IconButton } from '../../components/ui/Button'
@@ -11,7 +12,7 @@ const withKeys = (label: string, keys?: string): string => (keys ? `${label} (${
 
 /** What the window's chrome buttons need: there is no title bar (ADR 0056), so they live in the sidebar. */
 function useChrome() {
-  const { sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation()
+  const { sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation(useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, panelOpen: s.panelOpen, togglePanel: s.togglePanel, view: s.view, openSettings: s.openSettings, closeSettings: s.closeSettings })))
   const inSettings = view.type === 'settings'
   const keys = { sidebar: useCommandKeys('toggle-sidebar'), panel: useCommandKeys('toggle-side-panel'), settings: useCommandKeys('open-settings') }
   const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'

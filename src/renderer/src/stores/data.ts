@@ -76,10 +76,13 @@ export const useProjects = create<ProjectState>((set) => ({
 interface WorkspaceState {
   byProject: Record<string, WorkspaceView[]>
   load(projectId: string): Promise<void>
+  /** Loads a Workspace's Worktrees only when they are not here yet: events keep loaded ones fresh. */
+  ensure(projectId: string): Promise<void>
 }
 
-export const useWorkspaces = create<WorkspaceState>((set) => ({
+export const useWorkspaces = create<WorkspaceState>((set, get) => ({
   byProject: {},
+  ensure: (projectId) => (get().byProject[projectId] ? Promise.resolve() : get().load(projectId)),
   load: (projectId) =>
     load(
       'Load worktrees',
@@ -129,13 +132,16 @@ interface AgentState {
   /** When each agent's status last changed (ms epoch), from live events; unknown until the first change. */
   since: Record<string, number>
   load(workspaceId: string): Promise<void>
+  /** Loads a Worktree's agents only when they are not here yet: events keep loaded ones fresh. */
+  ensure(workspaceId: string): Promise<void>
   setRuntime(instanceId: string, details: CliRuntimeDetails): void
 }
 
-export const useAgents = create<AgentState>((set) => ({
+export const useAgents = create<AgentState>((set, get) => ({
   byWorkspace: {},
   runtime: {},
   since: {},
+  ensure: (workspaceId) => (get().byWorkspace[workspaceId] ? Promise.resolve() : get().load(workspaceId)),
   load: (workspaceId) =>
     load(
       'Load agents',

@@ -33,7 +33,7 @@ export function ProjectRow({ project }: { project: Project }) {
   const openProject = useNavigation((s) => s.openProject)
   const lastId = useNavigation((s) => s.lastWorktree[project.id])
   const workspaces = useWorkspaces((s) => s.byProject[project.id] ?? EMPTY)
-  const loadWorkspaces = useWorkspaces((s) => s.load)
+  const loadWorkspaces = useWorkspaces((s) => s.ensure)
   const isCurrent = selectedProjectId(view) === project.id
   // Follows the selection until the user folds or unfolds it.
   const [toggled, setToggled] = useState<boolean | null>(null)

@@ -22,6 +22,8 @@
     "e2e": "node scripts/e2e.mjs",
     "e2e:panes": "node scripts/e2e-panes.mjs",
     "e2e:composer": "node scripts/e2e-composer.mjs",
+    "e2e:layout": "node scripts/e2e-layout.mjs",
+    "e2e:perf": "node scripts/e2e-perf.mjs",
     "mobile": "pnpm --dir mobile",
     "mobile:install": "pnpm --dir mobile install",
     "mobile:check": "pnpm --dir mobile check"

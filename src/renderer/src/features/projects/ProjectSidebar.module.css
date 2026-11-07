@@ -385,10 +385,9 @@
   list-style: none;
 }
 
-/* Unfolding, the panes come in one after another (index in --i). */
+/* Unfolding, the panes slide in together: no stagger, so a shown sidebar is complete at once. */
 .agentList > li {
-  animation: row-in var(--duration-slow) var(--ease-liquid) both;
-  animation-delay: min(calc(var(--i, 0) * var(--stagger) * 2), 240ms);
+  animation: row-in var(--duration-fast) var(--ease-out);
 }
 
 @keyframes row-in {

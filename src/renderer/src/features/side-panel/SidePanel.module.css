@@ -233,7 +233,7 @@
 /* Shown again on every tab switch (it was display:none), so it fades up each time. */
 .page {
   height: 100%;
-  animation: page-in var(--duration-slow) var(--ease-out);
+  animation: page-in var(--duration-fast) var(--ease-out);
 }
 
 @keyframes page-in {

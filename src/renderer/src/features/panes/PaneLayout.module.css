@@ -20,7 +20,7 @@
     height var(--duration-slow) var(--ease-in-out),
     opacity var(--duration-base) var(--ease-in-out),
     visibility 0s;
-  animation: pane-in var(--duration-slow) var(--ease-in-out);
+  animation: pane-in var(--duration-fast) var(--ease-out);
 }
 
 /* Follow the pointer exactly while resizing or dragging. */

@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { CalendarClock, FolderTree, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop, Settings2 } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
@@ -38,7 +39,7 @@ export function SidePanel() {
   // Workspaces only — a project page has no side panel.
   const scope = workspaceId ?? ''
   const tabs = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
-  const { movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation()
+  const { movePanelTab, panelMaximized, togglePanelMaximized, panelSplit, setPanelSplit, ensurePanelTabs } = useNavigation(useShallow((s) => ({ movePanelTab: s.movePanelTab, panelMaximized: s.panelMaximized, togglePanelMaximized: s.togglePanelMaximized, panelSplit: s.panelSplit, setPanelSplit: s.setPanelSplit, ensurePanelTabs: s.ensurePanelTabs })))
   const bodyRef = useRef<HTMLDivElement>(null)
   /** The tab being dragged, and where the panel shows it would land. */
   const [dragging, setDragging] = useState<string | null>(null)
@@ -172,9 +173,13 @@ function PanelArea({
 }: PanelAreaProps) {
   const activeId = useNavigation((s) => s.activePanelTab[panelGroupKey(scope, group)])
   const all = useNavigation((s) => s.panelTabs[scope] ?? EMPTY)
-  const { selectPanelTab, movePanelTab } = useNavigation()
+  const { selectPanelTab, movePanelTab } = useNavigation(useShallow((s) => ({ selectPanelTab: s.selectPanelTab, movePanelTab: s.movePanelTab })))
   const [before, setBefore] = useState<string | null>(null)
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
+  // A tab's page mounts the first time it is shown, then stays mounted (it keeps its state):
+  // opening the panel renders one page, not every tab's (the Sessions history, the calendar…).
+  const [shown, setShown] = useState<ReadonlySet<string>>(() => new Set(active ? [active.id] : []))
+  if (active && !shown.has(active.id)) setShown(new Set(shown).add(active.id))
 
   /** Ctrl+Shift+← → reorder, Ctrl+Shift+↓ ↑ move between the areas. */
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, tab: PanelTab): void => {
@@ -296,8 +301,8 @@ function PanelArea({
         {tabs.length === 0 ? (
           <EmptyState compact icon={<PanelTop />} title="Drag a tab here" description="Drag a tab from the other area to show it here." />
         ) : (
-          // Every tab stays mounted so pages and the Explorer keep their state; only the active one is visible.
-          tabs.map((tab) => (
+          // A tab shown once stays mounted so pages and the Explorer keep their state; only the active one is visible.
+          tabs.filter((tab) => shown.has(tab.id)).map((tab) => (
             <div key={tab.id} className={styles.page} hidden={tab.id !== active?.id}>
               <ErrorBoundary region={tab.title} compact>
                 {tab.kind === 'explorer' ? (

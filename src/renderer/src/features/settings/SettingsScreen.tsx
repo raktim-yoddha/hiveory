@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { BookOpen, Blocks, Download, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
@@ -36,7 +37,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
  * what is behind stays in place, so appearance changes show at once. Escape or × closes it.
  */
 export function SettingsScreen({ section }: { section: SettingsSection }) {
-  const { openSettings, closeSettings } = useNavigation()
+  const { openSettings, closeSettings } = useNavigation(useShallow((s) => ({ openSettings: s.openSettings, closeSettings: s.closeSettings })))
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]!
   const listRef = useRef<HTMLUListElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)

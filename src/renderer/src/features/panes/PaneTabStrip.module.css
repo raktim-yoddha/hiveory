@@ -17,7 +17,7 @@
   height: calc(var(--pane-header-height) - var(--space-3));
   border-radius: var(--radius-sm);
   color: var(--color-text-muted);
-  animation: tab-in var(--duration-slow) var(--ease-liquid);
+  animation: tab-in var(--duration-fast) var(--ease-out);
   transition:
     background var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);

@@ -59,6 +59,8 @@ await test('a worktree: panes and the side panel start at the top too', async ()
   const panel = await page.getByRole('region', { name: 'Side panel' }).boundingBox()
   expect(panel && panel.y < 32, `the side panel starts ${panel?.y}px down`)
   // One top-bar height: the sidebar's button, a pane's header and the side panel's button line up (ADR 0056).
+  // Measured at rest: entrance animations (a pane sliding in) finish first.
+  await page.evaluate(() => Promise.all(document.getAnimations().filter((a) => a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished.catch(() => undefined))))
   const lines = [
     await middle(sidebar().getByRole('button', { name: 'Hide sidebar' })),
     await middle(page.locator('[data-top-bar]').first()),

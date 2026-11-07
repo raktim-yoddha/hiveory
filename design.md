@@ -381,6 +381,12 @@ movement and the `--duration-*` tokens; no `backdrop-filter` over large areas
 that repaint (terminals); no per-frame JavaScript loops; respect
 `prefers-reduced-motion`.
 
+Anything a click opens or switches to (the sidebar and its rail, the side panel and its pages,
+a worktree's screen, its panes and tabs) enters in `--duration-fast` with `--ease-out`, all at
+once and never staggered: the window answers within a few frames (`scripts/e2e-perf.mjs`
+checks four at 60 Hz). Springs and longer durations are for what floats over the app (menus,
+dialogs, toasts).
+
 Motion should clarify state, not decorate it.
 
 ## Interaction Rules

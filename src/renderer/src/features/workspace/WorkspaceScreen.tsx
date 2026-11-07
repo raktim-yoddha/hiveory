@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useCallback, useEffect, useState } from 'react'
 import { FileCode2, FolderX, Globe } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
@@ -36,7 +37,7 @@ interface WorkspaceScreenProps {
 export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: WorkspaceScreenProps) {
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
   const workspaces = useWorkspaces((s) => s.byProject[projectId] ?? NO_WORKSPACES)
-  const loadWorkspaces = useWorkspaces((s) => s.load)
+  const loadWorkspaces = useWorkspaces((s) => s.ensure)
   const workspace = workspaces.find((w) => w.id === workspaceId)
   const agents = useAgents((s) => s.byWorkspace[workspaceId])
   const loadAgents = useAgents((s) => s.load)
@@ -44,7 +45,8 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const allPages = useBrowser((s) => s.pages)
-  const runtime = useAgents((s) => s.runtime)
+  // Only this worktree's agents: a status change in another worktree never re-renders these panes.
+  const runtime = useAgents(useShallow((s) => Object.fromEntries((s.byWorkspace[workspaceId] ?? []).map((a) => [a.id, s.runtime[a.id]]))))
   const clis = useClis((s) => s.clis)
   const { load: loadLayout, apply } = useLayouts()
   const setWorkMinWidth = useNavigation((s) => s.setWorkMinWidth)

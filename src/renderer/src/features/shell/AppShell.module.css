@@ -160,16 +160,16 @@
 /* A screen fades up as it appears. */
 .view {
   height: 100%;
-  animation: screen-in var(--duration-slow) var(--ease-in-out);
+  animation: screen-in var(--duration-fast) var(--ease-out);
 }
 
 /* Sidebars glide in from their edge when shown. */
 .sidebar {
-  animation: slide-from-left var(--duration-slow) var(--ease-liquid);
+  animation: slide-from-left var(--duration-fast) var(--ease-out);
 }
 
 .panel {
-  animation: slide-from-right var(--duration-slow) var(--ease-liquid);
+  animation: slide-from-right var(--duration-fast) var(--ease-out);
 }
 
 @keyframes screen-in {

@@ -34,7 +34,7 @@ function RailWorkspace({ project }: { project: Project }) {
   const openWorkspace = useNavigation((s) => s.openWorkspace)
   const lastId = useNavigation((s) => s.lastWorktree[project.id])
   const worktrees = useWorkspaces((s) => s.byProject[project.id] ?? EMPTY)
-  const loadWorktrees = useWorkspaces((s) => s.load)
+  const loadWorktrees = useWorkspaces((s) => s.ensure)
   const [open, setOpen] = useState(false)
   useEffect(() => {
     void loadWorktrees(project.id)

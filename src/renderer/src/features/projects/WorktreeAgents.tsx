@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, FileCode2, Globe, Loader2 } from 'lucide-react'
 import type { BrowserPageView, CliInstanceView, CliStatus, EditorView } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -24,18 +25,19 @@ const MORE_PX = 24
  */
 const useWorktreeAgents = (workspaceId: string) => {
   const agents = useAgents((s) => s.byWorkspace[workspaceId] ?? EMPTY)
-  const runtime = useAgents((s) => s.runtime)
-  const load = useAgents((s) => s.load)
+  // Only this worktree's statuses: activity text and other worktrees' changes never re-render it.
+  const statuses = useAgents(useShallow((s) => (s.byWorkspace[workspaceId] ?? EMPTY).map((a) => (s.runtime[a.id] ?? a.runtime).status)))
+  const ensure = useAgents((s) => s.ensure)
   const clis = useClis((s) => s.clis)
   useEffect(() => {
-    void load(workspaceId)
-  }, [workspaceId, load])
+    void ensure(workspaceId)
+  }, [workspaceId, ensure])
   return useMemo(() => {
     const shell = new Set(clis.filter((c) => c.kind === 'shell').map((c) => c.id))
     return agents
-      .map((a) => ({ agent: a, status: shell.has(a.cliId) ? undefined : (runtime[a.id] ?? a.runtime).status }))
+      .map((a, i) => ({ agent: a, status: shell.has(a.cliId) ? undefined : statuses[i] }))
       .sort((x, y) => (x.status ? RANK[x.status] : 3) - (y.status ? RANK[y.status] : 3) || x.agent.petName.localeCompare(y.agent.petName))
-  }, [agents, runtime, clis])
+  }, [agents, statuses, clis])
 }
 
 /** Spins while anything in the worktree is working; in place of the old pane count (ADR 0040). */
@@ -66,7 +68,7 @@ const NO_EDITORS: EditorView[] = []
  */
 export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; workspaceId: string }) {
   const sorted = useWorktreeAgents(workspaceId)
-  const since = useAgents((s) => s.since)
+  const since = useAgents(useShallow((s) => Object.fromEntries((s.byWorkspace[workspaceId] ?? EMPTY).map((a) => [a.id, s.since[a.id]]))))
   const allPages = useBrowser((s) => s.pages)
   const pages = useMemo(() => (allPages.some((p) => p.scope === workspaceId) ? allPages.filter((p) => p.scope === workspaceId) : NO_PAGES), [allPages, workspaceId])
   const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
@@ -111,8 +113,8 @@ export function WorktreeAgents({ projectId, workspaceId }: { projectId: string; 
           <ChevronDown aria-hidden />
         </button>
         <ul className={styles.agentList}>
-          {entries.map((e, i) => (
-            <li key={e.id} style={{ '--i': i } as CSSProperties}>
+          {entries.map((e) => (
+            <li key={e.id}>
               <button type="button" className={styles.agentItem} onClick={() => openWorkspace(projectId, workspaceId, e.id)}>
                 {e.status ? <StatusDot status={e.status} /> : <span className={styles.noDot} aria-hidden />}
                 {e.icon}
