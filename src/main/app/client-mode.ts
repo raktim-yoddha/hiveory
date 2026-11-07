@@ -13,7 +13,7 @@ import { Tailscale } from '../services/tailscale/tailscale'
 import { clearClientConfig, connectAndSave, describeServer, discover, openBase, RemoteBackend, type ClientConfig } from './client'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
-import { createMainWindow, type rendererTargets } from './window'
+import { controlWindow, createMainWindow, type rendererTargets } from './window'
 
 /** Relaunches into the new mode (automation passes HIVEORY_NO_RELAUNCH and starts the app itself). */
 export const relaunch = (): void => {
@@ -63,6 +63,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
     'app.info': () => ({ platform: process.platform as 'win32' | 'darwin' | 'linux', version: app.getVersion(), hooksAvailable: true, isDev: !app.isPackaged, client: { server } }),
     'clipboard.readText': () => clipboard.readText(),
     'clipboard.writeText': ({ text }) => clipboard.writeText(text),
+    'window.control': (action, event) => controlWindow(event.sender, action),
     'system.openUrl': async ({ url }) => {
       if (!isOpenableUrl(url)) fail('FORBIDDEN', 'Hiveory only opens its help and store pages from here.')
       await shell.openExternal(url)

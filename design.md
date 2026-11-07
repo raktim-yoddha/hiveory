@@ -217,9 +217,9 @@ is put away, and the sidebar toggle; it drags the window. The side-panel toggle 
 right, on the top bars' centre line. Settings sits in the sidebar's
 footer. A hidden sidebar folds to an icon rail (a narrow card) with the same buttons. The side panel
 itself has no close button (the toggle, or dragging it narrow, hides it). On Windows and Linux the
-window controls sit transparently over the top-right card's header, which leaves them and the
-side-panel toggle room; on macOS
-the traffic lights sit at the start of the sidebar's top bar.
+window buttons (minimize, maximize, close) are the app's own icon buttons, the same size as every
+top-bar button (close turns danger on hover), after the side-panel toggle; the top-right card's
+header leaves them room. On macOS the traffic lights sit at the start of the sidebar's top bar.
 
 Do not add Agent mode.
 

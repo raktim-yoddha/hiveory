@@ -2,6 +2,7 @@ import { BrowserWindow, app, clipboard, dialog, nativeImage, safeStorage, shell,
 import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
+import { controlWindow } from '../app/window'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
 import { hostKey, hostLabel, isOpenableUrl, type AgentSession } from '@shared/domain'
 import { fail } from '@shared/errors'
@@ -294,6 +295,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'clipboard.readText': () => clipboard.readText(),
   'clipboard.writeText': ({ text }) => clipboard.writeText(text),
+  'window.control': (action, event) => controlWindow(event.sender, action),
 
   'shell.open': ({ workspaceId, projectId, tab }) => {
     // Each side-panel tab is its own shell; no tab = the workspace's default shell (also used by agent tools).

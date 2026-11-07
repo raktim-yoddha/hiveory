@@ -35,7 +35,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
  * client does not have (updates, voice packs, built-in browser pages, wallpapers).
  */
 export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
-  'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
+  'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'window.control', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
   'updates.status', 'voice.status', 'browser.state', 'wallpapers.list', 'themes.installed'
 ])
 

@@ -1,7 +1,10 @@
-import { PanelLeft, PanelRight, Settings } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Copy, Minus, PanelLeft, PanelRight, Settings, Square, X } from 'lucide-react'
 import { AppLogo } from '../../components/brand/AppLogo'
 import { IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
+import { api } from '../../lib/api'
+import { usePlatform } from '../../lib/platform'
 import { useApp } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { QueenTitle } from '../queen/Queen'
@@ -73,6 +76,31 @@ export function SidebarTop() {
 /** The side panel's button sits on the right, over the top-right top bar (ADR 0056); only in a worktree. */
 export function SidePanelToggle() {
   return useChrome().panel || null
+}
+
+/**
+ * Windows and Linux: the app's own window buttons, sized like every other top-bar button (ADR 0056).
+ * macOS keeps its traffic lights. The maximize icon follows the window, however it was resized.
+ */
+export function WindowControls() {
+  const platform = usePlatform()
+  const [maximized, setMaximized] = useState(false)
+  useEffect(() => {
+    if (platform === 'darwin') return
+    const sync = (): void => void api('window.control', 'status').then((s) => setMaximized(s.maximized), () => undefined)
+    sync()
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [platform])
+  if (platform === 'darwin') return null
+  const act = (action: 'minimize' | 'maximize' | 'close') => () => void api('window.control', action).then((s) => setMaximized(s.maximized), () => undefined)
+  return (
+    <span className={styles.windowControls}>
+      <IconButton label="Minimize window" icon={<Minus />} onClick={act('minimize')} className={styles.noDrag} />
+      <IconButton label={maximized ? 'Restore window' : 'Maximize window'} icon={maximized ? <Copy /> : <Square />} onClick={act('maximize')} className={styles.noDrag} />
+      <IconButton label="Close window" icon={<X />} onClick={act('close')} className={`${styles.noDrag} ${styles.closeWindow}`} />
+    </span>
+  )
 }
 
 /** The sidebar's footer: app settings. */

@@ -440,6 +440,8 @@ export const requestSchemas = {
   'system.revealPath': z.object({ projectId: id.optional(), workspaceId: id.optional() }),
   'clipboard.readText': none,
   'clipboard.writeText': z.object({ text: z.string().max(5_000_000) }),
+  /** The app's own window buttons (ADR 0056): `maximize` toggles; every call answers the new state. */
+  'window.control': z.enum(['status', 'minimize', 'maximize', 'close']),
   /** The right-sidebar shell for a Workspace (or a Project's folder). Returns its terminal id. */
   'shell.open': z.object({ workspaceId: id.optional(), projectId: id.optional(), tab: z.string().regex(/^[a-z0-9]{1,12}$/).optional() }),
   'shell.restart': z.object({ id }),
@@ -762,6 +764,7 @@ export interface ResponseMap {
   'system.revealPath': void
   'clipboard.readText': string
   'clipboard.writeText': void
+  'window.control': { maximized: boolean }
   'shell.open': { id: string; cwd: string }
   'shell.restart': void
   'shell.close': void

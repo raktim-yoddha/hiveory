@@ -76,6 +76,24 @@
   flex: 1;
 }
 
+/* The app's own window buttons (Windows, Linux): one group, a step apart from the side panel button. */
+.windowControls {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: var(--space-4);
+}
+
+/* Smaller glyphs than a tool's icon, like native window buttons. */
+.windowControls svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.closeWindow:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
 .noDrag {
   -webkit-app-region: no-drag;
 }

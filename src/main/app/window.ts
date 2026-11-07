@@ -14,11 +14,7 @@ export const THEME_CHROME: Record<ThemeId, { background: string; symbols: string
   silver: { background: '#08090b', symbols: '#b6bac2' }
 }
 export type WindowChrome = { background: string; symbols: string }
-/** No title bar (ADR 0056): the window controls sit on the top-right card, never on a solid strip. */
-const OVERLAY_COLOR = '#00000000'
 export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
-/** The window controls' height, centred on the top bars (page top + top bar + page top), as --window-controls-height. */
-export const TITLE_BAR_HEIGHT = 54
 
 export interface WindowTargets {
   preload: string
@@ -42,9 +38,8 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     icon: app.isPackaged ? appIcon : devIcon,
     backgroundColor: chrome.background,
     titleBarStyle: 'hidden',
-    ...(isMac
-      ? { trafficLightPosition: { x: 20, y: 21 } }
-      : { titleBarOverlay: { color: OVERLAY_COLOR, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
+    // Windows and Linux: no native buttons; the app draws its own on the top bars (ADR 0056).
+    ...(isMac ? { trafficLightPosition: { x: 20, y: 21 } } : {}),
     webPreferences: {
       preload: targets.preload,
       contextIsolation: true,
@@ -109,11 +104,16 @@ export const rendererTargets = (baseDir: string): WindowTargets => ({
 export const applyWindowTheme = (window: BrowserWindow, theme: ThemeId, custom?: WindowChrome | null): void => {
   const chrome = custom ?? THEME_CHROME[theme]
   window.setBackgroundColor(chrome.background)
-  if (process.platform !== 'darwin') {
-    try {
-      window.setTitleBarOverlay({ color: OVERLAY_COLOR, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT })
-    } catch {
-      // Overlay unavailable on this platform/window.
-    }
-  }
+}
+
+/** The app's own window buttons (ADR 0056): the sender's window only; `close` goes through its usual close (the tray). */
+export const controlWindow = (sender: Electron.WebContents, action: 'status' | 'minimize' | 'maximize' | 'close'): { maximized: boolean } => {
+  const window = BrowserWindow.fromWebContents(sender)
+  if (!window) return { maximized: false }
+  if (action === 'minimize') window.minimize()
+  else if (action === 'maximize') {
+    if (window.isMaximized()) window.unmaximize()
+    else window.maximize()
+  } else if (action === 'close') window.close()
+  return { maximized: window.isMaximized() }
 }
