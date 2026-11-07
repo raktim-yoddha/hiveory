@@ -13,12 +13,13 @@
 .slot {
   position: absolute;
   display: flex;
+  /* Quick, so panes keep up when a sidebar opens or closes (design.md "Motion"). */
   transition:
-    left var(--duration-slow) var(--ease-in-out),
-    top var(--duration-slow) var(--ease-in-out),
-    width var(--duration-slow) var(--ease-in-out),
-    height var(--duration-slow) var(--ease-in-out),
-    opacity var(--duration-base) var(--ease-in-out),
+    left var(--duration-fast) var(--ease-out),
+    top var(--duration-fast) var(--ease-out),
+    width var(--duration-fast) var(--ease-out),
+    height var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out),
     visibility 0s;
   animation: pane-in var(--duration-fast) var(--ease-out);
 }
