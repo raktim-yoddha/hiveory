@@ -47,16 +47,19 @@ export default defineConfig({
     build: { rollupOptions: { external: ['electron'], output: { format: 'cjs', entryFileNames: '[name].cjs' } } }
   },
   renderer: {
+    // The dev server listens on IPv4 loopback, which Electron reaches: on "localhost" it may bind only
+    // ::1 while Electron dials 127.0.0.1, and the window stays black (ERR_CONNECTION_REFUSED).
+    server: { host: '127.0.0.1' },
     // electron-vite leaves builds unminified; the renderer is parsed on every window start, so it is
     // minified (ADR 0044). Main and preload stay readable for stack traces in the log.
     build: { minify: true },
     plugins: [
       react(),
       {
-        // The dev server's hot-reload socket is the only reason the CSP allows ws://localhost; builds drop it.
+        // The dev server's hot-reload socket is the only reason the CSP allows ws://127.0.0.1; builds drop it.
         name: 'hiveory-csp',
         apply: 'build',
-        transformIndexHtml: (html: string) => html.replace(' ws://localhost:*', '')
+        transformIndexHtml: (html: string) => html.replace(' ws://127.0.0.1:*', '')
       }
     ],
     resolve: {
