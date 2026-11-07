@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.26.0 — Work only, no title bar, workspaces in the folded sidebar
+_2026-11-07_
+
+- Breaking: Bots and Chat are gone on the desktop and the phone; Work does it all. Saved bots, triggers, chats and their schedules no longer appear, and their files stay on disk.
+- Breaking: There is no title bar. The sidebar, panes and side panel start at the top of the window, with Settings at the bottom of the sidebar and the side panel button at the top right.
+- Hidden, the sidebar becomes a slim rail with every workspace's icon: click one to open the worktree you last used there, or double-click it to pick a worktree by its initials.
+- All three top bars share one height and line up with the window buttons.
+- Schedules always start an agent in a worktree, and a finished or missed run shows a desktop notification.
+- The development build no longer opens on a black screen.
+
 ## v0.25.0 — Usage limits in chat, more shortcuts, tabs-only panes
 _2026-11-01_
 
