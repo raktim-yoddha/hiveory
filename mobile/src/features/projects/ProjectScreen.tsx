@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Stack, router } from 'expo-router'
-import { CheckCheck, CirclePause, GitBranch, GitPullRequest, House, Moon, Plus, Settings2, type LucideIcon } from 'lucide-react-native'
+import { CalendarClock, CheckCheck, CirclePause, GitBranch, GitPullRequest, House, Moon, Plus, Settings2, type LucideIcon } from 'lucide-react-native'
 import type { CliStatus } from '@shared/domain/cli'
 import { useCall, useCliIcons } from '@/core/api'
 import { routes } from '@/core/routes'
@@ -19,7 +19,7 @@ const EMPTY: Record<CliStatus, { icon: LucideIcon; title: string }> = {
 /**
  * One workspace: its worktrees first (they stay put; tap the heading to fold them), then its board
  * as tabs (the desktop's three Kanban columns, one at a time on a phone, what needs the user first).
- * The header opens its pull requests and its settings, as the computer's tabs do (ADR 0037).
+ * The header opens its pull requests, its Schedules and its settings, as the computer's tabs do (ADR 0037, 0056).
  */
 export function ProjectScreen({ projectId }: { projectId: string }) {
   const { colors } = useTheme()
@@ -47,6 +47,7 @@ export function ProjectScreen({ projectId }: { projectId: string }) {
           headerRight: () => (
             <View style={styles.header}>
               {project?.repositoryRoot ? <IconButton label="Pull requests" icon={GitPullRequest} onPress={() => router.push(routes.pullRequests(projectId))} /> : null}
+              <IconButton label="Schedules" icon={CalendarClock} onPress={() => router.push(routes.schedules(projectId))} />
               <IconButton label="Workspace settings" icon={Settings2} onPress={() => router.push(routes.projectSettings(projectId))} />
             </View>
           )

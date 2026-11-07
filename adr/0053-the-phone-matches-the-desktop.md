@@ -57,3 +57,14 @@ used by the desktop and the phone; `routine-schedule.ts` re-exports them.
   with monthly or custom cron rules can be run, renamed and switched on or off from the phone but
   their timing is changed on the computer; Work-agent and new-chat Schedules are made there.
 - Files open as plain text, up to about 300,000 characters on a phone.
+
+## Amendment (2026-11-07): Work only on the phone too
+
+ADR 0056 removed Bots and Chat, and the phone follows. Its Bots and Chat tabs are gone, with bots,
+teams, triggers, answering a bot's requests for a yes and free-standing chats; the tabs are Home,
+Work and Settings. A chat-view agent's screen keeps what the Chat screen had: a file goes with a
+message (`chat.attach`, then `chat.send`), a message typed while it answers waits its turn
+(`chat.queue`) and can be taken back, and saved prompts fill the box. Schedules open from a
+Workspace's header; a Schedule is made or edited by picking a Workspace, a worktree and a CLI, as
+on the computer. A tapped "A schedule finished." opens the Schedules. "A bot needs your yes." is
+gone. The phone's calls (`PHONE_CHANNELS`) shrink to what it still uses.

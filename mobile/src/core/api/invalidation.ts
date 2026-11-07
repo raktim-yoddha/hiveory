@@ -13,14 +13,9 @@ export const staleChannels = (event: ServerEvent): PhoneChannel[] => {
       if (topic === 'agents') return ['agents.list', 'workspaces.list', 'kanban.board']
       if (topic === 'presets') return ['presets.list']
       if (topic === 'prompts') return ['prompts.list']
-      if (topic === 'triggers') return ['triggers.list', 'triggers.status']
       if (topic === 'settings') return ['settings.get']
-      // A chat's model or effort changed (maybe on the computer): the open chat reloads.
-      if (topic === 'chats' && chatId) return ['chat.get', 'chat.list', 'bots.threads']
-      // Chats and bot threads came or went (the Chat and Bots tabs, ADR 0039).
-      if (topic === 'chats') return ['chat.list', 'bots.threads', 'bots.list']
-      if (topic === 'bots') return ['bots.list', 'teams.list']
-      if (topic === 'approvals') return ['approvals.list']
+      // A chat-view agent's model or effort changed (maybe on the computer): its chat reloads.
+      if (topic === 'chats' && chatId) return ['chat.get']
       if (topic === 'routines') return ['routines.list', 'routines.runs']
       return []
     }

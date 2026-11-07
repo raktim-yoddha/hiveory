@@ -5,6 +5,6 @@ import { ScheduleEditScreen } from '@/features/schedules'
 export { RouteErrorBoundary as ErrorBoundary }
 
 export default function ScheduleRoute() {
-  const { routineId } = useLocalSearchParams<{ routineId?: string }>()
-  return <ScheduleEditScreen routineId={routineId} />
+  const { routineId, projectId } = useLocalSearchParams<{ routineId?: string; projectId?: string }>()
+  return <ScheduleEditScreen routineId={routineId} projectId={projectId} />
 }
