@@ -18,7 +18,7 @@ export type WindowChrome = { background: string; symbols: string }
 const OVERLAY_COLOR = '#00000000'
 export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
 /** The window controls' height, centred on the top bars (page top + top bar + page top), as --window-controls-height. */
-export const TITLE_BAR_HEIGHT = 46
+export const TITLE_BAR_HEIGHT = 54
 
 export interface WindowTargets {
   preload: string
@@ -43,7 +43,7 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     backgroundColor: chrome.background,
     titleBarStyle: 'hidden',
     ...(isMac
-      ? { trafficLightPosition: { x: 20, y: 17 } }
+      ? { trafficLightPosition: { x: 20, y: 21 } }
       : { titleBarOverlay: { color: OVERLAY_COLOR, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: targets.preload,

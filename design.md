@@ -210,7 +210,7 @@ The sidebar should feel like the BridgeMind reference: compact, dark, subtle, an
 ## Top-Level Navigation
 
 No modes and no title bar (ADR 0056). The sidebar, the main area and the side panel are cards that
-start at the top of the window, with a hairline of air above them (`--page-top`) and the page padding
+start at the top of the window, with a little air above them (`--page-top`) and the page padding
 on the other sides; their top bars share one height (`--pane-header-height`). The sidebar's top bar
 holds the brand (logo, name, the inverted DEV chip in development builds), Queen Bee's mark when she
 is put away, and the sidebar toggle; it drags the window. The side-panel toggle sits at the top
