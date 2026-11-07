@@ -88,7 +88,7 @@
 .panelToggle {
   position: absolute;
   top: calc(var(--page-top) + (var(--pane-header-height) - var(--control-sm)) / 2);
-  right: calc(var(--window-controls-width) + var(--page-padding) + var(--space-2));
+  right: calc(max(var(--window-controls-width), var(--page-padding)) + var(--space-2));
   z-index: calc(var(--z-panel) + 1);
   display: flex;
 }
