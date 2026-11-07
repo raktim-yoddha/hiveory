@@ -4,7 +4,7 @@
  * Product facts only: never user data, paths or settings values.
  */
 export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = [
-  ['Hiveory', 'A desktop app that runs coding-agent CLIs (Claude Code, Codex, Gemini, OpenCode and more) side by side. The sidebar (left, with its hide button at its top and Settings at its bottom), the open worktree and its side panel (right, shown or hidden by the button at the top right) all start at the top of the window. A phone app pairs with it.'],
+  ['Hiveory', 'A desktop app that runs coding-agent CLIs (Claude Code, Codex, Gemini, OpenCode and more) side by side. The sidebar (left, with its hide button at its top and Settings at its bottom; hidden, a slim rail of every workspace icon: click to open its last worktree, double-click to list its worktrees by initials), the open worktree and its side panel (right, shown or hidden by the button at the top right) all start at the top of the window. A phone app pairs with it.'],
   ['Workspace', 'A folder or Git repository in the sidebar. Its mark folds its worktrees; right-click for its settings.'],
   ['Worktree', 'The Primary (the workspace folder itself) or an isolated branch folder made by "+" (new, existing or remote branch). Each holds agent and terminal panes.'],
   ['Agents', 'Each pane runs one CLI instance with a pet name. Its status is Idle, Working or Needs you (terminals have none); the sidebar bar under a worktree lists every pane. Panes split right or bottom and can be dragged. After a quit, a reboot or a restored workspace, agents resume their conversations and terminals show their last output.'],

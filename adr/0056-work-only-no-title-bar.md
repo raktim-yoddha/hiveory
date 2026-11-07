@@ -56,3 +56,14 @@ centre on the top bars (Windows only lets their height change, never their width
 button leaves the sidebar and its rail: it sits at the top right, on the top bars' centre line, left of
 the window controls (at the corner on macOS). The top-right top bar leaves `--top-right-room` for both;
 the corner is found by the bar's right edge meeting the main area's, on every platform.
+
+## Amendment (2026-11-07): Workspaces in the folded sidebar
+
+The product owner wanted every Workspace reachable while the sidebar is folded. The rail lists each
+Workspace's mark (its icon or emoji and color), in the sidebar's sort order, between its top buttons
+and Settings; the list scrolls. A click opens the Worktree last used in that Workspace (else Primary)
+and nothing else. A double-click (→ from the keyboard, ← folds) lists its Worktrees under the mark as
+two-letter initials from the branch, else the name ("MA" for main, "LP" for feature/login-page); the
+tooltip names each, and a click opens it. Both clicks of a double-click open the same Worktree first,
+so the two gestures never fight. No new data or channel: it reads the stores the sidebar already uses.
+

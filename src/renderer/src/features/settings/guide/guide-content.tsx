@@ -49,7 +49,7 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             The sidebar runs down the left: the brand and the button that hides it at its top, your workspaces in the middle and Settings
-            at the bottom. Hidden, it folds to a slim rail with the same buttons. The worktree you open fills the middle, and its side panel
+            at the bottom. Hidden, it folds to a slim rail with the same buttons and every workspace&rsquo;s icon: click one to open the worktree you last used there, or double-click it to list its worktrees by their initials and pick one. The worktree you open fills the middle, and its side panel
             runs down the right, shown or hidden by the button at the top right; all three start at the top of the window.
           </p>
         ),

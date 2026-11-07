@@ -72,9 +72,6 @@
   padding-top: var(--sidebar-bar-height);
 }
 
-.spacer {
-  flex: 1;
-}
 
 .noDrag {
   -webkit-app-region: no-drag;

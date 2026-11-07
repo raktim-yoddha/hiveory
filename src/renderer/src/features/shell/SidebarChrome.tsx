@@ -4,6 +4,7 @@ import { IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useApp } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
+import { RailWorkspaces } from '../projects/RailWorkspaces'
 import { QueenTitle } from '../queen/Queen'
 import { useQueen } from '../queen/useQueen'
 import { useCommandKeys } from './useAppShortcuts'
@@ -80,14 +81,14 @@ export function SidebarBottom() {
   return <div className={styles.bottom}>{useChrome().settings}</div>
 }
 
-/** The sidebar folded away: the same buttons as an icon rail, so nothing is out of reach. */
+/** The sidebar folded away: the same buttons as an icon rail, plus every Workspace's mark, so nothing is out of reach. */
 export function SidebarRail() {
   const chrome = useChrome()
   return (
     <nav className={styles.rail} aria-label="App">
       {chrome.sidebar}
       {chrome.queen}
-      <span className={styles.spacer} />
+      <RailWorkspaces />
       {chrome.settings}
     </nav>
   )

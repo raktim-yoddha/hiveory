@@ -13,6 +13,7 @@ import { DeleteWorkspaceDialog } from '../workspace/DeleteWorkspaceDialog'
 import { workspaceMenuEntries } from '../workspace/workspace-menu'
 import { RemoveProjectDialog } from './RemoveProjectDialog'
 import { WorkspaceMark } from './WorkspaceMark'
+import { lastWorktreeOf } from './project-list'
 import { WorktreeAgents, WorktreeBusy } from './WorktreeAgents'
 import styles from './ProjectSidebar.module.css'
 
@@ -41,7 +42,7 @@ export function ProjectRow({ project }: { project: Project }) {
   const [removing, setRemoving] = useState(false)
   const primary = workspaces.find((w) => w.kind === 'main')
   const missing = primary ? !primary.healthy : false
-  const target = workspaces.find((w) => w.id === lastId) ?? primary ?? workspaces[0]
+  const target = lastWorktreeOf(workspaces, lastId)
 
   useEffect(() => {
     void loadWorkspaces(project.id)

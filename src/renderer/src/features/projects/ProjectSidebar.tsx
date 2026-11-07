@@ -6,17 +6,8 @@ import { Menu } from '../../components/ui/Menu'
 import { useProjects } from '../../stores/data'
 import { useAddProject } from './AddProjectDialog'
 import { ProjectRow } from './ProjectRow'
+import { readSort, saveSort, sortProjects } from './project-list'
 import styles from './ProjectSidebar.module.css'
-
-const SORT_KEY = 'hiveory.projectSort'
-
-const readSort = (): ProjectSort => {
-  try {
-    return localStorage.getItem(SORT_KEY) === 'name' ? 'name' : 'recent'
-  } catch {
-    return 'recent'
-  }
-}
 
 /** The single Projects sidebar of Workspace mode (design.md "Sidebar"). */
 /** `top` and `bottom`: the window's chrome above and below the list (ADR 0056). */
@@ -28,22 +19,11 @@ export function ProjectSidebar({ top, bottom }: { top?: ReactNode; bottom?: Reac
     if (!loaded) void load()
   }, [loaded, load])
 
-  const sorted = useMemo(
-    () =>
-      [...projects].sort((a, b) =>
-        // Recent = last real work (ADR 0024): opening a project does not move it.
-        sort === 'name' ? a.name.localeCompare(b.name) : (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt)
-      ),
-    [projects, sort]
-  )
+  const sorted = useMemo(() => sortProjects(projects, sort), [projects, sort])
 
   const chooseSort = (next: ProjectSort): void => {
     setSort(next)
-    try {
-      localStorage.setItem(SORT_KEY, next)
-    } catch {
-      // Sorting still works for this session without storage.
-    }
+    saveSort(next)
   }
 
   const addProject = (): void => useAddProject.getState().show()
