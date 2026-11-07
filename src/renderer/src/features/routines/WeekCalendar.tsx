@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef } from 'react'
 import type { RoutineRun, RoutineView } from '@shared/domain/routine'
 import { nextRuns } from '@shared/domain/routine-schedule'
 import { cx } from '../../lib/cx'
-import { BOT_DRAG_TYPE } from '../bots/bot-drag'
 import { DAY_MS, sameDay } from './calendar-dates'
 import { WEEKDAYS } from './routine-text'
 import styles from './Routines.module.css'
@@ -21,7 +20,7 @@ interface Item {
 
 /**
  * A week (or one day) of routines: past runs from the log (by outcome), upcoming runs from each
- * schedule. Click an empty hour to add one there; drop a bot from the sidebar on it to add one for that bot.
+ * schedule. Click an empty hour to add one there.
  */
 export function WeekCalendar({
   start,
@@ -35,11 +34,10 @@ export function WeekCalendar({
   dayCount?: 1 | 7
   routines: RoutineView[]
   runs: RoutineRun[]
-  onSlot: (at: Date, botId?: string) => void
+  onSlot: (at: Date) => void
   onOpen: (routineId: string) => void
 }) {
   const scroller = useRef<HTMLDivElement>(null)
-  const [over, setOver] = useState<string | null>(null)
   const now = new Date()
   const days = Array.from({ length: dayCount }, (_, i) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + i))
   const end = days.at(-1)!.getTime() + DAY_MS
@@ -63,23 +61,6 @@ export function WeekCalendar({
     const el = scroller.current
     if (el) el.scrollTop = (el.scrollHeight / 24) * 7
   }, [])
-
-  const dropOn = (at: Date) => ({
-    onDragOver: (e: DragEvent<HTMLButtonElement>) => {
-      if (!e.dataTransfer.types.includes(BOT_DRAG_TYPE)) return
-      e.preventDefault()
-      e.dataTransfer.dropEffect = 'copy'
-      setOver(at.toISOString())
-    },
-    onDragLeave: () => setOver((o) => (o === at.toISOString() ? null : o)),
-    onDrop: (e: DragEvent<HTMLButtonElement>) => {
-      const botId = e.dataTransfer.getData(BOT_DRAG_TYPE)
-      setOver(null)
-      if (!botId) return
-      e.preventDefault()
-      onSlot(at, botId)
-    }
-  })
 
   return (
     <div className={cx(styles.week, dayCount === 1 && styles.oneDay)}>
@@ -110,10 +91,9 @@ export function WeekCalendar({
                 <button
                   key={h}
                   type="button"
-                  className={cx(styles.slot, over === at.toISOString() && styles.slotOver)}
+                  className={styles.slot}
                   aria-label={`New schedule ${WEEKDAYS[d.getDay()]} ${d.getDate()} at ${String(h).padStart(2, '0')}:00`}
                   onClick={() => onSlot(at)}
-                  {...dropOn(at)}
                 />
               )
             })}

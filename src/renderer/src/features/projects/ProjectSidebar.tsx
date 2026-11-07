@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Check, FolderPlus, ListFilter } from 'lucide-react'
 import type { ProjectSort } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
@@ -19,7 +19,8 @@ const readSort = (): ProjectSort => {
 }
 
 /** The single Projects sidebar of Workspace mode (design.md "Sidebar"). */
-export function ProjectSidebar() {
+/** `top` and `bottom`: the window's chrome above and below the list (ADR 0056). */
+export function ProjectSidebar({ top, bottom }: { top?: ReactNode; bottom?: ReactNode }) {
   const { projects, loaded, load } = useProjects()
   const [sort, setSort] = useState<ProjectSort>(readSort)
 
@@ -49,6 +50,7 @@ export function ProjectSidebar() {
 
   return (
     <nav className={styles.sidebar} aria-label="Workspaces">
+      {top}
       <div className={styles.header}>
         <h2 className={styles.heading}>Workspaces</h2>
         <Menu
@@ -80,6 +82,7 @@ export function ProjectSidebar() {
           </button>
         </div>
       )}
+      {bottom}
     </nav>
   )
 }

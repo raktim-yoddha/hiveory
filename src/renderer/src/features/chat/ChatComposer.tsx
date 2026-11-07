@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent } from 'react'
-import { ArrowUp, ChevronDown, Eye, FolderClosed, ListPlus, LockOpen, Paperclip, RefreshCw, Search, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronDown, Eye, ListPlus, LockOpen, Paperclip, RefreshCw, Search, Square, X } from 'lucide-react'
 import type { ChatModel, ChatSession } from '@shared/domain/chat'
-import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
-import { Menu, type MenuEntry } from '../../components/ui/Menu'
+import { Menu } from '../../components/ui/Menu'
 import { Popover } from '../../components/ui/Popover'
 import { cx } from '../../lib/cx'
 import { useChat } from '../../stores/chat'
-import { useClis, useProjects, useWorkspaces } from '../../stores/data'
+import { useClis } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { EffortIcon } from './EffortIcon'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
@@ -19,43 +18,28 @@ const MAX_VISIBLE_MODELS = 250
 
 interface ChatComposerProps {
   chat: ChatSession & { running: boolean }
-  /**
-   * Work agent in chat view: the CLI and folder belong to the agent, so only
-   * model, effort and permissions are offered.
-   */
-  agent?: boolean
-  /** Offer the Workspace › Worktree picker (off for bot threads, which work in the bot's own folder). */
-  folder?: boolean
   placeholder?: string
 }
 
 /**
- * Message box with attachments (paste or drop images, video, files and long
- * text) and the CLI → model → effort pickers. Effort appears only when the
- * chosen model supports it. Shared by Chat mode and Work agents in chat view.
+ * A Work agent's message box in chat view, with attachments (paste or drop images, video, files and
+ * long text) and the model → effort pickers. The CLI and folder belong to the agent; effort appears
+ * only when the chosen model supports it.
  */
-export function ChatComposer({ chat, agent = false, folder = true, placeholder }: ChatComposerProps) {
-  const { send, stop, queue, unqueue, update: updateChat, clis: chatClis, catalogs, loadCatalog } = useChat()
+export function ChatComposer({ chat, placeholder }: ChatComposerProps) {
+  const { send, stop, queue, unqueue, update: updateChat, catalogs, loadCatalog } = useChat()
   const clis = useClis((s) => s.clis)
-  const projects = useProjects((s) => s.projects)
-  const worktrees = useWorkspaces((s) => s.byProject)
-  const loadWorktrees = useWorkspaces((s) => s.load)
   const [text, setText] = useState('')
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const files = useAttachments(chat.id)
-  const locked = agent || chat.messages.length > 0
   const catalog = chat.cliId ? catalogs[chat.cliId] : undefined
   const models = catalog && catalog !== 'loading' ? catalog.models : []
   const model: ChatModel | undefined = models.find((m) => m.id === (chat.model ?? ''))
   const efforts = model?.efforts ?? []
   const update = (patch: Parameters<typeof updateChat>[1]): Promise<void> => updateChat(chat.id, patch)
   const cliName = clis.find((c) => c.id === chat.cliId)?.displayName
-  // Where it works, as the user reads it: "demo-app" (its Primary) or "demo-app · fix-login".
-  const project = projects.find((p) => p.id === chat.projectId)
-  const worktree = chat.workspaceId ? worktrees[chat.projectId ?? '']?.find((w) => w.id === chat.workspaceId) : undefined
-  const place = project ? (worktree ? `${project.name} · ${worktree.name}` : project.name) : 'Home folder'
   const canSend = Boolean(chat.cliId) && !chat.running && files.ready && (text.trim().length > 0 || files.attachments.length > 0)
   // While it answers, text (not files) waits as the next turn (ADR 0031).
   const canQueue = Boolean(chat.cliId) && chat.running && text.trim().length > 0 && files.items.length === 0
@@ -63,17 +47,6 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
   useEffect(() => {
     if (chat.cliId) void loadCatalog(chat.cliId)
   }, [chat.cliId, loadCatalog])
-
-  // The picker lists every Workspace's Worktrees: load the ones not seen yet.
-  useEffect(() => {
-    if (locked || !folder) return
-    for (const p of projects) if (!worktrees[p.id]) void loadWorktrees(p.id)
-  }, [locked, folder, projects, worktrees, loadWorktrees])
-
-  // Auto-pick the only available CLI so a new chat is one step shorter.
-  useEffect(() => {
-    if (!chat.cliId && !locked && chatClis.length === 1) void updateChat(chat.id, { cliId: chatClis[0] })
-  }, [chat.cliId, chat.id, locked, chatClis, updateChat])
 
   useEffect(() => {
     const el = inputRef.current
@@ -121,17 +94,8 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
     if (event.dataTransfer.files.length) files.addFiles([...event.dataTransfer.files])
   }
 
-  const cliItems = chatClis.map((id) => ({
-    type: 'item' as const,
-    id,
-    label: clis.find((c) => c.id === id)?.displayName ?? id,
-    icon: <CliLogo cliId={id} size="sm" />,
-    checked: chat.cliId === id,
-    onSelect: () => void update({ cliId: id })
-  }))
-
   return (
-    <div className={cx(styles.composerWrap, agent && styles.composerWrapAgent)} onClick={focusChatInput}>
+    <div className={cx(styles.composerWrap, styles.composerWrapAgent)} onClick={focusChatInput}>
       <div
         className={cx(styles.composer, dragging && styles.composerDrop)}
         onDragOver={(e) => {
@@ -197,26 +161,6 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
               e.target.value = ''
             }}
           />
-          {!agent &&
-            (locked && chat.cliId ? (
-              <span className={cx(styles.pill, styles.pillStatic)} title="The CLI is fixed once a chat has started">
-                <CliLogo cliId={chat.cliId} size="sm" />
-                <span className={styles.pillLabel}>{cliName}</span>
-              </span>
-            ) : (
-              <Menu
-                label="Choose CLI"
-                items={cliItems}
-                empty="No chat-capable CLI is installed."
-                trigger={(props) => (
-                  <button type="button" {...props} className={styles.pill}>
-                    {chat.cliId && <CliLogo cliId={chat.cliId} size="sm" />}
-                    <span className={styles.pillLabel}>{chat.cliId ? cliName : 'Choose CLI'}</span>
-                    <ChevronDown aria-hidden className={styles.chevron} />
-                  </button>
-                )}
-              />
-            ))}
           {chat.cliId && (
             <ModelPicker
               models={models}
@@ -257,42 +201,6 @@ export function ChatComposer({ chat, agent = false, folder = true, placeholder }
               )}
             />
           )}
-          {folder &&
-            (locked ? (
-              <span className={cx(styles.pill, styles.pillStatic)} title={`${chat.cwd}\nThe folder is fixed once a chat has started`}>
-                <FolderClosed aria-hidden />
-                <span className={styles.pillLabel}>{place}</span>
-              </span>
-            ) : (
-              <Menu
-                label="Workspace and worktree"
-                items={[
-                  { type: 'item', id: 'home', label: 'Home folder', checked: !chat.projectId, onSelect: () => void update({ projectId: '' }) },
-                  ...projects.flatMap((p): MenuEntry[] => [
-                    { type: 'label', label: p.name },
-                    ...(worktrees[p.id]?.length ? worktrees[p.id]! : [undefined]).map((w): MenuEntry => {
-                      // The Primary is the Workspace's own folder (no workspaceId).
-                      const workspaceId = w && w.kind !== 'main' ? w.id : ''
-                      return {
-                        type: 'item',
-                        id: `${p.id}:${workspaceId}`,
-                        label: workspaceId ? w!.name : 'Primary',
-                        hint: w?.git?.branch,
-                        checked: chat.projectId === p.id && (chat.workspaceId ?? '') === workspaceId,
-                        onSelect: () => void update({ projectId: p.id, workspaceId })
-                      }
-                    })
-                  ])
-                ]}
-                trigger={(props) => (
-                  <button type="button" {...props} className={styles.pill} title={chat.cwd}>
-                    <FolderClosed aria-hidden />
-                    <span className={styles.pillLabel}>{place}</span>
-                    <ChevronDown aria-hidden className={styles.chevron} />
-                  </button>
-                )}
-              />
-            ))}
           <span className={styles.flex} />
           {chat.cliId && catalog && catalog !== 'loading' && catalog.limits && <UsageLimitsButton cliId={chat.cliId} cliName={cliName} />}
           <Menu

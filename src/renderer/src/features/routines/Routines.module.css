@@ -64,14 +64,6 @@
   margin-bottom: var(--space-5);
 }
 
-.allow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  color: var(--color-warning);
-  font-size: var(--text-sm);
-}
 
 /* Rows and the run log */
 .list,
@@ -367,9 +359,7 @@
 }
 
 /* A bot dragged over an hour */
-.slotOver {
-  background: var(--fill-accent-soft);
-}
+
 
 /* The range doubles as the date picker's button */
 button.range {

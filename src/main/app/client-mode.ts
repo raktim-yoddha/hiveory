@@ -98,7 +98,7 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
   handlers['ssh.answer'] = (input) => (sshAuth.has(input.id) ? sshAuth.answer(input.id, input.answer) : (backend.call('ssh.answer', input) as Promise<void>))
   handlers['ssh.pending'] = async () => [...sshAuth.pending(), ...((await backend.call('ssh.pending', undefined).catch(() => [])) as SshPrompt[])]
   registerIpc(handlers, (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile), log)
-  createMainWindow(targets, log, undefined, false)
+  createMainWindow(targets, log)
   log.info(`Client mode: using the Hiveory server ${server}`)
   return () => {
     sshAuth.close()

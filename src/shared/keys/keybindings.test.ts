@@ -24,9 +24,9 @@ describe('keybindings', () => {
     expect(commandFor(key('Comma', { ctrlKey: true }), {}, 'darwin')).toBeNull()
   })
 
-  it('never takes a key terminal CLIs use on Windows and Linux (Ctrl + a letter), except "New" outside Work', () => {
+  it('never takes a key terminal CLIs use on Windows and Linux (Ctrl + a letter)', () => {
     for (const c of APP_COMMANDS) {
-      const problem = shortcutProblem(parseShortcut(c.other)!, 'linux', { terminals: c.id !== 'new-item' })
+      const problem = shortcutProblem(parseShortcut(c.other)!, 'linux')
       expect(problem, c.id).toBeNull()
     }
     expect(commandFor(key('KeyB', { ctrlKey: true }), {}, 'win32')).toBeNull()
@@ -38,9 +38,8 @@ describe('keybindings', () => {
       const keys = APP_COMMANDS.map((c) => defaultBinding(c.id, platform))
       expect(new Set(keys).size, platform).toBe(keys.length)
       expect(keys.includes(defaultQueenShortcut(platform)), platform).toBe(false)
-      // ⌘N is New in every Mac app; the recorder only keeps the user from taking it for something else.
-      for (const c of APP_COMMANDS.filter((c) => !(platform === 'darwin' && c.id === 'new-item'))) {
-        expect(shortcutProblem(parseShortcut(defaultBinding(c.id, platform))!, platform, { terminals: c.id !== 'new-item' }), `${platform} ${c.id}`).toBeNull()
+      for (const c of APP_COMMANDS) {
+        expect(shortcutProblem(parseShortcut(defaultBinding(c.id, platform))!, platform), `${platform} ${c.id}`).toBeNull()
       }
     }
     expect(commandFor(key('Tab', { ctrlKey: true }), {}, 'win32')).toBe('next-tab')
@@ -49,17 +48,18 @@ describe('keybindings', () => {
   })
 
   it('matches exactly: an extra modifier is a different shortcut', () => {
-    expect(commandFor(key('Digit1', { ctrlKey: true }), {}, 'linux')).toBe('mode-work')
-    expect(commandFor(key('Digit1', { ctrlKey: true, altKey: true }), {}, 'linux')).toBeNull()
+    expect(commandFor(key('Comma', { ctrlKey: true }), {}, 'linux')).toBe('open-settings')
+    expect(commandFor(key('Comma', { ctrlKey: true, altKey: true }), {}, 'linux')).toBeNull()
   })
 
   it('follows the user: a changed shortcut, a cleared one, and junk dropped on load', () => {
-    const mine = cleanKeybindings({ 'toggle-sidebar': 'Control+Alt+KeyS', 'mode-chat': '', 'no-such': 'Control+KeyQ', 'mode-bots': 'nonsense' })
-    expect(mine).toEqual({ 'toggle-sidebar': 'Control+Alt+KeyS', 'mode-chat': '' })
+    // Shortcuts of removed commands (Bots and Chat, ADR 0056) are junk too.
+    const mine = cleanKeybindings({ 'toggle-sidebar': 'Control+Alt+KeyS', 'open-schedules': '', 'no-such': 'Control+KeyQ', 'mode-bots': 'Control+Digit2', 'next-tab': 'nonsense' })
+    expect(mine).toEqual({ 'toggle-sidebar': 'Control+Alt+KeyS', 'open-schedules': '' })
     expect(commandFor(key('KeyS', { ctrlKey: true, altKey: true }), mine, 'win32')).toBe('toggle-sidebar')
     expect(commandFor(key('KeyB', { ctrlKey: true, shiftKey: true }), mine, 'win32')).toBeNull()
-    expect(bindingOf('mode-chat', mine, 'win32')).toBeNull()
-    expect(bindingOf('mode-bots', mine, 'win32')).toEqual(parseShortcut('Control+Digit2'))
+    expect(bindingOf('open-schedules', mine, 'win32')).toBeNull()
+    expect(bindingOf('next-tab', mine, 'win32')).toEqual(parseShortcut('Control+Tab'))
   })
 
   it('names who already uses some keys', () => {

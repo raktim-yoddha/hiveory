@@ -32,12 +32,12 @@ const focusPane = (paneId: string): void => {
 
 /**
  * The panes-and-tabs shortcuts (ADR 0042, 0047) for the open worktree. False when none applies here
- * (another mode, Home, an empty worktree), so the keys go on to the page.
+ * (Home, an empty worktree), so the keys go on to the page.
  */
 export function runWorkCommand(id: AppCommandId): boolean {
   const nav = useNavigation.getState()
   const view = nav.view.type === 'settings' ? nav.view.returnTo : nav.view
-  if (nav.mode !== 'workspace' || view.type !== 'workspace') return false
+  if (view.type !== 'workspace') return false
   const { projectId, workspaceId } = view
   const tree = useLayouts.getState().byWorkspace[workspaceId] ?? null
   const panes = listPanes(tree)

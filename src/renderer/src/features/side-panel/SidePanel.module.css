@@ -104,6 +104,11 @@
   background: transparent;
 }
 
+/* Under the native window controls (ADR 0056). */
+.header[data-under-controls] {
+  padding-right: var(--window-controls-width);
+}
+
 /* Tabs scroll sideways when there are many; "+" follows the last tab. */
 .tabs {
   display: flex;

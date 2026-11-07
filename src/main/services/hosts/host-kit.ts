@@ -49,7 +49,7 @@ export interface HostKit {
   sessions: Remote<Pick<SessionHistoryService, 'list'>>
   pty: PtyBackend
   registry: CliRegistry
-  /** Runs a program on this machine without a shell (docker for bot computers, for example). */
+  /** Runs a program on this machine without a shell (git or docker, for example). */
   exec(params: ExecParams): Promise<{ code: number | null; stdout: string; stderr: string }>
   /** Reaches `host:port` as seen from this machine through a local loopback port (identity locally; `localPort` is preferred remotely). */
   forward(host: string, port: number, localPort?: number): Promise<{ port: number; close(): void }>

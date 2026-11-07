@@ -90,7 +90,7 @@ export function QueenBarSettings() {
         <div className={styles.groupTitle}>Placement</div>
         <SettingRow
           title="Where she sits"
-          description="Docked sits under the main area and lifts it up. Floating keeps a fixed-size bar over the bottom of the main area and takes no room. Title bar puts her bar away: only her mark stays, after the side panel button, and her bar drops down when you click it or press her shortcut."
+          description="Docked sits under the main area and lifts it up. Floating keeps a fixed-size bar over the bottom of the main area and takes no room. Sidebar puts her bar away: only her mark stays, at the top of the sidebar, and her bar drops down when you click it or press her shortcut."
           control={
             <Select
               label="Where she sits"
@@ -99,7 +99,7 @@ export function QueenBarSettings() {
               options={[
                 { value: 'docked', label: 'Docked' },
                 { value: 'floating', label: 'Floating' },
-                { value: 'titlebar', label: 'Title bar only' }
+                { value: 'titlebar', label: 'Sidebar only' }
               ]}
               onChange={(v) => setPlacement(v as QueenPlacement)}
             />

@@ -25,7 +25,6 @@ interface Props {
   inventory: ExtensionsInventory | null
   roots: SkillRoot[]
   projectId?: string
-  botId?: string
   onChanged: () => Promise<void>
 }
 
@@ -33,7 +32,7 @@ interface Props {
  * skills.sh in the Skills tab (ADR 0041): search the open Agent Skills directory, see each skill's
  * security audits, and install it into the folders that reach every installed CLI at once.
  */
-export function SkillStore({ lead, inventory, roots, projectId, botId, onChanged }: Props) {
+export function SkillStore({ lead, inventory, roots, projectId, onChanged }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<{ query: string; skills: StoreSkill[] } | null>(null)
   // Before a search: skills.sh's most installed skills (null while loading, [] when it can't be read).
@@ -118,7 +117,6 @@ export function SkillStore({ lead, inventory, roots, projectId, botId, onChanged
           skill={installing}
           roots={roots}
           projectId={projectId}
-          botId={botId}
           onClose={() => setInstalling(null)}
           onDone={async () => {
             setInstalling(null)
@@ -130,13 +128,13 @@ export function SkillStore({ lead, inventory, roots, projectId, botId, onChanged
   )
 }
 
-function InstallSkillDialog({ skill, roots, projectId, botId, onClose, onDone }: { skill: StoreSkill; roots: SkillRoot[]; projectId?: string; botId?: string; onClose: () => void; onDone: () => Promise<void> }) {
+function InstallSkillDialog({ skill, roots, projectId, onClose, onDone }: { skill: StoreSkill; roots: SkillRoot[]; projectId?: string; onClose: () => void; onDone: () => Promise<void> }) {
   const clis = useClis((s) => s.clis)
   // Installed CLIs that read skills at all (terminals don't).
   const installed = useMemo(() => new Set(clis.filter((c) => c.available && roots.some((r) => r.visibleTo.includes(c.id))).map((c) => c.id)), [clis, roots])
   // Every installed CLI by default: the shared folder plus each CLI's own where it doesn't read the shared one.
   const [targets, setTargets] = useState<string[]>(() => coveringRoots(roots, installed))
-  const [scope, setScope] = useState<'user' | 'project'>(botId ? 'project' : 'user')
+  const [scope, setScope] = useState<'user' | 'project'>('user')
   const [audits, setAudits] = useState<SkillAudit[] | null>(null)
   const [busy, setBusy] = useState(false)
   const reaches = [...new Set(roots.filter((r) => targets.includes(r.id)).flatMap((r) => r.visibleTo))].filter((id) => installed.has(id))
@@ -154,7 +152,6 @@ function InstallSkillDialog({ skill, roots, projectId, botId, onClose, onDone }:
         skillId: skill.skillId,
         rootIds: targets,
         projectId: scope === 'project' ? projectId : undefined,
-        ...(scope === 'project' && botId ? { botId } : {})
       })
       await onDone()
     }).finally(() => setBusy(false))
@@ -197,14 +194,14 @@ function InstallSkillDialog({ skill, roots, projectId, botId, onClose, onDone }:
             </ul>
           )}
         </div>
-        {(projectId || botId) && (
+        {projectId && (
           <Select
             label="Where"
             value={scope}
             onChange={(v) => setScope(v as 'user' | 'project')}
             options={[
               { value: 'user', label: 'Everywhere (your home folder)' },
-              { value: 'project', label: botId ? 'This bot only' : 'This workspace only' }
+              { value: 'project', label: 'This workspace only' }
             ]}
           />
         )}

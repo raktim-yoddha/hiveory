@@ -215,7 +215,7 @@ function PanelArea({
 
   return (
     <section className={styles.area} aria-label={group === 'top' ? 'Side panel' : 'Side panel, bottom'}>
-      <header className={styles.header}>
+      <header className={styles.header} data-top-bar>
         <div
           className={styles.tabs}
           role="tablist"

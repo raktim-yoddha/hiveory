@@ -8,7 +8,6 @@ import { buildReport } from './report'
 import { QUEEN_VOICES, sentencesOf, speakable, voiceFor } from './voice'
 
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [{ id: 'p1', name: 'demo-app' }, { id: 'p2', name: 'billing-api' }],
@@ -75,8 +74,6 @@ describe('Queen Bee rule parser', () => {
     expect(actions('open plugin settings')).toEqual([{ type: 'navigate', to: 'settings', section: 'extensions' }])
     expect(actions('open apps settings')).toEqual([{ type: 'navigate', to: 'settings', section: 'extensions' }])
     expect(actions('configure the queen')).toEqual([{ type: 'navigate', to: 'settings', section: 'queen' }])
-    expect(actions('switch to chat')).toEqual([{ type: 'set-mode', mode: 'chatspace' }])
-    expect(actions('work mode')).toEqual([{ type: 'set-mode', mode: 'workspace' }])
     expect(actions('open the browser')).toEqual([{ type: 'open-panel-tab', kind: 'browser' }])
     expect(actions('show file explorer')).toEqual([{ type: 'open-panel-tab', kind: 'explorer' }])
     expect(actions('hide the side panel')).toEqual([{ type: 'side-panel', open: false }])
@@ -84,7 +81,7 @@ describe('Queen Bee rule parser', () => {
   })
 
   it('chains clauses and runs nothing when any clause is unclear', () => {
-    expect(actions('open 2 codex then switch to chat').map((a) => a.type)).toEqual(['open-agents', 'set-mode'])
+    expect(actions('open 2 codex then go home').map((a) => a.type)).toEqual(['open-agents', 'navigate'])
     expect(parseCommand('open 2 codex and write me a poem', ctx)).toEqual({ kind: 'unknown' })
   })
 
@@ -92,7 +89,7 @@ describe('Queen Bee rule parser', () => {
     expect(actions('do codex kholo')).toEqual([{ type: 'open-agents', cliId: 'codex', count: 2, workspaceId: 'w1', projectId: 'p1' }])
     expect(actions('Do Codex Kolo')).toMatchObject([{ cliId: 'codex', count: 2 }])
     expect(actions('settings dikhao')).toEqual([{ type: 'navigate', to: 'settings', section: 'appearance' }])
-    expect(actions('teen claude chalu karo aur chat mode pe jao').map((a) => a.type)).toEqual(['open-agents', 'set-mode'])
+    expect(actions('teen claude chalu karo aur settings dikhao').map((a) => a.type)).toEqual(['open-agents', 'navigate'])
     expect(parseCommand('bruno ko band karo', ctx)).toMatchObject({ actions: [{ type: 'close-agents', agentIds: ['a1'] }], confirm: 'Close Bruno?' })
     expect(actions('kya chal raha hai')).toEqual([{ type: 'report', focus: 'all' }])
     expect(actions('kaun wait kar raha hai')).toEqual([{ type: 'report', focus: 'waiting-for-you' }])

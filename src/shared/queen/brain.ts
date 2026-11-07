@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { THEME_IDS } from '../domain/settings'
 import { appGuideText } from '../hiveory/guide'
 import { capabilitiesText } from './capabilities'
-import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, MODE_LABEL, QUEEN_BOTS_PAGES, QUEEN_LAYOUTS, QUEEN_PANE_SIZES, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, QUEEN_SIDES, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
+import { MAX_NOTE_LENGTH, MAX_OPEN_PER_COMMAND, QUEEN_LAYOUTS, QUEEN_PANE_SIZES, QUEEN_SETTINGS, QUEEN_SETTINGS_SECTIONS, QUEEN_SIDES, type QueenAction, type QueenContext, type QueenParse, type QueenSetting } from './actions'
 
 /**
  * Tier 1 of Queen Bee (ADR 0019): a model plans what the rule parser could not.
@@ -102,7 +102,6 @@ const ACTION_TYPES = [
   'apply-preset',
   'create-workspace',
   'navigate',
-  'set-mode',
   'set-theme',
   'side-panel',
   'open-panel-tab',
@@ -121,8 +120,6 @@ const ACTION_TYPES = [
   'apps-report',
   'check-updates',
   'save-preset',
-  'new-chat',
-  'message-bot',
   'switch-automation',
   'resume-session',
   'add-project'
@@ -158,10 +155,8 @@ export const PLAN_TOOL = {
             presetId: { type: 'string' },
             text: { type: 'string' },
             name: { type: 'string' },
-            to: { type: 'string', enum: ['home', 'settings', 'project', 'workspace', 'bots'] },
-            page: { type: 'string', enum: [...QUEEN_BOTS_PAGES] },
+            to: { type: 'string', enum: ['home', 'settings', 'project', 'workspace'] },
             section: { type: 'string', enum: [...QUEEN_SETTINGS_SECTIONS] },
-            mode: { type: 'string', enum: ['workspace', 'bots', 'chatspace'] },
             theme: { type: 'string', enum: [...THEME_IDS] },
             open: { type: 'boolean' },
             kind: { type: 'string', enum: ['browser', 'explorer'] },
@@ -174,7 +169,6 @@ export const PLAN_TOOL = {
             layout: { type: 'string', enum: [...QUEEN_LAYOUTS] },
             side: { type: 'string', enum: [...QUEEN_SIDES] },
             size: { type: 'string', enum: [...QUEEN_PANE_SIZES] },
-            botId: { type: 'string' },
             automationId: { type: 'string' }
           },
           required: ['type']
@@ -205,8 +199,6 @@ const actionSchema: z.ZodType<QueenAction> = z.union([
   z.object({ type: z.literal('navigate'), to: z.literal('settings'), section: z.enum(QUEEN_SETTINGS_SECTIONS) }),
   z.object({ type: z.literal('navigate'), to: z.literal('project'), projectId: id }),
   z.object({ type: z.literal('navigate'), to: z.literal('workspace'), projectId: id, workspaceId: id }),
-  z.object({ type: z.literal('navigate'), to: z.literal('bots'), page: z.enum(QUEEN_BOTS_PAGES) }),
-  z.object({ type: z.literal('set-mode'), mode: z.enum(['workspace', 'bots', 'chatspace']) }),
   z.object({ type: z.literal('set-theme'), theme: z.enum(THEME_IDS) }),
   z.object({ type: z.literal('side-panel'), open: z.boolean() }),
   z.object({ type: z.literal('open-panel-tab'), kind: z.enum(['browser', 'explorer']) }),
@@ -225,8 +217,6 @@ const actionSchema: z.ZodType<QueenAction> = z.union([
   z.object({ type: z.literal('apps-report') }),
   z.object({ type: z.literal('check-updates') }),
   z.object({ type: z.literal('save-preset'), name: z.string().trim().min(1).max(60), workspaceId: id }),
-  z.object({ type: z.literal('new-chat'), cliId: id.optional(), text: z.string().trim().min(1).max(20_000).optional(), projectId: id.optional() }),
-  z.object({ type: z.literal('message-bot'), botId: id, text: z.string().trim().min(1).max(20_000) }),
   z.object({ type: z.literal('switch-automation'), automationId: id, on: z.boolean() }),
   z.object({ type: z.literal('resume-session'), cliId: id, workspaceId: id, projectId: id }),
   z.object({ type: z.literal('add-project') })
@@ -275,7 +265,7 @@ const lower = (v: unknown): string => (typeof v === 'string' ? v.trim().toLowerC
 const TYPE_ALIASES: Record<string, string> = {
   'open-agent': 'open-agents', open: 'open-agents', 'start-agents': 'open-agents', 'close-agent': 'close-agents', close: 'close-agents',
   restart: 'restart-agent', focus: 'focus-agent', show: 'focus-agent', message: 'message-agent', send: 'message-agent', 'send-message': 'message-agent', tell: 'message-agent',
-  interrupt: 'interrupt-agent', stop: 'interrupt-agent', 'stop-agent': 'interrupt-agent', status: 'report', detail: 'agent-detail', theme: 'set-theme', mode: 'set-mode',
+  interrupt: 'interrupt-agent', stop: 'interrupt-agent', 'stop-agent': 'interrupt-agent', status: 'report', detail: 'agent-detail', theme: 'set-theme',
   'new-workspace': 'create-workspace', preset: 'apply-preset', go: 'navigate', 'navigate-to': 'navigate'
 }
 
@@ -309,7 +299,6 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
   if (elsewhere && (a.projectId === undefined || a.projectId === ctx.projectId)) a.projectId = elsewhere.projectId
   if (a.projectId !== undefined) a.projectId = find(a.projectId, ctx.projects, (p) => [p.name])
   if (a.presetId !== undefined) a.presetId = find(a.presetId, ctx.presets, (p) => [p.name])
-  if (a.botId !== undefined) a.botId = find(a.botId, ctx.bots ?? [], (b) => [b.name])
   if (a.automationId !== undefined) a.automationId = find(a.automationId, ctx.automations ?? [], (x) => [x.name])
   if (typeof a.on === 'string') a.on = a.on === 'true'
   if (typeof a.count === 'string' && /^\d+$/.test(a.count)) a.count = Number(a.count)
@@ -335,23 +324,9 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
       delete a.text
       break
     case 'navigate':
-      // Models often "navigate" to a mode: Chat and Work are modes, Bots opens on its work board.
-      if (/^(chat|chatspace|work|workspaces?)$/.test(lower(a.to))) {
-        a.type = 'set-mode'
-        a.mode = lower(a.to).startsWith('chat') ? 'chatspace' : 'workspace'
-        delete a.to
-        break
-      }
-      if (lower(a.to) === 'bots' || lower(a.to) === 'bot') {
-        a.to = 'bots'
-        a.page ??= 'work'
-      }
-      a.to ??= a.section ? 'settings' : a.page ? 'bots' : a.workspaceId ? 'workspace' : a.projectId ? 'project' : undefined
+      a.to ??= a.section ? 'settings' : a.workspaceId ? 'workspace' : a.projectId ? 'project' : undefined
       if (a.to === 'settings' && !(QUEEN_SETTINGS_SECTIONS as readonly string[]).includes(String(a.section))) a.section = 'appearance'
       if (a.to === 'workspace') a.projectId ??= elsewhere?.projectId ?? ctx.projectId
-      break
-    case 'set-mode':
-      a.mode = { work: 'workspace', bots: 'bots', bot: 'bots', chat: 'chatspace' }[lower(a.mode)] ?? a.mode
       break
     case 'set-theme':
       a.theme = lower(a.theme ?? a.name)
@@ -379,9 +354,6 @@ export function repair(item: unknown, ctx: QueenContext): Record<string, unknown
       break
     case 'resume-session':
       a.workspaceId ??= ctx.workspaceId
-      a.projectId ??= ctx.projectId
-      break
-    case 'new-chat':
       a.projectId ??= ctx.projectId
       break
   }
@@ -438,7 +410,6 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
     project: new Set(ctx.projects.map((p) => p.id)),
     agent: new Set(ctx.agents.map((a) => a.id)),
     preset: new Set(ctx.presets.map((p) => p.id)),
-    bot: new Set((ctx.bots ?? []).map((b) => b.id)),
     automation: new Set((ctx.automations ?? []).map((x) => x.id))
   }
   // Steps run one after another (ADR 0019 amendment): each is read on the page the earlier ones lead to,
@@ -468,10 +439,9 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
       (typeof a.targetAgentId === 'string' ? known.agent.has(a.targetAgentId) : true) &&
       (Array.isArray(a.agentIds) ? (a.agentIds as string[]).every((x) => known.agent.has(x)) : true) &&
       (typeof a.presetId === 'string' ? known.preset.has(a.presetId) : true) &&
-      (typeof a.botId === 'string' ? known.bot.has(a.botId) : true) &&
       (typeof a.automationId === 'string' ? known.automation.has(a.automationId) : true)
     if (!ok) {
-      const names = ['cliId', 'workspaceId', 'projectId', 'agentId', 'targetAgentId', 'presetId', 'botId', 'automationId']
+      const names = ['cliId', 'workspaceId', 'projectId', 'agentId', 'targetAgentId', 'presetId', 'automationId']
       const named = names.map((k) => repaired[k]).find((v) => typeof v === 'string')
       return { kind: 'unknown', reason: `${label} named ${named ? `"${String(named).replace(/^new:/, '')}", which` : 'something that'} isn't here` }
     }
@@ -493,11 +463,7 @@ export function planFromToolArgs(args: unknown, ctx: QueenContext, utterance = '
           ? [`Open ${ctx.clis.find((c) => c.id === a.cliId)?.displayName ?? a.cliId} and send ${quote(a.text)}?`]
           : a.type === 'create-workspace'
             ? [`Create the worktree “${a.name}”?`]
-            : a.type === 'message-bot' && !verbatim(a.text, utterance)
-              ? [`Send to ${ctx.bots?.find((b) => b.id === a.botId)?.name ?? 'the bot'}: ${quote(a.text)}?`]
-              : a.type === 'new-chat' && a.text && !verbatim(a.text, utterance)
-                ? [`Start a chat with ${quote(a.text)}?`]
-                : a.type === 'set-setting'
+            : a.type === 'set-setting'
                   ? [`Turn ${QUEEN_SETTINGS[a.setting].label.toLowerCase()} ${a.on ? 'on' : 'off'}?`]
                   : a.type === 'switch-automation'
                     ? [`Turn ${ctx.automations?.find((x) => x.id === a.automationId)?.name ?? 'it'} ${a.on ? 'on' : 'off'}?`]
@@ -516,15 +482,15 @@ export function systemPrompt(persona: { name: string; tagline: string; text?: st
     '- open-agents {cliId, count}; close-agents {agentIds}; restart-agent, interrupt-agent (stop its current work), focus-agent, agent-detail (what it is doing) {agentId}',
     '- message-agent {agentId, text}: send the user\'s exact words to an agent. open-and-message {cliId, text}: start one, then send.',
     '- report {focus, everywhere?, cliId?}: agent status. focus-waiting: go to the agent waiting longest.',
-    '- navigate {to: home|settings+section|project+projectId|workspace+workspaceId|bots+page (work board, schedules, triggers, team map)}; set-mode {mode}; set-theme {theme}; side-panel {open}; open-panel-tab {kind}',
+    '- navigate {to: home|settings+section|project+projectId|workspace+workspaceId}; set-theme {theme}; side-panel {open}; open-panel-tab {kind}',
     '- apply-preset {presetId}; save-preset {name}: save this workspace\'s agents; create-workspace {name}; add-project; remember {text} (only when asked to remember); help.',
     `- set-setting {setting: ${SETTING_IDS.join('|')}, on}; check-updates; apps-report: connected apps.`,
     '- open-url {url}: a page in the side browser; open-file {query}: a file of this workspace by name; arrange {layout: equal (a grid)|columns|rows|focus + agentId (its pane takes half)}: lay out this worktree\'s panes.',
     '- swap-panes {agentId, targetAgentId}; move-pane {agentId, side: left|right|top|bottom, targetAgentId?: beside that agent, else the layout\'s edge}; resize-pane {agentId, size: bigger|smaller|wider|narrower|taller|shorter}.',
     '- git-status: branch and changes here; pull-requests: open PRs of this project; resume-session {cliId}: reopen its latest conversation.',
-    '- new-chat {cliId?, text?}: a chat in Chat mode; message-bot {botId, text}: send the user\'s exact words to a bot. switch-automation {automationId, on}: pause or resume a schedule or trigger.',
+    '- switch-automation {automationId, on}: pause or resume a schedule.',
     'Words: the user says "workspace" for a STATE project and "worktree" (or branch) for a STATE workspace; say it their way in `question`/`reply`.',
-    'Meaning over wording: map loose or casual phrasing to the closest action ("let\'s hop into bots" → set-mode bots; "side by side"/"horizontally" → arrange columns; "stacked"/"vertically" → arrange rows; "spin up"/"fire up" → open-agents).',
+    'Meaning over wording: map loose or casual phrasing to the closest action ("side by side"/"horizontally" → arrange columns; "stacked"/"vertically" → arrange rows; "spin up"/"fire up" → open-agents).',
     'Several steps: put every step in `actions`, in order. They run one after another and stop at the first failure. A step without workspaceId/projectId acts where the earlier steps left you: after navigate to a project, its primary worktree; after create-workspace, the new worktree. Refer to a worktree created earlier in the plan by its name. To act in another project, navigate to it first or give its projectId.',
     'Rules: use ids or exact names from STATE only. workspaceId/projectId default to the current page. Ambiguous or unknown → no actions, set `question` (e.g. a workspace name several projects share: ask which project).',
     'Small talk (greetings, thanks, how are you) → no actions; a short, friendly `reply` in character.',
@@ -552,7 +518,7 @@ export function stateMessage(ctx: QueenContext, utterance: string, notes: string
   const page = ws ? `workspace ${ws.name} (${ws.id}) in project ${project?.name} (${project?.id})` : project ? `project ${project.name} (${project.id})` : 'home'
   const lines = [
     'STATE',
-    `page: ${page}; mode: ${MODE_LABEL[ctx.mode]}`,
+    `page: ${page}`,
     `projects: ${ctx.projects.map((p) => `${p.id} ${p.name}`).join('; ') || 'none'}`,
     `workspaces: ${ctx.workspaces.map((w) => `${w.id} ${w.name}${w.kind === 'main' ? ' [primary]' : ''}`).join('; ') || 'none'}`,
     ...(ctx.otherWorkspaces?.length
@@ -561,8 +527,7 @@ export function stateMessage(ctx: QueenContext, utterance: string, notes: string
     `agents: ${ctx.agents.map((a) => `${a.id} ${a.petName} (cli ${a.cliId}, workspace ${a.workspaceId}${a.status ? `, ${STATUS_WORD[a.status]}` : ''})`).join('; ') || 'none'}`,
     `clis: ${ctx.clis.map((c) => `${c.id} = ${c.displayName}`).join('; ') || 'none'}`,
     `presets: ${ctx.presets.map((p) => `${p.id} ${p.name}`).join('; ') || 'none'}`,
-    `bots: ${(ctx.bots ?? []).map((b) => `${b.id} ${b.name}`).join('; ') || 'none'}`,
-    ...(ctx.automations?.length ? [`schedules and triggers: ${ctx.automations.map((x) => `${x.id} ${x.name} (${x.kind}, ${x.on ? 'on' : 'paused'})`).join('; ')}`] : []),
+    ...(ctx.automations?.length ? [`schedules: ${ctx.automations.map((x) => `${x.id} ${x.name} (${x.on ? 'on' : 'paused'})`).join('; ')}`] : []),
     ...(notes.length ? ['', 'NOTES', ...notes.map((n) => `- ${n}`)] : []),
     '',
     'REQUEST',

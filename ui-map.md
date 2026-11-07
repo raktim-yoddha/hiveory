@@ -4,8 +4,9 @@
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│                       Work | Bots | Chat                         │
+│ (no title bar, ADR 0056: every column starts at the top)         │
 ├──────────────┬───────────────────────────────────────────────────┤
+│◆ Hiveory  ◨◧ │                                                   │
 │              │                                                   │
 │  Workspaces  │                 Current Screen                    │
 │              │                                                   │
@@ -31,89 +32,34 @@ Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busi
 a click anywhere on the bar unfolds it into a list (each row opens its pane): "N agents", then dot · logo · pet name · status · time in that status
 (ADR 0040). A loop spins at the end of a Worktree's row while any of its agents is working.
 
-### Bots mode (ADR 0022)
+### Window chrome (ADR 0056)
+
+No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then Queen Bee's
+mark (when put away), the side panel toggle (in a worktree) and the sidebar toggle; it drags the
+window. The sidebar's footer: Settings. Hidden, the sidebar is an icon rail: sidebar and side panel
+toggles and Queen Bee's mark at the top, Settings at the bottom. Window controls (Windows, Linux) sit
+over the top-right card's header, which leaves them room.
 
 ```text
-┌ BOTS        + ┐┌ [RN] Release notes editor          ● ⚙ ┐
-│ [RN] Release… CHIEF ││ Chief of Staff · Powered by Codex     │
-│ [S]  Scout       ● ││ [New chat] [From Chief: …] [+]        │
-│                │││          What should we work on?       │
-│                │││ ┌ Message Release notes editor…      ┐ │
-│                │││ │ 📎 Codex ▾  Model ▾  Effort  Read-only ↑│ │
-└────────────────┘└──────────────────────────────────────────┘
+┌ ◆ Hiveory DEV  ∿ ◨ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ⟲ ⑂ 🗓 ⚙  ⤢ │ — □ × ┐
+│ WORKSPACES     ⇅ 📁 │                            │                               │
+│ …                    │        panes               │       side panel              │
+│ ⚙                    │                            │                               │
+└──────────────────────┘└────────────────────────────┘└───────────────────────────────┘
 ```
 
-- Sidebar: the bots, grouped by team when there is more than one (foldable headings with a count),
-  Chief of Staff first, then pinned, then by name. Right-click: Edit, Make
-  Chief of Staff, Pin, Move to <team>, Delete. Double-click edits. A working dot shows running threads.
-- Header: avatar, name, role and engine, status, Computer and browser (opens the bot panel), settings (opens the bot editor).
-- Thread tabs: one per conversation, newest first; right-click deletes; "+" starts one. A bot's
-  first thread opens on its own.
-- Bot editor: Name, Blurb, Brief, Engine, Full access, Chief of Staff, Team messaging, Runs on a schedule, Memory (edit mode).
-- Sidebar "+": New bot (Ctrl N, ⌘N on Mac, while the bots sidebar is shown) and Templates: a
-  gallery of starter bots (Inbox triager, Standup writer, Release notes editor, PR reviewer,
-  Research scout, Competitor watch) with what each uses; picking one opens the bot editor filled in.
-  Create team opens a name dialog. New group chat joins the menu when group chats are built.
-- Sidebar footer: **Work board** opens the work board; **Schedules** the Schedules page; **Triggers** the Triggers page; **Team map** the team map (ADR 0028).
-- Triggers page: the event link card (off / on with its address / needs attention, with the reason, a
-  button to the page that fixes it, and "Use this project's webhook for Hiveory" when the Composio
-  project's webhook goes elsewhere); then "⚡ When [app · account] [event] → [bot] should", the event's
-  fields, "What it should do with each event", Create trigger; then YOUR TRIGGERS (name, app → bot,
-  last event, instructions, delete, on/off). Without a Composio key or connected app: a pointer to Apps.
-- Work board: four cards, Needs you (approval cards) · Working · Didn't finish · Done, each with a count; a row per handoff or
-  schedule/trigger run ("From → bot", title, since/when, the reason it failed), opening its thread.
-  Finished work stays a day. Nothing is dragged.
-- Schedule editor's **Who does it** (ADR 0030): bots, then "A new chat (Chat mode)". A Work schedule (ADR 0040)
-  is opened from Work and picks only its Worktree and CLI; its title names the Workspace. Below the instructions:
-  the schedule's files (chips) and "Add files for every run". Chat's sidebar header: Schedule a chat (calendar
-  icon) beside New chat (the editor opens in place, in Chat). A worktree's menu: New schedule… (the editor opens in place, in Work).
-  The Bots Schedules page, calendar, run logs and work board show bots' schedules and scheduled chats only.
-  Chat's sidebar footer: **Schedules** opens the same page for scheduled chats; Work's Schedules tab is the
-  same page for the Workspace's schedules, opening on Day (ADR 0055).
-- Message box (Chat, bot threads, Work chat view): attach; CLI · model · effort · where (Chat only:
-  Home folder, or a Workspace's Primary or Worktree, grouped by Workspace; a fixed pill once started) ·
-  usage limits (gauge; a popover: plan, each window's label, % used, bar, "Resets in … · day time", Check
-  again; a note when the sign-in has none) · permissions (ADR 0055). While answering, the box stays open, a queue button sits beside Stop, and waiting
-  messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
-- Approval card (ADR 0029): in a bot's thread above the composer and on the work board: "<Bot> wants to
-  send or post as you / change something in your apps", the tool, "What it will send" (the arguments
-  as plain text), Decline, Allow. The bot's dot turns to waiting while one is open.
-- Team map: header (bot and team count, Create team); a card per team (name, count, ⋯ Rename /
-  Delete), its bots as tiles (avatar, name, crown for the Chief, role and engine, working dot);
-  drag a tile onto another card to move the bot; right-click a tile for the bot's actions, "Move to
-  <team>" included. Below: Handoffs, "From → To · thread · Working / Done · when", each opening its thread.
-- Schedules page: header (Schedules, ‹ › week or day, the range ("October 5 – 11, 2026"; a button opening a
-  mini month whose days with runs carry a dot; picking a day jumps there), Today, Day · Week · List · Run logs,
-  bot filter, New schedule); the keep-awake switch with its explanation; Week: Mon–Sun columns,
-  hour rows (opening at 07:00), today shaded, a now line, past runs coloured by outcome and upcoming
-  runs from each schedule (same-time runs side by side); click an empty hour for a new schedule there,
-  or drop a bot from the sidebar on it for a new schedule for that bot at that hour; Day: the same for one day;
-  click a run to edit its schedule. List: schedule rows. Run logs: status, schedule, bot, when, by you
-  or the schedule, duration, why it failed, and Open thread.
 - Schedule editor (modal): Title; Starts (date, time, this computer's timezone); Repeat (Does not
   repeat · Every X minutes · Daily · Every weekday · Weekly on <day> · Selected weekdays (day chips) ·
   Monthly on day N · Monthly on the last day · Yearly · Custom cron); the next three runs; when
-  schedules run; Advanced (stop a run after N minutes, last day); Assign a bot (with "allow it to run
-  on a schedule" inline); Post results to (a dedicated results thread · one of the bot's threads ·
-  only each run's own thread); Instructions. Editing adds Delete and Run now.
-- Bot panel (the right column in Bots mode, resized like the Work side panel and sharing its width; tabs: Overview · Computer · Schedules · Browser):
-  - **Overview**: name and blurb; Does; Can reach; Won't; Notifications switch; Asks before (Sending as
-    you · Any change · Never, ADR 0029); Prompt preview
-    (bytes ≈ tokens, expands to the exact text); Skills (the shared Skills panel, scoped to the bot:
-    its own skills marked "This bot").
-  - **Computer**: its Linux computer's screen (refreshed every 2 s while it runs and the window is
-    shown) with Start/Stop, Take control and Rebuild (confirmed; "older desktop image" note when due),
-    and where it runs (this computer, the SSH host or "<bot>'s computer", Docker or Podman); **Works on**
-    cards: Auto · Linux computer · Server computer (SSH host field) · Share a computer (Whose computer) ·
-    This computer · Browser · Off; a "Can use … now" line and, when a
-    Settings switch blocks the choice, the reason with Open settings.
-  - **Schedules**: count, "allow it to run on a schedule" when it can't yet, Run logs, Create
-    schedule, the bot's schedule rows (name, schedule in words, next run, last failure, Run now, Edit,
-    on/off), and Open schedules → (the Schedules page filtered to this bot).
-  - **Browser**: the pages all the bot's threads share, as tabs with close and "+"; the built-in
-    browser pane below. Pages open in the bot's own profile ("Bot · <name>", made on first use), so
-    the user can sign in to sites for the bot here and its logins stay apart from theirs. A note
-    says when the bot can't use the browser right now (Works on, or Settings › Browser use).
+  schedules run; Advanced (stop a run after N minutes, last day); Worktree and CLI; Instructions; the
+  schedule's files. Editing adds Delete and Run now. Its title names the Workspace (ADR 0040).
+- Schedules tab (side panel): header (Schedules, ‹ › day or week, the range with a mini month, Today,
+  Day · Week · List · Run logs, New schedule); the keep-awake switch; the calendar (click an empty hour
+  for a new schedule there, a run to edit its schedule); List: schedule rows; Run logs: status,
+  schedule, who ("Claude Code · demo-app · main"), when, by you or the schedule, duration, why it failed.
+- Message box (a Work agent in chat view): attach; model · effort · usage limits (gauge and popover,
+  ADR 0055) · permissions. While answering, the box stays open, a queue button sits beside Stop, and
+  waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 
 ### Queen Bee (ADR 0019)
 
@@ -147,14 +93,14 @@ Full right                                [∿ Ada  Your instructions…  🎙 �
 Small        [∿]            [∿]                                              [∿]
 ```
 
-Title bar only (ADR 0044): no bar; her mark ∿ sits in the title bar after the side panel button
-(a dot for an unseen message). A click, her shortcut or a question drops the bar (and card) down
-under it; Escape or a click elsewhere puts it away. ⋯ › "Put away in the title bar" / "Show her bar
+Sidebar only (ADR 0044, 0056): no bar; her mark ∿ sits in the sidebar's top bar before the layout
+buttons (a dot for an unseen message). A click, her shortcut or a question drops the bar (and card)
+down under it; Escape or a click elsewhere puts it away. ⋯ › "Put away in the sidebar" / "Show her bar
 again" switch it, as does Settings › Queen Bee › Bar & shortcut › Where she sits.
 
 ```text
-… [Work │ Bots │ Chat] …                          [▯] [∿] [⚙]
-                                   [∿ Ada  Your instructions…  ✉ ⋯]
+┌ ◆ Hiveory  ∿ ◨ ◧ ┐
+[∿ Ada  Your instructions…  ✉ ⋯]
 ```
 
 Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
@@ -167,12 +113,11 @@ Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shor
   placement.
 
 Settings › Keyboard (ADR 0047), after Queen Bee: Queen Bee (Call Queen Bee), General (Settings, shortcuts,
-sidebar, side panel, maximize side panel, Schedules), Modes (Work, Bots, Chat), Lists (New chat or bot,
-New worktree, Next / Previous chat, bot or worktree), Panes and tabs (New tab, New terminal, Close, Next /
+sidebar, side panel, maximize side panel, Schedules), Lists (New worktree, Next / Previous worktree), Panes and tabs (New tab, New terminal, Close, Next /
 Previous tab, Next / Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
 as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
 is named under it. Built in: the fixed keys, read-only. "Reset every shortcut" when any was changed.
-Title bar tooltips show the keys ("Hide sidebar (Ctrl Shift B)").
+The chrome buttons' tooltips show the keys ("Hide sidebar (Ctrl Shift B)").
 
 ### Browser pane (ADR 0015; a pane among the agents since ADR 0042, opened from a pane's "+" › Browser)
 

@@ -23,7 +23,7 @@ const STATUS_TEXT: Record<AppAccount['status'], string> = {
 
 
 /**
- * Apps every agent can use — terminal, chat and bots — through the user's own
+ * Apps every agent can use — in a terminal or chat view — through the user's own
  * Composio project (ADR 0023): paste the API key once, then Connect goes straight
  * to each app's sign-in. An app can hold several labelled accounts.
  */
@@ -94,7 +94,7 @@ export function AppsPanel() {
           <strong>{keySet ? 'Composio' : 'Connect your apps with Composio'}</strong>
           <span className={styles.hint}>
             {keySet
-              ? 'Every agent — terminal, chat and bots — uses the apps you connect below, through your Composio project and plan.'
+              ? 'Every agent — in a terminal or chat view — uses the apps you connect below, through your Composio project and plan.'
               : 'Paste your Composio project API key once, free or paid. Then Connect takes you straight to each app’s own sign-in.'}
           </span>
           {(!keySet || editingKey) && (

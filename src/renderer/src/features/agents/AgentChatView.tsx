@@ -5,7 +5,7 @@ import { ChatMessages } from '../chat/ChatMessages'
 import styles from './AgentPane.module.css'
 
 /**
- * A Work agent in chat view: the same conversation and composer as Chat mode,
+ * A Work agent in chat view: a conversation and composer,
  * bound to the agent's own chat (its CLI and folder are fixed by the agent).
  */
 export function AgentChatView({ instanceId }: { instanceId: string }) {
@@ -21,7 +21,7 @@ export function AgentChatView({ instanceId }: { instanceId: string }) {
       {chat && (
         <>
           <ChatMessages chat={chat} />
-          <ChatComposer chat={chat} agent />
+          <ChatComposer chat={chat} />
         </>
       )}
     </div>

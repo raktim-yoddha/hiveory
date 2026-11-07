@@ -165,7 +165,7 @@ export class QueenBrain {
   async test(id: string): Promise<{ ms: number; detail: string }> {
     const account = this.all().find((a) => a.id === id) ?? fail('NOT_FOUND', 'That account no longer exists.')
     const started = Date.now()
-    const ctx: QueenContext = { mode: 'workspace', projects: [], workspaces: [], agents: [], clis: [], presets: [] }
+    const ctx: QueenContext = { projects: [], workspaces: [], agents: [], clis: [], presets: [] }
     const result = await this.planWith(account, 'open the settings', ctx, { name: 'Ada', tagline: 'Strict, formal and precise' }, [])
     const ms = Date.now() - started
     if (result.kind === 'actions' && result.actions[0]?.type === 'navigate') return { ms, detail: 'Tool calling works.' }

@@ -31,7 +31,7 @@ export interface CliDescriptor {
   /** `shell`: a plain terminal (PowerShell, Command Prompt, Git Bash), not an agent. */
   kind: 'agent' | 'shell'
   supportsAutoApprove: boolean
-  /** Has a headless mode Hiveory can show as a chat (Chat mode, and Work agents in chat view). */
+  /** Has a headless mode Hiveory can show as a chat (Work agents in chat view). */
   supportsChat: boolean
   /** Can continue a conversation from its own history by session id (the Sessions tab's Resume). */
   resumesById: boolean

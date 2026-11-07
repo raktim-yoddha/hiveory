@@ -21,7 +21,7 @@ const titleOf = (s: StoreMcpServer): string => s.title || s.name.split('/').at(-
 
 /**
  * The official MCP Registry in the MCP tab (ADR 0041): search it, then add a server to Hiveory, which
- * runs it for every agent — terminal, chat and bots — like any server added by hand.
+ * runs it for every agent — in a terminal or chat view — like any server added by hand.
  */
 export function McpStore({ lead }: { lead: ReactNode }) {
   const connections = useConnections((s) => s.connections)

@@ -102,7 +102,7 @@ pnpm mobile:install
 pnpm mobile start
 ```
 
-The app logo is `resources/icon.png` (512×512): the single source for the title bar, window and
+The app logo is `resources/icon.png` (512×512): the single source for the sidebar brand, window and
 taskbar icon, and every installer icon.
 
 ## Project layout

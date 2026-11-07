@@ -1,7 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from 'react'
 import {
   Blocks,
-  Bot,
   CalendarClock,
   Compass,
   GitBranch,
@@ -11,7 +10,6 @@ import {
   KanbanSquare,
   LayoutGrid,
   LifeBuoy,
-  MessagesSquare,
   Palette,
   Smartphone
 } from 'lucide-react'
@@ -46,6 +44,17 @@ export const GUIDE: GuideChapter[] = [
     summary: 'Add a workspace, open a worktree, start your first agents.',
     icon: Compass,
     sections: [
+      {
+        heading: 'The window',
+        body: (
+          <p>
+            The sidebar runs down the left: the brand and the layout buttons at its top (show or hide the sidebar and the side panel),
+            your workspaces in the middle and Settings at the bottom. Hidden, it folds to a slim rail with the same buttons. The worktree
+            you open fills the middle, and its side panel runs down the right; all three start at the top of the window.
+          </p>
+        ),
+        keywords: 'layout sidebar rail side panel settings title bar top'
+      },
       {
         heading: 'Add a workspace',
         body: (
@@ -307,11 +316,11 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Where she sits',
         body: (
           <p>
-            Docked under the main area, floating over it, or put away in the title bar: only her mark stays there and her bar drops down
-            when you click it or press her shortcut. Change it in her <b>⋯</b> menu or Settings › Queen Bee › Bar &amp; shortcut.
+            Docked under the main area, floating over it, or put away in the sidebar: only her mark stays at the sidebar&rsquo;s top and
+            her bar drops down when you click it or press her shortcut. Change it in her <b>⋯</b> menu or Settings › Queen Bee › Bar &amp; shortcut.
           </p>
         ),
-        keywords: 'docked floating title bar hide disable'
+        keywords: 'docked floating title bar sidebar hide disable'
       },
       {
         heading: 'Voice, models and notes',
@@ -327,75 +336,17 @@ export const GUIDE: GuideChapter[] = [
     ]
   },
   {
-    id: 'bots',
-    title: 'Bots',
-    summary: 'Teammates with a brief, memory and their own threads.',
-    icon: Bot,
-    sections: [
-      {
-        heading: 'A bot',
-        body: (
-          <p>
-            Each bot has a name, a brief, an engine and model, and a memory it carries into every new thread. Threads keep running while you
-            are elsewhere. Bots are grouped into teams; each team&rsquo;s <b>Chief of Staff</b> hands work to its bots and gets the results back.
-          </p>
-        ),
-        keywords: 'team chief thread memory brief'
-      },
-      {
-        heading: 'Asking before acting',
-        body: (
-          <p>
-            A bot asks before it sends or changes things in your apps (per bot). The request waits in its thread and on the work board for
-            Allow or Decline. A bot may also work in its own sandboxed Linux computer, which you can take over from its panel.
-          </p>
-        ),
-        keywords: 'approval allow decline computer docker'
-      },
-      {
-        heading: 'Schedules and triggers',
-        body: (
-          <p>
-            A bot can run instructions at set times (schedules) or when something happens in a connected app (triggers, read-only). The work
-            board lists what the team owes: Working, Didn&rsquo;t finish or Done.
-          </p>
-        ),
-        keywords: 'schedule routine trigger work board'
-      }
-    ]
-  },
-  {
-    id: 'chat',
-    title: 'Chat',
-    summary: 'A clean chat over any CLI.',
-    icon: MessagesSquare,
-    sections: [
-      {
-        heading: 'Pick, then talk',
-        body: (
-          <p>
-            Choose a CLI, a model (searchable) and, when the model has one, an effort level; the CLI locks after the first message. While it
-            answers you can type the next message — it waits and goes in when the reply ends. Pick where it works: your home folder, or a
-            workspace and any of its worktrees. The gauge in the box shows your plan&rsquo;s 5-hour and weekly limits and when they reset.
-            <b> Schedules</b> under the chat list shows your scheduled chats on a calendar.
-          </p>
-        ),
-        keywords: 'model effort thinking queue worktree folder schedules calendar usage limits 5-hour weekly reset'
-      }
-    ]
-  },
-  {
     id: 'routines',
     title: 'Schedules',
-    summary: 'Scheduled agents, chats and bot runs.',
+    summary: 'Agents that start on their own, on a calendar.',
     icon: CalendarClock,
     sections: [
       {
-        heading: 'Three kinds',
+        heading: 'An agent on a schedule',
         body: (
           <p>
-            A Work schedule starts an agent in a worktree (its card moves on the Kanban like any agent); make one in the side panel&rsquo;s Schedules
-            tab. A chat schedule starts a new chat. A bot schedule runs in a fresh thread of that bot.
+            A schedule starts an agent in a worktree and gives it your instructions (its card moves on the Kanban like any agent). Make one
+            in the side panel&rsquo;s Schedules tab, or from a worktree&rsquo;s menu.
           </p>
         ),
         keywords: 'schedule routine cron calendar'
@@ -432,7 +383,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'MCP servers and apps',
         body: (
           <p>
-            Servers you add (or find in the MCP Registry) and apps you connect are served by Hiveory to every agent — terminal, chat and bots —
+            Servers you add (or find in the MCP Registry) and apps you connect are served by Hiveory to every agent — in a terminal or chat view —
             without touching any CLI&rsquo;s config. Apps run through your own Composio key, kept encrypted on this computer.
           </p>
         ),
@@ -507,13 +458,12 @@ export const GUIDE: GuideChapter[] = [
             same Tailscale account, a pairing code otherwise. Turn on &ldquo;On this network&rdquo; to do the same on your Wi-Fi without
             Tailscale: other computers there list it under Your devices › On this network and connect with its code. A paired computer
             or phone keeps every address and uses whichever answers, Tailscale or Wi-Fi. Remove a device to cut it off at once. The phone
-            does what this window does in Work, Bots and Chat: files, worktrees, bots, teams, Schedules, triggers, chat files and saved
-            prompts; settings, accounts and keys stay on the computer. A terminal opened on
+            does what this window does: files, worktrees, agents, Schedules, chat files and saved prompts; settings, accounts and keys stay on the computer. A terminal opened on
             the phone is sized to the phone while you look at it there, and goes back to its pane&rsquo;s size when you leave; the keys
             above the phone&rsquo;s keyboard add Esc, Tab, Ctrl, Alt and the arrows.
           </p>
         ),
-        keywords: 'phone mobile tailscale wifi wi-fi lan network share devices approvals schedules files bots triggers attachments keyboard ctrl alt resize'
+        keywords: 'phone mobile tailscale wifi wi-fi lan network share devices schedules files attachments keyboard ctrl alt resize'
       }
     ]
   },
@@ -549,8 +499,7 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             Settings › Keyboard lists every shortcut with your system&rsquo;s standard keys: <K>Ctrl</K> on Windows and Linux, <K>⌘</K> on a
-            Mac. Queen Bee is <K>Ctrl</K> <K>Shift</K> <K>Space</K> (<K>⌥</K> <K>Space</K> on a Mac), Settings <K>Ctrl</K> <K>,</K>, Work, Bots
-            and Chat <K>Ctrl</K> <K>1</K> <K>2</K> <K>3</K>, this list <K>Ctrl</K> <K>Shift</K> <K>/</K> (<K>⌘</K> <K>/</K>). Click Change and press
+            Mac. Queen Bee is <K>Ctrl</K> <K>Shift</K> <K>Space</K> (<K>⌥</K> <K>Space</K> on a Mac), Settings <K>Ctrl</K> <K>,</K>, this list <K>Ctrl</K> <K>Shift</K> <K>/</K> (<K>⌘</K> <K>/</K>). Click Change and press
             new keys to make any of them yours.
           </p>
         ),
@@ -570,7 +519,7 @@ export const GUIDE: GuideChapter[] = [
               Maximize a pane <K>Ctrl</K> <K>Shift</K> <K>Enter</K>; split a tab out <K>Alt</K> <K>Shift</K> <K>=</K> (right) or <K>-</K> (below).
             </li>
             <li>
-              Next or previous chat, bot or worktree <K>Alt</K> <K>↓</K> / <K>↑</K>; new worktree <K>Ctrl</K> <K>Shift</K> <K>N</K>; Schedules{' '}
+              Next or previous worktree <K>Alt</K> <K>↓</K> / <K>↑</K>; new worktree <K>Ctrl</K> <K>Shift</K> <K>N</K>; Schedules{' '}
               <K>Ctrl</K> <K>Shift</K> <K>S</K>.
             </li>
             <li>
@@ -614,7 +563,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Agents keep running after you quit',
         body: (
           <p>
-            Agents, terminals and chat replies (Chat, bots, chat-view agents) run in Hiveory&rsquo;s terminal host, which keeps going after
+            Agents, terminals and chat replies (chat-view agents) run in Hiveory&rsquo;s terminal host, which keeps going after
             you quit and through updates; when Hiveory opens again every pane takes its terminal back, with what it printed meanwhile, and
             a reply that was still streaming finishes. Schedules need Hiveory open (or running as a server). Settings › Agents › Terminal host shows where
             they run, sets how long they are kept (until they finish, or 1 hour to 7 days), and restarts the host. To stop everything

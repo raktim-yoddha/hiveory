@@ -80,12 +80,6 @@ export interface ChatSession {
   autoApprove: boolean
   /** Set when this chat backs a Work agent shown in chat view; such chats stay out of the Chat list. */
   agentId?: string
-  /** Set when this chat is a thread of a bot (ADR 0022); such chats stay out of the Chat list too. */
-  botId?: string
-  /** A thread another bot opened to hand this bot work; results go back to `fromChatId`. */
-  delegation?: { fromChatId: string; fromBotId: string; depth: number }
-  /** Held to reading and answering (a trigger's run, ADR 0028): no full access, no app changes. */
-  readOnly?: boolean
   /** Messages typed while it was answering: each goes in as the next turn, in order (ADR 0031). */
   queued?: string[]
   /** The CLI's own session/thread id, used to resume the conversation. */
@@ -103,10 +97,8 @@ export interface ChatSummary {
   workspaceId?: string
   updatedAt: string
   running: boolean
-  /** Backs a Work agent in chat view (never listed in Chat mode). */
+  /** The Work agent in chat view this chat backs. */
   agentId?: string
-  /** A bot thread (listed under its bot in Bots mode, never in Chat mode). */
-  botId?: string
   /** Messages waiting for the current turn to end (ADR 0031). */
   queued?: string[]
 }

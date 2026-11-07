@@ -1,68 +1,21 @@
 # Product Specification
 
-## Product Modes
+## Product Shape
 
-Exactly three, in this order (ADR 0012, ADR 0022):
+One mode: Work (ADR 0056; Bots and Chat, ADR 0012 and 0022, are removed). There is no mode switch and
+no title bar: the sidebar (Workspaces), the open Worktree and its side panel all start at the top of
+the window, and the window's buttons (sidebar, side panel, Queen Bee put away, Settings) live in the
+sidebar, or in its icon rail while it is hidden.
 
-```text
-Workspace (Work)
-Bots
-Chatspace (Chat)
-```
-
-Bots (ADR 0022): a roster of global teammates. Each bot has a name, a brief, a default engine,
-model and permission, and a memory it carries into every new conversation. Its conversations are
-threads: tabs under the bot, each running on the chat engine in the bot's own folder, and they
-keep running while the user is elsewhere. Bots are grouped into **teams** (General always exists;
-ADR 0028), and each team has one **Chief of Staff**: the user's main contact for that team, who
-hands work to its bots (their results come back into its thread and wake it) and consults them.
-Chiefs reach General's Chief, so work crosses teams Chief to Chief. Bots that allow messaging may
-consult each other in any team. Delegation is bounded (only Chiefs delegate, at most two levels
-deep, 20 handoffs an hour per thread). The team map shows each team and the work bots are handing
-each other; dragging a bot onto another team moves it there. The **work board** lists what the team owes: handoffs
-and schedule and trigger runs, as Working, Didn't finish or Done, by their real state; finished work
-stays a day (Bots-only, capped history, ADR 0028). A bot **asks before acting in your apps** (ADR
-0029): by default before it sends or posts as you, or before any change, or never, per bot; reading is
-never asked. The request waits in its thread and on the work board for Allow or Decline, and is
-declined after 15 minutes. A trigger's read-only run can't change or send anything in apps.
-Schedules can also run **without a bot** (ADR 0030): as a new chat in Chat mode ("Schedule a chat") or as
-a new agent in a Work worktree, whose card then moves on the Kanban by its real state like any agent.
-Work's schedules belong to Work (ADR 0040): they are made and listed in the Workspace's Dashboard ›
-Schedules (or a worktree's "New schedule…") and never appear on the Bots calendar. Every mode has its
-own Schedules calendar (ADR 0055): Bots shows bots' schedules and scheduled chats, Chat (its sidebar's
-Schedules) its scheduled chats, and Work's Schedules tab the Workspace's schedules, each by day, week,
-list or run log.
-While a chat or bot is answering, the user can type the **next message**: it waits above the box and
-goes in when the reply ends (Stop drops it). The desktop message box has no saved-prompts button
-(ADR 0055); the phone keeps its saved prompts (ADR 0031). A new chat picks where it works: the home
-folder, or a Workspace and one of its Worktrees (Primary or an isolated one); it is fixed once the
-chat has started and shown as "demo-app · fix-login" (ADR 0055). Every message box whose CLI can
-report it (Claude Code, Codex) has a **usage limits** button: the plan's 5-hour and weekly windows (and
-per-model weekly ones) with the share used and when each resets, read from the CLI itself (ADR 0055). Bots never appear on a
-workspace's Kanban. A bot may have its own Linux computer (a sandboxed Docker desktop with a
-terminal and Chromium, on this computer or on an SSH host): it works there with desktop tools,
-and the user can take control from the bot panel. Each bot's **Works on** choice decides which
-computers its threads may use: Auto (the browser, plus its Linux computer when one is set up;
-never the user's screen), its Linux computer, this computer (the user's screen, chosen on purpose),
-the browser only, or none. Settings' Browser use and Computer use still switch those off for every
-agent. A bot's threads share one set of browser pages in the bot's own browser profile; the user
-signs in to sites for it in the bot panel's Browser tab, never by putting a password in a chat.
-A bot the user allows to run on a schedule can have **schedules** (ADR 0028): instructions run in a
-fresh thread once, every few minutes, or on a calendar rule in a chosen timezone. They run while
+Everything the removed modes did, Work does: an agent runs in a terminal or a **chat view** (the same
+message box: attachments, model and effort, queued next messages, the usage limits button, ADR 0031,
+0055), with apps, the browser and computer use. **Schedules** (ADR 0028, 0040) start a new agent of a
+CLI in a Worktree with the schedule's instructions, once, every few minutes or on a calendar rule in
+a timezone; its card moves on the Kanban by its real state. They are made and listed in the side
+panel's Schedules tab (or a worktree's "New schedule…"), by day, week, list or run log. They run while
 Hiveory (or the user's Hiveory server) is running; a run missed by less than 12 hours still happens
-when it is back, and every run is kept in a run log. A bot can save schedules for itself when asked
-("send me this every morning"); they arrive paused until the user switches them on. When a run ends
-or is missed while the user is elsewhere, a desktop notification opens its thread. Each bot's
-Overview says in plain words what it does, what it can reach and what it won't do, shows the exact
-prompt it starts from, and lists its own skills; notifications can be turned off per bot.
-**Triggers** start a bot's work when something happens in a connected app (a new email, a GitHub
-issue…): Composio delivers the event over a public link that Tailscale Funnel gives one random path of
-this computer. Every event is signature-checked, and its run is read-only, treating the event as data,
-never as orders.
-
-Chat: pick a detected CLI (Antigravity excluded), then a model (searchable),
-then an effort level when that model supports one. The CLI locks after the
-first message. Chats keep running while the user is in Work.
+when it is back, and every run is kept in a run log. A run that ends or is missed while the user is
+elsewhere shows a desktop notification.
 
 ## Workspace Lifecycle
 
@@ -312,7 +265,7 @@ the issue.
 
 ## Agents that know Hiveory (ADR 0041)
 
-Every agent, chat and bot can call `hiveory_about`: what Hiveory is and where everything lives, where
+Every agent can call `hiveory_about`: what Hiveory is and where everything lives, where
 it runs (worktree, workspace, branch), which Hiveory tools and settings apply, and what MCP servers and
 apps it has. Queen Bee answers "where is…" and "how do I…" questions about the app from the same guide
 and opens the place when she can.
@@ -357,14 +310,13 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   any 2–3 keys in Settings) taps to focus her and holds to talk.
 - Settings › Keyboard (ADR 0047) lists every shortcut with its platform's standard keys (⌘ on macOS,
   Ctrl on Windows and Linux, never the Windows/Super key): Queen Bee, Settings, the sidebar, the side
-  panel, Work/Bots/Chat and New chat or bot. Each can be changed, removed or reset; fixed terminal,
+  panel, Schedules, worktrees, panes and tabs. Each can be changed, removed or reset; fixed terminal,
   editor and pane keys are listed read-only.
 - Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
-  close agents (always after a yes), restart, jump to an agent, load a preset, switch
-  Work/Chat, open Home, a workspace, a worktree or a Settings section, show or hide the
-  side panel, and open a browser or the Explorer. In Bots: open the work board, Schedules,
-  Triggers or the team map, and pause or resume a schedule or trigger by its name ("pause
-  Morning brief"; a model's plan asks first).
+  close agents (always after a yes), restart, jump to an agent, load a preset, open Home,
+  a workspace, a worktree or a Settings section, show or hide the side panel, open a browser
+  or the Explorer, and pause or resume a schedule by its name ("pause Morning brief"; a model's
+  plan asks first).
 - Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
   live state. The current workspace, or every workspace from Home.
 - Live updates (finished, needs you, stopped) wait behind her message button, which shows a
@@ -378,7 +330,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   - a custom personality: her name (never an agent name), a style text and three sliders
     (formal↔casual, calm↔energetic, gentle↔direct);
   - her voice (any English Kokoro voice) and speed;
-  - placement (docked, floating, or put away in the title bar, ADR 0044), and the system-wide shortcut (opt-in).
+  - placement (docked, floating, or put away in the sidebar, ADR 0044, 0056), and the system-wide shortcut (opt-in).
 - Things she's learned: "remember that …" saves a note (shown as "Noted: …", undoable),
   "what do you know about me?" reads them back, "forget …" removes them. Notes are local,
   editable in Settings, and reach a model provider only as facts.
@@ -395,7 +347,6 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   - connected apps, a Hiveory update check;
   - the current agents saved as a preset ("save this as preset Backend");
   - a new chat with a CLI and a first message;
-  - a message to a bot ("ask Scout to …");
   - a CLI's last conversation resumed;
   - a new workspace;
   - "restart all".
@@ -446,7 +397,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 - A remote workspace's Ports button lists what listens on that machine and forwards a port to this
   computer (same number when free) and opens it in the browser.
 - Hiveory can run as a server (`hiveory --serve 7788`, no window, loopback only by default) so agents
-  and bots keep working while this computer is off. Settings › Remote › Use a Hiveory server pairs
+  keep working while this computer is off. Settings › Remote › Use a Hiveory server pairs
   this window with it (SSH tunnel or an address, plus the one-time code it printed); Hiveory then
   restarts as that server's window. The server's dialogs, screen and installer are never reachable
   from a client. Disconnect returns to local mode.
@@ -520,7 +471,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   agents then resume their conversations.
 - Server mode (`--serve`) uses the same terminal host, so switching a computer between desktop and
   server keeps its terminals.
-- Chat replies keep streaming too (Chat mode, bot threads, chat-view agents, ADR 0051): a reply
+- Chat replies keep streaming too (chat-view agents, ADR 0051): a reply
   that was streaming when Hiveory quit carries on in the terminal host and is finished, rebuilt in
   full, when Hiveory opens again. Schedules and triggers fire only while Hiveory (or its server mode)
   runs; what they start then outlives it.
@@ -531,10 +482,10 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 Initial version does not include:
 
-- free-form agent-to-agent chat (Work agents coordinate through agent tools; bots through the Chief of Staff, ADR 0022)
-- remote collaboration (planned as one host layer for Work and Bots, ADR 0022)
+- free-form agent-to-agent chat (Work agents coordinate through agent tools)
+- remote collaboration (planned as one host layer for Work, ADR 0022)
 - global Kanban across workspaces
-- task history in Work (Bots keeps a bounded run log for schedules, ADR 0028)
+- task history in Work (Schedules keep a bounded run log, ADR 0028)
 - Done Kanban column
 - user-controlled manual Kanban status
 - multiple user-facing Tasks inside a Worktree

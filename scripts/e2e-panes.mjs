@@ -184,17 +184,12 @@ await test('a terminal shows what it printed after Hiveory restarts (ADR 0044)',
   await shot('p7-terminal-restored')
 })
 
-await test('Settings, Bots and Chat load on first open without errors (ADR 0044)', async () => {
+await test('Settings loads on first open without errors (ADR 0044)', async () => {
   const errors = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await page.getByRole('heading', { name: 'Appearance' }).waitFor()
   await page.locator('dialog[open]').getByRole('button', { name: 'Close settings' }).click()
-  await page.getByRole('tab', { name: 'Bots' }).click()
-  await page.getByText(/Build your team of bots|Bots/).first().waitFor()
-  await page.getByRole('tab', { name: 'Chat' }).click()
-  await page.waitForTimeout(800)
-  await page.getByRole('tab', { name: 'Work' }).click()
   await openWorktree()
   expect(errors.length === 0, `errors: ${errors.join(' | ')}`)
 })

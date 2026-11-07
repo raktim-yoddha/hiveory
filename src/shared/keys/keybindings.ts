@@ -12,15 +12,10 @@ export const APP_COMMANDS = [
   { id: 'toggle-sidebar', label: 'Show or hide the sidebar', group: 'General', mac: 'Meta+KeyB', other: 'Control+Shift+KeyB' },
   { id: 'toggle-side-panel', label: 'Show or hide the side panel', group: 'General', mac: 'Meta+KeyJ', other: 'Control+Shift+KeyJ' },
   { id: 'maximize-side-panel', label: 'Maximize or restore the side panel', group: 'General', mac: 'Meta+Shift+KeyM', other: 'Control+Shift+KeyM' },
-  { id: 'open-schedules', label: 'Open Schedules (this mode’s calendar)', group: 'General', mac: 'Meta+Shift+KeyS', other: 'Control+Shift+KeyS' },
-  { id: 'mode-work', label: 'Go to Work', group: 'Modes', mac: 'Meta+Digit1', other: 'Control+Digit1' },
-  { id: 'mode-bots', label: 'Go to Bots', group: 'Modes', mac: 'Meta+Digit2', other: 'Control+Digit2' },
-  { id: 'mode-chat', label: 'Go to Chat', group: 'Modes', mac: 'Meta+Digit3', other: 'Control+Digit3' },
-  // Only in Chat and Bots, where no terminal needs Ctrl N; in Work the key reaches the terminal.
-  { id: 'new-item', label: 'New chat (in Chat) or new bot (in Bots)', group: 'Lists', mac: 'Meta+KeyN', other: 'Control+KeyN' },
+  { id: 'open-schedules', label: 'Open this worktree’s Schedules', group: 'General', mac: 'Meta+Shift+KeyS', other: 'Control+Shift+KeyS' },
   { id: 'new-worktree', label: 'New worktree in this workspace', group: 'Lists', mac: 'Meta+Shift+KeyN', other: 'Control+Shift+KeyN' },
-  { id: 'next-item', label: 'Next chat, bot or worktree', group: 'Lists', mac: 'Meta+Alt+ArrowDown', other: 'Alt+ArrowDown' },
-  { id: 'previous-item', label: 'Previous chat, bot or worktree', group: 'Lists', mac: 'Meta+Alt+ArrowUp', other: 'Alt+ArrowUp' },
+  { id: 'next-item', label: 'Next worktree', group: 'Lists', mac: 'Meta+Alt+ArrowDown', other: 'Alt+ArrowDown' },
+  { id: 'previous-item', label: 'Previous worktree', group: 'Lists', mac: 'Meta+Alt+ArrowUp', other: 'Alt+ArrowUp' },
   // Panes and tabs of the open worktree (ADR 0042); elsewhere the keys pass through.
   { id: 'new-tab', label: 'New tab: pick an agent, terminal or browser', group: 'Panes and tabs', mac: 'Meta+KeyT', other: 'Control+Shift+KeyT' },
   { id: 'new-terminal', label: 'New terminal tab', group: 'Panes and tabs', mac: 'Meta+Alt+KeyT', other: 'Control+Shift+Backquote' },

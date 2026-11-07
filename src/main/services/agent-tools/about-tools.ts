@@ -16,7 +16,7 @@ export interface AboutDeps {
 const onOff = (on: boolean): string => (on ? 'on' : 'off')
 
 /**
- * `hiveory_about` (ADR 0041): any agent, chat or bot asks Hiveory what it is, where the caller runs,
+ * `hiveory_about` (ADR 0041): any agent asks Hiveory what it is, where the caller runs,
  * the settings that shape what it can do and what it is connected to. Names and switches only: no
  * keys, notes or other people's data.
  */
@@ -49,7 +49,7 @@ export class AboutTools implements ToolFamily {
           ...(place.worktree.association ? [`It was started for ${place.worktree.association.kind === 'issue' ? 'issue' : 'pull request'} ${place.worktree.association.ref}.`] : []),
           workspaceSettings(place.project)
         ].join(' ')
-      : `You are ${caller.petName}, running in Hiveory outside a Work worktree (a chat or a bot thread).`
+      : `You are ${caller.petName}, running in Hiveory outside a Work worktree.`
     const connected = this.deps.connections()
     const text = [
       '# Where you are',

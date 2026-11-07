@@ -24,11 +24,8 @@ import type {
 } from '../domain'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { TerminalHostStatus } from '../host/protocol'
-import { APPROVAL_LEVELS, type ApprovalRequest } from '../domain/approval'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
-import { MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, type BotComputerStatus, type BotView, type Handoff, type Team } from '../domain/bot'
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
-import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger, type TriggerLinkStatus, type TriggerType } from '../domain/trigger'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
@@ -61,7 +58,6 @@ import { THEME_EXTENSION_ID, THEME_SEGMENT, VSCODE_THEME_ID, type ThemeListing, 
 /** What Queen Bee sends a model: names and ids only, bounded. */
 const shortText = z.string().max(200)
 const queenContextSchema = z.object({
-  mode: z.enum(['workspace', 'bots', 'chatspace']),
   projectId: shortText.optional(),
   workspaceId: shortText.optional(),
   projects: z.array(z.object({ id: shortText, name: shortText })).max(500),
@@ -71,60 +67,19 @@ const queenContextSchema = z.object({
     .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
     .max(500),
   clis: z.array(z.object({ id: shortText, displayName: shortText, kind: z.enum(['agent', 'shell']).optional() })).max(200),
-  presets: z.array(z.object({ id: shortText, name: shortText })).max(200),
-  bots: z.array(z.object({ id: shortText, name: shortText })).max(200).optional()
+  presets: z.array(z.object({ id: shortText, name: shortText })).max(200)
 })
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
 /** An SSH alias or user@host: never an ssh option, never shell syntax. */
 const sshDestination = z.string().min(1).max(255).regex(/^[A-Za-z0-9_][A-Za-z0-9._-]*(@[A-Za-z0-9_][A-Za-z0-9._-]*)?$/)
-const botName = z.string().trim().min(1).max(MAX_BOT_NAME)
-/** A bot's editable fields; '' clears the engine, model or effort. */
-const botFields = z.object({
-  brief: z.string().max(MAX_BOT_BRIEF).optional(),
-  blurb: z.string().trim().max(MAX_BOT_BLURB).optional(),
-  /** Desktop notifications for its replies and routines. */
-  notify: z.boolean().optional(),
-  cliId: z.union([id, z.literal('')]).optional(),
-  model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
-  effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
-  autoApprove: z.boolean().optional(),
-  chief: z.boolean().optional(),
-  messaging: z.boolean().optional(),
-  pinned: z.boolean().optional(),
-  /** Where the bot may use a computer (the bot panel's "Works on"). */
-  worksOn: z.enum(WORKS_ON).optional(),
-  /** May run on a schedule (ADR 0028). */
-  routines: z.boolean().optional(),
-  /** When it stops to ask before acting in apps (ADR 0029). */
-  approvals: z.enum(APPROVAL_LEVELS).optional(),
-  /** Its team; moving it there makes it Chief only if that team has none (ADR 0028). */
-  teamId: id.optional(),
-  /** The bot's Docker computer (ADR 0022): here, or on an SSH host; null removes it from the bot (the container stays). */
-  computer: z
-    .union([
-      z.object({
-        kind: z.literal('docker'),
-        host: z.object({ kind: z.literal('ssh'), destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }).optional()
-      }),
-      /** A seat on another bot's computer (ADR 0032). */
-      z.object({ kind: z.literal('shared'), botId: id }),
-      z.null()
-    ])
-    .optional()
-})
-const teamName = z.string().trim().min(1).max(MAX_TEAM_NAME)
 const isoDate = z.string().datetime({ offset: true })
 /** A routine's editable fields; the service checks the timezone, the cron rule and that a run is left. */
-const routineTarget = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('chat'), cliId: id, model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional() }),
-  z.object({ kind: z.literal('workspace'), projectId: id, workspaceId: id, cliId: id })
-])
+/** A routine runs on a new agent of this CLI in this Worktree (ADR 0040). */
+const routineTarget = z.object({ kind: z.literal('workspace'), projectId: id, workspaceId: id, cliId: id })
 const routineFields = z.object({
   name: z.string().trim().min(1).max(MAX_ROUTINE_NAME),
-  /** A bot, or `target` (a new chat, a Work agent): exactly one of them (ADR 0030). */
-  botId: id.optional(),
-  target: routineTarget.optional(),
+  target: routineTarget,
   prompt: z.string().trim().min(1).max(MAX_ROUTINE_PROMPT),
   schedule: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('once') }),
@@ -135,14 +90,11 @@ const routineFields = z.object({
   timezone: z.string().min(1).max(64),
   endsAt: isoDate.optional(),
   timeoutMinutes: z.number().int().min(1).max(1440).optional(),
-  results: z.enum(['thread', 'none']).optional(),
   /** Copies made by `routines.addFile`; main refuses any other path. */
   attachments: z
     .array(z.object({ name: z.string().min(1).max(260), path: z.string().min(1).max(1000), kind: z.enum(['image', 'video', 'text', 'file']), size: z.number().int().min(0) }))
     .max(MAX_ROUTINE_FILES)
     .optional(),
-  /** Post into this thread of the bot instead of a dedicated one. */
-  resultsThreadId: id.optional(),
   enabled: z.boolean().optional()
 })
 const folderPath = z.string().min(1).max(1000)
@@ -492,7 +444,7 @@ export const requestSchemas = {
   'shell.open': z.object({ workspaceId: id.optional(), projectId: id.optional(), tab: z.string().regex(/^[a-z0-9]{1,12}$/).optional() }),
   'shell.restart': z.object({ id }),
   'shell.close': z.object({ id }),
-  'extensions.scan': z.object({ projectId: id.optional(), botId: id.optional() }),
+  'extensions.scan': z.object({ projectId: id.optional() }),
   /** Paths must come from the last scan; main re-validates. */
   'extensions.revealSkill': z.object({ path: skillPath }),
   /** Copies a scanned skill into another skills folder (same scope), so more CLIs load it. */
@@ -504,12 +456,10 @@ export const requestSchemas = {
     description: z.string().trim().min(1).max(1024),
     body: z.string().max(100_000),
     rootIds: z.array(skillRoot).min(1).max(40),
-    projectId: id.optional(),
-    /** A bot's own skills: its folder, which its engines read as their project (ADR 0028). */
-    botId: id.optional()
+    projectId: id.optional()
   }),
   /** Opens a folder picker for a skill folder (with SKILL.md) and copies it into the chosen roots. */
-  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional(), botId: id.optional() }),
+  'extensions.importSkill': z.object({ rootIds: z.array(skillRoot).min(1).max(40), projectId: id.optional() }),
   // Stores (ADR 0041): skills.sh and the official MCP Registry, read from main. A store server is added
   // through connections.saveCustom like any other; a skill is downloaded from its GitHub repository here.
   'store.searchSkills': z.object({ query: z.string().max(200) }),
@@ -519,8 +469,7 @@ export const requestSchemas = {
     source: z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/),
     skillId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/),
     rootIds: z.array(skillRoot).min(1).max(40),
-    projectId: id.optional(),
-    botId: id.optional()
+    projectId: id.optional()
   }),
   'store.searchMcp': z.object({ query: z.string().max(200), cursor: z.string().max(500).optional() }),
   /** MCP servers and apps Hiveory runs for every agent (ADR 0017). Secrets go in, never come back out. */
@@ -599,16 +548,10 @@ export const requestSchemas = {
   'browser.exportCookies': z.object({ profileId }),
   'browser.clearCookies': z.object({ profileId }),
   'chat.clis': none,
-  'chat.list': none,
   'chat.get': z.object({ chatId: id }),
-  /** `cliId`: start on that CLI (the phone picks it in one step; ADR 0039). */
-  'chat.create': z.object({ projectId: id.optional(), cliId: id.optional() }),
   'chat.update': z.object({
     chatId: id,
     cliId: id.optional(),
-    projectId: z.union([id, z.literal('')]).optional(),
-    /** A Worktree of the chat's Workspace ('' = the Workspace's own folder; ADR 0055). */
-    workspaceId: z.union([id, z.literal('')]).optional(),
     // Model ids like "opencode-go/kimi-k2.7-code" or "sonnet[1m]"; never shell syntax.
     model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
     effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
@@ -617,7 +560,6 @@ export const requestSchemas = {
   }),
   /** Only the model and effort ('' = the CLI's default): what a phone may change on a chat (ADR 0027). */
   'chat.setModel': z.object({ chatId: id, model: chatModel, effort: chatEffort }),
-  'chat.delete': z.object({ chatId: id }),
   'chat.send': z.object({
     chatId: id,
     text: z.string().max(100_000),
@@ -645,74 +587,19 @@ export const requestSchemas = {
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
   /** The CLI's plan limits (5-hour, weekly), as it reports them (ADR 0055). */
   'chat.limits': z.object({ cliId: id, refresh: z.boolean().optional() }),
-  // Bots mode (ADR 0022). A bot's threads are chats: send, stop, attach and delete them through chat.*.
-  'bots.list': none,
-  'bots.create': botFields.extend({ name: botName }),
-  'bots.update': botFields.extend({
-    botId: id,
-    name: botName.optional(),
-    memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).optional()
-  }),
-  'bots.delete': z.object({ botId: id }),
-  'bots.threads': z.object({ botId: id }),
-  'bots.newThread': z.object({ botId: id }),
-  'bots.computer': z.object({ botId: id, action: z.enum(['status', 'start', 'stop', 'takeControl', 'rebuild']) }),
-  // Teams of bots, each with its own Chief (ADR 0028), and the work bots hand each other.
-  'teams.list': none,
-  'teams.create': z.object({ name: teamName }),
-  'teams.rename': z.object({ teamId: id, name: teamName }),
-  'teams.delete': z.object({ teamId: id }),
-  'bots.handoffs': none,
-  /** What a new thread of this bot is told before its first turn (the Overview's prompt preview). */
-  'bots.preview': z.object({ botId: id }),
-  // Triggers (ADR 0028): an event in a connected app starts a read-only bot run.
-  'triggers.status': none,
-  /** Publishes the event link (Tailscale Funnel + the Composio webhook). takeOver: the user agreed to repoint their project's webhook. */
-  'triggers.enableLink': z.object({ takeOver: z.boolean().optional() }),
-  'triggers.disableLink': none,
-  /** Opens the page that fixes the link (a tailscale.com page main chose; never a URL from the renderer). */
-  'triggers.openFix': none,
-  /** Bot calls waiting for the user's yes (ADR 0029). */
-  'approvals.list': none,
-  'approvals.answer': z.object({ approvalId: id, allow: z.boolean() }),
-  'triggers.list': none,
-  'triggers.types': z.object({ appId: appIdSchema }),
-  'triggers.create': z.object({
-    name: z.string().trim().min(1).max(MAX_TRIGGER_NAME),
-    botId: id,
-    prompt: z.string().max(MAX_TRIGGER_PROMPT),
-    appId: appIdSchema,
-    accountId: z.string().min(1).max(100).regex(/^[\w-]+$/),
-    triggerSlug: z.string().min(1).max(120).regex(/^[A-Za-z0-9_]+$/),
-    triggerName: z.string().min(1).max(200),
-    config: z.record(z.string().max(100), z.union([z.string().max(2000), z.number(), z.boolean()]))
-  }),
-  'triggers.update': z.object({
-    triggerId: id,
-    name: z.string().trim().min(1).max(MAX_TRIGGER_NAME).optional(),
-    prompt: z.string().max(MAX_TRIGGER_PROMPT).optional(),
-    enabled: z.boolean().optional(),
-    botId: id.optional()
-  }),
-  'triggers.delete': z.object({ triggerId: id }),
-  // Routines (ADR 0028): a bot's scheduled work, and the run log.
-  'routines.list': z.object({ botId: id.optional() }),
-  'routines.create': routineFields.refine((r) => Boolean(r.botId) !== Boolean(r.target), { message: 'Pick a bot, a chat or a Work agent.' }),
+  // Routines (ADR 0028, 0040): a Worktree's scheduled work, and the run log.
+  'routines.list': none,
+  'routines.create': routineFields,
   'routines.update': routineFields.partial().extend({
     routineId: id,
-    botId: id.nullable().optional(),
-    target: routineTarget.nullable().optional(),
     endsAt: isoDate.nullable().optional(),
-    timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional(),
-    resultsThreadId: id.nullable().optional()
+    timeoutMinutes: z.number().int().min(1).max(1440).nullable().optional()
   }),
   'routines.delete': z.object({ routineId: id }),
   /** Keeps a copy of a file for a routine's runs; its result goes into the routine's `attachments`. */
   'routines.addFile': z.object({ name: z.string().min(1).max(200), data: z.string().max(36_000_000) }),
   'routines.runNow': z.object({ routineId: id }),
-  'routines.runs': z.object({ botId: id.optional(), routineId: id.optional() }),
-  /** A screenshot of the bot's running Linux computer (base64 PNG) for the bot panel; null while it is not running. */
-  'bots.screen': z.object({ botId: id }),
+  'routines.runs': z.object({ routineId: id.optional() }),
   /** Checks an SSH host end to end (ADR 0022): probe, install hiveoryd if needed, connect, hello. */
   'hosts.check': z.object({ destination: sshDestination, port: z.number().int().min(1).max(65535).optional() }),
   /** The SSH picker's hosts: Tailscale devices and ~/.ssh/config aliases (ADR 0025). */
@@ -944,12 +831,9 @@ export interface ResponseMap {
   'browser.exportCookies': { count: number; path: string } | null
   'browser.clearCookies': { count: number }
   'chat.clis': string[]
-  'chat.list': ChatSummary[]
   'chat.get': ChatSession & { running: boolean }
-  'chat.create': ChatSession
   'chat.update': ChatSession
   'chat.setModel': ChatSession
-  'chat.delete': void
   'chat.send': void
   'chat.attach': ChatAttachment
   'chat.attachPath': ChatAttachment
@@ -961,31 +845,6 @@ export interface ResponseMap {
   'prompts.delete': void
   'chat.catalog': ChatCatalog
   'chat.limits': UsageLimits
-  'bots.list': BotView[]
-  'bots.create': BotView
-  'bots.update': BotView
-  'bots.delete': void
-  'bots.threads': ChatSummary[]
-  'bots.newThread': ChatSession
-  'bots.computer': BotComputerStatus
-  'bots.screen': string | null
-  'teams.list': Team[]
-  'teams.create': Team
-  'teams.rename': Team
-  'teams.delete': void
-  'bots.handoffs': Handoff[]
-  'bots.preview': string
-  'triggers.status': TriggerLinkStatus
-  'triggers.enableLink': TriggerLinkStatus
-  'triggers.disableLink': TriggerLinkStatus
-  'triggers.openFix': void
-  'approvals.list': ApprovalRequest[]
-  'approvals.answer': void
-  'triggers.list': Trigger[]
-  'triggers.types': TriggerType[]
-  'triggers.create': Trigger
-  'triggers.update': Trigger
-  'triggers.delete': void
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView
@@ -1039,7 +898,7 @@ export type Channel = keyof typeof requestSchemas
 export type RequestOf<C extends Channel> = z.input<(typeof requestSchemas)[C]>
 export type ResponseOf<C extends Channel> = ResponseMap[C]
 
-export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'bots' | 'routines' | 'triggers' | 'approvals' | 'prompts' | 'themes'
+export type StateTopic = 'projects' | 'workspaces' | 'agents' | 'presets' | 'layout' | 'settings' | 'chats' | 'connections' | 'editors' | 'routines' | 'prompts' | 'themes'
 
 export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }
@@ -1064,8 +923,6 @@ export interface EventMap {
   'ssh.prompt': SshPrompt
   /** That question was answered (here or in another window) or timed out. */
   'ssh.promptDone': { id: string }
-  /** The user clicked a routine's notification: open the bot's thread (ADR 0028). */
-  'bots.open': { botId: string; threadId: string }
 }
 
 export type EventName = keyof EventMap
@@ -1086,8 +943,7 @@ const EVENTS: Record<EventName, true> = {
   'queen.update': true,
   'hosts.changed': true,
   'ssh.prompt': true,
-  'ssh.promptDone': true,
-  'bots.open': true
+  'ssh.promptDone': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

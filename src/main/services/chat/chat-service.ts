@@ -74,8 +74,6 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     private readonly mcpFor: (chatId: string) => McpEndpoint | undefined = () => undefined,
     /** Per-run generated files (MCP configs). */
     private readonly runtimeDir = join(attachmentsDir, '..', '.runtime'),
-    /** Text sent ahead of a conversation's first turn (a bot's identity, brief and memory). */
-    private readonly preamble: (chat: ChatSession) => string | undefined = () => undefined,
     /** Where each turn's CLI runs: the terminal host, so a reply outlives Hiveory (ADR 0051). */
     private readonly processes: ChatProcessBackend = localChatProcesses
   ) {
@@ -123,47 +121,6 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return CHAT_CLI_IDS.filter((id) => available.has(id))
   }
 
-  list(): ChatSummary[] {
-    return this.store
-      .all()
-      .filter((c) => !c.agentId && !c.botId)
-      .map((c) => this.summary(c))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  }
-
-  /** A bot's threads, newest first. */
-  threads(botId: string): ChatSummary[] {
-    return this.store
-      .all()
-      .filter((c) => c.botId === botId)
-      .map((c) => this.summary(c))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  }
-
-  /** A new thread for a bot: it works in the bot's folder, starting from the bot's engine and permissions. */
-  createThread(input: Pick<ChatSession, 'botId' | 'cwd' | 'cliId' | 'model' | 'effort' | 'autoApprove' | 'delegation' | 'readOnly'> & { title?: string }): ChatSession {
-    const now = nowIso()
-    const cliId = input.cliId && this.clis().includes(input.cliId) ? input.cliId : undefined
-    const chat: ChatSession = {
-      id: randomUUID(),
-      title: input.title?.trim().slice(0, 80) || 'New chat',
-      botId: input.botId,
-      cwd: input.cwd,
-      cliId,
-      model: cliId ? input.model : undefined,
-      effort: cliId ? input.effort : undefined,
-      autoApprove: input.autoApprove,
-      ...(input.delegation ? { delegation: input.delegation } : {}),
-      ...(input.readOnly ? { readOnly: true } : {}),
-      messages: [],
-      createdAt: now,
-      updatedAt: now
-    }
-    this.store.save(chat)
-    this.broadcast('state.changed', { topic: 'chats' })
-    return chat
-  }
-
   private mcpConfig(chat: ChatSession): ChatMcp | undefined {
     const endpoint = this.mcpFor(chat.id)
     if (!endpoint) return undefined
@@ -180,17 +137,6 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     return chat!
   }
 
-  create(projectId?: string, cliId?: string): ChatSession {
-    const now = nowIso()
-    const cwd = projectId ? this.workspaces.project(projectId).path : homedir()
-    // Only a CLI that can chat (and is installed); anything else starts without one, as on the computer.
-    const cli = cliId && CHAT_PROVIDERS[cliId] && this.registry.executable(cliId) ? { cliId } : {}
-    const chat: ChatSession = { id: randomUUID(), title: 'New chat', projectId, cwd, ...cli, autoApprove: false, messages: [], createdAt: now, updatedAt: now }
-    this.store.save(chat)
-    this.broadcast('state.changed', { topic: 'chats' })
-    return chat
-  }
-
   /**
    * The chat behind a Work agent in chat view. Its CLI and folder follow the agent and never change;
    * a new one starts on `defaults` (its Workspace's model and effort for that CLI).
@@ -199,7 +145,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     const existing = this.store.get(instance.id)
     if (existing) {
       // Auto-approve turned on (the agent's or Settings', ADR 0049) gives an existing chat full access too.
-      const autoApprove = existing.autoApprove || (instance.autoApprove && !existing.readOnly)
+      const autoApprove = existing.autoApprove || instance.autoApprove
       if (existing.cwd !== cwd || autoApprove !== existing.autoApprove) this.store.save({ ...existing, cwd, autoApprove })
       return
     }
@@ -220,14 +166,9 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     })
   }
 
-  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title' | 'projectId' | 'workspaceId'>>): ChatSession {
+  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title'>>): ChatSession {
     const chat = this.get(chatId)
-    const moving = patch.projectId !== undefined || patch.workspaceId !== undefined
-    if (chat.agentId && ((patch.cliId && patch.cliId !== chat.cliId) || moving)) {
-      fail('FORBIDDEN', "An agent's CLI and folder are fixed.")
-    }
-    if (chat.botId && moving) fail('FORBIDDEN', "A bot's threads work in the bot's own folder.")
-    if (chat.readOnly && patch.autoApprove) fail('FORBIDDEN', 'A trigger run stays read-only.', { hint: 'Start a new thread to give the bot full access.' })
+    if (chat.agentId && patch.cliId && patch.cliId !== chat.cliId) fail('FORBIDDEN', "An agent's CLI is fixed.")
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
       if (started) fail('FORBIDDEN', 'The CLI is locked once a chat has started.', { hint: 'Start a new chat to use another CLI.' })
@@ -236,19 +177,6 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       chat.cliId = patch.cliId
       chat.model = undefined
       chat.effort = undefined
-    }
-    if (moving) {
-      const projectId = patch.projectId !== undefined ? patch.projectId || undefined : chat.projectId
-      // A Worktree of that Workspace, or of one mirroring its repository (ADR 0039); none = its own folder.
-      const workspaceId = patch.workspaceId !== undefined ? patch.workspaceId || undefined : patch.projectId !== undefined ? undefined : chat.workspaceId
-      const worktree = workspaceId ? this.workspaces.get(workspaceId) : undefined
-      if (worktree && (!projectId || !this.workspaces.mirrors(projectId).includes(worktree.projectId))) fail('INVALID_INPUT', 'That worktree is not in this workspace.')
-      if (projectId !== chat.projectId || workspaceId !== chat.workspaceId) {
-        if (started) fail('FORBIDDEN', 'The folder is fixed once a chat has started.')
-        chat.projectId = projectId
-        chat.workspaceId = workspaceId
-        chat.cwd = worktree?.path ?? (projectId ? this.workspaces.project(projectId).path : homedir())
-      }
     }
     if ('model' in patch) chat.model = patch.model || undefined
     if ('effort' in patch) chat.effort = patch.effort || undefined
@@ -361,12 +289,10 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     // Every window and phone shows the question at once, whoever sent it (the phone, Queen Bee, another agent).
     this.broadcast('chat.event', { chatId, message: structuredClone(asked), summary: this.summary(chat) })
 
-    // A bot's identity goes ahead of its first turn; providers without resume get it every turn with the transcript.
-    const intro = this.preamble(chat)
+    // Providers without resume get the transcript every turn.
     const body = provider!.resumable ? prompt : transcriptPrompt(history, prompt)
-    const firstTurn = !provider!.resumable || !chat.providerSessionId
     const spec = provider!.run({
-      prompt: intro && firstTurn ? `${intro}\n\n---\n\n${body}` : body,
+      prompt: body,
       model: chat.model,
       effort: chat.effort,
       sessionId: provider!.resumable ? chat.providerSessionId : undefined,
@@ -583,7 +509,6 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       updatedAt: chat.updatedAt,
       running: this.runs.has(chat.id),
       agentId: chat.agentId,
-      ...(chat.botId ? { botId: chat.botId } : {}),
       ...(chat.queued?.length ? { queued: [...chat.queued] } : {})
     }
   }

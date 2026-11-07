@@ -1,6 +1,6 @@
 .card {
   position: fixed;
-  top: calc(var(--titlebar-height) + var(--space-5));
+  top: calc(var(--window-controls-height) + var(--space-5));
   right: var(--space-7);
   z-index: var(--z-toast);
   display: flex;

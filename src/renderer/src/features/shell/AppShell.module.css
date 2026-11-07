@@ -1,3 +1,8 @@
+/* macOS's traffic lights need a wider rail (ADR 0056). */
+.app:global(.platform-darwin) {
+  --rail-width: calc(var(--traffic-lights-width) + var(--space-4));
+}
+
 .app {
   position: relative;
   isolation: isolate;
@@ -57,32 +62,24 @@
  * the window shrinks. Only a window too small for all of them squeezes the panes, and then only
  * by what the sidebars at their minimum (--side-reserve) leave.
  */
+/*
+ * No title bar (ADR 0056): the columns start at the top of the window. The sidebar column is always
+ * there (folded, it is the icon rail).
+ */
 .main {
-  --side-reserve: 0px;
+  --side-reserve: calc(var(--sidebar-min) + var(--gutter));
   --work-min: min(var(--work-min-width, 0px), 100% - var(--side-reserve));
 
   display: grid;
   flex: 1;
-  grid-template-columns: minmax(var(--work-min), 1fr);
+  grid-template-columns: minmax(var(--sidebar-min), var(--sidebar-width)) minmax(var(--work-min), 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: var(--gutter);
   min-height: 0;
-  padding: 0 var(--page-padding) var(--page-padding);
-}
-
-.withSidebar {
-  --side-reserve: calc(var(--sidebar-min) + var(--gutter));
-
-  grid-template-columns: minmax(var(--sidebar-min), var(--sidebar-width)) minmax(var(--work-min), 1fr);
+  padding: var(--page-padding);
 }
 
 .withPanel {
-  --side-reserve: calc(var(--side-panel-min) + var(--gutter));
-
-  grid-template-columns: minmax(var(--work-min), 1fr) minmax(var(--side-panel-min), var(--side-panel-width));
-}
-
-.withSidebar.withPanel {
   --side-reserve: calc(var(--sidebar-min) + var(--side-panel-min) + 2 * var(--gutter));
 
   grid-template-columns:
@@ -108,7 +105,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--gutter);
-  grid-column: 1;
+  grid-column: 2;
 }
 
 /* Screens fill what Queen Bee's docked bar leaves (ADR 0019). */
@@ -118,10 +115,6 @@
   min-height: 0;
 }
 
-.withSidebar .content {
-  grid-column: 2;
-}
-
 .panel {
   grid-column: -2;
 }
@@ -129,10 +122,6 @@
 /* Maximized: the panel spans the main column too, on top of it. The main area keeps its size underneath. */
 .panelMaximized {
   z-index: var(--z-panel);
-  grid-column: 1 / -1;
-}
-
-.withSidebar .panelMaximized {
   grid-column: 2 / -1;
 }
 
@@ -154,12 +143,7 @@
   left: calc(var(--gutter) * -1);
 }
 
-/*
- * Both modes stay mounted; the inactive one is hidden, not unmounted. A mode
- * (or screen) fades up as it appears — CSS animations restart when an element
- * goes from display:none to shown, so this costs nothing while hidden.
- */
-.mode,
+/* A screen fades up as it appears. */
 .view {
   height: 100%;
   animation: screen-in var(--duration-slow) var(--ease-in-out);
@@ -193,10 +177,6 @@
     opacity: 0;
     transform: translateX(var(--space-7));
   }
-}
-
-.mode[hidden] {
-  display: none;
 }
 
 /* Generic page surface for simple screens. */

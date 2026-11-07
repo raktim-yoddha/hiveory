@@ -3,7 +3,7 @@ import { cliAliases, norm } from './words'
 
 /**
  * Commands for the rest of the app — settings, the browser, files, Git and
- * GitHub, apps, updates, presets, chats, bots, sessions and projects — so Queen
+ * GitHub, apps, updates, presets, schedules, sessions and projects — so Queen
  * Bee reaches what a click reaches. Like the rule parser, it never guesses: a
  * missing place or name becomes a question.
  */
@@ -28,10 +28,7 @@ const OPEN_URL = /^(?:open|go to|browse(?: to)?|visit|load|show(?: me)?|navigate
 const OPEN_FILE = /^(?:open|show(?: me)?|edit|view)\s+(?:the\s+)?(?:file\s+(?!(?:explorer|browser|manager|tree|panel|tab)\b)(\S+)|(\S+\.[a-z0-9]{1,8}))\s*(?:file)?\s*$/i
 
 const SAVE_PRESET = /^(?:save|store|keep)\s+(?:this|these|the agents|this layout|this workspace|this setup|it)?\s*(?:as\s+)?(?:a\s+)?(?:new\s+)?preset(?:\s+(?:called|named|as))?\s+["“']?(.+?)["”']?\s*$/i
-// "open chat" switches to Chat mode; a new chat says new or start.
-const NEW_CHAT = /^(?:(?:start|begin)\s+(?:a\s+)?(?:new\s+)?|(?:open|create|make)\s+(?:a\s+)?new\s+|new\s+)chat(?:\s+(?:with|using|in)\s+([a-z0-9 .-]+?))?(?:\s*(?::|about|to|and (?:ask|say|tell)(?: it)?)\s+([\s\S]+))?\s*$/i
-const TELL_BOT = /^(?:ask|tell|message|ping|have)\s+(?:the\s+)?(?:bot\s+)?([\s\S]+)$/i
-const SWITCH = /^(pause|resume|unpause|stop|start|enable|disable|turn on|turn off|switch on|switch off|turn|switch)\s+(?:the\s+|my\s+)?(?:(routine|schedule|trigger)\s+)?(.+?)(?:\s+(routine|schedule|trigger))?(?:\s+(on|off))?$/i
+const SWITCH = /^(pause|resume|unpause|stop|start|enable|disable|turn on|turn off|switch on|switch off|turn|switch)\s+(?:the\s+|my\s+)?(?:(routine|schedule)\s+)?(.+?)(?:\s+(routine|schedule))?(?:\s+(on|off))?$/i
 const RESUME = /^(?:resume|continue|reopen|pick up)\b\s*(?:my\s+|the\s+)?(?:last\s+|latest\s+|previous\s+|recent\s+)?(.*?)\s*(?:session|conversation|chat)?\s*$/i
 
 /** Parses one command for the app beyond agents; null when it is not one. */
@@ -74,47 +71,17 @@ export function parseAppCommand(raw: string, ctx: QueenContext): QueenParse | nu
     return actions({ type: 'save-preset', name: preset[1]!.trim().slice(0, 60), workspaceId: ws })
   }
 
-  // Chats: "new chat", "start a chat with claude about the API".
-  const chat = NEW_CHAT.exec(input)
-  if (chat) {
-    const wanted = chat[1] ? norm(chat[1]) : ''
-    const cli = wanted ? ctx.clis.find((c) => c.kind !== 'shell' && cliAliases(c).includes(wanted)) : undefined
-    if (wanted && !cli) return { kind: 'ask', soft: true, question: { text: `I don't know a CLI called "${chat[1]}".` } }
-    const first = chat[2]?.replace(/^["“']|["”']$/g, '').trim()
-    return actions({ type: 'new-chat', ...(cli ? { cliId: cli.id } : {}), ...(first ? { text: first } : {}), ...(ctx.projectId ? { projectId: ctx.projectId } : {}) })
-  }
-
-  // Bots: "ask Scout to summarize the inbox".
-  const tell = TELL_BOT.exec(input)
-  if (tell && ctx.bots?.length) {
-    const after = tell[1]!.trim()
-    const bot = [...ctx.bots].sort((a, b) => b.name.length - a.name.length).find((b) => norm(after).startsWith(`${norm(b.name)} `))
-    // An agent with that name wins: agents are addressed by name everywhere else.
-    if (bot && !ctx.agents.some((a) => norm(a.petName) === norm(bot.name))) {
-      const message = after.split(/\s+/).slice(bot.name.trim().split(/\s+/).length).join(' ').replace(/^(?:bot\s+)?(?:to\s+)?/i, '').trim()
-      if (message) return actions({ type: 'message-bot', botId: bot.id, text: message })
-    }
-  }
-
-  // Schedules and triggers: "pause Morning brief", "turn the New issue trigger back on".
+  // Schedules: "pause Morning brief", "turn the Nightly tests schedule back on".
   const flip = SWITCH.exec(input.replace(/\s+back(?=\s+on$)/i, ''))
   // "turn X" without on or off is not a switch.
   if (flip && ctx.automations?.length && (flip[5] || !/^(turn|switch)$/i.test(flip[1]!))) {
     const wanted = norm(flip[3]!)
-    // "schedule" is the user's word for a routine (ADR 0046).
-    const kind = (flip[2] ?? flip[4])?.toLowerCase().replace('schedule', 'routine')
-    const hits = ctx.automations.filter((x) => norm(x.name) === wanted && (!kind || x.kind === kind))
+    const hits = ctx.automations.filter((x) => norm(x.name) === wanted)
     // An agent with that name wins: "stop Bruno" interrupts the agent.
     if (hits.length && !ctx.agents.some((a) => norm(a.petName) === wanted)) {
       const on = flip[5] ? flip[5].toLowerCase() === 'on' : /^(resume|unpause|start|enable|turn on|switch on)$/i.test(flip[1]!)
       if (hits.length === 1) return actions({ type: 'switch-automation', automationId: hits[0]!.id, on })
-      return ask(
-        `More than one schedule or trigger is called ${hits[0]!.name}. Which one?`,
-        hits.map((x) => {
-          const kind = x.kind === 'routine' ? 'schedule' : x.kind
-          return { label: `The ${kind}`, command: `${on ? 'resume' : 'pause'} ${x.name} ${kind}` }
-        })
-      )
+      return ask(`More than one schedule is called ${hits[0]!.name}. Rename one in its Worktree's Schedules tab first.`)
     }
   }
 

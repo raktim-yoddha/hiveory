@@ -413,7 +413,7 @@
   pointer-events: none;
 }
 
-/* Put away in the title bar (ADR 0044): her mark beside the side panel button, the bar drops under it. */
+/* Put away in the sidebar's top bar (ADR 0044, 0056): her mark beside the layout buttons, the bar drops under it. */
 .title {
   display: inline-flex;
   -webkit-app-region: no-drag;
@@ -426,9 +426,9 @@
 
 .titlePanel {
   position: fixed;
-  /* Clear of the title bar, lined up with the main area's right edge. */
-  top: calc(var(--titlebar-height) + var(--space-2));
-  right: var(--page-padding);
+  /* Under the sidebar's top bar, lined up with the sidebar's left edge. */
+  top: calc(var(--page-padding) + var(--sidebar-bar-height) + var(--space-2));
+  left: var(--page-padding);
   z-index: var(--z-menu);
   display: flex;
   flex-direction: column;
@@ -436,10 +436,10 @@
   width: var(--queen-bar-width);
   max-width: calc(100vw - var(--space-8));
   animation: title-drop var(--duration-base) var(--ease-liquid);
-  transform-origin: top right;
+  transform-origin: top left;
 }
 
-/* Her mark is already in the title bar right above: the dropped bar starts with her name. */
+/* Her mark is already in the top bar right above: the dropped bar starts with her name. */
 .titlePanel .bar > .mark {
   display: none;
 }

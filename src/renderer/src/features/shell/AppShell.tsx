@@ -4,7 +4,7 @@ import { ResizeHandle } from '../../components/ui/ResizeHandle'
 import { Toasts } from '../../components/ui/Toasts'
 import { SshPromptDialog } from './SshPromptDialog'
 import { cx } from '../../lib/cx'
-import { useBots } from '../../stores/bots'
+import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
 import { QueenDock, QueenFloating } from '../queen/Queen'
@@ -19,30 +19,22 @@ import { useNewWorktree } from '../workspace-create/new-worktree'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
-import { TitleBar } from './TitleBar'
+import { SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
+import { useWindowControlsRoom } from './window-controls'
 import styles from './AppShell.module.css'
 
-/*
- * Loaded when first needed (ADR 0044): Settings, Bots and Chat are most of the app's code, and a window
- * that starts in Work never parses them until they are opened.
- */
+/* Loaded when first needed (ADR 0044): a window never parses Settings until it is opened. */
 const SettingsScreen = lazy(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })))
-const BotsScreen = lazy(() => import('../bots/BotsScreen').then((m) => ({ default: m.BotsScreen })))
-const BotsSidebar = lazy(() => import('../bots/BotsSidebar').then((m) => ({ default: m.BotsSidebar })))
-const BotPanel = lazy(() => import('../bots/BotPanel').then((m) => ({ default: m.BotPanel })))
-const ChatScreen = lazy(() => import('../chat/ChatScreen').then((m) => ({ default: m.ChatScreen })))
-const ChatSidebar = lazy(() => import('../chat/ChatSidebar').then((m) => ({ default: m.ChatSidebar })))
 
 /**
- * Top-level layout. Work, Bots and Chat stay mounted once opened — switching modes only
- * hides the others — so none ever "sleeps"; Bots and Chat mount on their first visit (ADR 0044).
+ * Top-level layout (ADR 0056): no title bar. The sidebar, the main area and the side panel all start
+ * at the top of the window; the window's chrome lives in the sidebar (folded, an icon rail).
  * Each region has its own error boundary.
  * Both sidebars are resizable; a maximized side panel overlays the main area
  * (which keeps its size, so agent terminals never reflow).
  */
 export function AppShell() {
   const {
-    mode,
     view,
     sidebarCollapsed,
     sidebarWidth,
@@ -59,29 +51,27 @@ export function AppShell() {
   const newWorktree = useNewWorktree()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const queenPlacement = useQueen((s) => s.placement)
+  const platform = usePlatform()
   const inSettings = view.type === 'settings'
   // Settings is a window over the app (ADR 0039): everything behind it stays laid out, so changes show live.
   const showSidebar = !sidebarCollapsed
-  // The right column: a worktree's side panel (never on Home or Settings), or the open bot's panel.
-  const botPanelOpen = useBots((s) => s.panelOpen && s.activeBotId !== null && s.page === 'bot')
-  const setBotPanelOpen = useBots((s) => s.setPanelOpen)
   const workView = view.type === 'settings' ? view.returnTo : view
-  // Modes visited so far: each mounts the first time it is shown and then stays.
-  const [visited, setVisited] = useState(() => new Set([mode]))
-  if (!visited.has(mode)) setVisited(new Set([...visited, mode]))
-  const showBotPanel = botPanelOpen && mode === 'bots'
-  const showPanel = showBotPanel || (panelOpen && mode === 'workspace' && workView.type === 'workspace')
-  const maximized = panelMaximized && !showBotPanel
+  // The right column: a worktree's side panel (never on Home).
+  const showPanel = panelOpen && workView.type === 'workspace'
+  const maximized = panelMaximized
   const viewKey = workView.type === 'home' ? 'home' : `w:${workView.workspaceId}`
   // The open Worktree's panes keep their minimum width: the sidebars give way (see .main).
-  const workMin = mode === 'workspace' && workView.type === 'workspace' ? workMinWidth : 0
+  const workMin = workView.type === 'workspace' ? workMinWidth : 0
   const widths = {
-    '--sidebar-width': `${sidebarWidth}px`,
-    '--sidebar-min': `${SIDEBAR_WIDTH.min}px`,
+    // Folded, the sidebar is its icon rail: a fixed column.
+    '--sidebar-width': showSidebar ? `${sidebarWidth}px` : 'var(--rail-width)',
+    '--sidebar-min': showSidebar ? `${SIDEBAR_WIDTH.min}px` : 'var(--rail-width)',
     '--side-panel-width': `${panelWidth}px`,
     '--side-panel-min': `${PANEL_WIDTH.min}px`,
     '--work-min-width': `${workMin}px`
   } as CSSProperties
+  const mainRef = useRef<HTMLDivElement>(null)
+  useWindowControlsRoom(mainRef, platform)
   // Rendered widths: a sidebar's handle starts from what is shown (the grid may have narrowed it)
   // and stops where the panes would go below their minimum.
   const sidebarRef = useRef<HTMLElement>(null)
@@ -105,17 +95,15 @@ export function AppShell() {
   const panelMax = Math.max(PANEL_WIDTH.min, Math.min(PANEL_WIDTH.max, shown.panel + slack))
 
   return (
-    <div className={styles.app}>
+    <div className={cx(styles.app, `platform-${platform}`)}>
       {hasWallpaper && <div className={styles.wallpaper} aria-hidden />}
-      <ErrorBoundary region="Title bar" compact>
-        <TitleBar />
-      </ErrorBoundary>
-      <div className={cx(styles.main, showSidebar && styles.withSidebar, showPanel && styles.withPanel, showPanel && maximized && styles.covered)} style={widths}>
-        {showSidebar && (
-          <aside ref={sidebarRef} className={styles.sidebar}>
-            <ErrorBoundary region="Sidebar" compact>
-              <Suspense fallback={null}>{mode === 'chatspace' ? <ChatSidebar /> : mode === 'bots' ? <BotsSidebar /> : <ProjectSidebar />}</Suspense>
-            </ErrorBoundary>
+      <div ref={mainRef} className={cx(styles.main, showPanel && styles.withPanel, showPanel && maximized && styles.covered)} style={widths}>
+        {/* Keyed: the full sidebar glides in again whenever it is shown. */}
+        <aside key={showSidebar ? 'sidebar' : 'rail'} ref={sidebarRef} className={styles.sidebar}>
+          <ErrorBoundary region="Sidebar" compact>
+            {showSidebar ? <ProjectSidebar top={<SidebarTop />} bottom={<SidebarBottom />} /> : <SidebarRail />}
+          </ErrorBoundary>
+          {showSidebar && (
             <ResizeHandle
               label="Resize sidebar"
               className={styles.sidebarHandle}
@@ -127,44 +115,24 @@ export function AppShell() {
               onChange={(width) => setSidebarWidth(Math.min(width, sidebarMax))}
               onCollapse={toggleSidebar}
             />
-          </aside>
-        )}
+          )}
+        </aside>
         <main ref={contentRef} className={styles.content}>
           <div className={styles.stage}>
-          <div className={styles.mode} hidden={mode !== 'workspace'}>
             <div key={viewKey} className={styles.view}>
               <ErrorBoundary region="This screen" resetKey={viewKey}>
-              {workView.type === 'workspace' ? (
-                <WorkspaceScreen
-                  key={workView.workspaceId}
-                  projectId={workView.projectId}
-                  workspaceId={workView.workspaceId}
-                  focusPaneId={workView.focusPaneId}
-                />
-              ) : (
-                <HomeScreen />
-              )}
+                {workView.type === 'workspace' ? (
+                  <WorkspaceScreen
+                    key={workView.workspaceId}
+                    projectId={workView.projectId}
+                    workspaceId={workView.workspaceId}
+                    focusPaneId={workView.focusPaneId}
+                  />
+                ) : (
+                  <HomeScreen />
+                )}
               </ErrorBoundary>
             </div>
-          </div>
-          {visited.has('bots') && (
-            <div className={styles.mode} hidden={mode !== 'bots'}>
-              <ErrorBoundary region="Bots">
-                <Suspense fallback={null}>
-                  <BotsScreen />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-          )}
-          {visited.has('chatspace') && (
-            <div className={styles.mode} hidden={mode !== 'chatspace'}>
-              <ErrorBoundary region="Chat">
-                <Suspense fallback={null}>
-                  <ChatScreen />
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-          )}
           </div>
           <ErrorBoundary region="Queen Bee" compact>
             {queenPlacement === 'docked' ? <QueenDock /> : queenPlacement === 'floating' ? <QueenFloating /> : null}
@@ -182,17 +150,11 @@ export function AppShell() {
                 initial={PANEL_WIDTH.initial}
                 direction={-1}
                 onChange={(width) => setPanelWidth(Math.min(width, panelMax))}
-                onCollapse={showBotPanel ? () => setBotPanelOpen(false) : togglePanel}
+                onCollapse={togglePanel}
               />
             )}
-            <ErrorBoundary key={showBotPanel ? 'bot' : 'side'} region={showBotPanel ? 'Bot panel' : 'Side panel'} compact>
-              {showBotPanel ? (
-                <Suspense fallback={null}>
-                  <BotPanel />
-                </Suspense>
-              ) : (
-                <SidePanel />
-              )}
+            <ErrorBoundary region="Side panel" compact>
+              <SidePanel />
             </ErrorBoundary>
           </div>
         )}
@@ -205,7 +167,7 @@ export function AppShell() {
         </ErrorBoundary>
       )}
       <AddProjectDialog />
-      {/* Opened from Bots, Chat and Work (ADR 0040). */}
+      {/* Opened from a worktree's menu and its Schedules tab (ADR 0040). */}
       <RoutineEditor />
       <SshPromptDialog />
       {newWorktree.projectId && <CreateWorkspaceDialog projectId={newWorktree.projectId} onClose={newWorktree.close} />}

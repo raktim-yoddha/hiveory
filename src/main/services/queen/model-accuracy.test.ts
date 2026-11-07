@@ -13,7 +13,6 @@ const sealer: Sealer = { isEncryptionAvailable: () => true, encryptString: (v) =
 const ADA = { name: 'Ada', tagline: 'Strict' }
 
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [{ id: 'p1', name: 'demo-app' }],
@@ -102,9 +101,9 @@ describe('Queen Bee and providers that refuse parts of a request', () => {
       if (body.reasoning_effort) return refuse('Unrecognized request argument: reasoning_effort')
       if (typeof body.tool_choice === 'object') return refuse('tool_choice must be "auto" or "required"')
       if (body.tools) return refuse('This model does not support tools')
-      return ok({ content: '<think>hm</think>{"actions":[{"type":"set-mode","mode":"chat"}]}' })
+      return ok({ content: '<think>hm</think>{"actions":[{"type":"navigate","to":"home"}]}' })
     })
-    expect(await brain.plan('switch to the chat view please', ctx, ADA)).toMatchObject({ kind: 'actions', actions: [{ type: 'set-mode', mode: 'chatspace' }] })
+    expect(await brain.plan('take me home please', ctx, ADA)).toMatchObject({ kind: 'actions', actions: [{ type: 'navigate', to: 'home' }] })
     expect(bodies.length).toBe(4)
     expect(bodies[3]!.tools).toBeUndefined()
     // Next time it asks the way that worked, once.

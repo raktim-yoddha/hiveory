@@ -1,5 +1,5 @@
 /**
- * Apps every agent in Hiveory can use — terminal, chat and bots —
+ * Apps every agent in Hiveory can use — in a terminal or chat view —
  * through the user's own Composio project, free or paid (ADR 0023). The user
  * pastes their Composio API key once; Connect then goes straight to each
  * app's own sign-in. Hiveory keeps no app keys and hosts nothing.

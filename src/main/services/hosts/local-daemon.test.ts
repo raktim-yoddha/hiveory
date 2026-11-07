@@ -489,7 +489,7 @@ describe('chat turns outlive the app (ADR 0051)', () => {
         return { onStdout: (l: (d: string) => void) => void out.push(l), onStderr: () => undefined, onClose: (l: (c: number | null) => void) => void close.push(l), kill: () => undefined, detach: () => undefined }
       }
     }
-    const chats = new ChatService(store, {} as CliRegistry, {} as WorkspaceRepository, log, () => undefined, join(dir, 'att'), undefined, undefined, undefined, backend)
+    const chats = new ChatService(store, {} as CliRegistry, {} as WorkspaceRepository, log, () => undefined, join(dir, 'att'), undefined, undefined, backend)
     chats.recover()
     await until(() => !store.get('kept')!.messages[1]!.streaming)
     expect(store.get('kept')!.messages[1]).toMatchObject({ parts: [{ kind: 'text', text: 'Hello!' }], streaming: false })

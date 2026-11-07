@@ -334,7 +334,7 @@ export class SshHostConnector {
 
   /**
    * A local loopback port that reaches `host:port` as seen from the remote machine (ssh -L),
-   * e.g. a bot computer's desktop or a dev server on a VPS. `localPort` is tried first
+   * e.g. a dev server on a VPS. `localPort` is tried first
    * (the same number as remotely reads best); otherwise any free one. Closed by `close()`.
    */
   async forward(target: SshTarget, host: string, port: number, localPort?: number): Promise<{ port: number; close(): void }> {

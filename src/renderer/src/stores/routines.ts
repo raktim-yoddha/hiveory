@@ -19,7 +19,7 @@ interface RoutinesState {
   runNow(routineId: string): Promise<void>
 }
 
-/** Bots' routines and their run log (ADR 0028). Main owns them; this mirrors them for the screens. */
+/** Worktrees' schedules and their run log (ADR 0028, 0040). Main owns them; this mirrors them for the screens. */
 export const useRoutines = create<RoutinesState>((set, get) => ({
   routines: [],
   runs: [],
@@ -27,7 +27,7 @@ export const useRoutines = create<RoutinesState>((set, get) => ({
 
   load: async () => {
     try {
-      const [routines, runs] = await Promise.all([api('routines.list', {}), api('routines.runs', {})])
+      const [routines, runs] = await Promise.all([api('routines.list'), api('routines.runs', {})])
       set({ routines, runs, loaded: true })
     } catch (error) {
       set({ loaded: true })

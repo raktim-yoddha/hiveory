@@ -6,7 +6,6 @@ import { helpLine, helpSpoken } from './personas'
 
 /** Model plans of several steps (ADR 0019 amendment): each step is read where the earlier ones lead. */
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [
@@ -59,12 +58,6 @@ describe('Queen Bee plans of several steps', () => {
     const lines = helpLine(prefs).split('\n')
     expect(lines).toHaveLength(QUEEN_CAPABILITIES.length + 2)
     for (const c of QUEEN_CAPABILITIES) expect(lines.some((l) => l.startsWith(`• ${c.area}`))).toBe(true)
-  })
-
-  it('a model that "navigates" to a mode still gets there', () => {
-    expect(planFromToolArgs({ actions: [{ type: 'navigate', to: 'bots' }] }, ctx)).toMatchObject({ actions: [{ type: 'navigate', to: 'bots', page: 'work' }] })
-    expect(planFromToolArgs({ actions: [{ type: 'navigate', to: 'chat' }] }, ctx)).toMatchObject({ actions: [{ type: 'set-mode', mode: 'chatspace' }] })
-    expect(planFromToolArgs({ actions: [{ type: 'set-mode', mode: 'bots' }] }, ctx)).toMatchObject({ actions: [{ type: 'set-mode', mode: 'bots' }] })
   })
 
   it('said aloud, her help is whole sentences covering every area, never the list read out', () => {

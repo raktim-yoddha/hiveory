@@ -103,7 +103,6 @@ export type QueenOutcome =
   | { kind: 'focused'; name: string }
   | { kind: 'messaged'; name: string }
   | { kind: 'navigated'; place: string }
-  | { kind: 'mode'; mode: 'Work' | 'Bots' | 'Chat' }
   | { kind: 'preset'; name: string; workspace: string }
   | { kind: 'panel'; what: 'side panel' | 'side panel closed' | 'browser' | 'explorer' }
   | { kind: 'noted'; text: string }
@@ -124,7 +123,6 @@ export type QueenOutcome =
   | { kind: 'moved'; name: string; where: string }
   | { kind: 'resized'; name: string; size: QueenPaneSize }
   | { kind: 'preset-saved'; name: string }
-  | { kind: 'chat'; cliName?: string }
   | { kind: 'resumed'; cliName: string; title: string }
   | { kind: 'project'; name: string }
 
@@ -149,8 +147,6 @@ export function receipt(o: QueenOutcome): string {
       return `Sent to ${o.name}`
     case 'navigated':
       return `Opened ${o.place}`
-    case 'mode':
-      return `Switched to ${o.mode}`
     case 'preset':
       return `Loaded ${o.name} in ${o.workspace}`
     case 'panel':
@@ -185,8 +181,6 @@ export function receipt(o: QueenOutcome): string {
       return `Made ${o.name} ${o.size}`
     case 'preset-saved':
       return `Saved preset ${o.name}`
-    case 'chat':
-      return o.cliName ? `New chat with ${o.cliName}` : 'New chat'
     case 'resumed':
       return `Resumed ${o.cliName}: ${o.title}`
     case 'project':
@@ -210,8 +204,6 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return `${o.name} has your message`
     case 'navigated':
       return `${o.place} is open`
-    case 'mode':
-      return `you're in ${o.mode}`
     case 'preset':
       return `${o.name} is loading in ${o.workspace}`
     case 'panel':
@@ -246,8 +238,6 @@ const summary = (o: QueenOutcome, formal: boolean): string => {
       return `${o.name} is ${o.size}`
     case 'preset-saved':
       return `the ${o.name} preset is saved`
-    case 'chat':
-      return o.cliName ? `a new chat with ${o.cliName} is open` : 'a new chat is open'
     case 'resumed':
       return `${o.cliName} is picking up “${o.title}”`
     case 'project':

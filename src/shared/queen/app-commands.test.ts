@@ -4,7 +4,6 @@ import { planFromToolArgs } from './brain'
 import { parseCommand } from './parse'
 
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [{ id: 'p1', name: 'demo-app' }],
@@ -21,8 +20,7 @@ const ctx: QueenContext = {
     { id: 'codex', displayName: 'Codex', kind: 'agent' },
     { id: 'powershell', displayName: 'PowerShell', kind: 'shell' }
   ],
-  presets: [{ id: 'pr1', name: 'Fullstack' }],
-  bots: [{ id: 'b1', name: 'Scout' }]
+  presets: [{ id: 'pr1', name: 'Fullstack' }]
 }
 
 const actions = (text: string, context: QueenContext = ctx) => {
@@ -90,13 +88,7 @@ describe('Queen Bee app commands', () => {
     })
   })
 
-  it('starts chats, messages bots and resumes sessions', () => {
-    expect(actions('new chat')).toEqual([{ type: 'new-chat', projectId: 'p1' }])
-    expect(actions('start a chat with codex about the API design')).toEqual([{ type: 'new-chat', cliId: 'codex', text: 'the API design', projectId: 'p1' }])
-    // "open chat" still switches to Chat mode.
-    expect(actions('open chat')).toEqual([{ type: 'set-mode', mode: 'chatspace' }])
-    expect(actions('ask Scout to summarize my inbox')).toEqual([{ type: 'message-bot', botId: 'b1', text: 'summarize my inbox' }])
-    // An agent's name wins over a bot's.
+  it('messages agents and resumes sessions', () => {
     expect(actions('tell Bruno to run the tests')).toEqual([{ type: 'message-agent', agentId: 'a1', text: 'run the tests' }])
     expect(actions('resume my last claude session')).toEqual([{ type: 'resume-session', cliId: 'claude', workspaceId: 'w1', projectId: 'p1' }])
     expect(parseCommand('resume', ctx)).toMatchObject({ kind: 'ask', question: { text: 'Which CLI should I resume?' } })
@@ -121,37 +113,33 @@ describe('Queen Bee app commands', () => {
       kind: 'actions',
       actions: [{ type: 'open-url', url: 'https://example.com', workspaceId: 'w1' }]
     })
-    expect(planFromToolArgs({ actions: [{ type: 'message-bot', botId: 'Scout', text: 'hello there' }] }, ctx, 'ask scout to say hi')).toMatchObject({
+    expect(planFromToolArgs({ actions: [{ type: 'message-agent', agentId: 'Bruno', text: 'hello there' }] }, ctx, 'ask bruno to say hi')).toMatchObject({
       kind: 'actions',
-      actions: [{ type: 'message-bot', botId: 'b1', text: 'hello there' }],
-      confirm: 'Send to Scout: “hello there”?'
+      actions: [{ type: 'message-agent', agentId: 'a1', text: 'hello there' }],
+      confirm: 'Send to Bruno: “hello there”?'
     })
-    expect(planFromToolArgs({ actions: [{ type: 'message-bot', botId: 'Ghost', text: 'hi' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    // Bots and Chat are gone (ADR 0056): their actions are not something she can do.
+    expect(planFromToolArgs({ actions: [{ type: 'message-bot', botId: 'Scout', text: 'hi' }] }, ctx)).toMatchObject({ kind: 'unknown' })
+    expect(planFromToolArgs({ actions: [{ type: 'set-mode', mode: 'bots' }] }, ctx)).toMatchObject({ kind: 'unknown' })
     expect(planFromToolArgs({ actions: [{ type: 'set-setting', setting: 'computer-use', on: 'true' }] }, ctx)).toMatchObject({ confirm: 'Turn computer use on?' })
     expect(planFromToolArgs({ actions: [{ type: 'open-url', url: 'javascript:alert(1)' }] }, ctx)).toMatchObject({ kind: 'unknown' })
   })
 
-  it('opens Bots pages and pauses or resumes routines and triggers by name', () => {
+  it('pauses or resumes schedules by name', () => {
     const withAutomations: QueenContext = {
       ...ctx,
       automations: [
         { id: 'r1', name: 'Morning brief', kind: 'routine', on: true },
-        { id: 't1', name: 'New issue', kind: 'trigger', on: false },
         { id: 'r2', name: 'Digest', kind: 'routine', on: true },
-        { id: 't2', name: 'Digest', kind: 'trigger', on: true },
+        { id: 'r4', name: 'Digest', kind: 'routine', on: false },
         { id: 'r3', name: 'Bruno', kind: 'routine', on: true }
       ]
     }
-    expect(actions('open the work board')).toEqual([{ type: 'navigate', to: 'bots', page: 'work' }])
-    expect(actions('go to routines')).toEqual([{ type: 'navigate', to: 'bots', page: 'routines' }])
-    expect(actions('open schedules')).toEqual([{ type: 'navigate', to: 'bots', page: 'routines' }])
     expect(actions('pause the morning brief schedule', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: false }])
-    expect(actions('show the team map')).toEqual([{ type: 'navigate', to: 'bots', page: 'team-map' }])
     expect(actions('pause Morning brief', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: false }])
     expect(actions('resume the morning brief routine', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: true }])
-    expect(actions('turn the New issue trigger back on', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't1', on: true }])
-    expect(actions('pause digest trigger', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 't2', on: false }])
-    expect(parseCommand('pause digest', withAutomations)).toMatchObject({ kind: 'ask', question: { choices: [{ command: 'pause Digest schedule' }, { command: 'pause Digest trigger' }] } })
+    expect(actions('turn the Morning brief schedule back on', withAutomations)).toEqual([{ type: 'switch-automation', automationId: 'r1', on: true }])
+    expect(parseCommand('pause digest', withAutomations)).toMatchObject({ kind: 'ask' })
     // An agent with the same name wins.
     expect(actions('stop Bruno', withAutomations)).toEqual([{ type: 'interrupt-agent', agentId: 'a1' }])
     // A model may switch them too, but only ids it was shown, and only after a yes.
@@ -160,6 +148,5 @@ describe('Queen Bee app commands', () => {
       confirm: 'Turn Morning brief off?'
     })
     expect(planFromToolArgs({ actions: [{ type: 'switch-automation', automationId: 'Ghost', on: true }] }, withAutomations)).toMatchObject({ kind: 'unknown' })
-    expect(planFromToolArgs({ actions: [{ type: 'navigate', page: 'triggers' }] }, ctx)).toEqual({ kind: 'actions', actions: [{ type: 'navigate', to: 'bots', page: 'triggers' }] })
   })
 })

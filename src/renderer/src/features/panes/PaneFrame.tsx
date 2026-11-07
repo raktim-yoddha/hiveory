@@ -23,6 +23,7 @@ export function PaneFrame({ label, children, onHeaderPointerDown, onHeaderDouble
     <section className={cx(styles.frame, highlighted && styles.highlighted)} data-tone={tone} data-focused={focused || undefined} aria-label={label}>
       <header
         className={styles.header}
+        data-top-bar
         data-tabs
         onPointerDown={onHeaderPointerDown}
         onDoubleClick={(e) => {

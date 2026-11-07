@@ -3,12 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MAX_QUEUED } from '@shared/domain/prompt'
+import type { CliInstance } from '@shared/domain'
 import type { CliRegistry } from '../cli/registry'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import { ChatService } from './chat-service'
 import { ChatStore } from './chat-store'
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
+
+/** The chat behind a Work agent in chat view: the only kind of chat there is (ADR 0056). */
+const agentChat = (chats: ChatService, cwd = '/home/me/app', id = 'a1'): { id: string } => {
+  chats.ensureAgentChat({ id, petName: 'Ada', projectId: 'p1', cliId: 'claude', autoApprove: false } as CliInstance, cwd)
+  return { id }
+}
 
 /** A chat service whose turns are recorded instead of spawned: `busy` stands for a turn still answering. */
 const setup = () => {
@@ -19,7 +26,7 @@ const setup = () => {
   const internals = chats as unknown as { runs: Map<string, unknown>; sendQueued(chatId: string, failed: boolean): void; send(chatId: string, text: string): void }
   const sent: string[] = []
   internals.send = (_chatId, text) => void sent.push(text)
-  const chat = chats.create()
+  const chat = agentChat(chats)
   return {
     chats,
     store,
@@ -80,47 +87,12 @@ describe('sending', () => {
     const events: { event: string; payload: unknown }[] = []
     const registry = { executable: () => process.execPath, displayName: () => 'Claude' } as unknown as CliRegistry
     const chats = new ChatService(store, registry, {} as WorkspaceRepository, log, (event, payload) => void events.push({ event, payload }), join(dir, 'attachments'))
-    const chat = chats.create()
+    const chat = agentChat(chats)
     store.save({ ...store.get(chat.id)!, cliId: 'claude', cwd: dir })
     chats.send(chat.id, 'hello')
     chats.stop(chat.id)
     const messages = events.filter((e) => e.event === 'chat.event').map((e) => (e.payload as { message: { role: string; parts: unknown[] } }).message)
     expect(messages[0]).toMatchObject({ role: 'user', parts: [{ kind: 'text', text: 'hello' }] })
     expect(messages[1]?.role).toBe('assistant')
-  })
-})
-
-describe('where a chat works (ADR 0055)', () => {
-  const repo = {
-    project: (id: string) => ({ id, path: `/home/me/${id}` }),
-    mirrors: (id: string) => (id === 'app' ? ['app', 'app-sub'] : [id]),
-    get: (id: string) => ({ w1: { id: 'w1', projectId: 'app', path: '/home/me/app-trees/w1' }, w2: { id: 'w2', projectId: 'app-sub', path: '/home/me/app-trees/w2' }, w3: { id: 'w3', projectId: 'other', path: '/x' } })[id]
-  } as unknown as WorkspaceRepository
-  const make = () => {
-    const dir = mkdtempSync(join(tmpdir(), 'hv-where-'))
-    const store = new ChatStore(join(dir, 'chats'), log)
-    store.load()
-    return new ChatService(store, {} as CliRegistry, repo, log, () => undefined, join(dir, 'attachments'))
-  }
-
-  it("works in a Worktree of its Workspace (or a mirror's), and back in the Workspace's folder", () => {
-    const chats = make()
-    const { id } = chats.create()
-    expect(chats.update(id, { projectId: 'app', workspaceId: 'w1' })).toMatchObject({ projectId: 'app', workspaceId: 'w1', cwd: '/home/me/app-trees/w1' })
-    expect(chats.update(id, { workspaceId: 'w2' }).cwd).toBe('/home/me/app-trees/w2')
-    expect(chats.update(id, { workspaceId: '' })).toMatchObject({ workspaceId: undefined, cwd: '/home/me/app' })
-    // Another Workspace drops the Worktree.
-    chats.update(id, { workspaceId: 'w1' })
-    expect(chats.update(id, { projectId: 'other' })).toMatchObject({ projectId: 'other', workspaceId: undefined, cwd: '/home/me/other' })
-  })
-
-  it("refuses a Worktree of another Workspace, and moving once the chat has started", () => {
-    const chats = make()
-    const { id } = chats.create()
-    expect(() => chats.update(id, { projectId: 'app', workspaceId: 'w3' })).toThrow(/not in this workspace/)
-    expect(() => chats.update(id, { workspaceId: 'w1' })).toThrow(/not in this workspace/)
-    chats.update(id, { projectId: 'app' })
-    chats.get(id).messages.push({ id: 'm', role: 'user', parts: [], createdAt: '' })
-    expect(() => chats.update(id, { workspaceId: 'w1' })).toThrow(/fixed once a chat has started/)
   })
 })

@@ -58,11 +58,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   const projectPathOf = (projectId?: string, skillPath?: string): string | undefined => {
     if (projectId) return c.workspaceRepo.project(projectId).path
     if (!skillPath) return undefined
-    // A bot's folder is its project: its engines read skills there (ADR 0028).
-    return [...c.projects.list().map((p) => p.path), ...c.bots.list().map((b) => b.home)].find((root) => skillPath.startsWith(root))
+    return c.projects.list().map((p) => p.path).find((root) => skillPath.startsWith(root))
   }
-  /** The project-level skills folder's owner: a project, or a bot's own folder. */
-  const placePath = (projectId?: string, botId?: string): string | undefined => (botId ? c.bots.home(botId) : projectPathOf(projectId))
 
   /** A scope's folder (workspace, else project) and the id its events use. */
   const folderOf = (scope: { workspaceId?: string; projectId?: string }): { root: string; key: string; projectId: string } =>
@@ -308,7 +305,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'shell.restart': ({ id }) => c.shells.restart(id),
   'shell.close': ({ id }) => c.shells.close(id),
 
-  'extensions.scan': ({ projectId, botId }) => c.extensions.scan(placePath(projectId, botId)),
+  'extensions.scan': ({ projectId }) => c.extensions.scan(projectPathOf(projectId)),
   'extensions.revealSkill': async ({ path }) => {
     const error = await shell.openPath(c.extensions.skillFolder(path))
     if (error) fail('NOT_FOUND', 'Could not open the folder.', { detail: error })
@@ -317,8 +314,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.extensions.copySkill(path, rootId, projectPathOf(undefined, path))
   },
   'extensions.removeSkill': ({ path }) => c.extensions.removeSkill(path),
-  'extensions.createSkill': ({ projectId, botId, ...input }) => {
-    c.extensions.createSkill(input, placePath(projectId, botId))
+  'extensions.createSkill': ({ projectId, ...input }) => {
+    c.extensions.createSkill(input, projectPathOf(projectId))
   },
   'projects.pickAvatar': async ({ projectId }, event) => {
     const file = await pickPath(event.sender, { title: 'Choose an avatar image', properties: ['openFile'], filters: [{ name: 'Images', extensions: AVATAR_EXTENSIONS }] })
@@ -339,18 +336,18 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     })
     return c.projects.update(projectId, { settings: { avatar, emoji: null } })
   },
-  'extensions.importSkill': async ({ rootIds, projectId, botId }, event) => {
+  'extensions.importSkill': async ({ rootIds, projectId }, event) => {
     const folder = await pickPath(event.sender, { title: 'Choose a skill folder (with SKILL.md)', properties: ['openDirectory'] })
     if (!folder) return false
-    c.extensions.importSkill(folder, rootIds, placePath(projectId, botId))
+    c.extensions.importSkill(folder, rootIds, projectPathOf(projectId))
     return true
   },
 
   'store.searchSkills': ({ query }) => c.stores.searchSkills(query),
   'store.topSkills': () => c.stores.topSkills(),
   'store.skillAudits': ({ id }) => c.stores.skillAudits(id),
-  'store.installSkill': async ({ source, skillId, rootIds, projectId, botId }) => {
-    c.extensions.installFiles(await c.stores.downloadSkill(source, skillId), rootIds, placePath(projectId, botId))
+  'store.installSkill': async ({ source, skillId, rootIds, projectId }) => {
+    c.extensions.installFiles(await c.stores.downloadSkill(source, skillId), rootIds, projectPathOf(projectId))
   },
   'store.searchMcp': ({ query, cursor }) => c.stores.searchMcp(query, cursor),
 
@@ -498,15 +495,9 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'browser.clearCookies': async ({ profileId }) => ({ count: await c.browser.clearCookies(profileId) }),
 
   'chat.clis': () => c.chats.clis(),
-  'chat.list': () => c.chats.list(),
   'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
-  'chat.create': ({ projectId, cliId }) => c.chats.create(projectId, cliId),
   'chat.update': ({ chatId, ...patch }) => c.chats.update(chatId, patch),
   'chat.setModel': ({ chatId, model, effort }) => c.chats.update(chatId, { model, effort }),
-  'chat.delete': ({ chatId }) => {
-    c.approvals.drop({ threadId: chatId })
-    return c.chats.delete(chatId)
-  },
   'chat.send': ({ chatId, text, attachments }) => c.chats.send(chatId, text, attachments ?? []),
   'chat.queue': ({ chatId, text }) => c.chats.enqueue(chatId, text),
   'chat.unqueue': ({ chatId, index }) => c.chats.unqueue(chatId, index),
@@ -515,26 +506,9 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'prompts.delete': ({ promptId }) => c.prompts.delete(promptId),
   'chat.attach': ({ chatId, name, mime, data }) => c.chats.attach(chatId, name, mime, data),
   'chat.attachPath': ({ chatId, path }) => c.chats.attachPath(chatId, path),
-  'chat.stop': ({ chatId }) => {
-    c.approvals.drop({ threadId: chatId })
-    return c.chats.stop(chatId)
-  },
+  'chat.stop': ({ chatId }) => c.chats.stop(chatId),
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
   'chat.limits': ({ cliId, refresh }) => c.chats.limits(cliId, refresh ?? false),
-  'bots.list': () => c.bots.list(),
-  'bots.create': (input) => c.bots.create(input),
-  'bots.update': ({ botId, ...patch }) => c.bots.update(botId, patch),
-  'bots.delete': async ({ botId }) => {
-    c.bots.delete(botId)
-    c.approvals.drop({ botId })
-    c.routines.removeForBot(botId)
-    await c.triggers.removeForBot(botId)
-  },
-  'bots.threads': ({ botId }) => {
-    c.bots.get(botId)
-    return c.chats.threads(botId)
-  },
-  'bots.newThread': ({ botId }) => c.bots.newThread(botId),
   // This window runs its own services; connecting pairs with a server and relaunches as its client (ADR 0022).
   'client.status': () => ({ mode: 'local' as const, connected: false }),
   'client.connect': async (input) => {
@@ -546,46 +520,13 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'client.discover': () => discover(c.tailscale),
   'share.status': () => c.sharing.status(),
   'share.revoke': ({ deviceId }) => c.sharing.revoke(deviceId),
-  'bots.computer': async ({ botId, action }) => {
-    if (action === 'start') await c.computers.ensure(botId)
-    if (action === 'stop') await c.computers.stop(botId)
-    if (action === 'rebuild') await c.computers.rebuild(botId)
-    if (action === 'takeControl') {
-      // A loopback noVNC address Hiveory built itself (never a URL from the bot).
-      const url = await c.computers.takeControl(botId)
-      await shell.openExternal(url)
-      return { ...(await c.computers.status(botId)), url }
-    }
-    return c.computers.status(botId)
-  },
-  'teams.list': () => c.teams.list(),
-  'teams.create': ({ name }) => c.teams.create(name),
-  'teams.rename': ({ teamId, name }) => c.teams.rename(teamId, name),
-  'teams.delete': ({ teamId }) => c.teams.delete(teamId),
-  'bots.handoffs': () => c.bots.handoffs(),
-  'bots.preview': ({ botId }) => c.bots.preview(botId),
-  'triggers.status': () => c.triggers.status(),
-  'triggers.enableLink': ({ takeOver }) => c.triggers.enableLink(takeOver ?? false),
-  'triggers.disableLink': () => c.triggers.disableLink(),
-  'approvals.list': () => c.approvals.list(),
-  'approvals.answer': ({ approvalId, allow }) => c.approvals.answer(approvalId, allow),
-  'triggers.openFix': async () => {
-    const url = c.triggers.status().fixUrl
-    if (url && /^https:\/\/(login\.)?tailscale\.com\//.test(url)) await shell.openExternal(url)
-  },
-  'triggers.list': () => c.triggers.list(),
-  'triggers.types': ({ appId }) => c.triggers.types(appId),
-  'triggers.create': (input) => c.triggers.create(input),
-  'triggers.update': ({ triggerId, ...patch }) => c.triggers.update(triggerId, patch),
-  'triggers.delete': ({ triggerId }) => c.triggers.delete(triggerId),
-  'routines.list': ({ botId }) => c.routines.list(botId),
+  'routines.list': () => c.routines.list(),
   'routines.create': (input) => c.routines.create(input),
   'routines.update': ({ routineId, ...patch }) => c.routines.update(routineId, patch),
   'routines.addFile': ({ name, data }) => c.routineFiles.add(name, data),
   'routines.delete': ({ routineId }) => c.routines.delete(routineId),
   'routines.runNow': ({ routineId }) => c.routines.runNow(routineId),
   'routines.runs': (filter) => c.routines.runs(filter),
-  'bots.screen': async ({ botId }) => ((await c.computers.status(botId)).state === 'running' ? c.computers.screenshot(botId) : null),
   'hosts.listDir': async ({ destination, port, path }) => {
     const kit = await c.hosts.kit({ kind: 'ssh', destination, ...(port ? { port } : {}) })
     const dir = !path || path === '~' ? kit.home : path.startsWith('~/') ? kit.paths.join(kit.home, path.slice(2)) : path

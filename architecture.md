@@ -571,7 +571,7 @@ agent ──browser_* (MCP)──▶ BrowserTools ─▶ BrowserService (pages: 
 ### Chat data flow
 
 ```text
-Renderer composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ CLI headless
+Work agent in chat view: composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ CLI headless
         ▲                               │ stdout lines → parser → ChatAccumulator
         └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
 ```
@@ -631,25 +631,15 @@ PortForwards ─exec cat /proc/net/tcp─▶ list;  ─ssh -L─▶ localhost:<s
 `Tailscale` (`services/tailscale`) only reads the user's own Tailscale. `Sharing` (`app/sharing.ts`)
 owns the server for both the desktop switch and `--serve [--tailscale] [--lan]`.
 
-### Bots data flow (ADR 0022)
+### Schedules data flow (ADR 0028, 0040, 0056)
 
 ```text
-BotsScreen ─IPC bots.*─▶ BotService (PersistedState.bots, <data>/Bots/<id> folders)
-           ─IPC chat.*─▶ ChatService (a thread = a chat with botId; preamble(chat) ◀─ BotService)
-bot thread CLI ──MCP /mcp/<chatId>──▶ BotTools ─▶ BotService
-                                        ├─ remember / forget (memory)
-                                        ├─ list_bots, ask_bot (waits for the teammate's turn)
-                                        └─ delegate_bot ─▶ new thread on teammate ─▶ ChatService 'run' end
-                                                             └─▶ [Result from …] sent into the Chief's thread (queued while busy)
-RoutineService (ADR 0028; PersistedState.routines + routineRuns)
-  one timer ─▶ due run ─▶ BotService.newThread + ChatService.send ─▶ 'run' end ─▶ run completed/failed
+RoutineService (PersistedState.routines + routineRuns)
+  one timer ─▶ due run ─▶ startWorkRun (AgentService.open ─▶ waitReady ─▶ deliverMessage ─▶ waitIdle) ─▶ run completed/failed
   activity(running, nextDue) ─▶ KeepAwake (powerSaveBlocker, mains power only)
-  target chat ─▶ ChatService.create + send · target workspace ─▶ startWorkRun (AgentService.open ─▶ waitReady ─▶ deliverMessage ─▶ waitIdle) (ADR 0030)
-Composio ─HTTPS─▶ Tailscale Funnel (/hiveory/<random>) ─▶ TriggerIngress (127.0.0.1) ─▶ TriggerService
-  (signature, freshness, dedupe) ─▶ RoutineService.runEvent ─▶ read-only bot thread, event fenced as data
-bot thread app/MCP call ─▶ ApprovalService.guard (ADR 0029: toolRisk × Bot.approvals × chat.readOnly)
-  read ─▶ McpGateway · change/send ─▶ refuse (read-only) | ask ─▶ approvals.list ◀─ ApprovalCard ─▶ approvals.answer
 ```
+
+Bots, teams, triggers, approvals and bot computers were removed (ADR 0056).
 
 ### Phone app (ADR 0027)
 

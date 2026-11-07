@@ -7,7 +7,6 @@ import type { QueenPrefs } from './personas'
 const prefs = (persona: QueenPrefs['persona']): QueenPrefs => ({ persona, callMe: '', honorific: 'none', hype: 'lively', nudgeMinutes: 10, length: 'normal' })
 
 const ctx: QueenContext = {
-  mode: 'workspace',
   projects: [
     { id: 'p1', name: 'api' },
     { id: 'p2', name: 'web' }

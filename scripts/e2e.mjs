@@ -165,12 +165,11 @@ await launch()
 
 // ======================= A. Shell =======================
 console.log('A. Shell & settings')
-await test('home renders with DEV badge and Work/Chat modes', async () => {
+await test('home renders with the DEV badge in the sidebar, and no modes (ADR 0056)', async () => {
   await page.waitForSelector('text=Welcome to Hiveory')
   expect(await page.getByText('DEV', { exact: true }).isVisible(), 'DEV badge missing')
   expect((await value('settings.get')).theme === 'dark', 'Dark is not the default theme')
-  expect(await page.getByRole('tab', { name: 'Work' }).isVisible(), 'Work tab missing')
-  expect(await page.getByRole('tab', { name: 'Chat' }).isVisible(), 'Chat tab missing')
+  expect((await page.getByRole('tab', { name: 'Chat' }).count()) === 0, 'a Chat mode tab is still shown')
   await shot('a1-home')
 })
 
@@ -266,13 +265,14 @@ await test('appearance: an added image becomes the wallpaper; transparency reach
   await waitFor(async () => !(await page.evaluate(() => 'wallpaper' in document.documentElement.dataset)), 'wallpaper removed')
 })
 
-await test('the title-bar logo is flat (no glow, no gradient)', async () => {
-  const logo = await page.locator('header img').first().evaluate((el) => {
+await test('the sidebar logo is flat (no glow, no gradient)', async () => {
+  const brand = page.getByRole('navigation', { name: 'Workspaces' })
+  const logo = await brand.locator('img').first().evaluate((el) => {
     const s = getComputedStyle(el)
     return { filter: s.filter, clip: s.clipPath }
   })
   expect(logo.filter === 'none' && logo.clip.startsWith('inset'), JSON.stringify(logo))
-  const name = await page.locator('header').getByText('Hiveory', { exact: true }).evaluate((el) => getComputedStyle(el).backgroundImage)
+  const name = await brand.getByText('Hiveory', { exact: true }).evaluate((el) => getComputedStyle(el).backgroundImage)
   expect(name === 'none', `brand name has a gradient: ${name}`)
 })
 
@@ -907,11 +907,11 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
     expect(hidden === before, `the floating bar moved or resized with the main area: ${before} → ${hidden}`)
     await shot('h3-queen-floating')
     await page.getByRole('button', { name: 'Dock Queen Bee' }).click()
-    // Put away in the title bar (ADR 0044): only her mark stays; it drops her bar down, Escape puts it away.
+    // Put away in the sidebar (ADR 0044, 0056): only her mark stays; it drops her bar down, Escape puts it away.
     await page.getByRole('button', { name: 'Queen Bee options' }).click()
-    await page.getByRole('menuitem', { name: /Put away in the title bar/ }).click()
+    await page.getByRole('menuitem', { name: /Put away in the sidebar/ }).click()
     await waitFor(async () => (await queen.count()) === 0, 'bar put away')
-    const mark = page.getByRole('banner').getByRole('button', { name: 'Ask Queen Bee' })
+    const mark = page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: 'Ask Queen Bee' })
     await mark.click()
     await queen.waitFor()
     await waitFor(async () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Tell Queen Bee'), 'her input focused')
@@ -929,8 +929,8 @@ await test('Queen Bee: opens, reports, closes with a yes, navigates, undoes, flo
   } finally {
     for (const s of await shells()) await value('agents.close', { instanceId: s.id }).catch(() => undefined)
     await value('settings.update', { queenPersona: 'ada' })
-    // Never leave her in the title bar for the tests after this one.
-    const mark = page.getByRole('banner').getByRole('button', { name: /Ask Queen Bee|Put Queen Bee away/ })
+    // Never leave her in the sidebar for the tests after this one.
+    const mark = page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: /Ask Queen Bee|Put Queen Bee away/ })
     if (await mark.count()) {
       if (!(await queen.count())) await mark.click()
       await page.getByRole('button', { name: 'Queen Bee options' }).click()
@@ -1176,28 +1176,13 @@ await test('agents get an MCP server and Hiveory instructions', async () => {
   }
 })
 
-await test('Composio: Work agents and bots call its tools; the key stays masked', async () => {
+await test('Composio: Work agents call its tools; the key stays masked', async () => {
   const say = (r) => r.content.map((c) => c.text ?? '').join('\n')
   const names = (await rpc('tools/list', {})).result.tools.map((t) => t.name)
   expect(names.includes('composio_COMPOSIO_SEARCH_TOOLS'), 'the agent has no Composio tools')
   const first = await tool('composio_COMPOSIO_SEARCH_TOOLS', { query: 'gmail' })
   expect(!first.isError && say(first).includes('found GMAIL_SEND_EMAIL for gmail (key ••••)'), say(first))
   expect(!say(first).includes(COMPOSIO_KEY), 'an agent saw the Composio key')
-  // A bot's thread reaches the same tools through its own route.
-  const bot = await value('bots.create', { name: 'E2E Mailer' })
-  const thread = await value('bots.newThread', { botId: bot.id })
-  const botRpc = async (method, params) => {
-    const res = await fetch(mcp.url.replace(/\/mcp\/[^/]+$/, `/mcp/${thread.id}`), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: mcp.headers.Authorization },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-    })
-    return res.json()
-  }
-  expect((await botRpc('tools/list', {})).result.tools.some((t) => t.name === 'composio_COMPOSIO_SEARCH_TOOLS'), 'the bot has no Composio tools')
-  const fromBot = (await botRpc('tools/call', { name: 'composio_COMPOSIO_SEARCH_TOOLS', arguments: { query: 'calendar' } })).result
-  expect(!fromBot.isError && say(fromBot).includes('for calendar'), say(fromBot))
-  await value('bots.delete', { botId: bot.id })
 })
 await test('Queen Bee: messages by CLI name, stops work, reports everything, tells (out loud) when an agent finishes; her card never moves the panes', async () => {
   const queen = page.getByLabel('Tell Queen Bee')
@@ -1336,19 +1321,6 @@ await test('close_agent removes a pane; MCP refuses bad tokens and browsers', as
   expect(bad.status === 401, `bad token got ${bad.status}`)
   const browser = await fetch(mcp.url, { method: 'POST', headers: { Authorization: mcp.headers.Authorization, Origin: 'https://evil.test' }, body: '{}' })
   expect(browser.status === 403, `browser origin got ${browser.status}`)
-})
-
-await test('switching to Chat and back keeps terminals alive and intact', async () => {
-  const agents = await value('agents.list', { workspaceId: mainWs.id })
-  const before = (await value('terminal.snapshot', { instanceId: agents[0].id })).end
-  await page.getByRole('tab', { name: 'Chat' }).click()
-  await page.waitForTimeout(1200)
-  await page.getByRole('tab', { name: 'Work' }).click()
-  await page.waitForTimeout(400)
-  const after = await value('agents.list', { workspaceId: mainWs.id })
-  expect(after.every((a) => a.runtime.running), 'an agent stopped while in Chat mode')
-  expect((await value('terminal.snapshot', { instanceId: agents[0].id })).end >= before, 'terminal output was lost')
-  expect((await page.locator('section[aria-label$=" agent"] .xterm').count()) === after.length, 'a terminal was not re-attached')
 })
 
 await test('rapid open/close spam leaves no orphan panes or processes', async () => {
@@ -1575,71 +1547,13 @@ await test('kanban never mixes projects', async () => {
 
 // ======================= G. Chat =======================
 console.log('G. Chat')
-await test('chat: CLI picker lists detected chat CLIs and excludes Antigravity', async () => {
-  await page.getByRole('tab', { name: 'Chat' }).click()
-  await page.getByRole('button', { name: 'New chat' }).first().click()
-  const clis = await value('chat.clis')
-  expect(!clis.includes('antigravity'), 'antigravity offered for chat')
-  expect(clis.includes('codex'), 'codex missing from chat')
-  await page.getByRole('button', { name: /Choose CLI/ }).click()
-  expect((await page.getByRole('menuitemradio', { name: /Antigravity/ }).count()) === 0, 'antigravity in menu')
-  await page.getByRole('menuitemradio', { name: 'Codex' }).click()
-  await shot('g0-chat-toolbar')
-})
-
-await test('chat: model picker searches; effort appears only when the model supports it', async () => {
-  await page.getByRole('button', { name: /Default|Loading models/ }).first().click()
-  await page.getByLabel('Search models').waitFor()
-  const catalog = await value('chat.catalog', { cliId: 'codex' })
-  const withEffort = catalog.models.find((m) => m.efforts?.length)
-  expect(withEffort, 'no codex model with efforts')
-  await page.getByLabel('Search models').fill(withEffort.label)
-  await page.getByRole('option', { name: new RegExp(withEffort.label) }).first().click()
-  await page.waitForSelector('button[title="Reasoning effort"]')
-  await shot('g1-chat-pickers')
-  // Switch to OpenCode in a fresh chat: hundreds of models, effort only for models with variants.
-  await page.getByRole('button', { name: 'New chat' }).first().click()
-  await page.getByRole('button', { name: /Choose CLI/ }).click()
-  await page.getByRole('menuitemradio', { name: 'OpenCode' }).click()
-  await page.getByRole('button', { name: /Default|Loading models/ }).first().click()
-  await page.getByLabel('Search models').fill('big-pickle')
-  await page.waitForTimeout(300)
-  await page.getByRole('option', { name: /Big Pickle|big-pickle/i }).first().click()
-  const oc = await value('chat.catalog', { cliId: 'opencode' })
-  const chosen = oc.models.find((m) => /big-pickle/.test(m.id))
-  const effortVisible = await page.locator('button[title="Reasoning effort"]').isVisible()
-  expect(effortVisible === Boolean(chosen?.efforts?.length), 'effort visibility does not match model capability')
-})
-
-if (process.env.E2E_CHAT) {
-  await test('chat: real Codex reply, then the CLI locks', async () => {
-    await page.getByRole('button', { name: 'New chat' }).first().click()
-    await page.getByRole('button', { name: /Choose CLI/ }).click()
-    await page.getByRole('menuitemradio', { name: 'Codex' }).click()
-    await page.getByLabel('Message').fill('Reply with exactly: pong')
-    await page.keyboard.press('Enter')
-    // Switch to Work while it answers: chats must not sleep.
-    await page.getByRole('tab', { name: 'Work' }).click()
-    await page.waitForTimeout(1500)
-    await page.getByRole('tab', { name: 'Chat' }).click()
-    await page.waitForSelector('text=pong', { timeout: 120000 })
-    expect(await page.getByTitle('The CLI is fixed once a chat has started').isVisible(), 'CLI not locked after first message')
-    expect((await page.getByRole('button', { name: /Choose CLI/ }).count()) === 0, 'CLI dropdown still present')
-    const r = await invoke('chat.update', { chatId: (await value('chat.list'))[0].id, cliId: 'opencode' })
-    expect(!r.ok, 'locked CLI could be changed over IPC')
-    await shot('g2-chat-reply')
-  })
-}
-
 let chatWs
 await test('Work: "Use chat UI" opens agents as a chat; Antigravity-style CLIs keep a terminal', async () => {
-  await page.getByRole('tab', { name: 'Work' }).click()
   chatWs = await value('workspaces.create', {
     projectId, kind: 'isolated', name: 'Chatty', cliSelections: [{ cliId: 'codex', count: 1 }, { cliId: 'claude', count: 1 }], autoApprove: false, chatUi: true
   })
   const agents = await value('agents.list', { workspaceId: chatWs.id })
   expect(agents.length === 2 && agents.every((a) => a.chatUi && a.runtime.running), 'chat agents not created ready')
-  expect((await value('chat.list')).every((c) => !agents.some((a) => a.id === c.id)), 'agent chats leaked into the Chat list')
   await openSidebarWorkspace('demo-app', 'Chatty')
   await waitFor(async () => (await panes().locator('textarea[aria-label="Message"]').count()) === 2, 'chat composers in panes')
   expect((await panes().locator('.xterm').count()) === 0, 'a chat agent rendered a terminal')
@@ -1715,19 +1629,6 @@ if (process.env.E2E_CHAT) {
   })
 }
 
-await test('chats can be renamed from the Chat sidebar', async () => {
-  await page.getByRole('tab', { name: 'Chat' }).click()
-  const first = page.getByRole('navigation', { name: 'Chats' }).getByRole('listitem').first().getByRole('button').first()
-  await first.dblclick()
-  await page.getByLabel('Chat name').fill('Renamed chat')
-  await page.keyboard.press('Enter')
-  await waitFor(async () => (await value('chat.list')).some((c) => c.title === 'Renamed chat'), 'title saved')
-  await page.getByRole('navigation', { name: 'Chats' }).getByRole('button', { name: /Renamed chat demo-app/ }).click({ button: 'right' })
-  expect(await page.getByRole('menuitem', { name: 'Rename' }).isVisible(), 'rename missing from the context menu')
-  await page.keyboard.press('Escape')
-  await page.getByRole('tab', { name: 'Work' }).click()
-})
-
 await test('right-click menus: workspace actions without a ⋯ button', async () => {
   const row = page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button', { name: 'Chatty', exact: true })
   await row.click({ button: 'right' })
@@ -1792,7 +1693,7 @@ await test('everything survives a restart; agents come back on their own', async
   // Durable sessions: every agent resumes by itself — nobody presses Start.
   await waitFor(async () => (await value('agents.list', { workspaceId: mainWs.id })).every((a) => a.runtime.running), 'agents to resume', 20000)
   expect((await value('layout.get', { workspaceId: mainWs.id })) !== null, 'layout lost')
-  expect((await value('chat.list')).length >= 2, 'chats lost')
+  expect((await value('agents.list', { workspaceId: chatWs.id })).every((a) => a.chatUi), 'chat-view agents lost')
   await openSidebarWorkspace('demo-app', 'Main')
   await page.waitForTimeout(800)
   expect((await page.getByText('Start agent').count()) === 0 && (await page.getByText('Resume session').count()) === 0, 'a Start/Resume overlay is showing')

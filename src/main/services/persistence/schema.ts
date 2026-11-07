@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { APPROVAL_LEVELS, DEFAULT_APPROVAL_LEVEL } from '@shared/domain/approval'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { cleanKeybindings } from '@shared/keys/keybindings'
 import { parseShortcut } from '@shared/queen/shortcut'
@@ -7,11 +6,8 @@ import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
 import { customNameProblem } from '@shared/queen/personas'
 import { QUEEN_VOICES } from '@shared/queen/voice'
 import type { BrainKind } from '@shared/queen/brain'
-import type { Bot } from '@shared/domain/bot'
 import { VSCODE_THEME_ID } from '@shared/domain/vscode-theme'
 import { CODE_HOSTS, TRACKERS } from '@shared/domain/integrations'
-import { GENERAL_TEAM, MAX_BOT_BLURB, MAX_BOT_BRIEF, MAX_BOT_MEMORY, MAX_BOT_NAME, MAX_MEMORY_ENTRY, MAX_TEAM_NAME, WORKS_ON, oneChiefPerTeam, type Team } from '@shared/domain/bot'
-import { MAX_TRIGGER_NAME, MAX_TRIGGER_PROMPT, type Trigger } from '@shared/domain/trigger'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
 import { DEFAULT_SETTINGS, DETACHED_GRACES, THEME_IDS, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, AVATAR_DATA, EMOJI, HEX_COLOR, MAX_AVATAR_CHARS, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
@@ -34,18 +30,10 @@ export interface PersistedState {
   queenBrains: StoredBrainAccount[]
   /** Projects removed from Hiveory, kept whole so adding the folder again restores them (ADR 0020). */
   archive: ArchivedProject[]
-  /** Bots mode teammates (ADR 0022); their threads are chats in the chats folder. */
-  bots: Bot[]
-  /** Bots' teams, General first (ADR 0028). */
-  teams: Team[]
-  /** Bots' scheduled work (ADR 0028). */
+  /** Worktrees' scheduled work (ADR 0028, 0040). */
   routines: Routine[]
   /** The run log, newest first, at most MAX_ROUTINE_RUNS. */
   routineRuns: RoutineRun[]
-  /** Outside events that start bot runs (ADR 0028). */
-  triggers: Trigger[]
-  /** The public link trigger events arrive by: its Funnel path and the Composio webhook (secret sealed). */
-  triggerLink?: TriggerLink
   /** Issue trackers connected in Settings › Integrations (ADR 0040); keys sealed by SecretBox. */
   trackers?: StoredTrackers
   /** The user's saved prompts, newest first (ADR 0031). */
@@ -55,13 +43,6 @@ export interface PersistedState {
 export interface StoredTrackers {
   jira?: { site: string; email: string; token: string }
   linear?: { key: string }
-}
-
-export interface TriggerLink {
-  enabled: boolean
-  path: string
-  subscriptionId?: string
-  secret?: string
 }
 
 /** A removed project with everything that was in it: its workspaces, agents (to resume), layouts and open files. */
@@ -132,11 +113,8 @@ export const emptyState = (): PersistedState => ({
   editors: [],
   queenBrains: [],
   archive: [],
-  bots: [],
-  teams: [{ ...GENERAL_TEAM }],
   routines: [],
   routineRuns: [],
-  triggers: [],
   savedPrompts: []
 })
 
@@ -345,50 +323,12 @@ export const presetSchema: z.ZodType<AgentPreset> = z.object({
   chatUi: z.boolean().optional()
 })
 
-export const botSchema: z.ZodType<Bot> = z.object({
-  id: str,
-  name: z.string().min(1).max(MAX_BOT_NAME),
-  brief: z.string().max(MAX_BOT_BRIEF).catch(''),
-  blurb: z.string().max(MAX_BOT_BLURB).optional().catch(undefined),
-  notify: z.boolean().catch(true),
-  cliId: str.optional(),
-  model: str.optional(),
-  effort: str.optional(),
-  autoApprove: z.boolean().catch(false),
-  chief: z.boolean().catch(false),
-  // Bots saved before teams existed are in General.
-  teamId: str.catch(GENERAL_TEAM.id),
-  messaging: z.boolean().catch(true),
-  memory: z.array(z.string().max(MAX_MEMORY_ENTRY)).max(MAX_BOT_MEMORY).catch([]),
-  pinned: z.boolean().catch(false),
-  // Bots saved before "Works on" existed keep the browser and their Linux computer.
-  worksOn: z.enum(WORKS_ON).catch('auto'),
-  routines: z.boolean().catch(false),
-  approvals: z.enum(APPROVAL_LEVELS).catch(DEFAULT_APPROVAL_LEVEL),
-  computer: z
-    .discriminatedUnion('kind', [
-      z.object({ kind: z.literal('docker'), host: z.object({ kind: z.literal('ssh'), destination: str, port: z.number().int().optional() }).optional() }),
-      z.object({ kind: z.literal('shared'), botId: str })
-    ])
-    .optional()
-    .catch(undefined),
-  browserProfileId: str.optional().catch(undefined),
-  createdAt: str,
-  updatedAt: str
-})
-
 const isoDate = z.string().datetime({ offset: true })
 
 export const routineSchema: z.ZodType<Routine> = z.object({
   id: str,
   name: z.string().min(1).max(MAX_ROUTINE_NAME),
-  botId: str.optional(),
-  target: z
-    .discriminatedUnion('kind', [
-      z.object({ kind: z.literal('chat'), cliId: str, model: str.optional() }),
-      z.object({ kind: z.literal('workspace'), projectId: str, workspaceId: str, cliId: str })
-    ])
-    .optional(),
+  target: z.object({ kind: z.literal('workspace'), projectId: str, workspaceId: str, cliId: str }),
   prompt: z.string().min(1).max(MAX_ROUTINE_PROMPT),
   attachments: z
     .array(z.object({ name: str, path: str, kind: z.enum(['image', 'video', 'text', 'file']), size: z.number().int().min(0) }))
@@ -403,27 +343,8 @@ export const routineSchema: z.ZodType<Routine> = z.object({
   timezone: z.string().min(1).max(64),
   endsAt: isoDate.optional().catch(undefined),
   timeoutMinutes: z.number().int().positive().optional().catch(undefined),
-  results: z.enum(['thread', 'none']).catch('thread'),
-  resultsThreadId: str.optional().catch(undefined),
   enabled: z.boolean().catch(false),
   checkedThrough: isoDate,
-  createdAt: str,
-  updatedAt: str
-})
-
-export const triggerSchema: z.ZodType<Trigger> = z.object({
-  id: str,
-  name: z.string().min(1).max(MAX_TRIGGER_NAME),
-  botId: str,
-  prompt: z.string().max(MAX_TRIGGER_PROMPT).catch(''),
-  appId: str,
-  accountId: str,
-  triggerSlug: str,
-  triggerName: str,
-  config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).catch({}),
-  instanceId: str,
-  enabled: z.boolean().catch(false),
-  lastEventAt: str.optional(),
   createdAt: str,
   updatedAt: str
 })
@@ -440,48 +361,24 @@ const trackersSchema: z.ZodType<StoredTrackers> = z.object({
   linear: z.object({ key: str }).optional().catch(undefined)
 })
 
-const triggerLinkSchema: z.ZodType<TriggerLink> = z.object({
-  enabled: z.boolean(),
-  path: z.string().regex(/^\/hiveory\/[a-f0-9]{32}$/),
-  subscriptionId: str.optional(),
-  secret: str.optional()
-})
-
 export const routineRunSchema: z.ZodType<RoutineRun> = z.object({
   id: str,
   routineId: str,
   routineName: str,
-  botId: str.optional(),
   where: str.optional(),
   agentId: str.optional(),
-  trigger: z.enum(['schedule', 'manual', 'event']),
+  trigger: z.enum(['schedule', 'manual']),
   prompt: str,
   scheduledFor: str,
   startedAt: str.optional(),
   endedAt: str.optional(),
-  threadId: str.optional(),
   status: z.enum(['running', 'completed', 'failed', 'missed', 'skipped']),
   detail: str.optional()
 })
 
-const teamSchema: z.ZodType<Team> = z.object({ id: str, name: z.string().trim().min(1).max(MAX_TEAM_NAME), createdAt: str })
-
-/** Saved teams with General always first (a file without it, or from before teams, gets it back). */
-const teamsOf = (raw: unknown): Team[] => {
-  const teams = (Array.isArray(raw) ? raw : []).flatMap((t) => {
-    const parsed = teamSchema.safeParse(t)
-    return parsed.success ? [parsed.data] : []
-  })
-  const general = teams.find((t) => t.id === GENERAL_TEAM.id) ?? { ...GENERAL_TEAM }
-  const seen = new Set<string>()
-  return [general, ...teams.filter((t) => t.id !== GENERAL_TEAM.id)].filter((t) => !seen.has(t.id) && seen.add(t.id))
-}
-
-/** Bots of a missing team go to General, and each team keeps at most one Chief: the first. */
-const botsIn = (bots: Bot[], teams: Team[]): Bot[] => {
-  const ids = new Set(teams.map((t) => t.id))
-  return oneChiefPerTeam(bots.map((b) => (ids.has(b.teamId) ? b : { ...b, teamId: GENERAL_TEAM.id })))
-}
+/** Keeps the saved records `keep` accepts; anything else in the list is left for its schema to judge. */
+const workOnly = (value: unknown, keep: (record: Record<string, unknown>) => boolean): unknown =>
+  Array.isArray(value) ? value.filter((v: unknown) => typeof v !== 'object' || v === null || keep(v as Record<string, unknown>)) : value
 
 /**
  * Parses each record independently so one corrupt entry is dropped instead of
@@ -505,7 +402,6 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
     if (parsed.success) layouts[key] = parsed.data
     else rejected++
   }
-  const teams = teamsOf(input.teams)
   return {
     state: {
       version: 1,
@@ -528,13 +424,10 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
       editors: list(input.editors, editorSchema),
       queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),
-      teams,
-      bots: botsIn(list(input.bots, botSchema), teams),
-      routines: list(input.routines, routineSchema),
-      routineRuns: list(input.routineRuns, routineRunSchema).slice(0, MAX_ROUTINE_RUNS),
-      triggers: list(input.triggers, triggerSchema),
+      // Bots' routines, scheduled chats and their runs went with Bots and Chat (ADR 0056): dropped quietly.
+      routines: list(workOnly(input.routines, (r) => !r.botId && (r.target as { kind?: unknown } | undefined)?.kind === 'workspace'), routineSchema),
+      routineRuns: list(workOnly(input.routineRuns, (r) => !r.botId && !r.threadId && r.trigger !== 'event'), routineRunSchema).slice(0, MAX_ROUTINE_RUNS),
       savedPrompts: list(input.savedPrompts, savedPromptSchema).slice(0, MAX_SAVED_PROMPTS),
-      ...(triggerLinkSchema.safeParse(input.triggerLink).success ? { triggerLink: triggerLinkSchema.parse(input.triggerLink) } : {}),
       ...(trackersSchema.safeParse(input.trackers).success ? { trackers: trackersSchema.parse(input.trackers) } : {})
     },
     rejected

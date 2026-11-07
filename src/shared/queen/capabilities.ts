@@ -18,14 +18,14 @@ export const QUEEN_CAPABILITIES: QueenCapability[] = [
   { area: 'Status', what: 'who is working, idle or needs you, and what one agent is doing', examples: ['status of everything', 'what is Luna doing?', 'take me to whoever needs me'], say: 'tell you who is working, who is idle and who needs you' },
   { area: 'Workspaces and worktrees', what: 'switch workspaces and worktrees, create worktrees, load or save presets', examples: ['go to demo website', 'create a worktree called login-fix', 'save this as preset Backend'], say: 'take you to any workspace or worktree, make new worktrees and load your presets' },
   { area: 'Panes', what: 'lay out, move, swap and resize agent panes', examples: ['put them side by side', 'make Bruno bigger', 'swap Bruno and Luna'], say: 'arrange and resize their panes' },
-  { area: 'Pages', what: 'Home, Settings, Chat, and Bots (work board, schedules, triggers, team map)', examples: ['open the work board', 'new chat with Codex about the API', 'open Settings'], say: 'take you to Chat, Bots or Settings' },
+  { area: 'Pages', what: 'Home and Settings', examples: ['go home', 'open Settings'], say: 'take you Home or to Settings' },
   { area: 'Code', what: 'branch and changes, open pull requests, files and pages in the side browser', examples: ['what changed', 'show open PRs', 'open README.md', 'open localhost:3000'], say: 'check your branch, changes and pull requests' },
-  { area: 'Bots and schedules', what: 'message a bot, pause or resume a schedule or trigger', examples: ['pause Morning brief'], say: 'message your bots or pause their schedules' },
+  { area: 'Schedules', what: 'pause or resume a schedule', examples: ['pause Morning brief'], say: 'pause or resume your schedules' },
   { area: 'Settings and notes', what: 'theme, voice, app settings, connected apps, updates, and notes I keep about you', examples: ['bronze theme', 'mute', 'which apps are connected', 'remember that I review with Claude'], say: 'change your theme and settings and keep notes about how you work' },
   {
     area: 'Several steps at once',
     what: 'one request with many steps, done in order, in your own words',
-    examples: ['open demo website, make a worktree called secondary, then two Claude side by side', "let's hop into Bots"],
+    examples: ['open demo website, make a worktree called secondary, then two Claude side by side'],
     say: 'do a whole request of several steps in one go, however you phrase it',
     needsModel: true
   }

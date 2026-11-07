@@ -1,6 +1,6 @@
 /**
- * Saved prompts (ADR 0031): text the user reuses, inserted into any message box (Chat, a bot's
- * thread, a Work agent in chat view). The user's own words, kept on this computer.
+ * Saved prompts (ADR 0031): text the user reuses, inserted into any message box (a Work agent in
+ * chat view). The user's own words, kept on this computer.
  */
 export interface SavedPrompt {
   id: string

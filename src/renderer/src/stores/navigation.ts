@@ -2,7 +2,6 @@ import { create } from 'zustand'
 import { mainWorkspaceId } from '@shared/domain'
 import { useWorkspaces } from './data'
 
-export type AppMode = 'workspace' | 'bots' | 'chatspace'
 /** The Dashboard's sections (ADR 0042: Routines and Settings are side-panel tabs of their own). */
 export type ProjectTab = 'tasks' | 'workspaces' | 'issues'
 /** Where `openProject` lands: a Dashboard section, or the Routines or Settings tab. */
@@ -38,7 +37,6 @@ export const SIDEBAR_WIDTH = { min: 200, max: 440, initial: 248 }
 export const PANEL_WIDTH = { min: 300, max: 900, initial: 420 }
 
 interface NavigationState {
-  mode: AppMode
   view: View
   sidebarCollapsed: boolean
   sidebarWidth: number
@@ -59,7 +57,6 @@ interface NavigationState {
   /** The section the side panel's Workspace tab shows (board, pull requests, worktrees, settings). */
   workspaceTab: ProjectTab
   setWorkspaceTab(tab: ProjectTab): void
-  setMode(mode: AppMode): void
   openSettings(section?: SettingsSection): void
   closeSettings(): void
   togglePanel(): void
@@ -130,7 +127,6 @@ const initialWidths = readWidths()
 
 /** Ephemeral UI navigation state. Never persisted to the main process. */
 export const useNavigation = create<NavigationState>((set, get) => ({
-  mode: 'workspace',
   view: { type: 'home' },
   sidebarCollapsed: false,
   sidebarWidth: initialWidths.sidebar,
@@ -144,7 +140,6 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   lastWorktree: {},
   workspaceTab: 'tasks',
   setWorkspaceTab: (workspaceTab) => set({ workspaceTab }),
-  setMode: (mode) => set((s) => ({ mode, view: s.view.type === 'settings' ? s.view.returnTo : s.view })),
   openSettings: (section = 'appearance') =>
     set((s) => ({ view: { type: 'settings', section, returnTo: s.view.type === 'settings' ? s.view.returnTo : s.view } })),
   closeSettings: () => set((s) => (s.view.type === 'settings' ? { view: s.view.returnTo } : {})),
@@ -241,7 +236,6 @@ export const useNavigation = create<NavigationState>((set, get) => ({
   },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
     set((s) => ({
-      mode: 'workspace',
       view: { type: 'workspace', projectId, workspaceId, focusPaneId },
       lastWorktree: { ...s.lastWorktree, [projectId]: workspaceId }
     })),

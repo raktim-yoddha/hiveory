@@ -6,11 +6,6 @@ import type { SmallTalk } from './chat'
 export const QUEEN_SETTINGS_SECTIONS = ['appearance', 'agents', 'browser', 'extensions', 'integrations', 'queen', 'keyboard', 'remote', 'updates', 'guide', 'about'] as const
 export type QueenSettingsSection = (typeof QUEEN_SETTINGS_SECTIONS)[number]
 
-/** Bots mode's pages beyond a bot's conversation (ADR 0028). */
-export const QUEEN_BOTS_PAGES = ['work', 'routines', 'triggers', 'team-map'] as const
-export type QueenBotsPage = (typeof QUEEN_BOTS_PAGES)[number]
-export const BOTS_PAGE_LABEL: Record<QueenBotsPage, string> = { work: 'Work board', routines: 'Schedules', triggers: 'Triggers', 'team-map': 'Team map' }
-
 /**
  * Everything Queen Bee can do: a closed set. The rule parser and (later) a model
  * both emit these; only the executor turns them into app operations, after
@@ -28,8 +23,6 @@ export type QueenAction =
   | { type: 'navigate'; to: 'settings'; section: QueenSettingsSection }
   | { type: 'navigate'; to: 'project'; projectId: string }
   | { type: 'navigate'; to: 'workspace'; projectId: string; workspaceId: string }
-  | { type: 'navigate'; to: 'bots'; page: QueenBotsPage }
-  | { type: 'set-mode'; mode: 'workspace' | 'bots' | 'chatspace' }
   | { type: 'side-panel'; open: boolean }
   | { type: 'open-panel-tab'; kind: 'browser' | 'explorer' }
   /** Status of agents: the current project (or every project from Home), every project with `everywhere`, one CLI with `cliId`. */
@@ -80,11 +73,7 @@ export type QueenAction =
   | { type: 'check-updates' }
   /** Saves the workspace's agents (CLIs and counts) as a preset. */
   | { type: 'save-preset'; name: string; workspaceId: string }
-  /** Starts a chat in Chat mode, with a CLI and a first message when given. */
-  | { type: 'new-chat'; cliId?: string; text?: string; projectId?: string }
-  /** Sends a message to a bot in a new thread (Bots mode). */
-  | { type: 'message-bot'; botId: string; text: string }
-  /** Turns a bot's routine or trigger on or off (ADR 0028). */
+  /** Turns a Worktree's schedule on or off (ADR 0028). */
   | { type: 'switch-automation'; automationId: string; on: boolean }
   /** Reopens a CLI's latest conversation in this workspace. */
   | { type: 'resume-session'; cliId: string; workspaceId: string; projectId: string }
@@ -109,12 +98,8 @@ export const QUEEN_SETTINGS = {
 } as const
 export type QueenSetting = keyof typeof QUEEN_SETTINGS
 
-/** How each top-level mode is named to the user. */
-export const MODE_LABEL = { workspace: 'Work', bots: 'Bots', chatspace: 'Chat' } as const
-
 /** The plain snapshot of app state the parser reads. Built by the renderer from its stores. */
 export interface QueenContext {
-  mode: 'workspace' | 'bots' | 'chatspace'
   /** The current page; on Settings, the page it returns to. */
   projectId?: string
   workspaceId?: string
@@ -128,10 +113,8 @@ export interface QueenContext {
   /** Installed agent CLIs and terminals. */
   clis: Array<{ id: string; displayName: string; kind?: 'agent' | 'shell' }>
   presets: Array<{ id: string; name: string }>
-  /** The user's bots (Bots mode), so "ask Scout to …" reaches one. */
-  bots?: Array<{ id: string; name: string }>
-  /** Bots' routines and triggers, by the user's own names (never their instructions), so "pause Morning brief" reaches one. */
-  automations?: Array<{ id: string; name: string; kind: 'routine' | 'trigger'; on: boolean }>
+  /** Schedules, by the user's own names (never their instructions), so "pause Morning brief" reaches one. */
+  automations?: Array<{ id: string; name: string; kind: 'routine'; on: boolean }>
   /** A custom personality's name, so "Zara, open Codex" parses like "Queen, open Codex". */
   queenName?: string
 }

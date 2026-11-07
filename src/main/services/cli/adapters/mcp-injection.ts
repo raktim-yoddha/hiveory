@@ -11,7 +11,7 @@ export const MCP_SERVER_NAME = 'hiveory'
 /** wait_for_agent may legitimately block for up to 15 minutes. */
 export const MCP_TOOL_TIMEOUT_MS = 16 * 60 * 1000
 
-/** Every agent, chat and bot learns the app it runs in from hiveory_about (ADR 0041). */
+/** Every agent learns the app it runs in from hiveory_about (ADR 0041). */
 export const ABOUT_PROMPT =
   'You run inside Hiveory, a desktop app where coding agents work side by side in Git worktrees. When the user asks about Hiveory, ' +
   'its settings or where something is, or you need to know where you are and what is connected, call the hiveory MCP tool hiveory_about.'
@@ -49,32 +49,12 @@ export const appsPrompt = (apps: string[]): string =>
   `The user connected these apps to Hiveory: ${apps.join(', ')}. Their tools are hiveory MCP tools prefixed with the app name ` +
   '(for example github_…); use them whenever a request involves one of these apps.'
 
-/** A bot's thread: memory always; the team for the Chief of Staff (delegates) and for bots allowed to message (consult). */
-/** A bot's own Linux computer (a Docker container): terminal first, the desktop when a page or app needs eyes. */
-export const DESKTOP_PROMPT =
-  'You have your own Linux computer: desktop_run runs shell commands in /workspace (your files), desktop_open_url opens Chromium, desktop_ui reads the screen as UI elements, ' +
-  'desktop_screenshot shows the screen and desktop_click / desktop_type / desktop_key / desktop_scroll operate it. Prefer desktop_run for terminal work.'
-
-export const botPrompt = (role: NonNullable<McpEndpoint['bot']>, computer = false): string =>
-  [
-    'Use the hiveory remember / forget tools for your memory.',
-    computer ? DESKTOP_PROMPT : '',
-    role === 'chief'
-      ? "You lead a team of bots: list_bots shows them; delegate_bot hands one a task (its result arrives here later and wakes you); ask_bot is for a quick question. Brief clearly, never invent a teammate's progress, and only report work done once its result has arrived. Do small things yourself."
-      : role === 'member'
-        ? 'list_bots shows teammates you may consult with ask_bot when you need their answer.'
-        : ''
-  ]
-    .filter(Boolean)
-    .join(' ')
-
 /** The system-prompt addition for an agent Hiveory launches (chat-only runs have no coordination tools). */
 export const agentPrompt = (mcp: McpEndpoint, coordination = true): string => {
   const coord = coordination && mcp.coordination !== false
   return [
     ABOUT_PROMPT,
     coord ? AGENT_TOOLS_PROMPT : '',
-    mcp.bot ? botPrompt(mcp.bot, mcp.botComputer) : '',
     mcp.browser ? BROWSER_PROMPT : '',
     mcp.computer ? COMPUTER_PROMPT : '',
     mcp.apps?.length ? appsPrompt(mcp.apps) : '',

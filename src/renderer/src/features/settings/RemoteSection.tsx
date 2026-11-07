@@ -16,7 +16,7 @@ type Result = Awaited<ReturnType<typeof api<'hosts.check'>>>
 /**
  * Remote machines (ADR 0022, 0025): the user's own devices found through
  * Tailscale (one click), sharing this computer with them, an SSH host check
- * (Hiveory's host for remote projects and bot computers), and connecting to a
+ * (Hiveory's host for remote projects), and connecting to a
  * Hiveory server by hand.
  */
 export function RemoteSection() {

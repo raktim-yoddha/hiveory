@@ -23,14 +23,11 @@ import {
   type QueenOutcome,
   type QueenPrefs
 } from '@shared/queen/personas'
-import { BOTS_PAGE_LABEL, MAX_NOTES, MODE_LABEL, QUEEN_SETTINGS } from '@shared/queen/actions'
+import { MAX_NOTES, QUEEN_SETTINGS } from '@shared/queen/actions'
 import { buildReport, type QueenAgentStatus } from '@shared/queen/report'
 import { growPane } from '@shared/layout/operations'
 import { api, HiveoryError } from '../../lib/api'
-import { useBots } from '../../stores/bots'
-import { useChat } from '../../stores/chat'
 import { useRoutines } from '../../stores/routines'
-import { useTriggers } from '../../stores/triggers'
 import { useAgents, useClis, useLayouts, usePresets, useProjects, useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, selectedWorkspaceId, useNavigation, type View } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
@@ -84,16 +81,12 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
   const projects = useProjects.getState()
   const clis = useClis.getState()
   const presets = usePresets.getState()
-  const bots = useBots.getState()
   const routines = useRoutines.getState()
-  const triggers = useTriggers.getState()
-  const [projectList, cliList, presetList, botList, routineList, triggerList] = await Promise.all([
+  const [projectList, cliList, presetList, routineList] = await Promise.all([
     ensure(projects.loaded, projects.load, () => useProjects.getState().projects),
     ensure(clis.loaded, () => clis.load(), () => useClis.getState().clis),
     ensure(presets.loaded, presets.load, () => usePresets.getState().presets),
-    ensure(bots.loaded, bots.load, () => useBots.getState().bots).catch(() => []),
-    ensure(routines.loaded, routines.load, () => useRoutines.getState().routines).catch(() => []),
-    ensure(triggers.loaded, triggers.load, () => useTriggers.getState().triggers).catch(() => [])
+    ensure(routines.loaded, routines.load, () => useRoutines.getState().routines).catch(() => [])
   ])
   let workspaces = projectId ? useWorkspaces.getState().byProject[projectId] : undefined
   if (projectId && !workspaces) {
@@ -108,7 +101,6 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
   return {
     cards,
     ctx: {
-      mode: nav.mode,
       projectId,
       workspaceId,
       projects: projectList.map((p) => ({ id: p.id, name: p.name })),
@@ -117,11 +109,7 @@ async function buildContext(): Promise<{ ctx: QueenContext; cards: KanbanCard[] 
       agents: cards.map((c) => ({ id: c.instanceId, petName: c.petName, cliId: c.cliId, workspaceId: c.workspaceId, status: c.runtime.status })),
       clis: cliList.filter((c) => c.available).map((c) => ({ id: c.id, displayName: c.displayName, kind: c.kind })),
       presets: presetList.map((p) => ({ id: p.id, name: p.name })),
-      bots: botList.map((b) => ({ id: b.id, name: b.name })),
-      automations: [
-        ...routineList.map((r) => ({ id: r.id, name: r.name, kind: 'routine' as const, on: r.enabled })),
-        ...triggerList.map((t) => ({ id: t.id, name: t.name, kind: 'trigger' as const, on: t.enabled }))
-      ],
+      automations: routineList.map((r) => ({ id: r.id, name: r.name, kind: 'routine' as const, on: r.enabled })),
       ...(useSettings.getState().settings.queenPersona === 'custom' ? { queenName: personaInfo(useSettings.getState().settings).name } : {})
     }
   }
@@ -182,10 +170,10 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
     if (!tree) throw new QueenError('there are no panes there to arrange.')
     return tree
   }
-  /** Navigation steps undo to the page (and mode) that was showing before them. */
+  /** Navigation steps undo to the page that was showing before them. */
   const remember = (): void => {
-    const { view, mode } = nav()
-    undos.push(() => useNavigation.setState({ view: view as View, mode }))
+    const { view } = nav()
+    undos.push(() => useNavigation.setState({ view: view as View }))
   }
 
   try {
@@ -352,22 +340,11 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
             if (!project) throw new QueenError('that workspace is no longer open.')
             nav().openProject(project.id)
             outcomes.push({ kind: 'navigated', place: project.name })
-          } else if (action.to === 'bots') {
-            nav().setMode('bots')
-            const bots = useBots.getState()
-            ;({ work: bots.showWorkBoard, routines: () => bots.showRoutines(), triggers: bots.showTriggers, 'team-map': bots.showTeamMap })[action.page]()
-            outcomes.push({ kind: 'navigated', place: BOTS_PAGE_LABEL[action.page] })
           } else {
             nav().openWorkspace(action.projectId, action.workspaceId)
             const project = action.projectId !== ctx.projectId ? ctx.projects.find((x) => x.id === action.projectId)?.name : undefined
             outcomes.push({ kind: 'navigated', place: project ? `${project} · ${workspaceName(action.workspaceId)}` : workspaceName(action.workspaceId) })
           }
-          break
-        }
-        case 'set-mode': {
-          remember()
-          nav().setMode(action.mode)
-          outcomes.push({ kind: 'mode', mode: MODE_LABEL[action.mode] })
           break
         }
         case 'side-panel': {
@@ -560,43 +537,12 @@ async function execute(actions: QueenAction[], ctx: QueenContext, cards: KanbanC
           outcomes.push({ kind: 'preset-saved', name: action.name })
           break
         }
-        case 'new-chat': {
-          remember()
-          nav().setMode('chatspace')
-          await useChat.getState().create(action.projectId)
-          const chatId = useChat.getState().activeId
-          if (!chatId) throw new QueenError('the chat did not start.')
-          if (action.cliId) await useChat.getState().update(chatId, { cliId: action.cliId })
-          outcomes.push({ kind: 'chat', ...(action.cliId ? { cliName: cliName(action.cliId) } : {}) })
-          if (action.text) {
-            if (!(await useChat.getState().send(chatId, action.text))) throw new QueenError('the message was not sent.')
-            outcomes.push({ kind: 'messaged', name: 'the chat' })
-          }
-          break
-        }
-        case 'message-bot': {
-          const bot = ctx.bots?.find((b) => b.id === action.botId)
-          if (!bot) throw new QueenError('that bot no longer exists.')
-          remember()
-          nav().setMode('bots')
-          await useBots.getState().select(bot.id)
-          await useBots.getState().newThread(bot.id)
-          const thread = useBots.getState().activeThread[bot.id]
-          if (!thread || !(await useChat.getState().send(thread, action.text))) throw new QueenError(`${bot.name} did not get the message.`)
-          outcomes.push({ kind: 'messaged', name: bot.name })
-          break
-        }
         case 'switch-automation': {
           const item = ctx.automations?.find((x) => x.id === action.automationId)
-          if (!item) throw new QueenError('that schedule or trigger no longer exists.')
+          if (!item) throw new QueenError('that schedule no longer exists.')
           const flip = async (enabled: boolean): Promise<void> => {
-            if (item.kind === 'routine') {
-              await api('routines.update', { routineId: item.id, enabled })
-              await useRoutines.getState().load()
-            } else {
-              await api('triggers.update', { triggerId: item.id, enabled })
-              await useTriggers.getState().load()
-            }
+            await api('routines.update', { routineId: item.id, enabled })
+            await useRoutines.getState().load()
           }
           await flip(action.on)
           undos.push(() => flip(item.on))

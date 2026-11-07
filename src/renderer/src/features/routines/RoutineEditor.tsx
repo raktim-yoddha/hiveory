@@ -9,10 +9,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Modal } from '../../components/ui/Modal'
 import { Select } from '../../components/ui/Select'
 import { TextAreaField, TextField } from '../../components/ui/TextField'
-import { Toggle } from '../../components/ui/Toggle'
 import { cx } from '../../lib/cx'
-import { useBots } from '../../stores/bots'
-import { useChat } from '../../stores/chat'
 import { useClis, useProjects, useWorkspaces } from '../../stores/data'
 import { api } from '../../lib/api'
 import { reportError, runAction } from '../../stores/notices'
@@ -23,9 +20,9 @@ import { cronDays, localZone, sameZone, when, WEEKDAYS } from './routine-text'
 import form from '../../components/ui/form.module.css'
 import styles from './Routines.module.css'
 
-type Target = { routineId: string } | { botId?: string; startsAt?: string; target?: RoutineTarget }
+type Target = { routineId: string } | { startsAt?: string; target: RoutineTarget }
 
-/** What the editor is open for: a routine, a new one (maybe for a bot or a time), or nothing. */
+/** What the editor is open for: a routine, a new one for a Worktree (maybe at a time), or nothing. */
 export const useRoutineEditor = create<{ target: Target | null; open(target: Target): void; close(): void }>((set) => ({
   target: null,
   open: (target) => set({ target }),
@@ -34,13 +31,9 @@ export const useRoutineEditor = create<{ target: Target | null; open(target: Tar
 
 type Repeat = 'once' | 'interval' | RepeatPreset
 
-type Doer = 'bot' | 'chat' | 'workspace'
-
 interface Draft {
   name: string
-  /** Who does it (ADR 0030): a bot, a new chat or an agent in Work. */
-  doer: Doer
-  botId: string
+  /** Who does it: a new agent of this CLI in this Worktree (ADR 0040). */
   cliId: string
   projectId: string
   workspaceId: string
@@ -53,8 +46,6 @@ interface Draft {
   cron: string
   timeoutMinutes: string
   endsDate: string
-  /** 'dedicated' · 'none' · a thread id */
-  results: string
   /** Copies kept for every run (ADR 0030). */
   attachments: ChatAttachment[]
 }
@@ -70,17 +61,15 @@ const ruleTime = (expr: string, fallback: string): string => {
 /** The next whole hour: where a new routine starts unless a time was picked. */
 const nextHour = (): Date => new Date(Math.ceil((Date.now() + 1) / 3_600_000) * 3_600_000)
 
-const draftOf = (routine: RoutineView | undefined, target: Target, firstBot: string): Draft => {
+const draftOf = (routine: RoutineView | undefined, target: Target): Draft => {
   const start = new Date(routine?.startsAt ?? ('startsAt' in target && target.startsAt ? target.startsAt : nextHour().toISOString()))
   const s = routine?.schedule
   const doing = routine ? routine.target : 'target' in target ? target.target : undefined
   return {
     name: routine?.name ?? '',
-    doer: doing?.kind ?? 'bot',
-    botId: routine?.botId ?? ('botId' in target && target.botId ? target.botId : firstBot),
     cliId: doing?.cliId ?? '',
-    projectId: doing?.kind === 'workspace' ? doing.projectId : '',
-    workspaceId: doing?.kind === 'workspace' ? doing.workspaceId : '',
+    projectId: doing?.projectId ?? '',
+    workspaceId: doing?.workspaceId ?? '',
     prompt: routine?.prompt ?? '',
     date: dateOf(start),
     // A calendar rule's own hour and minute are what runs; the start date only says from when.
@@ -91,7 +80,6 @@ const draftOf = (routine: RoutineView | undefined, target: Target, firstBot: str
     cron: s?.kind === 'cron' ? s.expr : '0 9 * * 1-5',
     timeoutMinutes: routine?.timeoutMinutes ? String(routine.timeoutMinutes) : '',
     endsDate: routine?.endsAt ? dateOf(new Date(routine.endsAt)) : '',
-    results: routine?.results === 'none' ? 'none' : (routine?.resultsThreadId ?? 'dedicated'),
     attachments: routine?.attachments ?? []
   }
 }
@@ -111,7 +99,7 @@ function scheduleOf(d: Draft, start: Date, timezone: string): RoutineSchedule | 
   return { kind: 'cron', expr: compileRepeat(d.repeat, start, timezone, d.days), preset: d.repeat }
 }
 
-/** Create or edit a routine: when, how often, which bot, what it does, and where its results go. */
+/** Create or edit a routine: when, how often, which worktree and CLI, and what it does. */
 export function RoutineEditor() {
   const target = useRoutineEditor((s) => s.target)
   return target ? <EditorDialog key={JSON.stringify(target)} target={target} /> : null
@@ -120,15 +108,12 @@ export function RoutineEditor() {
 function EditorDialog({ target }: { target: Target }) {
   const close = useRoutineEditor((s) => s.close)
   const { routines, create: createRoutine, update, remove, runNow } = useRoutines()
-  const { bots, threads, loadThreads, update: updateBot } = useBots()
   const allClis = useClis((s) => s.clis)
-  const chatClis = useChat((s) => s.clis)
-  const loadChatClis = useChat((s) => s.loadClis)
   const projects = useProjects((s) => s.projects)
   const workspaces = useWorkspaces((s) => s.byProject)
   const loadWorkspaces = useWorkspaces((s) => s.load)
   const routine = 'routineId' in target ? routines.find((r) => r.id === target.routineId) : undefined
-  const [draft, setDraft] = useState<Draft>(() => draftOf(routine, target, bots[0]?.id ?? ''))
+  const [draft, setDraft] = useState<Draft>(() => draftOf(routine, target))
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -147,27 +132,12 @@ function EditorDialog({ target }: { target: Target }) {
   }
   const set = <K extends keyof Draft>(key: K, value: Draft[K]): void => setDraft((d) => ({ ...d, [key]: value }))
 
-  const bot = draft.doer === 'bot' ? bots.find((b) => b.id === draft.botId) : undefined
-  const botThreads = threads[draft.botId]
   useEffect(() => {
-    if (draft.doer === 'bot' && draft.botId && !botThreads) void loadThreads(draft.botId)
-  }, [draft.doer, draft.botId, botThreads, loadThreads])
-  useEffect(() => {
-    if (draft.doer === 'chat' && chatClis.length === 0) void loadChatClis()
-  }, [draft.doer, chatClis.length, loadChatClis])
-  useEffect(() => {
-    if (draft.doer === 'workspace' && draft.projectId && !workspaces[draft.projectId]) void loadWorkspaces(draft.projectId)
-  }, [draft.doer, draft.projectId, workspaces, loadWorkspaces])
-  const cliOptions = (draft.doer === 'chat' ? allClis.filter((c) => chatClis.includes(c.id)) : allClis.filter((c) => c.available && c.kind !== 'shell')).map((c) => ({
-    value: c.id,
-    label: c.displayName
-  }))
+    if (draft.projectId && !workspaces[draft.projectId]) void loadWorkspaces(draft.projectId)
+  }, [draft.projectId, workspaces, loadWorkspaces])
+  const cliOptions = allClis.filter((c) => c.available && c.kind !== 'shell').map((c) => ({ value: c.id, label: c.displayName }))
   const runsOn: RoutineTarget | undefined =
-    draft.doer === 'chat' && draft.cliId
-      ? { kind: 'chat', cliId: draft.cliId }
-      : draft.doer === 'workspace' && draft.projectId && draft.workspaceId && draft.cliId
-        ? { kind: 'workspace', projectId: draft.projectId, workspaceId: draft.workspaceId, cliId: draft.cliId }
-        : undefined
+    draft.projectId && draft.workspaceId && draft.cliId ? { kind: 'workspace', projectId: draft.projectId, workspaceId: draft.workspaceId, cliId: draft.cliId } : undefined
 
   // Times are this computer's; a routine saved in another zone moves to this one when it is saved.
   const timezone = localZone()
@@ -189,43 +159,22 @@ function EditorDialog({ target }: { target: Target }) {
         ? 'Add a title.'
         : !draft.prompt.trim()
           ? 'Add instructions.'
-          : draft.doer !== 'bot' && !runsOn
-            ? draft.doer === 'chat'
-              ? 'Pick the CLI for the chat.'
-              : 'Pick the worktree and CLI.'
-            : draft.doer === 'bot' && !bot
-            ? 'Assign a bot.'
-            : bot && !bot.routines
-              ? `Allow ${bot!.name} to run on a schedule.`
-              : preview.length === 0
-                ? draft.repeat === 'once'
-                  ? 'Pick a time in the future.'
-                  : 'This schedule has no runs left.'
-                : null
+          : !runsOn
+            ? 'Pick the worktree and CLI.'
+            : preview.length === 0
+              ? draft.repeat === 'once'
+                ? 'Pick a time in the future.'
+                : 'This schedule has no runs left.'
+              : null
 
   const save = async (): Promise<void> => {
-    if (problem || typeof schedule === 'string') return
+    if (problem || typeof schedule === 'string' || !runsOn) return
     setBusy(true)
-    const results = draft.results === 'none' ? ('none' as const) : ('thread' as const)
-    const thread = draft.results !== 'none' && draft.results !== 'dedicated' ? draft.results : undefined
     const timeout = Number(draft.timeoutMinutes) || undefined
-    const fields = { name: draft.name.trim(), prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, results, attachments: draft.attachments }
-    const doer = runsOn ? { target: runsOn } : { botId: draft.botId }
+    const fields = { name: draft.name.trim(), prompt: draft.prompt.trim(), schedule, startsAt: start.toISOString(), timezone, target: runsOn, attachments: draft.attachments }
     const saved = routine
-      ? await update(routine.id, {
-          ...fields,
-          ...(runsOn ? { target: runsOn, botId: null } : { botId: draft.botId, target: null }),
-          endsAt: endsAt?.toISOString() ?? null,
-          timeoutMinutes: timeout ?? null,
-          resultsThreadId: thread ?? null
-        })
-      : await createRoutine({
-          ...fields,
-          ...doer,
-          ...(endsAt ? { endsAt: endsAt.toISOString() } : {}),
-          ...(timeout ? { timeoutMinutes: timeout } : {}),
-          ...(thread ? { resultsThreadId: thread } : {})
-        })
+      ? await update(routine.id, { ...fields, endsAt: endsAt?.toISOString() ?? null, timeoutMinutes: timeout ?? null })
+      : await createRoutine({ ...fields, ...(endsAt ? { endsAt: endsAt.toISOString() } : {}), ...(timeout ? { timeoutMinutes: timeout } : {}) })
     setBusy(false)
     if (saved) close()
   }
@@ -243,20 +192,11 @@ function EditorDialog({ target }: { target: Target }) {
     { value: 'yearly', label: 'Yearly' },
     { value: 'custom', label: 'Custom cron (advanced)' }
   ]
-  const resultOptions = [
-    { value: 'dedicated', label: 'A dedicated results thread' },
-    ...(botThreads ?? []).map((t) => ({ value: t.id, label: `The thread "${t.title}"`, group: 'Post into a thread' })),
-    { value: 'none', label: "Only each run's own thread", group: '' }
-  ]
-  if (draft.results !== 'dedicated' && draft.results !== 'none' && !resultOptions.some((o) => o.value === draft.results)) {
-    resultOptions.splice(1, 0, { value: draft.results, label: 'Its results thread' })
-  }
-
   return (
     <>
       <Modal
         open={!confirmDelete}
-        title={`${routine ? 'Edit schedule' : 'New schedule'}${draft.doer === 'workspace' ? ` · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}` : ''}`}
+        title={`${routine ? 'Edit schedule' : 'New schedule'} · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}`}
         width="lg"
         onClose={close}
         footer={
@@ -343,44 +283,17 @@ function EditorDialog({ target }: { target: Target }) {
               </label>
             </div>
           </details>
-          {/* A Work routine belongs to its Workspace (ADR 0040): only the worktree and CLI are picked here. */}
-          {draft.doer === 'workspace' ? (
-            <Select
-              label="Worktree"
-              value={draft.workspaceId}
-              options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
-              onChange={(v) => set('workspaceId', v)}
-            />
-          ) : (
-            <Select
-              label="Who does it"
-              value={draft.doer === 'bot' ? draft.botId : draft.doer}
-              options={[...bots.map((b) => ({ value: b.id, label: b.name, group: 'A bot' })), { value: 'chat', label: 'A new chat (Chat mode)', group: 'Without a bot' }]}
-              onChange={(v) => (v === 'chat' ? setDraft((d) => ({ ...d, doer: v, cliId: '' })) : setDraft((d) => ({ ...d, doer: 'bot', botId: v })))}
-            />
-          )}
-          {draft.doer !== 'bot' && (
-            <>
-              <Select label="CLI" value={draft.cliId} options={[{ value: '', label: 'Pick a CLI', disabled: true }, ...cliOptions]} onChange={(v) => set('cliId', v)} />
-              <p className={styles.note}>
-                {draft.doer === 'chat'
-                  ? 'Each run starts a new chat in Chat mode and sends these instructions. It works read-only, like any new chat.'
-                  : 'Each run opens a new agent in that worktree and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.'}
-              </p>
-            </>
-          )}
-          {bot && !bot.routines && (
-            <div className={styles.allow}>
-              <span>{bot.name} doesn&rsquo;t run on a schedule yet.</span>
-              <Toggle label={`Allow ${bot.name} to run on a schedule`} checked={false} onChange={() => void updateBot(bot.id, { routines: true })} />
-            </div>
-          )}
-          {draft.doer === 'bot' && (
-            <>
-              <Select label="Post results to" value={draft.results} options={resultOptions} onChange={(v) => set('results', v)} />
-              <p className={styles.note}>Each run starts with fresh context in its own thread; a dated summary of each run collects in the results thread.</p>
-            </>
-          )}
+          {/* A routine belongs to its Workspace (ADR 0040): only the worktree and CLI are picked here. */}
+          <Select
+            label="Worktree"
+            value={draft.workspaceId}
+            options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+            onChange={(v) => set('workspaceId', v)}
+          />
+          <Select label="CLI" value={draft.cliId} options={[{ value: '', label: 'Pick a CLI', disabled: true }, ...cliOptions]} onChange={(v) => set('cliId', v)} />
+          <p className={styles.note}>
+            Each run opens a new agent in that worktree and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.
+          </p>
           <TextAreaField
             label="Instructions"
             value={draft.prompt}
@@ -429,7 +342,7 @@ function EditorDialog({ target }: { target: Target }) {
           onConfirm={() => void remove(routine.id).then(close)}
           onClose={() => setConfirmDelete(false)}
         >
-          Its future runs stop. The run log and the threads it made stay.
+          Its future runs stop. The run log and the agents it opened stay.
         </ConfirmDialog>
       )}
     </>

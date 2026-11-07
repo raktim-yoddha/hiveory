@@ -7,7 +7,6 @@ import { parseCommand } from './parse'
  * runs. No model involved; every case must be deterministic.
  */
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [{ id: 'p1', name: 'demo-app' }],

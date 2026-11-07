@@ -1,0 +1,80 @@
+/* The window's chrome lives in the sidebar (ADR 0056): no title bar, everything starts at the top. */
+.top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--sidebar-bar-height);
+  padding: 0 var(--space-4) 0 var(--space-7);
+  -webkit-app-region: drag;
+}
+
+/* macOS's traffic lights sit at the start of the top bar. */
+:global(.platform-darwin) .top {
+  padding-left: calc(var(--traffic-lights-width) + var(--space-4));
+}
+
+.brand {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  color: var(--color-text);
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Development builds and server windows: an inverted chip after the name. */
+.dev {
+  flex: none;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  line-height: var(--control-xs);
+}
+
+.bottom {
+  display: flex;
+  margin-top: auto;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+/* The folded sidebar: one card, its buttons in a column. */
+.rail {
+  composes: surface from './AppShell.module.css';
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) 0;
+  -webkit-app-region: drag;
+}
+
+/* Under macOS's traffic lights. */
+:global(.platform-darwin) .rail {
+  padding-top: var(--sidebar-bar-height);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.noDrag {
+  -webkit-app-region: no-drag;
+}

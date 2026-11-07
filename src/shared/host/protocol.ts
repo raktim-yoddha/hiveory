@@ -3,7 +3,7 @@ import type { AppError } from '../errors'
 /**
  * The execution-host protocol (ADR 0022): how Hiveory talks to a host daemon
  * (`hiveoryd`) that owns processes, files and git on a machine. The same frames
- * run over a local utility process and over an SSH channel, so Work and Bots
+ * run over a local utility process and over an SSH channel, so Work
  * share one remote layer. Bump HOST_PROTOCOL only for breaking changes.
  */
 // 2: remote daemons outlive their connection; pty.attach takes a terminal back after a reconnect (ADR 0025).

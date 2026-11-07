@@ -104,18 +104,6 @@
   --glow-working: none;
   --glow-waiting: none;
 
-  /* Bot avatars (Bots mode): soft identity tiles, picked per bot from its id; theme-independent */
-  --bot-tile-1: #e8766a;
-  --bot-tile-2: #5fb3e6;
-  --bot-tile-3: #5ccf9f;
-  --bot-tile-4: #f0a64a;
-  --bot-tile-5: #a48ae8;
-  --bot-tile-6: #e57fb3;
-  --bot-tile-ink: #17120c;
-  --bot-avatar-sm: 28px;
-  --bot-avatar-md: 36px;
-  --bot-avatar-lg: 64px;
-
   /* Drop preview */
   --color-drop: rgb(217 203 180 / 0.07);
   --color-drop-border: rgb(217 203 180 / 0.5);
@@ -205,8 +193,17 @@
   --logo-lg: 22px;
   --logo-xl: 40px;
   --logo-brand: 22px;
-  --titlebar-height: 44px;
-  --titlebar-controls-width: 140px;
+  /*
+   * No title bar (ADR 0056): the native window controls (Windows, Linux) sit over the top-right card's
+   * header, which leaves them this room; main's overlay height matches. macOS's traffic lights sit in
+   * the sidebar's top bar.
+   */
+  --window-controls-height: 40px;
+  --window-controls-width: 140px;
+  --traffic-lights-width: calc(var(--space-11) + var(--space-8));
+  /* The sidebar's top bar (brand and layout toggles) and its collapsed form, an icon rail. */
+  --sidebar-bar-height: calc(var(--control-lg) + var(--space-6));
+  --rail-width: calc(var(--control-lg) + var(--space-6));
   /* Defaults; the shell overrides both with the user's resized widths. */
   --sidebar-width: 248px;
   --side-panel-width: 420px;

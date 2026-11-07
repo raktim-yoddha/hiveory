@@ -51,7 +51,7 @@ export function QueenFloating() {
 }
 
 /**
- * Queen Bee put away in the title bar (ADR 0044): her mark sits after the side panel button, with a dot
+ * Queen Bee put away in the sidebar's top bar (ADR 0044, 0056): her mark sits before the layout buttons, with a dot
  * for an unseen message. A click, her shortcut or a question drops her bar down under it; Escape or a
  * click elsewhere puts it away again.
  */
@@ -318,7 +318,7 @@ function QueenBar() {
           {
             type: 'item',
             id: 'titlebar',
-            label: placement === 'titlebar' ? 'Show her bar again' : 'Put away in the title bar',
+            label: placement === 'titlebar' ? 'Show her bar again' : 'Put away in the sidebar',
             hint: placement === 'titlebar' ? 'Docked' : 'Only her mark stays',
             onSelect: () => setPlacement(placement === 'titlebar' ? 'docked' : 'titlebar')
           },

@@ -21,7 +21,6 @@ const sealer: Sealer = {
 }
 
 const ctx: QueenContext = {
-  mode: 'workspace',
   projectId: 'p1',
   workspaceId: 'w1',
   projects: [{ id: 'p1', name: 'demo-app' }],
@@ -187,10 +186,10 @@ describe('Queen Bee brain service', () => {
     const { brain, calls } = setup(() =>
       n++ === 0
         ? json(400, { error: { message: "Unsupported parameter: 'reasoning_effort'" } })
-        : json(200, { choices: [{ message: { tool_calls: [{ function: { arguments: '{"actions":[{"type":"set-mode","mode":"chatspace"}]}' } }] } }] })
+        : json(200, { choices: [{ message: { tool_calls: [{ function: { arguments: '{"actions":[{"type":"navigate","to":"home"}]}' } }] } }] })
     )
     brain.save({ provider: 'groq', label: '', baseUrl: '', model: 'llama', apiKey: 'k' })
-    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'set-mode' }] })
+    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'navigate' }] })
     expect(calls.map((c) => 'reasoning_effort' in c.body)).toEqual([true, false])
     await brain.plan('chat', ctx, ADA)
     expect(calls.at(-1)!.body.reasoning_effort).toBeUndefined()
@@ -265,12 +264,12 @@ describe('Queen Bee subscription brains (the user own CLIs)', () => {
     let n = 0
     const { fn, calls } = run(async (_f, args) => {
       if (n++ === 0) return { code: 1, stdout: '', stderr: '"message": "Unsupported value: \'low\' is not supported for reasoning.effort"', stopped: false }
-      await writeFile(args[args.indexOf('--output-last-message') + 1]!, JSON.stringify({ actions: [{ type: 'set-mode', mode: 'chatspace' }] }))
+      await writeFile(args[args.indexOf('--output-last-message') + 1]!, JSON.stringify({ actions: [{ type: 'navigate', to: 'home' }] }))
       return ok('')
     })
     const brain = setup(fn)
     brain.save({ provider: 'codexcli', label: '', baseUrl: '', model: '' })
-    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'set-mode' }] })
+    expect(await brain.plan('chat', ctx, ADA)).toMatchObject({ actions: [{ type: 'navigate' }] })
     expect(calls[0]!.args.join(' ')).toContain('model_reasoning_effort')
     expect(calls[1]!.args.join(' ')).not.toContain('model_reasoning_effort')
   })

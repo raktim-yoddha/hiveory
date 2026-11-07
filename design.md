@@ -209,19 +209,18 @@ The sidebar should feel like the BridgeMind reference: compact, dark, subtle, an
 
 ## Top-Level Navigation
 
-Exactly two modes, labelled (ADR 0012):
-
-```text
-Work | Chat
-```
-
-The title bar also holds the side-panel toggle (terminals and the built-in browser) and the
-app Settings gear. The side panel itself has no close button (the toggle, or dragging it narrow,
-hides it). Development builds show an inverted DEV chip after the name.
+No modes and no title bar (ADR 0056). The sidebar, the main area and the side panel are cards that
+start at the top of the window, with the page padding on every side. The sidebar's top bar holds the
+brand (logo, name, the inverted DEV chip in development builds), Queen Bee's mark when she is put
+away, and the side-panel and sidebar toggles; it drags the window. Settings sits in the sidebar's
+footer. A hidden sidebar folds to an icon rail (a narrow card) with the same buttons. The side panel
+itself has no close button (the toggle, or dragging it narrow, hides it). On Windows and Linux the
+window controls sit transparently over the top-right card's header, which leaves them room; on macOS
+the traffic lights sit at the start of the sidebar's top bar.
 
 Do not add Agent mode.
 
-Do not add additional top-level modes.
+Do not add top-level modes.
 
 ## Workspace Page
 

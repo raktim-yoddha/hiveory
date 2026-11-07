@@ -118,7 +118,7 @@ const emit: Emit = (event, payload) => {
 
 const openWindow = (): void => {
   const s = container?.settings.get()
-  window = createMainWindow(targets, log, s?.theme, Boolean(s?.wallpaper), s && container?.themes.theme(s.vscodeTheme)?.chrome)
+  window = createMainWindow(targets, log, s?.theme, s && container?.themes.theme(s.vscodeTheme)?.chrome)
   window.on('closed', () => (window = null))
   // Closing keeps the agents running: the window hides into the tray (unless that setting is off).
   window.on('close', (event) => {
@@ -166,7 +166,6 @@ app.whenReady().then(async () => {
   guard(log, 'Main worktree adoption', () => c.workspaceRepo.adoptImplicitMainWorkspaces())
   guard(log, 'Chat history', () => c.chatStore.load(), report('Chat history'))
   guard(log, 'Routines', () => c.routines.start(), report('Routines'))
-  void c.triggers.start()
   // Waking up, or plugging in or out, re-checks what is due and whether to keep the computer awake.
   const recheckRoutines = (): void => void guard(log, 'Routines', () => c.routines.tick())
   powerMonitor.on('resume', recheckRoutines)
@@ -195,7 +194,7 @@ app.whenReady().then(async () => {
     if (next.theme !== previous.theme || next.vscodeTheme !== previous.vscodeTheme || Boolean(next.wallpaper) !== Boolean(previous.wallpaper)) {
       guard(log, 'Window theme', () => {
         const custom = c.themes.theme(next.vscodeTheme)?.chrome
-        for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, Boolean(next.wallpaper), custom)
+        for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, next.theme, custom)
       })
     }
     if (next.autoCheckUpdates !== previous.autoCheckUpdates || next.updateCheckEvery !== previous.updateCheckEvery) {
@@ -266,7 +265,7 @@ app.whenReady().then(async () => {
     emit('state.changed', { topic: 'themes' })
     const look = c.settings.get()
     const custom = c.themes.theme(look.vscodeTheme)?.chrome
-    for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, look.theme, Boolean(look.wallpaper), custom)
+    for (const w of BrowserWindow.getAllWindows()) applyWindowTheme(w, look.theme, custom)
   })
   setInterval(() => void guard(log, 'Worktree sync', syncWorktrees), WORKTREE_SYNC_MS).unref()
   app.on('browser-window-focus', () => void guard(log, 'Worktree sync', syncWorktrees))
@@ -333,10 +332,7 @@ app.on('before-quit', (event) => {
   guard(log, 'Remote host shutdown', () => c.hosts.closeAll())
   guard(log, 'SSH questions shutdown', () => c.sshAuth.close())
   guard(log, 'Port forwards shutdown', () => c.ports.closeAll())
-  guard(log, 'Bot computer tunnels', () => c.computers.closeAll())
   guard(log, 'Routine scheduler shutdown', () => c.routines.dispose())
-  guard(log, 'Approvals shutdown', () => c.approvals.dispose())
-  guard(log, 'Trigger link shutdown', () => void c.triggers.close())
   // Chat turns are kept with the agents (ADR 0051), else stopped.
   if (keepAgents() && c.localHost.durable) guard(log, 'Chat detach', () => c.chats.detachAll())
   else guard(log, 'Chat shutdown', () => c.chats.stopAll())

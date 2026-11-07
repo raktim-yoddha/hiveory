@@ -44,8 +44,7 @@ export function KeyboardSection() {
   const record = (id: AppCommandId) => (text: string): string | null => {
     const parsed = parseShortcut(text)
     if (!parsed?.code) return `Add a key to the modifiers, like ${platform === 'darwin' ? '⌘B' : 'Ctrl Shift B'}.`
-    // "New" never fires in Work, so Ctrl + a letter can't take a terminal's key.
-    const issue = shortcutProblem(parsed, platform, { terminals: id !== 'new-item' })
+    const issue = shortcutProblem(parsed, platform)
     if (issue) return issue
     const clash = bindingClash(text, id, overrides, queen, platform)
     if (clash) return `${clash} already uses these keys.`

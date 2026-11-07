@@ -52,6 +52,11 @@
   cursor: grabbing;
 }
 
+/* Under the native window controls (ADR 0056). */
+.header[data-under-controls] {
+  padding-right: var(--window-controls-width);
+}
+
 .body {
   position: relative;
   flex: 1;
