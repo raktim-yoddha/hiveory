@@ -210,12 +210,15 @@ The sidebar should feel like the BridgeMind reference: compact, dark, subtle, an
 ## Top-Level Navigation
 
 No modes and no title bar (ADR 0056). The sidebar, the main area and the side panel are cards that
-start at the top of the window, with the page padding on every side. The sidebar's top bar holds the
-brand (logo, name, the inverted DEV chip in development builds), Queen Bee's mark when she is put
-away, and the side-panel and sidebar toggles; it drags the window. Settings sits in the sidebar's
+start at the top of the window, with a hairline of air above them (`--page-top`) and the page padding
+on the other sides; their top bars share one height (`--pane-header-height`). The sidebar's top bar
+holds the brand (logo, name, the inverted DEV chip in development builds), Queen Bee's mark when she
+is put away, and the sidebar toggle; it drags the window. The side-panel toggle sits at the top
+right, on the top bars' centre line. Settings sits in the sidebar's
 footer. A hidden sidebar folds to an icon rail (a narrow card) with the same buttons. The side panel
 itself has no close button (the toggle, or dragging it narrow, hides it). On Windows and Linux the
-window controls sit transparently over the top-right card's header, which leaves them room; on macOS
+window controls sit transparently over the top-right card's header, which leaves them and the
+side-panel toggle room; on macOS
 the traffic lights sit at the start of the sidebar's top bar.
 
 Do not add Agent mode.

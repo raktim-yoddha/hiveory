@@ -35,13 +35,13 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 ### Window chrome (ADR 0056)
 
 No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then Queen Bee's
-mark (when put away), the side panel toggle (in a worktree) and the sidebar toggle; it drags the
-window. The sidebar's footer: Settings. Hidden, the sidebar is an icon rail: sidebar and side panel
-toggles and Queen Bee's mark at the top, Settings at the bottom. Window controls (Windows, Linux) sit
-over the top-right card's header, which leaves them room.
+mark (when put away) and the sidebar toggle; it drags the window. The sidebar's footer: Settings.
+Hidden, the sidebar is an icon rail: sidebar toggle and Queen Bee's mark at the top, Settings at the
+bottom. The side panel toggle (in a worktree) sits at the top right, left of the window controls
+(Windows, Linux); the top-right card's header leaves both room. Every top bar has one height.
 
 ```text
-┌ ◆ Hiveory DEV  ∿ ◨ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ⟲ ⑂ 🗓 ⚙  ⤢ │ — □ × ┐
+┌ ◆ Hiveory DEV    ∿ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ⟲ ⑂ 🗓 ⚙  ⤢  ◨ │ — □ × ┐
 │ WORKSPACES     ⇅ 📁 │                            │                               │
 │ …                    │        panes               │       side panel              │
 │ ⚙                    │                            │                               │

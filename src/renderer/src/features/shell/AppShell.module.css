@@ -1,9 +1,13 @@
-/* macOS's traffic lights need a wider rail (ADR 0056). */
+/* macOS's traffic lights need a wider rail, and sit on the left: nothing native at the top right (ADR 0056). */
 .app:global(.platform-darwin) {
   --rail-width: calc(var(--traffic-lights-width) + var(--space-4));
+  --window-controls-width: 0px;
 }
 
 .app {
+  /* What a top bar in the top-right corner leaves free: the side panel button and the window controls. */
+  --top-right-room: calc(var(--window-controls-width) + var(--control-sm) + var(--space-4));
+
   position: relative;
   isolation: isolate;
   display: flex;
@@ -75,8 +79,18 @@
   grid-template-columns: minmax(var(--sidebar-min), var(--sidebar-width)) minmax(var(--work-min), 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: var(--gutter);
+  position: relative;
   min-height: 0;
-  padding: var(--page-padding);
+  padding: var(--page-top) var(--page-padding) var(--page-padding);
+}
+
+/* The side panel's button: top right, on the top bar's centre line, left of the window controls. */
+.panelToggle {
+  position: absolute;
+  top: calc(var(--page-top) + (var(--pane-header-height) - var(--control-sm)) / 2);
+  right: calc(var(--window-controls-width) + var(--page-padding) + var(--space-2));
+  z-index: calc(var(--z-panel) + 1);
+  display: flex;
 }
 
 .withPanel {

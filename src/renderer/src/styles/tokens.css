@@ -195,14 +195,14 @@
   --logo-brand: 22px;
   /*
    * No title bar (ADR 0056): the native window controls (Windows, Linux) sit over the top-right card's
-   * header, which leaves them this room; main's overlay height matches. macOS's traffic lights sit in
-   * the sidebar's top bar.
+   * header, centred on it (page top + top bar + page top); main's overlay height matches. macOS's
+   * traffic lights sit in the sidebar's top bar.
    */
-  --window-controls-height: 40px;
+  --window-controls-height: 46px;
   --window-controls-width: 140px;
   --traffic-lights-width: calc(var(--space-11) + var(--space-8));
-  /* The sidebar's top bar (brand and layout toggles) and its collapsed form, an icon rail. */
-  --sidebar-bar-height: calc(var(--control-lg) + var(--space-6));
+  /* The sidebar's top bar lines up with the panes' and the side panel's headers. Its folded form is an icon rail. */
+  --sidebar-bar-height: var(--pane-header-height);
   --rail-width: calc(var(--control-lg) + var(--space-6));
   /* Defaults; the shell overrides both with the user's resized widths. */
   --sidebar-width: 248px;
@@ -210,7 +210,8 @@
   /* Routines week calendar: the height of one hour. */
   --calendar-hour-height: 48px;
   --calendar-gutter-width: 56px;
-  --pane-header-height: 30px;
+  /* Every top bar: panes, the side panel and the sidebar (ADR 0056). */
+  --pane-header-height: calc(var(--control-lg) + var(--space-3));
   --pane-min-width: 240px;
   --pane-min-height: 140px;
   --dialog-width: 520px;
@@ -237,6 +238,8 @@
   /* Layout rhythm: the visible air between surfaces (design.md "Surfaces Need Air") */
   --gutter: 10px;
   --page-padding: 10px;
+  /* Above the columns: no title bar, so only a hairline of air (ADR 0056). */
+  --page-top: var(--space-2);
   /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
   --surface-radius: var(--radius-lg);
   /* A pane's edge at rest: none; the gutter's air separates panes. */

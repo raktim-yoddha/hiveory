@@ -17,8 +17,8 @@ export type WindowChrome = { background: string; symbols: string }
 /** No title bar (ADR 0056): the window controls sit on the top-right card, never on a solid strip. */
 const OVERLAY_COLOR = '#00000000'
 export const WINDOW_BACKGROUND = THEME_CHROME.bronze.background
-/** The window controls' height: the top-right card's header (page padding + pane header), as --window-controls-height. */
-export const TITLE_BAR_HEIGHT = 40
+/** The window controls' height, centred on the top bars (page top + top bar + page top), as --window-controls-height. */
+export const TITLE_BAR_HEIGHT = 46
 
 export interface WindowTargets {
   preload: string
@@ -43,7 +43,7 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     backgroundColor: chrome.background,
     titleBarStyle: 'hidden',
     ...(isMac
-      ? { trafficLightPosition: { x: 20, y: 25 } }
+      ? { trafficLightPosition: { x: 20, y: 17 } }
       : { titleBarOverlay: { color: OVERLAY_COLOR, symbolColor: chrome.symbols, height: TITLE_BAR_HEIGHT } }),
     webPreferences: {
       preload: targets.preload,

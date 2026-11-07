@@ -19,7 +19,7 @@ import { useNewWorktree } from '../workspace-create/new-worktree'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
-import { SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
+import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
 import { useWindowControlsRoom } from './window-controls'
 import styles from './AppShell.module.css'
 
@@ -71,7 +71,7 @@ export function AppShell() {
     '--work-min-width': `${workMin}px`
   } as CSSProperties
   const mainRef = useRef<HTMLDivElement>(null)
-  useWindowControlsRoom(mainRef, platform)
+  useWindowControlsRoom(mainRef)
   // Rendered widths: a sidebar's handle starts from what is shown (the grid may have narrowed it)
   // and stops where the panes would go below their minimum.
   const sidebarRef = useRef<HTMLElement>(null)
@@ -158,6 +158,9 @@ export function AppShell() {
             </ErrorBoundary>
           </div>
         )}
+        <div className={styles.panelToggle}>
+          <SidePanelToggle />
+        </div>
       </div>
       {inSettings && (
         <ErrorBoundary region="Settings">

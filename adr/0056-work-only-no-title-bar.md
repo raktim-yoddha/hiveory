@@ -45,3 +45,13 @@ left the title bar was an empty strip above everything.
 - The window-controls room is measured, not laid out: a top bar that moves into the corner without
   resizing is rechecked on the next pane change, resize or window resize.
 - Bringing either mode back is a new ADR, not a revert of this one.
+
+## Amendment (2026-11-07): one top-bar height, side panel button on the right
+
+The product owner found the top bars too short and the air above them too tall, and wanted the side
+panel's button on the right. Every top bar (the sidebar's, a pane's, the side panel's) is now
+`--pane-header-height` (`--control-lg` + `--space-3`); above the columns there is only `--page-top`
+(`--space-2`), and the window controls are 46 px tall so they centre on the top bars. The side panel
+button leaves the sidebar and its rail: it sits at the top right, on the top bars' centre line, left of
+the window controls (at the corner on macOS). The top-right top bar leaves `--top-right-room` for both;
+the corner is found by the bar's right edge meeting the main area's, on every platform.

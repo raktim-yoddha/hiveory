@@ -4,8 +4,8 @@
 
 One mode: Work (ADR 0056; Bots and Chat, ADR 0012 and 0022, are removed). There is no mode switch and
 no title bar: the sidebar (Workspaces), the open Worktree and its side panel all start at the top of
-the window, and the window's buttons (sidebar, side panel, Queen Bee put away, Settings) live in the
-sidebar, or in its icon rail while it is hidden.
+the window, and the window's buttons (sidebar, Queen Bee put away, Settings) live in the sidebar, or
+in its icon rail while it is hidden; the side panel's button sits at the top right.
 
 Everything the removed modes did, Work does: an agent runs in a terminal or a **chat view** (the same
 message box: attachments, model and effort, queued next messages, the usage limits button, ADR 0031,

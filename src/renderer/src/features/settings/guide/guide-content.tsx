@@ -48,9 +48,9 @@ export const GUIDE: GuideChapter[] = [
         heading: 'The window',
         body: (
           <p>
-            The sidebar runs down the left: the brand and the layout buttons at its top (show or hide the sidebar and the side panel),
-            your workspaces in the middle and Settings at the bottom. Hidden, it folds to a slim rail with the same buttons. The worktree
-            you open fills the middle, and its side panel runs down the right; all three start at the top of the window.
+            The sidebar runs down the left: the brand and the button that hides it at its top, your workspaces in the middle and Settings
+            at the bottom. Hidden, it folds to a slim rail with the same buttons. The worktree you open fills the middle, and its side panel
+            runs down the right, shown or hidden by the button at the top right; all three start at the top of the window.
           </p>
         ),
         keywords: 'layout sidebar rail side panel settings title bar top'

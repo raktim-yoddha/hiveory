@@ -16,6 +16,11 @@ execFileSync('git', ['commit', '-m', 'init'], { cwd: repo })
 
 const sidebar = () => page.getByRole('navigation', { name: 'Workspaces' })
 const top = (selector) => page.evaluate((s) => document.querySelector(s)?.getBoundingClientRect().top ?? -1, selector)
+/** Vertical centre of a located element: every top bar's buttons share one centre line. */
+const middle = async (locator) => {
+  const box = await locator.boundingBox()
+  return box ? box.y + box.height / 2 : -1
+}
 
 await launch()
 
@@ -49,10 +54,19 @@ await test('a worktree: panes and the side panel start at the top too', async ()
   await page.locator('[data-top-bar]').first().waitFor()
   const pane = await top('[data-top-bar]')
   expect(pane >= 0 && pane < 32, `the first pane starts ${pane}px down`)
-  await sidebar().getByRole('button', { name: 'Show side panel' }).click()
+  await page.getByRole('button', { name: 'Show side panel' }).click()
   await page.getByRole('region', { name: 'Side panel' }).waitFor()
   const panel = await page.getByRole('region', { name: 'Side panel' }).boundingBox()
   expect(panel && panel.y < 32, `the side panel starts ${panel?.y}px down`)
+  // One top-bar height: the sidebar's button, a pane's header and the side panel's button line up (ADR 0056).
+  const lines = [
+    await middle(sidebar().getByRole('button', { name: 'Hide sidebar' })),
+    await middle(page.locator('[data-top-bar]').first()),
+    await middle(page.getByRole('button', { name: 'Hide side panel' }))
+  ]
+  expect(Math.max(...lines) - Math.min(...lines) <= 1, `top bars are off their centre line: ${lines.join(', ')}`)
+  const toggle = await page.getByRole('button', { name: 'Hide side panel' }).boundingBox()
+  expect(toggle && toggle.x > (await page.evaluate(() => window.innerWidth)) * 0.75, 'the side panel button is not on the right')
   await shot('l2-worktree-panel')
 })
 
@@ -62,7 +76,7 @@ await test('the rightmost top bar leaves the window controls room (Windows and L
     () => page.evaluate(() => [...document.querySelectorAll('[data-top-bar]')].some((el) => el.hasAttribute('data-under-controls') && el.getBoundingClientRect().right > window.innerWidth - 160)),
     'the side panel header is marked under the controls'
   )
-  await sidebar().getByRole('button', { name: 'Hide side panel' }).click()
+  await page.getByRole('button', { name: 'Hide side panel' }).click()
   await waitFor(
     () => page.evaluate(() => [...document.querySelectorAll('[data-top-bar]')].some((el) => el.hasAttribute('data-under-controls'))),
     'the top-right pane header is marked under the controls'
@@ -73,6 +87,8 @@ await test('folded, the sidebar is a rail with the same buttons', async () => {
   await sidebar().getByRole('button', { name: 'Hide sidebar' }).click()
   const rail = page.getByRole('navigation', { name: 'App' })
   await rail.getByRole('button', { name: 'Show sidebar' }).waitFor()
+  const rows = [await middle(rail.getByRole('button', { name: 'Show sidebar' })), await middle(page.locator('[data-top-bar]').first())]
+  expect(Math.abs(rows[0] - rows[1]) <= 1, `the rail's button is off the top bars' centre line: ${rows.join(', ')}`)
   await rail.getByRole('button', { name: 'Settings' }).waitFor()
   await shot('l3-rail')
   await rail.getByRole('button', { name: 'Show sidebar' }).click()

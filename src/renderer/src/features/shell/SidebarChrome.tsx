@@ -44,7 +44,7 @@ function useChrome() {
   }
 }
 
-/** The sidebar's top bar: brand, Queen Bee's mark when put away, and the layout buttons. It drags the window. */
+/** The sidebar's top bar: brand, Queen Bee's mark when put away, and the sidebar button. It drags the window. */
 export function SidebarTop() {
   const info = useApp((s) => s.info)
   const chrome = useChrome()
@@ -65,10 +65,14 @@ export function SidebarTop() {
         )}
       </span>
       {chrome.queen}
-      {chrome.panel}
       {chrome.sidebar}
     </div>
   )
+}
+
+/** The side panel's button sits on the right, over the top-right top bar (ADR 0056); only in a worktree. */
+export function SidePanelToggle() {
+  return useChrome().panel || null
 }
 
 /** The sidebar's footer: app settings. */
@@ -82,7 +86,6 @@ export function SidebarRail() {
   return (
     <nav className={styles.rail} aria-label="App">
       {chrome.sidebar}
-      {chrome.panel}
       {chrome.queen}
       <span className={styles.spacer} />
       {chrome.settings}

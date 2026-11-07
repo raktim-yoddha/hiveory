@@ -427,7 +427,7 @@
 .titlePanel {
   position: fixed;
   /* Under the sidebar's top bar, lined up with the sidebar's left edge. */
-  top: calc(var(--page-padding) + var(--sidebar-bar-height) + var(--space-2));
+  top: calc(var(--page-top) + var(--sidebar-bar-height) + var(--space-2));
   left: var(--page-padding);
   z-index: var(--z-menu);
   display: flex;
