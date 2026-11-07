@@ -19,7 +19,7 @@ import { useNewWorktree } from '../workspace-create/new-worktree'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
-import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop, WindowControls } from './SidebarChrome'
+import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
 import { useWindowControlsRoom } from './window-controls'
 import styles from './AppShell.module.css'
 
@@ -158,9 +158,8 @@ export function AppShell() {
             </ErrorBoundary>
           </div>
         )}
-        <div className={styles.corner}>
+        <div className={styles.panelToggle}>
           <SidePanelToggle />
-          <WindowControls />
         </div>
       </div>
       {inSettings && (

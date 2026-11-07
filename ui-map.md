@@ -37,9 +37,8 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then Queen Bee's
 mark (when put away) and the sidebar toggle; it drags the window. The sidebar's footer: Settings.
 Hidden, the sidebar is an icon rail: sidebar toggle and Queen Bee's mark at the top, Settings at the
-bottom. The side panel toggle (in a worktree) sits at the top right, then the window buttons
-(Windows, Linux: — □ ×, top-bar sized); the top-right card's header leaves them room. Every top bar has
-one height.
+bottom. The side panel toggle (in a worktree) sits at the top right, left of the window controls
+(Windows, Linux); the top-right card's header leaves both room. Every top bar has one height.
 
 ```text
 ┌ ◆ Hiveory DEV    ∿ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ⟲ ⑂ 🗓 ⚙  ⤢  ◨ │ — □ × ┐

@@ -72,14 +72,6 @@ await test('a worktree: panes and the side panel start at the top too', async ()
 
 await test('the rightmost top bar leaves the window controls room (Windows and Linux)', async () => {
   if (process.platform === 'darwin') return
-  // The app draws its own window buttons, on the top bars' centre line (ADR 0056).
-  for (const name of ['Minimize window', 'Maximize window', 'Close window']) await page.getByRole('button', { name, exact: true }).waitFor()
-  const rows = [await middle(page.getByRole('button', { name: 'Close window', exact: true })), await middle(page.locator('[data-top-bar]').first())]
-  expect(Math.abs(rows[0] - rows[1]) <= 1, `the window buttons are off the top bars' centre line: ${rows.join(', ')}`)
-  await page.getByRole('button', { name: 'Maximize window', exact: true }).click()
-  await page.getByRole('button', { name: 'Restore window', exact: true }).waitFor()
-  await page.getByRole('button', { name: 'Restore window', exact: true }).click()
-  await page.getByRole('button', { name: 'Maximize window', exact: true }).waitFor()
   await waitFor(
     () => page.evaluate(() => [...document.querySelectorAll('[data-top-bar]')].some((el) => el.hasAttribute('data-under-controls') && el.getBoundingClientRect().right > window.innerWidth - 160)),
     'the side panel header is marked under the controls'

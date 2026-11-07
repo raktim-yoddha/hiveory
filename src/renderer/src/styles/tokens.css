@@ -194,12 +194,12 @@
   --logo-xl: 40px;
   --logo-brand: 22px;
   /*
-   * No title bar (ADR 0056): the app's window buttons (Windows, Linux) sit over the top-right card's
-   * header: three top-bar buttons and the gap before them. The corner's height: page top + top bar +
-   * page top. macOS's traffic lights sit in the sidebar's top bar.
+   * No title bar (ADR 0056): the native window controls (Windows, Linux) sit over the top-right card's
+   * header, centred on it (page top + top bar + page top); main's overlay height matches. macOS's
+   * traffic lights sit in the sidebar's top bar.
    */
   --window-controls-height: 54px;
-  --window-controls-width: calc(3 * var(--control-sm) + 2 * var(--space-2) + var(--space-4));
+  --window-controls-width: 140px;
   --traffic-lights-width: calc(var(--space-11) + var(--space-8));
   /* The sidebar's top bar lines up with the panes' and the side panel's headers. Its folded form is an icon rail. */
   --sidebar-bar-height: var(--pane-header-height);

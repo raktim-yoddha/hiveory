@@ -56,17 +56,3 @@ the top bars. The side panel
 button leaves the sidebar and its rail: it sits at the top right, on the top bars' centre line, left of
 the window controls (at the corner on macOS). The top-right top bar leaves `--top-right-room` for both;
 the corner is found by the bar's right edge meeting the main area's, on every platform.
-
-## Amendment (2026-11-07): the app draws its own window buttons
-
-Native Windows caption buttons have a fixed width and glyph; only their height can change, and a
-shorter strip no longer centres on the top bars. The product owner wanted them smaller. On Windows and
-Linux the window has no native title-bar overlay any more: the app draws minimize, maximize/restore
-and close as top-bar icon buttons ("Minimize window", "Maximize window"/"Restore window", "Close
-window") after the side panel button, through one new IPC channel, `window.control`
-(`status | minimize | maximize | close`, the sender's own window only; `close` goes through the usual
-close, so the tray still keeps agents running). It is local in a client window too
-(`CLIENT_LOCAL_CHANNELS`), never remote or on the phone. Windows 11's snap-layout flyout over the
-maximize button is lost; Win+Z, dragging to an edge and double-clicking the sidebar's top bar still
-work. A modal (Settings, a dialog) covers the buttons until it closes.
-
