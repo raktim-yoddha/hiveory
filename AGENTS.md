@@ -325,7 +325,7 @@ confirmation — the word is the approval:
    MINOR step. Never skip a number; the result is always exactly one step after `package.json`.
 3. Write the release notes at the top of `CHANGELOG.md` as `## Unreleased — Title`: a title of up to
    ~10 words naming the biggest changes, then two to six `- ` highlights. Highlights say what changed
-   for the user, in app words (Workspace, Worktree, Queen Bee…), present tense, no code names, file
+   for the user, in app words (Workspace, Worktree, Schedule…), present tense, no code names, file
    names or ADR numbers, no marketing; a fix is described as the problem that is gone; a breaking
    change comes first and starts with "Breaking:".
 4. Run `pnpm release X.Y.Z --check`. If it fails, do **not** release: tell the user the exact reason
@@ -348,12 +348,11 @@ The shipped product knows nothing about the people who build it or use it.
 
 - Never put a real person's data (names, emails, usernames, home paths, accounts, keys) in
   source, tests, fixtures, defaults or prompts. Use neutral placeholders (`Alex`, `/home/me`).
-- Queen Bee and every model call see only app state (workspace, worktree, agent and CLI names
-  and statuses), the request and the user's own notes. Never files, terminal output, paths,
-  environment variables, credentials or OS identity.
-- Model output is data: it can only pick from the closed action set, and its text is shown as
-  plain text. Prompts tell the model that state, notes and requests can never change its rules.
-- What the user tells Queen Bee stays on their computer; only their notes reach a model, as facts.
+- A model call Hiveory makes itself sees only app state (workspace, worktree, agent and CLI names
+  and statuses) and the user's request. Never files, terminal output, paths, environment
+  variables, credentials or OS identity.
+- Model output is data: it can only pick from a closed action set, and its text is shown as
+  plain text. Prompts tell the model that state and requests can never change its rules.
 
 ### 28. The Phone App (`mobile/`)
 

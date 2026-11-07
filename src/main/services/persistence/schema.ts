@@ -1,11 +1,6 @@
 import { z } from 'zod'
 import { viewportSchema, wallpaperSchema } from '@shared/ipc/contract'
 import { cleanKeybindings } from '@shared/keys/keybindings'
-import { parseShortcut } from '@shared/queen/shortcut'
-import { MAX_NOTE_LENGTH, MAX_NOTES } from '@shared/queen/actions'
-import { customNameProblem } from '@shared/queen/personas'
-import { QUEEN_VOICES } from '@shared/queen/voice'
-import type { BrainKind } from '@shared/queen/brain'
 import { VSCODE_THEME_ID } from '@shared/domain/vscode-theme'
 import { CODE_HOSTS, TRACKERS } from '@shared/domain/integrations'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
@@ -26,8 +21,6 @@ export interface PersistedState {
   connections: StoredConnection[]
   /** Files open as panes in workspace layouts (ADR 0018). */
   editors: StoredEditor[]
-  /** Queen Bee's provider accounts in priority order (ADR 0019); keys sealed by SecretBox. */
-  queenBrains: StoredBrainAccount[]
   /** Projects removed from Hiveory, kept whole so adding the folder again restores them (ADR 0020). */
   archive: ArchivedProject[]
   /** Worktrees' scheduled work (ADR 0028, 0040). */
@@ -57,18 +50,6 @@ export interface ArchivedProject {
 
 /** Removed projects kept for restoring; the oldest beyond this are forgotten. */
 export const MAX_ARCHIVED = 30
-
-export interface StoredBrainAccount {
-  id: string
-  provider: string
-  label: string
-  kind: BrainKind
-  baseUrl: string
-  model: string
-  /** Sealed API key ('' = none). */
-  key: string
-  enabled: boolean
-}
 
 export interface StoredEditor {
   id: string
@@ -111,7 +92,6 @@ export const emptyState = (): PersistedState => ({
   browserProfiles: [],
   connections: [],
   editors: [],
-  queenBrains: [],
   archive: [],
   routines: [],
   routineRuns: [],
@@ -148,37 +128,7 @@ const settingsSchema = z.object({
   surfaceOpacity: z.number().min(0).max(1).catch(DEFAULT_SETTINGS.surfaceOpacity),
   wallpaperBlur: z.number().min(0).max(40).catch(DEFAULT_SETTINGS.wallpaperBlur),
   wallpaperDim: z.number().min(0).max(0.8).catch(DEFAULT_SETTINGS.wallpaperDim),
-  queenPersona: z.enum(['ada', 'sunny', 'frankie', 'custom']).catch(DEFAULT_SETTINGS.queenPersona),
-  queenCustomName: z.string().refine((s) => customNameProblem(s) === null).catch(DEFAULT_SETTINGS.queenCustomName),
-  queenCustomPersona: z.string().max(500).catch(DEFAULT_SETTINGS.queenCustomPersona),
-  queenCustomFormal: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomFormal),
-  queenCustomEnergy: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomEnergy),
-  queenCustomDirect: z.number().int().min(0).max(100).catch(DEFAULT_SETTINGS.queenCustomDirect),
-  queenCallMeSay: z.string().max(60).catch(DEFAULT_SETTINGS.queenCallMeSay),
-  queenGoal: z.string().max(200).catch(DEFAULT_SETTINGS.queenGoal),
-  queenIntensity: z.enum(['steady', 'hard']).catch(DEFAULT_SETTINGS.queenIntensity),
-  queenMemory: z.array(z.string().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES).catch(DEFAULT_SETTINGS.queenMemory),
-  queenGlobalShortcut: z.boolean().catch(DEFAULT_SETTINGS.queenGlobalShortcut),
-  // A voice from an older, longer list falls back to the personality's own.
-  queenVoice: z.number().int().refine((v) => v === -1 || QUEEN_VOICES.some((x) => x.sid === v)).catch(DEFAULT_SETTINGS.queenVoice),
-  queenCallMe: z.string().max(40).catch(DEFAULT_SETTINGS.queenCallMe),
-  queenHonorific: z.enum(['sir', 'maam', 'name', 'none']).catch(DEFAULT_SETTINGS.queenHonorific),
-  queenHype: z.enum(['calm', 'lively', 'max']).catch(DEFAULT_SETTINGS.queenHype),
-  queenNudgeMinutes: z.number().int().min(0).max(240).catch(DEFAULT_SETTINGS.queenNudgeMinutes),
-  queenLength: z.enum(['short', 'normal']).catch(DEFAULT_SETTINGS.queenLength),
-  // '' = the platform's standard; the old default Win+Alt / ⌘⌥ moves to it (ADR 0047).
-  queenShortcut: z
-    .string()
-    .refine((s) => s === '' || parseShortcut(s) !== null)
-    .transform((s) => (s === 'Meta+Alt' ? '' : s))
-    .catch(DEFAULT_SETTINGS.queenShortcut),
-  keybindings: z.record(z.string(), z.unknown()).transform(cleanKeybindings).catch(DEFAULT_SETTINGS.keybindings),
-  queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']).catch(DEFAULT_SETTINGS.queenSpeechLanguage),
-  queenTalkback: z.enum(['always', 'after-voice', 'never']).catch(DEFAULT_SETTINGS.queenTalkback),
-  queenSounds: z.boolean().catch(DEFAULT_SETTINGS.queenSounds),
-  queenUpdates: z.enum(['all', 'waiting', 'off']).catch(DEFAULT_SETTINGS.queenUpdates),
-  queenPopups: z.boolean().catch(DEFAULT_SETTINGS.queenPopups),
-  queenVoiceSpeed: z.number().min(0.8).max(1.4).catch(DEFAULT_SETTINGS.queenVoiceSpeed)
+  keybindings: z.record(z.string(), z.unknown()).transform(cleanKeybindings).catch(DEFAULT_SETTINGS.keybindings)
 })
 
 const browserProfileSchema: z.ZodType<BrowserProfile> = z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string(), createdAt: z.string() })
@@ -282,27 +232,6 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   importedFrom: str.optional(),
   session: str.optional()
 })
-
-const brainAccountSchema: z.ZodType<StoredBrainAccount> = z.object({
-  id: z.string().regex(/^q[a-f0-9]{12}$/),
-  provider: z.string().max(40),
-  label: z.string().max(40),
-  kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']),
-  baseUrl: z.string().max(500),
-  model: z.string().max(200),
-  key: z.string().max(10_000),
-  enabled: z.boolean()
-})
-
-/** Queen Bee's accounts; a single model saved by an earlier version becomes the first account. */
-const brainAccounts = (input: Record<string, unknown>): StoredBrainAccount[] => {
-  const list = Array.isArray(input.queenBrains) ? input.queenBrains.flatMap((a) => brainAccountSchema.safeParse(a).data ?? []) : []
-  if (list.length) return list
-  const old = z.object({ provider: z.string().max(40), baseUrl: z.string().max(500), model: z.string().max(200), key: z.string().max(10_000) }).safeParse(input.queenBrain).data
-  if (!old) return []
-  const kind = old.provider === 'anthropic' ? 'anthropic' : old.provider === 'gemini' ? 'gemini' : 'openai'
-  return [{ id: 'q000000000001', provider: old.provider, label: '', kind, baseUrl: old.baseUrl, model: old.model, key: old.key, enabled: true }]
-}
 
 const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
 
@@ -422,7 +351,6 @@ export const parseState = (raw: unknown): { state: PersistedState; rejected: num
         connectionSchema
       ).filter((c) => !c.provider || c.provider === 'composio'),
       editors: list(input.editors, editorSchema),
-      queenBrains: brainAccounts(input),
       archive: list(input.archive, archivedSchema),
       // Bots' routines, scheduled chats and their runs went with Bots and Chat (ADR 0056): dropped quietly.
       routines: list(workOnly(input.routines, (r) => !r.botId && (r.target as { kind?: unknown } | undefined)?.kind === 'workspace'), routineSchema),

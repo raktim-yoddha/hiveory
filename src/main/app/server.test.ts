@@ -156,7 +156,7 @@ describe('Hiveory server', () => {
     expect(server!.devices()[0]).toMatchObject({ name: 'Phone', kind: 'mobile' })
     expect(await call(token, 'projects.list')).toMatchObject({ ok: true })
     // Accounts and keys stay on the computer (ADR 0053).
-    expect(await call(token, 'queen.removeAccount', { id: 'q000000000000' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
+    expect(await call(token, 'apps.removeKey')).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     expect(await call(token, 'settings.update', { theme: 'dark' })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     expect(await call(token, 'terminal.resize', { instanceId: 'a1', cols: 40, rows: 20 })).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } })
     for (const c of MOBILE_CHANNELS) expect(REMOTE_CHANNELS.has(c)).toBe(true)
@@ -213,7 +213,7 @@ describe('Hiveory server', () => {
     for (const c of [...REMOTE_CHANNELS, ...CLIENT_LOCAL_CHANNELS]) expect(all.has(c)).toBe(true)
     expect([...REMOTE_CHANNELS].filter((c) => CLIENT_LOCAL_CHANNELS.has(c))).toEqual([])
     // Nothing that shows the server's screen or dialogs, or changes its install, is remote.
-    for (const c of ['projects.open', 'projects.pickFolder', 'system.revealPath', 'files.reveal', 'updates.install', 'browser.show', 'chat.attachPath', 'voice.transcribe'] as const) {
+    for (const c of ['projects.open', 'projects.pickFolder', 'system.revealPath', 'files.reveal', 'updates.install', 'browser.show', 'chat.attachPath'] as const) {
       expect(REMOTE_CHANNELS.has(c)).toBe(false)
     }
   })

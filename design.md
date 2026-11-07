@@ -164,27 +164,6 @@ Generic actions use the application's shared icon set.
 generic robot. A CLI's logo appears where the CLI must be identified (pane header, pickers,
 cards) and nowhere it would repeat what is already on screen — chat replies carry no avatar.
 
-## Queen Bee
-
-One bar and one reply card, no history (ADR 0019).
-- **The bar:** the waveform mark, the input, the shortcut chip, a dock/float toggle and
-  ⋯. It's flat and outlined only while focused. No mic button: the shortcut is how you talk.
-- **Docked:** the bar shares the main area's surface. The card hovers above the panes on
-  a solid raised surface with the popover shadow; it never pushes them. Replies fade
-  out after 10 s (20 s with Undo) unless hovered; questions stay.
-- **Floating:** a fixed width (`--queen-bar-width`) over the bottom of the window, always visible,
-  on a solid raised surface with the popover shadow, so terminal text never shows through. It sits
-  left, centred or right (`--page-padding` + `--space-4` from the edge), at full width or small
-  (just the mark chip). While her mark is dragged the bar follows the pointer, slightly faded, with
-  a grabbing cursor; it snaps on release with no animation. Her card stays the full bar's width,
-  aligned to the bar's side.
-- **Waveform mark:** five bars in her accent chip, scaled by the live loudness (≈20 updates a
-  second from a timer, only while audio flows); a gentle breathing while she transcribes.
-- **Receipts:** small, secondary text with an accent check.
-- **Report rows:** status dot, name, CLI and worktree, wait time.
-- **An agent's own words:** an inset block captioned "On its screen", mono text, so it is
-  never mistaken for Queen Bee's.
-
 ## Dropdowns
 
 Every dropdown is the shared `Select`: a themed listbox (keyboard, type-ahead, groups,
@@ -212,8 +191,7 @@ The sidebar should feel like the BridgeMind reference: compact, dark, subtle, an
 No modes and no title bar (ADR 0056). The sidebar, the main area and the side panel are cards that
 start at the top of the window, with a little air above them (`--page-top`) and the page padding
 on the other sides; their top bars share one height (`--pane-header-height`). The sidebar's top bar
-holds the brand (logo, name, the inverted DEV chip in development builds), Queen Bee's mark when she
-is put away, and the sidebar toggle; it drags the window. The side-panel toggle sits at the top
+holds the brand (logo, name, the inverted DEV chip in development builds) and the sidebar toggle; it drags the window. The side-panel toggle sits at the top
 right, on the top bars' centre line. Settings sits in the sidebar's
 footer. A hidden sidebar folds to an icon rail (a narrow card) with the same buttons. The side panel
 itself has no close button (the toggle, or dragging it narrow, hides it). On Windows and Linux the

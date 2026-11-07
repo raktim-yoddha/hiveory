@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 import { WALLPAPER_SCHEME } from './services/appearance/wallpaper-service'
 import { IPC_PREFIX } from '@shared/ipc/contract'
 import { DEFAULT_SERVER_PORT } from '@shared/ipc/remote'
-import type { QueenUpdate } from '@shared/queen/updates'
 import { readClientConfig } from './app/client'
 import { runClientMode } from './app/client-mode'
 import { createContainer, type Container } from './app/container'
@@ -110,8 +109,6 @@ const emit: Emit = (event, payload) => {
   }
   // Clients of this machine's server get every event too.
   guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
-  // Paired phones hear when an agent needs the user, even with the app closed (ADR 0027).
-  if (event === 'queen.update') guard(log, 'Push', () => container?.sharing.notifyWaiting(payload as QueenUpdate))
   // Pluto sees agents start, stop and change status (ADR 0054).
   if (event === 'runtime.changed' || event === 'state.changed') guard(log, 'Pet link', () => container?.petLink.changed())
 }
@@ -210,15 +207,11 @@ app.whenReady().then(async () => {
     }
     if (next.computerUse && !previous.computerUse) guard(log, 'Computer use', () => c.computer.warm())
     if (!next.computerUse && previous.computerUse) guard(log, 'Computer use', () => c.computer.dispose())
-    if (next.queenGlobalShortcut !== previous.queenGlobalShortcut || next.queenShortcut !== previous.queenShortcut) {
-      guard(log, 'Queen Bee shortcut', () => c.hotkey.apply(next.queenGlobalShortcut, next.queenShortcut))
-    }
   })
   const startup = c.settings.get()
   guard(log, 'Update downloads', () => c.updates.setAutoDownload(startup.autoDownloadUpdates))
   guard(log, 'Update checks', () => c.updates.setAutoCheck(startup.autoCheckUpdates, startup.updateCheckEvery))
   if (startup.computerUse) guard(log, 'Computer use', () => c.computer.warm(), report('Computer use'))
-  if (startup.queenGlobalShortcut) guard(log, 'Queen Bee shortcut', () => c.hotkey.apply(true, startup.queenShortcut), report("Queen Bee's shortcut"))
   registerIpc(
     createHandlers(container),
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
@@ -316,7 +309,6 @@ app.on('before-quit', (event) => {
   // One disposer failing must not skip the rest — above all the final state flush.
   guard(log, 'Browser shutdown', () => c.browser.closeAll())
   guard(log, 'Computer shutdown', () => c.computer.dispose())
-  guard(log, 'Hotkey shutdown', () => c.hotkey.stop())
   guard(log, 'MCP gateway shutdown', () => c.gateway.closeAll())
   guard(log, 'File watcher shutdown', () => c.files.closeAll())
   if (keepAgents() && c.localHost.durable) {

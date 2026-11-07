@@ -89,9 +89,7 @@ Electron's official guidance recommends context isolation and controlled context
   and refuses symlinks or junctions that lead outside it.
 - Local MCP servers start with a minimal environment (`serverEnv`), never Hiveory's own.
   Each connection's secrets are masked from tool results and errors (`scrubSecrets`).
-- The window may use the microphone (audio only, its own page) for Queen Bee's
-  push-to-talk.
-- Speech packs download only from pinned URLs and must match their SHA-256.
+- The window is granted no device permission (camera, microphone) (ADR 0057).
 
 ## Domain Model
 
@@ -478,7 +476,6 @@ src/
 │   ├── ipc/contract.ts         every IPC channel + zod schema + event types
 │   ├── layout/                 split/dock/move/swap/resize, geometry, drop resolution
 │   ├── naming/names.ts         the one pet-name / workspace-name service
-│   ├── queen/                  Queen Bee: action union, rule parser (words, address, parse), model repair, computed reports, updates, persona phrasing, shortcut, voice packs
 │   ├── presets.ts              preset normalization/serialization
 │   └── errors.ts               normalized AppError / Result
 ├── main/                       Electron main: all privileged work
@@ -501,8 +498,6 @@ src/
 │       ├── sessions/           SessionHistoryService — the CLIs' own session history (Claude, Codex, Gemini readers), read-only, cached by mtime; ModelTracker — each running agent's live model (→ CliRuntimeDetails.model)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
-│       ├── queen/              QueenBrain (provider accounts: 3 API wire formats + Codex/Claude Code CLIs, fallback, sealed keys), cli-brain (locked-down headless CLI runs), GlobalHotkey (opt-in uiohook), QueenWatcher (live updates from real status changes)
-│       ├── voice/              VoiceService (pinned, verified, resumable pack downloads) + VoiceEngine (sherpa-onnx STT/TTS)
 │       ├── settings/ updates/  App settings (themes…), electron-updater
 │       ├── persistence/        StateStore (atomic JSON), schema + recovery
 │       └── cli/
@@ -518,8 +513,7 @@ src/
     ├── stores/                 Zustand caches + event bridge + notices
     ├── components/             reusable primitives (ui/, cli/, brand/)
     └── features/               shell, projects, project, kanban, workspace, workspace-create,
-                                presets, panes, agents, terminal, side-panel, settings (+guide), chat,
-                                queen (bar, card, executor: parse → resolve → run → receipts)
+                                presets, panes, agents, terminal, side-panel, settings (+guide), chat
 ```
 
 The adapter contract differs from the conceptual `CliAdapter` above: adapters
@@ -651,7 +645,7 @@ mobile/ (own pnpm workspace, Expo Router)
        │ import type @shared/*  (one contract with the desktop)
        ▼
 phone ──HTTP /call (MOBILE_CHANNELS) · SSE /events?terminal=none|<id> · POST /push──▶ Sharing/server
-desktop agent waits ─queen.update─▶ Sharing.notifyWaiting ─┐
+desktop agent waits ─AgentWatcher─▶ Sharing.notifyWaiting ─┐
 Schedule run ────────────────────────▶ Sharing.notifyPhones ─┴▶ Expo push (ids only, ADR 0053)
 phone reaches the computer at any of its addresses (Tailscale, Wi-Fi), the last that answered first (ADR 0052)
 ```

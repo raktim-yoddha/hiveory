@@ -1,12 +1,9 @@
 import { PanelLeft, PanelRight, Settings } from 'lucide-react'
 import { AppLogo } from '../../components/brand/AppLogo'
 import { IconButton } from '../../components/ui/Button'
-import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useApp } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { RailWorkspaces } from '../projects/RailWorkspaces'
-import { QueenTitle } from '../queen/Queen'
-import { useQueen } from '../queen/useQueen'
 import { useCommandKeys } from './useAppShortcuts'
 import styles from './SidebarChrome.module.css'
 
@@ -26,12 +23,6 @@ function useChrome() {
     panel: (inSettings ? view.returnTo : view).type === 'workspace' && (
       <IconButton label={panelLabel} title={withKeys(panelLabel, keys.panel)} icon={<PanelRight />} active={panelOpen} onClick={togglePanel} className={styles.noDrag} />
     ),
-    // Queen Bee put away (ADR 0044): her mark beside the layout buttons.
-    queen: useQueen((s) => s.placement) === 'titlebar' && (
-      <ErrorBoundary region="Queen Bee" compact>
-        <QueenTitle />
-      </ErrorBoundary>
-    ),
     settings: (
       <IconButton
         label={settingsLabel}
@@ -45,7 +36,7 @@ function useChrome() {
   }
 }
 
-/** The sidebar's top bar: brand, Queen Bee's mark when put away, and the sidebar button. It drags the window. */
+/** The sidebar's top bar: brand and the sidebar button. It drags the window. */
 export function SidebarTop() {
   const info = useApp((s) => s.info)
   const chrome = useChrome()
@@ -65,7 +56,6 @@ export function SidebarTop() {
           </span>
         )}
       </span>
-      {chrome.queen}
       {chrome.sidebar}
     </div>
   )
@@ -87,7 +77,6 @@ export function SidebarRail() {
   return (
     <nav className={styles.rail} aria-label="App">
       {chrome.sidebar}
-      {chrome.queen}
       <RailWorkspaces />
       {chrome.settings}
     </nav>

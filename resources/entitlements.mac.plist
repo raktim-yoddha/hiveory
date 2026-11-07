@@ -7,11 +7,8 @@
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
-    <!-- Native modules (PTY, speech) ship their own dylibs. -->
+    <!-- Native modules (PTY) ship their own dylibs. -->
     <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
-    <!-- Queen Bee push-to-talk (asked for only when the user first holds the shortcut). -->
-    <key>com.apple.security.device.audio-input</key>
     <true/>
   </dict>
 </plist>

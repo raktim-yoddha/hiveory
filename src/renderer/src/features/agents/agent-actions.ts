@@ -23,7 +23,7 @@ export async function waitUntilReady(instanceId: string, timeoutMs = 60_000): Pr
     if (r?.running && r.status === 'idle') {
       idleSince ??= now
       if (now - idleSince >= 2000 && now - started >= 3000) {
-        const peek = await api('queen.peek', { instanceId }).catch(() => null)
+        const peek = await api('agents.peek', { instanceId }).catch(() => null)
         if (peek?.excerpt) return 'ready'
       }
     } else idleSince = null

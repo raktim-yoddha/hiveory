@@ -7,8 +7,6 @@ import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
 import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigation'
-import { QueenDock, QueenFloating } from '../queen/Queen'
-import { useQueen } from '../queen/useQueen'
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
@@ -50,7 +48,6 @@ export function AppShell() {
   useAppShortcuts()
   const newWorktree = useNewWorktree()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
-  const queenPlacement = useQueen((s) => s.placement)
   const platform = usePlatform()
   const inSettings = view.type === 'settings'
   // Settings is a window over the app (ADR 0039): everything behind it stays laid out, so changes show live.
@@ -134,9 +131,6 @@ export function AppShell() {
               </ErrorBoundary>
             </div>
           </div>
-          <ErrorBoundary region="Queen Bee" compact>
-            {queenPlacement === 'docked' ? <QueenDock /> : queenPlacement === 'floating' ? <QueenFloating /> : null}
-          </ErrorBoundary>
         </main>
         {showPanel && (
           <div ref={panelRef} className={cx(styles.panel, maximized && styles.panelMaximized)}>

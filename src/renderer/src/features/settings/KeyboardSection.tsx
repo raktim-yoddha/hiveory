@@ -1,9 +1,8 @@
 import { APP_COMMANDS, bindingClash, bindingOf, defaultBinding, type AppCommandId, type Keybindings } from '@shared/keys/keybindings'
-import { defaultQueenShortcut, formatShortcut, parseShortcut, queenShortcutOf, shortcutProblem } from '@shared/queen/shortcut'
+import { formatShortcut, parseShortcut, shortcutProblem } from '@shared/keys/shortcut'
 import { Button } from '../../components/ui/Button'
 import { usePlatform } from '../../lib/platform'
 import { useSettings } from '../../stores/data'
-import { queenShortcutIssue } from './QueenBarSettings'
 import { SettingRow, SettingsPage } from './SettingsPage'
 import { ShortcutField } from './ShortcutField'
 import styles from './Settings.module.css'
@@ -22,16 +21,14 @@ const fixedKeys = (mac: boolean): Array<{ title: string; keys: string[] }> => [
 
 /**
  * Settings › Keyboard (ADR 0047): every shortcut of the app, with its platform's standard keys,
- * changed by pressing new ones. Queen Bee's are the same as in Settings › Queen Bee.
+ * changed by pressing new ones.
  */
 export function KeyboardSection() {
   const { settings, update } = useSettings()
   const platform = usePlatform()
   const overrides = settings.keybindings
-  const queen = queenShortcutOf(settings.queenShortcut, platform)
-  const queenStandard = defaultQueenShortcut(platform)
   const groups = [...new Set(APP_COMMANDS.map((c) => c.group))]
-  const changed = Object.keys(overrides).length > 0 || settings.queenShortcut !== ''
+  const changed = Object.keys(overrides).length > 0
 
   const setBinding = (id: AppCommandId, text: string | null): void => {
     const next: Keybindings = { ...overrides }
@@ -46,39 +43,14 @@ export function KeyboardSection() {
     if (!parsed?.code) return `Add a key to the modifiers, like ${platform === 'darwin' ? '⌘B' : 'Ctrl Shift B'}.`
     const issue = shortcutProblem(parsed, platform)
     if (issue) return issue
-    const clash = bindingClash(text, id, overrides, queen, platform)
+    const clash = bindingClash(text, id, overrides, platform)
     if (clash) return `${clash} already uses these keys.`
     setBinding(id, formatShortcut(parsed))
     return null
   }
 
-  const recordQueen = (text: string): string | null => {
-    const issue = queenShortcutIssue(text, platform, overrides)
-    if (issue) return issue
-    const normal = formatShortcut(parseShortcut(text)!)
-    void update({ queenShortcut: normal === queenStandard ? '' : normal })
-    return null
-  }
-
   return (
     <SettingsPage title="Keyboard" description={`Shortcuts use your system's standard keys${platform === 'darwin' ? ' (⌘ on a Mac)' : ' (Ctrl, never the Windows key)'}. Click Change, then press the new keys.`}>
-      <div className={styles.group}>
-        <div className={styles.groupTitle}>Queen Bee</div>
-        <SettingRow
-          title="Call Queen Bee"
-          description="Tap to type to her, hold to talk. Settings › Queen Bee can also make it work in other apps."
-          control={
-            <ShortcutField
-              label="Call Queen Bee"
-              value={queen}
-              onRecord={recordQueen}
-              isDefault={formatShortcut(queen) === queenStandard}
-              onReset={() => void update({ queenShortcut: '' })}
-            />
-          }
-        />
-      </div>
-
       {groups.map((group) => (
         <div key={group} className={styles.group}>
           <div className={styles.groupTitle}>{group}</div>
@@ -121,7 +93,7 @@ export function KeyboardSection() {
       </div>
 
       {changed && (
-        <Button variant="ghost" onClick={() => void update({ keybindings: {}, queenShortcut: '' })}>
+        <Button variant="ghost" onClick={() => void update({ keybindings: {} })}>
           Reset every shortcut to its standard keys
         </Button>
       )}

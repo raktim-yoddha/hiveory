@@ -8,7 +8,7 @@ const worktree = { id: 'w', projectId: 'p', name: 'login', kind: 'isolated', pat
 
 describe('hiveory_about', () => {
   const tools = new AboutTools({
-    settings: () => ({ ...DEFAULT_SETTINGS, browserUse: false, queenMemory: ['my private note'] }),
+    settings: () => ({ ...DEFAULT_SETTINGS, browserUse: false }),
     worktree: (id) => (id === 'w' ? { worktree, project } : undefined),
     connections: () => ['Postgres', 'Gmail']
   })
@@ -20,7 +20,6 @@ describe('hiveory_about', () => {
     expect(text).toContain('Built-in browser (browser_* tools; the user watches it): off')
     expect(text).toContain('Postgres, Gmail')
     expect(text).toContain('Settings › Integrations')
-    expect(text).not.toContain('my private note')
   })
 
   it('answers chats and bots outside a worktree too', async () => {

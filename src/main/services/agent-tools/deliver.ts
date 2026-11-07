@@ -8,7 +8,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /**
  * Types a message into an agent and (by default) submits it: the one path shared by
- * agents (send_message) and Queen Bee. Chat-view agents get a chat turn; terminal
+ * agents (send_message) and the phone. Chat-view agents get a chat turn; terminal
  * agents get bracketed paste when their TUI supports it, so multi-line text stays one prompt.
  */
 export async function deliverMessage(

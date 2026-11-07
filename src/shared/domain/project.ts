@@ -57,7 +57,7 @@ export interface ProjectSettings {
   branchPrefix?: string
   /** Branch new worktrees start from (default: the repository's default branch). */
   baseRef?: string
-  /** False: agents here never announce themselves (Queen Bee updates, phone pushes). */
+  /** False: agents here never announce themselves (phone pushes). */
   alerts?: boolean
   /** The Workspace's mark in the sidebar (ADR 0038); absent = a folder. */
   icon?: WorkspaceIcon

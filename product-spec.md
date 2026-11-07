@@ -4,7 +4,7 @@
 
 One mode: Work (ADR 0056; Bots and Chat, ADR 0012 and 0022, are removed). There is no mode switch and
 no title bar: the sidebar (Workspaces), the open Worktree and its side panel all start at the top of
-the window, and the window's buttons (sidebar, Queen Bee put away, Settings) live in the sidebar, or
+the window, and the window's buttons (sidebar, Settings) live in the sidebar, or
 in its icon rail while it is hidden; the side panel's button sits at the top right.
 
 Everything the removed modes did, Work does: an agent runs in a terminal or a **chat view** (the same
@@ -263,12 +263,18 @@ Its Dashboard shows each worktree's pull or merge request, Create PR/MR for any 
 default one, every open one, and the open issues, where Start worktree makes a worktree named after
 the issue.
 
+## Keyboard (ADR 0047)
+
+- Settings › Keyboard (ADR 0047) lists every shortcut with its platform's standard keys (⌘ on macOS,
+  Ctrl on Windows and Linux, never the Windows/Super key): Settings, the sidebar, the side
+  panel, Schedules, worktrees, panes and tabs. Each can be changed, removed or reset; fixed terminal,
+  editor and pane keys are listed read-only.
+
 ## Agents that know Hiveory (ADR 0041)
 
 Every agent can call `hiveory_about`: what Hiveory is and where everything lives, where
 it runs (worktree, workspace, branch), which Hiveory tools and settings apply, and what MCP servers and
-apps it has. Queen Bee answers "where is…" and "how do I…" questions about the app from the same guide
-and opens the place when she can.
+apps it has.
 
 ## Appearance
 
@@ -295,91 +301,6 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   that host's sessions; All adds every connected host's (ADR 0043). Worktree · Workspace · All,
   search, grouped by folder, newest first; title, last words, CLI, time and model. A session
   that ran in one of the workspace's worktrees resumes there as a new agent pane.
-
-## Queen Bee (ADR 0019)
-
-- A bar docked under the main area (Work, Chat and Settings), or floating: a fixed-size bar
-  over the bottom of the window that never moves or resizes with the sidebars or side panel,
-  always visible, taking no room.
-- Floating has six modes: full or small (just her mark), at the left, middle or right. Hold her
-  mark and drag to move the bar; it snaps to the third of the window it is let go in. Double-click
-  the mark to shrink or open the bar; a single click on the small mark does nothing (Enter opens
-  it, ← → move it; ⋯ also has Position and Shrink). Her shortcut opens a small bar. Her card keeps
-  the full bar's width, lined up with the bar's side. The mode is remembered.
-- Her shortcut (the platform's standard: Ctrl Shift Space on Windows and Linux, ⌥ Space on macOS;
-  any 2–3 keys in Settings) taps to focus her and holds to talk.
-- Settings › Keyboard (ADR 0047) lists every shortcut with its platform's standard keys (⌘ on macOS,
-  Ctrl on Windows and Linux, never the Windows/Super key): Queen Bee, Settings, the sidebar, the side
-  panel, Schedules, worktrees, panes and tabs. Each can be changed, removed or reset; fixed terminal,
-  editor and pane keys are listed read-only.
-- Typed commands run app actions: open N agents of a CLI (optionally "in <worktree>"),
-  close agents (always after a yes), restart, jump to an agent, load a preset, open Home,
-  a workspace, a worktree or a Settings section, show or hide the side panel, open a browser
-  or the Explorer, and pause or resume a schedule by its name ("pause Morning brief"; a model's
-  plan asks first).
-- Reports ("what's left?", "who's waiting?") list agents by status with wait times, from
-  live state. The current workspace, or every workspace from Home.
-- Live updates (finished, needs you, stopped) wait behind her message button, which shows a
-  dot until seen; the button opens and closes the card (ADR 0038).
-- She asks instead of guessing (unknown or ambiguous names), runs nothing if any part of
-  a command is unclear, and offers Undo for opens and navigation.
-- Personalities Ada, Sunny, Frankie and a custom one change wording only. Settings › Queen Bee holds:
-  - personality, what she calls you and how to say it aloud;
-  - reply length;
-  - per personality: Ada's honorific, Sunny's energy, Frankie's goal, intensity and nudge time;
-  - a custom personality: her name (never an agent name), a style text and three sliders
-    (formal↔casual, calm↔energetic, gentle↔direct);
-  - her voice (any English Kokoro voice) and speed;
-  - placement (docked, floating, or put away in the sidebar, ADR 0044, 0056), and the system-wide shortcut (opt-in).
-- Things she's learned: "remember that …" saves a note (shown as "Noted: …", undoable),
-  "what do you know about me?" reads them back, "forget …" removes them. Notes are local,
-  editable in Settings, and reach a model provider only as facts.
-- "Tell <agent> to …" types your exact words into that agent and submits them.
-- The rest of the app (ADR 0024):
-  - settings on or off ("turn off browser use", "enable computer use");
-  - a page in the side browser ("open localhost:3000"), a file in an editor
-    ("open README.md");
-  - the panes laid out (ADR 0048): a grid, columns or rows ("arrange them in a grid", "side by
-    side", "stack the agents"), one agent's pane taking half ("make Bruno the main pane"), two
-    agents' panes swapped, one moved to a side or beside another ("put Bruno below Luna"), or
-    made bigger, smaller, wider, narrower, taller or shorter;
-  - the worktree's branch and changes ("what changed"), the workspace's open pull requests;
-  - connected apps, a Hiveory update check;
-  - the current agents saved as a preset ("save this as preset Backend");
-  - a new chat with a CLI and a first message;
-  - a CLI's last conversation resumed;
-  - a new workspace;
-  - "restart all".
-- Voice (Settings › Queen Bee › Voice): local speech packs downloaded on request and
-  verified.
-  - Parakeet for English, Spanish, Portuguese, German and French.
-  - Whisper Turbo for Hindi/Hinglish.
-  - Kokoro voices so she can answer out loud.
-- Optional model (Settings › Queen Bee › Providers), with several accounts per provider
-  tried in order and models listed from the provider: any OpenAI-compatible provider,
-  Anthropic or Gemini (AI Studio key), or a local server. It handles only what the rules
-  don't understand, can only choose Queen Bee's actions, and asks before closing or
-  messaging agents. A Test button checks the key, the model and tool calling.
-- Subscription providers: the user's own Codex CLI (ChatGPT plan) or Claude Code CLI
-  (Claude plan), run headless with no tools; no key, slower (5–20 s).
-- The shortcut can also work while another app is focused (opt-in): a tap brings Hiveory
-  forward, a hold talks from anywhere.
-- Talkback: she answers out loud by default (Kokoro, or the system voice without it), with
-  short sound cues; "mute" and the ⋯ menu turn it off.
-- Talk to agents by name: "codex run the tests", "Bruno, …", "everyone: …", "tell all
-  claude to …", "open codex and send: …" (exact words, no model needed).
-- "stop Bruno" interrupts without closing; "status of everything", "codex status", "what is
-  Bruno doing", "take me to whoever needs me", "close idle agents", "bronze theme", "create a
-  worktree called …", "help", "again".
-- Live updates: she tells you (and says) when an agent finishes, needs you or crashes,
-  whether or not she started the work.
-- Her reply card hovers above the panes; it never moves them.
-- Her mark is a waveform that moves with your voice while you hold her shortcut and with hers
-  while she answers. Her mic button talks by hand (tap to listen, tap again to send); holding her
-  shortcut does the same.
-- Small talk works with no model: greetings, thanks, "how are you", "who are you".
-- "Go to primary" (or "main") means the current workspace's Primary; from Home, or for a name several workspaces
-  share, she asks which workspace's ("primary of api" names it directly).
 
 ## Remote hosts (ADR 0022)
 
@@ -412,7 +333,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
   code. A paired computer or phone keeps every address of the computer it paired with (Tailscale
   name and IP, Wi-Fi) and uses whichever answers, so turning Tailscale off at home, or leaving the
   Wi-Fi, keeps it connected while one way is still there. A paired computer can do everything that
-  runs on the server, including stopping a Queen Bee plan, skills and the Trigger link.
+  runs on the server, including skills.
 
 - Settings › Remote checks an SSH host (an alias from ~/.ssh/config or user@host) end to end and
   installs Hiveory's small host program in `~/.hiveory-host` there (with its own Node if needed).

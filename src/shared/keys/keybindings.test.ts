@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultQueenShortcut, parseShortcut, queenShortcutOf, shortcutProblem } from '../queen/shortcut'
+import { parseShortcut, shortcutProblem } from './shortcut'
 import { APP_COMMANDS, bindingClash, bindingOf, cleanKeybindings, commandFor, defaultBinding } from './keybindings'
 
 const key = (code: string, mods: Partial<Record<'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey', boolean>> = {}) => ({
@@ -37,7 +37,6 @@ describe('keybindings', () => {
     for (const platform of ['darwin', 'win32', 'linux']) {
       const keys = APP_COMMANDS.map((c) => defaultBinding(c.id, platform))
       expect(new Set(keys).size, platform).toBe(keys.length)
-      expect(keys.includes(defaultQueenShortcut(platform)), platform).toBe(false)
       for (const c of APP_COMMANDS) {
         expect(shortcutProblem(parseShortcut(defaultBinding(c.id, platform))!, platform), `${platform} ${c.id}`).toBeNull()
       }
@@ -63,25 +62,8 @@ describe('keybindings', () => {
   })
 
   it('names who already uses some keys', () => {
-    const queen = queenShortcutOf('', 'win32')
-    expect(bindingClash('Control+Comma', 'toggle-sidebar', {}, queen, 'win32')).toBe('Open or close Settings')
-    expect(bindingClash('Control+Shift+Space', 'toggle-sidebar', {}, queen, 'win32')).toBe('Queen Bee')
-    expect(bindingClash('Control+Comma', 'open-settings', {}, queen, 'win32')).toBeNull()
-    expect(bindingClash('Control+Shift+Space', 'queen', {}, queen, 'win32')).toBeNull()
-  })
-})
-
-describe("Queen Bee's standard keys", () => {
-  it('are ⌥ Space on macOS and Ctrl Shift Space elsewhere, and none of them is reserved', () => {
-    expect(defaultQueenShortcut('darwin')).toBe('Alt+Space')
-    expect(defaultQueenShortcut('win32')).toBe('Control+Shift+Space')
-    expect(defaultQueenShortcut('linux')).toBe('Control+Shift+Space')
-    for (const p of ['darwin', 'win32', 'linux']) expect(shortcutProblem(parseShortcut(defaultQueenShortcut(p))!, p)).toBeNull()
-  })
-
-  it("an empty or broken stored shortcut means the platform's standard", () => {
-    expect(queenShortcutOf('', 'darwin')).toEqual(parseShortcut('Alt+Space'))
-    expect(queenShortcutOf('garbage', 'win32')).toEqual(parseShortcut('Control+Shift+Space'))
-    expect(queenShortcutOf('Control+Meta', 'win32')).toEqual(parseShortcut('Control+Meta'))
+    expect(bindingClash('Control+Comma', 'toggle-sidebar', {}, 'win32')).toBe('Open or close Settings')
+    expect(bindingClash('Control+Comma', 'open-settings', {}, 'win32')).toBeNull()
+    expect(bindingClash('Control+Shift+Space', 'toggle-sidebar', {}, 'win32')).toBeNull()
   })
 })

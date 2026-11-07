@@ -12,7 +12,6 @@ import { applyTerminalFont } from './features/terminal/terminal-registry'
 import { useConnections } from './stores/connections'
 import { findTheme, useApp, useClis, useSettings, useThemes } from './stores/data'
 import { reportError } from './stores/notices'
-import { useVoice } from './features/queen/voice'
 
 // Last-resort guards: stray async failures become notices instead of silent breakage.
 window.addEventListener('unhandledrejection', (event) => reportError(event.reason))
@@ -31,8 +30,6 @@ function App() {
     void useSettings.getState().load()
     void useThemes.getState().load()
     void useBrowser.getState().load()
-    // Queen Bee's speech packs: the mic button and hold-to-talk need to know what's installed.
-    void useVoice.getState().load()
     void useConnections.getState().load()
     return uninstall
   }, [])

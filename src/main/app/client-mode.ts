@@ -68,7 +68,6 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
       await shell.openExternal(url)
     },
     'updates.status': () => ({ state: 'unsupported' as const, reason: 'This window uses a Hiveory server. Update Hiveory on each machine.' }),
-    'voice.status': () => [],
     'browser.state': () => ({ pages: [], profiles: [], annotations: [] }),
     'wallpapers.list': () => [],
     'themes.installed': () => [],

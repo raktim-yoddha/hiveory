@@ -34,9 +34,9 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 
 ### Window chrome (ADR 0056)
 
-No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then Queen Bee's
-mark (when put away) and the sidebar toggle; it drags the window. The sidebar's footer: Settings.
-Hidden, the sidebar is an icon rail: sidebar toggle and Queen Bee's mark at the top, then every
+No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then the
+sidebar toggle; it drags the window. The sidebar's footer: Settings.
+Hidden, the sidebar is an icon rail: sidebar toggle at the top, then every
 Workspace's mark (click: open the Worktree last used there; double-click or →: its Worktrees as
 two-letter initials, "MA" for main, "LP" for feature/login-page; click one to open it), Settings at
 the bottom. The side panel toggle (in a worktree) sits at the top right, left of the window controls
@@ -63,60 +63,11 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   ADR 0055) · permissions. While answering, the box stays open, a queue button sits beside Stop, and
   waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 
-### Queen Bee (ADR 0019)
+### Settings › Keyboard (ADR 0047)
 
-```text
-┌──────────────┬───────────────────────────────────────────────────┐
-│  Workspaces  │                 Current Screen                    │
-│              │            (lifts to make room)                   │
-│              │ ┌───────────────────────────────────────────────┐ │
-│              │ │ Reply card: answer, report rows, receipts, Undo│ │
-│              │ └───────────────────────────────────────────────┘ │
-│              │ [∿ Ada  Your instructions…  🎙 ✉ ▁ ⋯]     │
-└──────────────┴───────────────────────────────────────────────────┘
-```
-
-The reply card hovers over the panes (it never pushes them); only the bar takes room. Live
-updates wait behind ✉ (a dot marks an unseen one); ✉ opens and closes the card (ADR 0038).
-
-∿ is her waveform mark (still at rest, moving while you or she speaks). 🎙 talks by hand: tap
-to listen, tap again to send (holding her shortcut still works); it opens Settings › Queen Bee ›
-Voice until a speech pack is installed (ADR 0019 amendment). ▁ switches docked ↔
-floating. ⋯ holds Personality, Talk back and Configure….
-
-Floating: the same bar at a fixed width over the bottom of the window, always there; the panes
-don't lift for it. Drag ∿ to the left, middle or right; double-click ∿ to shrink to just ∿ (or
-open again). Six modes: full/small × left/middle/right.
-
-```text
-Full left    [∿ Ada  Your instructions…  🎙 ▁ ⋯]
-Full middle                 [∿ Ada  Your instructions…  🎙 ▁ ⋯]
-Full right                                [∿ Ada  Your instructions…  🎙 ▁ ⋯]
-Small        [∿]            [∿]                                              [∿]
-```
-
-Sidebar only (ADR 0044, 0056): no bar; her mark ∿ sits in the sidebar's top bar before the layout
-buttons (a dot for an unseen message). A click, her shortcut or a question drops the bar (and card)
-down under it; Escape or a click elsewhere puts it away. ⋯ › "Put away in the sidebar" / "Show her bar
-again" switch it, as does Settings › Queen Bee › Bar & shortcut › Where she sits.
-
-```text
-┌ ◆ Hiveory  ∿ ◨ ◧ ┐
-[∿ Ada  Your instructions…  ✉ ⋯]
-```
-
-Settings › Queen Bee has tabs: Personality · Providers · Voice · Bar & shortcut.
-- Personality: four cards (Ada, Sunny, Frankie, custom), the custom name/style/sliders,
-  how she talks to you, and "Things she's learned" (edit, remove, add notes).
-- Providers: ordered accounts; "Add provider" includes the Codex and Claude Code CLIs.
-- Voice: guide, speech packs, Talkback (answer out loud, updates from agents, sound cues),
-  "Her voice" picker with Preview, speed.
-- Bar & shortcut: recorder and presets, "Also in other apps" toggle with its status,
-  placement.
-
-Settings › Keyboard (ADR 0047), after Queen Bee: Queen Bee (Call Queen Bee), General (Settings, shortcuts,
-sidebar, side panel, maximize side panel, Schedules), Lists (New worktree, Next / Previous worktree), Panes and tabs (New tab, New terminal, Close, Next /
-Previous tab, Next / Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
+General (Settings, shortcuts, sidebar, side panel, maximize side panel, Schedules), Lists (New worktree,
+Next / Previous worktree), Panes and tabs (New tab, New terminal, Close, Next / Previous tab, Next /
+Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
 as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
 is named under it. Built in: the fixed keys, read-only. "Reset every shortcut" when any was changed.
 The chrome buttons' tooltips show the keys ("Hide sidebar (Ctrl Shift B)").

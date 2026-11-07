@@ -2,7 +2,6 @@ import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import appIcon from '@resources/icon.png?asset'
 import devIcon from '@resources/icon-dev.png?asset'
-import { isTrustedSenderUrl } from '../ipc/trust'
 import type { Logger } from './logger'
 
 import type { ThemeId } from '@shared/domain'
@@ -65,15 +64,11 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
-  // Only the microphone, only audio, only for the app's own page: Queen Bee's push-to-talk.
-  const ownPage = (url: string): boolean => isTrustedSenderUrl(url, targets.devServerUrl, targets.rendererFile)
-  window.webContents.session.setPermissionRequestHandler((wc, permission, callback, details) => {
-    const audioOnly = permission === 'media' && 'mediaTypes' in details && (details.mediaTypes ?? []).length > 0 && (details.mediaTypes ?? []).every((t) => t === 'audio')
-    callback(audioOnly && wc === window.webContents && ownPage(details.requestingUrl))
-  })
+  // No camera, microphone or other device permission is ever granted (ADR 0057).
+  window.webContents.session.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
   // The window never navigates away from Hiveory's page (will-navigate is blocked), so its contents identify it.
   // local-fonts: Settings › Terminal font lists installed monospaced families (names only; ADR 0039).
-  window.webContents.session.setPermissionCheckHandler((wc, permission) => (permission === 'media' || (permission as string) === 'local-fonts') && wc === window.webContents)
+  window.webContents.session.setPermissionCheckHandler((wc, permission) => (permission as string) === 'local-fonts' && wc === window.webContents)
 
   // DevTools stay reachable in development without an application menu.
   if (targets.devServerUrl) {

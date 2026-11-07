@@ -1,11 +1,10 @@
 import { useEffect } from 'react'
 import { bindingOf, commandFor, type AppCommandId } from '@shared/keys/keybindings'
-import { shortcutLabel } from '@shared/queen/shortcut'
+import { shortcutLabel, shortcutRecording } from '@shared/keys/shortcut'
 import { usePlatform } from '../../lib/platform'
 import { useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runWorkCommand, trackPaneFocus } from '../panes/work-commands'
-import { shortcutRecording } from '../queen/useQueenShortcut'
 import { useNewWorktree } from '../workspace-create/new-worktree'
 
 /** A command's keys as the platform writes them ("Ctrl Shift B", "⌘B"), for menus and tooltips; undefined when it has none. */

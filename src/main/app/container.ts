@@ -1,4 +1,4 @@
-import { app, BrowserWindow, nativeImage, net, Notification, powerMonitor, powerSaveBlocker, safeStorage, shell, systemPreferences } from 'electron'
+import { app, BrowserWindow, nativeImage, Notification, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { WallpaperService } from '../services/appearance/wallpaper-service'
@@ -55,11 +55,7 @@ import { LayoutService } from '../services/layout/layout-service'
 import { StateStore } from '../services/persistence/state-store'
 import { PresetService } from '../services/presets/preset-service'
 import { SettingsService } from '../services/settings/settings-service'
-import { QueenBrain } from '../services/queen/queen-brain'
-import { GlobalHotkey, loadHook } from '../services/queen/global-hotkey'
-import { QueenWatcher } from '../services/queen/queen-watcher'
-import { lastWords } from '@shared/queen/updates'
-import { VoiceService } from '../services/voice/voice-service'
+import { AgentWatcher } from '../services/agents/agent-watcher'
 import { ShellService } from '../services/shell/shell-service'
 import { UpdateService, type Updater } from '../services/updates/update-service'
 import { ProjectService } from '../services/projects/project-service'
@@ -89,14 +85,6 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const openBrowser = (url: string): void => void shell.openExternal(url)
   const connections = new ConnectionService(store, secrets, emit)
   const integrations = new IntegrationService(git, { github, gitlab: new GitlabService(git) }, new TrackerService(store, secrets))
-  // Subscription brains run the user's own agent CLIs; their model lists come from the chat catalog.
-  // Provider calls use Chromium's network stack (system proxy, reliable connects): Node's fetch
-  // intermittently hit 10 s connect timeouts to Cloudflare-fronted APIs (Groq, OpenRouter).
-  const queenBrain = new QueenBrain(store, secrets, net.fetch as typeof fetch, {
-    executable: (cliId) => registry.executable(cliId),
-    models: async (cliId) => (await chats.catalog(cliId)).models.map((m) => m.id)
-  })
-  const voice = new VoiceService(paths.voiceDir, emit, log)
   const gateway = new McpGateway(() => connections.enabled(), (c) => connections.spec(c), log, app.getVersion())
   connections.attach(gateway)
   const appService = new AppService(connections, openBrowser)
@@ -236,23 +224,23 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     }
   })
   const prompts = new PromptLibrary(store, emit)
-  // Queen Bee's live updates watch every status change on its way to the renderer.
-  const watcher = new QueenWatcher({
+  // Every status change, watched for the phone's "an agent needs you" push (ADR 0057).
+  const watcher = new AgentWatcher({
     agent: (id) => agents.find(id),
     isShell: (cliId) => registry.adapter(cliId)?.kind === 'shell',
     cliName: (cliId) => registry.displayName(cliId),
     workspaceName: (id) => workspaceRepo.find(id)?.name,
-    excerpt: (agent) => lastWords(agent.chatUi ? chats.lastReply(agent.id) : runtime.screenText(agent.id, 60)),
-    // A Workspace with alerts off stays quiet: no Queen Bee update, no phone push (ADR 0037).
+    excerpt: () => undefined,
+    // A Workspace with alerts off stays quiet: no phone push (ADR 0037).
     emit: (update) => {
       if (workspaceRepo.findProject(update.projectId)?.settings?.alerts === false) return
-      emit('queen.update', update)
+      sharing.notifyWaiting(update)
     }
   })
   const agentEmit: Emit = (event, payload) => {
     emit(event, payload)
     if (event === 'runtime.changed') {
-      const { instanceId, runtime: details } = payload as { instanceId: string; runtime: Parameters<QueenWatcher['onRuntime']>[1] }
+      const { instanceId, runtime: details } = payload as { instanceId: string; runtime: Parameters<AgentWatcher['onRuntime']>[1] }
       watcher.onRuntime(instanceId, details)
       // A turn started: real work, so the project rises in the sidebar.
       if (details.status === 'working') projects.markActive(agents.find(instanceId)?.projectId)
@@ -284,26 +272,6 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const presets = new PresetService(store, emit)
   settings = new SettingsService(store, emit)
   const updates = new UpdateService(updater, log, emit)
-  const hotkey = new GlobalHotkey(
-    log,
-    (signal) => {
-      // A tap brings Hiveory forward; holding to talk works from wherever the user is.
-      if (signal === 'tap') {
-        const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed())
-        if (w?.isMinimized()) w.restore()
-        w?.show()
-        w?.focus()
-      }
-      emit('queen.hotkey', { signal })
-    },
-    () => BrowserWindow.getFocusedWindow() !== null,
-    {
-      platform: process.platform,
-      wayland: process.env.XDG_SESSION_TYPE === 'wayland',
-      trusted: (prompt) => (process.platform === 'darwin' ? systemPreferences.isTrustedAccessibilityClient(prompt) : true),
-      load: () => loadHook()
-    }
-  )
   const shells = new ShellService(ptyBackend, (id) => localHost.take(id)?.ptyId)
   const sessions = new SessionHistoryService(log)
   const repositories = new RepositoryService(git)
@@ -449,9 +417,6 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     routineFiles,
     prompts,
     browser,
-    computer,
-    queenBrain,
-    voice,
-    hotkey
+    computer
   }
 }

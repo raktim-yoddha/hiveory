@@ -14,7 +14,6 @@ import {
   Smartphone
 } from 'lucide-react'
 import { AgentIcon } from '../../../components/brand/AgentIcon'
-import { QueenIcon } from '../../../components/brand/QueenIcon'
 
 export interface GuideSection {
   heading: string
@@ -35,7 +34,7 @@ const K = ({ children }: { children: ReactNode }) => <kbd>{children}</kbd>
 
 /**
  * The field guide (Settings › Guide, ADR 0044): one short chapter per part of the app, in the words the
- * app uses. Kept in step with APP_GUIDE (src/shared/hiveory/guide.ts), which agents and Queen Bee read.
+ * app uses. Kept in step with APP_GUIDE (src/shared/hiveory/guide.ts), which agents read.
  */
 export const GUIDE: GuideChapter[] = [
   {
@@ -294,48 +293,6 @@ export const GUIDE: GuideChapter[] = [
     ]
   },
   {
-    id: 'queen',
-    title: 'Queen Bee',
-    summary: 'Run the app by voice or text.',
-    icon: QueenIcon,
-    sections: [
-      {
-        heading: 'Call her',
-        body: (
-          <p>
-            Tap her shortcut (<K>Win</K> <K>Alt</K> by default, <K>⌘</K> <K>⌥</K> on a Mac) to type, hold it to talk. She opens, closes,
-            restarts and finds agents, messages them (&ldquo;tell Bruno to run the tests&rdquo;), reports who is waiting, switches pages and
-            changes a few settings. She lays out panes too: &ldquo;arrange them in a grid&rdquo;, columns or rows, &ldquo;make Bruno the
-            main pane&rdquo;, &ldquo;swap Bruno and Luna&rdquo;, &ldquo;move Luna to the left&rdquo;, &ldquo;make Bruno bigger&rdquo;. She
-            asks before closing or guessing.
-          </p>
-        ),
-        keywords: 'shortcut voice talk command grid layout swap move resize panes'
-      },
-      {
-        heading: 'Where she sits',
-        body: (
-          <p>
-            Docked under the main area, floating over it, or put away in the sidebar: only her mark stays at the sidebar&rsquo;s top and
-            her bar drops down when you click it or press her shortcut. Change it in her <b>⋯</b> menu or Settings › Queen Bee › Bar &amp; shortcut.
-          </p>
-        ),
-        keywords: 'docked floating title bar sidebar hide disable'
-      },
-      {
-        heading: 'Voice, models and notes',
-        body: (
-          <p>
-            Speech packs download on request and run on this computer. A model (your key, a local server, or your Codex or Claude plan) is
-            optional: it only handles what her rules don&rsquo;t understand. &ldquo;Remember that…&rdquo; saves a note; notes stay on this
-            computer.
-          </p>
-        ),
-        keywords: 'provider model voice notes memory'
-      }
-    ]
-  },
-  {
     id: 'routines',
     title: 'Schedules',
     summary: 'Agents that start on their own, on a calendar.',
@@ -499,7 +456,7 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             Settings › Keyboard lists every shortcut with your system&rsquo;s standard keys: <K>Ctrl</K> on Windows and Linux, <K>⌘</K> on a
-            Mac. Queen Bee is <K>Ctrl</K> <K>Shift</K> <K>Space</K> (<K>⌥</K> <K>Space</K> on a Mac), Settings <K>Ctrl</K> <K>,</K>, this list <K>Ctrl</K> <K>Shift</K> <K>/</K> (<K>⌘</K> <K>/</K>). Click Change and press
+            Mac. Settings is <K>Ctrl</K> <K>,</K>, this list <K>Ctrl</K> <K>Shift</K> <K>/</K> (<K>⌘</K> <K>/</K>). Click Change and press
             new keys to make any of them yours.
           </p>
         ),
@@ -588,8 +545,8 @@ export const GUIDE: GuideChapter[] = [
         keywords: 'install path detect'
       },
       {
-        heading: 'Ask an agent or Queen Bee',
-        body: <p>Every agent and Queen Bee know this app: ask them where something is or how to do it.</p>,
+        heading: 'Ask an agent',
+        body: <p>Every agent knows this app: ask them where something is or how to do it.</p>,
         keywords: 'help where how'
       }
     ]

@@ -256,7 +256,7 @@ export class AgentService {
 
   /**
    * Renames a pane (ADR 0042). Names stay unique across every agent, removed ones included, because
-   * agents, the board, Queen Bee and the phone all address agents by name.
+   * agents, the board and the phone all address agents by name.
    */
   rename(instanceId: string, name: string): void {
     const instance = this.get(instanceId)

@@ -136,7 +136,7 @@ describe('heuristic detector', () => {
     expect(d.onOutput('Allow command?', 600)).toBeNull()
     expect(d.tick(700)).toEqual({ type: 'needs-user', reason: 'permission' })
     expect(d.tick(1700)).toBeNull()
-    // Answered some other way (phone, Queen): it leaves the screen and the agent is working again.
+    // Answered some other way (the phone): it leaves the screen and the agent is working again.
     screen = 'running tests'
     expect(d.tick(2700)).toEqual({ type: 'working' })
   })

@@ -286,7 +286,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if (chat.title === 'New chat') chat.title = (prompt || attachments[0]!.name).replace(/\s+/g, ' ').slice(0, 60)
     chat.updatedAt = now
     this.store.save(chat)
-    // Every window and phone shows the question at once, whoever sent it (the phone, Queen Bee, another agent).
+    // Every window and phone shows the question at once, whoever sent it (the phone, another agent).
     this.broadcast('chat.event', { chatId, message: structuredClone(asked), summary: this.summary(chat) })
 
     // Providers without resume get the transcript every turn.

@@ -39,9 +39,7 @@ Everything runs on your computer. Hiveory has no account and no server of its ow
 - **Presets.** Save which CLIs to open, and how many of each, then load them into any Worktree.
 - **Built-in browser.** A real browser pane that agents can drive (with a visible cursor), with
   profiles, device sizes and element picking to send parts of a page to an agent.
-- **Queen Bee.** An assistant bar that answers questions about the app, opens places and acts on
-  your Workspaces by voice or text. Speech is transcribed on your computer.
-- **Bots.** Teammates with their own brief, memory, schedules and triggers, grouped into teams.
+- **Schedules.** Start an agent in a Worktree at set times, once or on a repeating calendar rule.
 - **Skills, MCP servers and apps.** Manage Agent Skills and MCP servers for every installed CLI in
   one place, browse skills.sh and the MCP Registry, and connect apps through your own Composio key.
 - **Code hosts and issues.** Pull requests, merge requests and issues from GitHub, GitLab, Jira and

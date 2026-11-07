@@ -22,6 +22,7 @@ import type {
   WorkspaceView,
   HostLinkStatus
 } from '../domain'
+import type { AgentPeek } from '../domain/agent-update'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { TerminalHostStatus } from '../host/protocol'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
@@ -29,13 +30,8 @@ import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROM
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
 import type { EditorView, FileEntry } from '../domain/files'
-import type { BrainAccountView, BrainResult } from '../queen/brain'
-import { QUEEN_VOICES, type VoicePackState } from '../queen/voice'
 import { cleanKeybindings, isAppCommand } from '../keys/keybindings'
-import { parseShortcut, type HotkeySignal, type HotkeyStatus } from '../queen/shortcut'
-import { MAX_NOTE_LENGTH, MAX_NOTES } from '../queen/actions'
-import { customNameProblem } from '../queen/personas'
-import type { QueenPeek, QueenUpdate } from '../queen/updates'
+import { parseShortcut } from '../keys/shortcut'
 
 /** A wallpaper image the user added; `url` is served by Hiveory's own protocol. */
 export interface WallpaperImage {
@@ -54,21 +50,6 @@ import { THEME_EXTENSION_ID, THEME_SEGMENT, VSCODE_THEME_ID, type ThemeListing, 
  * these schemas; the preload only forwards channels listed here.
  */
 
-
-/** What Queen Bee sends a model: names and ids only, bounded. */
-const shortText = z.string().max(200)
-const queenContextSchema = z.object({
-  projectId: shortText.optional(),
-  workspaceId: shortText.optional(),
-  projects: z.array(z.object({ id: shortText, name: shortText })).max(500),
-  workspaces: z.array(z.object({ id: shortText, name: shortText, kind: z.enum(['main', 'isolated']) })).max(500),
-  otherWorkspaces: z.array(z.object({ id: shortText, name: shortText, kind: z.enum(['main', 'isolated']), projectId: shortText })).max(1000).optional(),
-  agents: z
-    .array(z.object({ id: shortText, petName: shortText, cliId: shortText, workspaceId: shortText, status: z.enum(['idle', 'working', 'waiting-for-you']).optional() }))
-    .max(500),
-  clis: z.array(z.object({ id: shortText, displayName: shortText, kind: z.enum(['agent', 'shell']).optional() })).max(200),
-  presets: z.array(z.object({ id: shortText, name: shortText })).max(200)
-})
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/)
 /** An SSH alias or user@host: never an ssh option, never shell syntax. */
@@ -304,53 +285,12 @@ export const requestSchemas = {
   'presets.save': presetInputSchema,
   'presets.delete': z.object({ presetId: id }),
   'kanban.board': z.object({ projectId: id }),
-  /** Types a message into an agent and submits it (Queen Bee's "tell Bruno to …"). */
+  /** Types a message into an agent and submits it. */
   'agents.sendMessage': z.object({ instanceId: id, message: z.string().trim().min(1).max(20_000) }),
-  /** Queen Bee's model (ADR 0019). The key is write-only: never read back. */
-  'queen.accounts': none,
-  'queen.saveAccount': z.object({
-    id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
-    provider: z.string().regex(/^[a-z]{1,40}$/),
-    label: z.string().trim().max(40),
-    kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']).optional(),
-    baseUrl: z.string().trim().max(500),
-    model: z.string().trim().max(200),
-    apiKey: z.string().max(500).nullable().optional(),
-    enabled: z.boolean().optional()
-  }),
-  'queen.removeAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
-  'queen.moveAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/), to: z.number().int().min(0).max(50) }),
-  'queen.testAccount': z.object({ id: z.string().regex(/^q[a-f0-9]{12}$/) }),
-  /** Stops the model request in flight: models have no time limit, so the user stops them (ADR 0019). */
-  'queen.cancelPlan': none,
-  /** The provider's model list, with the key typed in the form or the saved key of `id`. */
-  'queen.listModels': z.object({
-    id: z.string().regex(/^q[a-f0-9]{12}$/).optional(),
-    provider: z.string().regex(/^[a-z]{1,40}$/),
-    kind: z.enum(['openai', 'anthropic', 'gemini', 'codex', 'claude-code']).optional(),
-    baseUrl: z.string().trim().max(500),
-    apiKey: z.string().max(500).optional()
-  }),
-  /** Local speech (ADR 0019 phase 3): packs download only on request. */
-  'voice.status': none,
-  'voice.download': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
-  'voice.cancel': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
-  'voice.remove': z.object({ pack: z.enum(['parakeet', 'whisper', 'kokoro']) }),
-  /** 16 kHz mono push-to-talk audio, at most 60 s. */
-  'voice.transcribe': z.object({ samples: z.instanceof(Float32Array).refine((a) => a.length > 0 && a.length <= 16000 * 60, 'Clip too long.'), language: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']) }),
-  /** `sid`: a preview of one of her voices; otherwise the voice from Settings. */
-  'voice.speak': z.object({ text: z.string().trim().min(1).max(600), sid: z.number().int().refine((v) => QUEEN_VOICES.some((x) => x.sid === v)).optional() }),
-  /** macOS asks for the microphone once; Windows reports its privacy setting. */
-  'voice.micAccess': none,
-  'queen.plan': z.object({ utterance: z.string().trim().min(1).max(2000), context: queenContextSchema }),
-  /** Stops what an agent is doing without closing it (Queen Bee's "stop Bruno"). */
+  /** Stops what an agent is doing without closing it. */
   'agents.interrupt': z.object({ instanceId: id }),
-  /** One agent up close: status, activity and the last words on its screen. */
-  'queen.peek': z.object({ instanceId: id }),
-  /** The system-wide shortcut's native hook (opt-in): running, off, or why not. */
-  'queen.hotkeyStatus': none,
-  /** macOS: asks for Accessibility access, then starts the hook if allowed. */
-  'queen.hotkeyAccess': none,
+  /** One agent up close: status, activity and the last words on its screen (ADR 0057). */
+  'agents.peek': z.object({ instanceId: id }),
   'settings.get': none,
   'settings.update': z
     .object({
@@ -389,34 +329,10 @@ export const requestSchemas = {
       wallpaperBlur: z.number().min(0).max(40),
       wallpaperDim: z.number().min(0).max(0.8),
       vscodeTheme: z.union([z.literal(''), z.string().regex(VSCODE_THEME_ID)]),
-      queenPersona: z.enum(['ada', 'sunny', 'frankie', 'custom']),
-      queenCustomName: z.string().trim().max(20).refine((s) => customNameProblem(s) === null, 'Pick another name.'),
-      queenCustomPersona: z.string().max(500),
-      queenCustomFormal: z.number().int().min(0).max(100),
-      queenCustomEnergy: z.number().int().min(0).max(100),
-      queenCustomDirect: z.number().int().min(0).max(100),
-      queenCallMeSay: z.string().trim().max(60),
-      queenGoal: z.string().trim().max(200),
-      queenIntensity: z.enum(['steady', 'hard']),
-      queenMemory: z.array(z.string().trim().min(1).max(MAX_NOTE_LENGTH)).max(MAX_NOTES),
-      queenGlobalShortcut: z.boolean(),
-      queenVoice: z.number().int().refine((v) => v === -1 || QUEEN_VOICES.some((x) => x.sid === v), 'Pick one of her voices.'),
-      queenCallMe: z.string().trim().max(40),
-      queenHonorific: z.enum(['sir', 'maam', 'name', 'none']),
-      queenHype: z.enum(['calm', 'lively', 'max']),
-      queenNudgeMinutes: z.number().int().min(0).max(240),
-      queenLength: z.enum(['short', 'normal']),
-      queenShortcut: z.string().max(60).refine((s) => s === '' || parseShortcut(s) !== null, 'Use two or three keys, at least one of them a modifier.'),
       keybindings: z
         .record(z.string().max(40), z.string().max(60))
         .refine((r) => Object.keys(r).length <= 40 && Object.entries(r).every(([id, s]) => isAppCommand(id) && (s === '' || parseShortcut(s) !== null)), 'Unknown command or shortcut.')
-        .transform(cleanKeybindings),
-      queenSpeechLanguage: z.enum(['en', 'es', 'pt', 'de', 'fr', 'hi']),
-      queenTalkback: z.enum(['always', 'after-voice', 'never']),
-      queenSounds: z.boolean(),
-      queenUpdates: z.enum(['all', 'waiting', 'off']),
-      queenPopups: z.boolean(),
-      queenVoiceSpeed: z.number().min(0.8).max(1.4)
+        .transform(cleanKeybindings)
     })
     .partial(),
   /** Wallpapers the user added (copied into Hiveory's own folder). */
@@ -732,25 +648,8 @@ export interface ResponseMap {
   'kanban.board': KanbanBoard
   'sessions.list': AgentSession[]
   'agents.sendMessage': string
-  'queen.accounts': BrainAccountView[]
-  'queen.saveAccount': BrainAccountView[]
-  'queen.removeAccount': BrainAccountView[]
-  'queen.moveAccount': BrainAccountView[]
-  'queen.testAccount': { ms: number; detail: string }
-  'queen.cancelPlan': void
-  'queen.listModels': string[]
-  'voice.status': VoicePackState[]
-  'voice.download': void
-  'voice.cancel': void
-  'voice.remove': void
-  'voice.transcribe': { text: string; ms: number }
-  'voice.speak': { samples: Float32Array; sampleRate: number }
-  'voice.micAccess': boolean
-  'queen.plan': BrainResult
-  'queen.hotkeyStatus': HotkeyStatus
   'agents.interrupt': void
-  'queen.peek': QueenPeek
-  'queen.hotkeyAccess': HotkeyStatus
+  'agents.peek': AgentPeek
   'settings.get': AppSettings
   'settings.update': AppSettings
   'terminalHost.status': TerminalHostStatus
@@ -904,11 +803,6 @@ export interface EventMap {
   'terminal.data': { instanceId: string; data: string; offset: number }
   /** Something changed in a watched folder (scope = workspace or project id). */
   'files.changed': { scope: string; paths: string[] }
-  'voice.changed': VoicePackState[]
-  /** Queen Bee's shortcut was used while another app was focused. */
-  'queen.hotkey': { signal: HotkeySignal }
-  /** An agent finished, needs you, or stopped (Queen Bee's live updates). */
-  'queen.update': QueenUpdate
   'runtime.changed': { instanceId: string; projectId: string; workspaceId: string; runtime: CliRuntimeDetails }
   /** `chatId`: that chat's settings changed (model, effort, permissions), so open views reload it. */
   'state.changed': { topic: StateTopic; projectId?: string; workspaceId?: string; chatId?: string }
@@ -938,9 +832,6 @@ const EVENTS: Record<EventName, true> = {
   'chat.event': true,
   'browser.changed': true,
   'files.changed': true,
-  'voice.changed': true,
-  'queen.hotkey': true,
-  'queen.update': true,
   'hosts.changed': true,
   'ssh.prompt': true,
   'ssh.promptDone': true

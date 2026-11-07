@@ -14,10 +14,6 @@ files:
 asarUnpack:
   # Native PTY binaries (and the bundled conpty.dll) must live outside the asar.
   - node_modules/@lydell/**
-  # Queen Bee's speech engine (native addon + onnxruntime libraries).
-  - node_modules/sherpa-onnx-*/**
-  # Queen Bee's opt-in system-wide shortcut (native keyboard hook).
-  - node_modules/uiohook-napi/**
   # Window icon is read from disk at runtime.
   - resources/**
 win:
@@ -31,15 +27,13 @@ nsis:
   # Installer icons come from the app icon (electron-builder converts it to .ico; NSIS rejects .png).
   shortcutName: Hiveory
 mac:
-  # The build machine's architecture: native modules (PTY, speech) install for the host only.
+  # The build machine's architecture: native modules (PTY) install for the host only.
   # The zip is what the in-app updater downloads on macOS; the dmg is for first installs.
   target: [dmg, zip]
   category: public.app-category.developer-tools
   hardenedRuntime: true
   entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
-  extendInfo:
-    NSMicrophoneUsageDescription: Hiveory listens only while you hold Queen Bee's talk shortcut, and transcribes on this computer.
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:

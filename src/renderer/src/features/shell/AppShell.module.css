@@ -122,7 +122,7 @@
   grid-column: 2;
 }
 
-/* Screens fill what Queen Bee's docked bar leaves (ADR 0019). */
+/* Screens fill the main column. */
 .stage {
   position: relative;
   flex: 1;

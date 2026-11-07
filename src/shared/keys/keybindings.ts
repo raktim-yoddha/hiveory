@@ -1,4 +1,4 @@
-import { formatShortcut, parseShortcut, type Modifier, type Shortcut } from '../queen/shortcut'
+import { formatShortcut, parseShortcut, type Modifier, type Shortcut } from './shortcut'
 
 /**
  * The app's keyboard shortcuts (ADR 0047), each with the standard keys of its platform: ⌘ on macOS;
@@ -81,11 +81,10 @@ export function commandFor(event: KeyLike, overrides: Keybindings, platform: str
   return null
 }
 
-/** Who already uses these keys (another command, or Queen Bee), for the recorder to say so. */
-export function bindingClash(text: string, self: AppCommandId | 'queen', overrides: Keybindings, queen: Shortcut, platform: string): string | null {
+/** Which other command already uses these keys, for the recorder to say so. */
+export function bindingClash(text: string, self: AppCommandId, overrides: Keybindings, platform: string): string | null {
   const wanted = parseShortcut(text)
   if (!wanted) return null
   const same = (s: Shortcut | null): boolean => s !== null && formatShortcut(s) === formatShortcut(wanted)
-  if (self !== 'queen' && same(queen)) return 'Queen Bee'
   return APP_COMMANDS.find((c) => c.id !== self && same(bindingOf(c.id, overrides, platform)))?.label ?? null
 }

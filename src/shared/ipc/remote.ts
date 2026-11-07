@@ -13,7 +13,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.rename', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot', 'terminalHost.status', 'terminalHost.restart',
   'layout.get', 'layout.apply', 'presets.list', 'presets.save', 'presets.delete', 'kanban.board',
-  'queen.plan', 'queen.peek', 'queen.accounts', 'queen.saveAccount', 'queen.removeAccount', 'queen.moveAccount', 'queen.testAccount', 'queen.listModels',
+  'agents.peek',
   'settings.get', 'settings.update', 'shell.open', 'shell.restart', 'shell.close', 'extensions.scan',
   'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'files.paste', 'files.watch',
   'editors.list', 'editors.open', 'editors.close',
@@ -24,19 +24,18 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest',
   'store.searchSkills', 'store.topSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
   'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list',
-  // Everything a mode needs that runs on the server itself, not this window (ADR 0052): stop a Queen Bee
-  // plan, and write and remove skills.
-  'queen.cancelPlan', 'extensions.createSkill', 'extensions.removeSkill', 'extensions.copySkill'
+  // Everything a mode needs that runs on the server itself, not this window (ADR 0052): write and remove skills.
+  'extensions.createSkill', 'extensions.removeSkill', 'extensions.copySkill'
 ])
 
 /**
  * Answered by the client's own machine even while it is connected to a server: its clipboard,
  * links, switching servers, and neutral answers for the window's start-up reads of things a
- * client does not have (updates, voice packs, built-in browser pages, wallpapers).
+ * client does not have (updates, built-in browser pages, wallpapers).
  */
 export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
   'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
-  'updates.status', 'voice.status', 'browser.state', 'wallpapers.list', 'themes.installed'
+  'updates.status', 'browser.state', 'wallpapers.list', 'themes.installed'
 ])
 
 /** The server's wire format: a call, and one event on the event stream. */

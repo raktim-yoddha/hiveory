@@ -1,9 +1,8 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { formatShortcut, isModifierCode, MODIFIERS, parseShortcut, shortcutLabel, type Modifier, type Shortcut } from '@shared/queen/shortcut'
+import { formatShortcut, isModifierCode, MODIFIERS, parseShortcut, shortcutLabel, shortcutRecording, type Modifier, type Shortcut } from '@shared/keys/shortcut'
 import { Button } from '../../components/ui/Button'
 import { cx } from '../../lib/cx'
 import { usePlatform } from '../../lib/platform'
-import { shortcutRecording } from '../queen/useQueenShortcut'
 import styles from './Settings.module.css'
 
 const modifierOf = (code: string): Modifier | null => {

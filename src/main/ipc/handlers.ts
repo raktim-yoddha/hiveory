@@ -1,18 +1,15 @@
-import { BrowserWindow, app, clipboard, dialog, nativeImage, safeStorage, shell, systemPreferences } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, nativeImage, safeStorage, shell } from 'electron'
 import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
 import { HOST_PROTOCOL } from '@shared/host/protocol'
-import { hostKey, hostLabel, isOpenableUrl, type AgentSession } from '@shared/domain'
+import { hostKey, hostLabel, isOpenableUrl, lastWords, type AgentSession } from '@shared/domain'
 import { fail } from '@shared/errors'
 import type { Container } from '../app/container'
 import { WALLPAPER_EXTENSIONS } from '../services/appearance/wallpaper-service'
 import { buildBoard } from '../services/kanban/build-board'
 import type { Handlers } from './router'
 import { deliverMessage } from '../services/agent-tools/deliver'
-import { voiceFor } from '@shared/queen/voice'
-import { personaInfo } from '@shared/queen/personas'
-import { lastWords } from '@shared/queen/updates'
 import { join } from 'node:path'
 import type { Project } from '@shared/domain'
 import { samePath } from '../services/projects/project-service'
@@ -202,33 +199,8 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
       fail('INVALID_INPUT', error instanceof Error ? error.message : String(error))
     )
   },
-  'queen.accounts': () => c.queenBrain.accounts(),
-  'queen.saveAccount': (input) => c.queenBrain.save(input),
-  'queen.removeAccount': ({ id }) => c.queenBrain.remove(id),
-  'queen.moveAccount': ({ id, to }) => c.queenBrain.move(id, to),
-  'queen.testAccount': ({ id }) => c.queenBrain.test(id),
-  'queen.cancelPlan': () => c.queenBrain.stop(),
-  'queen.listModels': (input) => c.queenBrain.listModels(input),
-  'voice.status': () => c.voice.status(),
-  'voice.download': ({ pack }) => c.voice.download(pack),
-  'voice.cancel': ({ pack }) => c.voice.cancel(pack),
-  'voice.remove': ({ pack }) => c.voice.remove(pack),
-  'voice.transcribe': ({ samples, language }) => c.voice.transcribe(samples, language),
-  'voice.speak': ({ text, sid }) => {
-    const s = c.settings.get()
-    return c.voice.speak(text, sid ?? voiceFor(s).sid, s.queenVoiceSpeed)
-  },
-  'voice.micAccess': async () => {
-    if (process.platform === 'darwin') return systemPreferences.askForMediaAccess('microphone')
-    if (process.platform === 'win32') return systemPreferences.getMediaAccessStatus('microphone') !== 'denied'
-    return true
-  },
-  'queen.plan': ({ utterance, context }) => {
-    const s = c.settings.get()
-    return c.queenBrain.plan(utterance, context, personaInfo(s), s.queenMemory)
-  },
   'agents.interrupt': ({ instanceId }) => c.agents.interrupt(instanceId),
-  'queen.peek': ({ instanceId }) => {
+  'agents.peek': ({ instanceId }) => {
     const agent = c.agents.find(instanceId) ?? fail('NOT_FOUND', 'That agent is no longer open.')
     const details = c.agents.details(agent)
     const excerpt = lastWords(agent.chatUi ? c.chats.lastReply(agent.id) : c.runtime.screenText(agent.id, 60))
@@ -240,11 +212,6 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
       ...(details.activity ? { activity: details.activity } : {}),
       ...(excerpt ? { excerpt } : {})
     }
-  },
-  'queen.hotkeyStatus': () => c.hotkey.current(),
-  'queen.hotkeyAccess': () => {
-    const s = c.settings.get()
-    return c.hotkey.requestAccess(s.queenGlobalShortcut, s.queenShortcut)
   },
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)

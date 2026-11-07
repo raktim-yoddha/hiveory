@@ -1,6 +1,6 @@
 /**
  * What Hiveory is and where everything lives, in the user's words (ADR 0041). One source for every
- * agent's `hiveory_about` tool and for Queen Bee, so they answer "where do I…" questions the same way.
+ * agent's `hiveory_about` tool, so agents answer "where do I…" questions the same way.
  * Product facts only: never user data, paths or settings values.
  */
 export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = [
@@ -12,16 +12,15 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Side panel', "A worktree's right panel. It always has Dashboard, Sessions (the agents' conversation history, from the machine the Workspace lives on), Explorer (files), Schedules (a calendar of the Workspace's scheduled agents) and Workspace settings; drag a tab into the lower half for a dual view."],
   ['Dashboard', "The workspace page in the side panel. Tabs: Tasks (the board), Worktrees (changes and each branch's pull or merge request) and Issues (from GitHub, GitLab, Jira or Linear; start a worktree from one)."],
   ['Workspace settings', 'Name, icon, emoji or avatar (its own image, or its GitHub or GitLab avatar) and color; how new agents open (terminal or chat); chat models; branch prefix and base branch; code host and issue source.'],
-  ['Queen Bee', 'The voice and text operator: opens, messages and reports on agents, lays out the panes of a worktree (a grid, columns, rows, one agent big; swaps, moves and resizes them by agent name), navigates and changes a few settings. Her shortcut is in Settings › Queen Bee and Settings › Keyboard; there (Bar & shortcut › Where she sits) or in her menu she can be docked, floating, or put away in the sidebar, where only her mark stays at its top and her bar drops down when called.'],
   ['Settings › Appearance', 'In sections: Theme (Dark, Bronze, Silver, then VS Code color themes); Background (wallpaper, transparency, blur, dim); Terminal font.'],
   ['Settings › Agents', 'Hiveory tools for agents, default auto-approve and chat view, computer use, keep running in the background, Terminal host (keep agents running when Hiveory quits, keep them for, restart), Pluto (download the separate desktop pet that shows every agent session on this computer, and whether it may see the agents here).'],
   ['Settings › Browser', 'Browser use for agents, the agent cursor, home page, profiles and viewport sizes.'],
   ['Settings › Skills, MCPs & Apps', 'Skills across every CLI (and skills.sh to find more), MCP servers Hiveory runs for every agent (and the MCP Registry), and apps through Composio.'],
   ['Settings › Integrations', 'GitHub and GitLab sign-in status (gh, glab) and Jira or Linear keys.'],
   ['Settings › Remote', 'Share this computer over Tailscale or the local network, pair the phone, SSH hosts and Hiveory servers.'],
-  ['Settings › Keyboard', 'Every shortcut, with the platform standard keys (⌘ on macOS, Ctrl on Windows and Linux): Queen Bee, Settings, sidebar, side panel, worktrees, panes and tabs. Change, remove or reset each; fixed terminal and editor keys are listed too.'],
+  ['Settings › Keyboard', 'Every shortcut, with the platform standard keys (⌘ on macOS, Ctrl on Windows and Linux): Settings, sidebar, side panel, worktrees, panes and tabs. Change, remove or reset each; fixed terminal and editor keys are listed too.'],
   ['Settings › Updates', 'Check for updates and how often.'],
-  ['Settings › Guide', 'A short chapter for every part of the app: getting started, worktrees and Git, panes, the Kanban, the browser, Queen Bee, schedules, skills and apps, integrations, remote and phone, keyboard, appearance and troubleshooting.']
+  ['Settings › Guide', 'A short chapter for every part of the app: getting started, worktrees and Git, panes, the Kanban, the browser, schedules, skills and apps, integrations, remote and phone, keyboard, appearance and troubleshooting.']
 ]
 
 /** The guide as plain lines: "Place: what is there." */

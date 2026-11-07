@@ -1,11 +1,10 @@
-import type { CliStatus, WaitingReason } from '../domain'
+import type { CliStatus, WaitingReason } from './cli'
 
 /**
- * Queen Bee's live updates (ADR 0019): what an agent just did, whether anyone
- * asked her or not. Computed in main from real status changes; the renderer
- * phrases them in the personality's voice and may say them out loud.
+ * What an agent just did (ADR 0019, 0057): computed in main from real status changes. A phone push
+ * goes out when one starts waiting for you.
  */
-export interface QueenUpdate {
+export interface AgentUpdate {
   /** finished: was working, now idle. waiting: needs you. stopped: its process ended with an error. */
   kind: 'finished' | 'waiting' | 'stopped'
   instanceId: string
@@ -22,8 +21,8 @@ export interface QueenUpdate {
   workedSeconds?: number
 }
 
-/** One agent up close, for "what is Bruno doing?". */
-export interface QueenPeek {
+/** One agent up close: its status and its last words (browser notes wait for these, ADR 0057). */
+export interface AgentPeek {
   petName: string
   status: CliStatus
   running: boolean

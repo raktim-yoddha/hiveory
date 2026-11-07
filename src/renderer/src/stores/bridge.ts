@@ -6,7 +6,6 @@ import { useConnections } from './connections'
 import { useEditors } from './editors'
 import { useHostLinks, useSshPrompts } from './hosts'
 import { useNotices } from './notices'
-import { useVoice } from '../features/queen/voice'
 import { useRoutines } from './routines'
 
 /** Events arriving within this window trigger one reload per cache key. */
@@ -51,7 +50,6 @@ export const installEventBridge = (): (() => void) => {
     subscribe('runtime.changed', ({ instanceId, runtime }) => useAgents.getState().setRuntime(instanceId, runtime)),
     subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
     subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
-    subscribe('voice.changed', (packs) => useVoice.getState().setPacks(packs)),
     subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary)),
     subscribe('browser.changed', (state) => useBrowser.getState().set(state)),
     subscribe('hosts.changed', ({ key, status }) => useHostLinks.getState().set(key, status)),

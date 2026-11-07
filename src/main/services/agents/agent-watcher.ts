@@ -1,5 +1,5 @@
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
-import type { QueenUpdate } from '@shared/queen/updates'
+import type { AgentUpdate } from '@shared/domain'
 
 export interface WatcherDeps {
   agent(instanceId: string): CliInstance | undefined
@@ -9,7 +9,7 @@ export interface WatcherDeps {
   workspaceName(workspaceId: string): string | undefined
   /** The agent's last chat reply or the last meaningful words on its screen. */
   excerpt(agent: CliInstance): string | undefined
-  emit(update: QueenUpdate): void
+  emit(update: AgentUpdate): void
   now?: () => number
 }
 
@@ -17,12 +17,11 @@ export interface WatcherDeps {
 export const MIN_WORK_MS = 4000
 
 /**
- * Queen Bee's live updates (ADR 0019): watches every agent's real status and
- * reports what matters — it finished, it needs you, it stopped with an error —
- * whether or not Queen Bee started the work. The first status seen for an
- * agent is only recorded, so restarts and app launch stay quiet.
+ * Watches every agent's real status (ADR 0019, kept by ADR 0057 for phone pushes) and reports what
+ * matters: it finished, it needs you, it stopped with an error. The first status seen for an agent
+ * is only recorded, so restarts and app launch stay quiet.
  */
-export class QueenWatcher {
+export class AgentWatcher {
   private readonly last = new Map<string, { status: CliRuntimeDetails['status']; running: boolean; since: number }>()
 
   constructor(private readonly deps: WatcherDeps) {}

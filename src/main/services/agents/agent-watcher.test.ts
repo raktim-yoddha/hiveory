@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { CliInstance, CliRuntimeDetails } from '@shared/domain'
-import { lastWords, type QueenUpdate } from '@shared/queen/updates'
-import { QueenWatcher } from './queen-watcher'
+import { lastWords, type AgentUpdate } from '@shared/domain'
+import { AgentWatcher } from './agent-watcher'
 
 const agent = (id: string, cliId = 'claude'): CliInstance => ({ id, cliId, petName: id === 'a1' ? 'Bruno' : 'Otis', projectId: 'p1', workspaceId: 'w1' }) as CliInstance
 const rt = (status: CliRuntimeDetails['status'], running = true, extra: Partial<CliRuntimeDetails> = {}): CliRuntimeDetails => ({ status, running, ...extra })
 
 const setup = () => {
   let now = 0
-  const updates: QueenUpdate[] = []
-  const watcher = new QueenWatcher({
+  const updates: AgentUpdate[] = []
+  const watcher = new AgentWatcher({
     agent: (id) => agent(id, id === 'a2' ? 'powershell' : 'claude'),
     isShell: (cliId) => cliId === 'powershell',
     cliName: () => 'Claude Code',
@@ -21,7 +21,7 @@ const setup = () => {
   return { watcher, updates, tick: (ms: number) => (now += ms) }
 }
 
-describe('Queen Bee live updates', () => {
+describe('agent updates', () => {
   it('tells when an agent finishes real work, and when it needs you', () => {
     const { watcher, updates, tick } = setup()
     watcher.onRuntime('a1', rt('idle'))

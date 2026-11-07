@@ -14,8 +14,6 @@ export interface AppPaths {
   wallpapersDir: string
   /** Installed VS Code color themes, as Hiveory tokens (ADR 0034). */
   themesDir: string
-  /** Queen Bee's speech packs (large, machine-local). */
-  voiceDir: string
   /** Set when this desktop uses a Hiveory server (ADR 0022): how to reach it, token sealed. */
   clientFile: string
   /** Devices paired with this machine when it runs as a Hiveory server (token hashes only). */
@@ -41,7 +39,6 @@ export const resolvePaths = (userData: string, appName: string, env = process.en
     worktreeRoot: join(dataRoot, 'Workspaces'),
     wallpapersDir: join(userData, 'wallpapers'),
     themesDir: join(userData, 'themes'),
-    voiceDir: join(dataRoot, 'Voice'),
     clientFile: join(userData, 'client.json'),
     serverDevicesFile: join(userData, 'server-devices.json')
   }

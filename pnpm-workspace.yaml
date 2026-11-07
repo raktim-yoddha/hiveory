@@ -6,4 +6,3 @@ allowBuilds:
   electron: true
   '@lydell/node-pty': true
   electron-winstaller: false
-  uiohook-napi: false

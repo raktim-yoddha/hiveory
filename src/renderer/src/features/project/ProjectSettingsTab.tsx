@@ -89,7 +89,7 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
         />
         <SettingRow
           title="Announce agents"
-          description="Queen Bee's updates and phone notifications when an agent here finishes or needs you. Turn off for a quiet workspace."
+          description="Phone notifications when an agent here needs you. Turn off for a quiet workspace."
           control={<Toggle label="Announce agents in this workspace" checked={s.alerts !== false} onChange={(on) => void update(project.id, { settings: { alerts: on ? null : false } })} />}
         />
       </div>

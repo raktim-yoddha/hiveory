@@ -521,12 +521,6 @@
   transform: scale(1);
 }
 
-/* A full-width field (text area, single slider) inside a group, aligned with its rows. */
-.fieldBlock {
-  padding: var(--space-6) var(--space-7);
-  border-top: var(--border-width) solid var(--color-border-subtle);
-}
-
 .sliders {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -701,75 +695,7 @@
   width: calc(var(--space-11) * 2);
 }
 
-/* Queen Bee personalities: selection is a tinted fill, never an outline. */
-.personas {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-
-.persona {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-6);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-inset);
-  color: var(--color-text);
-  text-align: left;
-  transition: background var(--duration-fast) var(--ease-out);
-}
-
-.persona:hover {
-  background: var(--color-surface-hover);
-}
-
-.persona[aria-checked='true'] {
-  background: var(--fill-accent-soft);
-}
-
-.personaName {
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-}
-
-.persona[aria-checked='true'] .personaName {
-  color: var(--color-accent);
-}
-
-.personaTagline {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-.personaSample {
-  margin-top: var(--space-2);
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  font-style: italic;
-}
-
-@container (max-width: 880px) {
-  .personas {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container (max-width: 560px) {
-  .personas {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* A text setting with its validation message under it. */
-.draftField {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-/* Queen Bee › Model */
+/* Controls in a row, and what a check found (a shortcut's problem). */
 .inlineControls {
   display: flex;
   flex-wrap: wrap;
@@ -777,19 +703,6 @@
   gap: var(--space-3);
 }
 
-.inlineIcon {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.inlineIcon svg,
-.testOk svg {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.testOk,
 .testFail {
   display: inline-flex;
   align-items: center;
@@ -797,32 +710,16 @@
   font-size: var(--text-xs);
 }
 
-.testOk {
-  color: var(--color-text-secondary);
-}
-
-.testOk svg {
-  color: var(--color-accent);
-}
-
 .testFail {
   color: var(--color-danger);
 }
 
-/* A section's main tab switch (Queen Bee), like Skills, MCPs & Apps. */
+/* A section's main tab switch, like Skills, MCPs & Apps. */
 .tabsHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-}
-
-.persona[aria-pressed='true'] {
-  background: var(--fill-accent-soft);
-}
-
-.persona[aria-pressed='true'] .personaName {
-  color: var(--color-accent);
 }
 
 /* A shortcut shown as keys. */
@@ -864,183 +761,8 @@
   font-size: var(--text-sm);
 }
 
-.listDescription {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-}
-
-/* Numbered how-to (Queen Bee › Voice): three step cards, then a privacy line. */
-.steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(calc(var(--menu-min-width) * 0.9), 1fr));
-  gap: var(--space-4);
-  margin: 0;
-  padding: var(--space-3) var(--space-7) var(--space-6);
-  list-style: none;
-}
-
-.step {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-6);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-}
-
-.stepHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
-}
-
-.stepNumber {
-  display: grid;
-  place-items: center;
-  width: var(--control-sm);
-  height: var(--control-sm);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-active);
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.step[data-done] .stepNumber {
-  background: var(--fill-accent-soft);
-  color: var(--color-accent);
-}
-
-.stepNumber svg {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.stepIcon {
-  display: inline-flex;
-  color: var(--color-text-muted);
-}
-
-.stepIcon svg {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-}
-
-.stepTitle {
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.stepText {
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-}
-
-.privacy {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin: 0;
-  padding: var(--space-5) var(--space-7) var(--space-6);
-  border-top: var(--border-width) solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-}
-
-.privacy svg {
-  flex: none;
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--color-accent);
-}
-
-.privacy strong {
-  color: var(--color-text-secondary);
-  font-weight: var(--weight-semibold);
-}
-
-.noteIcon {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  vertical-align: -2px;
-}
-
-/* Queen Bee › Providers: the add/edit dialog. */
-.dialogForm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8);
-}
-
-.modelField {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
 .modelField .inlineControls > :first-child {
   flex: 1;
-}
-
-.modelList {
-  display: flex;
-  flex-direction: column;
-  max-height: calc(var(--control-md) * 8);
-  overflow-y: auto;
-}
-
-.modelOption {
-  height: var(--control-md);
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-align: left;
-}
-
-.modelOption:hover,
-.modelOption:focus-visible {
-  background: var(--color-surface-hover);
-  color: var(--color-text);
-}
-
-.modelOption[aria-selected='true'] {
-  background: var(--fill-accent-soft);
-  color: var(--color-accent);
-}
-
-/* Queen Bee › Voice: her voices as cards, each with its own preview. */
-.voiceHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-4);
-}
-
-.voiceChoice {
-  position: relative;
-  display: flex;
-}
-
-.voiceChoice > .persona {
-  flex: 1;
-  padding-right: calc(var(--space-6) + var(--control-sm));
-}
-
-.voicePreview {
-  position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
 }
 
 /* A narrow container (the side panel's Workspace settings, ADR 0038): the control goes under its text. */

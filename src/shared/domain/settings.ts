@@ -60,56 +60,8 @@ export interface AppSettings {
   wallpaperDim: number
   /** Applied VS Code color theme (`<extension>/<slug>`, ADR 0034); '' = the built-in `theme`. */
   vscodeTheme: string
-  /** Queen Bee's personality (ADR 0019). */
-  queenPersona: 'ada' | 'sunny' | 'frankie' | 'custom'
-  /** Custom personality: her name (never an agent pet name). */
-  queenCustomName: string
-  /** Custom personality: how she should come across, in the user's words (≤ 500 chars; style only). */
-  queenCustomPersona: string
-  /** Custom personality sliders, 0–100. formal (100) ← → casual (0). */
-  queenCustomFormal: number
-  /** energetic (100) ← → calm (0). */
-  queenCustomEnergy: number
-  /** direct (100) ← → gentle (0). */
-  queenCustomDirect: number
-  /** How she should say your name aloud ('' = as written). */
-  queenCallMeSay: string
-  /** Frankie: the goal and deadline she keeps you honest about ('' = none). */
-  queenGoal: string
-  /** Frankie: how hard she pushes. */
-  queenIntensity: 'steady' | 'hard'
-  /** Things she's learned: notes the user asked her to remember. Local only. */
-  queenMemory: string[]
-  /** Her shortcut also works while another app is focused (native keyboard hook; opt-in). */
-  queenGlobalShortcut: boolean
-  /** Kokoro speaker id, or -1 for the personality's own voice. */
-  queenVoice: number
-  /** What Queen Bee calls you ('' = nothing). */
-  queenCallMe: string
-  /** Ada: how she addresses you. */
-  queenHonorific: 'sir' | 'maam' | 'name' | 'none'
-  /** Sunny: celebration level. */
-  queenHype: 'calm' | 'lively' | 'max'
-  /** Frankie: minutes an agent may wait on you before she calls it out (0 = never). */
-  queenNudgeMinutes: number
-  /** Short replies drop the second sentence. */
-  queenLength: 'short' | 'normal'
-  /** Tap to focus Queen Bee, hold to talk; '' = the platform's standard keys (shared/queen/shortcut.ts, ADR 0047). */
-  queenShortcut: string
   /** The user's changes to the app's shortcuts (Settings › Keyboard, ADR 0047); '' clears one. */
   keybindings: Keybindings
-  /** The language Queen Bee listens in (picks the speech pack). */
-  queenSpeechLanguage: 'en' | 'es' | 'pt' | 'de' | 'fr' | 'hi'
-  /** Talkback: when she answers out loud (Kokoro when installed, otherwise the system voice). */
-  queenTalkback: 'always' | 'after-voice' | 'never'
-  /** Short sound cues: listening, done, an agent update. */
-  queenSounds: boolean
-  /** Live updates from agents: finished and waiting, only waiting, or none. */
-  queenUpdates: 'all' | 'waiting' | 'off'
-  /** Her replies pop open over the work; off (default), they wait behind her message button (ADR 0039). */
-  queenPopups: boolean
-  /** Speaking speed (0.8–1.4). */
-  queenVoiceSpeed: number
 }
 
 /** How long terminals stay once no Hiveory is attached: until they end, or a limit (ADR 0050 §7). */
@@ -195,31 +147,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wallpaperBlur: 0,
   wallpaperDim: 0.25,
   vscodeTheme: '',
-  queenPersona: 'ada',
-  queenCustomName: 'Zara',
-  queenCustomPersona: '',
-  queenCustomFormal: 50,
-  queenCustomEnergy: 50,
-  queenCustomDirect: 50,
-  queenCallMeSay: '',
-  queenGoal: '',
-  queenIntensity: 'steady',
-  queenMemory: [],
-  queenGlobalShortcut: false,
-  queenVoice: -1,
-  queenCallMe: '',
-  queenHonorific: 'none',
-  queenHype: 'lively',
-  queenNudgeMinutes: 10,
-  queenLength: 'normal',
-  queenShortcut: '',
   keybindings: {},
-  queenSpeechLanguage: 'en',
-  queenTalkback: 'always',
-  queenSounds: true,
-  queenUpdates: 'all',
-  queenPopups: false,
-  queenVoiceSpeed: 1.05
 }
 
 export const THEMES: Array<{ id: ThemeId; name: string; description: string }> = [
