@@ -198,7 +198,7 @@
    * header, centred on it (page top + top bar + page top); main's overlay height matches. macOS's
    * traffic lights sit in the sidebar's top bar.
    */
-  --window-controls-height: 54px;
+  --window-controls-height: 46px;
   --window-controls-width: 140px;
   --traffic-lights-width: calc(var(--space-11) + var(--space-8));
   /* The sidebar's top bar lines up with the panes' and the side panel's headers. Its folded form is an icon rail. */
@@ -211,7 +211,7 @@
   --calendar-hour-height: 48px;
   --calendar-gutter-width: 56px;
   /* Every top bar: panes, the side panel and the sidebar (ADR 0056). */
-  --pane-header-height: calc(var(--control-lg) + var(--space-3));
+  --pane-header-height: calc(var(--control-lg) + var(--space-1));
   --pane-min-width: 240px;
   --pane-min-height: 140px;
   --dialog-width: 520px;
@@ -239,7 +239,7 @@
   --gutter: 10px;
   --page-padding: 10px;
   /* Above the columns: no title bar, so a little less air than the sides (ADR 0056). */
-  --page-top: var(--space-4);
+  --page-top: var(--space-3);
   /* Corners of the big surfaces: sidebars, side panel, panes, screens. */
   --surface-radius: var(--radius-lg);
   /* A pane's edge at rest: none; the gutter's air separates panes. */

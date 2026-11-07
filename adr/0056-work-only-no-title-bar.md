@@ -50,9 +50,9 @@ left the title bar was an empty strip above everything.
 
 The product owner found the top bars too short and the air above them too tall, and wanted the side
 panel's button on the right. Every top bar (the sidebar's, a pane's, the side panel's) is now
-`--pane-header-height` (`--control-lg` + `--space-3`); above the columns there is `--page-top`
-(`--space-4`, a little less than the sides), and the window controls are 54 px tall so they centre on
-the top bars. The side panel
+`--pane-header-height` (`--control-lg` + `--space-1`, 34 px); above the columns there is `--page-top`
+(`--space-3`, a little less than the sides), and the native window controls are 46 px tall so they
+centre on the top bars (Windows only lets their height change, never their width or glyphs). The side panel
 button leaves the sidebar and its rail: it sits at the top right, on the top bars' centre line, left of
 the window controls (at the corner on macOS). The top-right top bar leaves `--top-right-room` for both;
 the corner is found by the bar's right edge meeting the main area's, on every platform.
