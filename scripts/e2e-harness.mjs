@@ -27,7 +27,10 @@ export let page
 let closing = false
 export const launch = async (extraEnv = {}) => {
   // Automated runs never leave agents running in a terminal host after they end (ADR 0050).
-  app = await electron.launch({ args: ['.'], env: { ...process.env, HIVEORY_USER_DATA: profile, LOCALAPPDATA: local, HIVEORY_STOP_AGENTS_ON_QUIT: '1', ...extraEnv } })
+  // Windows marks a covered window hidden and stops painting it, so tests would depend on what else
+  // is on screen. The window keeps painting while the tests run, even with other windows on top.
+  const paint = ['--disable-features=CalculateNativeWinOcclusion', '--disable-backgrounding-occluded-windows', '--disable-renderer-backgrounding']
+  app = await electron.launch({ args: [...paint, '.'], env: { ...process.env, HIVEORY_USER_DATA: profile, LOCALAPPDATA: local, HIVEORY_STOP_AGENTS_ON_QUIT: '1', ...extraEnv } })
   const proc = app.process()
   proc.on('exit', (code, signal) => {
     if (!closing) console.log(`  !! Electron exited unexpectedly (code ${code}, signal ${signal})`)
