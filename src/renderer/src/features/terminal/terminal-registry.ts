@@ -5,6 +5,7 @@ import { Terminal, type ITheme } from '@xterm/xterm'
 import { DEFAULT_TERMINAL_FONT, type FontWeight, type TerminalFont } from '@shared/domain'
 import { api, subscribe } from '../../lib/api'
 import { createDarkBackgroundFilter } from './dark-backgrounds'
+import { findTerminalLinks, type TerminalLink } from './terminal-links'
 import { adaptiveFontSize, type LayoutNeeds, MIN_FONT_SIZE, smallerFontSize, visibleTop } from './terminal-fit'
 
 /**
@@ -102,6 +103,53 @@ interface Entry {
   filter: (chunk: string) => string
   /** Set while the terminal is off screen: when it fires, the terminal is freed (see IDLE_MS). */
   idle?: ReturnType<typeof setTimeout>
+  /** Opens a Ctrl/⌘-clicked link; links are not offered where nothing can open them. */
+  openLink?: (link: TerminalLink) => void
+}
+
+const MAC = /Mac/i.test(navigator.platform)
+
+/** Links open on Ctrl+click (⌘ on macOS): a plain click stays a click (selection, the CLI's own mouse). */
+const activateLink = (instanceId: string, event: MouseEvent, link: TerminalLink): void => {
+  if (MAC ? event.metaKey : event.ctrlKey) entries.get(instanceId)?.openLink?.(link)
+}
+
+/** An OSC 8 hyperlink (a CLI's own link): web addresses and file:// paths. */
+const osc8Link = (uri: string): TerminalLink | null => {
+  if (/^https?:\/\//i.test(uri)) return { kind: 'url', start: 0, end: 0, text: uri, url: uri }
+  if (!/^file:\/\//i.test(uri)) return null
+  try {
+    const url = new URL(uri)
+    const path = decodeURIComponent(url.pathname).replace(/^\/([A-Za-z]:)/, '$1')
+    const line = /^#L?(\d+)/.exec(url.hash)?.[1]
+    return { kind: 'file', start: 0, end: 0, text: uri, path, line: line ? Number(line) : undefined }
+  } catch {
+    return null
+  }
+}
+
+/** Underlines links in the output (on hover) and opens them on Ctrl/⌘+click. */
+const provideLinks = (instanceId: string, term: Terminal, element: HTMLElement): void => {
+  term.registerLinkProvider({
+    provideLinks: (y, callback) => {
+      const line = term.buffer.active.getLine(y - 1)
+      if (!line || !entries.get(instanceId)?.openLink) return callback(undefined)
+      // ponytail: one row at a time, columns = characters; links wrapped across rows or after wide glyphs (CJK, emoji) may be missed or offset.
+      const found = findTerminalLinks(line.translateToString(true))
+      callback(
+        found.length
+          ? found.map((link) => ({
+              range: { start: { x: link.start + 1, y }, end: { x: link.end, y } },
+              text: link.text,
+              decorations: { underline: true, pointerCursor: true },
+              activate: (event: MouseEvent) => activateLink(instanceId, event, link),
+              hover: () => (element.title = `${MAC ? '⌘' : 'Ctrl'}+click to open`),
+              leave: () => (element.title = '')
+            }))
+          : undefined
+      )
+    }
+  })
 }
 
 /**
@@ -176,7 +224,14 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
     overviewRuler: { width: SCROLLBAR_PX },
     minimumContrastRatio: minimumContrast(),
     fontWeight: fontWeight(),
-    theme
+    theme,
+    linkHandler: {
+      activate: (event, uri) => {
+        const link = osc8Link(uri)
+        if (link) activateLink(instanceId, event, link)
+      },
+      allowNonHttpProtocols: true
+    }
   })
   const fit = new FitAddon()
   term.loadAddon(fit)
@@ -227,6 +282,7 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
   })
   const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic) }
   entries.set(instanceId, entry)
+  provideLinks(instanceId, term, element)
   // Track cursor visibility (CSI ? 25 h / l) without consuming it: xterm still applies it.
   for (const final of ['h', 'l']) {
     term.parser.registerCsiHandler({ prefix: '?', final }, (params) => {
@@ -340,10 +396,11 @@ export const fitTerminal = (instanceId: string): void => {
 }
 
 /** Mounts the instance's terminal into `host`. Returns a detach function. */
-export const attachTerminal = (instanceId: string, host: HTMLElement, needs: LayoutNeeds): (() => void) => {
+export const attachTerminal = (instanceId: string, host: HTMLElement, needs: LayoutNeeds, openLink?: (link: TerminalLink) => void): (() => void) => {
   const entry = entries.get(instanceId) ?? create(instanceId, needs)
   clearTimeout(entry.idle)
   entry.needs = needs
+  entry.openLink = openLink
   host.appendChild(entry.element)
   let cancelled = false
   void fontReady.then(() => {

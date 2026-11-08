@@ -29,6 +29,7 @@ export function EditorPane({ editor, onDragHandlePointerDown, toggleMaximize, ta
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [dirty, setDirty] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
+  const reveal = useEditors((s) => s.reveal[editor.id])
   const current = useRef('')
   const scope = { workspaceId: editor.workspaceId }
 
@@ -99,6 +100,8 @@ export function EditorPane({ editor, onDragHandlePointerDown, toggleMaximize, ta
           value={loaded.saved}
           revision={loaded.revision}
           filename={editor.name}
+          reveal={reveal}
+          onRevealed={() => useEditors.getState().revealed(editor.id)}
           onChange={(value) => {
             current.current = value
             setDirty(value !== loaded.saved)

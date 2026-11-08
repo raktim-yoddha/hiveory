@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { cx } from '../../lib/cx'
 import { useNotices } from '../../stores/notices'
 import { droppedPathsText } from './drop-paths'
+import type { TerminalLink } from './terminal-links'
 import '@xterm/xterm/css/xterm.css'
 import { attachTerminal, fitTerminal, pasteIntoTerminal } from './terminal-registry'
 import styles from './TerminalView.module.css'
@@ -19,11 +20,18 @@ interface TerminalViewProps {
    * terminal runs on another machine, whose files these are not.
    */
   dropFiles?: 'windows' | 'posix' | false
+  /** Opens a Ctrl/⌘-clicked link in the output; without it, links are plain text. */
+  onLink?: (link: TerminalLink) => void
 }
 
 /** Hosts an agent's persistent terminal and keeps it fitted to the pane. */
-export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFiles = false }: TerminalViewProps) {
+export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFiles = false, onLink }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const linkRef = useRef(onLink)
+  useEffect(() => {
+    linkRef.current = onLink
+  })
+  const linkable = Boolean(onLink)
   const [over, setOver] = useState(false)
   const hasFiles = (e: DragEvent): boolean => [...e.dataTransfer.types].includes('Files')
   const onDragOver = (e: DragEvent): void => {
@@ -47,7 +55,7 @@ export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFile
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
-    const detach = attachTerminal(instanceId, host, { minColumns, minRows })
+    const detach = attachTerminal(instanceId, host, { minColumns, minRows }, linkable ? (link) => linkRef.current?.(link) : undefined)
     let timer: ReturnType<typeof setTimeout> | undefined
     // One trailing fit per resize burst: the TUI redraws once, at its final size.
     const observer = new ResizeObserver(() => {
@@ -60,7 +68,7 @@ export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFile
       observer.disconnect()
       detach()
     }
-  }, [instanceId, minColumns, minRows])
+  }, [instanceId, minColumns, minRows, linkable])
 
   return (
     <div

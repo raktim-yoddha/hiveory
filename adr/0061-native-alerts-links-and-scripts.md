@@ -74,3 +74,15 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
   instead of hiding it: a hidden window draws nothing, so no screenshot of an agent's page could be
   taken. It looks the same to the user; the tray icon brings it back. macOS and Linux still hide it.
 - After the window comes back from the tray, its place and size are remembered again.
+
+## Amendment (2026-11-09): links in terminals
+
+- Ctrl+click (⌘+click on macOS) on a web address in a terminal's output opens it in a browser pane
+  beside that terminal; on a file path (`src/app.ts:12:5`, `app.py(12,5)`, `guide.md#L12`, absolute or
+  relative) opens the file in an editor pane beside it, at that line and column. The CLI's own OSC 8
+  hyperlinks open the same way. A plain click stays a click (selection, the CLI's own mouse).
+- Only files of the worktree open: a path outside it is refused with a notice, and a name that is not
+  an existing file says so instead of opening an empty pane. No new IPC channel: links use
+  `browser.open`, `files.read`, `editors.open` and `layout.apply`.
+- Detection is per row and per character: links wrapped across rows, or after wide glyphs, may be
+  missed or offset.

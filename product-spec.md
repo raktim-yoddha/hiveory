@@ -449,3 +449,6 @@ Initial version does not include:
   run_script.
 - The window reopens where it was, at its size. Files dropped on a terminal type their quoted paths.
   Ctrl+F6 / Ctrl+Shift+F6 move between the sidebar, the worktree and the side panel.
+- Ctrl+click (⌘+click) in a terminal: a web address opens in a browser pane beside it; a file of the
+  worktree (`src/app.ts:12:5`, `(12,5)`, `#L12`) opens in an editor pane at that line. A plain click
+  stays a click; a path outside the worktree is refused.

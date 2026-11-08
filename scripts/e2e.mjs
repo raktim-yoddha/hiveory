@@ -821,6 +821,56 @@ await test('Ctrl+V pastes from the system clipboard (dictation tools use this pa
   await waitFor(async () => (await value('terminal.snapshot', { instanceId: shellPane.id })).data.includes('pasted-ok'), 'pasted text')
 })
 
+await test('Ctrl+click on a file:line or a URL in a terminal opens it beside the pane', async () => {
+  const ws = shellPane.workspaceId
+  writeFileSync(join(repo, 'linked.ts'), Array.from({ length: 40 }, (_, i) => `const line${i + 1} = ${i + 1}`).join('\n'))
+  const pane = page.locator(`section[aria-label="${shellPane.petName} agent"]`)
+  // The command line itself holds no link ([char]46 is ".", [char]58 is ":"); only the printed line does.
+  const show = async (expr) => {
+    await value('terminal.write', { instanceId: shellPane.id, data: `cls; echo (${expr})\r` })
+    await page.waitForTimeout(700)
+  }
+  /** Hovers down the first column until the link tooltip shows; returns that point. */
+  const findLink = async () => {
+    const box = await pane.locator('.xterm-screen').boundingBox()
+    for (let y = box.y + 4; y < box.y + Math.min(box.height, 260); y += 4) {
+      await page.mouse.move(box.x + 12, y)
+      if (await pane.locator('[title$="+click to open"]').count()) return { x: box.x + 12, y }
+    }
+    throw new Error('no link under the mouse')
+  }
+  const ctrlClick = async ({ x, y }) => {
+    await page.keyboard.down('Control')
+    await page.mouse.click(x, y)
+    await page.keyboard.up('Control')
+  }
+  await show(`'linked' + [char]46 + 'ts' + [char]58 + '25'`)
+  const at = await findLink()
+  // A plain click is a click: nothing opens.
+  await page.mouse.click(at.x, at.y)
+  await page.waitForTimeout(400)
+  expect(!(await value('editors.list', { workspaceId: ws })).some((e) => e.path === 'linked.ts'), 'a plain click opened the file')
+  await ctrlClick(at)
+  await waitFor(async () => (await value('editors.list', { workspaceId: ws })).some((e) => e.path === 'linked.ts'), 'linked.ts opened')
+  const file = page.locator('section[aria-label="linked.ts file"]')
+  await waitFor(async () => (await file.locator('.cm-activeLine').textContent().catch(() => '')) === 'const line25 = 25', 'the editor at line 25')
+
+  // A path outside the worktree is refused, and nothing opens.
+  const before = (await value('editors.list', { workspaceId: ws })).length
+  await show(`'..' + [char]47 + 'outside' + [char]46 + 'txt'`)
+  await ctrlClick(await findLink())
+  await page.getByText(/outside this worktree/).first().waitFor()
+  expect((await value('editors.list', { workspaceId: ws })).length === before, 'a file outside the worktree opened')
+
+  await show(`'http' + [char]58 + '//127.0.0.1' + [char]58 + '9/linked-page'`)
+  await ctrlClick(await findLink())
+  await waitFor(async () => (await value('browser.state')).pages.some((p) => p.scope === ws && p.url.includes('127.0.0.1:9/linked-page')), 'browser pane for the URL')
+  for (const p of (await value('browser.state')).pages.filter((p) => p.url.includes('linked-page'))) await value('browser.close', { pageId: p.id })
+  const opened = (await value('editors.list', { workspaceId: ws })).find((e) => e.path === 'linked.ts')
+  await value('editors.close', { editorId: opened.id })
+  rmSync(join(repo, 'linked.ts'))
+})
+
 await test('selection + Ctrl+C copies to the system clipboard', async () => {
   try {
     await app.evaluate(({ clipboard }) => clipboard.writeText(''))

@@ -3,10 +3,11 @@ import { Play } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { useAgents, useApp, useClis, useProjects } from '../../stores/data'
+import { useAgents, useApp, useClis, useProjects, useWorkspaces } from '../../stores/data'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
+import { openTerminalLink } from '../terminal/open-terminal-link'
 import { TerminalView } from '../terminal/TerminalView'
 import { AgentChatView } from './AgentChatView'
 import { agentActions } from './agent-actions'
@@ -30,6 +31,9 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleM
   const elsewhere = useProjects((s) => Boolean(s.projects.find((p) => p.id === agent.projectId)?.host))
   const info = useApp((s) => s.info)
   const dropFiles = elsewhere || info?.client ? false : info?.platform === 'win32' ? 'windows' : 'posix'
+  // Links in the output open beside the pane: web pages in a browser pane, worktree files in an editor.
+  const root = useWorkspaces((s) => s.byProject[agent.projectId]?.find((w) => w.id === agent.workspaceId)?.path)
+  const onLink = root ? (link: Parameters<typeof openTerminalLink>[0]) => void openTerminalLink(link, { workspaceId: agent.workspaceId, root, paneId: agent.id }) : undefined
   // A terminal has no status to show: Hiveory tracks agents, not shells (ADR 0044).
   const tracked = cli?.kind !== 'shell'
   useEffect(() => registerPaneCloser(agent.id, () => void agentActions.close(agent)), [agent])
@@ -43,7 +47,7 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleM
       tabStrip={tabStrip}
     >
       <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
-        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} dropFiles={dropFiles} />}
+        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} dropFiles={dropFiles} onLink={onLink} />}
       </ErrorBoundary>
       {!runtime.running && !agent.chatUi && (
         <div className={styles.stopped}>

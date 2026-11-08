@@ -149,13 +149,17 @@ interface CodeEditorProps {
   filename: string
   onChange: (value: string) => void
   onSave: () => void
+  /** A line (1-based) and column to jump to; a new object asks again. */
+  reveal?: { line: number; col: number }
+  /** Told once the jump is made, so it is not made again. */
+  onRevealed?: () => void
 }
 
 /**
  * CodeMirror 6: a few hundred KB, fast on large files, languages loaded only
  * when a file needs them. Presentational: loading and saving belong to the caller.
  */
-export function CodeEditor({ value, revision, filename, onChange, onSave }: CodeEditorProps) {
+export function CodeEditor({ value, revision, filename, onChange, onSave, reveal, onRevealed }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const callbacks = useRef({ onChange, onSave })
@@ -204,6 +208,19 @@ export function CodeEditor({ value, revision, filename, onChange, onSave }: Code
     view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revision])
+
+  // Jumps to a line asked for from outside (a terminal link), centred, with the cursor there.
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || !reveal) return
+    const doc = view.state.doc
+    const line = doc.line(Math.min(Math.max(1, reveal.line), doc.lines))
+    const pos = Math.min(line.from + Math.max(0, reveal.col - 1), line.to)
+    view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) })
+    view.focus()
+    onRevealed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal, revision])
 
   return <div ref={hostRef} className={styles.editor} />
 }
