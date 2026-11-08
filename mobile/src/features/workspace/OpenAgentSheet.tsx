@@ -1,5 +1,6 @@
 import { router } from 'expo-router'
-import { MessageSquare, Trash2 } from 'lucide-react-native'
+import { MessageSquare, Play, Trash2 } from 'lucide-react-native'
+import type { WorkspaceScript } from '@shared/domain/project'
 import { useAction, useCall } from '@/core/api'
 import { routes } from '@/core/routes'
 import { useTheme } from '@/core/theme'
@@ -17,6 +18,8 @@ export function OpenAgentSheet({ workspaceId, projectId, open, onClose }: { work
   const chatClis = useCall('chat.clis', undefined, { enabled: open })
   const openAgent = useAction('agents.open')
   const applyPreset = useAction('agents.applyPreset')
+  const write = useAction('terminal.write', { quiet: true })
+  const rename = useAction('agents.rename', { quiet: true })
   const deletePreset = useAction('presets.delete')
   const { colors } = useTheme()
   const available = (clis.data ?? []).filter((c) => c.available)
@@ -34,8 +37,33 @@ export function OpenAgentSheet({ workspaceId, projectId, open, onClose }: { work
       }
     )
 
+  // A Workspace script (ADR 0061): a new terminal named after it, its command typed once the shell is up.
+  const shell = available.find((c) => c.kind === 'shell')
+  const runScript = (script: WorkspaceScript): void => {
+    if (!shell) return
+    openAgent.mutate(
+      { workspaceId, cliId: shell.id, chatUi: false },
+      {
+        onSuccess: ({ agent }) => {
+          rename.mutate({ instanceId: agent.id, name: script.name })
+          setTimeout(() => write.mutate({ instanceId: agent.id, data: `${script.command}\r` }), 1200)
+          onClose()
+          router.push(routes.agent(agent.id, workspaceId, projectId))
+        }
+      }
+    )
+  }
+  const scripts = project?.settings?.scripts ?? []
+
   return (
     <Sheet open={open} title="Open an agent" onClose={onClose}>
+      {scripts.length && shell ? (
+        <Section title="Scripts">
+          {scripts.map((s) => (
+            <ListRow key={s.name} title={s.name} subtitle={s.command} leading={<Play size={18} color={colors.textMuted} />} onPress={openAgent.isPending ? undefined : () => runScript(s)} />
+          ))}
+        </Section>
+      ) : null}
       {chatCli ? (
         <Section title="Chat">
           <ListRow

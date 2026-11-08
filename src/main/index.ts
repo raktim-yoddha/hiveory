@@ -14,6 +14,7 @@ import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
 import { adoptLoginShellPath } from './app/shell-path'
 import { BackgroundTray } from './app/tray'
+import { NativeShell } from './app/native-shell'
 import { applyWindowTheme, createMainWindow, rendererTargets } from './app/window'
 import { createHandlers } from './ipc/handlers'
 import { registerIpc } from './ipc/router'
@@ -113,6 +114,13 @@ const emit: Emit = (event, payload) => {
   if (event === 'runtime.changed' || event === 'state.changed') guard(log, 'Pet link', () => container?.petLink.changed())
 }
 
+// Notifications, the attention badge, hiveory:// links and the jump list (ADR 0061): this window's own machine.
+const native = new NativeShell((event, payload) => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed() && !w.webContents.isDestroyed()) w.webContents.send(IPC_PREFIX + event, payload)
+  }
+}, log)
+
 const openWindow = (): void => {
   const s = container?.settings.get()
   window = createMainWindow(targets, log, s?.theme, s && container?.themes.theme(s.vscodeTheme)?.chrome)
@@ -132,10 +140,13 @@ app.on('second-instance', (_event, _argv, _cwd, data) => {
     return app.quit()
   }
   tray.show()
+  // A hiveory:// link clicked while Hiveory runs (Windows, Linux) arrives as the second instance's arguments.
+  native.fromArgv(_argv)
 })
 
 app.whenReady().then(async () => {
   if (!(await singleInstance)) return
+  if (servePort === undefined) guard(log, 'Links', () => native.register())
   // No application menu on Windows/Linux: its hidden Alt accelerators would swallow
   // Alt-shortcuts (Alt+V, Alt+C…) that CLIs rely on. Copy/paste are handled by the terminal.
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
@@ -144,7 +155,7 @@ app.whenReady().then(async () => {
   // A desktop paired with a Hiveory server runs no services of its own: it is that server's window.
   const clientConfig = servePort === undefined ? readClientConfig(paths.clientFile, safeStorage) : null
   if (clientConfig) {
-    stopClient = await runClientMode(clientConfig, paths, log, targets)
+    stopClient = await runClientMode(clientConfig, paths, log, targets, native.handlers())
     return
   }
   container = createContainer(paths, log, emit, app.isPackaged ? electronUpdater.autoUpdater : null)
@@ -213,7 +224,7 @@ app.whenReady().then(async () => {
   guard(log, 'Update checks', () => c.updates.setAutoCheck(startup.autoCheckUpdates, startup.updateCheckEvery))
   if (startup.computerUse) guard(log, 'Computer use', () => c.computer.warm(), report('Computer use'))
   registerIpc(
-    createHandlers(container),
+    { ...createHandlers(container), ...native.handlers() },
     (event) => isTrustedSenderUrl(event.senderFrame?.url, targets.devServerUrl, targets.rendererFile),
     log
   )

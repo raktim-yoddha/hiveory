@@ -8,6 +8,7 @@ import type { ChatModel } from '@shared/domain/chat'
 import { useAction, useCall, useCliIcons, useConnection, type Request, type Response } from '@/core/api'
 import { space, useTheme } from '@/core/theme'
 import { routes } from '@/core/routes'
+import { ScriptsSection } from './ScriptsSection'
 import { Button, Card, CliLogo, confirm, EffortSheet, effortLabel, ListRow, Loading, ModelSheet, Screen, Section, Sheet, Text, TextField } from '@/core/ui'
 
 type Settings = NonNullable<Request<'projects.update'>['settings']>
@@ -70,6 +71,8 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
             </View>
           </Card>
         </Section>
+
+        <ScriptsSection scripts={s.scripts ?? []} onSave={(scripts) => update({ scripts })} />
 
         <Section title="Order">
           <Card>

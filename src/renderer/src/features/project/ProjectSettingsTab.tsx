@@ -12,6 +12,7 @@ import { RemoveProjectDialog } from '../projects/RemoveProjectDialog'
 import { SettingRow } from '../settings/SettingsPage'
 import { ChatDefaults } from './ChatDefaults'
 import { IntegrationSettings } from './IntegrationSettings'
+import { ScriptsSettings } from './ScriptsSettings'
 import { WorkspaceLook } from './WorkspaceLook'
 import settings from '../settings/Settings.module.css'
 import styles from './ProjectScreen.module.css'
@@ -120,6 +121,8 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
           />
         </div>
       )}
+
+      <ScriptsSettings project={project} />
 
       <IntegrationSettings project={project} />
 

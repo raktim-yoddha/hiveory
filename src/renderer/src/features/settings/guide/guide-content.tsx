@@ -151,10 +151,44 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Pane header',
         body: (
           <p>
-            The logo is the CLI, the name is the agent: right-click it for Rename, Restart, Move and Close (right-click twice renames). The{' '}
-            <b>+</b> opens an agent, terminal or browser beside it; double-click the header to maximize.
+            Each pane is a tab: the logo is the CLI, the name is the agent. Right-click a tab for Rename, Split right, Split down and Close
+            (right-click twice renames); drag it to move or split it. The <b>+</b> opens a Chat UI, an agent, a terminal, a script or the
+            browser as a new tab; double-click a tab to maximize its pane, and again to restore it.
           </p>
         )
+      },
+      {
+        heading: 'Notifications',
+        body: (
+          <p>
+            When an agent needs you, finishes a turn or stops, Hiveory shows a desktop notification unless you are looking at its worktree;
+            click it to open that agent. The taskbar (or dock) shows how many agents need you and flashes when one more does. Choose all,
+            needs-you only or off in Settings › Agents; a Workspace with alerts off stays quiet.
+          </p>
+        ),
+        keywords: 'notification alert badge taskbar dock flash finished needs you'
+      },
+      {
+        heading: 'Scripts',
+        body: (
+          <p>
+            Workspace settings › <b>Scripts</b> keeps commands you run often by name: <code>dev</code>, <code>test</code>, <code>lint</code>.
+            Start one from a pane&rsquo;s <b>+</b>, from Find (<i>Run script</i>) or from the phone: it opens a terminal tab named after it and
+            types the command.
+          </p>
+        ),
+        keywords: 'script run command dev server test lint task'
+      },
+      {
+        heading: 'Links',
+        body: (
+          <p>
+            <code>hiveory://open?p=…&amp;w=…</code> opens a Workspace or worktree from another app; Find › <i>Copy a link to this worktree</i>{' '}
+            makes one. <code>hiveory://new?prompt=…</code> starts a Chat UI in the worktree on screen with that text in its message box: it
+            is never sent until you press Send. The taskbar jump list (Windows) and the dock menu (macOS) list your recent Workspaces.
+          </p>
+        ),
+        keywords: 'link deep link url protocol jump list dock prompt'
       },
       {
         heading: 'Status',

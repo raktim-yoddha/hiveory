@@ -579,6 +579,11 @@ Usage (ADR 0060): UsageSection / phone UsageScreen ─IPC usage.report─▶ Usa
    (Claude, Codex, Gemini history files, streamed line by line, cached by size + mtime) ─▶ UsageRow[]
    shared/domain/usage.ts groups them the same way on the desktop and the phone
 
+Native desktop (ADR 0061): AgentWatcher ─(Settings filter)─▶ agent.alert ─▶ useNativeShell ─IPC app.notify─▶ NativeShell (Notification)
+   container.attention() ─▶ agents.attention ─▶ useNativeShell ─IPC app.setAttention─▶ badge / overlay / flash
+   hiveory:// (open-url, second-instance argv, start-up argv) ─▶ NativeShell ─▶ app.link / app.pendingLink ─▶ openHiveoryLink
+   app.* native channels are CLIENT_LOCAL: the window's own machine answers them in client mode too
+
 Find (ADR 0060): command-palette shortcut ─▶ usePalette ─▶ CommandPalette ◀─ usePaletteItems (live stores)
    ranked by palette-rank.ts; running an item calls the same actions as the menus and shortcuts
 ```

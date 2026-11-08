@@ -14,6 +14,7 @@ import { clearClientConfig, connectAndSave, describeServer, discover, openBase, 
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
 import { createMainWindow, type rendererTargets } from './window'
+import type { NativeHandlers } from './native-shell'
 
 /** Relaunches into the new mode (automation passes HIVEORY_NO_RELAUNCH and starts the app itself). */
 export const relaunch = (): void => {
@@ -32,7 +33,7 @@ export const sshOptions = (): string[] => (process.env.HIVEORY_SSH_CONFIG ? ['-F
  * this machine — its clipboard, links, and switching servers. The renderer is
  * the same app; it only learns it is a client from app.info.
  */
-export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: Logger, targets: ReturnType<typeof rendererTargets>): Promise<() => void> => {
+export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: Logger, targets: ReturnType<typeof rendererTargets>, native: NativeHandlers): Promise<() => void> => {
   const server = describeServer(config)
   const send = (event: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) {
@@ -60,6 +61,8 @@ export const runClientMode = async (config: ClientConfig, paths: AppPaths, log: 
   void backend.run()
 
   const local: Partial<Handlers> = {
+    // Notifications, the badge, links and the jump list are this machine's (ADR 0061).
+    ...native,
     'app.info': () => ({ platform: process.platform as 'win32' | 'darwin' | 'linux', version: app.getVersion(), hooksAvailable: true, isDev: !app.isPackaged, client: { server } }),
     'clipboard.readText': () => clipboard.readText(),
     'clipboard.writeText': ({ text }) => clipboard.writeText(text),

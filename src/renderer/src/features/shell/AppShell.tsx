@@ -20,6 +20,7 @@ import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
 import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
 import { useWindowControlsRoom } from './window-controls'
+import { useNativeShell } from './useNativeShell'
 import { CommandPalette } from './palette/CommandPalette'
 import styles from './AppShell.module.css'
 
@@ -50,6 +51,7 @@ export function AppShell() {
     }))
   )
   useAppShortcuts()
+  useNativeShell()
   const newWorktree = useNewWorktree()
   const hasWallpaper = useSettings((s) => Boolean(s.settings.wallpaper))
   const platform = usePlatform()

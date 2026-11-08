@@ -7,6 +7,10 @@ import { readSort, sortProjects } from '../../projects/project-list'
 import { useNavigation, type PanelTab, type SettingsSection } from '../../../stores/navigation'
 import { agentActions } from '../../agents/agent-actions'
 import { useChatUi } from '../../agents/useChatUi'
+import { runScript } from '../../agents/run-script'
+import { openLink } from '@shared/domain/links'
+import { api } from '../../../lib/api'
+import { runAction } from '../../../stores/notices'
 import { runAppCommand } from '../useAppShortcuts'
 import type { PaletteItem } from './palette-rank'
 
@@ -62,6 +66,11 @@ export function usePaletteItems(open: boolean): PaletteItem[] {
       for (const cli of clis.filter((c) => c.available)) {
         items.push({ id: `cli:${cli.id}`, group: 'Open here', label: cli.displayName, hint: 'in a terminal', run: () => void agentActions.open(here.workspaceId, cli.id) })
       }
+      for (const s of projects.find((p) => p.id === here.projectId)?.settings?.scripts ?? []) {
+        items.push({ id: `script:${s.name}`, group: 'Run script', label: s.name, hint: s.command, run: () => void runScript(here.workspaceId, here.projectId, s) })
+      }
+      // A hiveory:// link back to this worktree, for notes, chats and other apps (ADR 0061).
+      items.push({ id: 'copy-link', group: 'Open here', label: 'Copy a link to this worktree', hint: 'hiveory://open…', run: () => void runAction('Copy link', () => api('clipboard.writeText', { text: openLink(here.projectId, here.workspaceId) })) })
       for (const tab of PANEL_TABS) items.push({ id: `panel:${tab.kind}`, group: 'Side panel', label: tab.label, run: () => nav().showPanelTab(here.workspaceId, tab.kind) })
     }
     for (const project of sortProjects(projects, readSort())) {

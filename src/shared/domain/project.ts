@@ -56,6 +56,8 @@ export interface ProjectSettings {
   alerts?: boolean
   /** True: listed first in the sidebar, the rail, the command palette and the phone (ADR 0060). */
   pinned?: boolean
+  /** Commands run in a worktree's terminal by name: dev, test, lint… (ADR 0061). */
+  scripts?: WorkspaceScript[]
   /** The Workspace's mark in the sidebar (ADR 0038); absent = a folder. */
   icon?: WorkspaceIcon
   /** Its color; absent = one picked from its id, so Workspaces differ from the start. */
@@ -72,6 +74,24 @@ export interface ProjectSettings {
   issueSource?: TrackerId | 'none'
   /** The Jira project or Linear team key when `issueSource` names one. */
   trackerGroup?: string
+}
+
+/** A Workspace's named command (ADR 0061), run in a terminal of the worktree it is started in. */
+export interface WorkspaceScript {
+  name: string
+  command: string
+}
+
+export const MAX_SCRIPTS = 20
+export const MAX_SCRIPT_COMMAND = 2000
+/** A script's name: short, readable, usable as a pane name. */
+export const SCRIPT_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._:-]{0,39}$/
+/** One line, no control characters: what is typed into the terminal is exactly what was saved. */
+export const scriptCommandProblem = (command: string): string | null => {
+  if (!command.trim()) return 'Enter the command to run.'
+  if (command.length > MAX_SCRIPT_COMMAND) return 'That command is too long.'
+  if ([...command].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127)) return 'Use one line, without control characters.'
+  return null
 }
 
 /** Marks a Workspace can show in the sidebar; the renderer maps each to an icon. */

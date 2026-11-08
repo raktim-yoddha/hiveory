@@ -1,5 +1,7 @@
 import { CliLogo } from '../../components/cli/CliLogo'
+import { Select } from '../../components/ui/Select'
 import { Toggle } from '../../components/ui/Toggle'
+import type { DesktopAlerts } from '@shared/domain'
 import { useApp, useClis, useSettings } from '../../stores/data'
 import { SettingRow, SettingsPage } from './SettingsPage'
 import { HiveoryPetSettings } from './HiveoryPetSettings'
@@ -44,6 +46,26 @@ export function AgentsSection() {
               label="Skip permissions (YOLO) for every agent"
               checked={settings.defaultAutoApprove}
               onChange={(defaultAutoApprove) => void update({ defaultAutoApprove })}
+            />
+          }
+        />
+      </div>
+      <div className={styles.group}>
+        <div className={styles.groupTitle}>Notifications</div>
+        <SettingRow
+          title="Desktop notifications"
+          description="A notification when an agent needs you, finishes a turn or stops, unless you are looking at its worktree; clicking it opens that agent. The taskbar (or dock) shows how many agents need you. A Workspace with alerts off stays quiet."
+          control={
+            <Select
+              label="Desktop notifications"
+              hideLabel
+              value={settings.desktopAlerts}
+              onChange={(desktopAlerts) => void update({ desktopAlerts: desktopAlerts as DesktopAlerts })}
+              options={[
+                { value: 'all', label: 'Needs you, finished, stopped' },
+                { value: 'needs-you', label: 'Only when an agent needs you' },
+                { value: 'off', label: 'Off' }
+              ]}
             />
           }
         />

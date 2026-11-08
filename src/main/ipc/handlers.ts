@@ -95,6 +95,12 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   }
 
   return {
+  // Answered by the window's own machine (NativeShell, ADR 0061); a paired device never reaches these.
+  'app.notify': () => fail('INVALID_INPUT', 'Notifications are shown by the window.'),
+  'app.setAttention': () => undefined,
+  'app.pendingLink': () => null,
+  'app.setRecent': () => undefined,
+  'agents.attention': () => ({ waiting: c.attention() }),
   'app.info': () => ({
     platform: process.platform as 'win32' | 'darwin' | 'linux',
     version: app.getVersion(),

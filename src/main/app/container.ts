@@ -36,7 +36,7 @@ import { SshHostConnector } from '../services/hosts/ssh-host'
 import { SshAuth } from '../services/hosts/ssh-auth'
 import { HostRegistry, localKit } from '../services/hosts/host-kit'
 import { PortForwards } from '../services/hosts/ports'
-import { appById, COMPOSIO, DETACHED_GRACE_MS, hostKey, type DetachedGrace, type HostLinkStatus, type HostRef } from '@shared/domain'
+import { alertWanted, appById, COMPOSIO, DETACHED_GRACE_MS, hostKey, type DetachedGrace, type HostLinkStatus, type HostRef } from '@shared/domain'
 import { KeepAwake, wantsAwake } from '../services/routines/keep-awake'
 import { RoutineService } from '../services/routines/routine-service'
 import { runNotice } from '../services/routines/run-notice'
@@ -238,12 +238,25 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     cliName: (cliId) => registry.displayName(cliId),
     workspaceName: (id) => workspaceRepo.find(id)?.name,
     excerpt: () => undefined,
-    // A Workspace with alerts off stays quiet: no phone push (ADR 0037).
+    // A Workspace with alerts off stays quiet: no phone push (ADR 0037), no desktop notification (ADR 0061).
     emit: (update) => {
       if (workspaceRepo.findProject(update.projectId)?.settings?.alerts === false) return
       sharing.notifyWaiting(update)
+      if (alertWanted(settings?.get().desktopAlerts ?? 'all', update.kind)) emit('agent.alert', update)
     }
   })
+  /** Agents that need you now, in Workspaces with alerts on: the taskbar/dock badge (ADR 0061). */
+  const attention = (): number =>
+    store.state.instances.filter(
+      (i) => registry.adapter(i.cliId)?.kind !== 'shell' && workspaceRepo.findProject(i.projectId)?.settings?.alerts !== false && runtime.details(i.id).status === 'waiting-for-you'
+    ).length
+  let lastAttention = -1
+  const refreshAttention = (): void => {
+    const waiting = attention()
+    if (waiting === lastAttention) return
+    lastAttention = waiting
+    emit('agents.attention', { waiting })
+  }
   const agentEmit: Emit = (event, payload) => {
     emit(event, payload)
     if (event === 'runtime.changed') {
@@ -252,6 +265,8 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
       // A turn started: real work, so the project rises in the sidebar.
       if (details.status === 'working') projects.markActive(agents.find(instanceId)?.projectId)
     }
+    // Agents come, go and change status: the badge follows.
+    if (event === 'runtime.changed' || event === 'state.changed') refreshAttention()
   }
   const agents = new AgentService(store, workspaceRepo, layouts, registry, runtime, log, agentEmit, chats, kits)
   const projects = new ProjectService(store, kits, agents, emit)
@@ -411,6 +426,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     shells,
     extensions,
     sessions,
+    attention,
     usage,
     repositories,
     wallpapers,

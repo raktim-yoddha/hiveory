@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { SESSION_ID } from '../domain/sessions'
-import { EMOJI, HEX_COLOR, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
-import { DETACHED_GRACES, FONT_FAMILY, FONT_WEIGHTS, THEME_IDS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
+import { EMOJI, HEX_COLOR, MAX_SCRIPT_COMMAND, MAX_SCRIPTS, SCRIPT_NAME, scriptCommandProblem, WORKSPACE_COLORS, WORKSPACE_ICONS } from '../domain/project'
+import { DESKTOP_ALERTS, DETACHED_GRACES, FONT_FAMILY, FONT_WEIGHTS, THEME_IDS, TERMINAL_FONT_LIMITS, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY } from '../domain/settings'
 import type {
   AgentPreset,
   AgentSession,
@@ -22,7 +22,8 @@ import type {
   WorkspaceView,
   HostLinkStatus
 } from '../domain'
-import type { AgentPeek } from '../domain/agent-update'
+import type { AgentPeek, AgentUpdate } from '../domain/agent-update'
+import type { HiveoryLink } from '../domain/links'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { ChangeSet, CommitSummary } from '../domain/changes'
 import type { UsageReport } from '../domain/usage'
@@ -179,6 +180,13 @@ export const projectSettingsPatchSchema = z.object({
   baseRef: gitRef.nullable().optional(),
   alerts: z.boolean().nullable().optional(),
   pinned: z.boolean().nullable().optional(),
+  // ADR 0061: named commands, each name once.
+  scripts: z
+    .array(z.object({ name: z.string().regex(SCRIPT_NAME), command: z.string().max(MAX_SCRIPT_COMMAND).refine((c) => scriptCommandProblem(c) === null, 'Use one line, without control characters.') }))
+    .max(MAX_SCRIPTS)
+    .refine((list) => new Set(list.map((s) => s.name.toLowerCase())).size === list.length, 'Each script needs its own name.')
+    .nullable()
+    .optional(),
   icon: z.enum(WORKSPACE_ICONS).nullable().optional(),
   color: z.enum(WORKSPACE_COLORS).nullable().optional(),
   // ADR 0042: any color; the avatar is set by projects.pickAvatar and can only be cleared here.
@@ -219,6 +227,14 @@ const tailnetIp = z
 
 export const requestSchemas = {
   'app.info': none,
+  // The window's own machine (ADR 0061): a native notification (answers whether it was clicked), the
+  // taskbar/dock attention badge, the link that started Hiveory, and the Workspaces its jump list offers.
+  'app.notify': z.object({ title: z.string().min(1).max(120), body: z.string().max(300), tag: z.string().max(128).optional() }),
+  'app.setAttention': z.object({ waiting: z.number().int().min(0).max(9999) }),
+  'app.pendingLink': none,
+  'app.setRecent': z.object({ items: z.array(z.object({ projectId: id, name: z.string().min(1).max(120) })).max(10) }),
+  /** How many agents need you right now, across every Workspace with alerts on (ADR 0061). */
+  'agents.attention': none,
   'projects.list': none,
   'projects.open': none,
   /** Add project (ADR 0020): a folder picked in main, a clone, or a new repository; `name` overrides the folder's name. */
@@ -325,6 +341,7 @@ export const requestSchemas = {
       browserViewports: z.array(viewportSchema).max(32),
       computerUse: z.boolean(),
       keepRunningInBackground: z.boolean(),
+      desktopAlerts: z.enum(DESKTOP_ALERTS),
       keepAgentsAfterQuit: z.boolean(),
       detachedGrace: z.enum(DETACHED_GRACES),
       keepAwakeForRoutines: z.boolean(),
@@ -641,6 +658,11 @@ export interface DeleteWorkspaceResult {
 
 export interface ResponseMap {
   'app.info': AppInfo
+  'app.notify': { clicked: boolean }
+  'app.setAttention': void
+  'app.pendingLink': HiveoryLink | null
+  'app.setRecent': void
+  'agents.attention': { waiting: number }
   'projects.list': Project[]
   'projects.open': Project | null
   'projects.add': Project
@@ -853,6 +875,12 @@ export interface EventMap {
   'ssh.prompt': SshPrompt
   /** That question was answered (here or in another window) or timed out. */
   'ssh.promptDone': { id: string }
+  /** An agent needs you, finished or stopped (ADR 0061): the window may show a desktop notification. */
+  'agent.alert': AgentUpdate
+  /** How many agents need you now (the taskbar/dock badge). */
+  'agents.attention': { waiting: number }
+  /** A hiveory:// link was opened (ADR 0061). */
+  'app.link': HiveoryLink
 }
 
 export type EventName = keyof EventMap
@@ -870,7 +898,10 @@ const EVENTS: Record<EventName, true> = {
   'files.changed': true,
   'hosts.changed': true,
   'ssh.prompt': true,
-  'ssh.promptDone': true
+  'ssh.promptDone': true,
+  'agent.alert': true,
+  'agents.attention': true,
+  'app.link': true
 }
 export const EVENT_NAMES = Object.keys(EVENTS) as EventName[]
 

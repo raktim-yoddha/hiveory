@@ -1,13 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Globe, MessageSquare, Plus, Search } from 'lucide-react'
-import type { CliDescriptor } from '@shared/domain'
+import { Globe, MessageSquare, Play, Plus, Search } from 'lucide-react'
+import type { CliDescriptor, WorkspaceScript } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
-import { useHostClis } from '../../stores/data'
+import { useHostClis, useProjects } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { openBrowserPane } from '../browser/open-browser'
 import { agentActions } from './agent-actions'
+import { runScript } from './run-script'
 import { useChatUi } from './useChatUi'
 import styles from './AddAgentMenu.module.css'
 
@@ -35,6 +36,7 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const { clis, loaded, load } = useHostClis(projectId)
   const openChat = useChatUi(workspaceId, projectId)
+  const scripts = useProjects((s) => s.projects.find((p) => p.id === projectId)?.settings?.scripts)
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -66,6 +68,14 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
     openChat({ targetPaneId: paneId, side: 'right', asTab: true })
   }
   const showChat = Boolean(openChat) && (!query.trim() || 'chat ui'.includes(query.trim().toLowerCase()))
+
+  // The Workspace's scripts (ADR 0061), each in a new terminal tab here.
+  const shownScripts = (scripts ?? []).filter((s) => !query.trim() || `${s.name} ${s.command}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const script = (s: WorkspaceScript): void => {
+    if (!projectId) return
+    onDone()
+    void runScript(workspaceId, projectId, s, { targetPaneId: paneId, side: 'right', asTab: true })
+  }
 
   const browser = (): void => {
     onDone()
@@ -129,7 +139,18 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
             </button>
           </div>
         )}
-        {groups.length === 0 && !showBrowser && !showChat && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
+        {shownScripts.length > 0 && (
+          <div className={styles.group}>
+            <div className={styles.groupLabel}>Scripts</div>
+            {shownScripts.map((s) => (
+              <button key={s.name} type="button" role="menuitem" className={styles.item} onClick={() => script(s)} title={s.command}>
+                <Play aria-hidden className={styles.itemIcon} />
+                <span>{s.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {groups.length === 0 && !showBrowser && !showChat && !shownScripts.length && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
         {groups.map((group) => (
           <div key={group.label} className={styles.group}>
             <div className={styles.groupLabel}>{group.label}</div>

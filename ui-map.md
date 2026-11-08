@@ -425,3 +425,11 @@ Input, Output, From cache (% of input); Tokens per day (a bar per day, hover or 
 By CLI and By model tables (input, output, cache read, cache write, replies). Empty: "No usage yet".
 
 Sidebar: a Workspace's menu has Pin to top / Unpin; pinned Workspaces come first.
+
+### Native desktop (ADR 0061)
+
+Settings › Agents › Notifications: Desktop notifications (Needs you, finished, stopped | Only when an
+agent needs you | Off). Workspace settings › Scripts: each script's name, command, Run and Remove; a
+name field, a command field and Add (problems shown under it). Pane "+": Browser · Chat UI · Scripts ·
+Terminals · Agents. Find: Open here › Copy a link to this worktree; Run script › <name>. Phone: Open an
+agent › Scripts; Workspace settings › Scripts (Add a script sheet: name, command; Remove).

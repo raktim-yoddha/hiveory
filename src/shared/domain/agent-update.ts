@@ -52,3 +52,7 @@ export function lastWords(screen: string): string | undefined {
   const text = lines.slice(-2).join(' ')
   return text.length > 220 ? `${text.slice(0, 219)}…` : text
 }
+
+/** Whether an update raises a desktop notification under Settings › Agents › Desktop notifications (ADR 0061). */
+export const alertWanted = (setting: 'all' | 'needs-you' | 'off', kind: AgentUpdate['kind']): boolean =>
+  setting === 'all' || (setting === 'needs-you' && kind === 'waiting')

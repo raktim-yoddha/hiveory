@@ -434,3 +434,15 @@ Initial version does not include:
 - Find (Ctrl+Shift+P, ⌘K on macOS, or the sidebar's search button) finds commands, Workspaces,
   worktrees, CLIs and Chat UI to open in the open worktree, side panel tabs and Settings pages.
 - A Workspace can be pinned to the top of the sidebar, the rail, Find and the phone's Work list.
+
+## Native desktop (ADR 0061)
+
+- A desktop notification when an agent needs you, finishes a turn or stops, unless its worktree is on
+  screen and Hiveory is in front; clicking it opens that agent. Settings › Agents › Desktop
+  notifications: all, needs-you only, off. A Workspace with alerts off stays quiet.
+- The taskbar or dock shows how many agents need you, and flashes (bounces) when one more does.
+- `hiveory://open?p=…&w=…` opens a Workspace or worktree; `hiveory://new?prompt=…` starts a Chat UI with
+  that text as its draft, never sent for you. Find › Copy a link to this worktree.
+- The Windows jump list and the macOS dock menu list the recent Workspaces.
+- Workspace settings › Scripts: named one-line commands, started as a terminal tab named after them
+  from the pane "+", Find (Run script), Workspace settings or the phone.

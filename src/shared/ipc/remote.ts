@@ -13,7 +13,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.rename', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
   'sessions.list', 'usage.report', 'terminal.write', 'terminal.resize', 'terminal.snapshot', 'terminalHost.status', 'terminalHost.restart',
   'layout.get', 'layout.apply', 'presets.list', 'presets.save', 'presets.delete', 'kanban.board',
-  'agents.peek',
+  'agents.peek', 'agents.attention',
   'settings.get', 'settings.update', 'shell.open', 'shell.restart', 'shell.close', 'extensions.scan',
   'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'files.paste', 'files.watch',
   'editors.list', 'editors.open', 'editors.close',
@@ -38,7 +38,9 @@ export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
   'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
   'updates.status', 'browser.state', 'wallpapers.list', 'themes.installed',
   // A picture of a window on this screen (ADR 0058); it reaches the server's chat through chat.attach.
-  'chat.windows', 'chat.captureWindow'
+  'chat.windows', 'chat.captureWindow',
+  // Native notifications, the attention badge, links and the jump list (ADR 0061).
+  'app.notify', 'app.setAttention', 'app.pendingLink', 'app.setRecent'
 ])
 
 /** The server's wire format: a call, and one event on the event stream. */

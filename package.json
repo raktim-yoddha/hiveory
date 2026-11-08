@@ -24,6 +24,7 @@
     "e2e:composer": "node scripts/e2e-composer.mjs",
     "e2e:changes": "node scripts/e2e-changes.mjs",
     "e2e:tools": "node scripts/e2e-tools.mjs",
+    "e2e:native": "node scripts/e2e-native.mjs",
     "e2e:layout": "node scripts/e2e-layout.mjs",
     "e2e:perf": "node scripts/e2e-perf.mjs",
     "mobile": "pnpm --dir mobile",

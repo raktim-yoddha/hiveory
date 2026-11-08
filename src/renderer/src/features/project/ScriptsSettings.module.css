@@ -1,0 +1,64 @@
+/* A Workspace's scripts (ADR 0061): name, command, run and remove; a form to add one. */
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0 var(--space-5);
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-2) var(--space-2);
+}
+
+.row + .row {
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.name {
+  flex: none;
+  min-width: 72px;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.command {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-7) var(--space-6);
+}
+
+.nameField {
+  flex: 0 0 120px;
+  min-width: 0;
+}
+
+.commandField {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.problem {
+  margin: 0;
+  padding: 0 var(--space-7) var(--space-5);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}

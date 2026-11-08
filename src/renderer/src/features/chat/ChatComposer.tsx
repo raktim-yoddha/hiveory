@@ -6,7 +6,7 @@ import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { rememberChatCli, useChat } from '../../stores/chat'
+import { DRAFT_EVENT, rememberChatCli, takeChatDraft, useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { ComposerTracks } from './ComposerTracks'
@@ -66,7 +66,8 @@ const writeStash = (chatId: string, list: string[]): void => {
 export function ChatComposer({ chat, placeholder, workspaceId, projectId }: ChatComposerProps) {
   const { send, stop, queue, unqueue, update: updateChat, catalogs, loadCatalog, clis: chatClis, loadClis } = useChat()
   const clis = useClis((s) => s.clis)
-  const [text, setText] = useState('')
+  // A prompt link's draft (ADR 0061) starts the box; it is never sent on its own.
+  const [text, setText] = useState(() => takeChatDraft(chat.id) ?? '')
   const [caret, setCaret] = useState(0)
   const [dragging, setDragging] = useState(false)
   const [capturing, setCapturing] = useState(false)
@@ -145,6 +146,19 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
     }
     window.addEventListener(QUOTE_EVENT, onQuote)
     return () => window.removeEventListener(QUOTE_EVENT, onQuote)
+  }, [chat.id])
+
+  // A draft offered while the box is already open: it fills an empty box, or goes below what is typed.
+  useEffect(() => {
+    const onDraft = (event: Event): void => {
+      if ((event as CustomEvent<{ chatId: string }>).detail.chatId !== chat.id) return
+      const offered = takeChatDraft(chat.id)
+      if (!offered) return
+      setText((t) => (t.trim() ? `${t.replace(/\s*$/, '')}\n\n${offered}` : offered))
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+    window.addEventListener(DRAFT_EVENT, onDraft)
+    return () => window.removeEventListener(DRAFT_EVENT, onDraft)
   }, [chat.id])
 
   useEffect(() => {

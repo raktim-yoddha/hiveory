@@ -36,6 +36,22 @@ export const preferredChatCli = (installed: string[]): string | undefined => {
   return last && installed.includes(last) ? last : installed[0]
 }
 
+/** Drafts waiting for a chat's message box (a prompt link, ADR 0061): each is taken once. */
+const pendingDrafts = new Map<string, string>()
+export const DRAFT_EVENT = 'hiveory:draft'
+
+/** Puts `text` in a chat's message box (never sends it): now if the box is open, else when it opens. */
+export const offerChatDraft = (chatId: string, text: string): void => {
+  pendingDrafts.set(chatId, text)
+  window.dispatchEvent(new CustomEvent(DRAFT_EVENT, { detail: { chatId } }))
+}
+
+export const takeChatDraft = (chatId: string): string | undefined => {
+  const text = pendingDrafts.get(chatId)
+  pendingDrafts.delete(chatId)
+  return text
+}
+
 export const rememberChatCli = (cliId: string): void => {
   try {
     localStorage.setItem(LAST_CLI_KEY, cliId)

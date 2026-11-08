@@ -6,6 +6,10 @@ export const THEME_IDS = ['dark', 'bronze', 'silver'] as const
 export type ThemeId = (typeof THEME_IDS)[number]
 
 /** App-wide preferences, persisted with the rest of the domain state. */
+/** Which agent events raise a desktop notification (ADR 0061). */
+export const DESKTOP_ALERTS = ['all', 'needs-you', 'off'] as const
+export type DesktopAlerts = (typeof DESKTOP_ALERTS)[number]
+
 export interface AppSettings {
   theme: ThemeId
   /** Check GitHub releases for updates on launch and every few hours. */
@@ -36,6 +40,8 @@ export interface AppSettings {
   computerUse: boolean
   /** Closing the window keeps Hiveory (and every agent) running in the tray; Quit stops them. */
   keepRunningInBackground: boolean
+  /** Desktop notifications when an agent needs you, finishes or stops (ADR 0061). */
+  desktopAlerts: DesktopAlerts
   /** Quitting Hiveory leaves agents and terminals running in the terminal host; the next start takes them back (ADR 0050). */
   keepAgentsAfterQuit: boolean
   /** How long kept terminals stay with no Hiveory attached, here and on remote machines (ADR 0050 §7). */
@@ -133,6 +139,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   browserViewports: [],
   computerUse: false,
   keepRunningInBackground: true,
+  desktopAlerts: 'all',
   keepAgentsAfterQuit: true,
   detachedGrace: 'until-exit',
   keepAwakeForRoutines: true,

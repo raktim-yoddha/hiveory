@@ -20,6 +20,9 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Settings › Integrations', 'GitHub and GitLab sign-in status (gh, glab) and Jira or Linear keys.'],
   ['Settings › Remote', 'Share this computer over Tailscale or the local network, pair the phone, SSH hosts and Hiveory servers.'],
   ['Settings › Keyboard', 'Every shortcut, with the platform standard keys (⌘ on macOS, Ctrl on Windows and Linux): Settings, sidebar, side panel, worktrees, panes and tabs. Change, remove or reset each; fixed terminal and editor keys are listed too.'],
+  ['Notifications', 'Hiveory shows a desktop notification when an agent needs you, finishes a turn or stops (unless its worktree is on screen); clicking it opens that agent. The taskbar or dock shows how many agents need you. Settings › Agents › Desktop notifications chooses all, needs-you only or off; a Workspace with alerts off stays quiet.'],
+  ['Links', 'hiveory://open?p=<workspace id>&w=<worktree id> opens a Workspace or worktree; hiveory://new?prompt=<text> starts a Chat UI in the worktree on screen with that text as a draft, never sent until you press Send. Find › Copy a link to this worktree makes one. The Windows taskbar jump list and the macOS dock menu list recent Workspaces.'],
+  ['Scripts', 'Workspace settings › Scripts keeps named commands (dev, test, lint). The pane "+", Find (Run script) and the phone start one in a new terminal of the worktree, named after it.'],
   ['Settings › Usage', 'Tokens the agents used per day, CLI and model (input, output, cache), read from the Claude Code, Codex and Gemini CLI history where Hiveory runs. Counts only, no prices.'],
   ['Settings › Updates', 'Check for updates and how often.'],
   ['Settings › Guide', 'A short chapter for every part of the app: getting started, worktrees and Git, panes, the Kanban, the browser, schedules, skills and apps, integrations, remote and phone, keyboard, appearance and troubleshooting.']

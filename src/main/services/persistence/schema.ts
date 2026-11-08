@@ -5,7 +5,8 @@ import { VSCODE_THEME_ID } from '@shared/domain/vscode-theme'
 import { CODE_HOSTS, TRACKERS } from '@shared/domain/integrations'
 import { MAX_PROMPT_TITLE, MAX_SAVED_PROMPT_TEXT, MAX_SAVED_PROMPTS, type SavedPrompt } from '@shared/domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, MAX_ROUTINE_RUNS, REPEAT_PRESETS, type Routine, type RoutineRun } from '@shared/domain/routine'
-import { DEFAULT_SETTINGS, DETACHED_GRACES, THEME_IDS, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, AVATAR_DATA, EMOJI, HEX_COLOR, MAX_AVATAR_CHARS, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
+import { MAX_SCRIPT_COMMAND, MAX_SCRIPTS, SCRIPT_NAME } from '@shared/domain/project'
+import { DEFAULT_SETTINGS, DESKTOP_ALERTS, DETACHED_GRACES, THEME_IDS, safeTerminalFont, UPDATE_CHECK_EVERY, UPDATE_REMIND_EVERY, AVATAR_DATA, EMOJI, HEX_COLOR, MAX_AVATAR_CHARS, WORKSPACE_COLORS, WORKSPACE_ICONS, type AgentPreset, type BrowserProfile, type AppSettings, type CliInstance, type LayoutNode, type Project, type Workspace } from '@shared/domain'
 
 /** Persisted domain configuration only — never processes, PTYs or drag state. */
 export interface PersistedState {
@@ -117,6 +118,7 @@ const settingsSchema = z.object({
   browserViewports: z.array(viewportSchema).max(32).catch(DEFAULT_SETTINGS.browserViewports),
   computerUse: z.boolean().catch(DEFAULT_SETTINGS.computerUse),
   keepRunningInBackground: z.boolean().catch(DEFAULT_SETTINGS.keepRunningInBackground),
+  desktopAlerts: z.enum(DESKTOP_ALERTS).catch(DEFAULT_SETTINGS.desktopAlerts),
   keepAgentsAfterQuit: z.boolean().catch(DEFAULT_SETTINGS.keepAgentsAfterQuit),
   detachedGrace: z.enum(DETACHED_GRACES).catch(DEFAULT_SETTINGS.detachedGrace),
   keepAwakeForRoutines: z.boolean().catch(DEFAULT_SETTINGS.keepAwakeForRoutines),
@@ -152,6 +154,7 @@ export const projectSchema: z.ZodType<Project> = z.object({
       baseRef: str.optional(),
       alerts: z.boolean().optional(),
       pinned: z.boolean().optional().catch(undefined),
+      scripts: z.array(z.object({ name: z.string().regex(SCRIPT_NAME), command: z.string().max(MAX_SCRIPT_COMMAND) })).max(MAX_SCRIPTS).optional().catch(undefined),
       icon: z.enum(WORKSPACE_ICONS).optional().catch(undefined),
       color: z.enum(WORKSPACE_COLORS).optional().catch(undefined),
       customColor: z.string().regex(HEX_COLOR).optional().catch(undefined),
