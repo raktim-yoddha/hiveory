@@ -124,7 +124,15 @@ export class AgentService {
     return [...this.instances(workspaceId).map((i) => i.id), ...this.store.state.editors.filter((e) => e.workspaceId === workspaceId).map((e) => e.id), ...this.extraPanes(workspaceId)]
   }
 
-  open(workspaceId: string, cliId: string, placement?: Placement, resumeSession?: string, chatUi?: boolean): { agent: CliInstanceView; layout: LayoutNode | null } {
+  open(
+    workspaceId: string,
+    cliId: string,
+    placement?: Placement,
+    resumeSession?: string,
+    chatUi?: boolean,
+    /** A subagent: who opened it, and the model and effort it runs (ADR 0058). */
+    subagent?: Pick<CliInstance, 'parentId' | 'model' | 'effort'>
+  ): { agent: CliInstanceView; layout: LayoutNode | null } {
     const workspace = this.workspaces.get(workspaceId)
     const adapter = this.registry.adapter(cliId)
     if (!adapter) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
@@ -135,6 +143,9 @@ export class AgentService {
     if (resumeSession) {
       if (!adapter!.adoptSession) fail('INVALID_INPUT', `${adapter!.displayName} can't resume a session by id.`)
       Object.assign(instance!, adapter!.adoptSession!(resumeSession), { hasConversation: true, chatUi: false })
+    }
+    if (subagent) {
+      for (const key of ['parentId', 'model', 'effort'] as const) if (subagent[key]) instance![key] = subagent[key]
     }
     const tree = this.layouts.get(workspaceId, this.paneIds(workspaceId))
     const next = placePane(tree, instance!.id, placement)
@@ -271,6 +282,18 @@ export class AgentService {
     this.emitAgents(this.workspaces.get(instance.workspaceId))
   }
 
+  /** A chat-view agent whose chat switched CLI (ADR 0058) now is an agent of that CLI. */
+  followChatCli(instanceId: string, cliId: string): void {
+    const instance = this.find(instanceId)
+    if (!instance?.chatUi || instance.cliId === cliId || !this.registry.adapter(cliId)) return
+    this.store.update((s) => {
+      const target = s.instances.find((i) => i.id === instanceId)
+      if (target) Object.assign(target, { cliId, model: undefined, effort: undefined })
+    })
+    const workspace = this.workspaces.find(instance.workspaceId)
+    if (workspace) this.emitAgents(workspace)
+  }
+
   find(instanceId: string): CliInstance | undefined {
     return this.store.state.instances.find((i) => i.id === instanceId)
   }
@@ -338,7 +361,11 @@ export class AgentService {
       fail('NOT_FOUND', message, { hint: 'Delete this worktree and create a new one.' })
     }
     // A new chat agent starts on its Workspace's model and effort for that CLI (ADR 0037).
-    if (instance.chatUi) return this.chats.ensureAgentChat(instance, workspace.path, this.workspaces.findProject(workspace.projectId)?.settings?.chatDefaults?.[instance.cliId])
+    // A subagent starts on the model its parent chose instead.
+    if (instance.chatUi) {
+      const choice = instance.model || instance.effort ? { model: instance.model ?? '', effort: instance.effort ?? '' } : this.workspaces.findProject(workspace.projectId)?.settings?.chatDefaults?.[instance.cliId]
+      return this.chats.ensureAgentChat(instance, workspace.path, choice)
+    }
     const soleOfCli = this.instances(workspace.id).filter((i) => i.cliId === instance.cliId && !i.chatUi).length === 1
     if (instance.hasConversation) this.resumed.add(instance.id)
     else this.resumed.delete(instance.id)

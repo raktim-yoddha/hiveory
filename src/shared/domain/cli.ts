@@ -59,6 +59,11 @@ export interface CliInstance {
   autoApprove: boolean
   /** Shown as a chat view (headless runs) instead of a terminal. Only for chat-capable CLIs. */
   chatUi?: boolean
+  /** The agent that opened this one as its subagent (ADR 0058). */
+  parentId?: string
+  /** Model and effort it was started with (a subagent's choice; terminal CLIs that take them as flags). */
+  model?: string
+  effort?: string
   createdAt: string
 }
 

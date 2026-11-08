@@ -8,8 +8,9 @@ the window, and the window's buttons (sidebar, Settings) live in the sidebar, or
 in its icon rail while it is hidden; the side panel's button sits at the top right.
 
 Everything the removed modes did, Work does: an agent runs in a terminal or a **chat view** (the same
-message box: attachments, model and effort, queued next messages, the usage limits button, ADR 0031,
-0055), with apps, the browser and computer use. **Schedules** (ADR 0028, 0040) start a new agent of a
+message box: attachments, the CLI and model in one picker, effort, plan and fast mode, `@` files and
+`/` commands, queued next messages, the usage limits button and context meter, the agent's tasks,
+subagents and changes above the box, ADR 0031, 0055, 0058), with apps, the browser and computer use. **Schedules** (ADR 0028, 0040) start a new agent of a
 CLI in a Worktree with the schedule's instructions, once, every few minutes or on a calendar rule in
 a timezone; its card moves on the Kanban by its real state. They are made and listed in the side
 panel's Schedules tab (or a worktree's "New schedule…"), by day, week, list or run log. They run while
@@ -408,3 +409,17 @@ Initial version does not include:
 - Done Kanban column
 - user-controlled manual Kanban status
 - multiple user-facing Tasks inside a Worktree
+
+## Changes, checkpoints and subagents (ADR 0058)
+
+- Every worktree's side panel has a **Changes** tab: uncommitted work (untracked files included), the
+  branch against its base, one commit, or one chat turn, as a file tree with line counts; a file opens
+  its diff in place. It reads Git where the worktree lives (this computer, an SSH host or a Hiveory
+  server) and never changes anything.
+- Each chat-view turn in a Git worktree keeps a checkpoint; a reply that changed files shows how many,
+  with View (its own diff) and Undo (its files back as before the turn, after a confirmation).
+- A chat-view agent may switch CLI mid-conversation; the new CLI receives the conversation so far.
+- Any agent can open a subagent on any installed CLI, with a model, effort and task (`open_agent`); a
+  chat-view parent gets the subagent's reply back as a message when it finishes.
+- Everything above works when the window is a client of a Hiveory server hosted anywhere (ADR 0022,
+  0052); a picture of a window is taken by the window's own computer and sent to the server's chat.

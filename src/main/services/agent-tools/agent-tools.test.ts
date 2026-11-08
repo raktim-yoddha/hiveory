@@ -120,8 +120,10 @@ describe('agent tools', () => {
 
   it('opens agents beside a named agent and validates the CLI', async () => {
     const { tools, deps } = setup()
-    expect((await tools.call('open_agent', { cli: 'codex', beside: 'Kai', side: 'bottom' })).text).toBe('Opened Nova (Codex) below Kai.')
-    expect(deps.agents.open).toHaveBeenCalledWith('w2', 'codex', { targetPaneId: 'a3', side: 'bottom' })
+    expect((await tools.call('open_agent', { cli: 'codex', beside: 'Kai', side: 'bottom' })).text).toBe('Opened Nova (Codex) as your subagent, below Kai.')
+    // The caller becomes its parent: a subagent (ADR 0058).
+    expect(deps.agents.open).toHaveBeenCalledWith('w2', 'codex', { targetPaneId: 'a3', side: 'bottom' }, undefined, undefined, { parentId: 'a1' })
+    expect((await tools.call('open_agent', { cli: 'codex', model: 'gpt; rm -rf' })).text).toMatch(/plain model id/)
     expect((await tools.call('open_agent', { cli: 'gemini' })).text).toBe('"gemini" is not an installed CLI. Installed: claude, codex.')
   })
 

@@ -352,6 +352,7 @@
  * up on hover, and a compact square send button. No pills, no outlines at rest.
  */
 .composer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);

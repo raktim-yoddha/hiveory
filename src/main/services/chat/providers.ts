@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import type { ChatAttachment, ChatModel, UsageLimits, UsageWindow } from '@shared/domain/chat'
+import type { ChatAttachment, ChatCommand, ChatModel, UsageLimits, UsageWindow } from '@shared/domain/chat'
 import { ALLOW_ALL_PERMISSIONS, claudeMcpArgs, codexMcpArgs, mcpServersJson, opencodeConfigJson } from '../cli/adapters/mcp-injection'
 import type { McpEndpoint } from '../cli/adapters/types'
 import { CLAUDE_CONTROL_ARGS, claudeControl, claudeControlReply } from './cli-probe'
@@ -17,6 +17,10 @@ export interface RunInput {
   attachments?: ChatAttachment[]
   /** Hiveory's MCP server (browser, and coordination for Work agents), when tools are on. */
   mcp?: ChatMcp
+  /** Plan mode (providers with `plan`): read-only planning, whatever autoApprove says (ADR 0058). */
+  plan?: boolean
+  /** Fast mode, for a model marked `fast`. */
+  fast?: boolean
 }
 
 export interface ChatMcp {
@@ -49,7 +53,10 @@ export interface ChatProvider {
   parser: () => LineParser
   /** True when the CLI resumes its own sessions; otherwise Hiveory replays a transcript. */
   resumable: boolean
-  models(run: CatalogRunner): Promise<ChatModel[]>
+  /** Its models, and, when the same answer lists them, its slash commands and skills (ADR 0058). */
+  models(run: CatalogRunner): Promise<ChatModel[] | { models: ChatModel[]; commands: ChatCommand[] }>
+  /** It has a read-only planning mode (`RunInput.plan`). */
+  plan?: boolean
   /** The plan's usage limits, asked of the CLI itself (ADR 0055); absent when the CLI cannot say. */
   limits?(run: CatalogRunner): Promise<PlanLimits>
   run(input: RunInput): RunSpec
@@ -90,6 +97,25 @@ export const parseClaudeModels = (models: unknown): ChatModel[] => {
     return [{ id: m.value, label: version ?? name, description: (version ? parts.slice(1) : parts).join(' · ') || undefined, efforts }]
   })
 }
+
+/** Claude Code's `initialize` reply lists its slash commands and skills: [{ name, description, argumentHint }]. */
+export const parseClaudeCommands = (commands: unknown): ChatCommand[] =>
+  Array.isArray(commands)
+    ? commands.flatMap((raw): ChatCommand[] => {
+        const c = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
+        if (typeof c.name !== 'string' || !c.name) return []
+        return [
+          {
+            name: c.name.replace(/^\//, ''),
+            ...(typeof c.description === 'string' && c.description ? { description: c.description } : {}),
+            ...(typeof c.argumentHint === 'string' && c.argumentHint ? { argumentHint: c.argumentHint } : {})
+          }
+        ]
+      })
+    : []
+
+/** Claude Code's fast mode runs on its Opus models only. */
+const claudeFast = (model: ChatModel): ChatModel => (/opus/i.test(`${model.id} ${model.label}`) ? { ...model, fast: true } : model)
 
 /** `codex debug models` → models with their own reasoning levels. */
 export const parseCodexModels = (json: string): ChatModel[] => {
@@ -227,16 +253,17 @@ const claude: ChatProvider = {
   parser: claudeParser,
   resumable: true,
   // Asked of the CLI itself (no model call); the aliases still work when it cannot answer.
+  plan: true,
   models: async (cli) => {
-    const models = await cli
+    const reply = await cli
       .ask(CLAUDE_CONTROL_ARGS, [claudeControl('models', { subtype: 'initialize' })], (m) => claudeControlReply(m, 'models'))
-      .then((reply) => parseClaudeModels(reply.models))
-      .catch(() => [])
-    return models.length ? models : CLAUDE_ALIASES
+      .catch(() => ({}) as Record<string, unknown>)
+    const models = parseClaudeModels(reply.models)
+    return { models: (models.length ? models : CLAUDE_ALIASES).map(claudeFast), commands: parseClaudeCommands(reply.commands) }
   },
   limits: async (cli) =>
     parseClaudeUsage(await cli.ask(CLAUDE_CONTROL_ARGS, [claudeControl('usage', { subtype: 'get_usage', skip_behaviors: true })], (m) => claudeControlReply(m, 'usage'))),
-  run: ({ prompt, model, effort, sessionId, autoApprove, attachments, mcp }) => {
+  run: ({ prompt, model, effort, sessionId, autoApprove, attachments, mcp, plan, fast }) => {
     const assigned = sessionId ? undefined : randomUUID()
     return {
       ...(mcp ? { files: [{ path: mcp.configPath, content: JSON.stringify(mcpServersJson(mcp.endpoint)) }] } : {}),
@@ -250,7 +277,9 @@ const claude: ChatProvider = {
         ...flag('--effort', effort),
         ...(sessionId ? ['--resume', sessionId] : ['--session-id', assigned as string]),
         ...attachmentDirs(attachments).flatMap((dir) => ['--add-dir', dir]),
-        ...(autoApprove ? ['--dangerously-skip-permissions'] : []),
+        // Plan mode wins over full access: it is the user's "think, don't touch" for this turn.
+        ...(plan ? ['--permission-mode', 'plan'] : autoApprove ? ['--dangerously-skip-permissions'] : []),
+        ...(fast && (!model || /opus/i.test(model)) ? ['--settings', JSON.stringify({ fastMode: true })] : []),
         ...(mcp ? claudeMcpArgs(mcp.endpoint, mcp.configPath, mcp.coordination) : [])
       ],
       stdin: withAttachmentNote(prompt, attachments),
@@ -304,12 +333,13 @@ const opencodeLike = (cliId: string): ChatProvider => ({
   cliId,
   parser: opencodeParser,
   resumable: true,
+  plan: true,
   models: async (cli) => [DEFAULT_MODEL, ...parseOpencodeModels(await cli.run(['models', '--verbose']))],
-  run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp }) => ({
+  run: ({ prompt, model, effort, sessionId, autoApprove, attachments = [], mcp, plan }) => ({
     env: {
       ...(mcp ? { [cliId === 'kilocode' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: opencodeConfigJson(mcp.endpoint) } : {}),
       // Versions without --auto still honour the permission override (ADR 0049).
-      ...(autoApprove ? { [cliId === 'kilocode' ? 'KILO_PERMISSION' : 'OPENCODE_PERMISSION']: ALLOW_ALL_PERMISSIONS } : {})
+      ...(autoApprove && !plan ? { [cliId === 'kilocode' ? 'KILO_PERMISSION' : 'OPENCODE_PERMISSION']: ALLOW_ALL_PERMISSIONS } : {})
     },
     args: [
       'run',
@@ -318,7 +348,8 @@ const opencodeLike = (cliId: string): ChatProvider => ({
       ...flag('-m', model),
       ...flag('--variant', effort),
       ...flag('-s', sessionId),
-      ...(autoApprove ? ['--auto'] : []),
+      // Its built-in read-only "plan" agent.
+      ...(plan ? ['--agent', 'plan'] : autoApprove ? ['--auto'] : []),
       promptArg(prompt || 'Look at the attached files.'),
       // Native attachments; last, because --file takes a list.
       ...attachments.map((a) => `--file=${a.path}`)

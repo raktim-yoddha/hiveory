@@ -73,3 +73,8 @@ push a workspace branch and create a PR, pick issues for association.
 electron-updater checks GitHub Releases manually or automatically (setting);
 nothing downloads without a click; dev builds report "unsupported". Releases
 follow SemVer and AGENTS.md rule 26 (`pnpm release X.Y.Z`).
+
+## Amendment (2026-11-08): the CLI lock is lifted for chat-view agents
+
+A chat-view agent may switch CLI mid-conversation: the new CLI's first turn gets the conversation so
+far as context (ADR 0058).

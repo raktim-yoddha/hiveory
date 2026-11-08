@@ -18,9 +18,10 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'files.paste', 'files.watch',
   'editors.list', 'editors.open', 'editors.close',
   'connections.list', 'apps.status', 'apps.setKey', 'apps.removeKey', 'apps.connect', 'apps.disconnect', 'connections.saveCustom', 'connections.import', 'connections.setEnabled', 'connections.test', 'connections.remove',
-  'chat.clis', 'chat.get', 'chat.update', 'chat.setModel', 'chat.send', 'chat.attach', 'chat.stop', 'chat.catalog', 'chat.limits', 'chat.queue', 'chat.unqueue', 'prompts.list', 'prompts.save', 'prompts.delete',
+  'chat.clis', 'chat.get', 'chat.update', 'chat.setModel', 'chat.send', 'chat.attach', 'chat.stop', 'chat.catalog', 'chat.limits', 'chat.queue', 'chat.unqueue', 'chat.revertTurn', 'prompts.list', 'prompts.save', 'prompts.delete',
   'routines.list', 'routines.addFile', 'routines.create', 'routines.update', 'routines.delete', 'routines.runNow', 'routines.runs',
   'hosts.check', 'hosts.suggest', 'hosts.status', 'hosts.listDir', 'ssh.pending', 'ssh.answer', 'git.info', 'git.validateBranch', 'git.init',
+  'changes.list', 'changes.diff', 'changes.commits',
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest',
   'store.searchSkills', 'store.topSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
   'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list',
@@ -35,7 +36,9 @@ export const REMOTE_CHANNELS = new Set<Channel>([
  */
 export const CLIENT_LOCAL_CHANNELS = new Set<Channel>([
   'app.info', 'clipboard.readText', 'clipboard.writeText', 'system.openUrl', 'client.status', 'client.connect', 'client.disconnect', 'client.discover',
-  'updates.status', 'browser.state', 'wallpapers.list', 'themes.installed'
+  'updates.status', 'browser.state', 'wallpapers.list', 'themes.installed',
+  // A picture of a window on this screen (ADR 0058); it reaches the server's chat through chat.attach.
+  'chat.windows', 'chat.captureWindow'
 ])
 
 /** The server's wire format: a call, and one event on the event stream. */

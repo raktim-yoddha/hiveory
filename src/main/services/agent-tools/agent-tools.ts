@@ -8,7 +8,7 @@ import type { LayoutService } from '../layout/layout-service'
 import type { ShellService } from '../shell/shell-service'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { ToolDefinition, ToolHost, ToolResult } from './mcp-protocol'
-import { deliverMessage, waitIdle } from './deliver'
+import { deliverMessage, waitIdle, waitReady } from './deliver'
 import { int, str, ToolError } from './tool-args'
 
 export interface AgentToolDeps {
@@ -33,6 +33,11 @@ export interface ToolFamily {
 }
 
 const MAX_READ_LINES = 400
+/** What a model id or effort may look like before it reaches a CLI's flags (as `chat.update` checks). */
+const MODEL_ID = /^[\w.:/@[\]-]{1,200}$/
+const EFFORT = /^[\w-]{1,40}$/
+/** How long a subagent left to work on its own may take before its parent stops waiting for its result. */
+const SUBAGENT_REPORT_MS = 60 * 60_000
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /**
@@ -81,7 +86,10 @@ export class AgentTools implements ToolHost {
     const cli = this.deps.registry.displayName(agent.cliId)
     const workspace = this.deps.workspaces.find(agent.workspaceId)?.name ?? 'unknown worktree'
     const status = !runtime.running ? 'not running' : runtime.status + (runtime.waitingReason ? ` (${runtime.waitingReason})` : '')
-    return `${agent.petName} — ${cli} · worktree "${workspace}" · ${status}${agent.id === this.callerId ? ' · this is you' : ''}`
+    const model = agent.model ? ` (${agent.model}${agent.effort ? `, ${agent.effort}` : ''})` : ''
+    const parent = agent.parentId ? this.deps.agents.find(agent.parentId)?.petName : undefined
+    const role = agent.id === this.callerId ? ' · this is you' : agent.parentId === this.callerId ? ' · your subagent' : parent ? ` · subagent of ${parent}` : ''
+    return `${agent.petName} — ${cli}${model} · worktree "${workspace}" · ${status}${role}`
   }
 
   list(): ToolDefinition[] {
@@ -172,11 +180,20 @@ export class AgentTools implements ToolHost {
       },
       {
         name: 'open_agent',
-        description: 'Open a new agent in a new pane. It joins your worktree unless placed beside an agent in another one.',
+        description:
+          'Open a new agent in a new pane as your subagent: any installed CLI, with its own model and effort. Give it a task to start it working. ' +
+          'wait:true returns its reply when it finishes (like ask_agent); otherwise it works on its own and, when you are in chat view, its result comes back to you as a message when it finishes. ' +
+          'It joins your worktree unless placed beside an agent in another one.',
         inputSchema: {
           type: 'object',
           properties: {
             cli: { type: 'string', enum: clis, description: 'Which installed CLI to start.' },
+            model: { type: 'string', description: "Optional model id the CLI accepts (e.g. \"opus\", \"gpt-5.5\", \"opencode/kimi-k2\"); default: the CLI's own." },
+            effort: { type: 'string', description: 'Optional reasoning effort the model accepts (e.g. low, medium, high).' },
+            task: { type: 'string', minLength: 1, maxLength: 20000, description: 'Optional first message: what the subagent should do.' },
+            view: { type: 'string', enum: ['chat', 'terminal'], description: "Chat view (headless, model and effort always apply) or a terminal; default: the worktree's setting." },
+            wait: { type: 'boolean', default: false, description: 'With a task: wait for it to finish and return its reply.' },
+            timeout_seconds: { type: 'integer', minimum: 1, maximum: 900, default: 300 },
             beside: { ...agentArg, description: 'Optional: place the new pane next to this agent.' },
             side: { type: 'string', enum: ['right', 'bottom'], default: 'right' }
           },
@@ -225,6 +242,25 @@ export class AgentTools implements ToolHost {
         }
       }
     ]
+  }
+
+  /**
+   * A chat-view parent hears back from a subagent it left working (ADR 0058): its reply arrives as the
+   * parent's next message (queued while the parent answers). Terminal parents ask with wait_for_agent.
+   */
+  private reportWhenDone(subagent: CliInstance): void {
+    const parent = this.caller
+    if (!parent.chatUi) return
+    void waitIdle(this.deps, subagent, SUBAGENT_REPORT_MS, 2500).then((done) => {
+      if (!done || !this.deps.agents.find(parent.id) || !this.deps.agents.find(subagent.id)) return
+      const reply = subagent.chatUi ? this.deps.chats.lastReply(subagent.id) : this.deps.runtime.screenText(subagent.id, 60)
+      const text = `Your subagent ${subagent.petName} (${this.deps.registry.displayName(subagent.cliId)}) finished its task. Its ${subagent.chatUi ? 'reply' : 'screen'}:\n\n${reply.slice(-8000) || '(nothing)'}`
+      try {
+        this.deps.chats.enqueue(parent.id, text)
+      } catch {
+        // The parent's queue is full or it is gone: it can still read the subagent itself.
+      }
+    })
   }
 
   async call(name: string, args: Record<string, unknown>): Promise<ToolResult> {
@@ -327,8 +363,29 @@ export class AgentTools implements ToolHost {
         const beside = str(args, 'beside', false)
         const target = beside ? this.resolve(beside) : this.caller
         const side: Side = args.side === 'bottom' ? 'bottom' : 'right'
-        const { agent } = agents.open(target.workspaceId, cli.id, { targetPaneId: target.id, side })
-        return `Opened ${agent.petName} (${cli.displayName}) ${side === 'right' ? 'to the right of' : 'below'} ${target.petName}.`
+        const model = str(args, 'model', false)
+        const effort = str(args, 'effort', false)
+        if (model && !MODEL_ID.test(model)) throw new ToolError('model must be a plain model id (letters, digits and . : / @ [ ] -).')
+        if (effort && !EFFORT.test(effort)) throw new ToolError('effort must be a single word such as low, medium or high.')
+        const view = args.view === 'chat' ? true : args.view === 'terminal' ? false : undefined
+        const { agent } = agents.open(target.workspaceId, cli.id, { targetPaneId: target.id, side }, undefined, view, {
+          parentId: this.callerId,
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {})
+        })
+        const opened = `Opened ${agent.petName} (${cli.displayName}${model ? `, ${model}` : ''}${effort ? `, ${effort}` : ''}) as your subagent, ${side === 'right' ? 'to the right of' : 'below'} ${target.petName}.`
+        const task = str(args, 'task', false)
+        if (!task) return opened
+        const ready = await waitReady(this.deps, agent)
+        if (ready !== 'ready') return `${opened} It is not ready for its task (${ready === 'waiting' ? 'it is asking the user something first' : ready}); send it with send_message once it is.`
+        await deliverMessage(this.deps, agent, task)
+        if (args.wait === true) {
+          const done = await waitIdle(this.deps, agent, int(args, 'timeout_seconds', 300, 1, 900) * 1000, 2500)
+          const reply = agent.chatUi ? this.deps.chats.lastReply(agent.id) : runtime.screenText(agent.id, 80)
+          return `${opened} ${done ? 'It finished.' : 'Timed out while it was still working.'}\n--- ${agent.chatUi ? 'reply' : 'screen'} ---\n${reply || '(nothing yet)'}`
+        }
+        this.reportWhenDone(agent)
+        return `${opened} It is working on its task.${this.caller.chatUi ? ' Its result comes back to you as a message when it finishes.' : ' Use wait_for_agent and read_agent for its result.'}`
       }
       case 'close_agent': {
         const agent = this.resolve(str(args, 'agent'))

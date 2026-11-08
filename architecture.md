@@ -566,8 +566,12 @@ agent ──browser_* (MCP)──▶ BrowserTools ─▶ BrowserService (pages: 
 
 ```text
 Work agent in chat view: composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ CLI headless
-        ▲                               │ stdout lines → parser → ChatAccumulator
+        ▲                               │ stdout lines → parser → ChatAccumulator (text, tools, tasks, usage)
         └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
+   before/after each turn: Checkpoints ─ git add -A (GIT_INDEX_FILE=copy) + write-tree ─▶ TurnCheckpoint
+
+Changes tab (ADR 0058): ChangesPanel ─IPC changes.*─▶ ChangesService ─▶ WorktreeChanges ─ HostKit.exec(git)
+   (this computer, an SSH host, or — as a client — the Hiveory server's own handlers)
 ```
 
 ### Terminal host data flow (ADR 0022)

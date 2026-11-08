@@ -26,6 +26,12 @@ export class ChatAccumulator {
       case 'done':
         this.done = true
         return
+      case 'tasks':
+        this.message.tasks = event.tasks
+        return
+      case 'usage':
+        this.message.usage = { used: event.used ?? this.message.usage?.used ?? 0, ...((event.window ?? this.message.usage?.window) ? { window: event.window ?? this.message.usage?.window } : {}) }
+        return
       case 'text':
       case 'thinking': {
         const key = `${event.type}:${event.key}`

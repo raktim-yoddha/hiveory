@@ -1,3 +1,5 @@
+import type { ChatTask } from '@shared/domain/chat'
+
 /**
  * Line parsers for each CLI's headless output, normalized into one small
  * event vocabulary. Pure: each takes raw stdout lines, so they are unit-tested
@@ -12,10 +14,30 @@ export type ChatEvent =
   | { type: 'tool'; id: string; name?: string; detail?: string; output?: string; status: 'running' | 'done' | 'error' }
   | { type: 'error'; message: string }
   | { type: 'done' }
+  /** The agent's to-do list, whole (ADR 0058). */
+  | { type: 'tasks'; tasks: ChatTask[] }
+  /** Context in use after a model call, and/or the model's window. */
+  | { type: 'usage'; used?: number; window?: number }
 
 export type LineParser = (line: string) => ChatEvent[]
 
 const MAX_OUTPUT = 4000
+const TASK_STATUS = new Set<ChatTask['status']>(['pending', 'in_progress', 'completed'])
+
+/** A to-do list in any CLI's shape: {content|text|step, status} or {text, completed}. */
+export const toTasks = (raw: unknown): ChatTask[] | undefined => {
+  if (!Array.isArray(raw)) return undefined
+  const tasks = raw.flatMap((item): ChatTask[] => {
+    const t = rec(item)
+    const text = s(t.content) ?? s(t.text) ?? s(t.step) ?? s(t.title)
+    if (!text) return []
+    const status = s(t.status)
+    return [{ text, status: TASK_STATUS.has(status as ChatTask['status']) ? (status as ChatTask['status']) : t.completed === true ? 'completed' : 'pending' }]
+  })
+  return tasks.length ? tasks : undefined
+}
+
+const tokens = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 const parseJson = (line: string): Record<string, unknown> | null => {
   const trimmed = line.trim()
@@ -103,8 +125,14 @@ export const claudeParser = (): LineParser => {
           if (block.type === 'thinking' && typeof block.thinking === 'string') out.push({ type: 'thinking', key, full: block.thinking })
           if (block.type === 'tool_use') {
             out.push({ type: 'tool', id: s(block.id) ?? key, name: s(block.name), detail: summarizeInput(block.input), status: 'running' })
+            const tasks = block.name === 'TodoWrite' ? toTasks(rec(block.input).todos) : undefined
+            if (tasks) out.push({ type: 'tasks', tasks })
           }
         })
+        const usage = rec(message.usage)
+        // What the model saw on this call, plus what it wrote: the context the next call starts from.
+        const used = tokens(usage.input_tokens) + tokens(usage.cache_creation_input_tokens) + tokens(usage.cache_read_input_tokens) + tokens(usage.output_tokens)
+        if (used > 0) out.push({ type: 'usage', used })
         break
       }
       case 'user': {
@@ -133,6 +161,10 @@ export const claudeParser = (): LineParser => {
       case 'result':
         if (sessionId) out.push({ type: 'session', id: sessionId })
         if (j.is_error) out.push({ type: 'error', message: s(j.result) ?? s(j.error) ?? `Run ended: ${s(j.subtype) ?? 'error'}` })
+        {
+          const window = Math.max(0, ...Object.values(rec(j.modelUsage)).map((m) => tokens(rec(m).contextWindow)))
+          if (window > 0) out.push({ type: 'usage', window })
+        }
         out.push({ type: 'done' })
         break
     }
@@ -177,6 +209,10 @@ export const codexParser = (): LineParser => (line) => {
       return [{ type: 'tool', id, name: `${s(item.server) ?? 'mcp'}.${s(item.tool) ?? 'tool'}`, status: finished ? (item.status === 'failed' ? 'error' : 'done') : 'running' }]
     case 'web_search':
       return [{ type: 'tool', id, name: 'Web search', detail: s(item.query), status: finished ? 'done' : 'running' }]
+    case 'todo_list': {
+      const tasks = toTasks(item.items)
+      return tasks ? [{ type: 'tasks', tasks }] : []
+    }
     case 'error':
       return [{ type: 'error', message: s(item.message) ?? 'Codex error' }]
     default:
@@ -216,6 +252,8 @@ export const opencodeParser = (): LineParser => {
           output: typeof state.output === 'string' ? clip(state.output) : s(state.error),
           status
         })
+        const tasks = s(part.tool) === 'todowrite' ? toTasks(rec(state.input).todos) : undefined
+        if (tasks) out.push({ type: 'tasks', tasks })
         break
       }
       case 'error': {

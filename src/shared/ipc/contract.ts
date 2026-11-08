@@ -24,6 +24,7 @@ import type {
 } from '../domain'
 import type { AgentPeek } from '../domain/agent-update'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
+import type { ChangeSet, CommitSummary } from '../domain/changes'
 import type { TerminalHostStatus } from '../host/protocol'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
@@ -101,6 +102,12 @@ const skillPath = z.string().min(1).max(1000)
 const fileScope = z.object({ workspaceId: id.optional(), projectId: id.optional() }).refine((s) => Boolean(s.workspaceId || s.projectId), 'A worktree or workspace is required.')
 const relPath = z.string().max(1000).refine((p) => !p.includes('\0'), 'Invalid path.')
 const fileName = z.string().min(1).max(1000)
+const changeSource = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('uncommitted') }),
+  z.object({ kind: z.literal('branch') }),
+  z.object({ kind: z.literal('commit'), sha: z.string().regex(/^[0-9a-f]{7,64}$/) }),
+  z.object({ kind: z.literal('turn'), chatId: id, messageId: id })
+])
 /** `agents` or the id of a CLI that has its own skills folder (checked against the registry's roots in main). */
 const skillRoot = id
 const connectionId = z.string().regex(/^c[a-z0-9]{1,24}$/)
@@ -472,7 +479,10 @@ export const requestSchemas = {
     model: z.string().max(200).regex(/^[\w.:/@[\]-]*$/).optional(),
     effort: z.string().max(40).regex(/^[\w-]*$/).optional(),
     autoApprove: z.boolean().optional(),
-    title: z.string().max(200).optional()
+    title: z.string().max(200).optional(),
+    /** Plan and fast mode (ADR 0058). */
+    plan: z.boolean().optional(),
+    fast: z.boolean().optional()
   }),
   /** Only the model and effort ('' = the CLI's default): what a phone may change on a chat (ADR 0027). */
   'chat.setModel': z.object({ chatId: id, model: chatModel, effort: chatEffort }),
@@ -503,6 +513,18 @@ export const requestSchemas = {
   'chat.catalog': z.object({ cliId: id, refresh: z.boolean().optional() }),
   /** The CLI's plan limits (5-hour, weekly), as it reports them (ADR 0055). */
   'chat.limits': z.object({ cliId: id, refresh: z.boolean().optional() }),
+  /** Undoes one turn's file changes from its checkpoint (ADR 0058). */
+  'chat.revertTurn': z.object({ chatId: id, messageId: id }),
+  /**
+   * Open windows on the computer in front of the user, and a PNG of one (ADR 0058). Always answered by
+   * the window's own machine, also as a client of a server; the picture then goes up with `chat.attach`.
+   */
+  'chat.windows': none,
+  'chat.captureWindow': z.object({ sourceId: z.string().min(1).max(200).regex(/^window:[\w:-]+$/) }),
+  // A worktree's changes for the side panel's Changes tab (ADR 0058), read from Git where the worktree lives.
+  'changes.list': z.object({ workspaceId: id, source: changeSource }),
+  'changes.diff': z.object({ workspaceId: id, source: changeSource, path: fileName }),
+  'changes.commits': z.object({ workspaceId: id }),
   // Routines (ADR 0028, 0040): a Worktree's scheduled work, and the run log.
   'routines.list': none,
   'routines.create': routineFields,
@@ -744,6 +766,12 @@ export interface ResponseMap {
   'prompts.delete': void
   'chat.catalog': ChatCatalog
   'chat.limits': UsageLimits
+  'chat.revertTurn': ChatMessage
+  'chat.windows': Array<{ id: string; name: string; thumbnail: string }>
+  'chat.captureWindow': { name: string; data: string }
+  'changes.list': ChangeSet
+  'changes.diff': string
+  'changes.commits': CommitSummary[]
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView

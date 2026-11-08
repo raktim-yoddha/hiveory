@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { CalendarClock, FolderTree, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop, Settings2 } from 'lucide-react'
+import { CalendarClock, FolderTree, GitCompareArrows, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop, Settings2 } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
@@ -16,6 +16,7 @@ import {
   type PanelGroup,
   type PanelTab
 } from '../../stores/navigation'
+import { ChangesPanel } from '../changes/ChangesPanel'
 import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
 import { ProjectPanel } from '../project/ProjectPanel'
@@ -23,12 +24,12 @@ import { ProjectScreen } from '../project/ProjectScreen'
 import styles from './SidePanel.module.css'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDashboard, routines: CalendarClock, settings: Settings2 }
+const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDashboard, routines: CalendarClock, settings: Settings2, changes: GitCompareArrows }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
- * Right side panel for the Worktree in view: always the Dashboard (ADR 0038, 0039), the agent session
- * history, the folder's Explorer, and the Workspace's Routines and Settings (ADR 0042) — nothing to add
+ * Right side panel for the Worktree in view: always the Dashboard (ADR 0038, 0039), the worktree's
+ * Changes (ADR 0058), the agent session history, the folder's Explorer, and the Workspace's Routines and Settings (ADR 0042) — nothing to add
  * or close. Tabs drag to reorder; dragging one into the lower half splits the panel into a top and a
  * bottom area for a dual view, and back (a divider sets their heights). Browser pages are panes.
  */
@@ -307,6 +308,8 @@ function PanelArea({
               <ErrorBoundary region={tab.title} compact>
                 {tab.kind === 'explorer' ? (
                   <Explorer key={scope} workspaceId={scope} />
+                ) : tab.kind === 'changes' ? (
+                  <ChangesPanel key={scope} workspaceId={scope} />
                 ) : tab.kind === 'workspace' ? (
                   projectId && <ProjectScreen key={scope} projectId={projectId} workspaceId={scope} />
                 ) : tab.kind === 'routines' || tab.kind === 'settings' ? (

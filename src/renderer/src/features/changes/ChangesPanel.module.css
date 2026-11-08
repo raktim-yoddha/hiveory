@@ -1,0 +1,346 @@
+/* The side panel's Changes tab (ADR 0058): a file tree with line counts, diffs open in place. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-6);
+}
+
+.bar + .bar {
+  padding-top: 0;
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+.branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.branch svg,
+.source svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 60%;
+  height: var(--control-sm);
+  margin-left: calc(-1 * var(--space-3));
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.source:hover,
+.source[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.flex {
+  flex: 1;
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count,
+.sha {
+  flex: none;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.sha {
+  font-family: var(--font-mono);
+}
+
+.stat {
+  display: inline-flex;
+  flex: none;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.add {
+  color: var(--color-success);
+}
+
+.del {
+  color: var(--color-danger);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-2) 0;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.loading svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.tree {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fileRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0 var(--space-5) 0 calc(var(--space-6) + var(--depth, 0) * var(--space-5));
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.row:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.row:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-focus);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
+.chevron,
+.fileIcon {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+}
+
+.deletedName {
+  color: var(--color-text-faint);
+  text-decoration: line-through;
+}
+
+.mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border: var(--border-width) solid currentColor;
+  border-radius: var(--radius-xs);
+}
+
+.mark svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  stroke-width: 3;
+}
+
+.modified {
+  color: var(--color-warning);
+}
+
+.added {
+  color: var(--color-success);
+}
+
+.deleted {
+  color: var(--color-danger);
+}
+
+.renamed {
+  color: var(--color-accent);
+}
+
+/* Open in an editor pane: shown on hover, over the counts. */
+.open {
+  position: absolute;
+  right: calc(var(--space-5) + var(--icon-md) + var(--space-3));
+  opacity: 0;
+  background: var(--color-surface-raised-solid);
+}
+
+.fileRow:hover .open,
+.open:focus-visible {
+  opacity: 1;
+}
+
+.diff {
+  margin: var(--space-1) var(--space-3) var(--space-3);
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+}
+
+.code {
+  margin: 0;
+  max-height: calc(var(--menu-max-height) * 1.5);
+  overflow: auto;
+  padding: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  user-select: text;
+}
+
+.line {
+  display: block;
+  min-width: max-content;
+  padding: 0 var(--space-4) 0 0;
+  white-space: pre;
+}
+
+.sign {
+  display: inline-block;
+  width: var(--space-7);
+  color: var(--color-text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.line.add {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-text);
+}
+
+.line.del {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  color: var(--color-text);
+}
+
+.line.hunk {
+  margin: var(--space-2) 0;
+  color: var(--color-text-faint);
+}
+
+.line.context {
+  color: var(--color-text-secondary);
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.commits {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.commitsToggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.commitsToggle:hover {
+  background: var(--color-surface-hover);
+}
+
+.commitsToggle svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.commitList {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+}
+
+.commit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: var(--control-md);
+  padding: 0 var(--space-5) 0 var(--space-7);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.commit:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.commit svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.selected {
+  background: var(--fill-selected);
+  color: var(--color-text);
+}

@@ -28,6 +28,9 @@ export const codexAdapter: CliAdapter = {
       args.push('-c', `notify=${JSON.stringify(notify)}`)
     }
     if (autoApprove) args.push('--dangerously-bypass-approvals-and-sandbox')
+    // A subagent's model and effort (ADR 0058).
+    if (instance.model) args.push('-m', instance.model)
+    if (instance.effort) args.push('-c', `model_reasoning_effort="${instance.effort}"`)
     // Resume: the exact thread id reported by notify; otherwise the folder's latest session when unambiguous.
     const thread = instance.providerSessionId
     if (resume && thread) return { args: ['resume', ...args, thread], env }

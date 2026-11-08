@@ -1,4 +1,4 @@
-import { BrowserWindow, app, clipboard, dialog, nativeImage, safeStorage, shell } from 'electron'
+import { BrowserWindow, app, clipboard, desktopCapturer, dialog, nativeImage, safeStorage, shell } from 'electron'
 import { connectAndSave, discover } from '../app/client'
 import { suggestHosts } from '../services/hosts/ssh-config'
 import { relaunch } from '../app/client-mode'
@@ -463,7 +463,12 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
 
   'chat.clis': () => c.chats.clis(),
   'chat.get': ({ chatId }) => ({ ...c.chats.get(chatId), running: c.chats.isRunning(chatId) }),
-  'chat.update': ({ chatId, ...patch }) => c.chats.update(chatId, patch),
+  'chat.update': ({ chatId, ...patch }) => {
+    const chat = c.chats.update(chatId, patch)
+    // A chat-view agent's CLI follows its chat's (ADR 0058): the pane, board and tools show the new one.
+    if (chat.agentId && chat.cliId) c.agents.followChatCli(chat.agentId, chat.cliId)
+    return chat
+  },
   'chat.setModel': ({ chatId, model, effort }) => c.chats.update(chatId, { model, effort }),
   'chat.send': ({ chatId, text, attachments }) => c.chats.send(chatId, text, attachments ?? []),
   'chat.queue': ({ chatId, text }) => c.chats.enqueue(chatId, text),
@@ -476,6 +481,20 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'chat.stop': ({ chatId }) => c.chats.stop(chatId),
   'chat.catalog': ({ cliId, refresh }) => c.chats.catalog(cliId, refresh ?? false),
   'chat.limits': ({ cliId, refresh }) => c.chats.limits(cliId, refresh ?? false),
+  'chat.revertTurn': ({ chatId, messageId }) => c.chats.revertTurn(chatId, messageId),
+  // A picture of one open window, attached to the draft (ADR 0058); thumbnails only list them.
+  'chat.windows': async () => {
+    const sources = await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 320, height: 200 } })
+    return sources.filter((w) => w.name).map((w) => ({ id: w.id, name: w.name, thumbnail: w.thumbnail.toDataURL() }))
+  },
+  'chat.captureWindow': async ({ sourceId }) => {
+    const source = (await desktopCapturer.getSources({ types: ['window'], thumbnailSize: { width: 1920, height: 1200 } })).find((w) => w.id === sourceId)
+    if (!source || source.thumbnail.isEmpty()) fail('NOT_FOUND', 'That window is gone.')
+    return { name: `${source!.name.slice(0, 60) || 'window'}.png`, data: source!.thumbnail.toPNG().toString('base64') }
+  },
+  'changes.list': ({ workspaceId, source }) => c.changes.list(workspaceId, source),
+  'changes.diff': ({ workspaceId, source, path }) => c.changes.diff(workspaceId, source, path),
+  'changes.commits': ({ workspaceId }) => c.changes.commits(workspaceId),
   // This window runs its own services; connecting pairs with a server and relaunches as its client (ADR 0022).
   'client.status': () => ({ mode: 'local' as const, connected: false }),
   'client.connect': async (input) => {

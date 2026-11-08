@@ -62,6 +62,9 @@ import { ProjectService } from '../services/projects/project-service'
 import { WorkspaceRepository } from '../services/workspaces/workspace-repository'
 import { WorkspaceService } from '../services/workspaces/workspace-service'
 import { guard } from './guard'
+import { Checkpoints } from '../services/chat/checkpoints'
+import { ChangesService, gitOn } from '../services/git/changes-service'
+import { runProgram } from '../../host/host-server'
 import type { Logger } from './logger'
 import type { AppPaths } from './paths'
 import { Sharing } from './sharing'
@@ -169,11 +172,14 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     mcpFor,
     join(paths.runtimeDir, 'chat'),
     // Chat-view agents run their CLI in the terminal host too (ADR 0051).
-    hostedChatProcesses(() => localHost.get(), (chatId) => localHost.takeRun(chatId))
+    hostedChatProcesses(() => localHost.get(), (chatId) => localHost.takeRun(chatId)),
+    // Every turn's before and after, for its changes and undo (ADR 0058).
+    new Checkpoints((cwd) => gitOn({ exec: runProgram }, cwd), join(paths.runtimeDir, 'checkpoints'))
   )
   // Every project's machine: this computer, or an SSH host reached through hiveoryd (ADR 0022).
   let hosts: HostRegistry | null = null
   const kits = { kit: (host?: HostRef) => hosts!.kit(host) }
+  const changes = new ChangesService(workspaceRepo, kits, (chatId, messageId) => chats.turnCheckpoint(chatId, messageId))
   /** A desktop notification, only while no Hiveory window is focused; clicking it brings Hiveory forward. */
   const notifyDesktop = (notice: { title: string; body: string }): void => {
     const window = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
@@ -413,6 +419,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     apps: appService,
     chatStore,
     chats,
+    changes,
     routines,
     routineFiles,
     prompts,

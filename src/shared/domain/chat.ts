@@ -9,6 +9,16 @@ export interface ChatModel {
   efforts?: string[]
   defaultEffort?: string
   description?: string
+  /** The CLI can run this model in its fast mode (Claude's Opus models, ADR 0058). */
+  fast?: boolean
+}
+
+/** A slash command (or skill) the CLI offers in its prompt, as the CLI itself lists it (ADR 0058). */
+export interface ChatCommand {
+  name: string
+  description?: string
+  /** "<file>" style hint for what follows the command. */
+  argumentHint?: string
 }
 
 export interface ChatCatalog {
@@ -18,6 +28,10 @@ export interface ChatCatalog {
   error?: string
   /** The CLI can report its plan's usage limits (`chat.limits`, ADR 0055). */
   limits?: boolean
+  /** Its slash commands and skills, for the composer's "/" menu (ADR 0058). */
+  commands?: ChatCommand[]
+  /** It has a read-only planning mode the composer can switch on (ADR 0058). */
+  plan?: boolean
 }
 
 /** One window of a CLI plan's usage limit (ADR 0055): "5-hour limit", "Weekly · Opus". */
@@ -46,6 +60,34 @@ export type ChatPart =
   | { kind: 'thinking'; text: string }
   | { kind: 'tool'; id: string; name: string; detail?: string; output?: string; status: 'running' | 'done' | 'error' }
 
+/** One step of the agent's own to-do list (Claude's TodoWrite, Codex's plan), newest list wins (ADR 0058). */
+export interface ChatTask {
+  text: string
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
+/** How full the model's context window was at the end of a turn, as the CLI reports it (ADR 0058). */
+export interface ChatUsage {
+  /** Tokens in the context after the turn's last model call. */
+  used: number
+  /** The model's context window, when the CLI says. */
+  window?: number
+}
+
+/**
+ * The worktree before and after one turn (ADR 0058): Git trees written aside from the user's index
+ * and branches, so the turn's own changes can be listed and undone.
+ */
+export interface TurnCheckpoint {
+  before: string
+  after?: string
+  files?: number
+  additions?: number
+  deletions?: number
+  /** The turn's changes were undone. */
+  reverted?: boolean
+}
+
 /** A file sent with a message: pasted images/video, dropped files, or long pasted text saved to a file. */
 export interface ChatAttachment {
   name: string
@@ -64,6 +106,11 @@ export interface ChatMessage {
   /** Assistant turn still streaming. */
   streaming?: boolean
   error?: string
+  /** The agent's to-do list as this turn left it. */
+  tasks?: ChatTask[]
+  usage?: ChatUsage
+  /** Assistant turns in a Git worktree: what the turn changed. */
+  checkpoint?: TurnCheckpoint
 }
 
 export interface ChatSession {
@@ -78,6 +125,15 @@ export interface ChatSession {
   model?: string
   effort?: string
   autoApprove: boolean
+  /** Plan mode: the CLI plans and answers without changing anything (ADR 0058). */
+  plan?: boolean
+  /** Fast mode, for models that have one (ADR 0058). */
+  fast?: boolean
+  /**
+   * The CLI changed mid-conversation (ADR 0058): the next turn starts a new session on the new CLI with
+   * the conversation so far as context, then it resumes as usual.
+   */
+  handoff?: boolean
   /** Set when this chat backs a Work agent shown in chat view; such chats stay out of the Chat list. */
   agentId?: string
   /** Messages typed while it was answering: each goes in as the next turn, in order (ADR 0031). */

@@ -59,8 +59,12 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   Day · Week · List · Run logs, New schedule); the keep-awake switch; the calendar (click an empty hour
   for a new schedule there, a run to edit its schedule); List: schedule rows; Run logs: status,
   schedule, who ("Claude Code · demo-app · main"), when, by you or the schedule, duration, why it failed.
-- Message box (a Work agent in chat view): attach; model · effort · usage limits (gauge and popover,
-  ADR 0055) · permissions. While answering, the box stays open, a queue button sits beside Stop, and
+- Message box (a Work agent in chat view, ADR 0058): above it, pills for the agent's tasks ("4/6
+  tasks"), its subagents and the worktree's changes ("+1.9k −684", opens Changes); in it, `@` file and
+  `/` command suggestions; toolbar "+" (files, picture of a window) · CLI and model (one picker, CLI
+  tabs) · effort (when the model has it) · permissions · fast (⚡, Opus) · plan · context meter · usage
+  limits (gauge and popover, ADR 0055) · send. A reply that changed files ends with "N files changed
+  +a −d · View · Undo"; selected reply text offers Quote. While answering, the box stays open, a queue button sits beside Stop, and
   waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
 
 ### Settings › Keyboard (ADR 0047)
@@ -398,3 +402,9 @@ Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat
 Welcome (3 steps) › Pair (QR scanner · or address + code)
 App-wide: SSH question sheet · notices · notification taps
 ```
+
+### Side panel Changes (ADR 0058)
+
+Branch · refresh; source (Uncommitted, Branch, One turn, Commits ›) · totals · file count; the tree
+(folders with summed counts, single-folder chains joined; files with +/−, a status mark, a pencil to
+open in an editor pane; click to open its diff in place); Commits (collapsible, the branch's commits).

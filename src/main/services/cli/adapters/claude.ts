@@ -60,6 +60,9 @@ export const claudeAdapter: CliAdapter = {
       ? ['--resume', instance.conversationId]
       : ['--session-id', instance.conversationId]
     if (autoApprove) args.push('--dangerously-skip-permissions')
+    // A subagent's model and effort (ADR 0058).
+    if (instance.model) args.push('--model', instance.model)
+    if (instance.effort) args.push('--effort', instance.effort)
     const files: Array<{ path: string; content: string }> = []
     if (hook) {
       // Hooks are injected per launch via --settings; the user's own settings are never modified.

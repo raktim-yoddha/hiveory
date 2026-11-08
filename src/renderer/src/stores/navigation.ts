@@ -20,7 +20,7 @@ export type View =
  */
 export interface PanelTab {
   id: string
-  kind: 'explorer' | 'sessions' | 'workspace' | 'routines' | 'settings'
+  kind: 'explorer' | 'sessions' | 'workspace' | 'routines' | 'settings' | 'changes'
   title: string
   /** The side panel splits into a top and a bottom area; tabs sit in the top one unless moved down. */
   group?: PanelGroup
@@ -60,6 +60,8 @@ interface NavigationState {
   openSettings(section?: SettingsSection): void
   closeSettings(): void
   togglePanel(): void
+  /** Opens the side panel on one of its tabs (the composer's changes pill opens Changes, ADR 0058). */
+  showPanelTab(scope: string, kind: PanelTab['kind']): void
   togglePanelMaximized(): void
   setSidebarWidth(width: number): void
   setPanelWidth(width: number): void
@@ -144,6 +146,11 @@ export const useNavigation = create<NavigationState>((set, get) => ({
     set((s) => ({ view: { type: 'settings', section, returnTo: s.view.type === 'settings' ? s.view.returnTo : s.view } })),
   closeSettings: () => set((s) => (s.view.type === 'settings' ? { view: s.view.returnTo } : {})),
   togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen, panelMaximized: s.panelOpen ? false : s.panelMaximized })),
+  showPanelTab: (scope, kind) => {
+    get().ensurePanelTabs(scope)
+    get().addPanelTab(scope, kind)
+    set({ panelOpen: true })
+  },
   togglePanelMaximized: () => set((s) => ({ panelMaximized: !s.panelMaximized })),
   setSidebarWidth: (width) => {
     const sidebarWidth = clamp(width, SIDEBAR_WIDTH)
@@ -172,7 +179,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', routines: 'Schedules', settings: 'Settings' }[kind]
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', routines: 'Schedules', settings: 'Settings', changes: 'Changes' }[kind]
     const tab: PanelTab = { id: tabId, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({
@@ -232,7 +239,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
     if (!scope) return
     const fresh = !get().panelTabs[scope]
     // Every kind, once: a worktree opened before keeps its order and gets what it lacks.
-    for (const kind of ['workspace', 'sessions', 'explorer', 'routines', 'settings'] as const) get().addPanelTab(scope, kind, undefined, fresh && kind === 'workspace')
+    for (const kind of ['workspace', 'changes', 'sessions', 'explorer', 'routines', 'settings'] as const) get().addPanelTab(scope, kind, undefined, fresh && kind === 'workspace')
   },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
     set((s) => ({

@@ -97,10 +97,16 @@ export function useAttachments(chatId: string) {
     [add, chatId]
   )
 
+  /** A file main makes itself (a picture of a window, ADR 0058). */
+  const addUpload = useCallback(
+    (name: string, kind: ChatAttachment['kind'], upload: () => Promise<ChatAttachment>): void => void add({ name, kind, size: 0 }, upload),
+    [add]
+  )
+
   const remove = useCallback((key: string) => setItems((list) => list.filter((item) => item.key !== key)), [])
   const clear = useCallback(() => setItems([]), [])
 
   const ready = items.every((item) => item.attachment)
   const attachments = items.flatMap((item) => (item.attachment ? [item.attachment] : []))
-  return { items, attachments, ready, addFiles, addText, remove, clear }
+  return { items, attachments, ready, addFiles, addText, addUpload, remove, clear }
 }

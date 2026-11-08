@@ -21,6 +21,8 @@ import { ChatAccumulator } from './accumulator'
 import type { ChatStore } from './chat-store'
 import { probeCli } from './cli-probe'
 import { CHAT_PROVIDERS, transcriptPrompt, type CatalogRunner, type ChatMcp } from './providers'
+import type { Checkpoints } from './checkpoints'
+import type { LineParser } from './parsers'
 
 const CATALOG_TTL_MS = 10 * 60 * 1000
 /** Limits move with every turn: a fresh reading at most this often unless the user refreshes. */
@@ -29,6 +31,8 @@ const EMIT_EVERY_MS = 50
 const MAX_STDERR = 4000
 /** Files dropped from disk are sent by path; anything bigger than this is refused. */
 const MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024
+/** A checkpoint that takes longer than this is skipped: the turn never waits long for it (ADR 0058). */
+const CHECKPOINT_TIMEOUT_MS = 5000
 
 const KIND_BY_EXT: Record<string, ChatAttachment['kind']> = {
   '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.gif': 'image', '.webp': 'image', '.bmp': 'image',
@@ -46,7 +50,8 @@ export const attachmentKind = (name: string): ChatAttachment['kind'] => KIND_BY_
 export const safeName = (name: string): string => basename(name).replace(/[^\w.() -]+/g, '_').slice(0, 120) || 'file'
 
 interface Run {
-  proc: ChatProcess
+  /** Absent while the turn's checkpoint is being written, before the CLI starts. */
+  proc?: ChatProcess
   stopped: boolean
 }
 
@@ -75,7 +80,9 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     /** Per-run generated files (MCP configs). */
     private readonly runtimeDir = join(attachmentsDir, '..', '.runtime'),
     /** Where each turn's CLI runs: the terminal host, so a reply outlives Hiveory (ADR 0051). */
-    private readonly processes: ChatProcessBackend = localChatProcesses
+    private readonly processes: ChatProcessBackend = localChatProcesses,
+    /** Each turn's before/after trees (ADR 0058); absent: turns keep no checkpoints. */
+    private readonly checkpoints?: Checkpoints
   ) {
     super()
   }
@@ -166,21 +173,27 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     })
   }
 
-  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title'>>): ChatSession {
+  update(chatId: string, patch: Partial<Pick<ChatSession, 'cliId' | 'model' | 'effort' | 'autoApprove' | 'title' | 'plan' | 'fast'>>): ChatSession {
     const chat = this.get(chatId)
-    if (chat.agentId && patch.cliId && patch.cliId !== chat.cliId) fail('FORBIDDEN', "An agent's CLI is fixed.")
     const started = chat.messages.length > 0
     if (patch.cliId !== undefined && patch.cliId !== chat.cliId) {
-      if (started) fail('FORBIDDEN', 'The CLI is locked once a chat has started.', { hint: 'Start a new chat to use another CLI.' })
       if (!this.clis().includes(patch.cliId)) fail('CLI_UNAVAILABLE', 'That CLI is not available for chat.')
-      // A different CLI means different models; reset the model-specific choices.
+      if (this.runs.has(chatId)) fail('INVALID_INPUT', 'Wait for the reply to finish before switching CLI.')
+      // A different CLI means different models; reset the model-specific choices. A started
+      // conversation hands off: the new CLI's first turn gets it as context (ADR 0058, replaces ADR 0012's lock).
       chat.cliId = patch.cliId
       chat.model = undefined
       chat.effort = undefined
+      chat.fast = undefined
+      chat.providerSessionId = undefined
+      if (!CHAT_PROVIDERS[patch.cliId]?.plan) chat.plan = undefined
+      if (started) chat.handoff = true
     }
     if ('model' in patch) chat.model = patch.model || undefined
     if ('effort' in patch) chat.effort = patch.effort || undefined
     if (patch.autoApprove !== undefined) chat.autoApprove = patch.autoApprove
+    if (patch.plan !== undefined) chat.plan = patch.plan || undefined
+    if (patch.fast !== undefined) chat.fast = patch.fast || undefined
     if (patch.title !== undefined) chat.title = patch.title.trim().slice(0, 80) || chat.title
     chat.updatedAt = nowIso()
     this.store.save(chat)
@@ -209,7 +222,10 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     if (!provider || !executable) return Promise.resolve({ cliId, models: [], error: 'This CLI is not available for chat.' })
     const catalog = provider
       .models(this.cliRunner(executable))
-      .then((models) => ({ cliId, models, ...(provider.limits ? { limits: true } : {}) }))
+      .then((found): ChatCatalog => {
+        const { models, commands } = Array.isArray(found) ? { models: found, commands: [] } : found
+        return { cliId, models, ...(commands.length ? { commands } : {}), ...(provider.plan ? { plan: true } : {}), ...(provider.limits ? { limits: true } : {}) }
+      })
       .catch((error: Error) => {
         this.log.warn(`Model discovery failed for ${cliId}`, error)
         // Default model always works; discovery errors never block chatting.
@@ -289,39 +305,90 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     // Every window and phone shows the question at once, whoever sent it (the phone, another agent).
     this.broadcast('chat.event', { chatId, message: structuredClone(asked), summary: this.summary(chat) })
 
-    // Providers without resume get the transcript every turn.
-    const body = provider!.resumable ? prompt : transcriptPrompt(history, prompt)
+    // Providers without resume get the transcript every turn; so does the first turn after a CLI switch.
+    const fresh = !provider!.resumable || chat.handoff === true
+    const body = fresh ? transcriptPrompt(history, prompt) : prompt
     const spec = provider!.run({
       prompt: body,
       model: chat.model,
       effort: chat.effort,
-      sessionId: provider!.resumable ? chat.providerSessionId : undefined,
+      sessionId: fresh ? undefined : chat.providerSessionId,
       autoApprove: chat.autoApprove,
       attachments,
-      mcp: this.mcpConfig(chat)
+      mcp: this.mcpConfig(chat),
+      plan: Boolean(chat.plan && provider!.plan),
+      fast: chat.fast === true
     })
     if (spec.assignedSessionId) chat.providerSessionId = spec.assignedSessionId
 
-    let proc: ChatProcess
-    try {
-      const target = resolveSpawnTarget(executable!, spec.args)
-      for (const file of spec.files ?? []) {
-        mkdirSync(dirname(file.path), { recursive: true })
-        writeFileSync(file.path, file.content)
+    // The turn is running from here (a second send is refused), first writing its checkpoint.
+    const run: Run = { stopped: false }
+    this.runs.set(chatId, run)
+    this.broadcast('state.changed', { topic: 'chats' })
+    // The reply shows as working at once, while the checkpoint is written.
+    this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary: this.summary(chat) })
+    this.emit('run', chatId, true)
+    void this.checkpoint(chat.cwd).then((before) => {
+      if (before) reply.checkpoint = { before }
+      if (run.stopped) {
+        this.runs.delete(chatId)
+        this.finish(chat, reply, new ChatAccumulator(reply), 'Stopped')
+        return
       }
-      proc = this.processes.spawn({ key: chatId, file: target.file, args: target.args, cwd: chat.cwd, env: { ...sanitizeEnv(process.env), ...spec.env }, stdin: spec.stdin })
+      let proc: ChatProcess
+      try {
+        const target = resolveSpawnTarget(executable!, spec.args)
+        for (const file of spec.files ?? []) {
+          mkdirSync(dirname(file.path), { recursive: true })
+          writeFileSync(file.path, file.content)
+        }
+        proc = this.processes.spawn({ key: chatId, file: target.file, args: target.args, cwd: chat.cwd, env: { ...sanitizeEnv(process.env), ...spec.env }, stdin: spec.stdin })
+      } catch (error) {
+        this.runs.delete(chatId)
+        this.finish(chat, reply, new ChatAccumulator(reply), error instanceof Error ? error.message : String(error))
+        return
+      }
+      this.follow(chat, reply, proc, provider!.parser(), run)
+    })
+  }
+
+  /** The folder as a Git tree before a turn, or undefined (not a repository, too slow, failed). */
+  private checkpoint(cwd: string): Promise<string | undefined> {
+    if (!this.checkpoints) return Promise.resolve(undefined)
+    return Promise.race([
+      this.checkpoints.snapshot(cwd).catch(() => undefined),
+      new Promise<undefined>((done) => setTimeout(() => done(undefined), CHECKPOINT_TIMEOUT_MS))
+    ])
+  }
+
+  /** The trees a turn's changes are listed from (Changes tab, ADR 0058). */
+  turnCheckpoint(chatId: string, messageId: string): ChatMessage['checkpoint'] {
+    return this.store.get(chatId)?.messages.find((m) => m.id === messageId)?.checkpoint
+  }
+
+  /** Puts back every file one turn changed, as it was before the turn (ADR 0058). */
+  async revertTurn(chatId: string, messageId: string): Promise<ChatMessage> {
+    const chat = this.get(chatId)
+    const message = chat.messages.find((m) => m.id === messageId)
+    const checkpoint = message?.checkpoint
+    if (!message || !checkpoint?.after || !this.checkpoints) return fail('NOT_FOUND', 'That turn has no saved checkpoint.')
+    if (this.runs.has(chatId)) fail('INVALID_INPUT', 'Wait for the reply to finish first.')
+    try {
+      await this.checkpoints.revert(chat.cwd, checkpoint.before, checkpoint.after)
     } catch (error) {
-      this.finish(chat, reply, new ChatAccumulator(reply), error instanceof Error ? error.message : String(error))
-      return
+      fail('GIT_FAILED', 'Could not undo that turn.', { hint: error instanceof Error ? error.message.slice(0, 300) : undefined })
     }
-    this.follow(chat, reply, proc, provider!.parser())
+    message.checkpoint = { ...checkpoint, reverted: true }
+    this.store.save(chat)
+    this.broadcast('chat.event', { chatId, message: structuredClone(message), summary: this.summary(chat) })
+    return message
   }
 
   /**
    * Streams a turn's output into its reply until it ends. A run taken back after a restart (ADR 0051)
    * comes here too, with its whole output from the first byte, so the reply is rebuilt as it was.
    */
-  private follow(chat: ChatSession, reply: ChatMessage, proc: ChatProcess, parse: ReturnType<(typeof CHAT_PROVIDERS)[string]['parser']>): void {
+  private follow(chat: ChatSession, reply: ChatMessage, proc: ChatProcess, parse: LineParser, existing?: Run): void {
     const chatId = chat.id
     const acc = new ChatAccumulator(reply)
     let stderr = ''
@@ -340,7 +407,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary: this.summary(chat) })
     }
 
-    const run: Run = { proc, stopped: false }
+    const run: Run = existing ?? { stopped: false }
+    run.proc = proc
     this.runs.set(chatId, run)
     this.broadcast('state.changed', { topic: 'chats' })
     this.emit('run', chatId, true)
@@ -403,7 +471,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
   /** Quitting with agents kept: every running turn carries on in the terminal host for the next start. */
   detachAll(): void {
     for (const [chatId, run] of this.runs) {
-      run.proc.detach()
+      run.proc?.detach()
       const chat = this.store.get(chatId)
       if (chat) this.store.save(chat)
     }
@@ -442,7 +510,7 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
       this.store.save(chat)
     }
     run.stopped = true
-    run.proc.kill()
+    run.proc?.kill()
   }
 
   stopAll(): void {
@@ -471,6 +539,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
 
   private finish(chat: ChatSession, reply: ChatMessage, acc: ChatAccumulator, error?: string): void {
     if (acc.sessionId && !chat.providerSessionId) chat.providerSessionId = acc.sessionId
+    // The new CLI has the conversation now; later turns resume its session.
+    if (!error) delete chat.handoff
     reply.streaming = false
     if (error) reply.error = error
     else if (reply.parts.length === 0) reply.error = 'No response.'
@@ -479,7 +549,27 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     this.broadcast('chat.event', { chatId: chat.id, message: structuredClone(reply), summary: this.summary(chat) })
     this.broadcast('state.changed', { topic: 'chats' })
     this.emit('run', chat.id, false)
-    this.sendQueued(chat.id, Boolean(error))
+    // The turn's "after" is written before the next waiting message starts changing files.
+    void this.closeCheckpoint(chat, reply).finally(() => this.sendQueued(chat.id, Boolean(error)))
+  }
+
+  private async closeCheckpoint(chat: ChatSession, reply: ChatMessage): Promise<void> {
+    const before = reply.checkpoint?.before
+    if (!before || !this.checkpoints) return
+    try {
+      const after = await this.checkpoint(chat.cwd)
+      if (!after) return
+      reply.checkpoint = await this.checkpoints.measure(chat.cwd, before, after)
+    } catch (error) {
+      this.log.warn('Turn checkpoint failed', error)
+      return
+    }
+    const current = this.store.get(chat.id)
+    const stored = current?.messages.find((m) => m.id === reply.id)
+    if (!current || !stored) return
+    stored.checkpoint = reply.checkpoint
+    this.store.save(current)
+    this.broadcast('chat.event', { chatId: chat.id, message: structuredClone(stored), summary: this.summary(current) })
   }
 
   /** The next waiting message goes in once a turn ends well; after an error the queue waits for the user. */

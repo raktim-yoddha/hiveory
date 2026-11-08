@@ -1,0 +1,400 @@
+/* The message box's newer parts (ADR 0058): icon controls, context meter, the strip above, suggestions. */
+
+/* Toolbar icon controls (add, fast, plan): the same quiet hover as the text controls. */
+.iconPill {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.iconPill:not(:disabled):hover,
+.iconPill[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.iconPill svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.iconPillOn,
+.iconPillOn:not(:disabled):hover {
+  background: var(--fill-accent-soft);
+  color: var(--color-accent);
+}
+
+/* Context meter: a ring that fills as the context does. */
+.meter {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  color: var(--color-text-muted);
+}
+
+.meter svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  transform: rotate(-90deg);
+}
+
+.meterTrack,
+.meterFill {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.meterTrack {
+  stroke: var(--color-border-strong);
+}
+
+.meterFill {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--duration-base) var(--ease-out);
+}
+
+.meter[data-full] {
+  color: var(--color-warning);
+}
+
+/* The strip above the box: tasks, subagents, changes. */
+.tracks {
+  display: flex;
+  gap: var(--space-2);
+  max-width: var(--chat-max-width);
+  margin: 0 auto var(--space-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.track {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-sm);
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.track:hover,
+.track[aria-expanded='true'] {
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.track > svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.trackSpin {
+  color: var(--color-working);
+}
+
+.trackList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: var(--menu-max-height);
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  list-style: none;
+}
+
+.trackRow,
+.trackRowButton {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-tight);
+}
+
+.trackRow > svg,
+.trackRowButton > svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.taskDone {
+  color: var(--color-text-faint);
+  text-decoration: line-through;
+}
+
+.taskDone > svg {
+  color: var(--color-success);
+}
+
+.trackRowButton {
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  text-align: left;
+}
+
+.trackRowButton:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.trackName {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trackMeta {
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+/* `@` files and `/` commands, above the box. */
+.suggestions {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  z-index: var(--z-menu);
+  max-height: var(--menu-max-height);
+  margin: 0;
+  padding: var(--space-2);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+  list-style: none;
+}
+
+.suggestion {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  text-align: left;
+}
+
+.suggestionActive {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.suggestionLabel {
+  flex: none;
+  font-family: var(--font-mono);
+}
+
+.suggestionDetail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The CLI tabs above a model list. */
+.cliTabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cliTab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(var(--menu-min-width) * 0.8);
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.cliTab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.cliTabActive {
+  background: var(--fill-selected);
+  color: var(--color-text);
+}
+
+.cliTabName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A picture of a window. */
+.windows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--menu-min-width) * 0.8), 1fr));
+  gap: var(--space-4);
+  max-height: calc(var(--menu-max-height) * 1.5);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.windowOption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+  color: var(--color-text-secondary);
+  text-align: left;
+}
+
+.windowOption:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.windowOption img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+  background: var(--color-surface);
+}
+
+.windowName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.windowName svg {
+  flex: none;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.note svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+/* What one turn changed, under its reply. */
+.turnChanges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.turnChanges > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.turnAction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.turnAction:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.turnAction svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+/* "Quote" over a selection in a reply. */
+.quote {
+  position: fixed;
+  z-index: var(--z-menu);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised-solid);
+  box-shadow: var(--shadow-popover);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  transform: translate(-50%, calc(-100% - var(--space-2)));
+}
+
+.quote svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
