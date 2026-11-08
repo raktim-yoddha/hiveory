@@ -44,14 +44,23 @@ export function Popover({ label, trigger, children, placement = 'below', width =
   }, [open])
 
   useLayoutEffect(() => {
-    if (!open || !triggerRef.current || !panelRef.current) return
-    const t = triggerRef.current.getBoundingClientRect()
-    const p = panelRef.current.getBoundingClientRect()
-    let top = placement === 'above' ? t.top - p.height - GAP : t.bottom + GAP
-    if (top < GAP) top = t.bottom + GAP
-    if (top + p.height > window.innerHeight - GAP) top = Math.max(GAP, t.top - p.height - GAP)
-    const left = Math.min(Math.max(GAP, align === 'end' ? t.right - p.width : t.left), window.innerWidth - p.width - GAP)
-    setPosition({ top, left })
+    const panel = panelRef.current
+    if (!open || !triggerRef.current || !panel) return
+    const place = (): void => {
+      if (!triggerRef.current) return
+      const t = triggerRef.current.getBoundingClientRect()
+      const p = panel.getBoundingClientRect()
+      let top = placement === 'above' ? t.top - p.height - GAP : t.bottom + GAP
+      if (top < GAP) top = t.bottom + GAP
+      if (top + p.height > window.innerHeight - GAP) top = Math.max(GAP, t.top - p.height - GAP)
+      const left = Math.min(Math.max(GAP, align === 'end' ? t.right - p.width : t.left), window.innerWidth - p.width - GAP)
+      setPosition((at) => (at && at.top === top && at.left === left ? at : { top, left }))
+    }
+    place()
+    // Content that arrives later (a model list after "Loading…") changes the height: place it again.
+    const observer = new ResizeObserver(place)
+    observer.observe(panel)
+    return () => observer.disconnect()
   }, [open, placement, align])
 
   useEffect(() => {
