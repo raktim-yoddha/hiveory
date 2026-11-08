@@ -8,6 +8,9 @@ import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { DRAFT_EVENT, rememberChatCli, takeChatDraft, useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
+import { useNotices } from '../../stores/notices'
+import { AlsoAsk } from './AlsoAsk'
+import { askSeveral } from './ask-several'
 import { AttachmentChips } from './AttachmentChips'
 import { ComposerTracks } from './ComposerTracks'
 import { ContextMeter, latestUsage, WindowPicker } from './ComposerExtras'
@@ -74,6 +77,8 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
   const [found, setFound] = useState<{ query: string; entries: FileEntry[] }>()
   const [picked, setPicked] = useState(0)
   const [dismissed, setDismissed] = useState<number | null>(null)
+  // Other CLIs that get the next message too, each in a new chat beside this one.
+  const [also, setAlso] = useState<string[]>([])
   const recall = useRef<{ index: number; text: string } | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -193,7 +198,13 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
     setDraft('')
     attachments.clear()
     const ok = await send(chat.id, value, sent)
-    if (!ok) setDraft(value)
+    if (!ok) return setDraft(value)
+    if (also.length && value && workspaceId) {
+      const extra = also
+      setAlso([])
+      if (sent.length) useNotices.getState().push({ level: 'info', message: 'Attached files went only to this chat; the other CLIs got the text.' })
+      await askSeveral(workspaceId, chat.id, extra, value)
+    }
   }
 
   const accept = (s: Suggestion): void => {
@@ -466,6 +477,13 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
             </button>
           )}
           <span className={styles.flex} />
+          {!chat.running && workspaceId && (
+            <AlsoAsk
+              options={chatClis.filter((id) => id !== chat.cliId).map((id) => ({ id, name: clis.find((c) => c.id === id)?.displayName ?? id }))}
+              selected={also}
+              onChange={setAlso}
+            />
+          )}
           {usage && <ContextMeter usage={usage} />}
           {chat.cliId && loaded?.limits && <UsageLimitsButton cliId={chat.cliId} cliName={cliName} />}
           {chat.running && <IconButton label="Queue as the next message" icon={<ListPlus />} size="md" disabled={!canQueue} onClick={() => void submit()} />}

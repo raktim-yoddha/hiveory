@@ -1268,6 +1268,51 @@ await test('chat UI adapts to a narrow pane: labels collapse, nothing overflows'
   await pane.getByRole('button', { name: /^Restore / }).click().catch(() => undefined)
 })
 
+await test('Also ask: a chat picks other CLIs for its next message; this one is not offered', async () => {
+  const agents = await value('agents.list', { workspaceId: chatWs.id })
+  const codex = agents.find((a) => a.cliId === 'codex')
+  const pane = page.locator(`section[aria-label="${codex.petName} agent"]`)
+  const chatClis = await value('chat.clis')
+  const others = chatClis.filter((id) => id !== 'codex')
+  const pill = pane.getByRole('button', { name: /^Also ask/ })
+  if (!others.length) {
+    expect((await pill.count()) === 0, 'Also ask shown with no other chat CLI')
+    return console.log('    (only one chat CLI installed: nothing to pick)')
+  }
+  await pill.click()
+  const menu = page.getByRole('menu', { name: 'Also ask' })
+  const names = await menu.getByRole('menuitemradio').allTextContents()
+  expect(names.length === others.length && !names.some((n) => /codex/i.test(n)), `offered: ${names}`)
+  await menu.getByRole('menuitemradio').first().click()
+  // The menu stays open for more picks; the pill says how many.
+  expect((await menu.getByRole('menuitemradio', { checked: true }).count()) === 1, 'the pick is not checked')
+  await page.keyboard.press('Escape')
+  await pane.getByRole('button', { name: 'Also ask 1 more CLI' }).waitFor()
+  await pane.getByRole('button', { name: 'Also ask 1 more CLI' }).click()
+  await page.getByRole('menu', { name: 'Also ask' }).getByRole('menuitem', { name: 'Only this chat' }).click()
+  await pane.getByRole('button', { name: 'Also ask other CLIs' }).waitFor()
+})
+
+if (process.env.E2E_CHAT) {
+  await test('Also ask: one message, answered by two CLIs side by side', async () => {
+    const agents = await value('agents.list', { workspaceId: chatWs.id })
+    const codex = agents.find((a) => a.cliId === 'codex')
+    const pane = page.locator(`section[aria-label="${codex.petName} agent"]`)
+    await pane.getByRole('button', { name: /^Also ask/ }).click()
+    const pick = page.getByRole('menu', { name: 'Also ask' }).getByRole('menuitemradio', { name: /Claude/ })
+    await pick.click()
+    await page.keyboard.press('Escape')
+    await pane.getByLabel('Message').fill('Reply with exactly: twin')
+    await pane.getByLabel('Message').press('Enter')
+    await waitFor(async () => (await value('agents.list', { workspaceId: chatWs.id })).length === agents.length + 1, 'a new chat for the other CLI', 20000)
+    const added = (await value('agents.list', { workspaceId: chatWs.id })).find((a) => !agents.some((b) => b.id === a.id))
+    expect(added.chatUi && added.cliId === 'claude', JSON.stringify(added))
+    for (const id of [codex.id, added.id]) await page.locator(`section[aria-label="${(await value('agents.list', { workspaceId: chatWs.id })).find((a) => a.id === id).petName} agent"]`).getByText('twin', { exact: true }).last().waitFor({ timeout: 120000 })
+    await shot('g6-also-ask')
+    await value('agents.close', { instanceId: added.id })
+  })
+}
+
 await test('attachments: dropped files and long pasted text become chips and are sent with the message', async () => {
   const agents = await value('agents.list', { workspaceId: chatWs.id })
   const codex = agents.find((a) => a.cliId === 'codex')

@@ -89,3 +89,13 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
 - A terminal (not an agent: agents show their status) that prints while out of sight, in a background
   tab or a worktree not on screen, shows a ring on its tab, "New output", until it is on screen again.
   Kept in the renderer only (`useTerminalActivity`); nothing is stored.
+
+## Amendment (2026-11-09): Also ask (one message, several CLIs)
+
+- A Chat UI's message box has **Also ask**: tick other installed chat CLIs, and the next message also
+  goes to each of them, in a new Chat UI to the right of the last, so the answers read side by side
+  (as T3 Code sends one prompt to several models). The choice is for one message; it then clears.
+- Text only: attached files are registered to the chat they were added to (main refuses others'
+  paths), so they stay with the first chat and a notice says so. Not offered while the chat is
+  answering, or in a composer outside a worktree.
+- No new channel: `agents.open` with `chatUi` and `chat.send`, as opening a Chat UI and sending do.
