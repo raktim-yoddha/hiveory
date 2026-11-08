@@ -151,6 +151,7 @@ export const projectSchema: z.ZodType<Project> = z.object({
       branchPrefix: str.optional(),
       baseRef: str.optional(),
       alerts: z.boolean().optional(),
+      pinned: z.boolean().optional().catch(undefined),
       icon: z.enum(WORKSPACE_ICONS).optional().catch(undefined),
       color: z.enum(WORKSPACE_COLORS).optional().catch(undefined),
       customColor: z.string().regex(HEX_COLOR).optional().catch(undefined),

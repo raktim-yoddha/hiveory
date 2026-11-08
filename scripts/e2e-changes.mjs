@@ -68,9 +68,9 @@ await test('the Changes tab shows the tree and a diff in place', async () => {
 await test('the Branch source and an empty commit list do not break', async () => {
   await panel().getByRole('button', { name: 'Uncommitted' }).click()
   await page.getByRole('menuitemradio', { name: /Branch/ }).or(page.getByRole('menuitem', { name: /Branch/ })).first().click()
-  await panel().getByRole('button', { name: 'Branch' }).waitFor()
+  await panel().getByRole('button', { name: 'Branch', exact: true }).waitFor()
   await shot('ch3-branch-source')
-  await panel().getByRole('button', { name: 'Branch' }).click()
+  await panel().getByRole('button', { name: 'Branch', exact: true }).click()
   await page.getByRole('menuitemradio', { name: /Uncommitted/ }).or(page.getByRole('menuitem', { name: /Uncommitted/ })).first().click()
 })
 
@@ -85,7 +85,7 @@ await test('a chat-view agent: CLI and model picker, tracks with the worktree ch
   expect(!(await page.getByRole('combobox', { name: 'Open agents as' }).count()), 'the terminal/chat dropdown is still there')
   await shot('ch3b-plus-menu')
   await menu.getByRole('menuitem', { name: 'Chat UI' }).click()
-  const box = page.getByRole('textbox', { name: 'Message' })
+  const box = page.getByRole('textbox', { name: 'Message', exact: true })
   await box.waitFor()
   expect((await box.getAttribute('placeholder'))?.includes('@files'), 'placeholder mentions @files')
   // The worktree's changes ride above the box.

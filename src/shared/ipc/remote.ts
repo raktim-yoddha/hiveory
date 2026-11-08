@@ -11,7 +11,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'projects.list', 'projects.add', 'projects.addDefaults', 'projects.remove', 'projects.touch', 'projects.update',
   'workspaces.list', 'workspaces.suggestName', 'workspaces.create', 'workspaces.delete', 'workspaces.gitStatus', 'workspaces.repair',
   'clis.list', 'agents.list', 'agents.open', 'agents.close', 'agents.rename', 'agents.restart', 'agents.applyPreset', 'agents.sendMessage', 'agents.interrupt',
-  'sessions.list', 'terminal.write', 'terminal.resize', 'terminal.snapshot', 'terminalHost.status', 'terminalHost.restart',
+  'sessions.list', 'usage.report', 'terminal.write', 'terminal.resize', 'terminal.snapshot', 'terminalHost.status', 'terminalHost.restart',
   'layout.get', 'layout.apply', 'presets.list', 'presets.save', 'presets.delete', 'kanban.board',
   'agents.peek',
   'settings.get', 'settings.update', 'shell.open', 'shell.restart', 'shell.close', 'extensions.scan',
@@ -21,7 +21,7 @@ export const REMOTE_CHANNELS = new Set<Channel>([
   'chat.clis', 'chat.get', 'chat.update', 'chat.setModel', 'chat.send', 'chat.attach', 'chat.stop', 'chat.catalog', 'chat.limits', 'chat.queue', 'chat.unqueue', 'chat.revertTurn', 'prompts.list', 'prompts.save', 'prompts.delete',
   'routines.list', 'routines.addFile', 'routines.create', 'routines.update', 'routines.delete', 'routines.runNow', 'routines.runs',
   'hosts.check', 'hosts.suggest', 'hosts.status', 'hosts.listDir', 'ssh.pending', 'ssh.answer', 'git.info', 'git.validateBranch', 'git.init',
-  'changes.list', 'changes.diff', 'changes.commits',
+  'changes.list', 'changes.diff', 'changes.commits', 'changes.commit', 'changes.push', 'changes.discard',
   'github.status', 'github.pullRequests', 'github.issues', 'github.createPullRequest',
   'store.searchSkills', 'store.topSkills', 'store.skillAudits', 'store.installSkill', 'store.searchMcp',
   'integrations.status', 'integrations.connectJira', 'integrations.connectLinear', 'integrations.disconnect', 'integrations.groups', 'issues.list',
@@ -77,7 +77,11 @@ export const MOBILE_CHANNELS = new Set<Channel>([
   // The phone matches the desktop in every mode (ADR 0053).
   'projects.add', 'projects.remove', 'workspaces.delete', 'workspaces.repair', 'git.init', 'agents.rename', 'presets.save', 'presets.delete', 'files.list', 'files.search', 'files.read', 'files.write', 'files.create', 'files.rename', 'files.delete', 'github.issues',
   'routines.create', 'routines.update', 'routines.delete', 'routines.runs',
-  'chat.update', 'chat.attach', 'chat.queue', 'chat.unqueue', 'prompts.list', 'prompts.save', 'prompts.delete'
+  'chat.update', 'chat.attach', 'chat.queue', 'chat.unqueue', 'prompts.list', 'prompts.save', 'prompts.delete',
+  // The Changes tab on the phone (ADR 0060).
+  'changes.list', 'changes.diff', 'changes.commits', 'changes.commit', 'changes.push', 'changes.discard',
+  // Usage on the phone (ADR 0060).
+  'usage.report'
 ])
 
 /** Who a paired device is: a desktop window (everything remote) or a phone (MOBILE_CHANNELS). */

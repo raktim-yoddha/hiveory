@@ -1,0 +1,25 @@
+appId: host.exp.exponent
+name: A worktree's changes — diff, discard, commit (ADR 0060)
+---
+- tapOn: Workspaces
+- tapOn: ${PROJECT}
+- tapOn: Primary
+# The branch row opens Changes: the seeded uncommitted note and its diff.
+- tapOn: "Changes on branch.*"
+- assertVisible: Uncommitted
+- assertVisible: notes.md
+- tapOn: notes.md
+- assertVisible: "(?i).*written on the phone.*"
+# Discard asks first.
+- tapOn: "Discard changes to scratch.txt"
+- tapOn: Discard
+- assertNotVisible: scratch.txt
+- tapOn: Commit message
+- inputText: "docs: commit from the phone"
+- hideKeyboard
+- tapOn: Commit
+- extendedWaitUntil:
+    visible: No changes
+    timeout: 15000
+- back
+- back

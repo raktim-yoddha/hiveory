@@ -71,6 +71,21 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
           </Card>
         </Section>
 
+        <Section title="Order">
+          <Card>
+            <View style={styles.switchRow}>
+              <Text style={styles.flex}>Pin to the top of Work and the computer’s sidebar</Text>
+              <Switch
+                accessibilityLabel="Pin this workspace to the top"
+                value={s.pinned === true}
+                trackColor={{ true: colors.brand, false: colors.surfaceActive }}
+                thumbColor={colors.text}
+                onValueChange={(on) => update({ pinned: on ? true : null })}
+              />
+            </View>
+          </Card>
+        </Section>
+
         {remote ? null : <ChatDefaults projectId={projectId} defaults={s.chatDefaults ?? {}} onSave={(chatDefaults) => update({ chatDefaults })} />}
 
         {project.repositoryRoot ? (

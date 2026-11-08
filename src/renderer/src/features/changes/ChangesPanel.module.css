@@ -344,3 +344,38 @@
   background: var(--fill-selected);
   color: var(--color-text);
 }
+
+/* Commit and push (ADR 0060). */
+.commitBar {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}
+
+.message {
+  width: 100%;
+  min-height: calc(var(--control-sm) * 2);
+  max-height: 40vh;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-sm);
+  resize: vertical;
+}
+
+.message:focus-visible {
+  outline: none;
+  border-color: var(--color-focus);
+}
+
+.commitActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

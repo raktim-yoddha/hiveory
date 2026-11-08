@@ -164,6 +164,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.projects.markActive(opened.agent.projectId)
     return opened
   },
+  'usage.report': ({ days }) => c.usage.report(days),
   // A Workspace on an SSH host lists that host's sessions; All adds every connected host's (ADR 0043).
   'sessions.list': async ({ scope, workspaceId, projectId }) => {
     const on = async (host: HostRef | undefined, folders?: string[]): Promise<AgentSession[]> => {
@@ -495,6 +496,9 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'changes.list': ({ workspaceId, source }) => c.changes.list(workspaceId, source),
   'changes.diff': ({ workspaceId, source, path }) => c.changes.diff(workspaceId, source, path),
   'changes.commits': ({ workspaceId }) => c.changes.commits(workspaceId),
+  'changes.commit': ({ workspaceId, message }) => c.changes.commit(workspaceId, message),
+  'changes.push': ({ workspaceId }) => c.changes.push(workspaceId),
+  'changes.discard': ({ workspaceId, paths }) => c.changes.discard(workspaceId, paths),
   // This window runs its own services; connecting pairs with a server and relaunches as its client (ADR 0022).
   'client.status': () => ({ mode: 'local' as const, connected: false }),
   'client.connect': async (input) => {

@@ -54,6 +54,8 @@ export interface ProjectSettings {
   baseRef?: string
   /** False: agents here never announce themselves (phone pushes). */
   alerts?: boolean
+  /** True: listed first in the sidebar, the rail, the command palette and the phone (ADR 0060). */
+  pinned?: boolean
   /** The Workspace's mark in the sidebar (ADR 0038); absent = a folder. */
   icon?: WorkspaceIcon
   /** Its color; absent = one picked from its id, so Workspaces differ from the start. */

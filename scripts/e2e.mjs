@@ -789,8 +789,9 @@ await test('pane "+": terminals first, search; PowerShell opens as a tab', async
   await picker.waitFor()
   await page.waitForTimeout(400)
   const names = await picker.getByRole('menuitem').allInnerTexts()
-  // The browser, then terminals, then agents (ADR 0042).
-  expect(names[0] === 'Browser' && names[1] === 'PowerShell' && names.includes('Command Prompt'), `terminals not right after the browser: ${names}`)
+  // The browser, Chat UI when a chat CLI is installed (ADR 0059), then terminals, then agents (ADR 0042).
+  const rest = names.slice(names[1] === 'Chat UI' ? 2 : 1)
+  expect(names[0] === 'Browser' && rest[0] === 'PowerShell' && rest.includes('Command Prompt'), `terminals not right after the browser: ${names}`)
   await picker.getByLabel('Search terminals and agents').fill('power')
   await waitFor(async () => JSON.stringify(await picker.getByRole('menuitem').allInnerTexts()) === JSON.stringify(['PowerShell']), 'search filters')
   await page.keyboard.press('Enter')
@@ -1152,8 +1153,11 @@ await test('Work: Chat UI opens chats; a CLI picked from a list keeps its termin
   expect((await panes().getByTitle('The CLI is fixed once a chat has started').count()) === 0, 'agent composer repeats the CLI')
   expect(await panes().first().getByText(/^Chat with /).isVisible(), 'welcome with the CLI logo missing')
   expect(await panes().first().getByRole('button', { name: /Read-only|Full access/ }).isVisible(), 'permissions picker missing')
-  const r = await invoke('chat.update', { chatId: agents[0].id, cliId: 'opencode' })
-  expect(!r.ok, "an agent's CLI could be changed")
+  // A chat may change CLI before (and during) a conversation; its agent follows (ADR 0058).
+  const [first, second] = agents
+  await value('chat.update', { chatId: first.id, cliId: second.cliId })
+  await waitFor(async () => (await value('agents.list', { workspaceId: chatWs.id })).find((a) => a.id === first.id)?.cliId === second.cliId, 'the agent follows its chat’s CLI')
+  await value('chat.update', { chatId: first.id, cliId: first.cliId })
   await shot('g3-work-chat-ui')
 })
 

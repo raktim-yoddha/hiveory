@@ -20,6 +20,7 @@ import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
 import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
 import { useWindowControlsRoom } from './window-controls'
+import { CommandPalette } from './palette/CommandPalette'
 import styles from './AppShell.module.css'
 
 /* Loaded when first needed (ADR 0044): a window never parses Settings until it is opened. */
@@ -172,6 +173,9 @@ export function AppShell() {
       <SshPromptDialog />
       {newWorktree.projectId && <CreateWorkspaceDialog projectId={newWorktree.projectId} onClose={newWorktree.close} />}
       <UpdatePrompt />
+      <ErrorBoundary region="Command palette">
+        <CommandPalette />
+      </ErrorBoundary>
       <Toasts />
     </div>
   )

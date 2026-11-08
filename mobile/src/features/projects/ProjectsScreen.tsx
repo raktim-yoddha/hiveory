@@ -20,8 +20,9 @@ import {
 } from "@/core/ui";
 import { AddWorkspaceSheet } from "./AddWorkspaceSheet";
 
-/** Most recently worked on first, like the desktop sidebar. */
+/** Pinned first, then most recently worked on, like the desktop sidebar (ADR 0060). */
 const byWork = (a: Project, b: Project): number =>
+  Number(Boolean(b.settings?.pinned)) - Number(Boolean(a.settings?.pinned)) ||
   (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt);
 
 /** Every project on the computer, with how many agents need the user or are working in each. */

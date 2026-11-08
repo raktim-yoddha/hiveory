@@ -423,3 +423,14 @@ Initial version does not include:
   chat-view parent gets the subagent's reply back as a message when it finishes.
 - Everything above works when the window is a client of a Hiveory server hosted anywhere (ADR 0022,
   0052); a picture of a window is taken by the window's own computer and sent to the server's chat.
+
+## Commit, Usage, Find and pins (ADR 0060)
+
+- The Changes tab commits every change with a message (Ctrl/⌘+Enter; Commit & push), pushes the
+  branch (publishing it to `origin` when it has no upstream) and discards one file after a
+  confirmation. Git's own refusal is shown as it is. The phone's Changes screen does the same.
+- Settings › Usage (and the phone's) shows tokens per day, CLI and model for Today, 7, 30 or 90
+  days, from the Claude Code, Codex and Gemini CLI history where Hiveory runs. Counts only.
+- Find (Ctrl+Shift+P, ⌘K on macOS, or the sidebar's search button) finds commands, Workspaces,
+  worktrees, CLIs and Chat UI to open in the open worktree, side panel tabs and Settings pages.
+- A Workspace can be pinned to the top of the sidebar, the rail, Find and the phone's Work list.

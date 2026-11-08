@@ -5,6 +5,7 @@ import type { HostKit } from '../hosts/host-kit'
 import type { WorkspaceRepository } from '../workspaces/workspace-repository'
 import type { KitSource } from '../workspaces/workspace-service'
 import { totals, WorktreeChanges, type Git } from './changes'
+import { commitAll, discardFiles, pushBranch } from './commit-changes'
 import { GitCommandError } from './git-service'
 
 const GIT_TIMEOUT_MS = 30_000
@@ -30,11 +31,31 @@ export class ChangesService {
     private readonly turnTrees: TurnTrees
   ) {}
 
-  private async reader(workspaceId: string): Promise<{ changes: WorktreeChanges; base?: string }> {
+  private async gitIn(workspaceId: string): Promise<{ git: Git; base?: string }> {
     const workspace = this.repo.get(workspaceId)
     const project = this.repo.project(workspace.projectId)
     const kit = await this.kits.kit(project.host)
-    return { changes: new WorktreeChanges(gitOn(kit, workspace.path)), base: workspace.git?.baseRef ?? project.settings?.baseRef }
+    return { git: gitOn(kit, workspace.path), base: workspace.git?.baseRef ?? project.settings?.baseRef }
+  }
+
+  private async reader(workspaceId: string): Promise<{ changes: WorktreeChanges; base?: string }> {
+    const { git, base } = await this.gitIn(workspaceId)
+    return { changes: new WorktreeChanges(git), base }
+  }
+
+  /** Commits every change in the worktree (ADR 0060). */
+  async commit(workspaceId: string, message: string): Promise<{ sha: string }> {
+    return { sha: await commitAll((await this.gitIn(workspaceId)).git, message) }
+  }
+
+  /** Pushes the worktree's branch, tracking origin's branch of the same name when it has none yet (ADR 0060). */
+  async push(workspaceId: string): Promise<{ branch: string; upstream: string }> {
+    return pushBranch((await this.gitIn(workspaceId)).git)
+  }
+
+  /** Puts files back as they are in the last commit (ADR 0060). */
+  async discard(workspaceId: string, paths: string[]): Promise<void> {
+    await discardFiles((await this.gitIn(workspaceId)).git, paths)
   }
 
   /** The commit the branch is compared against: its merge base with the base branch. */

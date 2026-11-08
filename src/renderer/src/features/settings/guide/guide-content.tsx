@@ -118,6 +118,18 @@ export const GUIDE: GuideChapter[] = [
         keywords: 'github gitlab pr merge request issue'
       },
       {
+        heading: 'Commit and push',
+        body: (
+          <p>
+            The side panel&rsquo;s <b>Changes</b> tab commits every change in the worktree (new files too) with your message; <K>Ctrl</K>{' '}
+            <K>Enter</K> commits, <b>Commit &amp; push</b> pushes right after. <b>Push</b> sends commits the remote lacks; a branch that has
+            never been pushed is published to <code>origin</code> under its own name. A file&rsquo;s undo button puts it back as it is in the
+            last commit, after you confirm. The phone does the same from a worktree&rsquo;s branch row.
+          </p>
+        ),
+        keywords: 'commit push publish discard revert git changes'
+      },
+      {
         heading: 'Delete and repair',
         body: (
           <p>
@@ -461,6 +473,17 @@ export const GUIDE: GuideChapter[] = [
           </p>
         ),
         keywords: 'keyboard shortcuts key bindings hotkeys change'
+      },
+      {
+        heading: 'Find anything',
+        body: (
+          <p>
+            <K>Ctrl</K> <K>Shift</K> <K>P</K> (<K>⌘</K> <K>K</K> on a Mac), or the search button at the bottom of the sidebar, opens Find:
+            type a few letters of a command, Workspace, worktree, CLI, side panel tab or Settings page, then <K>↑</K> <K>↓</K> and{' '}
+            <K>Enter</K>.
+          </p>
+        ),
+        keywords: 'command palette find search quick open jump'
       },
       {
         heading: 'Tabs, panes and lists',

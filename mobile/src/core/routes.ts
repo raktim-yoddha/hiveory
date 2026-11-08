@@ -13,6 +13,10 @@ export const routes = {
   /** A folder of a worktree ('' = its top), and one file in it (ADR 0053). */
   files: (workspaceId: string, projectId: string, dir = '') => ({ pathname: '/files/[workspaceId]' as const, params: { workspaceId, projectId, dir } }),
   file: (workspaceId: string, projectId: string, path: string) => ({ pathname: '/file/[workspaceId]' as const, params: { workspaceId, projectId, path } }),
+  /** A worktree's changes: diffs, commit, push, discard (ADR 0060). */
+  changes: (workspaceId: string) => ({ pathname: '/changes/[workspaceId]' as const, params: { workspaceId } }),
+  /** Tokens the computer's agents used (ADR 0060). */
+  usage: '/usage' as const,
   pair: '/pair' as const,
   project: (projectId: string) => ({ pathname: '/project/[projectId]' as const, params: { projectId } }),
   projectSettings: (projectId: string) => ({ pathname: '/project-settings/[projectId]' as const, params: { projectId } }),

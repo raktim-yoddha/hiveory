@@ -64,6 +64,9 @@ git(repo, 'config', 'user.name', 'e2e')
 writeFileSync(join(repo, 'README.md'), '# demo\n')
 git(repo, 'add', '.')
 git(repo, 'commit', '-m', 'init')
+// Uncommitted work for the Changes flow (ADR 0060): a note to commit and a file to discard.
+writeFileSync(join(repo, 'notes.md'), 'written on the phone\n')
+writeFileSync(join(repo, 'scratch.txt'), 'throw me away\n')
 // The stand-in answers to the Aider adapter (no hooks, no MCP), and is the only CLI on this PATH.
 const bin = join(sandbox, 'bin')
 mkdirSync(bin)

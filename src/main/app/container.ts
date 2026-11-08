@@ -21,6 +21,7 @@ import { ComputerService } from '../services/computer/computer-service'
 import { ComputerTools } from '../services/computer/computer-tools'
 import { ExtensionsService } from '../services/extensions/extensions-service'
 import { SessionHistoryService } from '../services/sessions/session-history'
+import { UsageService } from '../services/usage/usage-service'
 import { ModelTracker } from '../services/sessions/model-tracker'
 import { RepositoryService } from '../services/projects/repository-service'
 import { ChatService } from '../services/chat/chat-service'
@@ -280,6 +281,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
   const updates = new UpdateService(updater, log, emit)
   const shells = new ShellService(ptyBackend, (id) => localHost.take(id)?.ptyId)
   const sessions = new SessionHistoryService(log)
+  const usage = new UsageService(log)
   const repositories = new RepositoryService(git)
   const models = new ModelTracker(store, workspaceRepo, runtime)
   guard(log, 'Model tracker', () => models.start())
@@ -409,6 +411,7 @@ export const createContainer = (paths: AppPaths, log: Logger, emit: Emit, update
     shells,
     extensions,
     sessions,
+    usage,
     repositories,
     wallpapers,
     themes,

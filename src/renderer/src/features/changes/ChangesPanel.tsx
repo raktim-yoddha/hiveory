@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, ChevronDown, ChevronRight, Dot, FileCode2, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Minus, Plus, RefreshCw, SquarePen } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronRight, Dot, FileCode2, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
 import type { ChangedFile, ChangeSource, CommitSummary } from '@shared/domain/changes'
 import { IconButton } from '../../components/ui/Button'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
@@ -10,6 +11,7 @@ import { runAction } from '../../stores/notices'
 import { buildChangeTree, diffLines, shortCount, type ChangeNode } from './change-tree'
 import { useChangesView } from './changes-store'
 import { useChangeSet } from './useChangeSet'
+import { CommitBar } from './CommitBar'
 import styles from './ChangesPanel.module.css'
 
 const UNCOMMITTED: ChangeSource = { kind: 'uncommitted' }
@@ -114,11 +116,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
         ) : (
           <ul className={styles.tree} role="tree" aria-label="Changed files">
             {tree.map((node) => (
-              <TreeNode key={node.kind === 'folder' ? node.path : node.file.path} node={node} depth={0} workspaceId={workspaceId} source={source} />
+              <TreeNode key={node.kind === 'folder' ? node.path : node.file.path} node={node} depth={0} workspaceId={workspaceId} source={source} onChanged={refresh} />
             ))}
           </ul>
         )}
       </div>
+      <CommitBar workspaceId={workspaceId} changedFiles={source.kind === 'uncommitted' ? (changes?.files.length ?? 0) : 0} onDone={() => void refresh()} />
       {commits.length > 0 && (
         <div className={styles.commits}>
           <button type="button" className={styles.commitsToggle} aria-expanded={showCommits} onClick={() => setShowCommits(!showCommits)}>
@@ -162,9 +165,11 @@ interface TreeNodeProps {
   depth: number
   workspaceId: string
   source: ChangeSource
+  /** After a file was discarded. */
+  onChanged: () => Promise<void>
 }
 
-const TreeNode = memo(function TreeNode({ node, depth, workspaceId, source }: TreeNodeProps) {
+const TreeNode = memo(function TreeNode({ node, depth, workspaceId, source, onChanged }: TreeNodeProps) {
   const [open, setOpen] = useState(true)
   const indent = { '--depth': depth } as CSSProperties
   if (node.kind === 'folder') {
@@ -178,18 +183,19 @@ const TreeNode = memo(function TreeNode({ node, depth, workspaceId, source }: Tr
         {open && (
           <ul role="group" className={styles.tree}>
             {node.children.map((child) => (
-              <TreeNode key={child.kind === 'folder' ? child.path : child.file.path} node={child} depth={depth + 1} workspaceId={workspaceId} source={source} />
+              <TreeNode key={child.kind === 'folder' ? child.path : child.file.path} node={child} depth={depth + 1} workspaceId={workspaceId} source={source} onChanged={onChanged} />
             ))}
           </ul>
         )}
       </li>
     )
   }
-  return <FileRow file={node.file} name={node.name} depth={depth} workspaceId={workspaceId} source={source} />
+  return <FileRow file={node.file} name={node.name} depth={depth} workspaceId={workspaceId} source={source} onChanged={onChanged} />
 })
 
-function FileRow({ file, name, depth, workspaceId, source }: { file: ChangedFile; name: string; depth: number; workspaceId: string; source: ChangeSource }) {
+function FileRow({ file, name, depth, workspaceId, source, onChanged }: { file: ChangedFile; name: string; depth: number; workspaceId: string; source: ChangeSource; onChanged: () => Promise<void> }) {
   const [open, setOpen] = useState(false)
+  const [discarding, setDiscarding] = useState<'ask' | 'busy' | null>(null)
   const [patch, setPatch] = useState<string | null>(null)
   const [failed, setFailed] = useState<string>()
   const mark = STATUS_MARK[file.status]
@@ -237,7 +243,24 @@ function FileRow({ file, name, depth, workspaceId, source }: { file: ChangedFile
             onClick={() => void runAction('Open file', () => api('editors.open', { workspaceId, path: file.path }))}
           />
         )}
+        {source.kind === 'uncommitted' && <IconButton className={styles.open} label={`Discard changes to ${name}`} icon={<Undo2 />} onClick={() => setDiscarding('ask')} />}
       </div>
+      <ConfirmDialog
+        open={discarding !== null}
+        title={`Discard changes to ${name}?`}
+        confirmLabel="Discard"
+        danger
+        busy={discarding === 'busy'}
+        onClose={() => setDiscarding(null)}
+        onConfirm={() => {
+          setDiscarding('busy')
+          void runAction('Discard changes', () => api('changes.discard', { workspaceId, paths: file.from ? [file.from, file.path] : [file.path] }))
+            .then(onChanged)
+            .finally(() => setDiscarding(null))
+        }}
+      >
+        {file.status === 'added' ? 'This new file is deleted. It cannot be undone.' : 'The file goes back to how it is in the last commit. It cannot be undone.'}
+      </ConfirmDialog>
       {open && (
         <div className={styles.diff} role="region" aria-label={`Changes in ${name}`}>
           {failed ? (

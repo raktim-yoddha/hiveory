@@ -1,0 +1,11 @@
+appId: host.exp.exponent
+name: Settings — Usage (ADR 0060)
+---
+- tapOn: Settings
+- scrollUntilVisible:
+    element: Usage
+- tapOn: Usage
+- tapOn: 90 days
+# Counts or the empty state, never an error.
+- assertVisible: "No usage yet|Total"
+- back

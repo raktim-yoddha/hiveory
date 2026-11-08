@@ -43,3 +43,13 @@ describe('sortProjects', () => {
     expect(sortProjects([p('a', '2026-01-01'), p('b', '2026-03-01')], 'recent').map((x) => x.name)).toEqual(['b', 'a'])
   })
 })
+
+describe('sortProjects with pins (ADR 0060)', () => {
+  const p = (id: string, name: string, at: string, pinned?: boolean) => ({ id, name, path: `/home/me/${id}`, createdAt: at, updatedAt: at, lastOpenedAt: at, ...(pinned ? { settings: { pinned } } : {}) }) as Project
+  const list = [p('a', 'Alpha', '2026-01-03'), p('b', 'Beta', '2026-01-01', true), p('c', 'Gamma', '2026-01-02'), p('d', 'Delta', '2026-01-04', true)]
+  it('puts pinned Workspaces first, each part in the chosen order', () => {
+    expect(sortProjects(list, 'recent').map((x) => x.id)).toEqual(['d', 'b', 'a', 'c'])
+    expect(sortProjects(list, 'name').map((x) => x.id)).toEqual(['b', 'd', 'a', 'c'])
+    expect(sortProjects([], 'name')).toEqual([])
+  })
+})

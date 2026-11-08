@@ -65,7 +65,16 @@ export const PHONE_CHANNELS = [
   'chat.unqueue',
   'prompts.list',
   'prompts.save',
-  'prompts.delete'
+  'prompts.delete',
+  // The Changes tab (ADR 0060).
+  'changes.list',
+  'changes.diff',
+  'changes.commits',
+  'changes.commit',
+  'changes.push',
+  'changes.discard',
+  // Usage (ADR 0060).
+  'usage.report'
 ] as const satisfies readonly Channel[]
 
 export type PhoneChannel = (typeof PHONE_CHANNELS)[number]

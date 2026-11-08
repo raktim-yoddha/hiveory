@@ -1,0 +1,191 @@
+/* Settings › Usage (ADR 0060): headline counts, tokens per day, and tables by CLI and model. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.flex {
+  flex: 1;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.loading svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+}
+
+.tileLabel,
+.caption,
+.groupTitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.tileValue {
+  color: var(--color-text);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-tight);
+}
+
+.tileNote {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.chart {
+  margin: 0 0 var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+}
+
+.plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 120px;
+  margin-top: var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border-subtle);
+}
+
+/* The whole column is the hover and focus target, wider and taller than its bar. */
+.column {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  height: 100%;
+  min-width: 2px;
+  outline: none;
+}
+
+.barFill {
+  width: 100%;
+  height: calc(var(--share) * 100%);
+  min-height: 1px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+.column:hover .barFill,
+.column:focus-visible .barFill {
+  opacity: 1;
+}
+
+.column:focus-visible {
+  box-shadow: 0 0 0 var(--border-width) var(--color-focus);
+}
+
+.column:hover::after,
+.column:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  z-index: 1;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised-solid);
+  color: var(--color-text);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+  color: var(--color-text-faint);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.group {
+  margin-bottom: var(--space-6);
+  border: var(--border-width) solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-inset);
+  overflow-x: auto;
+}
+
+.groupTitle {
+  margin: 0;
+  padding: var(--space-6) var(--space-7) var(--space-2);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-7);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table thead th {
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+.table th[scope='row'],
+.table thead th:first-child {
+  text-align: left;
+}
+
+.table th[scope='row'] {
+  overflow: hidden;
+  max-width: 280px;
+  color: var(--color-text);
+  font-weight: var(--weight-regular);
+  text-overflow: ellipsis;
+}
+
+.table td {
+  color: var(--color-text-secondary);
+}
+
+.table tbody tr + tr {
+  border-top: var(--border-width) solid var(--color-border-subtle);
+}

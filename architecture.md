@@ -495,6 +495,7 @@ src/
 │       ├── extensions/         Skills (copy/create/import/trash) & MCP inventory (full configs kept in main)
 │       ├── connections/        ConnectionService (Hiveory MCP servers incl. the Composio session, sealed secrets), McpGateway (MCP client → ToolFamily), AppService (Composio REST: key, session, connect links, accounts — ADR 0023)
 │       ├── appearance/         WallpaperService (user images, hv-wallpaper:// scheme), ThemeService (VS Code themes from Open VSX)
+│       ├── usage/              UsageService — token counts per CLI, model and day from the CLIs' own history (ADR 0060)
 │       ├── sessions/           SessionHistoryService — the CLIs' own session history (Claude, Codex, Gemini readers), read-only, cached by mtime; ModelTracker — each running agent's live model (→ CliRuntimeDetails.model)
 │       ├── files/              FileService — Explorer: scoped list/search/read/write/create/rename/paste/trash/watch
 │       ├── editors/            EditorService — files open as panes in workspace layouts
@@ -572,6 +573,14 @@ Work agent in chat view: composer ─IPC chat.send─▶ ChatService ─spawn (n
 
 Changes tab (ADR 0058): ChangesPanel ─IPC changes.*─▶ ChangesService ─▶ WorktreeChanges ─ HostKit.exec(git)
    (this computer, an SSH host, or — as a client — the Hiveory server's own handlers)
+   writing (ADR 0060): changes.commit / push / discard ─▶ commit-changes.ts (literal pathspecs) ─ same git
+
+Usage (ADR 0060): UsageSection / phone UsageScreen ─IPC usage.report─▶ UsageService ─▶ usage-readers
+   (Claude, Codex, Gemini history files, streamed line by line, cached by size + mtime) ─▶ UsageRow[]
+   shared/domain/usage.ts groups them the same way on the desktop and the phone
+
+Find (ADR 0060): command-palette shortcut ─▶ usePalette ─▶ CommandPalette ◀─ usePaletteItems (live stores)
+   ranked by palette-rank.ts; running an item calls the same actions as the menus and shortcuts
 ```
 
 ### Terminal host data flow (ADR 0022)

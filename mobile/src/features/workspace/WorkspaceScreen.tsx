@@ -79,7 +79,8 @@ export function WorkspaceScreen({ workspaceId, projectId }: { workspaceId: strin
                 .join(' · ') || 'Clean, up to date'
             }
             leading={<GitBranch size={18} color={colors.brand} />}
-            label={`Branch ${git.data.branch ?? ''}`}
+            label={`Changes on branch ${git.data.branch ?? ''}`}
+            onPress={() => router.push(routes.changes(workspaceId))}
           />
         ) : null}
         {workspace && !workspace.healthy ? (

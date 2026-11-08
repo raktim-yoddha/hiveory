@@ -6,6 +6,7 @@ import { useSettings, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runWorkCommand, trackPaneFocus } from '../panes/work-commands'
 import { useNewWorktree } from '../workspace-create/new-worktree'
+import { usePalette } from './palette/palette-store'
 
 /** A command's keys as the platform writes them ("Ctrl Shift B", "⌘B"), for menus and tooltips; undefined when it has none. */
 export function useCommandKeys(id: AppCommandId): string | undefined {
@@ -36,9 +37,10 @@ function moveInList(by: 1 | -1): boolean {
 }
 
 /** Runs a command; false when it doesn't apply here, so its keys go on to the page (a terminal). */
-function run(id: AppCommandId): boolean {
+export function runAppCommand(id: AppCommandId): boolean {
   const nav = useNavigation.getState()
-  if (id === 'open-settings') {
+  if (id === 'command-palette') usePalette.getState().toggle()
+  else if (id === 'open-settings') {
     if (nav.view.type === 'settings') nav.closeSettings()
     else nav.openSettings()
   } else if (id === 'show-shortcuts') nav.openSettings('keyboard')
@@ -88,7 +90,7 @@ export function useAppShortcuts(): void {
       const settingsOpen = useNavigation.getState().view.type === 'settings'
       const dialogs = document.querySelectorAll('dialog[open]').length
       if (dialogs > (settingsOpen ? 1 : 0) || (settingsOpen && id !== 'open-settings')) return
-      if (!run(id)) return
+      if (!runAppCommand(id)) return
       e.preventDefault()
       e.stopPropagation()
     }

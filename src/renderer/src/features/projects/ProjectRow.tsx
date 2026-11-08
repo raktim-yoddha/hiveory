@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Copy, FolderOpen, GitBranch, House, Settings2, X } from 'lucide-react'
+import { AlertTriangle, Copy, FolderOpen, GitBranch, House, Pin, PinOff, Settings2, X } from 'lucide-react'
 import type { Project, WorkspaceView } from '@shared/domain'
 import { HostBadge } from '../../components/ui/HostBadge'
 import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { useWorkspaces } from '../../stores/data'
+import { useProjects, useWorkspaces } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runAction } from '../../stores/notices'
 import { NewWorktreeButton } from '../workspace-create/NewWorktreeButton'
@@ -76,6 +76,13 @@ export function ProjectRow({ project }: { project: Project }) {
               icon: <Settings2 />,
               disabled: !target,
               onSelect: () => openProject(project.id, 'settings')
+            },
+            {
+              type: 'item',
+              id: 'pin',
+              label: project.settings?.pinned ? 'Unpin' : 'Pin to top',
+              icon: project.settings?.pinned ? <PinOff /> : <Pin />,
+              onSelect: () => void useProjects.getState().update(project.id, { settings: { pinned: project.settings?.pinned ? null : true } })
             },
             { type: 'separator' },
             {

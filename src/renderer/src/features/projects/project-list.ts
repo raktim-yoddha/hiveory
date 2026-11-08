@@ -19,10 +19,12 @@ export const saveSort = (sort: ProjectSort): void => {
   }
 }
 
-/** Recent = last real work (ADR 0024): opening a Workspace does not move it. */
+/** Pinned Workspaces first (ADR 0060); then recent = last real work (ADR 0024): opening a Workspace does not move it. */
 export const sortProjects = (projects: Project[], sort: ProjectSort): Project[] =>
-  [...projects].sort((a, b) =>
-    sort === 'name' ? a.name.localeCompare(b.name) : (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt)
+  [...projects].sort(
+    (a, b) =>
+      Number(Boolean(b.settings?.pinned)) - Number(Boolean(a.settings?.pinned)) ||
+      (sort === 'name' ? a.name.localeCompare(b.name) : (b.lastActiveAt ?? b.createdAt).localeCompare(a.lastActiveAt ?? a.createdAt))
   )
 
 /** The Worktree a Workspace opens on: the one last used there, else Primary, else the first. */

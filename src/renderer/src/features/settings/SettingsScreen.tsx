@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef, type ReactNode } from 'react'
-import { BookOpen, Blocks, Download, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
+import { BarChart3, BookOpen, Blocks, Download, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
@@ -17,6 +17,7 @@ import { KeyboardSection } from './KeyboardSection'
 import { RemoteSection } from './RemoteSection'
 import { GuideSection } from './guide/GuideSection'
 import { UpdatesSection } from './UpdatesSection'
+import { UsageSection } from './UsageSection'
 import styles from './Settings.module.css'
 
 const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
@@ -27,6 +28,7 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
   { id: 'integrations', label: 'Integrations', icon: <GitPullRequest /> },
   { id: 'keyboard', label: 'Keyboard', icon: <Keyboard /> },
   { id: 'remote', label: 'Remote', icon: <Server /> },
+  { id: 'usage', label: 'Usage', icon: <BarChart3 /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
   { id: 'guide', label: 'Guide', icon: <BookOpen /> },
   { id: 'about', label: 'About', icon: <Info /> }
@@ -92,6 +94,7 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
           {current.id === 'integrations' && <IntegrationsSection />}
           {current.id === 'keyboard' && <KeyboardSection />}
           {current.id === 'remote' && <RemoteSection />}
+          {current.id === 'usage' && <UsageSection />}
           {current.id === 'updates' && <UpdatesSection />}
           {current.id === 'guide' && <GuideSection />}
           {current.id === 'about' && <AboutSection />}

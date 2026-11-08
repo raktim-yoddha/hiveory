@@ -7,6 +7,8 @@ import { formatShortcut, parseShortcut, type Modifier, type Shortcut } from './s
  * terminal apps do. The user can change or clear any of them in Settings › Keyboard.
  */
 export const APP_COMMANDS = [
+  // Everything below, and every Workspace, worktree, agent and Settings page, searchable (ADR 0060).
+  { id: 'command-palette', label: 'Find a command, worktree or setting', group: 'General', mac: 'Meta+KeyK', other: 'Control+Shift+KeyP' },
   { id: 'open-settings', label: 'Open or close Settings', group: 'General', mac: 'Meta+Comma', other: 'Control+Comma' },
   { id: 'show-shortcuts', label: 'Show keyboard shortcuts', group: 'General', mac: 'Meta+Slash', other: 'Control+Shift+Slash' },
   { id: 'toggle-sidebar', label: 'Show or hide the sidebar', group: 'General', mac: 'Meta+KeyB', other: 'Control+Shift+KeyB' },

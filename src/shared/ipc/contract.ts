@@ -25,6 +25,7 @@ import type {
 import type { AgentPeek } from '../domain/agent-update'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
 import type { ChangeSet, CommitSummary } from '../domain/changes'
+import type { UsageReport } from '../domain/usage'
 import type { TerminalHostStatus } from '../host/protocol'
 import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt } from '../domain/prompt'
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
@@ -177,6 +178,7 @@ export const projectSettingsPatchSchema = z.object({
   branchPrefix: z.string().max(40).regex(/^([A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/).refine((v) => !v.startsWith('-') && !v.includes('..')).nullable().optional(),
   baseRef: gitRef.nullable().optional(),
   alerts: z.boolean().nullable().optional(),
+  pinned: z.boolean().nullable().optional(),
   icon: z.enum(WORKSPACE_ICONS).nullable().optional(),
   color: z.enum(WORKSPACE_COLORS).nullable().optional(),
   // ADR 0042: any color; the avatar is set by projects.pickAvatar and can only be cleared here.
@@ -270,6 +272,8 @@ export const requestSchemas = {
   }),
   /** The agent CLIs' own conversation history on this computer, for a workspace, a project or everything. */
   'sessions.list': z.object({ scope: z.enum(['workspace', 'project', 'all']), workspaceId: id.optional(), projectId: id.optional() }),
+  /** Token use per CLI, model and day over the last `days` days, from the CLIs' own history (ADR 0060). */
+  'usage.report': z.object({ days: z.number().int().min(1).max(90) }),
   'agents.close': z.object({ instanceId: id }),
   /** A pane's new name (ADR 0042): letters, digits, spaces and a little punctuation, unique among all agents. */
   'agents.rename': z.object({ instanceId: id, name: z.string().trim().min(1).max(32).regex(/^[\p{L}\p{N} ._'-]+$/u) }),
@@ -521,6 +525,10 @@ export const requestSchemas = {
   'changes.list': z.object({ workspaceId: id, source: changeSource }),
   'changes.diff': z.object({ workspaceId: id, source: changeSource, path: fileName }),
   'changes.commits': z.object({ workspaceId: id }),
+  // The Changes tab's writing actions (ADR 0060): commit everything, push the branch, discard files.
+  'changes.commit': z.object({ workspaceId: id, message: z.string().min(1).max(5000) }),
+  'changes.push': z.object({ workspaceId: id }),
+  'changes.discard': z.object({ workspaceId: id, paths: z.array(fileName.refine((p) => !p.includes('\0'), 'Bad path')).min(1).max(500) }),
   // Routines (ADR 0028, 0040): a Worktree's scheduled work, and the run log.
   'routines.list': none,
   'routines.create': routineFields,
@@ -661,6 +669,7 @@ export interface ResponseMap {
   'layout.get': LayoutNode | null
   'layout.apply': LayoutNode | null
   'presets.list': AgentPreset[]
+  'usage.report': UsageReport
   'presets.save': AgentPreset
   'presets.delete': void
   'kanban.board': KanbanBoard
@@ -768,6 +777,9 @@ export interface ResponseMap {
   'changes.list': ChangeSet
   'changes.diff': string
   'changes.commits': CommitSummary[]
+  'changes.commit': { sha: string }
+  'changes.push': { branch: string; upstream: string }
+  'changes.discard': void
   'routines.list': RoutineView[]
   'routines.create': RoutineView
   'routines.update': RoutineView

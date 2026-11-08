@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Alert, StyleSheet, View } from 'react-native'
 import Constants from 'expo-constants'
 import { router } from 'expo-router'
-import { Check, ChevronRight, Monitor, Palette, Plus, ShieldCheck, Trash2 } from 'lucide-react-native'
+import { BarChart3, Check, ChevronRight, Monitor, Palette, Plus, ShieldCheck, Trash2 } from 'lucide-react-native'
 import { useCall, useConnection } from '@/core/api'
 import { useComputers } from '@/core/computers'
 import { routes } from '@/core/routes'
@@ -61,6 +61,9 @@ export function SettingsScreen({ notifications, updates }: { notifications?: Rea
       </Section>
       {notifications ? <Section title="Notifications">{notifications}</Section> : null}
       {updates ? <Section title="Updates">{updates}</Section> : null}
+      <Section title="Agents">
+        <ListRow title="Usage" subtitle="Tokens per day, CLI and model" leading={<BarChart3 size={18} color={colors.textMuted} />} onPress={() => router.push(routes.usage)} />
+      </Section>
       <Section title="Appearance">
         <ListRow
           title="Theme"

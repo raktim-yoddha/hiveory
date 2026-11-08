@@ -69,7 +69,7 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
 
 ### Settings › Keyboard (ADR 0047)
 
-General (Settings, shortcuts, sidebar, side panel, maximize side panel, Schedules), Lists (New worktree,
+General (Find, Settings, shortcuts, sidebar, side panel, maximize side panel, Schedules), Lists (New worktree,
 Next / Previous worktree), Panes and tabs (New tab, New terminal, Close, Next / Previous tab, Next /
 Previous area, Maximize, Split right / down), Chat (Type in the message box): each row shows its keys
 as a keycap with Change (press the new keys; Escape cancels), Remove and Reset; a clash or a reserved key
@@ -394,7 +394,9 @@ Result:
 Tabs (one bar, the selected pill holds icon and label; ADR 0039, 0056) ─ Home ─ Work ─ Settings
 Work › Workspace (its mark; header: Pull requests · Schedules · Settings; Worktrees (Primary tagged), + New: New | Existing | Remote branch; Needs you | Working | Idle tabs) › Worktree (branch and changes, Open an agent sheet with Terminal | Chat) › Agent
 Workspace › Schedules (its Schedules, rule and last run, Run now, + New) › Schedule (name, instructions, Workspace · Worktree · CLI, repeat and time, On, Run now, Delete, recent runs)
-Workspace › Pull requests (worktree branches with Create PR, open pull requests; GitLab's merge requests too) · Workspace › Settings (the computer's Settings tab, ADR 0037)
+Workspace › Pull requests (worktree branches with Create PR, open pull requests; GitLab's merge requests too) · Workspace › Settings (the computer's Settings tab, ADR 0037; Order: Pin to the top)
+Worktree › branch row › Changes (Uncommitted | Branch; branch · totals · Push / Publish; Commit: message, Commit, Commit & push; Files: tap for its diff, undo to discard; ADR 0060)
+Settings › Agents › Usage (Today | 7 | 30 | 90 days; Total, Output, From cache; tokens per day; By CLI; By model; ADR 0060)
 Agent: header (CLI logo, pet name, status pill, ⋯ actions) · terminal or chat (markdown) · needs-you bar (Esc / Enter)
   terminal: a box typed straight into the CLI (keyboard Enter adds a line) · key row [/ Esc Tab ↑ ↓ ……… ⏎] (⏎ fixed right, sends)
   chat: queued messages and attached files · model and effort · message box (attach a file, saved prompts)
@@ -407,3 +409,19 @@ App-wide: SSH question sheet · notices · notification taps
 Branch · refresh; source (Uncommitted, Branch, One turn, Commits ›) · totals · file count; the tree
 (folders with summed counts, single-folder chains joined; files with +/−, a status mark, a pencil to
 open in an editor pane; click to open its diff in place); Commits (collapsible, the branch's commits).
+Uncommitted only: an undo button per file (Discard, confirmed) and the commit bar at the bottom: message
+(Ctrl/⌘+Enter commits, +Shift also pushes) · Commit · Commit & push ……… Push N / Publish branch (ADR 0060).
+
+### Find (ADR 0060)
+
+Ctrl+Shift+P (⌘K) or the sidebar footer's search button (also on the rail): a dialog near the top, a
+search box over results, each row: group (Open here, Side panel, Go to, Commands, Lists, Panes and
+tabs, Chat, Settings) · name · hint ……… keys. ↑ ↓ choose, Enter runs, Escape closes.
+
+### Settings › Usage (ADR 0060)
+
+Period (Today | 7 days | 30 days | 90 days) · refresh; tiles: Total tokens (replies · conversations),
+Input, Output, From cache (% of input); Tokens per day (a bar per day, hover or focus for its count);
+By CLI and By model tables (input, output, cache read, cache write, replies). Empty: "No usage yet".
+
+Sidebar: a Workspace's menu has Pin to top / Unpin; pinned Workspaces come first.
