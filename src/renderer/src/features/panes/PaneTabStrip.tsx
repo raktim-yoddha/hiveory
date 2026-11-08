@@ -16,6 +16,8 @@ export interface PaneTabInfo {
   status?: { status: CliStatus; running: boolean; detail?: string }
   /** A file with changes not saved yet. */
   unsaved?: boolean
+  /** A terminal printed while its tab was not on screen. */
+  activity?: boolean
   /** Agents and terminals can be renamed (their pet name, ADR 0042). */
   rename?: (name: string) => void
 }
@@ -81,6 +83,8 @@ export function PaneTabStrip({ area, describe, onOperation, add }: PaneTabStripP
                     {...props}
                     role="tab"
                     aria-selected={selected}
+                    // A tab's children are presentational: its marks are told here.
+                    aria-description={[info.unsaved && 'Unsaved changes', info.activity && 'New output'].filter(Boolean).join(', ') || undefined}
                     data-pane-grip
                     className={styles.tabButton}
                     title={`${info.title}\nDrag to move or split · double-click to maximize · right-click for actions, twice to rename`}
@@ -91,6 +95,7 @@ export function PaneTabStrip({ area, describe, onOperation, add }: PaneTabStripP
                     <span className={styles.title}>{info.title}</span>
                     {info.status && <StatusDot status={info.status.status} running={info.status.running} detail={info.status.detail} />}
                     {info.unsaved && <span className={styles.unsaved} role="img" aria-label="Unsaved changes" title="Unsaved changes" />}
+                    {info.activity && <span className={styles.activity} role="img" aria-label="New output" title="New output" />}
                   </button>
                 )}
               />

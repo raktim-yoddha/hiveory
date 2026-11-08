@@ -550,9 +550,10 @@ await test('arrange bar: Columns, then narrow panes keep a reachable close butto
   const columnsX = layout.x + layout.width / 2 + 128
   await page.mouse.move(columnsX, layout.y + 30, { steps: 10 })
   await page.waitForSelector('text=Release on a layout')
-  await shot('c1-arrange-bar')
+  // No screenshot here: a capture mid-drag (Playwright's, not the user's) turns the drop into a dock.
   await page.mouse.up()
   await page.waitForTimeout(500)
+  await shot('c1-columns')
   const boxes = await paneBoxes()
   expect(new Set(boxes.map((b) => Math.round(b.y))).size === 1, 'columns did not put panes in one row')
   for (const pane of await panes().all()) {
@@ -869,6 +870,23 @@ await test('Ctrl+click on a file:line or a URL in a terminal opens it beside the
   const opened = (await value('editors.list', { workspaceId: ws })).find((e) => e.path === 'linked.ts')
   await value('editors.close', { editorId: opened.id })
   rmSync(join(repo, 'linked.ts'))
+})
+
+await test('a terminal that prints behind another tab says "New output" until it is shown', async () => {
+  const ws = shellPane.workspaceId
+  const areaOf = (node) => (node.type === 'pane' ? ((node.tabs ?? [node.paneId]).includes(shellPane.id) ? node : null) : node.children.map(areaOf).find(Boolean) ?? null)
+  const area = areaOf(await value('layout.get', { workspaceId: ws }))
+  const other = (area?.tabs ?? []).find((id) => id !== shellPane.id)
+  expect(other, `the shell shares no area: ${JSON.stringify(area)}`)
+  // Marks inside a tab are presentational (not part of its role tree): matched by attribute.
+  const tab = page.getByRole('tab', { name: new RegExp(`\\b${shellPane.petName}\\b`) })
+  await value('layout.apply', { workspaceId: ws, operation: { type: 'activate', paneId: other } })
+  await page.waitForTimeout(400)
+  expect((await tab.locator('[aria-label="New output"]').count()) === 0, 'marked before printing')
+  await value('terminal.write', { instanceId: shellPane.id, data: 'echo background-output\r' })
+  await waitFor(async () => (await tab.locator('[aria-label="New output"]').count()) > 0, `no mark on ${shellPane.petName}`)
+  await value('layout.apply', { workspaceId: ws, operation: { type: 'activate', paneId: shellPane.id } })
+  await waitFor(async () => (await tab.locator('[aria-label="New output"]').count()) === 0, 'the mark cleared once shown')
 })
 
 await test('selection + Ctrl+C copies to the system clipboard', async () => {

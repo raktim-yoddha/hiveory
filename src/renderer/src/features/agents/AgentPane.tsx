@@ -24,7 +24,7 @@ interface AgentPaneProps extends PaneRenderProps {
  * One agent instance's pane: its area's tabs + its own terminal (or chat). An agent that needs
  * you tints the frame.
  */
-export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleMaximize, tabStrip }: AgentPaneProps) {
+export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleMaximize, concealed, tabStrip }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
   // Dropped files are paths on this computer: only a terminal running here can use them (ADR 0061).
@@ -47,7 +47,7 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleM
       tabStrip={tabStrip}
     >
       <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
-        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} dropFiles={dropFiles} onLink={onLink} />}
+        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} dropFiles={dropFiles} onLink={onLink} concealed={concealed} />}
       </ErrorBoundary>
       {!runtime.running && !agent.chatUi && (
         <div className={styles.stopped}>

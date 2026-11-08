@@ -14,6 +14,7 @@ import { AddAgentMenu } from '../agents/AddAgentMenu'
 import { PaneTabStrip, type PaneTabInfo } from '../panes/PaneTabStrip'
 import { useBrowser } from '../../stores/browser'
 import { useEditors } from '../../stores/editors'
+import { useTerminalActivity } from '../../stores/terminal-activity'
 import { useNavigation } from '../../stores/navigation'
 import { BrowserPaneFrame } from '../browser/BrowserPaneFrame'
 import { EditorPane } from '../editor/EditorPane'
@@ -43,6 +44,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const loadAgents = useAgents((s) => s.load)
   const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
   const unsaved = useEditors((s) => s.unsaved)
+  const fresh = useTerminalActivity((s) => s.fresh)
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const allPages = useBrowser((s) => s.pages)
@@ -108,6 +110,8 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
       title: agent.petName,
       icon: <CliLogo cliId={agent.cliId} size="sm" />,
       status: tracked ? { status: r.status, running: r.running, detail: r.activity } : undefined,
+      // Agents show their status; a terminal shows that it printed while out of sight.
+      activity: !tracked && fresh[agent.id] === true,
       rename: (name) => void runAction('Rename pane', () => api('agents.rename', { instanceId: agent.id, name }))
     }
   }

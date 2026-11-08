@@ -1,4 +1,4 @@
-/* global window */
+/* global window, requestAnimationFrame */
 // The end-to-end harness shared by scripts/e2e*.mjs: launches the built app with a throwaway profile,
 // runs named tests, and calls the app's IPC. `app` and `page` are live bindings (a relaunch swaps them).
 import { mkdirSync, mkdtempSync, readFileSync, existsSync } from 'node:fs'
@@ -72,6 +72,18 @@ export const test = async (name, fn) => {
     // Playwright puts the reason (what intercepted a click, which elements matched) on later lines.
     const detail = String(error?.message ?? '').split('\n').slice(1, 8).filter((l) => l.trim()).map((l) => `        ${l.trim()}`).join('\n')
     console.log(`  ✗ ${name}\n      ${message}${detail ? `\n${detail}` : ''}`)
+    // Layout tests fail together when the screen itself changes (a sleeping monitor, a locked session):
+    // the window's size, the screen and whether the page still draws tell that apart from a real bug.
+    const where = await app
+      ?.evaluate(({ BrowserWindow, screen }) => {
+        const w = BrowserWindow.getAllWindows()[0]
+        return { window: w?.getBounds(), minimized: w?.isMinimized(), screens: screen.getAllDisplays().map((d) => `${d.size.width}x${d.size.height}@${d.scaleFactor}`) }
+      })
+      .catch(() => null)
+    const frames = await page
+      ?.evaluate(() => new Promise((ok) => { let n = 0; const tick = () => (++n, requestAnimationFrame(tick)); requestAnimationFrame(tick); setTimeout(() => ok(n), 500) }))
+      .catch(() => null)
+    if (where) console.log(`        (window ${JSON.stringify(where.window)}${where.minimized ? ' minimized' : ''}, screens ${where.screens.join(', ')}, ${frames ?? '?'} frames in 0.5 s)`)
     await shot(`FAIL-${name.replace(/[^a-z0-9]+/gi, '-')}`)
   }
 }

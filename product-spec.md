@@ -452,3 +452,5 @@ Initial version does not include:
 - Ctrl+click (⌘+click) in a terminal: a web address opens in a browser pane beside it; a file of the
   worktree (`src/app.ts:12:5`, `(12,5)`, `#L12`) opens in an editor pane at that line. A plain click
   stays a click; a path outside the worktree is refused.
+- A terminal that prints while out of sight (a background tab, another worktree) shows a ring on its tab,
+  "New output", until it is on screen again. Agents keep their status dot instead.

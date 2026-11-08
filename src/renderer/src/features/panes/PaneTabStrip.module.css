@@ -111,6 +111,15 @@
   align-items: center;
 }
 
+/* A terminal that printed while out of sight: a ring (a file's unsaved dot is solid). */
+.activity {
+  flex: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: var(--radius-pill);
+}
+
 /* A file with unsaved changes: a dot beside its name, as editors show it. */
 .unsaved {
   flex: none;

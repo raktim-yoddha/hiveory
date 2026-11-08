@@ -4,6 +4,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import { Terminal, type ITheme } from '@xterm/xterm'
 import { DEFAULT_TERMINAL_FONT, type FontWeight, type TerminalFont } from '@shared/domain'
 import { api, subscribe } from '../../lib/api'
+import { useTerminalActivity } from '../../stores/terminal-activity'
 import { createDarkBackgroundFilter } from './dark-backgrounds'
 import { findTerminalLinks, type TerminalLink } from './terminal-links'
 import { adaptiveFontSize, type LayoutNeeds, MIN_FONT_SIZE, smallerFontSize, visibleTop } from './terminal-fit'
@@ -105,6 +106,24 @@ interface Entry {
   idle?: ReturnType<typeof setTimeout>
   /** Opens a Ctrl/⌘-clicked link; links are not offered where nothing can open them. */
   openLink?: (link: TerminalLink) => void
+  /** On screen now: in the page (not another worktree) and not a background tab. */
+  visible: boolean
+  inPage: boolean
+  concealed: boolean
+  watch?: IntersectionObserver
+}
+
+const updateVisible = (instanceId: string, entry: Entry): void => {
+  entry.visible = entry.inPage && !entry.concealed
+  if (entry.visible) useTerminalActivity.getState().seen(instanceId)
+}
+
+/** A background tab is mounted but out of sight (visibility: hidden), which intersection cannot tell. */
+export const setTerminalConcealed = (instanceId: string, concealed: boolean): void => {
+  const entry = entries.get(instanceId)
+  if (!entry || entry.concealed === concealed) return
+  entry.concealed = concealed
+  updateVisible(instanceId, entry)
 }
 
 const MAC = /Mac/i.test(navigator.platform)
@@ -175,6 +194,8 @@ const ensureListener = (): void => {
   listening = true
   subscribe('terminal.data', ({ instanceId, data, offset }) => {
     const entry = entries.get(instanceId)
+    // Output nobody can see marks the terminal's tab until it is on screen again.
+    if (!entry?.visible) useTerminalActivity.getState().printed(instanceId)
     if (!entry) return
     if (entry.written < 0) entry.pending.push({ data, offset })
     else writeChunk(entry, data, offset)
@@ -280,9 +301,15 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
     if (!copySelection(term)) pasteClipboard(instanceId, term)
     else term.clearSelection()
   })
-  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic) }
+  const entry: Entry = { term, fit, element, opened: false, written: -1, pending: [], lastSize: '', needs, visibleRows: 0, cursorHidden: false, placed: '', filter: createDarkBackgroundFilter(() => !font.italic), visible: false, inPage: false, concealed: false }
   entries.set(instanceId, entry)
   provideLinks(instanceId, term, element)
+  // In the page and laid out (another worktree's terminals are detached); background tabs: setTerminalConcealed.
+  entry.watch = new IntersectionObserver(([seen]) => {
+    entry.inPage = Boolean(seen?.isIntersecting)
+    updateVisible(instanceId, entry)
+  })
+  entry.watch.observe(element)
   // Track cursor visibility (CSI ? 25 h / l) without consuming it: xterm still applies it.
   for (const final of ['h', 'l']) {
     term.parser.registerCsiHandler({ prefix: '?', final }, (params) => {
@@ -430,6 +457,7 @@ export const disposeTerminal = (instanceId: string): void => {
   if (!entry) return
   entries.delete(instanceId)
   clearTimeout(entry.idle)
+  entry.watch?.disconnect()
   entry.term.dispose()
   entry.element.remove()
 }

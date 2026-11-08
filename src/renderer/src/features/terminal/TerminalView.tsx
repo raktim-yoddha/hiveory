@@ -4,7 +4,7 @@ import { useNotices } from '../../stores/notices'
 import { droppedPathsText } from './drop-paths'
 import type { TerminalLink } from './terminal-links'
 import '@xterm/xterm/css/xterm.css'
-import { attachTerminal, fitTerminal, pasteIntoTerminal } from './terminal-registry'
+import { attachTerminal, fitTerminal, pasteIntoTerminal, setTerminalConcealed } from './terminal-registry'
 import styles from './TerminalView.module.css'
 
 /** Settle time after the last size change before re-fitting; pane animations resize continuously. */
@@ -22,10 +22,12 @@ interface TerminalViewProps {
   dropFiles?: 'windows' | 'posix' | false
   /** Opens a Ctrl/⌘-clicked link in the output; without it, links are plain text. */
   onLink?: (link: TerminalLink) => void
+  /** Mounted but out of sight (a background tab): output then marks its tab. */
+  concealed?: boolean
 }
 
 /** Hosts an agent's persistent terminal and keeps it fitted to the pane. */
-export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFiles = false, onLink }: TerminalViewProps) {
+export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFiles = false, onLink, concealed = false }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const linkRef = useRef(onLink)
   useEffect(() => {
@@ -69,6 +71,8 @@ export function TerminalView({ instanceId, minColumns = 0, minRows = 0, dropFile
       detach()
     }
   }, [instanceId, minColumns, minRows, linkable])
+
+  useEffect(() => setTerminalConcealed(instanceId, concealed), [instanceId, concealed])
 
   return (
     <div

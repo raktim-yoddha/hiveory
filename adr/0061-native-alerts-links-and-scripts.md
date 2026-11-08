@@ -86,3 +86,6 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
   `browser.open`, `files.read`, `editors.open` and `layout.apply`.
 - Detection is per row and per character: links wrapped across rows, or after wide glyphs, may be
   missed or offset.
+- A terminal (not an agent: agents show their status) that prints while out of sight, in a background
+  tab or a worktree not on screen, shows a ring on its tab, "New output", until it is on screen again.
+  Kept in the renderer only (`useTerminalActivity`); nothing is stored.
