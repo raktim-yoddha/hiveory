@@ -541,8 +541,8 @@ await test('the sidebar order follows work, not clicks (ADR 0024)', async () => 
 })
 
 await test('arrange bar: Columns, then narrow panes keep a reachable close button', async () => {
-  // The agents opened as tabs of one area (ADR 0042): drag the shown tab, whatever the random names make the strip look like.
-  const src = await page.getByRole('tablist', { name: 'Panes in this area' }).getByRole('tab', { selected: true }).first().boundingBox()
+  // The agents opened as tabs of one area (ADR 0042): drag the first tab, whatever the random names make the strip look like.
+  const src = await page.getByRole('tablist', { name: 'Panes in this area' }).first().getByRole('tab').first().boundingBox()
   const layout = await page.locator('section[aria-label$=" agent"]').first().evaluate((el) => el.parentElement.parentElement.getBoundingClientRect().toJSON())
   await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2)
   await page.mouse.down()
@@ -623,19 +623,18 @@ await test('keyboard: divider arrows resize; a pane tab’s menu renames it', as
   await page.getByRole('tab', { name: /\bRenamed\b/ }).waitFor()
 })
 
-await test('maximize via double-click and restore via button', async () => {
-  const header = panes().first().locator('header')
+await test('maximize via double-click and restore with a second one', async () => {
   const name = (await panes().first().getAttribute('aria-label')).replace(' agent', '')
-  const hb = await header.boundingBox()
-  await page.mouse.dblclick(hb.x + hb.width / 2, hb.y + hb.height / 2)
+  // The pane's own tab: the middle of the header may hold another tab or the "+" (random names, ADR 0042).
+  const tab = () => page.locator(`section[aria-label="${name} agent"]`).getByRole('tab').filter({ hasText: name }).first()
+  await tab().dblclick()
   await page.waitForTimeout(400)
   const layout = await panes().first().evaluate((el) => el.parentElement.parentElement.getBoundingClientRect().width)
   const max = await page.locator(`section[aria-label="${name} agent"]`).boundingBox()
   expect(max.width > layout - 4, 'double-click did not maximize')
   await shot('c4-maximized')
   // A second double-click restores it.
-  const maxHeader = await page.locator(`section[aria-label="${name} agent"]`).locator('header').boundingBox()
-  await page.mouse.dblclick(maxHeader.x + maxHeader.width / 2, maxHeader.y + maxHeader.height / 2)
+  await tab().dblclick()
   await page.waitForTimeout(400)
   expect((await page.locator(`section[aria-label="${name} agent"]`).boundingBox()).width < layout - 50, 'restore failed')
 })
