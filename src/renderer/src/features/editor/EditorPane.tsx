@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { api, subscribe } from '../../lib/api'
 import { runAction } from '../../stores/notices'
+import { useEditors } from '../../stores/editors'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
@@ -77,6 +78,11 @@ export function EditorPane({ editor, onDragHandlePointerDown, toggleMaximize, ta
     closeRef.current = () => (dirty ? setConfirmClose(true) : close())
   })
   useEffect(() => registerPaneCloser(editor.id, () => closeRef.current()), [editor.id])
+  // The tab shows a file's unsaved changes (its strip is drawn by the layout, not here).
+  useEffect(() => {
+    useEditors.getState().setUnsaved(editor.id, dirty)
+  }, [editor.id, dirty])
+  useEffect(() => () => useEditors.getState().setUnsaved(editor.id, false), [editor.id])
 
   return (
     <PaneFrame

@@ -396,10 +396,10 @@ await test('add a Git workspace: its Primary worktree is made, nothing else', as
 await test('the Dashboard path trail copies the full path', async () => {
   await openSidebarWorkspace('demo-app', 'Main')
   await openDashboardTab('Tasks')
-  await page.locator('aside[aria-label="Side panel"]').getByRole('button', { name: 'Copy path' }).first().click()
-  await page.waitForTimeout(200)
-  const clip = await app.evaluate(({ clipboard }) => clipboard.readText())
-  expect(clip === repo, `clipboard has "${clip}"`)
+  await app.evaluate(({ clipboard }) => clipboard.writeText(''))
+  await page.locator('aside[aria-label="Side panel"]').getByRole('button', { name: 'Copy path', exact: true }).first().click()
+  // The system clipboard can lag a moment behind the write.
+  await waitFor(async () => (await app.evaluate(({ clipboard }) => clipboard.readText())) === repo, 'the path on the clipboard')
 })
 
 await test('"+" opens New worktree with the Settings defaults', async () => {
@@ -536,13 +536,15 @@ await test('the sidebar order follows work, not clicks (ADR 0024)', async () => 
   await waitFor(async () => (await order())[0] === before[1], `${before[1]} to rise after work there`)
   await value('agents.close', { instanceId: agent.id })
   await openSidebarWorkspace('demo-app', 'Main')
-  await panes().first().waitFor()
+  // Panes are tabs (ADR 0042): the shown one, not a background tab.
+  await page.locator('section[aria-label$=" agent"]:visible').first().waitFor()
 })
 
 await test('arrange bar: Columns, then narrow panes keep a reachable close button', async () => {
-  const src = await panes().first().locator('header').boundingBox()
+  // The agents opened as tabs of one area (ADR 0042): drag the shown tab, whatever the random names make the strip look like.
+  const src = await page.getByRole('tablist', { name: 'Panes in this area' }).getByRole('tab', { selected: true }).first().boundingBox()
   const layout = await page.locator('section[aria-label$=" agent"]').first().evaluate((el) => el.parentElement.parentElement.getBoundingClientRect().toJSON())
-  await page.mouse.move(src.x + 50, src.y + src.height / 2)
+  await page.mouse.move(src.x + src.width / 2, src.y + src.height / 2)
   await page.mouse.down()
   await page.mouse.move(src.x + 70, src.y + 30, { steps: 4 })
   const columnsX = layout.x + layout.width / 2 + 128
@@ -603,20 +605,22 @@ await test('resizing never squeezes a pane below its minimum width', async () =>
   expect(min >= 238, `pane squeezed to ${min}px`)
 })
 
-await test('keyboard: divider arrows resize; pane menu moves panes', async () => {
+await test('keyboard: divider arrows resize; a pane tab’s menu renames it', async () => {
   const divider = page.getByRole('separator', { name: 'Resize panes' }).first()
   const before = await divider.getAttribute('aria-valuenow')
   await divider.focus()
   await page.keyboard.press('ArrowRight')
   await page.waitForTimeout(250)
   expect((await divider.getAttribute('aria-valuenow')) !== before, 'arrow key did not resize')
-  const order = async () => (await paneBoxes()).sort((a, b) => a.y - b.y || a.x - b.x).map((b) => b.name)
-  const first = (await order())[0]
-  await panes().filter({ hasText: '' }).first()
-  await page.getByRole('button', { name: `${first.replace(' agent', '')} actions` }).click({ button: 'right' })
-  await page.getByRole('menuitem', { name: 'Move right' }).click()
-  await page.waitForTimeout(400)
-  expect((await order())[0] !== first, 'move right did nothing')
+  // Panes are tabs (ADR 0042): a tab's right-click menu holds Rename, Split right / down and Close.
+  const agent = (await value('agents.list', { workspaceId: mainWs.id }))[0]
+  await page.getByRole('tab', { name: new RegExp(`\\b${agent.petName}\\b`) }).click({ button: 'right' })
+  for (const item of ['Rename', 'Split right', 'Split down', 'Close']) await page.getByRole('menuitem', { name: item }).waitFor()
+  await page.getByRole('menuitem', { name: 'Rename' }).click()
+  await page.getByLabel(`Rename ${agent.petName}`).fill('Renamed')
+  await page.keyboard.press('Enter')
+  await waitFor(async () => (await value('agents.list', { workspaceId: mainWs.id })).some((a) => a.id === agent.id && a.petName === 'Renamed'), 'renamed from the tab menu')
+  await page.getByRole('tab', { name: /\bRenamed\b/ }).waitFor()
 })
 
 await test('maximize via double-click and restore via button', async () => {
@@ -629,7 +633,9 @@ await test('maximize via double-click and restore via button', async () => {
   const max = await page.locator(`section[aria-label="${name} agent"]`).boundingBox()
   expect(max.width > layout - 4, 'double-click did not maximize')
   await shot('c4-maximized')
-  await page.getByRole('button', { name: `Restore ${name}` }).click()
+  // A second double-click restores it.
+  const maxHeader = await page.locator(`section[aria-label="${name} agent"]`).locator('header').boundingBox()
+  await page.mouse.dblclick(maxHeader.x + maxHeader.width / 2, maxHeader.y + maxHeader.height / 2)
   await page.waitForTimeout(400)
   expect((await page.locator(`section[aria-label="${name} agent"]`).boundingBox()).width < layout - 50, 'restore failed')
 })
@@ -776,7 +782,9 @@ await test('dragging a sidebar well past its minimum hides it; showing it again 
   expect(Math.abs((await page.getByRole('navigation', { name: 'Workspaces' }).boundingBox()).width - width) < 2, 'sidebar width not restored')
   if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
   await sidePanel().waitFor()
-  await drag('Resize side panel', 900)
+  // To the window's right edge: moves past the window are not always delivered.
+  const edge = await page.getByRole('separator', { name: 'Resize side panel' }).boundingBox()
+  await drag('Resize side panel', page.viewportSize().width - 4 - (edge.x + edge.width / 2))
   await waitFor(async () => !(await sidePanel().isVisible()), 'side panel collapsed')
   await page.getByRole('button', { name: 'Show side panel' }).click()
   await sidePanel().waitFor()
@@ -1306,6 +1314,7 @@ await test('Composio: the key and accounts survive a restart; nothing opens the 
 })
 await test('closing every agent returns to the empty workspace', async () => {
   for (const a of await value('agents.list', { workspaceId: mainWs.id })) await value('agents.close', { instanceId: a.id })
+  await openSidebarWorkspace('demo-app', 'Main')
   await page.waitForSelector('text=Empty worktree')
   expect((await value('layout.get', { workspaceId: mainWs.id })) === null, 'layout not cleared')
 })

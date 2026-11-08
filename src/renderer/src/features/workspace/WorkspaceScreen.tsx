@@ -89,13 +89,14 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const list = agents ?? NO_AGENTS
   const byId = new Map(list.map((a) => [a.id, a]))
   const editorById = new Map(editors.map((e) => [e.id, e]))
+  const unsaved = useEditors((s) => s.unsaved)
   // This worktree's browser pages are panes too (ADR 0042).
   const pageById = new Map(allPages.filter((p) => p.scope === workspaceId).map((p) => [p.id, p]))
 
   /** What a pane's tab shows: an agent's or terminal's name, logo and status; a file's or page's name. */
   const describe = (paneId: string): PaneTabInfo | undefined => {
     const editor = editorById.get(paneId)
-    if (editor) return { title: editor.name, icon: <FileCode2 aria-hidden /> }
+    if (editor) return { title: editor.name, icon: <FileCode2 aria-hidden />, unsaved: unsaved[editor.id] === true }
     const page = pageById.get(paneId)
     if (page) return { title: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: page.ownerName ? <AgentIcon aria-hidden /> : <Globe aria-hidden /> }
     const agent = byId.get(paneId)

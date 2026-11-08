@@ -14,6 +14,8 @@ export interface PaneTabInfo {
   title: string
   icon: ReactNode
   status?: { status: CliStatus; running: boolean; detail?: string }
+  /** A file with changes not saved yet. */
+  unsaved?: boolean
   /** Agents and terminals can be renamed (their pet name, ADR 0042). */
   rename?: (name: string) => void
 }
@@ -88,6 +90,7 @@ export function PaneTabStrip({ area, describe, onOperation, add }: PaneTabStripP
                     {info.icon}
                     <span className={styles.title}>{info.title}</span>
                     {info.status && <StatusDot status={info.status.status} running={info.status.running} detail={info.status.detail} />}
+                    {info.unsaved && <span className={styles.unsaved} role="img" aria-label="Unsaved changes" title="Unsaved changes" />}
                   </button>
                 )}
               />
