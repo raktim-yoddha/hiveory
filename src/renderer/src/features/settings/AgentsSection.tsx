@@ -1,6 +1,5 @@
 import { CliLogo } from '../../components/cli/CliLogo'
 import { Toggle } from '../../components/ui/Toggle'
-import { Select } from '../../components/ui/Select'
 import { useApp, useClis, useSettings } from '../../stores/data'
 import { SettingRow, SettingsPage } from './SettingsPage'
 import { HiveoryPetSettings } from './HiveoryPetSettings'
@@ -45,22 +44,6 @@ export function AgentsSection() {
               label="Skip permissions (YOLO) for every agent"
               checked={settings.defaultAutoApprove}
               onChange={(defaultAutoApprove) => void update({ defaultAutoApprove })}
-            />
-          }
-        />
-        <SettingRow
-          title="New agents open as"
-          description="For every workspace that has no choice of its own (its Settings) and new worktrees. You can still pick the other one each time. CLIs without a chat mode (such as Antigravity) keep their terminal."
-          control={
-            <Select
-              label="New agents open as"
-              hideLabel
-              value={settings.defaultChatUi ? 'chat' : 'terminal'}
-              options={[
-                { value: 'terminal', label: 'Terminal' },
-                { value: 'chat', label: 'Chat' }
-              ]}
-              onChange={(value) => void update({ defaultChatUi: value === 'chat' })}
             />
           }
         />

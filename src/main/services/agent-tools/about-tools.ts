@@ -58,7 +58,7 @@ export class AboutTools implements ToolFamily {
       '# What you can use',
       `Hiveory coordination tools (other agents, panes, the worktree terminal): ${onOff(s.agentTools)}. Built-in browser (browser_* tools; the user watches it): ${onOff(s.browserUse)}. Computer use (computer_* tools): ${onOff(s.computerUse)}.`,
       connected.length ? `MCP servers and apps Hiveory serves you: ${connected.join(', ')}.` : 'No extra MCP servers or apps are connected in Hiveory.',
-      `Every agent auto-approves permissions: ${onOff(s.defaultAutoApprove)}; open in chat view: ${onOff(s.defaultChatUi)}.`,
+      `Every agent auto-approves permissions: ${onOff(s.defaultAutoApprove)}. CLIs open in their terminals; the "+" menu's Chat UI opens a chat whose CLI and model are picked in its message box.`,
       'Skills live in the skills folders each CLI reads; the user manages them (and finds more on skills.sh) in Settings › Skills, MCPs & Apps.',
       'You cannot change settings: tell the user where they are (below). The gear at the top right opens Settings.',
       '',
@@ -72,7 +72,6 @@ export class AboutTools implements ToolFamily {
 const workspaceSettings = (project: Project): string => {
   const s = project.settings ?? {}
   const parts = [
-    s.agentView ? `new agents open as ${s.agentView}` : '',
     s.codeHost ? `code host ${s.codeHost}` : '',
     s.issueSource ? `issues from ${s.issueSource}` : '',
     s.baseRef ? `new worktrees start from ${s.baseRef}` : ''

@@ -94,7 +94,6 @@ export class WorkspaceService {
       path: project.path,
       association: input.association,
       autoApprove: input.autoApprove,
-      chatUi: input.chatUi ?? project.settings?.agentView === 'chat',
       createdAt: now,
       updatedAt: now
     }
@@ -192,7 +191,6 @@ export class WorkspaceService {
       git: { worktreePath, branch, baseRef, createdBranch },
       association: input.association,
       autoApprove: input.autoApprove,
-      chatUi: input.chatUi ?? project.settings?.agentView === 'chat',
       createdAt: now,
       updatedAt: now
     }

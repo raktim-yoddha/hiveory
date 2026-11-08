@@ -67,27 +67,6 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
       <div className={settings.group}>
         <div className={settings.groupTitle}>Agents</div>
         <SettingRow
-          title="New agents open as"
-          description={
-            remote
-              ? 'Agents on an SSH host always open in their terminal.'
-              : 'Used by the "+" menu, Open agent and the phone in every worktree here. You can still pick the other one each time. CLIs without a chat mode keep their terminal.'
-          }
-          control={
-            <Select
-              label="New agents open as"
-              hideLabel
-              value={s.agentView ?? ''}
-              options={[
-                { value: '', label: "Each worktree's choice" },
-                { value: 'terminal', label: 'Terminal' },
-                { value: 'chat', label: 'Chat' }
-              ]}
-              onChange={(value) => void update(project.id, { settings: { agentView: value === '' ? null : (value as 'terminal' | 'chat') } })}
-            />
-          }
-        />
-        <SettingRow
           title="Announce agents"
           description="Phone notifications when an agent here needs you. Turn off for a quiet workspace."
           control={<Toggle label="Announce agents in this workspace" checked={s.alerts !== false} onChange={(on) => void update(project.id, { settings: { alerts: on ? null : false } })} />}

@@ -31,7 +31,7 @@ export function WorkspaceScreen({ workspaceId, projectId }: { workspaceId: strin
     for (const a of agents.data ?? []) counts.set(a.cliId, (counts.get(a.cliId) ?? 0) + 1)
     const list = agents.data ?? []
     savePreset.mutate(
-      { name, cliSelections: [...counts].map(([cliId, count]) => ({ cliId, count: Math.min(count, 8) })), autoApprove: list.every((a) => a.autoApprove), chatUi: list.some((a) => a.chatUi) },
+      { name, cliSelections: [...counts].map(([cliId, count]) => ({ cliId, count: Math.min(count, 8) })), autoApprove: list.every((a) => a.autoApprove) },
       { onSuccess: () => setNaming(false) }
     )
   }

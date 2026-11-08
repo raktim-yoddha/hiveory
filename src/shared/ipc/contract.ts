@@ -139,8 +139,7 @@ export const presetInputSchema = z.object({
   id: id.optional(),
   name: z.string().trim().min(1).max(60),
   cliSelections: z.array(cliSelectionSchema).max(32),
-  autoApprove: z.boolean(),
-  chatUi: z.boolean().optional()
+  autoApprove: z.boolean()
 })
 
 export const layoutOperationSchema = z.discriminatedUnion('type', [
@@ -174,7 +173,6 @@ const chatEffort = z.string().max(40).regex(/^[\w-]*$/)
  * back to the app's default.
  */
 export const projectSettingsPatchSchema = z.object({
-  agentView: z.enum(['terminal', 'chat']).nullable().optional(),
   chatDefaults: z.record(id, z.object({ model: chatModel, effort: chatEffort })).nullable().optional(),
   branchPrefix: z.string().max(40).regex(/^([A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/).refine((v) => !v.startsWith('-') && !v.includes('..')).nullable().optional(),
   baseRef: gitRef.nullable().optional(),
@@ -201,7 +199,6 @@ export const createWorkspaceSchema = z.object({
     .optional(),
   cliSelections: z.array(cliSelectionSchema).max(32),
   autoApprove: z.boolean(),
-  chatUi: z.boolean().optional(),
   /** Isolated only: base ref for a new branch (default: the repository's default branch). */
   baseRef: gitRef.optional(),
   /** Isolated only: new branch name, or the existing branch when `useExistingBranch`. */
@@ -317,7 +314,6 @@ export const requestSchemas = {
       updateRemindEvery: z.enum(UPDATE_REMIND_EVERY),
       agentTools: z.boolean(),
       defaultAutoApprove: z.boolean(),
-      defaultChatUi: z.boolean(),
       browserUse: z.boolean(),
       browserAgentCursor: z.boolean(),
       browserHomeUrl: z.string().trim().max(2000),

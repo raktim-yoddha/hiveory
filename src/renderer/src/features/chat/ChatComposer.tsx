@@ -6,7 +6,7 @@ import { IconButton } from '../../components/ui/Button'
 import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
-import { useChat } from '../../stores/chat'
+import { rememberChatCli, useChat } from '../../stores/chat'
 import { useClis } from '../../stores/data'
 import { AttachmentChips } from './AttachmentChips'
 import { ComposerTracks } from './ComposerTracks'
@@ -373,6 +373,7 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
               started={chat.messages.length > 0}
               onChange={(cliId, next) => {
                 const keepEffort = next.efforts?.includes(chat.effort ?? '') ? chat.effort : ''
+                rememberChatCli(cliId)
                 void update({ ...(cliId !== chat.cliId ? { cliId } : {}), model: next.id, effort: keepEffort, ...(chat.fast && !next.fast ? { fast: false } : {}) })
               }}
             />

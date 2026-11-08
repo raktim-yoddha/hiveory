@@ -50,12 +50,8 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
   const [associationKind, setAssociationKind] = useState<WorkspaceAssociation['kind']>(initial?.association.kind ?? 'issue')
   const [associationRef, setAssociationRef] = useState(initial?.association.ref ?? '')
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
-  // Toggles start from the defaults chosen in Settings → Agents; the Workspace's own view wins (ADR 0037).
-  const [config, setConfig] = useState<AgentConfig>(() => {
-    const { defaultAutoApprove, defaultChatUi } = useSettings.getState().settings
-    const view = useProjects.getState().projects.find((p) => p.id === projectId)?.settings?.agentView
-    return { cliSelections: [], autoApprove: defaultAutoApprove, chatUi: view ? view === 'chat' : defaultChatUi }
-  })
+  // Auto-approve starts from Settings → Agents; agents open in their terminals (chat is "Chat UI", ADR 0059).
+  const [config, setConfig] = useState<AgentConfig>(() => ({ cliSelections: [], autoApprove: useSettings.getState().settings.defaultAutoApprove }))
   const [tab, setTab] = useState<ConfigTab>('agents')
   const [busy, setBusy] = useState(false)
   const [git, setGit] = useState<GitChoice>({ useExistingBranch: false, ready: false })
@@ -85,7 +81,6 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
         association: associationRef.trim() ? { kind: associationKind, ref: associationRef.trim() } : undefined,
         cliSelections: config.cliSelections,
         autoApprove: config.autoApprove,
-        chatUi: config.chatUi,
         baseRef: git.baseRef,
         branch: git.branch,
         useExistingBranch: git.useExistingBranch,
@@ -169,7 +164,7 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
               current={config}
               onApply={(preset) => {
                 // A preset replaces the configuration; it never merges (STARTER_PROMPT §10).
-                setConfig({ cliSelections: preset.cliSelections, autoApprove: preset.autoApprove, chatUi: preset.chatUi ?? false })
+                setConfig({ cliSelections: preset.cliSelections, autoApprove: preset.autoApprove })
                 setTab('agents')
               }}
             />

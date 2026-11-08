@@ -185,10 +185,9 @@ describe('settings persistence', () => {
       theme: 'silver'
     })
     expect(parseState({ settings: { theme: 'neon' } }).state.settings.theme).toBe('dark')
-    expect(parseState({ settings: { defaultChatUi: true, defaultAutoApprove: 'no' } }).state.settings).toMatchObject({
-      defaultChatUi: true,
-      defaultAutoApprove: false
-    })
+    expect(parseState({ settings: { defaultAutoApprove: 'no' } }).state.settings).toMatchObject({ defaultAutoApprove: false })
+    // The old "open agents as chat" setting is gone (ADR 0059): a saved one is dropped.
+    expect(parseState({ settings: { defaultChatUi: true } }).state.settings).not.toHaveProperty('defaultChatUi')
   })
 
   it("keeps a Workspace's icon and color across restarts, dropping unknown ones", () => {

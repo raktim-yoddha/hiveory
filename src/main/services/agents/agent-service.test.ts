@@ -81,10 +81,10 @@ describe('skip permissions (YOLO) from Settings', () => {
 })
 
 describe('agents in chat view', () => {
-  it('opens chat-capable CLIs as chats and keeps a terminal for the rest', () => {
-    const { agents, runtime, chats } = setup({ chatUi: true })
-    const claude = agents.open('w1', 'claude').agent
-    const antigravity = agents.open('w1', 'antigravity').agent
+  it('opens chat-capable CLIs as chats when asked and keeps a terminal for the rest', () => {
+    const { agents, runtime, chats } = setup()
+    const claude = agents.open('w1', 'claude', undefined, undefined, true).agent
+    const antigravity = agents.open('w1', 'antigravity', undefined, undefined, true).agent
     expect(claude.chatUi).toBe(true)
     expect(antigravity.chatUi).toBe(false)
     expect(chats.ensureAgentChat).toHaveBeenCalledWith(expect.objectContaining({ id: claude.id }), expect.any(String), undefined)
@@ -93,8 +93,8 @@ describe('agents in chat view', () => {
   })
 
   it('is always ready, working while a reply streams, and reports it to the Kanban', () => {
-    const { agents, chats, emitted } = setup({ chatUi: true })
-    const { agent } = agents.open('w1', 'codex')
+    const { agents, chats, emitted } = setup()
+    const { agent } = agents.open('w1', 'codex', undefined, undefined, true)
     expect(agents.list('w1')[0]!.runtime).toEqual({ status: 'idle', running: true })
     chats.running.add(agent.id)
     chats.emit('run', agent.id, true)
@@ -103,20 +103,17 @@ describe('agents in chat view', () => {
     expect(agents.find(agent.id)!.hasConversation).toBe(true)
   })
 
-  it("follows the Workspace's view over the Worktree's, lets each open choose, and starts chats on its defaults (ADR 0037)", () => {
-    const { agents, chats } = setup({ chatUi: false }, { agentView: 'chat', chatDefaults: { claude: { model: 'opus', effort: 'high' } } })
-    const chat = agents.open('w1', 'claude').agent
+  it('opens a CLI in its terminal unless a Chat UI is asked for, which starts on the Workspace defaults (ADR 0059)', () => {
+    const { agents, chats } = setup({}, { chatDefaults: { claude: { model: 'opus', effort: 'high' } } })
+    expect(agents.open('w1', 'claude').agent.chatUi).toBe(false)
+    const chat = agents.open('w1', 'claude', undefined, undefined, true).agent
     expect(chat.chatUi).toBe(true)
     expect(chats.ensureAgentChat).toHaveBeenCalledWith(expect.objectContaining({ id: chat.id }), expect.any(String), { model: 'opus', effort: 'high' })
-    expect(agents.open('w1', 'claude', undefined, undefined, false).agent.chatUi).toBe(false)
-    const terminalFirst = setup({ chatUi: true }, { agentView: 'terminal' })
-    expect(terminalFirst.agents.open('w1', 'codex').agent.chatUi).toBe(false)
-    expect(terminalFirst.agents.open('w1', 'codex', undefined, undefined, true).agent.chatUi).toBe(true)
   })
 
   it('deletes the chat when the agent closes', () => {
-    const { agents, chats, runtime } = setup({ chatUi: true })
-    const { agent } = agents.open('w1', 'claude')
+    const { agents, chats, runtime } = setup()
+    const { agent } = agents.open('w1', 'claude', undefined, undefined, true)
     agents.close(agent.id)
     expect(chats.delete).toHaveBeenCalledWith(agent.id)
     expect(runtime.dispose).not.toHaveBeenCalled()

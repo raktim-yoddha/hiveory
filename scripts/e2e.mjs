@@ -351,11 +351,12 @@ await test('apps: a Composio key once; Connect goes straight to the app; a label
 })
 await test('settings: agent defaults pre-fill the create dialog toggles', async () => {
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Agents' }).click()
-  await choose(page, 'New agents open as', 'Chat')
+  // Chat is its own "Chat UI" entry now (ADR 0059): Settings has no "New agents open as".
+  expect(!(await page.getByText('New agents open as').count()), 'the old chat default is still in Settings')
   await page.getByRole('switch', { name: 'Skip permissions (YOLO) for every agent' }).click()
   await waitFor(async () => {
     const s = await value('settings.get')
-    return s.defaultChatUi && s.defaultAutoApprove
+    return s.defaultAutoApprove
   }, 'defaults saved')
 })
 
@@ -404,10 +405,10 @@ await test('the Dashboard path trail copies the full path', async () => {
 await test('"+" opens New worktree with the Settings defaults', async () => {
   const dialog = await newWorktree('demo-app')
   await dialog.waitFor()
-  expect((await dialog.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'true', 'chat UI default not applied')
+  expect(!(await dialog.getByRole('switch', { name: 'Use chat UI' }).count()), 'the old chat toggle is still in New worktree')
   expect((await dialog.getByRole('switch', { name: 'Skip permissions (YOLO)' }).getAttribute('aria-checked')) === 'true', 'auto-approve default not applied')
   await page.keyboard.press('Escape')
-  await value('settings.update', { defaultChatUi: false, defaultAutoApprove: false })
+  await value('settings.update', { defaultAutoApprove: false })
 })
 
 await test('a second Primary is refused', async () => {
@@ -419,7 +420,6 @@ await test('new branch: invalid branch name is caught before creating', async ()
   await page.waitForTimeout(600)
   const dialog = await newWorktree('demo-app')
   await dialog.getByText('Base branch').first().waitFor()
-  expect((await dialog.getByRole('switch', { name: 'Use chat UI' }).getAttribute('aria-checked')) === 'false', 'chat UI default should be off again')
   await dialog.getByLabel('New branch').fill('bad..name')
   await dialog.getByText('not a valid Git branch name').waitFor({ timeout: 5000 })
   expect(await dialog.getByRole('button', { name: 'Create', exact: true }).isDisabled(), 'create enabled with invalid branch')
@@ -1141,16 +1141,14 @@ await test('kanban never mixes projects', async () => {
 // ======================= G. Chat =======================
 console.log('G. Chat')
 let chatWs
-await test('Work: "Use chat UI" opens agents as a chat; Antigravity-style CLIs keep a terminal', async () => {
-  chatWs = await value('workspaces.create', {
-    projectId, kind: 'isolated', name: 'Chatty', cliSelections: [{ cliId: 'codex', count: 1 }, { cliId: 'claude', count: 1 }], autoApprove: false, chatUi: true
-  })
+await test('Work: Chat UI opens chats; a CLI picked from a list keeps its terminal (ADR 0059)', async () => {
+  chatWs = await value('workspaces.create', { projectId, kind: 'isolated', name: 'Chatty', cliSelections: [], autoApprove: false })
+  for (const cliId of ['codex', 'claude']) await value('agents.open', { workspaceId: chatWs.id, cliId, chatUi: true })
   const agents = await value('agents.list', { workspaceId: chatWs.id })
   expect(agents.length === 2 && agents.every((a) => a.chatUi && a.runtime.running), 'chat agents not created ready')
   await openSidebarWorkspace('demo-app', 'Chatty')
   await waitFor(async () => (await panes().locator('textarea[aria-label="Message"]').count()) === 2, 'chat composers in panes')
   expect((await panes().locator('.xterm').count()) === 0, 'a chat agent rendered a terminal')
-  expect((await panes().getByRole('button', { name: /Choose CLI/ }).count()) === 0, 'agent composer offers a CLI picker')
   expect((await panes().getByTitle('The CLI is fixed once a chat has started').count()) === 0, 'agent composer repeats the CLI')
   expect(await panes().first().getByText(/^Chat with /).isVisible(), 'welcome with the CLI logo missing')
   expect(await panes().first().getByRole('button', { name: /Read-only|Full access/ }).isVisible(), 'permissions picker missing')

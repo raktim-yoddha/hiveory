@@ -110,7 +110,6 @@ const settingsSchema = z.object({
   updateRemindEvery: z.enum(UPDATE_REMIND_EVERY).catch(DEFAULT_SETTINGS.updateRemindEvery),
   agentTools: z.boolean().catch(DEFAULT_SETTINGS.agentTools),
   defaultAutoApprove: z.boolean().catch(DEFAULT_SETTINGS.defaultAutoApprove),
-  defaultChatUi: z.boolean().catch(DEFAULT_SETTINGS.defaultChatUi),
   browserUse: z.boolean().catch(DEFAULT_SETTINGS.browserUse),
   browserAgentCursor: z.boolean().catch(DEFAULT_SETTINGS.browserAgentCursor),
   browserHomeUrl: z.string().max(2000).catch(DEFAULT_SETTINGS.browserHomeUrl),
@@ -148,7 +147,6 @@ export const projectSchema: z.ZodType<Project> = z.object({
   // A damaged settings object is dropped, never the Workspace (ADR 0037).
   settings: z
     .object({
-      agentView: z.enum(['terminal', 'chat']).optional(),
       chatDefaults: z.record(str, z.object({ model: str, effort: str })).optional(),
       branchPrefix: str.optional(),
       baseRef: str.optional(),
@@ -177,7 +175,6 @@ export const workspaceSchema: z.ZodType<Workspace> = z.object({
     .optional(),
   association: z.object({ kind: z.enum(['issue', 'pull-request']), ref: str }).optional(),
   autoApprove: z.boolean(),
-  chatUi: z.boolean().optional(),
   createdAt: str,
   updatedAt: str
 })
@@ -248,8 +245,7 @@ export const presetSchema: z.ZodType<AgentPreset> = z.object({
   id: str,
   name: str,
   cliSelections: z.array(z.object({ cliId: str, count: z.number().int().positive() })),
-  autoApprove: z.boolean(),
-  chatUi: z.boolean().optional()
+  autoApprove: z.boolean()
 })
 
 const isoDate = z.string().datetime({ offset: true })

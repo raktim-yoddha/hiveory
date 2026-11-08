@@ -16,7 +16,7 @@ interface PopoverProps {
   children: (close: () => void) => ReactNode
   /** Opens above the trigger (e.g. a composer at the bottom of the screen). */
   placement?: 'above' | 'below'
-  width?: 'md' | 'lg'
+  width?: 'md' | 'lg' | 'xl'
   /** 'end' lines the panel's right edge up with the trigger's (triggers near the right of the screen). */
   align?: 'start' | 'end'
 }

@@ -61,8 +61,8 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   schedule, who ("Claude Code · demo-app · main"), when, by you or the schedule, duration, why it failed.
 - Message box (a Work agent in chat view, ADR 0058): above it, pills for the agent's tasks ("4/6
   tasks"), its subagents and the worktree's changes ("+1.9k −684", opens Changes); in it, `@` file and
-  `/` command suggestions; toolbar "+" (files, picture of a window) · CLI and model (one picker, CLI
-  tabs) · effort (when the model has it) · permissions · fast (⚡, Opus) · plan · context meter · usage
+  `/` command suggestions; toolbar "+" (files, picture of a window) · CLI and model (one picker: CLIs
+  down the left, the chosen one's models on the right) · effort (when the model has it) · permissions · fast (⚡, Opus) · plan · context meter · usage
   limits (gauge and popover, ADR 0055) · send. A reply that changed files ends with "N files changed
   +a −d · View · Undo"; selected reply text offers Quote. While answering, the box stays open, a queue button sits beside Stop, and
   waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).
@@ -185,9 +185,9 @@ Installing applies the extension's first theme.
 ```
 
 Double-click a file: it opens as a pane `[file] index.ts  src  · ⤢ ×` beside the
-agents. Pane "+": `( → Right | ↓ Bottom )`, a dropdown `[Open as terminal ▾]` / chat (starts
-from the Workspace's setting, else the Worktree's, else Settings › Agents › New agents open as;
-ADR 0037, ADR 0038), search, Terminals, Agents.
+agents. Pane "+": `( → Right | ↓ Bottom )`, search, Browser, Chat (Chat UI: a chat on the CLI last
+picked in a chat; its CLI and model change in the message box, ADR 0059), Terminals, Agents (each in
+its terminal).
 
 ## Add workspace (ADR 0020)
 
@@ -236,8 +236,7 @@ Schedules tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settin
 Workspace's schedules (ADR 0055): Day · Week · List · Run logs (Day first), the calendar, the keep-awake switch,
 New schedule (for the open Worktree; an empty hour on the calendar starts one there).
 
-Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (New agents open as:
-Each worktree's choice | Terminal | Chat; Announce agents) · Chat agents start with (model and
+Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (Announce agents) · Chat agents start with (model and
 effort per chat CLI) · New worktrees (Branch prefix, Start from) · Integrations (Code host: Automatic |
 GitHub | GitLab | Off; Issues: The code host | Jira | Linear | Off; Project or Team) · Remove from Hiveory.
 

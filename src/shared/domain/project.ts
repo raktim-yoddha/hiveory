@@ -38,9 +38,6 @@ export interface Project {
   settings?: ProjectSettings
 }
 
-/** How an agent shows: its CLI's own terminal, or Hiveory's chat view (ADR 0013). */
-export type AgentView = 'terminal' | 'chat'
-
 /** A chat CLI's model and reasoning effort; '' is the CLI's own default. */
 export interface ChatChoice {
   model: string
@@ -49,8 +46,6 @@ export interface ChatChoice {
 
 /** Per-Workspace settings (ADR 0037). Every field is optional: absent means "the app's default". */
 export interface ProjectSettings {
-  /** How new agents open in every Worktree here (the "+" menu, the phone, new worktrees). */
-  agentView?: AgentView
   /** Model and effort a new chat agent starts with, per chat CLI id. */
   chatDefaults?: Record<string, ChatChoice>
   /** Start of new worktree branch names (default "hiveory/"). */
@@ -114,12 +109,5 @@ export const DEFAULT_BRANCH_PREFIX = 'hiveory/'
 
 export const branchPrefixOf = (project?: Pick<Project, 'settings'>): string => project?.settings?.branchPrefix ?? DEFAULT_BRANCH_PREFIX
 
-/**
- * Whether a new agent opens in chat view: the Workspace's setting when it has one, otherwise the
- * Worktree's own (chosen when it was created), otherwise the app's (Settings › Agents, ADR 0038).
- * The "+" menu and the phone start from this.
- */
-export const opensAsChat = (project: Pick<Project, 'settings'> | undefined, worktree: { chatUi?: boolean } | undefined, appDefault = false): boolean =>
-  project?.settings?.agentView ? project.settings.agentView === 'chat' : (worktree?.chatUi ?? appDefault)
 
 export type ProjectSort = 'recent' | 'name'

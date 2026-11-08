@@ -161,7 +161,8 @@ Presets remember only:
 - CLI types
 - instance counts
 - auto-approve permission setting
-- chat UI setting (ADR 0013)
+
+A chat is never part of a preset: it opens from "Chat UI" and picks its CLI there (ADR 0059).
 
 Never store pane layout in presets.
 

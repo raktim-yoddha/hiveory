@@ -1,15 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Globe, Plus, Search } from 'lucide-react'
-import { opensAsChat, type CliDescriptor } from '@shared/domain'
-import { CHAT_CLI_IDS } from '@shared/domain/chat'
+import { Globe, MessageSquare, Plus, Search } from 'lucide-react'
+import type { CliDescriptor } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import { IconButton } from '../../components/ui/Button'
 import { Popover } from '../../components/ui/Popover'
-import { Select } from '../../components/ui/Select'
-import { useHostClis, useProjects, useSettings, useWorkspaces } from '../../stores/data'
+import { useHostClis } from '../../stores/data'
 import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { openBrowserPane } from '../browser/open-browser'
 import { agentActions } from './agent-actions'
+import { useChatUi } from './useChatUi'
 import styles from './AddAgentMenu.module.css'
 
 interface AddAgentMenuProps {
@@ -19,10 +18,10 @@ interface AddAgentMenuProps {
 }
 
 /**
- * An area's "+": a new tab in that area (ADR 0042). How (a Terminal | Chat dropdown,
- * starting from the Workspace's, Worktree's or app's setting, ADR 0037, ADR 0038), then what — a terminal
- * (PowerShell, Command Prompt, Git Bash) or a detected agent CLI — with search.
- * Nothing is hardcoded: entries come from the CLI registry.
+ * An area's "+": a new tab in that area (ADR 0042) — the browser, a Chat UI (ADR 0059: a chat whose CLI
+ * and model are picked, and changed, in its own message box), a terminal (PowerShell, Command Prompt,
+ * Git Bash) or a detected agent CLI in its terminal — with search. Nothing is hardcoded: entries come
+ * from the CLI registry.
  */
 export function AddAgentMenu({ workspaceId, paneId }: AddAgentMenuProps) {
   return (
@@ -35,13 +34,7 @@ export function AddAgentMenu({ workspaceId, paneId }: AddAgentMenuProps) {
 function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { onDone: () => void }) {
   const projectId = useNavigation((s) => selectedProjectId(s.view))
   const { clis, loaded, load } = useHostClis(projectId)
-  const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
-  const worktree = useWorkspaces((s) => (projectId ? s.byProject[projectId] : undefined)?.find((w) => w.id === workspaceId))
-  // Chat view runs the CLI headless on this computer, so remote Workspaces only get terminals.
-  const chatPossible = !project?.host
-  const appDefault = useSettings((s) => s.settings.defaultChatUi)
-  const [chosenView, setView] = useState<boolean | null>(null)
-  const chat = chatPossible && (chosenView ?? opensAsChat(project, worktree, appDefault))
+  const openChat = useChatUi(workspaceId, projectId)
   const [query, setQuery] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -63,8 +56,16 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
   const open = (cli: CliDescriptor): void => {
     onDone()
     const placement = { targetPaneId: paneId, side: 'right' as const, asTab: true }
-    void agentActions.open(workspaceId, cli.id, placement, undefined, cli.kind === 'shell' ? false : chat)
+    // A CLI from the list always gets its terminal; Chat UI is its own entry (ADR 0059).
+    void agentActions.open(workspaceId, cli.id, placement, undefined, false)
   }
+
+  const chatUi = (): void => {
+    if (!openChat) return
+    onDone()
+    openChat({ targetPaneId: paneId, side: 'right', asTab: true })
+  }
+  const showChat = Boolean(openChat) && (!query.trim() || 'chat ui'.includes(query.trim().toLowerCase()))
 
   const browser = (): void => {
     onDone()
@@ -84,18 +85,6 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
 
   return (
     <div className={styles.picker}>
-      {chatPossible && (
-        <Select
-          label="Open agents as"
-          hideLabel
-          value={chat ? 'chat' : 'terminal'}
-          options={[
-            { value: 'terminal', label: 'Open as terminal' },
-            { value: 'chat', label: 'Open as chat' }
-          ]}
-          onChange={(value) => setView(value === 'chat')}
-        />
-      )}
       <label className={styles.search} htmlFor={searchId}>
         <Search aria-hidden />
         <input
@@ -116,6 +105,7 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
               e.preventDefault()
               const first = groups[0]?.items[0]
               if (first) open(first)
+              else if (showChat) chatUi()
             }
           }}
         />
@@ -130,7 +120,16 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
             </button>
           </div>
         )}
-        {groups.length === 0 && !showBrowser && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
+        {showChat && (
+          <div className={styles.group}>
+            <div className={styles.groupLabel}>Chat</div>
+            <button type="button" role="menuitem" className={styles.item} onClick={chatUi} title="A chat: pick and change its CLI and model in the message box">
+              <MessageSquare aria-hidden className={styles.itemIcon} />
+              <span>Chat UI</span>
+            </button>
+          </div>
+        )}
+        {groups.length === 0 && !showBrowser && !showChat && <p className={styles.empty}>{query ? 'No matches' : 'No CLIs detected'}</p>}
         {groups.map((group) => (
           <div key={group.label} className={styles.group}>
             <div className={styles.groupLabel}>{group.label}</div>
@@ -138,7 +137,6 @@ function AddPanePicker({ workspaceId, paneId, onDone }: AddAgentMenuProps & { on
               <button key={cli.id} type="button" role="menuitem" className={styles.item} onClick={() => open(cli)}>
                 <CliLogo cliId={cli.id} size="sm" />
                 <span>{cli.displayName}</span>
-                {chat && cli.kind !== 'shell' && !(CHAT_CLI_IDS as readonly string[]).includes(cli.id) && <span className={styles.note}>terminal only</span>}
               </button>
             ))}
           </div>

@@ -24,7 +24,6 @@ export function NewWorkspaceSheet({ projectId, open, onClose }: { projectId: str
   const { computer, token } = useConnection()
   const project = useCall('projects.list', undefined).data?.find((p) => p.id === projectId)
   const [name, setName] = useState('')
-  const [view, setView] = useState<'terminal' | 'chat' | null>(null)
   const [source, setSource] = useState<Source>('new')
   const [branch, setBranch] = useState<string | null>(null)
   const git = useCall('git.info', { projectId, fetch: source === 'remote' }, { enabled: open && source !== 'new' })
@@ -32,7 +31,6 @@ export function NewWorkspaceSheet({ projectId, open, onClose }: { projectId: str
   const branches = source === 'existing' ? (git.data?.branches ?? []).filter((b) => !inUse.has(b)) : source === 'remote' ? (git.data?.remoteBranches ?? []).filter((r) => !inUse.has(r.slice(r.indexOf('/') + 1))) : []
   const picked = branch && branches.includes(branch) ? branch : branches[0]
   const create = useAction('workspaces.create')
-  const chosen = view ?? (project?.settings?.agentView === 'chat' ? 'chat' : 'terminal')
 
   useEffect(() => {
     if (!open || !computer || !token) return
@@ -47,7 +45,6 @@ export function NewWorkspaceSheet({ projectId, open, onClose }: { projectId: str
         name: name.trim(),
         cliSelections: [],
         autoApprove: false,
-        chatUi: chosen === 'chat',
         ...(source === 'existing' ? { branch: picked, useExistingBranch: true } : source === 'remote' ? { remoteBranch: picked } : {})
       },
       {
@@ -95,17 +92,6 @@ export function NewWorkspaceSheet({ projectId, open, onClose }: { projectId: str
           <Text tone="muted">{source === 'existing' ? 'Every local branch is already open in a worktree.' : 'No remote branches (or the remote could not be reached).'}</Text>
         )
       ) : null}
-      {project?.host ? null : (
-        <Segmented
-          label="Its agents open as"
-          value={chosen}
-          onChange={setView}
-          options={[
-            { value: 'terminal', label: 'Terminal' },
-            { value: 'chat', label: 'Chat' }
-          ]}
-        />
-      )}
     </Sheet>
   )
 }

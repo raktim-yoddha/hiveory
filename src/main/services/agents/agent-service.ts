@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { opensAsChat, type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace } from '@shared/domain'
+import { type CliInstance, type CliInstanceView, type CliRuntimeDetails, type CliSelection, type LayoutNode, type Side, type Workspace } from '@shared/domain'
 import { CHAT_CLI_IDS } from '@shared/domain/chat'
 import { AppException, fail } from '@shared/errors'
 import { buildGridLayout, dockPane, insertBeside, listPanes, stackPane } from '@shared/layout/operations'
@@ -136,9 +136,8 @@ export class AgentService {
     const workspace = this.workspaces.get(workspaceId)
     const adapter = this.registry.adapter(cliId)
     if (!adapter) fail('CLI_UNAVAILABLE', 'Unknown CLI.')
-    // The user's pick for this agent, else the Workspace's setting, else the Worktree's own (ADR 0037).
-    const view = chatUi ?? opensAsChat(this.workspaces.findProject(workspace.projectId), workspace, this.store.state.settings.defaultChatUi)
-    const [instance] = this.build({ ...workspace, chatUi: view }, [{ cliId, count: 1 }])
+    // A CLI opens in its terminal; chat view only when asked for (the "+" menu's Chat UI, a subagent, ADR 0059).
+    const [instance] = this.build(workspace, [{ cliId, count: 1 }], chatUi === true)
     // From the Sessions tab: the new agent continues that conversation (the adapter says where its id goes).
     if (resumeSession) {
       if (!adapter!.adoptSession) fail('INVALID_INPUT', `${adapter!.displayName} can't resume a session by id.`)
@@ -167,14 +166,15 @@ export class AgentService {
   }
 
   /** Presets replace the configuration of an empty Workspace; they never merge (STARTER_PROMPT §10). */
-  applyPreset(workspaceId: string, selections: CliSelection[], autoApprove: boolean, chatUi = false): void {
+  /** Presets open their CLIs in terminals (ADR 0059); an old preset's chat flag is ignored. */
+  applyPreset(workspaceId: string, selections: CliSelection[], autoApprove: boolean): void {
     const workspace = this.workspaces.get(workspaceId)
     if (this.countInWorkspace(workspaceId) > 0) {
       fail('FORBIDDEN', 'Presets can only be loaded into an empty worktree.', {
         hint: 'Close the open agents first.'
       })
     }
-    const updated = { ...workspace, autoApprove, chatUi, updatedAt: nowIso() }
+    const updated = { ...workspace, autoApprove, updatedAt: nowIso() }
     this.workspaces.save(updated)
     this.createInstances(updated, selections)
   }
@@ -304,7 +304,7 @@ export class AgentService {
     return instance!
   }
 
-  private build(workspace: Workspace, selections: CliSelection[]): CliInstance[] {
+  private build(workspace: Workspace, selections: CliSelection[], chatUi = false): CliInstance[] {
     const wanted = normalizeSelections(selections).filter((s) => this.registry.adapter(s.cliId))
     const total = wanted.reduce((n, s) => n + s.count, 0)
     // Unique among every configured instance, across all projects (removed ones too, so restoring them never clashes).
@@ -322,7 +322,7 @@ export class AgentService {
         autoApprove: workspace.autoApprove && (this.registry.adapter(cliId)?.supportsAutoApprove ?? false),
         // Chat view only for CLIs with a headless mode; the rest keep their terminal.
         // Chat view runs the CLI headless on this computer, so remote projects keep their terminals.
-        chatUi: Boolean(workspace.chatUi) && CHAT_CAPABLE.has(cliId) && !this.workspaces.findProject(workspace.projectId)?.host,
+        chatUi: chatUi && CHAT_CAPABLE.has(cliId) && !this.workspaces.findProject(workspace.projectId)?.host,
         createdAt: now
       }))
     )

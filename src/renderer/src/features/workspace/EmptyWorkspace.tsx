@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, Layers, Settings2 } from 'lucide-react'
+import { ChevronDown, Layers, MessageSquare, Settings2 } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { Button } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -7,6 +7,8 @@ import { Menu, type MenuEntry } from '../../components/ui/Menu'
 import { usePresets } from '../../stores/data'
 import { agentActions } from '../agents/agent-actions'
 import { useAgentMenuEntries } from '../agents/useAgentMenuEntries'
+import { useChatUi } from '../agents/useChatUi'
+import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { PresetsDialog } from '../presets/PresetsDialog'
 
 /**
@@ -14,7 +16,12 @@ import { PresetsDialog } from '../presets/PresetsDialog'
  * are "Open agent" and "Load preset" offered (AGENTS.md rule 11).
  */
 export function EmptyWorkspace({ workspaceId }: { workspaceId: string }) {
-  const agents = useAgentMenuEntries((cliId) => void agentActions.open(workspaceId, cliId))
+  const cliEntries = useAgentMenuEntries((cliId) => void agentActions.open(workspaceId, cliId))
+  const openChat = useChatUi(workspaceId, useNavigation((s) => selectedProjectId(s.view)))
+  // Chat UI first: a chat whose CLI and model are picked in its message box (ADR 0059).
+  const agents: MenuEntry[] = openChat
+    ? [{ type: 'item', id: 'chat-ui', label: 'Chat UI', icon: <MessageSquare />, hint: 'Pick the CLI in the chat', onSelect: () => openChat() }, { type: 'separator' }, ...cliEntries]
+    : cliEntries
   const { presets, loaded, load } = usePresets()
   const [managing, setManaging] = useState(false)
 

@@ -22,8 +22,6 @@ export interface AppSettings {
   agentTools: boolean
   /** Skip permissions (YOLO) for every agent at launch (ADR 0049); also the starting value in the worktree and preset dialogs. */
   defaultAutoApprove: boolean
-  /** Starting value of "Use chat UI" when creating workspaces and presets. */
-  defaultChatUi: boolean
   /** Give agents the built-in browser (browser_* tools) over MCP. */
   browserUse: boolean
   /** Show the agent's animated cursor and action label while it drives a page. */
@@ -128,7 +126,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateRemindEvery: '2h',
   agentTools: true,
   defaultAutoApprove: false,
-  defaultChatUi: false,
   browserUse: true,
   browserAgentCursor: true,
   browserHomeUrl: '',

@@ -3,12 +3,12 @@ import { ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, GitBranch, Trash2 } from 'lucide-react-native'
-import { DEFAULT_BRANCH_PREFIX, type AgentView, type ChatChoice } from '@shared/domain/project'
+import { DEFAULT_BRANCH_PREFIX, type ChatChoice } from '@shared/domain/project'
 import type { ChatModel } from '@shared/domain/chat'
 import { useAction, useCall, useCliIcons, useConnection, type Request, type Response } from '@/core/api'
 import { space, useTheme } from '@/core/theme'
 import { routes } from '@/core/routes'
-import { Button, Card, CliLogo, confirm, EffortSheet, effortLabel, ListRow, Loading, ModelSheet, Screen, Section, Segmented, Sheet, Text, TextField } from '@/core/ui'
+import { Button, Card, CliLogo, confirm, EffortSheet, effortLabel, ListRow, Loading, ModelSheet, Screen, Section, Sheet, Text, TextField } from '@/core/ui'
 
 type Settings = NonNullable<Request<'projects.update'>['settings']>
 
@@ -54,28 +54,6 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
             {project.path}
             {project.repositoryRoot ? '' : ' · not a Git repository'}
           </Text>
-        </Section>
-
-        <Section title="New agents open as">
-          {remote ? (
-            <Text tone="muted">Agents on an SSH host always open in their terminal.</Text>
-          ) : (
-            <>
-              <Segmented<'' | AgentView>
-                label="New agents open as"
-                value={s.agentView ?? ''}
-                onChange={(v) => update({ agentView: v === '' ? null : v })}
-                options={[
-                  { value: '', label: 'Per worktree' },
-                  { value: 'terminal', label: 'Terminal' },
-                  { value: 'chat', label: 'Chat' }
-                ]}
-              />
-              <Text variant="caption" tone="muted">
-                Used by Open an agent here and by the computer&apos;s “+” menu, in every worktree. You can still pick the other one each time.
-              </Text>
-            </>
-          )}
         </Section>
 
         <Section title="Announce agents">

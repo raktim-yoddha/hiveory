@@ -215,7 +215,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   },
   'agents.applyPreset': ({ workspaceId, presetId }) => {
     const preset = c.presets.get(presetId)
-    c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove, preset.chatUi ?? false)
+    c.agents.applyPreset(workspaceId, preset.cliSelections, preset.autoApprove)
   },
 
   // Terminal ids belong either to an agent (runtime) or a sidebar shell.

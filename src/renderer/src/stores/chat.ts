@@ -23,6 +23,27 @@ interface ChatState {
   applyEvent(chatId: string, message: ChatMessage, summary: ChatSummary): void
 }
 
+const LAST_CLI_KEY = 'hiveory.chatCli'
+
+/** The CLI a new Chat UI starts on (ADR 0059): the one last picked in a chat here, else the first chat CLI installed. */
+export const preferredChatCli = (installed: string[]): string | undefined => {
+  let last: string | null = null
+  try {
+    last = localStorage.getItem(LAST_CLI_KEY)
+  } catch {
+    // Storage off: the first installed one.
+  }
+  return last && installed.includes(last) ? last : installed[0]
+}
+
+export const rememberChatCli = (cliId: string): void => {
+  try {
+    localStorage.setItem(LAST_CLI_KEY, cliId)
+  } catch {
+    // Storage off: nothing to remember.
+  }
+}
+
 /** Work agents' chats in chat view. Runs live in main; this mirrors them, so a reply is never interrupted. */
 export const useChat = create<ChatState>((set, get) => ({
   chats: {},

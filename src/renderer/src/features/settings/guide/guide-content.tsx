@@ -158,15 +158,15 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Terminal or chat',
         body: (
           <p>
-            An agent runs in its own terminal, or in a chat view for CLIs that have one (each workspace picks a default in its settings).
-            Click anywhere in a chat to type.
+            A CLI picked from a pane's "+" runs in its own terminal. "+" › Chat UI opens a chat instead: choose its CLI and model in
+            the message box, and change them there at any time. Click anywhere in a chat to type.
           </p>
         ),
         keywords: 'chat ui view'
       },
       {
         heading: 'Presets',
-        body: <p>A preset remembers which CLIs, how many of each, auto-approve and chat view — never the layout. Load one into any empty worktree.</p>,
+        body: <p>A preset remembers which CLIs, how many of each and auto-approve — never the layout. Load one into any empty worktree.</p>,
         keywords: 'preset save load'
       },
       {

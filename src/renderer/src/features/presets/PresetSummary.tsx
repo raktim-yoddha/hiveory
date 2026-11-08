@@ -1,4 +1,4 @@
-import { MessagesSquare, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import type { AgentPreset } from '@shared/domain'
 import { CliLogo } from '../../components/cli/CliLogo'
 import styles from './Presets.module.css'
@@ -15,11 +15,6 @@ export function PresetSummary({ preset }: { preset: AgentPreset }) {
       {preset.autoApprove && (
         <span className={styles.summaryItem} title="Skip permissions (YOLO) on">
           <ShieldCheck aria-label="Skip permissions (YOLO) on" />
-        </span>
-      )}
-      {preset.chatUi && (
-        <span className={styles.summaryItem} title="Chat UI on">
-          <MessagesSquare aria-label="Chat UI on" />
         </span>
       )}
     </span>

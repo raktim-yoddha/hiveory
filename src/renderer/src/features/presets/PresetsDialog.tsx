@@ -29,15 +29,14 @@ export function PresetsDialog({ initial, onClose }: PresetsDialogProps) {
   const [saving, setSaving] = useState(false)
 
   const startNew = (): void => {
-    const { defaultAutoApprove, defaultChatUi } = useSettings.getState().settings
+    const { defaultAutoApprove } = useSettings.getState().settings
     setDraft({
       name: '',
       cliSelections: initial?.cliSelections ?? [],
-      autoApprove: initial?.autoApprove ?? defaultAutoApprove,
-      chatUi: initial?.chatUi ?? defaultChatUi
+      autoApprove: initial?.autoApprove ?? defaultAutoApprove
     })
   }
-  const startEdit = (preset: AgentPreset): void => setDraft({ ...preset, chatUi: preset.chatUi ?? false })
+  const startEdit = (preset: AgentPreset): void => setDraft(preset)
 
   const save = async (): Promise<void> => {
     if (!draft) return
