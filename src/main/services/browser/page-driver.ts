@@ -51,6 +51,7 @@ export class PageDriver {
   /** Animated cursor moves; 0 when the cursor is off, so actions run at full speed. */
   cursorMs = 110
   private emulated: Viewport | null = null
+  private parked: { width: number; height: number } | null = null
   private lastSnapshot: { url: string; lines: string[] } | null = null
 
   /**
@@ -423,11 +424,31 @@ export class PageDriver {
     return this.emulated
   }
 
+  /**
+   * A page off screen lays out at `size` (its last real size) whatever the window does: in a window
+   * that is minimized, or was never shown, Chromium would give it 0×0 and agents would see an empty
+   * page. `null` when the page is on screen again. Device mode's own size wins.
+   */
+  async park(size: { width: number; height: number } | null): Promise<void> {
+    const same = size && this.parked ? size.width === this.parked.width && size.height === this.parked.height : size === this.parked
+    if (same) return
+    this.parked = size
+    if (this.emulated) return
+    // Overriding a page that has not loaded anything yet takes the whole app down: wait for its document.
+    if (!this.wc.getURL()) return void this.wc.once('dom-ready', () => void this.fitParked().catch(() => undefined))
+    await this.fitParked()
+  }
+
+  private async fitParked(): Promise<void> {
+    if (this.parked) await this.cdp('Emulation.setDeviceMetricsOverride', { width: this.parked.width, height: this.parked.height, deviceScaleFactor: 0, mobile: false })
+    else await this.cdp('Emulation.clearDeviceMetricsOverride')
+  }
+
   /** Emulates a screen size, scaled down to fit `area` (the visible panel) when it is larger. */
   async emulate(viewport: Viewport | null, scale = 1): Promise<void> {
     this.emulated = viewport
     if (!viewport) {
-      await this.cdp('Emulation.clearDeviceMetricsOverride')
+      await this.fitParked()
       await this.cdp('Emulation.setTouchEmulationEnabled', { enabled: false })
       await this.cdp('Emulation.setUserAgentOverride', { userAgent: this.wc.getUserAgent() })
       return

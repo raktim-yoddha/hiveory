@@ -97,6 +97,8 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     }
     closing = true
   })
+  // A close kept in the tray (Background mode) is not the end: the window comes back and is remembered again.
+  for (const event of ['show', 'restore'] as const) window.on(event as 'show', () => (closing = false))
 
   // No in-app navigation or popups; http(s) links open in the system browser.
   window.webContents.on('will-navigate', (event) => event.preventDefault())

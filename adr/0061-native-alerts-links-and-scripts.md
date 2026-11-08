@@ -64,3 +64,13 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
   the sidebar, the open worktree and the side panel, each getting back the control that last had focus.
 - Agents get `list_scripts` and `run_script`: a script starts in a terminal pane beside the agent,
   named after it, and the tool returns its first output.
+
+## Amendment (2026-11-08): agents browse while the window is away
+
+- An agent's browser page keeps its last real size (1280×800 for a new one) while Hiveory's window is
+  minimized, hidden or never shown, so snapshots, clicks and screenshots work as when it is on screen.
+  Before, a page opened then was laid out at 0×0 and agents saw an empty page.
+- On Windows, closing the window in Background mode now minimizes it and takes it off the taskbar
+  instead of hiding it: a hidden window draws nothing, so no screenshot of an agent's page could be
+  taken. It looks the same to the user; the tray icon brings it back. macOS and Linux still hide it.
+- After the window comes back from the tray, its place and size are remembered again.

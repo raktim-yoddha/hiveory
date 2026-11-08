@@ -24,7 +24,13 @@ export class BackgroundTray {
   hide(): void {
     const w = this.window()
     if (!w) return
-    w.hide()
+    if (process.platform === 'win32') {
+      // A hidden window draws nothing, so agents' browser pages could not be captured (ADR 0061).
+      // Minimized and off the taskbar it looks the same to the user, and its pages keep drawing.
+      w.setSkipTaskbar(true)
+      w.minimize()
+      w.once('restore', () => w.setSkipTaskbar(false))
+    } else w.hide() // ponytail: macOS and Linux unverified; switch them too if their hidden pages stall the same way.
     this.ensure()
     this.refresh()
     if (!this.told && process.platform === 'win32') {

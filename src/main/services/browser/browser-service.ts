@@ -132,6 +132,11 @@ export class BrowserService {
     window.on('closed', () => {
       if (this.window === window) this.window = null
     })
+    for (const event of ['minimize', 'restore', 'hide', 'show'] as const) {
+      window.on(event as 'show', () => {
+        for (const page of this.pages.values()) if (!page.view.webContents.isDestroyed()) this.place(page)
+      })
+    }
     // A click in the app itself takes the selection off the page.
     window.webContents.on('before-mouse-event', (_event, mouse) => mouse.type === 'mouseDown' && this.focus(undefined))
   }
@@ -145,6 +150,12 @@ export class BrowserService {
     const size = page.driver.viewport ?? page.size
     page.view.setBounds(page.shown ?? { x: 0, y: 0, width: size.width, height: size.height })
     page.view.setVisible(Boolean(page.shown))
+    if (!page.view.webContents.isDestroyed()) void page.driver.park(page.shown && !this.away() ? null : page.size).catch(() => undefined)
+  }
+
+  /** A minimized or hidden window has no size to give its pages, shown or not: they keep theirs. */
+  private away(): boolean {
+    return !this.window || this.window.isDestroyed() || this.window.isMinimized() || !this.window.isVisible()
   }
 
   /** Shows a page in the panel at `bounds`, or parks it. With `freeze`, returns a picture of it first (for menus drawn over it). */
@@ -168,7 +179,7 @@ export class BrowserService {
         }
       }
       page.shown = rounded
-      page.size = { width: rounded.width, height: rounded.height }
+      if (!this.away()) page.size = { width: rounded.width, height: rounded.height }
     } else {
       page.shown = null
     }

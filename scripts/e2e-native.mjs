@@ -5,6 +5,7 @@
 // Usage: pnpm build && node scripts/e2e-native.mjs [screenshotDir]
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { join } from 'node:path'
 import { agentMcp, app, close, expect, finish, invoke, launch, page, relaunch, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
 
@@ -231,6 +232,36 @@ await test('an agent lists and runs the Workspace scripts over its Hiveory tools
     const pane = (await value('agents.list', { workspaceId: primary.id })).filter((a) => a.petName === 'lint').at(-1)
     return Boolean(pane) && (await value('terminal.snapshot', { instanceId: pane.id })).data.includes('lint-ok')
   }, 'the agent-started script printed', 20_000)
+})
+
+await test('with the window in the tray, an agent opens, reads and captures a page', async () => {
+  const claude = (await value('clis.list')).find((c) => c.id === 'claude' && c.available)
+  if (!claude) return console.log('    (Claude Code not installed: skipped)')
+  const site = createServer((_req, res) => res.end('<!doctype html><title>Tray fixture</title><h1>Tray fixture</h1><button id="go">Go</button>'))
+  await new Promise((ok) => site.listen(0, '127.0.0.1', ok))
+  try {
+    await value('settings.update', { keepRunningInBackground: true })
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close())
+    await page.waitForTimeout(800)
+    // The page is created while the window is away: it must still lay out at a real size.
+    const { agent } = await value('agents.open', { workspaceId: primary.id, cliId: 'claude' })
+    const { tool } = await agentMcp(agent.id)
+    const text = (r) => r.content.map((c) => c.text ?? '').join('\n')
+    const nav = await tool('browser_navigate', { url: `http://127.0.0.1:${site.address().port}/` })
+    expect(!nav.isError && text(nav).includes('heading "Tray fixture"') && !/viewport 0×0/.test(text(nav)), text(nav).slice(0, 400))
+    const click = await tool('browser_click', { target: '#go' })
+    expect(!click.isError, text(click).slice(0, 300))
+    const picture = await tool('browser_screenshot', {})
+    expect(!picture.isError && picture.content.some((c) => c.type === 'image'), text(picture).slice(0, 300))
+  } finally {
+    site.close()
+    await app.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0]
+      if (w.isMinimized()) w.restore()
+      w.show()
+    })
+    await value('settings.update', { keepRunningInBackground: false })
+  }
 })
 
 await test('the window reopens where it was, at its size', async () => {
