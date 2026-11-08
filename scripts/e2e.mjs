@@ -1093,8 +1093,10 @@ await test('pick element copies it for an agent; annotate pins a note agents can
   await page.waitForTimeout(300)
   await view.click('#go')
   await browserPane().getByText(/Copied button "Greet"/).waitFor()
-  const copied = await app.evaluate(({ clipboard }) => clipboard.readText())
-  expect(copied.includes('selector: #go') && copied.includes('<button'), `clipboard: ${copied.slice(0, 200)}`)
+  // The system clipboard can lag a moment behind the write.
+  let copied = ''
+  await waitFor(async () => (copied = await app.evaluate(({ clipboard }) => clipboard.readText())).includes('selector: #go'), 'the element on the clipboard')
+  expect(copied.includes('<button'), `clipboard: ${copied.slice(0, 200)}`)
   await browserPane().getByRole('button', { name: 'More browser actions' }).click()
   await page.getByRole('menuitem', { name: 'Annotate element' }).click()
   await browserPane().getByText('Click the element to annotate').waitFor()
