@@ -1,3 +1,4 @@
+/* global document */
 // End-to-end: what makes Hiveory a native app (ADR 0061) — agent notifications and their click, the
 // taskbar/dock attention badge, hiveory:// links (open and prompt drafts), the jump list, and Workspace
 // scripts. Notifications are captured in the main process, never shown. No model is called.
@@ -5,7 +6,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, close, expect, finish, invoke, launch, page, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
+import { agentMcp, app, close, expect, finish, invoke, launch, page, relaunch, sandbox, shot, test, value, waitFor } from './e2e-harness.mjs'
 
 const repo = join(sandbox, 'demo-app')
 mkdirSync(repo, { recursive: true })
@@ -174,13 +175,77 @@ await test('Workspace settings list scripts and add one; Find runs them', async 
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await page.getByRole('alert').getByText('A script already has that name.').waitFor()
   await shot('n4-scripts-settings')
+  // What main puts on the clipboard (the system clipboard itself is another program's to lock).
+  await app.evaluate(({ clipboard }) => {
+    globalThis.__copied = []
+    const write = clipboard.writeText.bind(clipboard)
+    clipboard.writeText = (text, type) => {
+      globalThis.__copied.push(text)
+      try {
+        write(text, type)
+      } catch {
+        // A locked system clipboard is not what this test checks.
+      }
+    }
+  })
   await page.keyboard.press('Control+Shift+KeyP')
   const find = page.getByRole('dialog', { name: 'Command palette' })
   await find.getByRole('combobox').fill('lint')
   await find.getByRole('option').filter({ hasText: 'Run script' }).first().waitFor()
   await find.getByRole('combobox').fill('copy a link')
   await find.getByRole('combobox').press('Enter')
-  await waitFor(async () => (await app.evaluate(({ clipboard }) => clipboard.readText())).startsWith(`hiveory://open?p=${project.id}`), 'worktree link copied')
+  await waitFor(async () => (await app.evaluate(() => globalThis.__copied.at(-1) ?? '')) === `hiveory://open?p=${project.id}&w=${primary.id}`, 'worktree link copied')
+})
+
+await test('Ctrl+F6 moves between the sidebar, the worktree and the side panel, and back', async () => {
+  await page.keyboard.press('Escape')
+  const where = () =>
+    page.evaluate(() => {
+      const el = document.activeElement
+      return el?.closest('nav[aria-label="Workspaces"]') ? 'sidebar' : el?.closest('aside[aria-label="Side panel"]') ? 'panel' : el?.closest('main') ? 'main' : 'none'
+    })
+  await sidebar().getByRole('button').first().focus()
+  expect((await where()) === 'sidebar', `start: ${await where()}`)
+  const seen = []
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('Control+F6')
+    seen.push(await where())
+  }
+  expect(JSON.stringify(seen) === JSON.stringify(['main', 'panel', 'sidebar']), `forward: ${seen}`)
+  await page.keyboard.press('Control+Shift+F6')
+  expect((await where()) === 'panel', `back: ${await where()}`)
+})
+
+await test('an agent lists and runs the Workspace scripts over its Hiveory tools', async () => {
+  const claude = (await value('clis.list')).find((c) => c.id === 'claude' && c.available)
+  if (!claude) return console.log('    (Claude Code not installed: skipped)')
+  const { agent } = await value('agents.open', { workspaceId: primary.id, cliId: 'claude' })
+  const { tool } = await agentMcp(agent.id)
+  const listed = await tool('list_scripts')
+  expect(listed.content[0].text.includes('say-hi: echo hiveory-script-ok'), JSON.stringify(listed))
+  const unknown = await tool('run_script', { name: 'nope' })
+  expect(unknown.isError && /Scripts: say-hi/.test(unknown.content[0].text), JSON.stringify(unknown))
+  const ran = await tool('run_script', { name: 'lint', wait_seconds: 2 })
+  expect(!ran.isError && ran.content[0].text.includes('Started "lint"'), JSON.stringify(ran))
+  await waitFor(async () => {
+    const pane = (await value('agents.list', { workspaceId: primary.id })).filter((a) => a.petName === 'lint').at(-1)
+    return Boolean(pane) && (await value('terminal.snapshot', { instanceId: pane.id })).data.includes('lint-ok')
+  }, 'the agent-started script printed', 20_000)
+})
+
+await test('the window reopens where it was, at its size', async () => {
+  const wanted = { x: 140, y: 90, width: 1180, height: 760 }
+  await app.evaluate(({ BrowserWindow }, b) => BrowserWindow.getAllWindows()[0].setBounds(b), wanted)
+  await page.waitForTimeout(1200)
+  // The system may adjust what was asked by a few pixels (borders, scaling): the window's own bounds count.
+  const before = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+  expect(Math.abs(before.x - wanted.x) < 20 && Math.abs(before.width - wanted.width) < 20, `setBounds gave ${JSON.stringify(before)}`)
+  Object.assign(wanted, before)
+  await relaunch()
+  const bounds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getBounds())
+  // Within the few pixels display scaling rounds to.
+  const close = (a, b) => Math.abs(a - b) <= 3
+  expect(close(bounds.x, wanted.x) && close(bounds.y, wanted.y) && close(bounds.width, wanted.width) && close(bounds.height, wanted.height), `reopened at ${JSON.stringify(bounds)}`)
 })
 
 await close()

@@ -445,4 +445,7 @@ Initial version does not include:
   that text as its draft, never sent for you. Find › Copy a link to this worktree.
 - The Windows jump list and the macOS dock menu list the recent Workspaces.
 - Workspace settings › Scripts: named one-line commands, started as a terminal tab named after them
-  from the pane "+", Find (Run script), Workspace settings or the phone.
+  from the pane "+", Find (Run script), Workspace settings or the phone; agents use list_scripts and
+  run_script.
+- The window reopens where it was, at its size. Files dropped on a terminal type their quoted paths.
+  Ctrl+F6 / Ctrl+Shift+F6 move between the sidebar, the worktree and the side panel.

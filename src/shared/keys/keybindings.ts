@@ -10,6 +10,9 @@ export const APP_COMMANDS = [
   // Everything below, and every Workspace, worktree, agent and Settings page, searchable (ADR 0060).
   { id: 'command-palette', label: 'Find a command, worktree or setting', group: 'General', mac: 'Meta+KeyK', other: 'Control+Shift+KeyP' },
   { id: 'open-settings', label: 'Open or close Settings', group: 'General', mac: 'Meta+Comma', other: 'Control+Comma' },
+  // Between the sidebar, the worktree and the side panel, as F6 does in native apps (ADR 0061).
+  { id: 'focus-next-area', label: 'Move to the next area', group: 'General', mac: 'Meta+F6', other: 'Control+F6' },
+  { id: 'focus-previous-area', label: 'Move to the previous area', group: 'General', mac: 'Meta+Shift+F6', other: 'Control+Shift+F6' },
   { id: 'show-shortcuts', label: 'Show keyboard shortcuts', group: 'General', mac: 'Meta+Slash', other: 'Control+Shift+Slash' },
   { id: 'toggle-sidebar', label: 'Show or hide the sidebar', group: 'General', mac: 'Meta+KeyB', other: 'Control+Shift+KeyB' },
   { id: 'toggle-side-panel', label: 'Show or hide the side panel', group: 'General', mac: 'Meta+KeyJ', other: 'Control+Shift+KeyJ' },

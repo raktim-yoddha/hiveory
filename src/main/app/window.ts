@@ -1,5 +1,6 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
 import { join } from 'node:path'
+import { fitWindow, MIN_SIZE, readWindowState, writeWindowState } from './window-state'
 import appIcon from '@resources/icon.png?asset'
 import devIcon from '@resources/icon-dev.png?asset'
 import type { Logger } from './logger'
@@ -30,11 +31,13 @@ export interface WindowTargets {
 export const createMainWindow = (targets: WindowTargets, log: Logger, theme: ThemeId = 'dark', custom?: WindowChrome | null): BrowserWindow => {
   const isMac = process.platform === 'darwin'
   const chrome = custom ?? THEME_CHROME[theme]
+  // The window opens where it was, at its size, when that is still on a screen (ADR 0061).
+  const stateFile = join(app.getPath('userData'), 'window-state.json')
+  const saved = fitWindow(readWindowState(stateFile), screen.getAllDisplays().map((d) => d.workArea))
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 960,
-    minHeight: 600,
+    ...(saved ? { x: saved.x, y: saved.y, width: saved.width, height: saved.height } : { width: 1440, height: 900 }),
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
     show: false,
     title: 'Hiveory',
     // Taskbar/window icon on Windows and Linux; macOS uses the bundle icon. Dev builds carry a DEV mark.
@@ -56,7 +59,44 @@ export const createMainWindow = (targets: WindowTargets, log: Logger, theme: The
     }
   })
 
-  window.once('ready-to-show', () => window.show())
+  // A frameless window's constructor size gains Windows' invisible borders; setBounds() means what
+  // getBounds() reports, so the window comes back at exactly the size it was saved with.
+  if (saved) window.setBounds({ x: saved.x, y: saved.y, width: saved.width, height: saved.height })
+  window.once('ready-to-show', () => {
+    if (saved?.maximized) window.maximize()
+    window.show()
+    setTimeout(() => (settled = true), 1500)
+  })
+  // Remembered once a move or resize settles (normal bounds for a maximized window). While the window
+  // closes, Windows resizes it by its invisible borders: nothing from then on is kept, or the window
+  // would grow a little on every launch.
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let closing = false
+  // The system's own adjustments while the window appears (scaling, borders) are not the user's: ignored.
+  let settled = false
+  const remember = (): void => {
+    if (closing || window.isDestroyed() || window.isMinimized() || window.isFullScreen()) return
+    const maximized = window.isMaximized()
+    writeWindowState(stateFile, { ...(maximized ? window.getNormalBounds() : window.getBounds()), maximized })
+  }
+  const rememberSoon = (): void => {
+    if (closing || !settled) return
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      saveTimer = undefined
+      remember()
+    }, 600)
+  }
+  for (const event of ['resize', 'move', 'maximize', 'unmaximize'] as const) window.on(event as 'resize', rememberSoon)
+  window.on('close', () => {
+    // A save still waiting is made now, with the bounds the window had before it started closing.
+    if (saveTimer !== undefined) {
+      clearTimeout(saveTimer)
+      saveTimer = undefined
+      remember()
+    }
+    closing = true
+  })
 
   // No in-app navigation or popups; http(s) links open in the system browser.
   window.webContents.on('will-navigate', (event) => event.preventDefault())

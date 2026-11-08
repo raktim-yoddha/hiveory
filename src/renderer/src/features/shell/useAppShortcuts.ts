@@ -7,6 +7,7 @@ import { selectedProjectId, useNavigation } from '../../stores/navigation'
 import { runWorkCommand, trackPaneFocus } from '../panes/work-commands'
 import { useNewWorktree } from '../workspace-create/new-worktree'
 import { usePalette } from './palette/palette-store'
+import { focusArea, trackAreaFocus } from './focus-areas'
 
 /** A command's keys as the platform writes them ("Ctrl Shift B", "⌘B"), for menus and tooltips; undefined when it has none. */
 export function useCommandKeys(id: AppCommandId): string | undefined {
@@ -40,6 +41,7 @@ function moveInList(by: 1 | -1): boolean {
 export function runAppCommand(id: AppCommandId): boolean {
   const nav = useNavigation.getState()
   if (id === 'command-palette') usePalette.getState().toggle()
+  else if (id === 'focus-next-area' || id === 'focus-previous-area') return focusArea(id === 'focus-next-area' ? 1 : -1)
   else if (id === 'open-settings') {
     if (nav.view.type === 'settings') nav.closeSettings()
     else nav.openSettings()
@@ -81,6 +83,7 @@ export function useAppShortcuts(): void {
   const keybindings = useSettings((s) => s.settings.keybindings)
   const platform = usePlatform()
   useEffect(trackPaneFocus, [])
+  useEffect(trackAreaFocus, [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.repeat || e.isComposing || shortcutRecording.active) return

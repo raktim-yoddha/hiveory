@@ -3,7 +3,7 @@ import { Play } from 'lucide-react'
 import type { CliInstanceView } from '@shared/domain'
 import { Button } from '../../components/ui/Button'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
-import { useAgents, useClis } from '../../stores/data'
+import { useAgents, useApp, useClis, useProjects } from '../../stores/data'
 import { PaneFrame } from '../panes/PaneFrame'
 import { registerPaneCloser } from '../panes/pane-commands'
 import type { PaneRenderProps } from '../panes/PaneLayout'
@@ -26,6 +26,10 @@ interface AgentPaneProps extends PaneRenderProps {
 export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleMaximize, tabStrip }: AgentPaneProps) {
   const runtime = useAgents((s) => s.runtime[agent.id]) ?? agent.runtime
   const cli = useClis((s) => s.clis.find((c) => c.id === agent.cliId))
+  // Dropped files are paths on this computer: only a terminal running here can use them (ADR 0061).
+  const elsewhere = useProjects((s) => Boolean(s.projects.find((p) => p.id === agent.projectId)?.host))
+  const info = useApp((s) => s.info)
+  const dropFiles = elsewhere || info?.client ? false : info?.platform === 'win32' ? 'windows' : 'posix'
   // A terminal has no status to show: Hiveory tracks agents, not shells (ADR 0044).
   const tracked = cli?.kind !== 'shell'
   useEffect(() => registerPaneCloser(agent.id, () => void agentActions.close(agent)), [agent])
@@ -39,7 +43,7 @@ export function AgentPane({ agent, onDragHandlePointerDown, highlighted, toggleM
       tabStrip={tabStrip}
     >
       <ErrorBoundary region={agent.chatUi ? 'Chat' : 'Terminal'} compact resetKey={agent.id}>
-        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} />}
+        {agent.chatUi ? <AgentChatView instanceId={agent.id} /> : <TerminalView instanceId={agent.id} minColumns={cli?.minColumns} minRows={cli?.minRows} dropFiles={dropFiles} />}
       </ErrorBoundary>
       {!runtime.running && !agent.chatUi && (
         <div className={styles.stopped}>

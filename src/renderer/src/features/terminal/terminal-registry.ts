@@ -291,6 +291,15 @@ const placeGrid = (entry: Entry): void => {
   else delete entry.element.dataset.clip
 }
 
+/** Types text into a terminal as a paste (bracketed when the program asked for it), e.g. dropped files' paths. */
+export const pasteIntoTerminal = (instanceId: string, text: string): void => {
+  const entry = entries.get(instanceId)
+  if (entry) {
+    entry.term.paste(text)
+    entry.term.focus()
+  } else send(instanceId, text)
+}
+
 /** Fits the terminal to its host and tells the PTY — only when the grid size actually changed. */
 export const fitTerminal = (instanceId: string): void => {
   const entry = entries.get(instanceId)

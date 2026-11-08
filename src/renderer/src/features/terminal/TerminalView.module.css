@@ -48,3 +48,10 @@
 .host:hover :global(.xterm .scrollbar .slider) {
   opacity: 0.8;
 }
+
+/* Files held over the terminal (ADR 0061): their paths will be typed at the prompt. */
+.dropping {
+  border-radius: var(--radius-sm);
+  outline: var(--border-width) dashed var(--color-drop-border);
+  background: var(--color-drop);
+}

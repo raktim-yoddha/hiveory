@@ -21,6 +21,7 @@ const TOOLS: Array<[string, string]> = [
   ['open_agent / close_agent', 'Start or stop agents in new panes'],
   ['arrange_panes', 'Equal, focus or columns layout for the worktree'],
   ['run_in_terminal / read_terminal', "Run commands in the worktree's side-panel terminal"],
+  ['list_scripts / run_script', 'The Workspace scripts (dev, test…), each started in a terminal pane of its own'],
   ['browser_*', 'Drive the built-in browser — see Settings › Browser'],
   ['computer_*', 'Mouse, keyboard, windows and screen of this computer (when Computer use is on)']
 ]

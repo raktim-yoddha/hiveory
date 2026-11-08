@@ -219,6 +219,25 @@ export class AgentTools implements ToolHost {
           additionalProperties: false
         }
       },
+      // The Workspace's named commands (ADR 0061), each in a terminal pane of its own.
+      {
+        name: 'list_scripts',
+        description: "The Workspace's scripts (named commands such as dev or test) that run_script can start.",
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false }
+      },
+      {
+        name: 'run_script',
+        description: 'Start one of the Workspace scripts in a new terminal pane beside you, named after it, and return its first output. It keeps running there (a dev server stays up).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 1, maxLength: 40, description: 'A name from list_scripts.' },
+            wait_seconds: { type: 'integer', minimum: 0, maximum: 60, default: 5, description: 'How long to wait before reading its output.' }
+          },
+          required: ['name'],
+          additionalProperties: false
+        }
+      },
       {
         name: 'run_in_terminal',
         description: "Run a shell command in your worktree's terminal (the side panel) and return its recent output.",
@@ -402,6 +421,30 @@ export class AgentTools implements ToolHost {
         if (focus.workspaceId !== workspaceId) throw new ToolError(`${focus.petName} is in another worktree.`)
         layouts.apply(workspaceId, agents.paneIds(workspaceId), { type: 'arrange', mode, focusPaneId: focus.id })
         return `Arranged panes: ${mode}${mode === 'focus' ? ` on ${focus.petName}` : ''}.`
+      }
+      case 'list_scripts': {
+        const scripts = workspaces.project(this.caller.projectId).settings?.scripts ?? []
+        return scripts.length ? scripts.map((s) => `${s.name}: ${s.command}`).join('\n') : 'This Workspace has no scripts. The user adds them in Workspace settings › Scripts.'
+      }
+      case 'run_script': {
+        const name = str(args, 'name')
+        const scripts = workspaces.project(this.caller.projectId).settings?.scripts ?? []
+        const script = scripts.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())
+        if (!script) throw new ToolError(`No script named "${name}". Scripts: ${scripts.map((s) => s.name).join(', ') || 'none'}.`)
+        const shell = registry.list().find((c) => c.kind === 'shell' && c.available)
+        if (!shell) throw new ToolError('No terminal is installed on this machine to run the script in.')
+        const { agent } = agents.open(this.caller.workspaceId, shell.id, { targetPaneId: this.caller.id, side: 'right' }, undefined, false)
+        try {
+          agents.rename(agent.id, script.name)
+        } catch {
+          // Another pane already has that name: the terminal keeps its own.
+        }
+        // The shell prints its prompt first; then the command is typed, exactly as saved.
+        const started = Date.now()
+        while (Date.now() - started < 5000 && !runtime.screenText(agent.id, 5).trim()) await sleep(150)
+        runtime.write(agent.id, `${script.command}\r`)
+        await sleep(int(args, 'wait_seconds', 5, 0, 60) * 1000)
+        return `Started "${script.name}" (${script.command}) in a new terminal pane, ${agent.petName}.\n--- screen ---\n${runtime.screenText(agent.id, 40) || '(nothing yet)'}`
       }
       case 'run_in_terminal': {
         const workspace = workspaces.get(this.caller.workspaceId)

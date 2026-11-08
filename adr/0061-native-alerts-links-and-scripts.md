@@ -51,3 +51,16 @@ and OS notifications; T3 Code has prompt links, notifications and a badge.
   closing it. Ports, health checks and a service proxy (as in Paseo) are left for later.
 - Voice dictation is not included: Electron has no built-in speech service, and sending audio to a
   provider needs its own decision.
+
+## Amendment (2026-11-08): window, drops, area keys and agent scripts
+
+- The window reopens where it was, at its size and maximized or not, when that place is still at
+  least half on a connected screen (`window-state.json` in the app's data folder); otherwise it opens
+  at its default size.
+- Files dropped on a terminal pane type their paths at its prompt, quoted for this platform's shells,
+  as a paste. A terminal on an SSH host or behind a Hiveory server refuses the drop and says why: the
+  files are on this computer, not there.
+- Ctrl+F6 / Ctrl+Shift+F6 (⌘ on macOS; a modifier is required, ADR 0047) move the keyboard between
+  the sidebar, the open worktree and the side panel, each getting back the control that last had focus.
+- Agents get `list_scripts` and `run_script`: a script starts in a terminal pane beside the agent,
+  named after it, and the tool returns its first output.

@@ -20,7 +20,7 @@ export const ABOUT_PROMPT =
 export const AGENT_TOOLS_PROMPT =
   'You are running inside Hiveory next to other coding agents. Use the hiveory MCP tools to coordinate: ' +
   'list_agents (names + live status), read_agent, send_message, wait_for_agent, open_agent, close_agent, ' +
-  'arrange_panes and run_in_terminal. Always use the exact agent names list_agents returns. ' +
+  'arrange_panes, run_in_terminal, and list_scripts / run_script (the Workspace scripts, such as dev or test). Always use the exact agent names list_agents returns. ' +
   'open_agent starts a subagent on any installed CLI with its own model, effort and task, so you can hand work to another model.'
 
 /**

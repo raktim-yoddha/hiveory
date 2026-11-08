@@ -69,6 +69,38 @@ const setup = (runtimeOverrides: Record<string, CliRuntimeDetails> = {}) => {
   return { tools: new AgentTools(deps as unknown as AgentToolDeps, 'a1'), deps, writes }
 }
 
+describe('Workspace scripts for agents (ADR 0061)', () => {
+  const withScripts = (scripts?: Array<{ name: string; command: string }>, shell = true) => {
+    const s = setup()
+    const deps = s.deps as unknown as Record<string, Record<string, unknown>>
+    deps.workspaces!.project = () => ({ id: 'p1', name: 'demo', settings: scripts ? { scripts } : undefined })
+    deps.registry!.list = () => [{ id: 'claude', displayName: 'Claude Code', available: true }, ...(shell ? [{ id: 'powershell', displayName: 'PowerShell', kind: 'shell', available: true }] : [])]
+    deps.agents!.rename = vi.fn()
+    deps.runtime!.screenText = () => 'PS C:\\repo> '
+    return s
+  }
+
+  it('lists the scripts, or says there are none', async () => {
+    expect((await withScripts([{ name: 'dev', command: 'pnpm dev' }]).tools.call('list_scripts', {})).text).toBe('dev: pnpm dev')
+    expect((await withScripts().tools.call('list_scripts', {})).text).toMatch(/no scripts/)
+  })
+
+  it('runs one in a new terminal beside the caller, named after it', async () => {
+    const { tools, deps, writes } = withScripts([{ name: 'dev', command: 'pnpm dev' }])
+    const { text, isError } = await tools.call('run_script', { name: 'DEV', wait_seconds: 0 })
+    expect(isError).toBeFalsy()
+    expect(deps.agents.open).toHaveBeenCalledWith('w1', 'powershell', { targetPaneId: 'a1', side: 'right' }, undefined, false)
+    expect((deps.agents as unknown as { rename: ReturnType<typeof vi.fn> }).rename).toHaveBeenCalledWith('a9', 'dev')
+    expect(writes).toContainEqual(['a9', 'pnpm dev\r'])
+    expect(text).toContain('Started "dev" (pnpm dev)')
+  })
+
+  it('names the scripts there are when one is unknown, and needs a terminal', async () => {
+    expect((await withScripts([{ name: 'dev', command: 'x' }]).tools.call('run_script', { name: 'build' })).text).toMatch(/No script named "build". Scripts: dev/)
+    expect((await withScripts([{ name: 'dev', command: 'x' }], false).tools.call('run_script', { name: 'dev' })).text).toMatch(/No terminal/)
+  })
+})
+
 describe('agent tools', () => {
   it('lists workspace agents with status and marks the caller', async () => {
     const { tools } = setup({ a2: { status: 'waiting-for-you', running: true, waitingReason: 'permission' } })
