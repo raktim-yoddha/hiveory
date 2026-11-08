@@ -42,6 +42,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const agents = useAgents((s) => s.byWorkspace[workspaceId])
   const loadAgents = useAgents((s) => s.load)
   const editors = useEditors((s) => s.byWorkspace[workspaceId] ?? NO_EDITORS)
+  const unsaved = useEditors((s) => s.unsaved)
   const loadEditors = useEditors((s) => s.load)
   const tree = useLayouts((s) => s.byWorkspace[workspaceId] ?? null)
   const allPages = useBrowser((s) => s.pages)
@@ -89,7 +90,6 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   const list = agents ?? NO_AGENTS
   const byId = new Map(list.map((a) => [a.id, a]))
   const editorById = new Map(editors.map((e) => [e.id, e]))
-  const unsaved = useEditors((s) => s.unsaved)
   // This worktree's browser pages are panes too (ADR 0042).
   const pageById = new Map(allPages.filter((p) => p.scope === workspaceId).map((p) => [p.id, p]))
 
