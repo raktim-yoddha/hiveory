@@ -1,0 +1,172 @@
+/* The review pane (ADR 0064): every changed file's diff, one after another. */
+.review {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-7);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 40%;
+  height: var(--control-md);
+  margin-left: calc(-1 * var(--space-3));
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+}
+
+.source svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.source:hover,
+.source[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.flex {
+  flex: 1;
+}
+
+.files {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-5) var(--space-5) var(--space-9);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.loading svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.file + .file {
+  margin-top: var(--space-5);
+}
+
+.file {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-inset);
+}
+
+/* Each file's header stays on top while its diff scrolls by. */
+.fileHeader {
+  position: sticky;
+  top: calc(-1 * var(--space-5));
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: var(--control-lg);
+  padding: 0 var(--space-3) 0 var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-raised-solid);
+}
+
+.fileToggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  height: var(--control-lg);
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.chevron,
+.fileIcon {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.fileName {
+  flex: none;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+}
+
+.deleted {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.fileDir {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag {
+  flex: none;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-active);
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--control-xs);
+}
+
+.fileBody {
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

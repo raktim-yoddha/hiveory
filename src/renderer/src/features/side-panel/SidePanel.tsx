@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { FolderTree, GitCompareArrows, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop } from 'lucide-react'
+import { FolderTree, GitCompareArrows, GitPullRequest, History, LayoutDashboard, Maximize2, Minimize2, PanelRight, PanelTop } from 'lucide-react'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
@@ -17,18 +17,19 @@ import {
   type PanelTab
 } from '../../stores/navigation'
 import { ChangesPanel } from '../changes/ChangesPanel'
+import { PullRequestPanel } from '../pull-request/PullRequestPanel'
 import { Explorer } from '../explorer/Explorer'
 import { SessionsPanel } from '../sessions/SessionsPanel'
 import { ProjectScreen } from '../project/ProjectScreen'
 import styles from './SidePanel.module.css'
 
 const EMPTY: PanelTab[] = []
-const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDashboard, changes: GitCompareArrows }
+const TAB_ICON = { explorer: FolderTree, sessions: History, workspace: LayoutDashboard, changes: GitCompareArrows, pull: GitPullRequest }
 const TAB_TYPE = 'application/x-hiveory-panel-tab'
 
 /**
  * Right side panel for the Worktree in view: always the Dashboard (ADR 0038, 0039), the worktree's
- * Changes (ADR 0058), the agent session history and the folder's Explorer — nothing to add or close. Schedules
+ * Changes (ADR 0058), its Pull request (ADR 0064), the agent session history and the folder's Explorer — nothing to add or close. Schedules
  * open from the sidebar and a Workspace's settings in Settings (ADR 0062). Tabs drag to reorder; dragging one into the lower half splits the panel into a top and a
  * bottom area for a dual view, and back (a divider sets their heights). Browser pages are panes.
  */
@@ -309,6 +310,8 @@ function PanelArea({
                   <Explorer key={scope} workspaceId={scope} />
                 ) : tab.kind === 'changes' ? (
                   <ChangesPanel key={scope} workspaceId={scope} />
+                ) : tab.kind === 'pull' ? (
+                  <PullRequestPanel key={scope} workspaceId={scope} projectId={projectId} />
                 ) : tab.kind === 'workspace' ? (
                   projectId && <ProjectScreen key={scope} projectId={projectId} workspaceId={scope} />
                 ) : (

@@ -8,7 +8,7 @@ the window, and the window's buttons (sidebar, Settings) live in the sidebar, or
 in its icon rail while it is hidden; the side panel's button sits at the top right.
 
 Everything the removed modes did, Work does: an agent runs in a terminal or a **chat view** (the same
-message box: attachments, the CLI and model in one picker, effort, plan and fast mode, `@` files and
+message box: attachments, one picker for the CLI, model, effort, access, plan and fast mode (ADR 0064), `@` files and
 `/` commands, queued next messages, the usage limits button and context meter, the agent's tasks,
 subagents and changes above the box, ADR 0031, 0055, 0058), with apps, the browser and computer use. **Schedules** (ADR 0028, 0040) start a new agent of a
 CLI in a Worktree with the schedule's instructions, once, every few minutes or on a calendar rule in
@@ -290,7 +290,8 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; a CLI opens in its terminal; "Chat UI" opens a chat whose CLI and model are picked, and changed, in its message box (ADR 0059); its Also ask button sends the next message to other chat CLIs too, each in a new Chat UI to its right, so their answers read side by side (text only; attached files stay with the first chat)
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It always has the Dashboard (the Workspace page; ADR 0038, 0039), Changes, Sessions and the Explorer; a Workspace's settings open in Settings, from its right-click › Workspace settings (ADR 0062). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- A worktree has a bar above its panes (ADR 0064): its name, Workspace and branch with its actions; Run (a Workspace script), Open in (an installed code editor, the file manager) and a git button with the next step (Commit, Publish branch, Push, Create PR, Merge PR). Review changes opens every changed file's diff in one pane, with line numbers.
+- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It always has the Dashboard (the Workspace page; ADR 0038, 0039), Changes, Pull request (the branch's review with its checks and Merge, ADR 0064), Sessions and the Explorer; a Workspace's settings open in Settings, from its right-click › Workspace settings (ADR 0062). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)

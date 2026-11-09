@@ -16,11 +16,9 @@ import { WorkspaceMark } from './WorkspaceMark'
 import { lastWorktreeOf } from './project-list'
 import { WorktreeAgents, WorktreeBusy } from './WorktreeAgents'
 import styles from './ProjectSidebar.module.css'
+import { folderName } from '../../lib/folder-name'
 
 const EMPTY: WorkspaceView[] = []
-
-/** Last part of a path, on any platform. */
-const folderName = (path: string): string => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 
 /**
  * A Workspace and its Worktrees (ADR 0038). Its mark folds the Worktrees; the row itself only

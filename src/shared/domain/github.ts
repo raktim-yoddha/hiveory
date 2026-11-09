@@ -45,3 +45,27 @@ export interface GitInfo {
   /** Asked to fetch, but origin could not be reached (the list may be stale). */
   fetchFailed?: boolean
 }
+
+/** How one check on a review is doing (a CI job, a status). */
+export type CheckState = 'success' | 'failure' | 'pending' | 'skipped' | 'neutral'
+
+export interface PullRequestCheck {
+  name: string
+  /** Its workflow or pipeline, when the host says. */
+  group?: string
+  state: CheckState
+  /** How long it ran, when finished. */
+  seconds?: number
+  url?: string
+}
+
+/** The review of one branch, with its checks (ADR 0064). */
+export interface PullRequestDetail extends PullRequest {
+  state: 'open' | 'merged' | 'closed'
+  baseBranch?: string
+  /** False when it has conflicts; absent while the host is still working it out. */
+  mergeable?: boolean
+  checks: PullRequestCheck[]
+}
+
+export type MergeMethod = 'squash' | 'merge' | 'rebase'

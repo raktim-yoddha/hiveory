@@ -17,6 +17,7 @@ import { AVATAR_EXTENSIONS, avatarFromFile, avatarFromUrl } from '../services/pr
 import { CODE_HOST_INFO } from '@shared/domain/integrations'
 import type { HostRef } from '@shared/domain'
 import type { CodeHost } from '../services/git/code-host'
+import { installedEditors, openInEditor } from '../services/editors/external-editors'
 
 /** Why a Workspace has no reviews when its settings turned the code host off (ADR 0040). */
 const CODE_HOST_OFF = "The code host is turned off in this workspace's settings."
@@ -45,6 +46,16 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   const requireRepoRoot = async (projectId: string): Promise<string> =>
     (await repoRootOf(projectId)) ?? fail('NOT_A_REPOSITORY', 'This workspace is not a Git repository.')
   /** The Workspace's code host (ADR 0040) and its repository root, or why it has none. */
+  /** A worktree's code host, folder and branch: a linked worktree's own, or the Primary's current one. */
+  const reviewTarget = async (workspaceId: string) => {
+    const workspace = c.workspaceRepo.get(workspaceId)
+    localOnly(workspace.projectId, 'Pull requests')
+    const { host, root } = await requireHost(workspace.projectId)
+    const path = workspace.git?.worktreePath ?? workspace.path
+    const name = workspace.kind === 'isolated' ? workspace.git?.branch : await c.git.currentBranch(path)
+    const branch = name ? { name, isDefault: workspace.kind === 'main' && name === (await c.git.defaultBranch(root)) } : undefined
+    return { host, root, path, branch }
+  }
   const requireHost = async (projectId: string): Promise<{ host: CodeHost; root: string }> => {
     const root = await requireRepoRoot(projectId)
     const host = (await c.integrations.hostFor(c.workspaceRepo.project(projectId), root)) ?? fail('INVALID_INPUT', CODE_HOST_OFF)
@@ -255,6 +266,12 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'updates.download': () => c.updates.download(),
   'updates.install': () => c.updates.install(),
 
+  'system.editorApps': () => installedEditors(),
+  'system.openIn': ({ workspaceId, appId }) => {
+    const workspace = c.workspaceRepo.get(workspaceId)
+    if (c.workspaceRepo.project(workspace.projectId).host) fail('INVALID_INPUT', 'That folder is on another machine.')
+    if (!openInEditor(appId, workspace.path)) fail('NOT_FOUND', 'That editor is not installed.')
+  },
   'system.revealPath': async ({ projectId, workspaceId }) => {
     const folder = workspaceId
       ? c.workspaceRepo.get(workspaceId).path
@@ -373,6 +390,10 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     await files.watch(key, root, watch)
   },
   'editors.list': ({ workspaceId }) => c.editors.list(workspaceId),
+  'editors.openReview': ({ workspaceId, targetPaneId, side }) => {
+    c.workspaceRepo.get(workspaceId)
+    return c.editors.openReview(workspaceId, targetPaneId && side ? { targetPaneId, side } : undefined)
+  },
   'editors.open': async ({ workspaceId, path, targetPaneId, side }) => {
     const { root, files } = await filesOf({ workspaceId })
     await files.resolveIn(root, path)
@@ -586,17 +607,21 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     return (await host.issues(root)).map((i) => ({ number: Number(i.key.replace('#', '')), title: i.title, url: i.url }))
   },
   'github.createPullRequest': async ({ workspaceId, draft }) => {
-    const workspace = c.workspaceRepo.get(workspaceId)
-    localOnly(workspace.projectId, 'Pull requests')
-    const { host, root } = await requireHost(workspace.projectId)
-    // From any worktree on a branch of its own: a linked one, or the Primary while it is off the default branch.
-    const path = workspace.git?.worktreePath ?? workspace.path
-    const branch = workspace.kind === 'isolated' ? workspace.git?.branch : await c.git.currentBranch(path)
+    const { host, root, path, branch } = await reviewTarget(workspaceId)
     if (!branch) return fail('INVALID_INPUT', 'This worktree is not on a branch.')
-    if (workspace.kind === 'main' && branch === (await c.git.defaultBranch(root))) {
-      return fail('INVALID_INPUT', `The Primary is on ${branch}, the default branch.`, { hint: 'Switch it to another branch, or use a worktree.' })
-    }
-    return { url: await host.createPullRequest(root, path, branch, draft ?? false) }
+    if (branch.isDefault) return fail('INVALID_INPUT', `The Primary is on ${branch.name}, the default branch.`, { hint: 'Switch it to another branch, or use a worktree.' })
+    return { url: await host.createPullRequest(root, path, branch.name, draft ?? false) }
+  },
+  // A worktree's own review (ADR 0064); a detached head or the Primary on the default branch says why it has none.
+  'github.pullRequestFor': async ({ workspaceId }) => {
+    const { host, path, branch } = await reviewTarget(workspaceId)
+    if (!branch) return fail('INVALID_INPUT', 'This worktree is not on a branch.')
+    if (branch.isDefault) return fail('INVALID_INPUT', `The Primary is on ${branch.name}, the default branch.`, { hint: 'Pull requests come from a worktree on its own branch: make one with "+".' })
+    return host.pullRequestFor(path, branch.name)
+  },
+  'github.merge': async ({ workspaceId, number, method }) => {
+    const { host, path } = await reviewTarget(workspaceId)
+    await host.merge(path, number, method)
   },
   'integrations.status': () => c.integrations.status(),
   'integrations.connectJira': async (input) => {

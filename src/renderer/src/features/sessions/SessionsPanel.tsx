@@ -14,6 +14,7 @@ import { useNavigation } from '../../stores/navigation'
 import { agentActions } from '../agents/agent-actions'
 import { ago } from '../../lib/ago'
 import styles from './Sessions.module.css'
+import { folderName } from '../../lib/folder-name'
 
 const PAGE = 40
 const SCOPES: Array<{ value: SessionScope; label: string }> = [
@@ -22,7 +23,6 @@ const SCOPES: Array<{ value: SessionScope; label: string }> = [
   { value: 'all', label: 'All' }
 ]
 
-const folderName = (path: string): string => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 const samePath = (a: string, b: string): boolean => a.replace(/[\\/]+$/, '').toLowerCase() === b.replace(/[\\/]+$/, '').toLowerCase()
 
 /**

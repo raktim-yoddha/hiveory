@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { AppException } from '@shared/errors'
-import type { GithubStatus, PullRequest } from '@shared/domain/github'
+import type { GithubStatus, MergeMethod, PullRequest, PullRequestDetail } from '@shared/domain/github'
 import { CODE_HOST_INFO, type CodeHostId, type HostAccount, type Issue } from '@shared/domain/integrations'
 
 /** Runs a code host CLI (gh, glab): local tools the user already signed in to; Hiveory stores no tokens. No shell. */
@@ -25,6 +25,9 @@ export const hostCli =
       })
     })
 
+/** The CLI's own words when it failed (its stderr), for telling "no review" apart from a real error. */
+export const detailOf = (error: unknown): string => (error instanceof AppException ? (error.error.detail ?? error.error.message) : String(error))
+
 /** Why a host CLI call failed, in the words its status shows. */
 export const reasonOf = (error: unknown, fallback: string): string => {
   const app = error instanceof AppException ? error.error : undefined
@@ -43,6 +46,10 @@ export interface CodeHost {
   issues(repoRoot: string): Promise<Issue[]>
   /** Pushes the branch to origin, then opens a review filled from its commits; returns its address. */
   createPullRequest(repoRoot: string, worktreePath: string, branch: string, draft: boolean): Promise<string>
+  /** The review of `branch` with its checks, or null when it has none (ADR 0064). Run in the worktree. */
+  pullRequestFor(worktreePath: string, branch: string): Promise<PullRequestDetail | null>
+  /** Merges review `number` on the host (the user asked for it with Merge). */
+  merge(worktreePath: string, number: number, method: MergeMethod): Promise<void>
   /** The repository owner's avatar (its project's, on GitLab), else the signed-in account's; an https address. */
   avatarUrl(repoRoot: string | undefined): Promise<string | undefined>
 }

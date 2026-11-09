@@ -12,11 +12,13 @@ import { openLink } from '@shared/domain/links'
 import { api } from '../../../lib/api'
 import { runAction } from '../../../stores/notices'
 import { runAppCommand } from '../useAppShortcuts'
+import { openReview } from '../../changes/changes-store'
 import type { PaletteItem } from './palette-rank'
 
 const PANEL_TABS: Array<{ kind: PanelTab['kind']; label: string }> = [
   { kind: 'changes', label: 'Changes' },
   { kind: 'workspace', label: 'Dashboard' },
+  { kind: 'pull', label: 'Pull request' },
   { kind: 'explorer', label: 'Explorer' },
   { kind: 'sessions', label: 'Sessions' }
 ]
@@ -69,6 +71,7 @@ export function usePaletteItems(open: boolean): PaletteItem[] {
       }
       // A hiveory:// link back to this worktree, for notes, chats and other apps (ADR 0061).
       items.push({ id: 'copy-link', group: 'This worktree', label: 'Copy a link to this worktree', run: () => void runAction('Copy link', () => api('clipboard.writeText', { text: openLink(here.projectId, here.workspaceId) })) })
+      items.push({ id: 'review', group: 'This worktree', label: 'Review changes', hint: 'every changed file in a pane', run: () => void openReview(here.workspaceId) })
       items.push({ id: 'workspace-settings', group: 'This worktree', label: 'Workspace settings', run: () => nav().openSettings('workspace', here.projectId) })
       for (const tab of PANEL_TABS) items.push({ id: `panel:${tab.kind}`, group: 'Side panel', label: tab.label, run: () => nav().showPanelTab(here.workspaceId, tab.kind) })
     }

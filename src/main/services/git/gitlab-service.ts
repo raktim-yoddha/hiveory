@@ -1,9 +1,10 @@
 import { AppException } from '@shared/errors'
-import type { GithubStatus, PullRequest } from '@shared/domain/github'
+import type { GithubStatus, MergeMethod, PullRequest, PullRequestDetail } from '@shared/domain/github'
 import type { HostAccount, Issue } from '@shared/domain/integrations'
 import type { GitService } from './git-service'
 import { gitArgs } from './git-commands'
-import { hostCli, reasonOf, urlIn, type CodeHost, type HostCli } from './code-host'
+import { detailOf, hostCli, reasonOf, urlIn, type CodeHost, type HostCli } from './code-host'
+import { isNoReview, parseGitlabMergeRequest } from './pull-request-detail'
 
 /** Merge requests and issues via the GitLab CLI (`glab`, ADR 0040): gitlab.com or the user's own instance, as glab is set up. */
 export class GitlabService implements CodeHost {
@@ -66,6 +67,19 @@ export class GitlabService implements CodeHost {
   async issues(repoRoot: string): Promise<Issue[]> {
     const out = await this.glab(repoRoot, ['issue', 'list', '--output', 'json', '--per-page', '50'])
     return (JSON.parse(out) as Array<{ iid: number; title: string; web_url: string; state?: string }>).map((i) => ({ key: `#${i.iid}`, title: i.title, url: i.web_url, state: i.state }))
+  }
+
+  async pullRequestFor(worktreePath: string, branch: string): Promise<PullRequestDetail | null> {
+    try {
+      return parseGitlabMergeRequest(await this.glab(worktreePath, ['mr', 'view', branch, '--output', 'json']))
+    } catch (error) {
+      if (isNoReview(detailOf(error))) return null
+      throw error
+    }
+  }
+
+  async merge(worktreePath: string, number: number, method: MergeMethod): Promise<void> {
+    await this.glab(worktreePath, ['mr', 'merge', String(number), '--yes', ...(method === 'squash' ? ['--squash'] : method === 'rebase' ? ['--rebase'] : [])], 120_000)
   }
 
   async createPullRequest(repoRoot: string, worktreePath: string, branch: string, draft: boolean): Promise<string> {

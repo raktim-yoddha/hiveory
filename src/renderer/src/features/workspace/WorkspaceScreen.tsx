@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useCallback, useEffect, useState } from 'react'
-import { FileCode2, FolderX, Globe } from 'lucide-react'
+import { FileCode2, FolderX, GitCompareArrows, Globe } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
@@ -18,10 +18,12 @@ import { useTerminalActivity } from '../../stores/terminal-activity'
 import { useNavigation } from '../../stores/navigation'
 import { BrowserPaneFrame } from '../browser/BrowserPaneFrame'
 import { EditorPane } from '../editor/EditorPane'
+import { ReviewPane } from '../changes/ReviewPane'
 import { AgentPane } from '../agents/AgentPane'
 import { PaneLayout } from '../panes/PaneLayout'
 import { focusTerminal, terminalMinWidth } from '../terminal/terminal-registry'
 import { EmptyWorkspace } from './EmptyWorkspace'
+import { WorktreeBar } from '../worktree-bar/WorktreeBar'
 import styles from './WorkspaceScreen.module.css'
 
 const NO_AGENTS: CliInstanceView[] = []
@@ -34,7 +36,7 @@ interface WorkspaceScreenProps {
   focusPaneId?: string
 }
 
-/** Orchestrates a Workspace: header, empty state or the agent pane layout. */
+/** Orchestrates a Worktree: its top bar (ADR 0064), then the empty state or the pane layout. */
 export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: WorkspaceScreenProps) {
   const project = useProjects((s) => s.projects.find((p) => p.id === projectId))
   const workspaces = useWorkspaces((s) => s.byProject[projectId] ?? NO_WORKSPACES)
@@ -98,7 +100,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   /** What a pane's tab shows: an agent's or terminal's name, logo and status; a file's or page's name. */
   const describe = (paneId: string): PaneTabInfo | undefined => {
     const editor = editorById.get(paneId)
-    if (editor) return { title: editor.name, icon: <FileCode2 aria-hidden />, unsaved: unsaved[editor.id] === true }
+    if (editor) return { title: editor.name, icon: editor.kind === 'review' ? <GitCompareArrows aria-hidden /> : <FileCode2 aria-hidden />, unsaved: unsaved[editor.id] === true }
     const page = pageById.get(paneId)
     if (page) return { title: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: page.ownerName ? <AgentIcon aria-hidden /> : <Globe aria-hidden /> }
     const agent = byId.get(paneId)
@@ -118,6 +120,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
 
   return (
     <section className={styles.screen} aria-label={`${workspace.name} worktree`}>
+      <WorktreeBar project={project} workspace={workspace} />
       <div className={styles.body}>
         {agents && list.length === 0 && editors.length === 0 && pageById.size === 0 ? (
           <div className={styles.emptySurface}>
@@ -145,6 +148,13 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
                   />
                 )
                 const editor = editorById.get(paneId)
+                if (editor?.kind === 'review') {
+                  return (
+                    <ErrorBoundary region="Review" compact resetKey={editor.id}>
+                      <ReviewPane editor={editor} {...props} tabStrip={tabStrip} />
+                    </ErrorBoundary>
+                  )
+                }
                 if (editor) {
                   return (
                     <ErrorBoundary region={`${editor.name} editor`} compact resetKey={editor.id}>

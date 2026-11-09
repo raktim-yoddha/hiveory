@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from 'react'
-import { AppWindow, ArrowUp, ChevronDown, Eye, ListPlus, ListTodo, LockOpen, Paperclip, Plus, Square, X, Zap } from 'lucide-react'
+import { AppWindow, ArrowUp, ListPlus, Paperclip, Plus, Square, X } from 'lucide-react'
 import type { ChatSession, ChatCommand } from '@shared/domain/chat'
 import type { FileEntry } from '@shared/domain'
 import { IconButton } from '../../components/ui/Button'
@@ -14,10 +14,9 @@ import { askSeveral } from './ask-several'
 import { AttachmentChips } from './AttachmentChips'
 import { ComposerTracks } from './ComposerTracks'
 import { ContextMeter, latestUsage, WindowPicker } from './ComposerExtras'
-import { EffortIcon } from './EffortIcon'
 import { LONG_TEXT_CHARS, useAttachments } from './useAttachments'
 import { focusChatInput } from './focus-input'
-import { ModelPicker } from './ModelPicker'
+import { AgentPicker } from './AgentPicker'
 import { applySuggestion, findTrigger, type Trigger } from './suggestions'
 import { UsageLimitsButton } from './UsageLimitsButton'
 import styles from './Chat.module.css'
@@ -62,8 +61,8 @@ const writeStash = (chatId: string, list: string[]): void => {
 /**
  * A Work agent's message box in chat view (ADR 0058): its to-do list, subagents and the worktree's
  * changes above it; `@` tags files and `/` runs the CLI's commands and skills; attachments (paste,
- * drop, a picture of a window); the CLI and model in one picker, effort when the model has it,
- * permissions, fast and plan mode, and the context meter. ↑ in an empty box brings back what you
+ * drop, a picture of a window); one picker for the CLI, model, effort, speed, plan mode and access
+ * (ADR 0064), and the context meter. ↑ in an empty box brings back what you
  * sent; Ctrl+S puts a draft aside and brings it back.
  */
 export function ChatComposer({ chat, placeholder, workspaceId, projectId }: ChatComposerProps) {
@@ -85,8 +84,6 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
   const attachments = useAttachments(chat.id)
   const catalog = chat.cliId ? catalogs[chat.cliId] : undefined
   const loaded = catalog && catalog !== 'loading' ? catalog : undefined
-  const model = loaded?.models.find((m) => m.id === (chat.model ?? ''))
-  const efforts = model?.efforts ?? []
   const usage = useMemo(() => latestUsage(chat.messages), [chat.messages])
   const update = (patch: Parameters<typeof updateChat>[1]): Promise<void> => updateChat(chat.id, patch)
   const cliName = clis.find((c) => c.id === chat.cliId)?.displayName
@@ -391,90 +388,20 @@ export function ChatComposer({ chat, placeholder, workspaceId, projectId }: Chat
             }}
           />
           {chat.cliId && (
-            <ModelPicker
+            <AgentPicker
               cliId={chat.cliId}
               model={chat.model ?? ''}
+              effort={chat.effort ?? ''}
+              fast={Boolean(chat.fast)}
+              plan={Boolean(chat.plan)}
+              autoApprove={chat.autoApprove}
               switchable={Boolean(chat.agentId)}
               started={chat.messages.length > 0}
-              onChange={(cliId, next) => {
-                const keepEffort = next.efforts?.includes(chat.effort ?? '') ? chat.effort : ''
-                rememberChatCli(cliId)
-                void update({ ...(cliId !== chat.cliId ? { cliId } : {}), model: next.id, effort: keepEffort, ...(chat.fast && !next.fast ? { fast: false } : {}) })
+              onChange={(patch) => {
+                if (patch.cliId) rememberChatCli(patch.cliId)
+                void update(patch)
               }}
             />
-          )}
-          {efforts.length > 0 && (
-            <Menu
-              label="Reasoning effort"
-              items={[
-                {
-                  type: 'item',
-                  id: 'default',
-                  label: `Default${model?.defaultEffort ? ` (${model.defaultEffort})` : ''}`,
-                  icon: <EffortIcon level={model?.defaultEffort} levels={efforts} />,
-                  checked: !chat.effort,
-                  onSelect: () => void update({ effort: '' })
-                },
-                ...efforts.map((e) => ({
-                  type: 'item' as const,
-                  id: e,
-                  label: e[0]!.toUpperCase() + e.slice(1),
-                  icon: <EffortIcon level={e} levels={efforts} />,
-                  checked: chat.effort === e,
-                  onSelect: () => void update({ effort: e })
-                }))
-              ]}
-              trigger={(props) => (
-                <button type="button" {...props} className={styles.pill} title="Reasoning effort">
-                  <EffortIcon level={chat.effort ?? model?.defaultEffort} levels={efforts} />
-                  <span className={cx(styles.pillLabel, styles.capitalize)}>{chat.effort ?? model?.defaultEffort ?? 'Effort'}</span>
-                  <ChevronDown aria-hidden className={styles.chevron} />
-                </button>
-              )}
-            />
-          )}
-          <Menu
-            label="Permissions"
-            items={[
-              { type: 'item', id: 'read-only', label: 'Read-only', hint: 'Reads and answers', icon: <Eye />, checked: !chat.autoApprove, onSelect: () => void update({ autoApprove: false }) },
-              { type: 'item', id: 'full', label: 'Full access', hint: 'Edits files, runs commands', icon: <LockOpen />, checked: chat.autoApprove, onSelect: () => void update({ autoApprove: true }) }
-            ]}
-            trigger={(props) => (
-              <button
-                type="button"
-                {...props}
-                className={styles.pill}
-                title={chat.autoApprove ? 'Full access: the agent may edit files and run commands' : 'Read-only: the agent can read and answer, not change anything'}
-              >
-                {chat.autoApprove ? <LockOpen aria-hidden /> : <Eye aria-hidden />}
-                <span className={styles.pillLabel}>{chat.autoApprove ? 'Full access' : 'Read-only'}</span>
-                <ChevronDown aria-hidden className={styles.chevron} />
-              </button>
-            )}
-          />
-          {model?.fast && (
-            <button
-              type="button"
-              className={cx(composer.iconPill, chat.fast && composer.iconPillOn)}
-              aria-pressed={Boolean(chat.fast)}
-              aria-label="Fast mode"
-              title={chat.fast ? 'Fast mode is on: quicker replies, at a higher cost' : 'Fast mode: quicker replies, at a higher cost'}
-              onClick={() => void update({ fast: !chat.fast })}
-            >
-              <Zap aria-hidden />
-            </button>
-          )}
-          {loaded?.plan && (
-            <button
-              type="button"
-              className={cx(composer.iconPill, chat.plan && composer.iconPillOn)}
-              aria-pressed={Boolean(chat.plan)}
-              aria-label="Plan mode"
-              title={chat.plan ? 'Plan mode is on: the agent plans and answers without changing anything' : 'Plan mode: the agent plans and answers without changing anything'}
-              onClick={() => void update({ plan: !chat.plan })}
-            >
-              <ListTodo aria-hidden />
-            </button>
           )}
           <span className={styles.flex} />
           {!chat.running && workspaceId && (

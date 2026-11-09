@@ -32,7 +32,7 @@ import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt }
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
-import type { EditorView, FileEntry } from '../domain/files'
+import type { EditorApp, EditorView, FileEntry } from '../domain/files'
 import { cleanKeybindings, isAppCommand } from '../keys/keybindings'
 import { parseShortcut } from '../keys/shortcut'
 
@@ -42,7 +42,7 @@ export interface WallpaperImage {
   url: string
   thumb: string
 }
-import type { GithubIssue, GithubStatus, GitInfo, PullRequest } from '../domain/github'
+import type { GithubIssue, GithubStatus, GitInfo, PullRequest, PullRequestDetail } from '../domain/github'
 import { CODE_HOSTS, TRACKERS, type IntegrationsView, type IssueList, type TrackerGroup } from '../domain/integrations'
 import type { McpSearchResult, SkillAudit, StoreSkill } from '../domain/stores'
 import type { Discovery, ShareStatus, RemotePort, SshHostSuggestion, SshPrompt, TailnetStatus } from '../domain/tailnet'
@@ -428,8 +428,13 @@ export const requestSchemas = {
   'editors.list': z.object({ workspaceId: id }),
   'editors.open': z.object({ workspaceId: id, path: fileName, targetPaneId: id.optional(), side: side.optional() }),
   'editors.close': z.object({ editorId: z.string().regex(/^e[a-f0-9]{12}$/) }),
+  // ADR 0064: the worktree's review pane (every changed file's diff).
+  'editors.openReview': z.object({ workspaceId: id, targetPaneId: id.optional(), side: side.optional() }),
   /** Opens the Composio account page in the system browser (allow-listed in main). */
   'system.openUrl': z.object({ url: z.string().max(500) }),
+  // ADR 0064: the top bar's Open in — installed editors, and opening a worktree in one (ids from that list only).
+  'system.editorApps': none,
+  'system.openIn': z.object({ workspaceId: id, appId: z.string().regex(/^[a-z]{2,20}$/) }),
   'connections.list': none,
   /** Apps (ADR 0023): the user's Composio API key, and app accounts connected through it. */
   'apps.status': none,
@@ -592,6 +597,9 @@ export const requestSchemas = {
   'github.pullRequests': z.object({ projectId: id }),
   'github.issues': z.object({ projectId: id }),
   'github.createPullRequest': z.object({ workspaceId: id, draft: z.boolean().optional() }),
+  // ADR 0064: the open worktree's review with its checks, and Merge.
+  'github.pullRequestFor': z.object({ workspaceId: id }),
+  'github.merge': z.object({ workspaceId: id, number: z.number().int().positive(), method: z.enum(['squash', 'merge', 'rebase']) }),
   // Code hosts and issue trackers (ADR 0040). The github.* channels above answer for whichever code host
   // the Workspace has (GitHub or GitLab); tracker keys go in here and never come back out.
   'integrations.status': none,
@@ -725,6 +733,8 @@ export interface ResponseMap {
   'store.installSkill': void
   'store.searchMcp': McpSearchResult
   'system.openUrl': void
+  'system.editorApps': EditorApp[]
+  'system.openIn': void
   'files.list': { root: string; entries: FileEntry[] }
   'files.search': FileEntry[]
   'files.read': { content: string; size: number }
@@ -738,6 +748,7 @@ export interface ResponseMap {
   'editors.list': EditorView[]
   'editors.open': EditorView
   'editors.close': void
+  'editors.openReview': EditorView
   'connections.list': ConnectionView[]
   'apps.status': AppsStatus
   'apps.setKey': AppsStatus
@@ -828,6 +839,8 @@ export interface ResponseMap {
   'github.pullRequests': PullRequest[]
   'github.issues': GithubIssue[]
   'github.createPullRequest': { url: string }
+  'github.pullRequestFor': PullRequestDetail | null
+  'github.merge': void
   'integrations.status': IntegrationsView
   'integrations.connectJira': IntegrationsView
   'integrations.connectLinear': IntegrationsView

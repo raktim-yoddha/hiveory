@@ -1,9 +1,10 @@
 import { AppException } from '@shared/errors'
-import type { GithubStatus, PullRequest } from '@shared/domain/github'
+import type { GithubStatus, MergeMethod, PullRequest, PullRequestDetail } from '@shared/domain/github'
 import type { HostAccount, Issue } from '@shared/domain/integrations'
 import type { GitService } from './git-service'
 import { gitArgs } from './git-commands'
-import { hostCli, reasonOf, urlIn, type CodeHost, type HostCli } from './code-host'
+import { detailOf, hostCli, reasonOf, urlIn, type CodeHost, type HostCli } from './code-host'
+import { GH_PR_FIELDS, isNoReview, parseGithubPullRequest } from './pull-request-detail'
 import { githubAvatarUrl } from '../projects/avatar'
 
 /** Pull requests and issues via the GitHub CLI (`gh`), optional: everything else works without it. */
@@ -56,6 +57,19 @@ export class GithubService implements CodeHost {
   async issues(repoRoot: string): Promise<Issue[]> {
     const out = await this.gh(repoRoot, ['issue', 'list', '--state', 'open', '--limit', '50', '--json', 'number,title,url'])
     return (JSON.parse(out) as Array<{ number: number; title: string; url: string }>).map((i) => ({ key: `#${i.number}`, title: i.title, url: i.url }))
+  }
+
+  async pullRequestFor(worktreePath: string, branch: string): Promise<PullRequestDetail | null> {
+    try {
+      return parseGithubPullRequest(await this.gh(worktreePath, ['pr', 'view', branch, '--json', GH_PR_FIELDS]))
+    } catch (error) {
+      if (isNoReview(detailOf(error))) return null
+      throw error
+    }
+  }
+
+  async merge(worktreePath: string, number: number, method: MergeMethod): Promise<void> {
+    await this.gh(worktreePath, ['pr', 'merge', String(number), `--${method}`], 120_000)
   }
 
   async createPullRequest(repoRoot: string, worktreePath: string, branch: string, draft: boolean): Promise<string> {

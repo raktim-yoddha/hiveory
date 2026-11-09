@@ -1,20 +1,26 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, ChevronDown, ChevronRight, Dot, FileCode2, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
-import type { ChangedFile, ChangeSource, CommitSummary } from '@shared/domain/changes'
+import { ArrowRight, ChevronDown, ChevronRight, Dot, FileCode2, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Maximize2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
+import type { ChangedFile, ChangeSource } from '@shared/domain/changes'
 import { IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
-import { Menu, type MenuEntry } from '../../components/ui/Menu'
+import { Menu } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { cx } from '../../lib/cx'
 import { runAction } from '../../stores/notices'
-import { buildChangeTree, diffLines, shortCount, type ChangeNode } from './change-tree'
-import { useChangesView } from './changes-store'
+import { buildChangeTree, shortCount, type ChangeNode } from './change-tree'
+import { DiffView } from './DiffView'
+import { openReview, useChangesView } from './changes-store'
 import { useChangeSet } from './useChangeSet'
+import { UNCOMMITTED, useChangeSource } from './useChangeSource'
 import { CommitBar } from './CommitBar'
 import styles from './ChangesPanel.module.css'
 
-const UNCOMMITTED: ChangeSource = { kind: 'uncommitted' }
+/** The worktree's change set for the source its views share. */
+export function useChangeSetFor(workspaceId: string) {
+  const source = useChangesView((s) => s.source[workspaceId]) ?? UNCOMMITTED
+  return useChangeSet(workspaceId, source)
+}
 
 /** "+1.9k −684", green and red; nothing for an empty side. */
 export function DiffStat({ additions, deletions, className }: { additions: number; deletions: number; className?: string }) {
@@ -26,56 +32,16 @@ export function DiffStat({ additions, deletions, className }: { additions: numbe
   )
 }
 
-const sourceLabel = (source: ChangeSource, commits: CommitSummary[]): string => {
-  if (source.kind === 'uncommitted') return 'Uncommitted'
-  if (source.kind === 'branch') return 'Branch'
-  if (source.kind === 'turn') return 'One turn'
-  return commits.find((c) => c.sha === source.sha)?.subject ?? source.sha.slice(0, 7)
-}
-
 /**
  * The side panel's Changes tab (ADR 0058): every file the agents (and you) changed in this worktree,
  * as a tree with line counts; a file opens its diff in place. Uncommitted work, the whole branch
  * against its base, one commit, or one chat turn.
  */
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
-  const source = useChangesView((s) => s.source[workspaceId]) ?? UNCOMMITTED
-  const setSource = useChangesView((s) => s.setSource)
-  const { changes, error, loading, refresh } = useChangeSet(workspaceId, source)
-  const [commits, setCommits] = useState<CommitSummary[]>([])
+  const { changes, error, loading, refresh } = useChangeSetFor(workspaceId)
+  const { source, choose, commits, items, label } = useChangeSource(workspaceId, changes)
   const [showCommits, setShowCommits] = useState(false)
   const tree = useMemo(() => buildChangeTree(changes?.files ?? []), [changes])
-
-  useEffect(() => {
-    let live = true
-    void api('changes.commits', { workspaceId })
-      .then((list) => live && setCommits(list))
-      .catch(() => undefined)
-    return () => {
-      live = false
-    }
-  }, [workspaceId, changes?.branch])
-
-  const choose = (next: ChangeSource): void => setSource(workspaceId, next)
-  const items: MenuEntry[] = [
-    { type: 'item', id: 'uncommitted', label: 'Uncommitted', hint: 'Everything not committed yet', checked: source.kind === 'uncommitted', onSelect: () => choose(UNCOMMITTED) },
-    { type: 'item', id: 'branch', label: 'Branch', hint: changes?.base && source.kind === 'branch' ? `Against ${changes.base}` : 'Against its base branch', checked: source.kind === 'branch', onSelect: () => choose({ kind: 'branch' }) },
-    ...(source.kind === 'turn' ? [{ type: 'item' as const, id: 'turn', label: 'One turn', hint: "A chat turn's own changes", checked: true, onSelect: () => undefined }] : []),
-    ...(commits.length
-      ? [
-          { type: 'separator' as const },
-          { type: 'label' as const, label: 'Commits' },
-          ...commits.slice(0, 20).map((c) => ({
-            type: 'item' as const,
-            id: c.sha,
-            label: c.subject || c.sha.slice(0, 7),
-            hint: c.sha.slice(0, 7),
-            checked: source.kind === 'commit' && source.sha === c.sha,
-            onSelect: () => choose({ kind: 'commit', sha: c.sha })
-          }))
-        ]
-      : [])
-  ]
 
   return (
     <div className={styles.panel}>
@@ -85,6 +51,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
           <span className={styles.ellipsis}>{changes?.branch ?? '—'}</span>
         </span>
         <span className={styles.flex} />
+        <IconButton label="Review every file in a pane" icon={<Maximize2 />} onClick={() => void openReview(workspaceId)} />
         <IconButton label="Refresh changes" icon={<RefreshCw className={loading ? 'spin' : undefined} />} onClick={() => void refresh()} />
       </div>
       <div className={styles.bar}>
@@ -93,7 +60,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
           items={items}
           trigger={(props) => (
             <button type="button" {...props} className={styles.source}>
-              <span className={styles.ellipsis}>{sourceLabel(source, commits)}</span>
+              <span className={styles.ellipsis}>{label}</span>
               <ChevronDown aria-hidden />
             </button>
           )}
@@ -270,32 +237,10 @@ function FileRow({ file, name, depth, workspaceId, source, onChanged }: { file: 
               <Loader2 className="spin" aria-hidden /> Loading diff…
             </div>
           ) : (
-            <DiffView patch={patch} />
+            <DiffView patch={patch} bounded />
           )}
         </div>
       )}
     </li>
-  )
-}
-
-const MAX_DIFF_LINES = 3000
-
-/** A unified diff, colored by line; very long ones are cut. */
-function DiffView({ patch }: { patch: string }) {
-  const lines = useMemo(() => diffLines(patch), [patch])
-  if (lines.length === 0) return <p className={styles.note}>No line changes.</p>
-  return (
-    <pre className={styles.code}>
-      {lines.slice(0, MAX_DIFF_LINES).map((line, i) => (
-        <span key={i} className={cx(styles.line, styles[line.kind])}>
-          <span className={styles.sign} aria-hidden>
-            {line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '}
-          </span>
-          {line.text || ' '}
-          {'\n'}
-        </span>
-      ))}
-      {lines.length > MAX_DIFF_LINES && <span className={cx(styles.line, styles.note)}>… {lines.length - MAX_DIFF_LINES} more lines</span>}
-    </pre>
   )
 }

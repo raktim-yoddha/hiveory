@@ -226,51 +226,6 @@
   background: var(--color-surface-inset);
 }
 
-.code {
-  margin: 0;
-  max-height: calc(var(--menu-max-height) * 1.5);
-  overflow: auto;
-  padding: var(--space-2) 0;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  line-height: var(--leading-normal);
-  user-select: text;
-}
-
-.line {
-  display: block;
-  min-width: max-content;
-  padding: 0 var(--space-4) 0 0;
-  white-space: pre;
-}
-
-.sign {
-  display: inline-block;
-  width: var(--space-7);
-  color: var(--color-text-faint);
-  text-align: center;
-  user-select: none;
-}
-
-.line.add {
-  background: color-mix(in srgb, var(--color-success) 14%, transparent);
-  color: var(--color-text);
-}
-
-.line.del {
-  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
-  color: var(--color-text);
-}
-
-.line.hunk {
-  margin: var(--space-2) 0;
-  color: var(--color-text-faint);
-}
-
-.line.context {
-  color: var(--color-text-secondary);
-}
-
 .note {
   margin: 0;
   padding: var(--space-3) var(--space-4);

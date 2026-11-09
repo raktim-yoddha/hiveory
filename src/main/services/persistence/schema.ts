@@ -55,8 +55,10 @@ export const MAX_ARCHIVED = 30
 export interface StoredEditor {
   id: string
   workspaceId: string
-  /** Relative to the workspace folder. */
+  /** Relative to the workspace folder ('.' for a review). */
   path: string
+  /** A review of the worktree's changes rather than one file (ADR 0064). */
+  kind?: 'review'
 }
 
 /** A connection as saved: env and header values are sealed by SecretBox. */
@@ -234,7 +236,7 @@ const connectionSchema: z.ZodType<StoredConnection> = z.object({
   session: str.optional()
 })
 
-const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000) })
+const editorSchema: z.ZodType<StoredEditor> = z.object({ id: z.string().regex(/^e[a-f0-9]{12}$/), workspaceId: str, path: z.string().min(1).max(1000), kind: z.literal('review').optional() })
 
 const archivedSchema: z.ZodType<ArchivedProject> = z.object({
   project: projectSchema,

@@ -23,7 +23,7 @@ export class EditorService {
   ) {}
 
   private view(editor: StoredEditor): EditorView {
-    return { ...editor, name: basename(editor.path) }
+    return { ...editor, name: editor.kind === 'review' ? 'Review' : basename(editor.path) }
   }
 
   list(workspaceId: string): EditorView[] {
@@ -36,9 +36,18 @@ export class EditorService {
   }
 
   open(workspaceId: string, path: string, placement?: Placement): EditorView {
-    const existing = this.store.state.editors.find((e) => e.workspaceId === workspaceId && e.path === path)
+    return this.add(workspaceId, { path }, placement)
+  }
+
+  /** The worktree's review pane, every changed file's diff (ADR 0064): one per worktree, like a file. */
+  openReview(workspaceId: string, placement?: Placement): EditorView {
+    return this.add(workspaceId, { path: '.', kind: 'review' }, placement)
+  }
+
+  private add(workspaceId: string, what: Pick<StoredEditor, 'path' | 'kind'>, placement?: Placement): EditorView {
+    const existing = this.store.state.editors.find((e) => e.workspaceId === workspaceId && e.path === what.path && e.kind === what.kind)
     if (existing) return this.view(existing)
-    const editor: StoredEditor = { id: `e${randomBytes(6).toString('hex')}`, workspaceId, path }
+    const editor: StoredEditor = { id: `e${randomBytes(6).toString('hex')}`, workspaceId, ...what }
     const tree = this.layouts.get(workspaceId, this.paneIds(workspaceId))
     this.store.update((s) => {
       s.editors.push(editor)
@@ -65,7 +74,7 @@ export class EditorService {
     let changed = false
     this.store.update((s) => {
       for (const e of s.editors) {
-        if (e.workspaceId !== workspaceId) continue
+        if (e.workspaceId !== workspaceId || e.kind) continue
         if (e.path === from || e.path.startsWith(`${from}/`)) {
           e.path = to + e.path.slice(from.length)
           changed = true

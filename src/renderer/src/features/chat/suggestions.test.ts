@@ -37,6 +37,16 @@ describe('changes tree (ADR 0058)', () => {
     expect(lines.map((l) => l.kind)).toEqual(['hunk', 'del', 'add', 'context'])
   })
 
+  it('numbers each line in the old and new file from its hunk (ADR 0064)', () => {
+    const lines = diffLines(['@@ -10,3 +20,3 @@', ' ctx', '-old', '+new', ' after'].join('\n'))
+    expect(lines.slice(1).map((l) => [l.old, l.new])).toEqual([
+      [10, 20],
+      [11, undefined],
+      [undefined, 21],
+      [12, 22]
+    ])
+  })
+
   it('shortens big counts', () => {
     expect([shortCount(684), shortCount(1900), shortCount(12_400)]).toEqual(['684', '1.9k', '12k'])
   })

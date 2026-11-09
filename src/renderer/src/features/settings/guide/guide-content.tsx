@@ -130,6 +130,19 @@ export const GUIDE: GuideChapter[] = [
         keywords: 'commit push publish discard revert git changes'
       },
       {
+        heading: 'Review and merge',
+        body: (
+          <p>
+            The bar above the panes shows the worktree&rsquo;s next git step: <b>Commit</b>, <b>Publish branch</b>, <b>Push</b>,{' '}
+            <b>Create PR</b> or <b>Merge PR</b>. Its menu opens <b>Review changes</b>, every changed file&rsquo;s diff in one pane with line
+            numbers, and the side panel&rsquo;s <b>Pull request</b> tab: the checks with their times, and Merge (squash, merge commit or
+            rebase). <b>Run</b> starts a Workspace script; <b>Open in</b> opens the worktree in VS Code, Cursor, Zed or another installed
+            editor.
+          </p>
+        ),
+        keywords: 'review diff pull request merge checks ci run script open in editor vscode cursor'
+      },
+      {
         heading: 'Delete and repair',
         body: (
           <p>
@@ -204,11 +217,12 @@ export const GUIDE: GuideChapter[] = [
         heading: 'Terminal or chat',
         body: (
           <p>
-            A CLI picked from a pane's "+" runs in its own terminal. "+" › Chat UI opens a chat instead: choose its CLI and model in
-            the message box, and change them there at any time. Click anywhere in a chat to type.
+            A CLI picked from a pane's "+" runs in its own terminal. "+" › Chat UI opens a chat instead. One menu in its message box
+            sets the CLI and model (star the ones you use; <K>Ctrl</K> <K>1</K>–<K>9</K> pick), the reasoning effort, Standard or Fast,
+            plan mode and Read-only or Full access, and changes them at any time. Click anywhere in a chat to type.
           </p>
         ),
-        keywords: 'chat ui view'
+        keywords: 'chat ui view model effort access fast plan picker'
       },
       {
         heading: 'Presets',
@@ -286,7 +300,8 @@ export const GUIDE: GuideChapter[] = [
         heading: 'The side panel',
         body: (
           <p>
-            Inside a worktree the side panel holds the Dashboard, Changes, Sessions (every CLI conversation, resumable) and the Explorer. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
+            Inside a worktree the side panel holds the Dashboard, Changes, Pull request (the branch&rsquo;s checks and Merge), Sessions
+            (every CLI conversation, resumable) and the Explorer. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
             button.
           </p>
         ),

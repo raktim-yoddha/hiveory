@@ -1,0 +1,382 @@
+/* The composer's one picker (ADR 0064): CLI, model, effort, speed, plan mode and access. */
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: calc(var(--menu-min-width) * 1.6);
+  height: var(--control-md);
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.triggerText {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triggerMeta {
+  flex: none;
+  color: var(--color-text-muted);
+}
+
+.triggerIcon,
+.chevron {
+  flex: none;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--color-text-muted);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--menu-max-height);
+  min-height: 0;
+}
+
+.columns {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The CLIs down the left: their logos, starred models first. */
+.rail {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+  overflow-y: auto;
+  border-right: var(--border-width) solid var(--color-border);
+}
+
+.railTab {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.railTab:hover {
+  background: var(--color-surface-hover);
+}
+
+.railActive {
+  background: var(--fill-selected);
+  color: var(--color-text);
+}
+
+/* The chosen CLI is marked on the rail's edge as well. */
+.railActive::after {
+  position: absolute;
+  top: var(--space-3);
+  right: calc(-1 * var(--space-3) - var(--border-width));
+  bottom: var(--space-3);
+  width: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-bronze);
+  content: '';
+}
+
+.star {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+.railRule {
+  flex: none;
+  width: var(--control-sm);
+  height: var(--border-width);
+  margin: var(--space-2) 0;
+  background: var(--color-border);
+}
+
+.models {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.search {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+  height: calc(var(--control-lg) + var(--space-5));
+  padding: 0 var(--space-3) 0 var(--space-6);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.search > svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--text-md);
+  outline: none;
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+}
+
+.option:hover {
+  background: var(--color-surface-hover);
+}
+
+.optionMain {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  height: calc(var(--control-lg) + var(--space-2));
+  padding: 0 var(--space-3) 0 var(--space-5);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.optionLabel {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-md);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionGroup {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}
+
+.selected .optionLabel {
+  color: var(--color-text);
+}
+
+.check {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-bronze);
+}
+
+.flex {
+  flex: 1;
+  min-width: 0;
+}
+
+.keys {
+  flex: none;
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-raised-solid);
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--text-2xs);
+  line-height: var(--control-xs);
+}
+
+/* A star appears on a model's row when pointed at, and stays once set. */
+.starButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  margin-right: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-faint);
+  opacity: 0;
+}
+
+.starButton svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.option:hover .starButton,
+.starButton:focus-visible,
+.starred {
+  opacity: 1;
+}
+
+.starred {
+  color: var(--color-bronze);
+}
+
+.starred svg {
+  fill: currentColor;
+}
+
+.more {
+  width: 100%;
+  height: var(--control-lg);
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-md);
+  text-align: left;
+}
+
+.more:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.note {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+/* The model's reasoning effort, beside the models. */
+.effort {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: calc(var(--menu-min-width) * 1.15);
+  padding: 0 var(--space-3) var(--space-3);
+  overflow-y: auto;
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.effortHead {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: calc(var(--control-lg) + var(--space-5));
+  margin-bottom: var(--space-3);
+  padding: 0 var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: var(--text-md);
+}
+
+.effortModel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.effortOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  height: calc(var(--control-lg) + var(--space-2));
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  text-align: left;
+}
+
+.effortOption:hover {
+  background: var(--color-surface-hover);
+}
+
+.effortOption svg {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.toggle svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.toggle:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.toggleOn {
+  border-color: transparent;
+  background: var(--fill-selected);
+  color: var(--color-text);
+}

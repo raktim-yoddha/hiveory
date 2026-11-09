@@ -1,0 +1,86 @@
+/* The worktree's top bar (ADR 0064), level with the sidebar's and the side panel's. */
+.bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  /* Never wider than the panes below: the names give way, then the bar clips (ADR 0024's minimum widths stay the panes'). */
+  min-width: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  height: var(--sidebar-bar-height);
+  padding: 0 var(--space-2) 0 var(--space-4);
+  -webkit-app-region: drag;
+}
+
+/* Under the window controls and the side panel button, the actions leave them room (ADR 0056). */
+.bar[data-under-controls] {
+  padding-right: var(--top-right-room);
+}
+
+.title {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.icon {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--color-text-muted);
+}
+
+.name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40ch;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project,
+.branch {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.noDrag,
+.actions {
+  -webkit-app-region: no-drag;
+}
+
+.flex {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+/* A narrow work area keeps the actions and lets the names give way. */
+@container (max-width: 560px) {
+  .project,
+  .branch {
+    display: none;
+  }
+}

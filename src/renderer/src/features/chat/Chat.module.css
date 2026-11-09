@@ -441,11 +441,6 @@ button.pill:hover,
   height: var(--icon-sm);
 }
 
-/* The model control is the one that gives up width first. */
-.pillModel {
-  flex: 0 1 auto;
-}
-
 .pillText,
 .pillLabel {
   overflow: hidden;
@@ -655,114 +650,6 @@ button.pill:hover,
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
-
-/* Model picker */
-.models {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.modelSearch {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
-  border-bottom: var(--border-width) solid var(--color-border-subtle);
-}
-
-.modelSearch > svg {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--color-text-muted);
-}
-
-.modelSearch input {
-  flex: 1;
-  min-width: 0;
-  height: var(--control-md);
-  border: 0;
-  background: transparent;
-  color: var(--color-text);
-  font-size: var(--text-md);
-}
-
-.modelSearch input:focus {
-  outline: none;
-}
-
-.modelList {
-  max-height: calc(var(--space-11) * 8);
-  padding: var(--space-2);
-  overflow-y: auto;
-}
-
-.modelGroup {
-  position: sticky;
-  top: 0;
-  padding: var(--space-4) var(--space-4) var(--space-2);
-  background: var(--color-glass);
-  color: var(--color-text-muted);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-}
-
-.modelOption {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  text-align: left;
-}
-
-.modelOption:hover,
-.modelOption:focus-visible {
-  outline: none;
-  background: var(--color-surface-hover);
-}
-
-.modelSelected {
-  background: var(--color-surface-active);
-}
-
-.modelText {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.modelLabel {
-  overflow: hidden;
-  font-size: var(--text-md);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modelId {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.modelBadge {
-  padding: 0 var(--space-3);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  font-size: var(--text-2xs);
-  line-height: var(--control-xs);
-}
-
 
 .modelNote {
   padding: var(--space-4) var(--space-5);

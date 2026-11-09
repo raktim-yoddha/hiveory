@@ -1,0 +1,83 @@
+/* A unified diff (ADR 0058, 0064): shared by the Changes tab and the review pane. */
+.code {
+  margin: 0;
+  overflow: auto;
+  padding: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+  user-select: text;
+}
+
+/* In the side panel a long diff scrolls in place; the review pane lets the page scroll. */
+.bounded {
+  max-height: calc(var(--menu-max-height) * 1.5);
+}
+
+.line {
+  display: flex;
+  min-width: max-content;
+  padding: 0 var(--space-4) 0 0;
+  white-space: pre;
+}
+
+/* The old and new line numbers, then the sign, outside the selectable text. */
+.num {
+  flex: none;
+  width: calc(var(--space-10) + var(--space-3));
+  padding-right: var(--space-4);
+  color: var(--color-text-faint);
+  text-align: right;
+  user-select: none;
+}
+
+.sign {
+  flex: none;
+  width: var(--space-7);
+  color: var(--color-text-faint);
+  text-align: center;
+  user-select: none;
+}
+
+.add {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-text);
+}
+
+.add .num,
+.add .sign {
+  color: var(--color-success);
+}
+
+.del {
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  color: var(--color-text);
+}
+
+.del .num,
+.del .sign {
+  color: var(--color-danger);
+}
+
+.hunk {
+  margin: var(--space-2) 0;
+  padding-left: var(--space-4);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+}
+
+.context {
+  color: var(--color-text-secondary);
+}
+
+.note {
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.empty {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+}

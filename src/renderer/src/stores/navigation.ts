@@ -21,7 +21,7 @@ export type View =
  */
 export interface PanelTab {
   id: string
-  kind: 'explorer' | 'sessions' | 'workspace' | 'changes'
+  kind: 'explorer' | 'sessions' | 'workspace' | 'changes' | 'pull'
   title: string
   /** The side panel splits into a top and a bottom area; tabs sit in the top one unless moved down. */
   group?: PanelGroup
@@ -78,7 +78,7 @@ interface NavigationState {
   setPanelSplit(share: number): void
   /** A Workspace's page lives in the side panel (ADR 0038): opens its last Worktree with the Dashboard on `tab`. */
   openProject(projectId: string, tab?: ProjectTab): void
-  /** A worktree's side panel always has Dashboard, Changes, Sessions and Explorer (ADR 0042, 0062). */
+  /** A worktree's side panel always has Dashboard, Changes, Pull request, Sessions and Explorer (ADR 0042, 0062, 0064). */
   ensurePanelTabs(scope: string): void
   openWorkspace(projectId: string, workspaceId: string, focusPaneId?: string): void
   goHome(): void
@@ -183,7 +183,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
       return existing
     }
     const n = tabs.filter((t) => t.kind === kind).length + 1
-    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', changes: 'Changes' }[kind]
+    const label = { explorer: 'Explorer', sessions: 'Sessions', workspace: 'Dashboard', changes: 'Changes', pull: 'Pull request' }[kind]
     const tab: PanelTab = { id: tabId, kind, title: n > 1 ? `${label} ${n}` : label, ...(group === 'bottom' ? { group } : {}) }
     const key = panelGroupKey(scope, group)
     set((s) => ({
@@ -238,7 +238,7 @@ export const useNavigation = create<NavigationState>((set, get) => ({
     if (!scope) return
     const fresh = !get().panelTabs[scope]
     // Every kind, once: a worktree opened before keeps its order and gets what it lacks.
-    for (const kind of ['workspace', 'changes', 'sessions', 'explorer'] as const) get().addPanelTab(scope, kind, undefined, fresh && kind === 'workspace')
+    for (const kind of ['workspace', 'changes', 'pull', 'sessions', 'explorer'] as const) get().addPanelTab(scope, kind, undefined, fresh && kind === 'workspace')
   },
   openWorkspace: (projectId, workspaceId, focusPaneId) =>
     set((s) => ({

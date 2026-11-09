@@ -7,9 +7,9 @@ const { useNavigation, selectedProjectId } = await import('./navigation')
 
 // ADR 0062: Schedules and Workspace settings left the side panel.
 describe('navigation (ADR 0062)', () => {
-  it('gives a worktree only Dashboard, Changes, Sessions and Explorer', () => {
+  it('gives a worktree only Dashboard, Changes, Pull request, Sessions and Explorer (ADR 0064)', () => {
     useNavigation.getState().ensurePanelTabs('w1')
-    expect(useNavigation.getState().panelTabs.w1?.map((t) => t.kind)).toEqual(['workspace', 'changes', 'sessions', 'explorer'])
+    expect(useNavigation.getState().panelTabs.w1?.map((t) => t.kind)).toEqual(['workspace', 'changes', 'pull', 'sessions', 'explorer'])
   })
 
   it('opens Settings on one Workspace and returns to what was behind', () => {

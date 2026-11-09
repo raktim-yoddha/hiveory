@@ -35,6 +35,30 @@ Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busi
 a click anywhere on the bar unfolds it into a list (each row opens its pane): "N agents", then dot · logo · pet name · status · time in that status
 (ADR 0040). A loop spins at the end of a Worktree's row while any of its agents is working.
 
+### Worktree bar and review (ADR 0064)
+
+```text
+┌ ⌂ app  demo-app  main  ⋯                    [▷ ▾] [</> VS Code ▾] [⟜ Commit ▾] ┐
+│ [Review ×] [Milo ×] [+]                                                          │
+│ Uncommitted ▾  +8 −2  3 files                                          ⇕  ⟳      │
+│ ┌ ˅ README.md                    +4 −1  ✎ ┐                                       │
+│ │ 1  1   # demo                          │                                       │
+│ │ 3    − A small app.                    │                                       │
+│ │    3 + A small app, now reviewed.      │                                       │
+│ └────────────────────────────────────────┘                                       │
+```
+
+Run ▾: the Workspace script used last; the menu lists scripts and Edit scripts…. Open in ▾: installed editors,
+File manager, Copy path. The git button shows the next step (Commit · Publish branch · Push · Create PR · Merge
+PR); its menu: Commit…, Push, Create pull request, Create draft pull request, Pull request, Open on the code host,
+Review changes. Review pane: the Changes tab's source menu, +/−, file count, collapse/expand all, refresh; each
+file a card with a sticky header (chevron, name, folder, New/Deleted/Renamed, +/−, open) and a numbered diff.
+
+Pull request tab (side panel): View on GitHub/GitLab ↗ · refresh; title #n; Open/Draft/Merged/Closed chip,
+branch → base, author, review decision; checks card (headline, counts; unfolds into checks: state icon, name,
+workflow, time, log); Merge pull request ▾ (Squash and merge · Create a merge commit · Rebase and merge) with a
+confirmation. None yet: Create PR · Draft. Unavailable: the reason and Code host settings.
+
 ### Window chrome (ADR 0056)
 
 No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then the
@@ -65,8 +89,9 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   schedule, who ("Claude Code · demo-app · main"), when, by you or the schedule, duration, why it failed.
 - Message box (a Work agent in chat view, ADR 0058): above it, pills for the agent's tasks ("4/6
   tasks"), its subagents and the worktree's changes ("+1.9k −684", opens Changes); in it, `@` file and
-  `/` command suggestions; toolbar "+" (files, picture of a window) · CLI and model (one picker: CLIs
-  down the left, the chosen one's models on the right) · effort (when the model has it) · permissions · fast (⚡, Opus) · plan · context meter · usage
+  `/` command suggestions; toolbar "+" (files, picture of a window) · one agent picker (ADR 0064: a rail of
+  CLIs with ★ starred models first · search, models with Ctrl+1–9, Show more · Reasoning levels · footer Standard |
+  Fast, Plan mode, Read-only | Full access; the trigger shows CLI, model, effort and access) · context meter · usage
   limits (gauge and popover, ADR 0055) · send. A reply that changed files ends with "N files changed
   +a −d · View · Undo"; selected reply text offers Quote. While answering, the box stays open, a queue button sits beside Stop, and
   waiting messages list above the box ("Next" / "Then", each with ×) (ADR 0031).

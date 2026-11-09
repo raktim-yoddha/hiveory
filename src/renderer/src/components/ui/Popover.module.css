@@ -17,6 +17,10 @@
   width: calc(var(--menu-min-width) * 2.2);
 }
 
+.panel[data-width='xxl'] {
+  width: min(calc(var(--menu-min-width) * 3.6), calc(100vw - var(--space-8)));
+}
+
 .panel[data-width='xl'] {
   width: min(calc(var(--menu-min-width) * 3), calc(100vw - var(--space-8)));
 }
