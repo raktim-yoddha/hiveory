@@ -63,3 +63,6 @@ Decided by the product owner: Find and other screens were cramped and wordy.
 - Settings rows, group titles and menus get more room (padding, line height, a hairline between
   rows), within the design tokens, and the longest Settings, Remote, Schedules and board texts are cut
   to one sentence.
+- The side panel's Changes, Sessions and Explorer pages share the Dashboard's inset; Explorer rows
+  and its search are taller. Skills and other Settings lists get roomier items, and a skill's
+  description shows one line (the full text is its tooltip).
