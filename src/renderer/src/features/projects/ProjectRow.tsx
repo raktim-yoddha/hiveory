@@ -30,7 +30,7 @@ const folderName = (path: string): string => path.split(/[\\/]/).filter(Boolean)
 export function ProjectRow({ project }: { project: Project }) {
   const view = useNavigation((s) => s.view)
   const openWorkspace = useNavigation((s) => s.openWorkspace)
-  const openProject = useNavigation((s) => s.openProject)
+  const openSettings = useNavigation((s) => s.openSettings)
   const lastId = useNavigation((s) => s.lastWorktree[project.id])
   const workspaces = useWorkspaces((s) => s.byProject[project.id] ?? EMPTY)
   const loadWorkspaces = useWorkspaces((s) => s.ensure)
@@ -74,8 +74,8 @@ export function ProjectRow({ project }: { project: Project }) {
               id: 'settings',
               label: 'Workspace settings',
               icon: <Settings2 />,
-              disabled: !target,
-              onSelect: () => openProject(project.id, 'settings')
+              // Settings, on this Workspace's page (ADR 0062).
+              onSelect: () => openSettings('workspace', project.id)
             },
             {
               type: 'item',

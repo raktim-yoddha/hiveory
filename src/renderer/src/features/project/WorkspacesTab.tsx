@@ -22,7 +22,7 @@ const EMPTY: WorkspaceView[] = []
 export function WorkspacesTab({ projectId }: { projectId: string }) {
   const workspaces = useWorkspaces((s) => s.byProject[projectId] ?? EMPTY)
   const load = useWorkspaces((s) => s.load)
-  const openProject = useNavigation((s) => s.openProject)
+  const openSettings = useNavigation((s) => s.openSettings)
   const [deleting, setDeleting] = useState<WorkspaceView | null>(null)
   const [creating, setCreating] = useState<WorkspaceView | null>(null)
   const [busy, setBusy] = useState(false)
@@ -78,7 +78,7 @@ export function WorkspacesTab({ projectId }: { projectId: string }) {
         ) : !code.status.available ? (
           <div className={list.empty}>
             <p>{code.status.reason ?? 'No code host for this workspace.'}</p>
-            <Button size="sm" variant="ghost" onClick={() => openProject(projectId, 'settings')}>
+            <Button size="sm" variant="ghost" onClick={() => openSettings('workspace', projectId)}>
               Code host settings
             </Button>
           </div>

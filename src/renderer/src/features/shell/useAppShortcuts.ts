@@ -52,14 +52,8 @@ export function runAppCommand(id: AppCommandId): boolean {
     if (workView().type !== 'workspace') return false
     if (!nav.panelOpen) nav.togglePanel()
     nav.togglePanelMaximized()
-  } else if (id === 'open-schedules') {
-    // The open worktree's Schedules tab (ADR 0055).
-    const view = workView()
-    if (view.type !== 'workspace') return false
-    nav.ensurePanelTabs(view.workspaceId)
-    nav.addPanelTab(view.workspaceId, 'routines')
-    if (!nav.panelOpen) nav.togglePanel()
-  } else if (id === 'new-worktree') {
+  } else if (id === 'open-schedules') nav.openSchedules()
+  else if (id === 'new-worktree') {
     const projectId = selectedProjectId(nav.view)
     if (!projectId) return false
     useNewWorktree.getState().open(projectId)

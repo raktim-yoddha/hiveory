@@ -17,7 +17,7 @@ export const APP_COMMANDS = [
   { id: 'toggle-sidebar', label: 'Show or hide the sidebar', group: 'General', mac: 'Meta+KeyB', other: 'Control+Shift+KeyB' },
   { id: 'toggle-side-panel', label: 'Show or hide the side panel', group: 'General', mac: 'Meta+KeyJ', other: 'Control+Shift+KeyJ' },
   { id: 'maximize-side-panel', label: 'Maximize or restore the side panel', group: 'General', mac: 'Meta+Shift+KeyM', other: 'Control+Shift+KeyM' },
-  { id: 'open-schedules', label: 'Open this worktree’s Schedules', group: 'General', mac: 'Meta+Shift+KeyS', other: 'Control+Shift+KeyS' },
+  { id: 'open-schedules', label: 'Open Schedules', group: 'General', mac: 'Meta+Shift+KeyS', other: 'Control+Shift+KeyS' },
   { id: 'new-worktree', label: 'New worktree in this workspace', group: 'Lists', mac: 'Meta+Shift+KeyN', other: 'Control+Shift+KeyN' },
   { id: 'next-item', label: 'Next worktree', group: 'Lists', mac: 'Meta+Alt+ArrowDown', other: 'Alt+ArrowDown' },
   { id: 'previous-item', label: 'Previous worktree', group: 'Lists', mac: 'Meta+Alt+ArrowUp', other: 'Alt+ArrowUp' },

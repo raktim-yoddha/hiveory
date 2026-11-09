@@ -12,8 +12,9 @@ message box: attachments, the CLI and model in one picker, effort, plan and fast
 `/` commands, queued next messages, the usage limits button and context meter, the agent's tasks,
 subagents and changes above the box, ADR 0031, 0055, 0058), with apps, the browser and computer use. **Schedules** (ADR 0028, 0040) start a new agent of a
 CLI in a Worktree with the schedule's instructions, once, every few minutes or on a calendar rule in
-a timezone; its card moves on the Kanban by its real state. They are made and listed in the side
-panel's Schedules tab (or a worktree's "New schedule…"), by day, week, list or run log. They run while
+a timezone; its card moves on the Kanban by its real state. They are made and listed on the Schedules
+page, opened from the top of the sidebar (or a worktree's "New schedule…"), by day, week, list or
+run log, every Workspace's together (ADR 0062). They run while
 Hiveory (or the user's Hiveory server) is running; a run missed by less than 12 hours still happens
 when it is back, and every run is kept in a run log. A run that ends or is missed while the user is
 elsewhere shows a desktop notification.
@@ -289,7 +290,7 @@ VS Code color themes (ADR 0034): search the Open VSX catalog, install, apply. A 
 
 - A pane's "+" opens terminals (PowerShell, Command Prompt, Git Bash) or agents, with search; Right and Bottom side by side; a CLI opens in its terminal; "Chat UI" opens a chat whose CLI and model are picked, and changed, in its message box (ADR 0059); its Also ask button sends the next message to other chat CLIs too, each in a new Chat UI to its right, so their answers read side by side (text only; attached files stay with the first chat)
 - Terminal panes are not agents: no Kanban card
-- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It starts with the Dashboard (the Workspace page; ADR 0038, 0039), Sessions and the Explorer, and "+" adds the Workspace's Schedules and Settings (ADR 0042). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
+- The side panel exists only in worktrees (never Home, Chat or Settings; ADR 0021). It always has the Dashboard (the Workspace page; ADR 0038, 0039), Changes, Sessions and the Explorer; a Workspace's settings open in Settings, from its right-click › Workspace settings (ADR 0062). The Explorer: file tree with search, new file/folder, rename, cut/copy/paste, delete (to trash), copy path
 - Double-clicking a file opens it as an editable pane (Ctrl+S saves); it reloads when an agent changes it on disk
 
 ## Side panel areas and Sessions (ADR 0020)

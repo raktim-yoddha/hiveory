@@ -1,13 +1,19 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useEffect, useRef, type ReactNode } from 'react'
-import { BarChart3, BookOpen, Blocks, Download, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { BarChart3, BookOpen, Blocks, Download, FolderGit2, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
+import { EmptyState } from '../../components/ui/EmptyState'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { cx } from '../../lib/cx'
 import { useSelectionBox } from '../../lib/useSelectionBox'
+import { useProjects } from '../../stores/data'
 import { useNavigation, type SettingsSection } from '../../stores/navigation'
+import { ProjectSettingsTab } from '../project/ProjectSettingsTab'
+import { WorkspaceMark } from '../projects/WorkspaceMark'
+import { readSort, sortProjects } from '../projects/project-list'
 import { AboutSection } from './AboutSection'
+import { SettingsPage } from './SettingsPage'
 import { AgentsSection } from './AgentsSection'
 import { AppearanceSection } from './AppearanceSection'
 import { BrowserSection } from './BrowserSection'
@@ -20,7 +26,7 @@ import { UpdatesSection } from './UpdatesSection'
 import { UsageSection } from './UsageSection'
 import styles from './Settings.module.css'
 
-const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
+const SECTIONS: Array<{ id: Exclude<SettingsSection, 'workspace'>; label: string; icon: ReactNode }> = [
   { id: 'appearance', label: 'Appearance', icon: <Palette /> },
   { id: 'agents', label: 'Agents', icon: <AgentIcon /> },
   { id: 'browser', label: 'Browser', icon: <Globe /> },
@@ -35,12 +41,19 @@ const SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> =
 ]
 
 /**
- * App-level settings (a Workspace's own live in its Dashboard), as a window over the app (ADR 0039):
- * what is behind stays in place, so appearance changes show at once. Escape or × closes it.
+ * Settings, as a window over the app (ADR 0039): what is behind stays in place, so appearance changes
+ * show at once. Escape or × closes it. Under the app's sections, each Workspace's own settings
+ * (ADR 0062: a Workspace's right-click › Workspace settings opens its page here).
  */
-export function SettingsScreen({ section }: { section: SettingsSection }) {
+export function SettingsScreen({ section, projectId }: { section: SettingsSection; projectId?: string }) {
   const { openSettings, closeSettings } = useNavigation(useShallow((s) => ({ openSettings: s.openSettings, closeSettings: s.closeSettings })))
-  const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]!
+  const projects = useProjects((s) => s.projects)
+  const sorted = useMemo(() => sortProjects(projects, readSort()), [projects])
+  const project = section === 'workspace' ? projects.find((p) => p.id === projectId) : undefined
+  const current =
+    section === 'workspace'
+      ? { id: `workspace:${projectId ?? ''}`, label: project ? `${project.name} settings` : 'Workspace settings' }
+      : (SECTIONS.find((s) => s.id === section) ?? SECTIONS[0]!)
   const listRef = useRef<HTMLUListElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
   const pill = useSelectionBox(listRef, '[aria-current="page"]', [current.id])
@@ -82,6 +95,28 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
               </button>
             </li>
           ))}
+          {sorted.length > 0 && (
+            <li className={styles.navGroup} aria-hidden>
+              Workspaces
+            </li>
+          )}
+          {sorted.map((p) => {
+            const here = section === 'workspace' && p.id === projectId
+            return (
+              <li key={p.id}>
+                <button
+                  type="button"
+                  className={cx(styles.navItem, here && styles.navActive)}
+                  aria-current={here ? 'page' : undefined}
+                  aria-label={`${p.name} workspace settings`}
+                  onClick={() => openSettings('workspace', p.id)}
+                >
+                  <WorkspaceMark project={p} className={styles.navMark} />
+                  <span className={styles.navText}>{p.name}</span>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       </nav>
       <section className={styles.content} aria-label={current.label}>
@@ -98,6 +133,14 @@ export function SettingsScreen({ section }: { section: SettingsSection }) {
           {current.id === 'updates' && <UpdatesSection />}
           {current.id === 'guide' && <GuideSection />}
           {current.id === 'about' && <AboutSection />}
+          {section === 'workspace' &&
+            (project ? (
+              <SettingsPage title={project.name} description="This workspace's own settings. What is left unset follows Settings › Agents.">
+                <ProjectSettingsTab project={project} />
+              </SettingsPage>
+            ) : (
+              <EmptyState icon={<FolderGit2 />} title="Workspace not found" description="It may have been removed." />
+            ))}
         </ErrorBoundary>
       </section>
     </div>

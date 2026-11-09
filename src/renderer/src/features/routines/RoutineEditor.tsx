@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { mainWorkspaceId } from '@shared/domain'
 import { Paperclip, Play, Trash2 } from 'lucide-react'
 import { create } from 'zustand'
 import type { ChatAttachment } from '@shared/domain/chat'
@@ -20,9 +21,9 @@ import { cronDays, localZone, sameZone, when, WEEKDAYS } from './routine-text'
 import form from '../../components/ui/form.module.css'
 import styles from './Routines.module.css'
 
-type Target = { routineId: string } | { startsAt?: string; target: RoutineTarget }
+type Target = { routineId: string } | { startsAt?: string; target?: RoutineTarget }
 
-/** What the editor is open for: a routine, a new one for a Worktree (maybe at a time), or nothing. */
+/** What the editor is open for: a routine, a new one (for a Worktree, or one to pick; maybe at a time), or nothing. */
 export const useRoutineEditor = create<{ target: Target | null; open(target: Target): void; close(): void }>((set) => ({
   target: null,
   open: (target) => set({ target }),
@@ -283,7 +284,15 @@ function EditorDialog({ target }: { target: Target }) {
               </label>
             </div>
           </details>
-          {/* A routine belongs to its Workspace (ADR 0040): only the worktree and CLI are picked here. */}
+          {/* A routine belongs to its Workspace (ADR 0040): picked for a new one only, starting on its Primary (ADR 0062). */}
+          {!routine && (
+            <Select
+              label="Workspace"
+              value={draft.projectId}
+              options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+              onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: mainWorkspaceId(v) }))}
+            />
+          )}
           <Select
             label="Worktree"
             value={draft.workspaceId}

@@ -45,6 +45,8 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: var(--space-5) var(--space-4);
+  /* Many Workspaces scroll the list, never the window. */
+  overflow-y: auto;
   border-right: var(--border-width) solid var(--color-border-subtle);
   background: var(--color-surface-top);
 }
@@ -120,6 +122,29 @@
 .navItem:hover {
   background: var(--color-surface-hover);
   color: var(--color-text);
+}
+
+/* Under the app's sections: each Workspace's own settings (ADR 0062). */
+.navGroup {
+  padding: var(--space-6) var(--space-5) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.navMark {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.navText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .navActive,

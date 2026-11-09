@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { CalendarClock, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import type { RoutineRun, RoutineTarget, RoutineView } from '@shared/domain/routine'
+import type { RoutineRun } from '@shared/domain/routine'
 import { Button, IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Popover } from '../../components/ui/Popover'
 import { Tabs } from '../../components/ui/Tabs'
 import { Toggle } from '../../components/ui/Toggle'
-import { useSettings, useWorkspaces } from '../../stores/data'
+import { useSettings } from '../../stores/data'
 import { useRoutines } from '../../stores/routines'
 import chat from '../chat/Chat.module.css'
 import { useRoutineEditor } from './RoutineEditor'
@@ -28,26 +28,16 @@ const VIEWS: Array<{ value: View; label: string }> = [
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-/** Whose schedules a Schedules page shows: one Workspace's, opened from one of its Worktrees (ADR 0040, 0055). */
-export interface ScheduleScope {
-  projectId: string
-  workspaceId: string
-}
-
-const NO_WORKTREES: Array<{ id: string }> = []
-
 /**
- * A Workspace's schedules on a day (or week) calendar, or as a list, with the run log and the
- * keep-awake switch (ADR 0055). It lives in the side panel's Schedules tab.
+ * Every Workspace's schedules on a week (or day) calendar, or as a list, with the run log and the
+ * keep-awake switch (ADR 0055). It fills the main area, opened from the top of the sidebar (ADR 0062).
  */
-export function RoutinesPage({ scope }: { scope: ScheduleScope }) {
-  const { routines, runs, loaded, load } = useRoutines()
-  const worktrees = useWorkspaces((s) => s.byProject[scope.projectId] ?? NO_WORKTREES)
+export function RoutinesPage() {
+  const { routines: shown, runs, loaded, load } = useRoutines()
   const open = useRoutineEditor((s) => s.open)
   const settings = useSettings((s) => s.settings)
   const updateSettings = useSettings((s) => s.update)
-  // The side panel is narrow: Work opens on one day.
-  const [view, setView] = useState<View>('day')
+  const [view, setView] = useState<View>('week')
   /** The day the calendar is on: its week in Week view, itself in Day view. */
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()))
 
@@ -55,12 +45,9 @@ export function RoutinesPage({ scope }: { scope: ScheduleScope }) {
     if (!loaded) void load()
   }, [loaded, load])
 
-  const inScope = (r: RoutineView): boolean => worktrees.some((w) => w.id === r.target.workspaceId)
-  const shown = routines.filter(inScope)
   const isMine = (run: RoutineRun): boolean => shown.some((r) => r.id === run.routineId)
-  // A new schedule (or a click on an empty hour) is for the open Worktree.
-  const target: RoutineTarget = { kind: 'workspace', projectId: scope.projectId, workspaceId: scope.workspaceId, cliId: '' }
-  const create = (startsAt?: string): void => open({ target, startsAt })
+  // The editor asks which Workspace, worktree and CLI a new schedule runs in.
+  const create = (startsAt?: string): void => open({ startsAt })
   const shownRuns = runs.filter(isMine)
   const weekStart = weekStartOf(anchor)
   const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6)

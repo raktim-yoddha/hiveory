@@ -7,7 +7,7 @@
 │ (no title bar, ADR 0056: every column starts at the top)         │
 ├──────────────┬───────────────────────────────────────────────────┤
 │◆ Hiveory  ◨◧ │                                                   │
-│              │                                                   │
+│ 🗓 Schedules  │                                                   │
 │  Workspaces  │                 Current Screen                    │
 │              │                                                   │
 │   + Add      │                                                   │
@@ -23,9 +23,12 @@
 └──────────────┴───────────────────────────────────────────────────┘
 ```
 
-The sidebar (ADR 0038): ◆ is the workspace's mark (icon and color from its Settings); clicking it
+The sidebar (ADR 0038): Schedules sits above the Workspaces and opens the Schedules page in the main
+area (ADR 0062). ◆ is the workspace's mark (icon and color from its Settings); clicking it
 folds or unfolds its Worktrees. The workspace row does nothing while unfolded; folded, it shows the
-last-opened Worktree's folder and branch and clicking it opens that Worktree. Each Worktree shows its
+last-opened Worktree's folder and branch and clicking it opens that Worktree. Right-click a
+workspace for Workspace settings (Settings, on that workspace's page), Pin, Open folder, Copy path
+and Remove. Each Worktree shows its
 name and branch; the Primary shows the workspace folder's name with a Primary tag. "+" offers New
 branch · Existing branch · Remote branch. A workspace whose folder is gone shows a warning mark.
 Under each Worktree, its agents as one bar of chips (status dot + CLI logo, busiest first, +N, ›);
@@ -36,14 +39,15 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 
 No title bar and no modes. The sidebar's top bar: logo · Hiveory · DEV/SERVER chip, then the
 sidebar toggle; it drags the window. The sidebar's footer: Settings.
-Hidden, the sidebar is an icon rail: sidebar toggle at the top, then every
+Hidden, the sidebar is an icon rail: sidebar toggle at the top, Schedules, then every
 Workspace's mark (click: open the Worktree last used there; double-click or →: its Worktrees as
 two-letter initials, "MA" for main, "LP" for feature/login-page; click one to open it), Settings at
 the bottom. The side panel toggle (in a worktree) sits at the top right, left of the window controls
 (Windows, Linux); the top-right card's header leaves both room. Every top bar has one height.
 
 ```text
-┌ ◆ Hiveory DEV    ∿ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ⟲ ⑂ 🗓 ⚙  ⤢  ◨ │ — □ × ┐
+┌ ◆ Hiveory DEV    ∿ ◧ ┐┌ [Ada ×] [+] ──────────────┐┌ Dashboard ± ⟲ ⑂     ⤢  ◨ │ — □ × ┐
+│ 🗓 Schedules          │                            │                               │
 │ WORKSPACES     ⇅ 📁 │                            │                               │
 │ …                    │        panes               │       side panel              │
 │ ⚙                    │                            │                               │
@@ -55,8 +59,8 @@ the bottom. The side panel toggle (in a worktree) sits at the top right, left of
   Monthly on day N · Monthly on the last day · Yearly · Custom cron); the next three runs; when
   schedules run; Advanced (stop a run after N minutes, last day); Worktree and CLI; Instructions; the
   schedule's files. Editing adds Delete and Run now. Its title names the Workspace (ADR 0040).
-- Schedules tab (side panel): header (Schedules, ‹ › day or week, the range with a mini month, Today,
-  Day · Week · List · Run logs, New schedule); the keep-awake switch; the calendar (click an empty hour
+- Schedules page (main area, from the sidebar's Schedules, ADR 0062; every Workspace's): header (Schedules, ‹ › day or week, the range with a mini month, Today,
+  Day · Week · List · Run logs, New schedule); the keep-awake switch; the calendar (Week first) (click an empty hour
   for a new schedule there, a run to edit its schedule); List: schedule rows; Run logs: status,
   schedule, who ("Claude Code · demo-app · main"), when, by you or the schedule, duration, why it failed.
 - Message box (a Work agent in chat view, ADR 0058): above it, pills for the agent's tasks ("4/6
@@ -208,8 +212,8 @@ Git knows (ADR 0038).
 
 ## Workspace
 
-The Workspace page is the **Dashboard** tab of the side panel beside the open Worktree (ADR 0038, 0039), added from the
-panel's "+" or from a workspace's right-click › Workspace settings. It has no New worktree button.
+The Workspace page is the **Dashboard** tab of the side panel beside the open Worktree (ADR 0038, 0039). It has no
+New worktree button.
 
 ```text
 ┌ [▦ Dashboard ×] + ───────────────── ⤢ ┐
@@ -232,11 +236,12 @@ review state, open on the host; without a code host, the reason and Code host se
 Issues tab: "Issues · GitHub/GitLab/Jira/Linear", refresh, a filter past 8 issues, rows (title, key ·
 state, Start worktree, open); without a source, the reason and Issue settings.
 
-Schedules tab (ADR 0040; a side-panel tab of its own since ADR 0042, like Settings): the Schedules page for this
-Workspace's schedules (ADR 0055): Day · Week · List · Run logs (Day first), the calendar, the keep-awake switch,
-New schedule (for the open Worktree; an empty hour on the calendar starts one there).
+Schedules (ADR 0040, 0055; in the main area since ADR 0062): every Workspace's schedules: Week · Day · List · Run
+logs, the calendar, the keep-awake switch, New schedule (the editor asks for the Workspace, then its worktree and
+CLI; an empty hour on the calendar starts one there).
 
-Settings tab (ADR 0037): General (Name, Icon and color, Folder, Repository) · Agents (Announce agents) · Chat agents start with (model and
+Workspace settings (ADR 0037; in Settings since ADR 0062: a workspace's right-click › Workspace settings, or Settings'
+Workspaces list under its sections): General (Name, Icon and color, Folder, Repository) · Agents (Announce agents) · Chat agents start with (model and
 effort per chat CLI) · New worktrees (Branch prefix, Start from) · Integrations (Code host: Automatic |
 GitHub | GitLab | Off; Issues: The code host | Jira | Linear | Off; Project or Team) · Remove from Hiveory.
 

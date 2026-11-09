@@ -19,7 +19,7 @@ const sourceName = (source: IssueList['source']): string =>
  * Any issue starts a worktree named after it, with the issue attached.
  */
 export function IssuesTab({ projectId, local }: { projectId: string; local: boolean }) {
-  const openProject = useNavigation((s) => s.openProject)
+  const openSettings = useNavigation((s) => s.openSettings)
   const [data, setData] = useState<IssueList | null>(null)
   const [query, setQuery] = useState('')
   const [starting, setStarting] = useState<Issue | null>(null)
@@ -59,7 +59,7 @@ export function IssuesTab({ projectId, local }: { projectId: string; local: bool
           title="No issues to show"
           description={data.reason}
           actions={
-            <Button size="sm" onClick={() => openProject(projectId, 'settings')}>
+            <Button size="sm" onClick={() => openSettings('workspace', projectId)}>
               Issue settings
             </Button>
           }

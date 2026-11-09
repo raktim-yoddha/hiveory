@@ -47,8 +47,8 @@ export const GUIDE: GuideChapter[] = [
         heading: 'The window',
         body: (
           <p>
-            The sidebar runs down the left: the brand and the button that hides it at its top, your workspaces in the middle and Settings
-            at the bottom. Hidden, it folds to a slim rail with the same buttons and every workspace&rsquo;s icon: click one to open the worktree you last used there, or double-click it to list its worktrees by their initials and pick one. The worktree you open fills the middle, and its side panel
+            The sidebar runs down the left: the brand and the button that hides it at its top, then Schedules, your workspaces in the
+            middle and Settings at the bottom. Right-click a workspace for its settings. Hidden, it folds to a slim rail with the same buttons and every workspace&rsquo;s icon: click one to open the worktree you last used there, or double-click it to list its worktrees by their initials and pick one. The worktree you open fills the middle, and its side panel
             runs down the right, shown or hidden by the button at the top right; all three start at the top of the window.
           </p>
         ),
@@ -286,8 +286,7 @@ export const GUIDE: GuideChapter[] = [
         heading: 'The side panel',
         body: (
           <p>
-            Inside a worktree the side panel holds the Dashboard, Sessions (every CLI conversation, resumable), the Explorer, Schedules and the
-            workspace&rsquo;s Settings. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
+            Inside a worktree the side panel holds the Dashboard, Changes, Sessions (every CLI conversation, resumable) and the Explorer. Drag a tab into its lower half to see two at once; maximize it over the main area with its corner
             button.
           </p>
         ),
@@ -349,7 +348,7 @@ export const GUIDE: GuideChapter[] = [
         body: (
           <p>
             A schedule starts an agent in a worktree and gives it your instructions (its card moves on the Kanban like any agent). Make one
-            in the side panel&rsquo;s Schedules tab, or from a worktree&rsquo;s menu.
+            on the Schedules page (the first row of the sidebar, every workspace&rsquo;s schedules together), or from a worktree&rsquo;s menu.
           </p>
         ),
         keywords: 'schedule routine cron calendar'

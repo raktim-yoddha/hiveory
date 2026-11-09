@@ -1,7 +1,8 @@
 import { useShallow } from 'zustand/react/shallow'
-import { PanelLeft, PanelRight, Search, Settings } from 'lucide-react'
+import { CalendarClock, PanelLeft, PanelRight, Search, Settings } from 'lucide-react'
 import { AppLogo } from '../../components/brand/AppLogo'
 import { IconButton } from '../../components/ui/Button'
+import { cx } from '../../lib/cx'
 import { useApp } from '../../stores/data'
 import { useNavigation } from '../../stores/navigation'
 import { RailWorkspaces } from '../projects/RailWorkspaces'
@@ -13,13 +14,17 @@ const withKeys = (label: string, keys?: string): string => (keys ? `${label} (${
 
 /** What the window's chrome buttons need: there is no title bar (ADR 0056), so they live in the sidebar. */
 function useChrome() {
-  const { sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings } = useNavigation(useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, panelOpen: s.panelOpen, togglePanel: s.togglePanel, view: s.view, openSettings: s.openSettings, closeSettings: s.closeSettings })))
+  const { sidebarCollapsed, toggleSidebar, panelOpen, togglePanel, view, openSettings, closeSettings, openSchedules } = useNavigation(useShallow((s) => ({ sidebarCollapsed: s.sidebarCollapsed, toggleSidebar: s.toggleSidebar, panelOpen: s.panelOpen, togglePanel: s.togglePanel, view: s.view, openSettings: s.openSettings, closeSettings: s.closeSettings, openSchedules: s.openSchedules })))
   const inSettings = view.type === 'settings'
-  const keys = { sidebar: useCommandKeys('toggle-sidebar'), panel: useCommandKeys('toggle-side-panel'), settings: useCommandKeys('open-settings'), find: useCommandKeys('command-palette') }
+  const keys = { sidebar: useCommandKeys('toggle-sidebar'), panel: useCommandKeys('toggle-side-panel'), settings: useCommandKeys('open-settings'), find: useCommandKeys('command-palette'), schedules: useCommandKeys('open-schedules') }
   const sidebarLabel = sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
   const panelLabel = panelOpen ? 'Hide side panel' : 'Show side panel'
   const settingsLabel = inSettings ? 'Close settings' : 'Settings'
+  const inSchedules = view.type === 'schedules'
   return {
+    inSchedules,
+    openSchedules,
+    schedulesTitle: withKeys('Schedules', keys.schedules),
     // The command palette (ADR 0060).
     find: <IconButton label="Find" title={withKeys('Find a command, worktree or setting', keys.find)} icon={<Search />} onClick={() => usePalette.getState().toggle()} className={styles.noDrag} />,
     sidebar: <IconButton label={sidebarLabel} title={withKeys(sidebarLabel, keys.sidebar)} icon={<PanelLeft />} active={!sidebarCollapsed} onClick={toggleSidebar} className={styles.noDrag} />,
@@ -65,6 +70,25 @@ export function SidebarTop() {
   )
 }
 
+/** Schedules, above the Workspaces (ADR 0062): every Workspace's schedules in the main area. */
+export function SidebarSchedules() {
+  const chrome = useChrome()
+  return (
+    <div className={styles.links}>
+      <button
+        type="button"
+        className={cx(styles.link, chrome.inSchedules && styles.linkActive)}
+        aria-current={chrome.inSchedules ? 'page' : undefined}
+        title={chrome.schedulesTitle}
+        onClick={chrome.openSchedules}
+      >
+        <CalendarClock aria-hidden />
+        Schedules
+      </button>
+    </div>
+  )
+}
+
 /** The side panel's button sits on the right, over the top-right top bar (ADR 0056); only in a worktree. */
 export function SidePanelToggle() {
   return useChrome().panel || null
@@ -87,6 +111,7 @@ export function SidebarRail() {
   return (
     <nav className={styles.rail} aria-label="App">
       {chrome.sidebar}
+      <IconButton label="Schedules" title={chrome.schedulesTitle} icon={<CalendarClock />} active={chrome.inSchedules} onClick={chrome.openSchedules} className={styles.noDrag} />
       <RailWorkspaces />
       {chrome.find}
       {chrome.settings}

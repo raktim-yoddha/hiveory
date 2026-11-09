@@ -11,6 +11,7 @@ import { PANEL_WIDTH, SIDEBAR_WIDTH, useNavigation } from '../../stores/navigati
 import { ProjectSidebar } from '../projects/ProjectSidebar'
 import { AddProjectDialog } from '../projects/AddProjectDialog'
 import { RoutineEditor } from '../routines/RoutineEditor'
+import { RoutinesPage } from '../routines/RoutinesPage'
 import { useAppShortcuts } from './useAppShortcuts'
 import { UpdatePrompt } from '../updates/UpdatePrompt'
 import { CreateWorkspaceDialog } from '../workspace-create/CreateWorkspaceDialog'
@@ -18,7 +19,7 @@ import { useNewWorktree } from '../workspace-create/new-worktree'
 import { SidePanel } from '../side-panel/SidePanel'
 import { WorkspaceScreen } from '../workspace/WorkspaceScreen'
 import { HomeScreen } from './HomeScreen'
-import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarTop } from './SidebarChrome'
+import { SidePanelToggle, SidebarBottom, SidebarRail, SidebarSchedules, SidebarTop } from './SidebarChrome'
 import { useWindowControlsRoom } from './window-controls'
 import { useNativeShell } from './useNativeShell'
 import { CommandPalette } from './palette/CommandPalette'
@@ -62,7 +63,7 @@ export function AppShell() {
   // The right column: a worktree's side panel (never on Home).
   const showPanel = panelOpen && workView.type === 'workspace'
   const maximized = panelMaximized
-  const viewKey = workView.type === 'home' ? 'home' : `w:${workView.workspaceId}`
+  const viewKey = workView.type === 'workspace' ? `w:${workView.workspaceId}` : workView.type
   // The open Worktree's panes keep their minimum width: the sidebars give way (see .main).
   const workMin = workView.type === 'workspace' ? workMinWidth : 0
   const widths = {
@@ -104,7 +105,19 @@ export function AppShell() {
         {/* Keyed: the full sidebar glides in again whenever it is shown. */}
         <aside key={showSidebar ? 'sidebar' : 'rail'} ref={sidebarRef} className={styles.sidebar}>
           <ErrorBoundary region="Sidebar" compact>
-            {showSidebar ? <ProjectSidebar top={<SidebarTop />} bottom={<SidebarBottom />} /> : <SidebarRail />}
+            {showSidebar ? (
+              <ProjectSidebar
+                top={
+                  <>
+                    <SidebarTop />
+                    <SidebarSchedules />
+                  </>
+                }
+                bottom={<SidebarBottom />}
+              />
+            ) : (
+              <SidebarRail />
+            )}
           </ErrorBoundary>
           {showSidebar && (
             <ResizeHandle
@@ -131,6 +144,8 @@ export function AppShell() {
                     workspaceId={workView.workspaceId}
                     focusPaneId={workView.focusPaneId}
                   />
+                ) : workView.type === 'schedules' ? (
+                  <RoutinesPage />
                 ) : (
                   <HomeScreen />
                 )}
@@ -165,12 +180,12 @@ export function AppShell() {
       {inSettings && (
         <ErrorBoundary region="Settings">
           <Suspense fallback={null}>
-            <SettingsScreen section={view.section} />
+            <SettingsScreen section={view.section} projectId={view.projectId} />
           </Suspense>
         </ErrorBoundary>
       )}
       <AddProjectDialog />
-      {/* Opened from a worktree's menu and its Schedules tab (ADR 0040). */}
+      {/* Opened from a worktree's menu and the Schedules page (ADR 0040, 0062). */}
       <RoutineEditor />
       <SshPromptDialog />
       {newWorktree.projectId && <CreateWorkspaceDialog projectId={newWorktree.projectId} onClose={newWorktree.close} />}

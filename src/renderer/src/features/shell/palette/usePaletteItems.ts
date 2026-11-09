@@ -18,9 +18,7 @@ const PANEL_TABS: Array<{ kind: PanelTab['kind']; label: string }> = [
   { kind: 'changes', label: 'Changes' },
   { kind: 'workspace', label: 'Dashboard' },
   { kind: 'explorer', label: 'Explorer' },
-  { kind: 'sessions', label: 'Sessions' },
-  { kind: 'routines', label: 'Schedules' },
-  { kind: 'settings', label: 'Workspace settings' }
+  { kind: 'sessions', label: 'Sessions' }
 ]
 
 const SETTINGS: Array<{ id: SettingsSection; label: string }> = [
@@ -71,6 +69,7 @@ export function usePaletteItems(open: boolean): PaletteItem[] {
       }
       // A hiveory:// link back to this worktree, for notes, chats and other apps (ADR 0061).
       items.push({ id: 'copy-link', group: 'Open here', label: 'Copy a link to this worktree', hint: 'hiveory://open…', run: () => void runAction('Copy link', () => api('clipboard.writeText', { text: openLink(here.projectId, here.workspaceId) })) })
+      items.push({ id: 'workspace-settings', group: 'Open here', label: 'Workspace settings', run: () => nav().openSettings('workspace', here.projectId) })
       for (const tab of PANEL_TABS) items.push({ id: `panel:${tab.kind}`, group: 'Side panel', label: tab.label, run: () => nav().showPanelTab(here.workspaceId, tab.kind) })
     }
     for (const project of sortProjects(projects, readSort())) {
