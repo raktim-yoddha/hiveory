@@ -6,6 +6,16 @@ from the commits that shipped on the dates shown.
 
 The GitHub release for each version lists these highlights and every commit in it.
 
+## v0.27.0 — Native desktop alerts, Changes commits, Also ask, terminal links
+_2026-11-09_
+
+- Breaking: Queen Bee is gone: her bar, voice, notes and settings. Saved Queen Bee settings and provider keys are dropped; the phone still gets "An agent needs you".
+- Agents notify you when they need you or finish, the taskbar or dock shows how many wait, hiveory:// links open a Workspace or start a chat draft, and the window reopens where it was.
+- The Changes tab commits, pushes and discards; Settings › Usage shows tokens per day and CLI; Find (Ctrl+Shift+P, ⌘K on a Mac) opens anything; Workspaces can be pinned to the top.
+- Workspace scripts (dev, test, lint) run from the pane "+", Find, the phone and agents, and the Chat UI is its own entry whose message box picks any CLI and model, with subagents on any CLI.
+- Ctrl+click a web address or a file:line in a terminal to open it beside it, a terminal tab shows when it printed out of sight, and Also ask sends one chat message to several CLIs side by side.
+- Agents' browser pages keep working while Hiveory is minimized or in the tray.
+
 ## v0.26.0 — Work only, no title bar, workspaces in the folded sidebar
 _2026-11-07_
 
