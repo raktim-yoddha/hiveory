@@ -27,13 +27,15 @@ jobs:
     name: Draft release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
+          # This job installs no packages: no automatic pnpm cache (setup-node v5+).
+          package-manager-cache: false
       - name: Write the release text
         run: |
           node scripts/release-notes.mjs "$TAG" > notes.txt
@@ -50,17 +52,17 @@ jobs:
       fail-fast: false
       matrix:
         # ubuntu-24.04-arm builds the Linux arm64 (aarch64) installers natively (ADR 0035).
-        os: [windows-latest, macos-latest, ubuntu-latest, ubuntu-24.04-arm]
+        os: [windows-latest, macos-latest, ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     env:
       # No Apple Developer certificate yet: build unsigned instead of searching the keychain.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
@@ -81,16 +83,16 @@ jobs:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.TAG }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
           cache-dependency-path: mobile/pnpm-lock.yaml
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17

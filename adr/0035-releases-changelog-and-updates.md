@@ -81,3 +81,17 @@ A tag can be re-run by hand (Actions › Release › Run workflow) with the work
 moving the tag: the draft step keeps a draft the tag already has, electron-builder overwrites its files
 in that draft, and the APK upload replaces its file. A CI-only fix like this one has nothing to release,
 so it re-runs the tag rather than cutting a new version.
+
+## Amendment (2026-11-09): actions on Node 24; the Linux x64 build stays on Ubuntu 24.04
+
+GitHub retires the Node 20 runtime that `actions/checkout@v4`, `actions/setup-node@v4`,
+`actions/setup-java@v4` and `pnpm/action-setup@v4` ran on (v0.27.0 built with warnings). CI and
+releases now use `actions/checkout@v7`, `actions/setup-node@v7`, `actions/setup-java@v6` and
+`pnpm/action-setup@v6` (Node 24; v6 also supports pnpm 11, which the repository uses). setup-node v5+
+caches the package manager by itself when `package.json` names one; the draft job installs nothing,
+so it sets `package-manager-cache: false`.
+
+`ubuntu-latest` is moving to Ubuntu 26. The Linux x64 desktop build compiles native modules, so the
+glibc its installers need follows the runner: it now runs on `ubuntu-24.04`, the same baseline as the
+arm64 build. Jobs whose output does not depend on the runner (draft, publish, Android, CI) keep
+`ubuntu-latest`, as this ADR chose for macOS.
