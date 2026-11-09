@@ -18,7 +18,8 @@ export interface CliRuntimeDetails {
 }
 
 export type IconReference =
-  | { kind: 'svg'; viewBox: string; path: string; color: string }
+  /** `evenodd`: subpaths cut holes (marks drawn as one path, ADR 0064). */
+  | { kind: 'svg'; viewBox: string; path: string; color: string; fillRule?: 'evenodd' }
   /** Official mark as a data URI (bundled, never fetched at runtime). */
   | { kind: 'image'; src: string }
   | { kind: 'monogram'; text: string; color?: string }

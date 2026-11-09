@@ -22,6 +22,10 @@ interface Item {
  * A week (or one day) of routines: past runs from the log (by outcome), upcoming runs from each
  * schedule. Click an empty hour to add one there.
  */
+
+/** This computer's time zone as a short offset ("GMT+5:30"); its full name is the tooltip. */
+const ZONE = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? ''
+
 export function WeekCalendar({
   start,
   dayCount = 7,
@@ -56,17 +60,17 @@ export function WeekCalendar({
     }
   }
 
-  // Opens on the working day, not at midnight.
+  // Opens on the working day, not at midnight, with its first hour's label in full.
   useEffect(() => {
     const el = scroller.current
-    if (el) el.scrollTop = (el.scrollHeight / 24) * 7
+    if (el) el.scrollTop = (el.scrollHeight / 24) * 6.75
   }, [])
 
   return (
     <div className={cx(styles.week, dayCount === 1 && styles.oneDay)}>
       <div className={styles.weekHead}>
         <span className={styles.zone} title={Intl.DateTimeFormat().resolvedOptions().timeZone}>
-          {Intl.DateTimeFormat().resolvedOptions().timeZone}
+          {ZONE}
         </span>
         {days.map((d) => (
           <span key={d.toISOString()} className={cx(styles.dayHead, sameDay(d, now) && styles.today)}>

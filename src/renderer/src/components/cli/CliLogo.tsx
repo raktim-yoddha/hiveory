@@ -1,7 +1,6 @@
 import type { IconReference } from '@shared/domain'
 import { useClis } from '../../stores/data'
-import { cx } from '../../lib/cx'
-import styles from './CliLogo.module.css'
+import { BrandMark } from '../brand/BrandMark'
 
 interface CliLogoProps {
   cliId: string
@@ -19,19 +18,5 @@ export function CliLogo({ cliId, size = 'md', className }: CliLogoProps) {
   const cli = useClis((s) => s.clis.find((c) => c.id === cliId))
   const icon = cli?.icon ?? FALLBACK
   const name = cli?.displayName ?? cliId
-  return (
-    <span className={cx(styles.logo, styles[size], className)} role="img" aria-label={name} title={name}>
-      {icon.kind === 'image' ? (
-        <img src={icon.src} alt="" aria-hidden draggable={false} />
-      ) : icon.kind === 'svg' ? (
-        <svg viewBox={icon.viewBox} aria-hidden fill={icon.color}>
-          <path d={icon.path} />
-        </svg>
-      ) : (
-        <span className={styles.monogram} style={icon.color ? { color: icon.color } : undefined} aria-hidden>
-          {icon.text}
-        </span>
-      )}
-    </span>
-  )
+  return <BrandMark icon={icon} label={name} size={size} className={className} />
 }

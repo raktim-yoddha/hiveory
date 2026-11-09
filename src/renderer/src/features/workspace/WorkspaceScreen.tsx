@@ -1,8 +1,9 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useCallback, useEffect, useState } from 'react'
-import { FileCode2, FolderX, GitCompareArrows, Globe } from 'lucide-react'
+import { FolderX, GitCompareArrows, Globe } from 'lucide-react'
 import type { CliInstanceView, EditorView, WorkspaceView } from '@shared/domain'
 import { EmptyState } from '../../components/ui/EmptyState'
+import { FileIcon } from '../../components/files/FileIcon'
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary'
 import { useAgents, useClis, useLayouts, useProjects, useWorkspaces } from '../../stores/data'
 import { CliLogo } from '../../components/cli/CliLogo'
@@ -100,7 +101,7 @@ export function WorkspaceScreen({ projectId, workspaceId, focusPaneId }: Workspa
   /** What a pane's tab shows: an agent's or terminal's name, logo and status; a file's or page's name. */
   const describe = (paneId: string): PaneTabInfo | undefined => {
     const editor = editorById.get(paneId)
-    if (editor) return { title: editor.name, icon: editor.kind === 'review' ? <GitCompareArrows aria-hidden /> : <FileCode2 aria-hidden />, unsaved: unsaved[editor.id] === true }
+    if (editor) return { title: editor.name, icon: editor.kind === 'review' ? <GitCompareArrows aria-hidden /> : <FileIcon name={editor.name} />, unsaved: unsaved[editor.id] === true }
     const page = pageById.get(paneId)
     if (page) return { title: page.ownerName ? `${page.ownerName} · ${pageTitle(page)}` : pageTitle(page), icon: page.ownerName ? <AgentIcon aria-hidden /> : <Globe aria-hidden /> }
     const agent = byId.get(paneId)

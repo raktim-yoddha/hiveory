@@ -1,9 +1,11 @@
 /* The composer's one picker (ADR 0064): CLI, model, effort, speed, plan mode and access. */
 .trigger {
   display: inline-flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: var(--space-3);
-  min-width: 0;
+  /* A narrow message box still shows the model's name, not just its logo. */
+  min-width: calc(var(--control-lg) * 3);
   max-width: calc(var(--menu-min-width) * 1.6);
   height: var(--control-md);
   padding: 0 var(--space-4) 0 var(--space-3);

@@ -6,7 +6,7 @@ import { useWorkspaces } from './data'
 export type ProjectTab = 'tasks' | 'workspaces' | 'issues'
 
 /** `workspace`: one Workspace's own settings, named by the view's `projectId` (ADR 0062). */
-export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'keyboard' | 'remote' | 'usage' | 'updates' | 'guide' | 'about' | 'workspace'
+export type SettingsSection = 'appearance' | 'agents' | 'browser' | 'extensions' | 'integrations' | 'keyboard' | 'remote' | 'usage' | 'updates' | 'about' | 'workspace'
 
 export type View =
   | { type: 'home' }
@@ -35,7 +35,8 @@ export const tabGroup = (tab: PanelTab): PanelGroup => tab.group ?? 'top'
 
 /** Clamp ranges for the resizable sidebars (px). */
 export const SIDEBAR_WIDTH = { min: 200, max: 440, initial: 248 }
-export const PANEL_WIDTH = { min: 300, max: 900, initial: 420 }
+// The narrowest panel still fits its five tabs as icons beside the window controls (ADR 0065).
+export const PANEL_WIDTH = { min: 350, max: 900, initial: 420 }
 
 interface NavigationState {
   view: View

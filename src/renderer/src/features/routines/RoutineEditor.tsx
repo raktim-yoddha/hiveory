@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { mainWorkspaceId } from '@shared/domain'
-import { Paperclip, Play, Trash2 } from 'lucide-react'
+import { ChevronRight, Paperclip, Play, Trash2 } from 'lucide-react'
 import { create } from 'zustand'
 import type { ChatAttachment } from '@shared/domain/chat'
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILE_BYTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, type RepeatPreset, type RoutineSchedule, type RoutineTarget, type RoutineView } from '@shared/domain/routine'
@@ -229,6 +229,61 @@ function EditorDialog({ target }: { target: Target }) {
       >
         <div className={styles.form}>
           <TextField label="Title" value={draft.name} maxLength={MAX_ROUTINE_NAME} placeholder="Morning inbox report" onChange={(v) => set('name', v)} autoFocus />
+          {/* A routine belongs to its Workspace (ADR 0040): picked for a new one only, starting on its Primary (ADR 0062). */}
+          {!routine && (
+            <Select
+              label="Workspace"
+              value={draft.projectId}
+              options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
+              onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: mainWorkspaceId(v) }))}
+            />
+          )}
+          <div className={styles.row}>
+          <Select
+            label="Worktree"
+            value={draft.workspaceId}
+            options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
+            onChange={(v) => set('workspaceId', v)}
+          />
+          <Select label="CLI" value={draft.cliId} options={[{ value: '', label: 'Pick a CLI', disabled: true }, ...cliOptions]} onChange={(v) => set('cliId', v)} />
+          </div>
+          <TextAreaField
+            label="Instructions"
+            value={draft.prompt}
+            maxLength={MAX_ROUTINE_PROMPT}
+            rows={6}
+            placeholder="What each run does, where to look and what to report. Each run starts a new agent there with these instructions."
+            onChange={(v) => set('prompt', v)}
+          />
+          <div className={styles.files}>
+            <AttachmentChips
+              items={draft.attachments.map((a) => ({ key: a.path, name: a.name, kind: a.kind, size: a.size }))}
+              onRemove={(key) => set('attachments', draft.attachments.filter((a) => a.path !== key))}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<Paperclip />}
+              loading={adding}
+              disabled={draft.attachments.length >= MAX_ROUTINE_FILES}
+              onClick={() => fileRef.current?.click()}
+            >
+              {draft.attachments.length ? 'Add another file' : 'Add files for every run'}
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                void addFiles([...(e.target.files ?? [])])
+                e.target.value = ''
+              }}
+            />
+            <span className={styles.note}>
+              Up to {MAX_ROUTINE_FILES} files, {MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB each, copied for every run.
+            </span>
+          </div>
           <div className={styles.row}>
             <label className={form.field}>
               <span className={form.fieldLabel}>Starts</span>
@@ -277,10 +332,14 @@ function EditorDialog({ target }: { target: Target }) {
             {routine && !sameZone(routine.timezone, timezone) ? ` Saved in ${routine.timezone}; saving moves it to ${timezone}.` : ''}
           </p>
           <p className={styles.note}>
-            Runs while Hiveory is open on this computer (or on your Hiveory server). A run missed by less than 12 hours still happens when it is back.
+            Runs while Hiveory (or your Hiveory server) is open; a run missed by under 12 hours still happens.
           </p>
           <details className={styles.advanced}>
-            <summary>Advanced · {draft.timeoutMinutes ? `stops after ${draft.timeoutMinutes} min` : 'no run limit'}</summary>
+            <summary>
+              <ChevronRight aria-hidden className={styles.advancedChevron} />
+              Advanced
+              <span className={styles.advancedHint}>{draft.timeoutMinutes ? `stops after ${draft.timeoutMinutes} min` : 'no run limit'}</span>
+            </summary>
             <div className={styles.row}>
               <TextField label="Stop a run after (minutes)" type="number" min={1} max={1440} placeholder="No limit" value={draft.timeoutMinutes} onChange={(v) => set('timeoutMinutes', v)} />
               <label className={form.field}>
@@ -289,62 +348,6 @@ function EditorDialog({ target }: { target: Target }) {
               </label>
             </div>
           </details>
-          {/* A routine belongs to its Workspace (ADR 0040): picked for a new one only, starting on its Primary (ADR 0062). */}
-          {!routine && (
-            <Select
-              label="Workspace"
-              value={draft.projectId}
-              options={[{ value: '', label: 'Pick a workspace', disabled: true }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
-              onChange={(v) => setDraft((d) => ({ ...d, projectId: v, workspaceId: mainWorkspaceId(v) }))}
-            />
-          )}
-          <Select
-            label="Worktree"
-            value={draft.workspaceId}
-            options={[{ value: '', label: 'Pick a worktree', disabled: true }, ...(workspaces[draft.projectId] ?? []).map((w) => ({ value: w.id, label: w.name }))]}
-            onChange={(v) => set('workspaceId', v)}
-          />
-          <Select label="CLI" value={draft.cliId} options={[{ value: '', label: 'Pick a CLI', disabled: true }, ...cliOptions]} onChange={(v) => set('cliId', v)} />
-          <p className={styles.note}>
-            Each run opens a new agent in that worktree and types these instructions once it is ready. Its card moves on the board by what it is doing, and it stays open when it is done.
-          </p>
-          <TextAreaField
-            label="Instructions"
-            value={draft.prompt}
-            maxLength={MAX_ROUTINE_PROMPT}
-            rows={6}
-            placeholder="What to do on every run, where to look, and what to report. Keep anything irreversible for your approval."
-            onChange={(v) => set('prompt', v)}
-          />
-          <div className={styles.files}>
-            <AttachmentChips
-              items={draft.attachments.map((a) => ({ key: a.path, name: a.name, kind: a.kind, size: a.size }))}
-              onRemove={(key) => set('attachments', draft.attachments.filter((a) => a.path !== key))}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<Paperclip />}
-              loading={adding}
-              disabled={draft.attachments.length >= MAX_ROUTINE_FILES}
-              onClick={() => fileRef.current?.click()}
-            >
-              {draft.attachments.length ? 'Add another file' : 'Add files for every run'}
-            </Button>
-            <input
-              ref={fileRef}
-              type="file"
-              multiple
-              hidden
-              onChange={(e) => {
-                void addFiles([...(e.target.files ?? [])])
-                e.target.value = ''
-              }}
-            />
-            <span className={styles.note}>
-              Up to {MAX_ROUTINE_FILES} files, {MAX_ROUTINE_FILE_BYTES / 1024 / 1024} MB each. Hiveory keeps a copy, so each run gets them even if the originals move.
-            </span>
-          </div>
         </div>
       </Modal>
       {routine && (

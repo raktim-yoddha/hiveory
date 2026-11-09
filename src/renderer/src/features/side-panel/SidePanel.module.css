@@ -170,11 +170,20 @@
   .tab:not(.active) .tabTitle {
     display: none;
   }
+
+  .tab:not(.active) .tabButton {
+    padding: 0 var(--space-3);
+  }
 }
 
 @container (max-width: 260px) {
   .tabTitle {
     display: none;
+  }
+
+  /* Icons alone sit centred in their tab. */
+  .tabButton {
+    padding: 0 var(--space-3);
   }
 }
 

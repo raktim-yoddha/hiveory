@@ -28,7 +28,6 @@ export const APP_GUIDE: ReadonlyArray<readonly [place: string, what: string]> = 
   ['Keyboard areas', 'Ctrl+F6 and Ctrl+Shift+F6 (Command on a Mac) move between the sidebar, the open worktree and the side panel. Files dropped on a terminal type their paths at its prompt. Ctrl+click (Command+click on a Mac) a web address in a terminal to open it in a browser pane beside it, or a file of the worktree (src/app.ts:12) to open it in an editor at that line. A ring on the tab of a terminal means it printed while you were not looking.'],
   ['Settings › Usage', 'Tokens the agents used per day, CLI and model (input, output, cache), read from the Claude Code, Codex and Gemini CLI history where Hiveory runs. Counts only, no prices.'],
   ['Settings › Updates', 'Check for updates and how often.'],
-  ['Settings › Guide', 'A short chapter for every part of the app: getting started, worktrees and Git, panes, the Kanban, the browser, schedules, skills and apps, integrations, remote and phone, keyboard, appearance and troubleshooting.']
 ]
 
 /** The guide as plain lines: "Place: what is there." */

@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { BarChart3, BookOpen, Blocks, Download, FolderGit2, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
+import { BarChart3, Blocks, Download, FolderGit2, GitPullRequest, Globe, Info, Keyboard, Palette, Server, X } from 'lucide-react'
 import { AgentIcon } from '../../components/brand/AgentIcon'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -21,7 +21,6 @@ import { ExtensionsSection } from './ExtensionsSection'
 import { IntegrationsSection } from './IntegrationsSection'
 import { KeyboardSection } from './KeyboardSection'
 import { RemoteSection } from './RemoteSection'
-import { GuideSection } from './guide/GuideSection'
 import { UpdatesSection } from './UpdatesSection'
 import { UsageSection } from './UsageSection'
 import styles from './Settings.module.css'
@@ -36,7 +35,6 @@ const SECTIONS: Array<{ id: Exclude<SettingsSection, 'workspace'>; label: string
   { id: 'remote', label: 'Remote', icon: <Server /> },
   { id: 'usage', label: 'Usage', icon: <BarChart3 /> },
   { id: 'updates', label: 'Updates', icon: <Download /> },
-  { id: 'guide', label: 'Guide', icon: <BookOpen /> },
   { id: 'about', label: 'About', icon: <Info /> }
 ]
 
@@ -131,7 +129,6 @@ export function SettingsScreen({ section, projectId }: { section: SettingsSectio
           {current.id === 'remote' && <RemoteSection />}
           {current.id === 'usage' && <UsageSection />}
           {current.id === 'updates' && <UpdatesSection />}
-          {current.id === 'guide' && <GuideSection />}
           {current.id === 'about' && <AboutSection />}
           {section === 'workspace' &&
             (project ? (

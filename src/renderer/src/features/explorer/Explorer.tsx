@@ -17,6 +17,7 @@ import {
   Trash2
 } from 'lucide-react'
 import type { FileEntry } from '@shared/domain'
+import { FileIcon } from '../../components/files/FileIcon'
 import { IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { Menu, type MenuEntry } from '../../components/ui/Menu'
@@ -314,7 +315,7 @@ export function Explorer({ workspaceId }: ExplorerProps) {
               onDoubleClick={() => void openFile(entry.path)}
               onKeyDown={(e) => e.key === 'Enter' && void openFile(entry.path)}
             >
-              <File aria-hidden className={styles.icon} />
+              <FileIcon name={entry.name} className={styles.icon} />
               <span className={styles.label}>{entry.name}</span>
               <span className={styles.dir}>{parentOf(entry.path)}</span>
             </button>
@@ -370,7 +371,7 @@ export function Explorer({ workspaceId }: ExplorerProps) {
                                 <Folder aria-hidden className={styles.icon} />
                               )
                             ) : (
-                              <File aria-hidden className={styles.icon} />
+                              <FileIcon name={entry.name} className={styles.icon} />
                             )}
                             <span className={styles.label}>{entry.name}</span>
                           </button>

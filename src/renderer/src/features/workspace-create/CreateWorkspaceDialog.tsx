@@ -104,12 +104,15 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
       onClose={onClose}
       width="lg"
       footer={
-        <div className={styles.footer}>
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
           {/* Panes are optional: with none chosen it is an empty Worktree (Open agent, Load preset). */}
           <Button variant="primary" onClick={() => void create()} disabled={!canSubmit} loading={busy}>
-            {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create'}
+            {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create worktree'}
           </Button>
-        </div>
+        </>
       }
     >
       <div className={styles.form}>

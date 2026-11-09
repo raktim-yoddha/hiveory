@@ -145,7 +145,9 @@ export function AppShell() {
                     focusPaneId={workView.focusPaneId}
                   />
                 ) : workView.type === 'schedules' ? (
-                  <RoutinesPage />
+                  <div className={cx(styles.surface, styles.page)}>
+                    <RoutinesPage />
+                  </div>
                 ) : (
                   <HomeScreen />
                 )}

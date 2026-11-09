@@ -4,6 +4,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  container: review / inline-size;
 }
 
 .bar {
@@ -20,8 +21,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 0;
-  max-width: 40%;
+  flex: none;
+  max-width: 50%;
   height: var(--control-md);
   margin-left: calc(-1 * var(--space-3));
   padding: 0 var(--space-4);
@@ -113,6 +114,7 @@
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
+  overflow: hidden;
   height: var(--control-lg);
   padding: 0 var(--space-3);
   border: 0;
@@ -131,9 +133,13 @@
 }
 
 .fileName {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--text-md);
   font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .deleted {
@@ -169,4 +175,17 @@
   padding: var(--space-4) var(--space-6);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+/* A narrow pane keeps each file's name, kind and counts; the folder and totals give way. */
+@container review (max-width: 420px) {
+  .fileDir,
+  .count {
+    display: none;
+  }
+
+  .bar {
+    gap: var(--space-4);
+    padding-left: var(--space-6);
+  }
 }

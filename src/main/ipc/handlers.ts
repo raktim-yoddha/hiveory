@@ -17,7 +17,7 @@ import { AVATAR_EXTENSIONS, avatarFromFile, avatarFromUrl } from '../services/pr
 import { CODE_HOST_INFO } from '@shared/domain/integrations'
 import type { HostRef } from '@shared/domain'
 import type { CodeHost } from '../services/git/code-host'
-import { installedEditors, openInEditor } from '../services/editors/external-editors'
+import { openInApps, openInEditor } from '../services/editors/external-editors'
 
 /** Why a Workspace has no reviews when its settings turned the code host off (ADR 0040). */
 const CODE_HOST_OFF = "The code host is turned off in this workspace's settings."
@@ -266,7 +266,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
   'updates.download': () => c.updates.download(),
   'updates.install': () => c.updates.install(),
 
-  'system.editorApps': () => installedEditors(),
+  'system.editorApps': () => openInApps(),
   'system.openIn': ({ workspaceId, appId }) => {
     const workspace = c.workspaceRepo.get(workspaceId)
     if (c.workspaceRepo.project(workspace.projectId).host) fail('INVALID_INPUT', 'That folder is on another machine.')

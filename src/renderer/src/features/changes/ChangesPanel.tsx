@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { ArrowRight, ChevronDown, ChevronRight, Dot, FileCode2, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Maximize2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronRight, Dot, GitBranch, GitCommitHorizontal, GitCompareArrows, Loader2, Maximize2, Minus, Plus, RefreshCw, SquarePen, Undo2 } from 'lucide-react'
 import type { ChangedFile, ChangeSource } from '@shared/domain/changes'
+import { FileIcon } from '../../components/files/FileIcon'
 import { IconButton } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -195,7 +196,7 @@ function FileRow({ file, name, depth, workspaceId, source, onChanged }: { file: 
           onClick={() => setOpen(!open)}
           title={file.from ? `${file.from} → ${file.path}` : file.path}
         >
-          <FileCode2 aria-hidden className={styles.fileIcon} />
+          <FileIcon name={file.path} className={styles.fileIcon} />
           <span className={cx(styles.name, styles.ellipsis, file.status === 'deleted' && styles.deletedName)}>{name}</span>
           {file.binary ? <span className={styles.count}>binary</span> : <DiffStat additions={file.additions} deletions={file.deletions} />}
           <span className={cx(styles.mark, styles[file.status])} aria-label={mark.label} title={mark.label}>

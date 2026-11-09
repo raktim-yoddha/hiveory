@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Code2, Copy, FolderOpen } from 'lucide-react'
-import type { EditorApp, WorkspaceView } from '@shared/domain'
+import { Copy } from 'lucide-react'
+import type { EditorApp, OpenInApps, WorkspaceView } from '@shared/domain'
+import { BrandMark } from '../../components/brand/BrandMark'
 import { SplitButton } from '../../components/ui/SplitButton'
 import type { MenuEntry } from '../../components/ui/Menu'
 import { api } from '../../lib/api'
 import { runAction } from '../../stores/notices'
 
 const LAST_KEY = 'hiveory.lastEditor'
-/** Installed editors don't change while Hiveory runs; asked once per window. */
-let installed: Promise<EditorApp[]> | null = null
-const editorApps = (): Promise<EditorApp[]> => (installed ??= api('system.editorApps').catch(() => []))
+/** Installed editors don't change while Hiveory runs: asked once per window. */
+let asked: Promise<OpenInApps | null> | null = null
+const openInApps = (): Promise<OpenInApps | null> => (asked ??= api('system.editorApps').catch(() => null))
 
 const readLast = (): string | null => {
   try {
@@ -21,20 +22,22 @@ const readLast = (): string | null => {
 
 /**
  * Open in ▾ (ADR 0064): opens the worktree's folder in the editor used last (VS Code, Cursor, Zed…,
- * whichever are installed); the menu offers the others, the file manager and copying the path.
+ * whichever are installed, each with its own mark); the menu offers the others, this system's file
+ * manager and copying the path.
  */
 export function OpenInButton({ workspace }: { workspace: WorkspaceView }) {
-  const [apps, setApps] = useState<EditorApp[]>([])
+  const [apps, setApps] = useState<OpenInApps | null>(null)
   const [last, setLast] = useState(readLast)
   useEffect(() => {
     let live = true
-    void editorApps().then((list) => live && setApps(list))
+    void openInApps().then((found) => live && setApps(found))
     return () => {
       live = false
     }
   }, [])
 
-  const main = apps.find((a) => a.id === last) ?? apps[0]
+  const editors = apps?.editors ?? []
+  const main = editors.find((a) => a.id === last) ?? editors[0]
   const open = (app: EditorApp): void => {
     try {
       localStorage.setItem(LAST_KEY, app.id)
@@ -44,19 +47,22 @@ export function OpenInButton({ workspace }: { workspace: WorkspaceView }) {
     setLast(app.id)
     void runAction(`Open in ${app.label}`, () => api('system.openIn', { workspaceId: workspace.id, appId: app.id }))
   }
+  const reveal = (): void => void runAction('Open folder', () => api('system.revealPath', { workspaceId: workspace.id }))
   const items: MenuEntry[] = [
-    ...(apps.length ? [{ type: 'label' as const, label: 'Open in' }] : []),
-    ...apps.map((a) => ({ type: 'item' as const, id: a.id, label: a.label, icon: <Code2 />, checked: a.id === main?.id, onSelect: () => open(a) })),
-    ...(apps.length ? [{ type: 'separator' as const }] : []),
-    { type: 'item', id: 'reveal', label: 'File manager', icon: <FolderOpen />, disabled: !workspace.healthy, onSelect: () => void runAction('Open folder', () => api('system.revealPath', { workspaceId: workspace.id })) },
+    ...editors.map((a) => ({ type: 'item' as const, id: a.id, label: a.label, icon: <BrandMark icon={a.icon} size="sm" />, checked: a.id === main?.id, onSelect: () => open(a) })),
+    ...(editors.length ? [{ type: 'separator' as const }] : []),
+    ...(apps
+      ? [{ type: 'item' as const, id: 'reveal', label: apps.fileManager.label, icon: <BrandMark icon={apps.fileManager.icon} size="sm" />, disabled: !workspace.healthy, onSelect: reveal }]
+      : []),
     { type: 'item', id: 'copy', label: 'Copy path', icon: <Copy />, onSelect: () => void runAction('Copy path', () => api('clipboard.writeText', { text: workspace.path })) }
   ]
+  const shown = main ?? (apps ? { label: apps.fileManager.label, icon: apps.fileManager.icon } : null)
   return (
     <SplitButton
-      icon={main ? <Code2 /> : <FolderOpen />}
-      label={main?.label}
-      title={main ? `Open this worktree in ${main.label}` : 'Open this worktree'}
-      onClick={main ? () => open(main) : undefined}
+      icon={shown ? <BrandMark icon={shown.icon} size="sm" /> : <Copy />}
+      label={shown?.label}
+      title={main ? `Open this worktree in ${main.label}` : shown ? `Show this worktree in ${shown.label}` : 'Open this worktree'}
+      onClick={main ? () => open(main) : apps ? reveal : undefined}
       menuLabel="Open this worktree in"
       items={items}
     />

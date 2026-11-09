@@ -201,3 +201,10 @@
   background: var(--gradient-surface), var(--color-surface);
   box-shadow: var(--shadow-surface);
 }
+
+/* A full page on its surface (Schedules, ADR 0065): it scrolls inside, the corners stay round. */
+.page {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}

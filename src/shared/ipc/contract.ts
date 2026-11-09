@@ -32,7 +32,7 @@ import { MAX_PROMPT_TITLE, MAX_QUEUED, MAX_SAVED_PROMPT_TEXT, type SavedPrompt }
 import { INTERVAL_MINUTES, MAX_ROUTINE_FILES, MAX_ROUTINE_NAME, MAX_ROUTINE_PROMPT, REPEAT_PRESETS, type RoutineRun, type RoutineView } from '../domain/routine'
 import type { ConnectionView, ExtensionsInventory } from '../domain/extensions'
 import type { AppAccount, AppsStatus } from '../domain/apps'
-import type { EditorApp, EditorView, FileEntry } from '../domain/files'
+import type { EditorView, FileEntry, OpenInApps } from '../domain/files'
 import { cleanKeybindings, isAppCommand } from '../keys/keybindings'
 import { parseShortcut } from '../keys/shortcut'
 
@@ -733,7 +733,7 @@ export interface ResponseMap {
   'store.installSkill': void
   'store.searchMcp': McpSearchResult
   'system.openUrl': void
-  'system.editorApps': EditorApp[]
+  'system.editorApps': OpenInApps
   'system.openIn': void
   'files.list': { root: string; entries: FileEntry[] }
   'files.search': FileEntry[]

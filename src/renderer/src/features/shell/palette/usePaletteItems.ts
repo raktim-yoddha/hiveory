@@ -33,7 +33,6 @@ const SETTINGS: Array<{ id: SettingsSection; label: string }> = [
   { id: 'remote', label: 'Remote' },
   { id: 'usage', label: 'Usage' },
   { id: 'updates', label: 'Updates' },
-  { id: 'guide', label: 'Guide' },
   { id: 'about', label: 'About' }
 ]
 

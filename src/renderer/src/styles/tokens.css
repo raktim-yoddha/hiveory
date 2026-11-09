@@ -61,6 +61,15 @@
   /* Text over a picture's dark scrim (wallpaper names): white in every theme. */
   --color-on-media: #ffffff;
 
+  /* File-type tints in lists (ADR 0065): soft, so names stay the loudest thing on a row. */
+  --file-blue: #6fa8dc;
+  --file-yellow: #d9b85c;
+  --file-orange: #d98b5c;
+  --file-purple: #a98bd6;
+  --file-green: #8fb87a;
+  --file-cyan: #6cbcc4;
+  --file-red: #d47a72;
+
   /* Third-party brand marks sit on a light tile in every theme, so official colors keep their contrast. */
   --color-logo-tile: #f4f4f5;
 

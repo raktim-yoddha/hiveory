@@ -1,7 +1,8 @@
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, FileCode2, GitCompareArrows, Loader2, RefreshCw, SquarePen } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, GitCompareArrows, Loader2, RefreshCw, SquarePen } from 'lucide-react'
 import type { ChangedFile, ChangeSource } from '@shared/domain/changes'
 import type { EditorView } from '@shared/domain'
+import { FileIcon } from '../../components/files/FileIcon'
 import { IconButton } from '../../components/ui/Button'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { Menu } from '../../components/ui/Menu'
@@ -140,7 +141,7 @@ const FileDiff = memo(function FileDiff({ file, workspaceId, sourceKey, folded, 
       <header className={styles.fileHeader}>
         <button type="button" className={styles.fileToggle} aria-expanded={!folded} onClick={() => onToggle(file.path)} title={file.from ? `${file.from} → ${file.path}` : file.path}>
           {folded ? <ChevronRight aria-hidden className={styles.chevron} /> : <ChevronDown aria-hidden className={styles.chevron} />}
-          <FileCode2 aria-hidden className={styles.fileIcon} />
+          <FileIcon name={file.path} className={styles.fileIcon} />
           <span className={cx(styles.fileName, file.status === 'deleted' && styles.deleted)}>{name}</span>
           {dir && <span className={styles.fileDir}>{dir}</span>}
           {file.status === 'added' && <span className={styles.tag}>New</span>}

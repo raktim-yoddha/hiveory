@@ -1,0 +1,36 @@
+/* A file's icon tint by language (ADR 0065); the attribute outranks a list's own muted icon color. */
+.icon[data-tone] {
+  flex: none;
+}
+
+.icon[data-tone='blue'] {
+  color: var(--file-blue);
+}
+
+.icon[data-tone='yellow'] {
+  color: var(--file-yellow);
+}
+
+.icon[data-tone='orange'] {
+  color: var(--file-orange);
+}
+
+.icon[data-tone='purple'] {
+  color: var(--file-purple);
+}
+
+.icon[data-tone='green'] {
+  color: var(--file-green);
+}
+
+.icon[data-tone='cyan'] {
+  color: var(--file-cyan);
+}
+
+.icon[data-tone='red'] {
+  color: var(--file-red);
+}
+
+.icon[data-tone='muted'] {
+  color: var(--color-text-muted);
+}
