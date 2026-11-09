@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HOST_PROTOCOL, transportPair, type HostTransport } from '@shared/host/protocol'
 import { publish } from '../../../host/endpoint-owner'
 import { gracePolicy, IDLE_MS } from '../../../host/grace'
@@ -21,6 +21,10 @@ import type { PtyBackend, PtyHandle, PtyStart } from '../pty/pty-backend'
 import { newNonce, newToken, prove, verifyProof } from './handshake'
 import { HostClient, hostPtyBackend } from './host-client'
 import { localEndpointPath, otherProtocols } from './local-endpoint'
+
+// local-host imports Electron's utilityProcess; the real package downloads Electron (~100 MB) on first
+// import, which a unit test must never wait for (CI timed out on it). These tests never start one.
+vi.mock('electron', () => ({ utilityProcess: { fork: () => { throw new Error('No Electron in unit tests.') } } }))
 
 const log = { info: () => undefined, warn: () => undefined, error: () => undefined }
 const states: HostState[] = []
