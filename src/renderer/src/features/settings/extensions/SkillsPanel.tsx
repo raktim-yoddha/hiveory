@@ -119,7 +119,7 @@ export function SkillsPanel({ inventory, projectId, onChanged }: Props) {
 
       <div className={settings.group}>
         <p className={cx(settings.groupNote, styles.noteTop)}>
-          A skill is a folder with SKILL.md. Put it in more folders to reach more CLIs — every CLI that reads a folder loads what is in it.
+          A skill is a folder with SKILL.md. Each CLI loads the skills in the folders it reads.
         </p>
         {inventory && groups.length === 0 && (
           <p className={settings.empty}>

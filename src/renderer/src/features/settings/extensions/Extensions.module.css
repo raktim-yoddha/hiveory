@@ -96,11 +96,13 @@
 .description {
   display: -webkit-box;
   overflow: hidden;
+  max-width: 64ch;
   color: var(--color-text-muted);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   line-height: var(--leading-normal);
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  /* One line in the list; the full text is its tooltip. */
+  -webkit-line-clamp: 1;
 }
 
 /* A skill row's right side: who loads it, and the one control for where it lives. */
