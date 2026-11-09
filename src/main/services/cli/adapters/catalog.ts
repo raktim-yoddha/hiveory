@@ -27,6 +27,8 @@ interface CliSpec {
   mcp?: (endpoint: McpEndpoint) => { args?: string[]; env?: Record<string, string> }
   /** Agent Skills folders it reads (Settings › Skills). */
   skills?: SkillFolders
+  /** Its own login and config variables, refreshed from the user's saved environment (ADR 0063). */
+  loginEnv?: string[]
   /** How an agent gets its own conversation back after a restart (ADR 0014). */
   session?: {
     /** Hiveory chooses the session id up front (exact, per agent)… */
@@ -56,6 +58,7 @@ export const defineCli = (spec: CliSpec): CliAdapter => ({
   ...(spec.minRows ? { minRows: spec.minRows } : {}),
   injectMcp: Boolean(spec.mcp),
   ...(spec.skills ? { skills: spec.skills } : {}),
+  ...(spec.loginEnv ? { loginEnv: spec.loginEnv } : {}),
   ...(spec.session?.start && spec.session.resume
     ? { adoptSession: (id: string) => ({ conversationId: id }) }
     : spec.session?.byId
@@ -102,6 +105,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'OpenCode',
     icon: officialIcon('opencode', 'OP'),
     executables: ['opencode'],
+    loginEnv: ['OPENCODE_CONFIG', 'OPENCODE_CONFIG_DIR'],
     // Measured: it crashed at 36 columns; below 60 its folder footer wraps into a one-word column.
     minColumns: 60,
     // Measured: below 14 rows its footer is drawn over the prompt; 17 leaves room for a two-line
@@ -120,6 +124,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'GitHub Copilot CLI',
     icon: officialIcon('copilot', 'CO'),
     executables: ['copilot'],
+    loginEnv: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'],
     autoApproveArgs: ['--allow-all-tools'],
     session: { latest: ['--continue'] },
     mcp: (endpoint) => ({ args: ['--additional-mcp-config', JSON.stringify(mcpServersJson(endpoint, { tools: ['*'] }))] }),
@@ -130,6 +135,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Cursor CLI',
     icon: officialIcon('cursor', 'CU'),
     executables: ['cursor-agent'],
+    loginEnv: ['CURSOR_API_KEY'],
     autoApproveArgs: ['--force'],
     session: { latest: ['resume'] },
     skills: { dir: '.cursor/skills', shared: true, alsoReads: ['.claude/skills', '.codex/skills'] }
@@ -139,6 +145,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Qwen Code',
     icon: officialIcon('qwen', 'QW'),
     executables: ['qwen'],
+    loginEnv: ['QWEN_*'],
     autoApproveArgs: ['--yolo'],
     session: { latest: ['--continue'] },
     skills: { dir: '.qwen/skills', shared: true }
@@ -148,6 +155,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Amp',
     icon: officialIcon('amp', 'AM'),
     executables: ['amp'],
+    loginEnv: ['AMP_API_KEY', 'AMP_URL'],
     autoApproveArgs: ['--dangerously-allow-all'],
     skills: { dir: '.config/agents/skills', projectDir: null, shared: true }
   }),
@@ -156,6 +164,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Aider',
     icon: officialIcon('aider', 'AI'),
     executables: ['aider'],
+    loginEnv: ['AIDER_*'],
     autoApproveArgs: ['--yes-always'],
     session: { latest: ['--restore-chat-history'] }
   }),
@@ -164,6 +173,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Goose',
     icon: officialIcon('goose', 'GO'),
     executables: ['goose'],
+    loginEnv: ['GOOSE_*'],
     args: ['session'],
     autoApproveEnv: { GOOSE_MODE: 'auto' },
     session: { latest: ['--resume'] },
@@ -174,6 +184,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Crush',
     icon: officialIcon('crush', 'CR'),
     executables: ['crush'],
+    loginEnv: ['CRUSH_*'],
     autoApproveArgs: ['--yolo'],
     skills: { dir: '.config/crush/skills', projectDir: '.crush/skills' }
   }),
@@ -182,6 +193,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Kimi CLI',
     icon: officialIcon('kimi', 'KI'),
     executables: ['kimi'],
+    loginEnv: ['KIMI_*'],
     // Measured: its welcome box and tips wrap into a narrow side column below ~46 columns.
     minColumns: 50,
     autoApproveArgs: ['--yolo'],
@@ -202,6 +214,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Factory Droid',
     icon: officialIcon('droid', 'DR'),
     executables: ['droid'],
+    loginEnv: ['FACTORY_API_KEY'],
     skills: { dir: '.factory/skills', shared: true }
   }),
   defineCli({
@@ -209,6 +222,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Auggie',
     icon: officialIcon('auggie', 'AU'),
     executables: ['auggie'],
+    loginEnv: ['AUGMENT_SESSION_AUTH'],
     skills: { dir: '.augment/skills' }
   }),
   defineCli({
@@ -247,6 +261,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Grok CLI',
     icon: officialIcon('grok', 'GR'),
     executables: ['grok'],
+    loginEnv: ['GROK_API_KEY'],
     autoApproveArgs: ['--always-approve'],
     session: { start: (id) => ['--session-id', id], resume: (id) => ['--resume', id] },
     skills: { dir: '.grok/skills' }
@@ -276,6 +291,7 @@ export const CATALOG: CliAdapter[] = [
     displayName: 'Letta Code',
     icon: officialIcon('letta', 'LE'),
     executables: ['letta'],
+    loginEnv: ['LETTA_API_KEY', 'LETTA_BASE_URL'],
     skills: { shared: true }
   }),
   defineCli({

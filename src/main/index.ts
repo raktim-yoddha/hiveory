@@ -13,6 +13,9 @@ import { guard } from './app/guard'
 import { createLogger } from './app/logger'
 import { resolvePaths } from './app/paths'
 import { adoptLoginShellPath } from './app/shell-path'
+import { BUILT_IN_ADAPTERS } from './services/cli/adapters'
+import { loginEnvPatterns } from './services/cli/adapters/login-env'
+import { loginEnv } from './services/pty/login-env'
 import { BackgroundTray } from './app/tray'
 import { NativeShell } from './app/native-shell'
 import { applyWindowTheme, createMainWindow, rendererTargets } from './app/window'
@@ -152,6 +155,9 @@ app.whenReady().then(async () => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   // Finder-launched apps get a minimal PATH: adopt the login shell's before any CLI is looked up.
   await adoptLoginShellPath(log)
+  // CLI logins come from the user's saved environment, never a stale inherited one (ADR 0063).
+  loginEnv.configure(loginEnvPatterns(BUILT_IN_ADAPTERS))
+  await loginEnv.refresh()
   // A desktop paired with a Hiveory server runs no services of its own: it is that server's window.
   const clientConfig = servePort === undefined ? readClientConfig(paths.clientFile, safeStorage) : null
   if (clientConfig) {
@@ -273,6 +279,8 @@ app.whenReady().then(async () => {
   })
   setInterval(() => void guard(log, 'Worktree sync', syncWorktrees), WORKTREE_SYNC_MS).unref()
   app.on('browser-window-focus', () => void guard(log, 'Worktree sync', syncWorktrees))
+  // Back from changing an API key or login: the next agent sees it (ADR 0063).
+  app.on('browser-window-focus', () => void loginEnv.refresh())
   const notices = [
     ...(notice ? [notice] : []),
     ...(failed.length ? [`${failed.join(', ')} failed to start. Everything else works; details are in the log.`] : [])

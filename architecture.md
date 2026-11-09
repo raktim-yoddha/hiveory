@@ -88,6 +88,8 @@ Electron's official guidance recommends context isolation and controlled context
 - File access (`FileService.resolveIn`) stays inside the scope's folder, refuses `.git`
   and refuses symlinks or junctions that lead outside it.
 - Local MCP servers start with a minimal environment (`serverEnv`), never Hiveory's own.
+- CLI login variables (`PROVIDER_LOGIN_ENV` plus each adapter's `loginEnv`) come from the user's
+  saved environment, never the one Hiveory inherited (`loginEnv` in `sanitizeEnv`, ADR 0063).
   Each connection's secrets are masked from tool results and errors (`scrubSecrets`).
 - The window is granted no device permission (camera, microphone) (ADR 0057).
 

@@ -84,6 +84,12 @@ export interface CliAdapter {
   minRows?: number
   /** Agent Skills folders this CLI reads (Settings › Skills); absent: it has no skills support. */
   skills?: SkillFolders
+  /**
+   * Its login and config variables beyond the shared provider ones (`PROVIDER_LOGIN_ENV`); `NAME_*`
+   * matches a prefix. Hiveory takes them from the user's saved environment, never from whatever
+   * launched it, so a stale token or endpoint can't override the CLI's own login (ADR 0063).
+   */
+  loginEnv?: string[]
   /** Keys that stop the current task without quitting. Default: Esc for agents, Ctrl+C for shells. */
   interruptKeys?: string
   /** The adapter knows how to load Hiveory's MCP server into a session (see `LaunchContext.mcp`). */

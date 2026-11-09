@@ -52,6 +52,7 @@ export const claudeAdapter: CliAdapter = {
   injectMcp: true,
 
   skills: { dir: '.claude/skills' },
+  loginEnv: ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CONFIG_DIR'],
   // A session from its history: Claude takes Hiveory's conversation id as its own session id.
   adoptSession: (sessionId) => ({ conversationId: sessionId }),
   buildLaunch({ instance, autoApprove, hook, mcp, runtimeDir, resume }) {

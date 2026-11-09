@@ -12,6 +12,7 @@ import { HostClient } from './host-client'
 import { lineTransport } from './line-transport'
 import { pruneRuntimes, runtimeVersionOf, type DaemonRuntime } from './daemon-runtime'
 import { localEndpointFile, otherProtocols, type LocalEndpoint } from './local-endpoint'
+import { loginEnv } from '../pty/login-env'
 
 /** After this many failed starts in a row, PTYs stay in-process for the session. */
 const MAX_FAILURES = 3
@@ -363,7 +364,8 @@ export class LocalHost {
       const log = openSync(join(this.dir, 'daemon.log'), 'a')
       const [file, args] = daemonCommand(staged?.exe ?? process.execPath, [staged?.entry ?? this.entry, '--daemon', '--local', this.dir])
       spawn(file, args, {
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        // Its own environment carries no stale CLI logins either (ADR 0063); panes get theirs from each start.
+        env: { ...loginEnv.apply(process.env), ELECTRON_RUN_AS_NODE: '1' },
         detached: true,
         windowsHide: true,
         stdio: ['ignore', log, log],

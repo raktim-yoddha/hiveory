@@ -1,3 +1,5 @@
+import { loginEnv } from './login-env'
+
 /** Variables that must never leak from Hiveory's own process into agent shells. */
 const ALWAYS_STRIPPED = ['ELECTRON_RUN_AS_NODE', 'ELECTRON_NO_ATTACH_CONSOLE', 'ELECTRON_ENABLE_LOGGING']
 
@@ -5,8 +7,8 @@ const ALWAYS_STRIPPED = ['ELECTRON_RUN_AS_NODE', 'ELECTRON_NO_ATTACH_CONSOLE', '
  * Builds an agent's environment. When Hiveory itself was started from inside
  * a Claude Code session (CLAUDECODE is set), that host session's variables
  * are dropped so nested agents start clean instead of inheriting its
- * transcript, session and messaging settings. User config such as
- * ANTHROPIC_* is kept.
+ * transcript, session and messaging settings. CLI login variables such as
+ * ANTHROPIC_* come from the user's saved environment, not Hiveory's (ADR 0063).
  */
 export const sanitizeEnv = (
   base: Record<string, string | undefined>,
@@ -14,7 +16,7 @@ export const sanitizeEnv = (
 ): Record<string, string> => {
   const insideClaudeSession = Boolean(base.CLAUDECODE)
   const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries({ ...base, ...overrides })) {
+  for (const [key, value] of Object.entries({ ...loginEnv.apply(base), ...overrides })) {
     if (value === undefined || ALWAYS_STRIPPED.includes(key)) continue
     if (insideClaudeSession && (key === 'CLAUDECODE' || key === 'AI_AGENT' || key.startsWith('CLAUDE_'))) continue
     env[key] = value
