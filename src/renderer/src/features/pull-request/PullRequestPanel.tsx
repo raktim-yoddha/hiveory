@@ -80,7 +80,8 @@ export function PullRequestPanel({ workspaceId, projectId }: { workspaceId: stri
             title="Pull requests are unavailable"
             description={error}
             actions={
-              projectId ? (
+              // A branch reason is fixed by a worktree, not by settings.
+              projectId && !/default branch|not on a branch/i.test(error) ? (
                 <Button size="sm" onClick={() => useNavigation.getState().openSettings('workspace', projectId)}>
                   Code host settings
                 </Button>

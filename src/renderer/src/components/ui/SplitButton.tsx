@@ -29,7 +29,11 @@ export function SplitButton({ onClick, icon, label, title, menuLabel, items, pri
           <span className={cx(styles.icon, loading && 'spin')} aria-hidden>
             {icon}
           </span>
-          {label && <span className={styles.label}>{label}</span>}
+          {label && (
+            <span className={styles.label} data-split-label>
+              {label}
+            </span>
+          )}
         </button>
       )}
       <Menu

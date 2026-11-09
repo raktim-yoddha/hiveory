@@ -31,7 +31,7 @@ export class UpdateService {
     private readonly log: Logger,
     private readonly emit: Emit
   ) {
-    this.status = updater ? { state: 'idle' } : { state: 'unsupported', reason: 'Updates are available in installed builds.' }
+    this.status = updater ? { state: 'idle' } : { state: 'unsupported', reason: 'Updates install in the released app; this build updates from source.' }
     if (!updater) return
     updater.autoDownload = false
     updater.autoInstallOnAppQuit = true

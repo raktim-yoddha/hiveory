@@ -48,8 +48,8 @@ a click anywhere on the bar unfolds it into a list (each row opens its pane): "N
 │ └────────────────────────────────────────┘                                       │
 ```
 
-Run ▾: the Workspace script used last; the menu lists scripts and Edit scripts…. Open in ▾: installed editors,
-File manager, Copy path. The git button shows the next step (Commit · Publish branch · Push · Create PR · Merge
+Run ▾: the Workspace script used last; the menu lists scripts and Edit scripts…. Open in ▾: installed editors with their own marks,
+the system's file manager (File Explorer, Finder or Files, ADR 0065), Copy path. The git button shows the next step (Commit · Publish branch · Push · Create PR · Merge
 PR); its menu: Commit…, Push, Create pull request, Create draft pull request, Pull request, Open on the code host,
 Review changes. Review pane: the Changes tab's source menu, +/−, file count, collapse/expand all, refresh; each
 file a card with a sticky header (chevron, name, folder, New/Deleted/Renamed, +/−, open) and a numbered diff.

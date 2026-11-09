@@ -184,6 +184,15 @@
     display: none;
   }
 
+  /* The name outranks its New/Deleted tag (the diff shows that anyway). */
+  .tag {
+    display: none;
+  }
+
+  .fileName {
+    min-width: 6ch;
+  }
+
   .bar {
     gap: var(--space-4);
     padding-left: var(--space-6);

@@ -13,7 +13,7 @@ import styles from './Settings.module.css'
 const describe = (s: UpdateStatus): { title: string; detail?: string } => {
   switch (s.state) {
     case 'unsupported':
-      return { title: 'Updates run in installed builds', detail: s.reason }
+      return { title: 'Development build', detail: s.reason }
     case 'idle':
       return { title: 'Ready to check for updates' }
     case 'checking':

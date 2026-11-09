@@ -19,12 +19,13 @@ export function WorktreeBar({ project, workspace }: { project: Project; workspac
   const [deleting, setDeleting] = useState(false)
   const primary = workspace.kind === 'main'
   const remote = Boolean(project.host)
+  const title = primary ? folderName(project.path) : workspace.name
   return (
     <header className={styles.bar} data-top-bar aria-label="Worktree">
       <span className={styles.title}>
         {primary ? <House aria-hidden className={styles.icon} /> : <GitBranch aria-hidden className={styles.icon} />}
-        <span className={styles.name}>{primary ? folderName(project.path) : workspace.name}</span>
-        <span className={styles.project}>{project.name}</span>
+        <span className={styles.name}>{title}</span>
+        {project.name !== title && <span className={styles.project}>{project.name}</span>}
         {workspace.git?.branch && <span className={styles.branch}>{workspace.git.branch}</span>}
       </span>
       <Menu label={`${workspace.name} actions`} items={workspaceMenuEntries(workspace, () => setDeleting(true))} trigger={(props) => <IconButton {...props} label={`${workspace.name} actions`} icon={<MoreHorizontal />} className={styles.noDrag} />} />

@@ -110,7 +110,7 @@ export function CreateWorkspaceDialog({ projectId, source: initialSource = 'new'
           </Button>
           {/* Panes are optional: with none chosen it is an empty Worktree (Open agent, Load preset). */}
           <Button variant="primary" onClick={() => void create()} disabled={!canSubmit} loading={busy}>
-            {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create worktree'}
+            {count > 0 ? `Create with ${count} ${count === 1 ? 'pane' : 'panes'}` : 'Create'}
           </Button>
         </>
       }

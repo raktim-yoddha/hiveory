@@ -49,7 +49,7 @@ export function BrowserSection() {
   return (
     <SettingsPage
       title="Browser"
-      description="The built-in browser in the side panel. Agents can drive it with real mouse and keyboard input — even while the panel is closed."
+      description="The built-in browser opens as a pane beside your agents, who can drive it with real mouse and keyboard input."
     >
       <div className={styles.group}>
         <div className={styles.groupTitle}>Browser use</div>

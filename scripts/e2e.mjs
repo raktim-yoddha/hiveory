@@ -174,7 +174,7 @@ await test('home renders with the DEV badge in the sidebar, and no modes (ADR 00
 
 await test('settings: every section renders', async () => {
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
-  for (const section of ['Appearance', 'Agents', 'Skills, MCPs & Apps', 'Updates', 'Guide', 'About']) {
+  for (const section of ['Appearance', 'Agents', 'Skills, MCPs & Apps', 'Updates', 'About']) {
     await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: section }).click()
     await page.waitForTimeout(150)
     expect(!(await page.getByText('failed to display').isVisible()), `${section} crashed`)
@@ -360,23 +360,14 @@ await test('settings: agent defaults pre-fill the create dialog toggles', async 
   }, 'defaults saved')
 })
 
-await test('settings: guide search filters and chapters open', async () => {
-  await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Guide' }).click()
-  await page.getByLabel('Search the guide').fill('swap')
-  await page.waitForTimeout(150)
-  expect(await page.getByRole('button', { name: /Arranging panes/ }).isVisible(), 'search did not find layout chapter')
-  expect(!(await page.getByRole('button', { name: /^.*Presets/ }).isVisible()), 'search did not filter')
-  await page.getByRole('button', { name: /Arranging panes/ }).click()
-  expect(await page.getByRole('heading', { name: 'Arranging panes' }).isVisible(), 'chapter did not open')
-  await page.getByRole('button', { name: /Next chapter/ }).click()
-  expect(await page.getByRole('heading', { name: /The Kanban/ }).isVisible(), 'next chapter failed')
-  await shot('a3-guide')
+await test('settings: there is no Guide page (ADR 0065)', async () => {
+  const nav = page.getByRole('navigation', { name: 'Settings sections' })
+  expect((await nav.getByRole('button', { name: 'Guide', exact: true }).count()) === 0, 'Settings still lists a Guide')
 })
 
 await test('settings: updates are honest in development builds', async () => {
-  await page.getByRole('button', { name: 'All chapters' }).click().catch(() => undefined)
   await page.getByRole('navigation', { name: 'Settings sections' }).getByRole('button', { name: 'Updates' }).click()
-  expect(await page.getByText('Updates run in installed builds').isVisible(), 'unsupported state not shown')
+  expect(await page.getByText('Development build').isVisible(), 'unsupported state not shown')
   expect(await page.getByRole('button', { name: 'Check now' }).isDisabled(), 'check should be disabled in dev')
   await closeSettings()
 })

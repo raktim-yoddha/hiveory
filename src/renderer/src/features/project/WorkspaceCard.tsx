@@ -10,6 +10,7 @@ import { runAction } from '../../stores/notices'
 import { workspaceMenuEntries } from '../workspace/workspace-menu'
 import { useGitStatus } from './useGitStatus'
 import styles from './WorkspaceCard.module.css'
+import { folderName } from '../../lib/folder-name'
 
 /** The worktree's pull (or merge) request, or the way to open one (ADR 0040); absent without a code host. */
 export interface CardReview {
@@ -50,7 +51,8 @@ export function WorkspaceCard({ workspace, onDelete, review }: WorkspaceCardProp
           <button {...props} type="button" className={styles.open} onClick={() => openWorkspace(workspace.projectId, workspace.id)}>
             <span className={styles.top}>
               {isMain ? <House className={styles.kindIcon} aria-hidden /> : <GitBranch className={styles.kindIcon} aria-hidden />}
-              <span className={styles.name}>{workspace.name}</span>
+              {/* The Primary is the Workspace's own folder: its name, then the tag (as in the sidebar, ADR 0039). */}
+              <span className={styles.name}>{isMain ? folderName(workspace.path) : workspace.name}</span>
               {isMain && <span className={styles.badge}>Primary</span>}
             </span>
             {branch && <span className={styles.branch}>{branch}</span>}

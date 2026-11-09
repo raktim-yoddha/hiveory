@@ -23,8 +23,8 @@ interface Item {
  * schedule. Click an empty hour to add one there.
  */
 
-/** This computer's time zone as a short offset ("GMT+5:30"); its full name is the tooltip. */
-const ZONE = new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? ''
+/** This computer's time zone as a short offset ("+5:30"), to fit the hours' gutter; its full name is the tooltip. */
+const ZONE = (new Intl.DateTimeFormat(undefined, { timeZoneName: 'short' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? '').replace(/^GMT(?=[+-])/, '') || 'UTC'
 
 export function WeekCalendar({
   start,

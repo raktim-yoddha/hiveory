@@ -516,7 +516,7 @@ src/
     ├── stores/                 Zustand caches + event bridge + notices
     ├── components/             reusable primitives (ui/, cli/, brand/)
     └── features/               shell, projects, project, kanban, workspace, workspace-create,
-                                presets, panes, agents, terminal, side-panel, settings (+guide), chat
+                                presets, panes, agents, terminal, side-panel, settings, chat
 ```
 
 The adapter contract differs from the conceptual `CliAdapter` above: adapters

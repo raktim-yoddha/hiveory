@@ -31,7 +31,24 @@ export const detailOf = (error: unknown): string => (error instanceof AppExcepti
 /** Why a host CLI call failed, in the words its status shows. */
 export const reasonOf = (error: unknown, fallback: string): string => {
   const app = error instanceof AppException ? error.error : undefined
-  return app?.hint ?? app?.detail ?? fallback
+  return app?.hint ?? (app?.detail ? readable(app.detail) : fallback)
+}
+
+/** What the CLIs say most often, in the app's words (ADR 0065). */
+const KNOWN: Array<[RegExp, string]> = [
+  [/no git remotes? found|none of the git remotes/i, 'This repository has no GitHub or GitLab remote yet.'],
+  [/could not resolve host|network is unreachable|timed? ?out/i, 'The code host could not be reached. Check the connection.'],
+  [/not (?:logged|signed) in|authentication (?:required|failed)|bad credentials|http 401/i, 'The code host CLI is not signed in.']
+]
+
+/** A CLI's message as a sentence: its first line, a known one reworded, capitalized and ended. */
+export const readable = (detail: string): string => {
+  const line = detail.trim().split(/\r?\n/)[0]!.replace(/^(?:error|fatal|gh|glab):\s*/i, '').trim()
+  const known = KNOWN.find(([pattern]) => pattern.test(line))
+  if (known) return known[1]
+  if (!line) return detail
+  const sentence = line[0]!.toUpperCase() + line.slice(1)
+  return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`
 }
 
 /** The first https address in a CLI's output (the review it just opened). */

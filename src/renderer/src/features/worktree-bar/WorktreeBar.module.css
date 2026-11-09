@@ -36,7 +36,7 @@
 
 .name {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: 8ch;
   max-width: 40ch;
   overflow: hidden;
   color: var(--color-text);
@@ -77,10 +77,16 @@
   gap: var(--space-4);
 }
 
-/* A narrow work area keeps the actions and lets the names give way. */
-@container (max-width: 560px) {
+/* A narrow work area keeps the worktree's name: its Workspace and branch go first, then the buttons' labels. */
+@container (max-width: 640px) {
   .project,
   .branch {
+    display: none;
+  }
+}
+
+@container (max-width: 520px) {
+  .actions [data-split-label] {
     display: none;
   }
 }

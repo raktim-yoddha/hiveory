@@ -5,7 +5,7 @@
   align-items: center;
   gap: var(--space-3);
   /* A narrow message box still shows the model's name, not just its logo. */
-  min-width: calc(var(--control-lg) * 3);
+  min-width: calc(var(--control-lg) * 2.5);
   max-width: calc(var(--menu-min-width) * 1.6);
   height: var(--control-md);
   padding: 0 var(--space-4) 0 var(--space-3);
@@ -24,7 +24,7 @@
 }
 
 .triggerText {
-  min-width: 0;
+  min-width: 5ch;
   overflow: hidden;
   color: var(--color-text);
   font-weight: var(--weight-medium);
@@ -33,8 +33,12 @@
 }
 
 .triggerMeta {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
   color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .triggerIcon,
@@ -381,4 +385,23 @@
   border-color: transparent;
   background: var(--fill-selected);
   color: var(--color-text);
+}
+
+/* Narrow message boxes (the composer's container): the effort goes first, then the small icons, so Send always fits. */
+@container composer (max-width: 460px) {
+  .triggerMeta {
+    display: none;
+  }
+}
+
+@container composer (max-width: 320px) {
+  .trigger {
+    min-width: 0;
+    padding-right: var(--space-3);
+  }
+
+  .triggerIcon,
+  .chevron {
+    display: none;
+  }
 }
