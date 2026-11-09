@@ -114,7 +114,12 @@ function EditorDialog({ target }: { target: Target }) {
   const workspaces = useWorkspaces((s) => s.byProject)
   const loadWorkspaces = useWorkspaces((s) => s.load)
   const routine = 'routineId' in target ? routines.find((r) => r.id === target.routineId) : undefined
-  const [draft, setDraft] = useState<Draft>(() => draftOf(routine, target))
+  const [draft, setDraft] = useState<Draft>(() => {
+    const d = draftOf(routine, target)
+    // With one Workspace, a new schedule needs no Workspace pick (ADR 0062).
+    const only = projects.length === 1 ? projects[0]!.id : ''
+    return !routine && !d.projectId && only ? { ...d, projectId: only, workspaceId: mainWorkspaceId(only) } : d
+  })
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -197,7 +202,7 @@ function EditorDialog({ target }: { target: Target }) {
     <>
       <Modal
         open={!confirmDelete}
-        title={`${routine ? 'Edit schedule' : 'New schedule'} · ${projects.find((p) => p.id === draft.projectId)?.name ?? 'Work'}`}
+        title={[routine ? 'Edit schedule' : 'New schedule', projects.find((p) => p.id === draft.projectId)?.name].filter(Boolean).join(' · ')}
         width="lg"
         onClose={close}
         footer={

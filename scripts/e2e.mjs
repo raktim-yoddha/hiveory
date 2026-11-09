@@ -657,7 +657,9 @@ console.log('D. Side panel, sidebars, terminal & clipboard')
 const sidePanel = () => page.locator('aside[aria-label="Side panel"]')
 await test('the side panel has its fixed tabs, no "+" and no ×; browsers are panes', async () => {
   if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
-  for (const name of ['Dashboard', 'Sessions', 'Explorer', 'Schedules', 'Settings']) await sidePanel().getByRole('tab', { name }).waitFor()
+  for (const name of ['Dashboard', 'Changes', 'Sessions', 'Explorer']) await sidePanel().getByRole('tab', { name }).waitFor()
+  // Schedules live in the sidebar and a Workspace's settings in Settings (ADR 0062).
+  expect((await sidePanel().getByRole('tablist', { name: 'Side panel tabs' }).getByRole('tab').count()) === 4, 'the side panel has more than its four tabs')
   expect(!(await sidePanel().getByRole('button', { name: /^Close / }).count()), 'side panel tabs can be closed')
   expect(!(await sidePanel().getByRole('button', { name: /^Add / }).count()), 'side panel still has "+"')
   expect(!(await sidePanel().getByLabel('Address').count()), 'a browser in the side panel')

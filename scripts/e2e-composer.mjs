@@ -1,5 +1,5 @@
-// End-to-end: the composer's shortcuts and the Schedules tab (ADR 0047 amendment, ADR 0055) — Tabs only, real
-// model names and the Schedules calendar of a worktree.
+// End-to-end: the composer's shortcuts and the Schedules page (ADR 0047 amendment, ADR 0055, 0062) — Tabs only, real
+// model names and the Schedules calendar.
 // Usage: pnpm build && node scripts/e2e-composer.mjs [screenshotDir]
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -40,7 +40,7 @@ await test('setup: a Workspace with a second worktree', async () => {
   worktree = await value('workspaces.create', { projectId: project.id, kind: 'isolated', name: 'fix-login', cliSelections: [], autoApprove: false })
 })
 
-await test('Work: Schedules tab is a calendar; Ctrl Shift T opens the tab picker; Alt ↓ moves worktree', async () => {
+await test('Work: Schedules page is a calendar; Ctrl Shift T opens the tab picker; Alt ↓ moves worktree', async () => {
   await value('agents.open', { workspaceId: worktree.id, cliId: (await value('clis.list')).find((c) => c.kind === 'shell' && c.available).id })
   const sidebar = page.getByRole('navigation', { name: 'Workspaces' })
   const unfold = sidebar.getByRole('button', { name: 'Unfold demo-app' })
@@ -48,8 +48,11 @@ await test('Work: Schedules tab is a calendar; Ctrl Shift T opens the tab picker
   await sidebar.getByRole('button', { name: 'fix-login', exact: true }).click()
   await page.locator('section[aria-label$=" agent"]').first().waitFor()
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+KeyS' : 'Control+Shift+KeyS')
-  await page.locator('aside[aria-label="Side panel"]').getByRole('tablist', { name: 'Schedules view' }).waitFor()
+  // The shortcut opens the Schedules page in the main area (ADR 0062); the worktree opens again from the sidebar.
+  await page.locator('main').getByRole('tablist', { name: 'Schedules view' }).waitFor()
   await shot('c5-work-schedules')
+  await sidebar.getByRole('button', { name: 'fix-login', exact: true }).click()
+  await page.locator('section[aria-label$=" agent"]').first().waitFor()
   await page.locator('section[aria-label$=" agent"] .xterm').first().click()
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+KeyT' : 'Control+Shift+KeyT')
   await page.getByRole('dialog', { name: 'Add pane' }).waitFor()

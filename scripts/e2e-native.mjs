@@ -162,9 +162,10 @@ await test('Workspace scripts: saved, refused when bad, run from the pane "+"', 
 })
 
 await test('Workspace settings list scripts and add one; Find runs them', async () => {
-  await page.locator('aside[aria-label="Side panel"]').count()
-  if (!(await page.locator('aside[aria-label="Side panel"]').getByRole('tablist').count())) await page.getByRole('button', { name: /side panel$/i }).first().click()
-  await page.locator('aside[aria-label="Side panel"]').getByRole('tab', { name: 'Settings' }).click()
+  // A Workspace's right-click › Workspace settings opens Settings on its page (ADR 0062).
+  await sidebar().getByRole('button', { name: 'demo-app', exact: true }).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Workspace settings' }).click()
+  await page.getByRole('dialog', { name: 'Settings' }).getByRole('heading', { name: 'demo-app' }).waitFor()
   const scripts = page.getByRole('list', { name: 'Scripts' })
   await scripts.getByText('say-hi').waitFor()
   await page.getByLabel('Script name').fill('lint')
@@ -176,6 +177,7 @@ await test('Workspace settings list scripts and add one; Find runs them', async 
   await page.getByRole('button', { name: 'Add', exact: true }).click()
   await page.getByRole('alert').getByText('A script already has that name.').waitFor()
   await shot('n4-scripts-settings')
+  await page.keyboard.press('Escape')
   // What main puts on the clipboard (the system clipboard itself is another program's to lock).
   await app.evaluate(({ clipboard }) => {
     globalThis.__copied = []
@@ -200,6 +202,7 @@ await test('Workspace settings list scripts and add one; Find runs them', async 
 
 await test('Ctrl+F6 moves between the sidebar, the worktree and the side panel, and back', async () => {
   await page.keyboard.press('Escape')
+  if (await page.getByRole('button', { name: 'Show side panel' }).count()) await page.getByRole('button', { name: 'Show side panel' }).click()
   const where = () =>
     page.evaluate(() => {
       const el = document.activeElement
