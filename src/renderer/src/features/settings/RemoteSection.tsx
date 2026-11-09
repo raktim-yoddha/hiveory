@@ -39,7 +39,7 @@ export function RemoteSection() {
   return (
     <SettingsPage
       title="Remote"
-      description="Use your other computers from here, or this one from them. Devices on your Tailscale network connect in one click; SSH uses your own setup (config, keys, agent, known hosts) and Hiveory never asks for or stores passwords."
+      description="Use your other computers from here, or this one from them, over Tailscale or SSH."
     >
       <TailnetDevices
         onUseSsh={(host) => {
@@ -52,7 +52,7 @@ export function RemoteSection() {
       {!onServer && <ShareThisComputer />}
       <SettingRow
         title="Check an SSH host"
-        description="An alias from ~/.ssh/config or user@host. The check installs Hiveory's small host program in ~/.hiveory-host on that machine (with its own Node when the machine has none) and connects to it."
+        description="An alias from ~/.ssh/config or user@host. Checking installs Hiveory's small host program there."
         control={null}
       />
       <div ref={sshField}>
@@ -77,7 +77,7 @@ export function RemoteSection() {
       )}
       <SettingRow
         title="Passwords, codes and new hosts"
-        description="When ssh needs a password, a key passphrase, a one-time code or your OK for a new host's fingerprint, Hiveory asks here. Passwords stay in memory until Hiveory quits, never on disk. A changed host key is always refused."
+        description="Hiveory asks here when ssh needs one. Passwords stay in memory only; a changed host key is always refused."
         control={null}
       />
       <ServerConnection />

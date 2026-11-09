@@ -35,13 +35,13 @@ export function AgentsSection() {
   return (
     <SettingsPage
       title="Agents"
-      description="Defaults for new worktrees and presets, and the tools agents get to coordinate each other."
+      description="Defaults for new agents, and the tools they use to work together."
     >
       <div className={styles.group}>
         <div className={styles.groupTitle}>Defaults</div>
         <SettingRow
           title="Skip permissions (YOLO)"
-          description="On: every agent, in every workspace and worktree, starts in its CLI's dangerous skip-permissions mode (Claude Code --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox, Gemini --yolo…). Running agents switch on their next start. Off: each worktree and preset chooses."
+          description="Every agent starts in its CLI's skip-permissions mode (--dangerously-skip-permissions, --yolo…) from its next start. Off: each worktree and preset chooses."
           control={
             <Toggle
               label="Skip permissions (YOLO) for every agent"
@@ -55,7 +55,7 @@ export function AgentsSection() {
         <div className={styles.groupTitle}>Notifications</div>
         <SettingRow
           title="Desktop notifications"
-          description="A notification when an agent needs you, finishes a turn or stops, unless you are looking at its worktree; clicking it opens that agent. The taskbar (or dock) shows how many agents need you. A Workspace with alerts off stays quiet."
+          description="When an agent needs you, finishes or stops, unless its worktree is on screen. Click one to open that agent."
           control={
             <Select
               label="Desktop notifications"
@@ -75,7 +75,7 @@ export function AgentsSection() {
         <div className={styles.groupTitle}>When you close the window</div>
         <SettingRow
           title="Keep agents running in the background"
-          description="Closing the window leaves Hiveory in the tray and every agent keeps working; open it again from the tray. Quit from the tray stops them (they resume their conversations next time)."
+          description="Closing the window keeps Hiveory in the tray, with every agent working. Quit from the tray stops them."
           control={
             <Toggle
               label="Keep agents running in the background"
@@ -90,12 +90,11 @@ export function AgentsSection() {
       <div className={styles.group}>
         <div className={styles.groupTitle}>Agent tools</div>
         <p className={styles.groupNote}>
-          Agents you open in Hiveory get a private, local MCP server so they can see and coordinate each other. It listens on
-          this machine only, with a per-launch secret.
+          A private MCP server on this computer lets agents see and coordinate each other.
         </p>
         <SettingRow
           title="Give agents Hiveory tools"
-          description="Seeing, messaging and arranging other agents. The browser, computer use and apps have their own switches. Applies to agents started after the change."
+          description="See, message and arrange other agents. Applies to agents started after the change."
           control={
             <Toggle label="Give agents Hiveory tools" checked={settings.agentTools} onChange={(agentTools) => void update({ agentTools })} />
           }
@@ -104,9 +103,7 @@ export function AgentsSection() {
       <div className={styles.group}>
         <div className={styles.groupTitle}>Computer use</div>
         <p className={styles.groupNote}>
-          Lets agents operate this computer like you do: read any app&apos;s buttons and fields, click, type, press shortcuts, switch windows
-          and take screenshots. Agents see apps as text with element refs first, so it is fast and needs no screenshots. Hiveory shows a
-          notice whenever an agent starts using it.
+          Agents can click, type and read other apps on this computer. Hiveory shows a notice whenever one starts.
         </p>
         <SettingRow
           title="Give agents computer use"

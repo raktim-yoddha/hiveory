@@ -194,7 +194,7 @@ await test('Workspace settings list scripts and add one; Find runs them', async 
   await page.keyboard.press('Control+Shift+KeyP')
   const find = page.getByRole('dialog', { name: 'Command palette' })
   await find.getByRole('combobox').fill('lint')
-  await find.getByRole('option').filter({ hasText: 'Run script' }).first().waitFor()
+  await find.getByRole('group', { name: 'Run script' }).getByRole('option').first().waitFor()
   await find.getByRole('combobox').fill('copy a link')
   await find.getByRole('combobox').press('Enter')
   await waitFor(async () => (await app.evaluate(() => globalThis.__copied.at(-1) ?? '')) === `hiveory://open?p=${project.id}&w=${primary.id}`, 'worktree link copied')

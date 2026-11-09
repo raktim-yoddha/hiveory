@@ -40,7 +40,7 @@ export function KanbanBoard({ projectId, workspaceId }: { projectId: string; wor
       )}
       {board && total === 0 && (
         <div className={styles.hint}>
-          <p>{scope === 'here' ? 'No agents in this worktree yet.' : "Every agent in this workspace's worktrees shows up here, sorted by what it is doing right now."}</p>
+          <p>{scope === 'here' ? 'No agents in this worktree yet.' : "Agents from every worktree appear here by what they are doing."}</p>
           {scope === 'all' && (
             <Button size="sm" onClick={() => setWorkspaceTab('workspaces')}>
               Go to worktrees

@@ -172,16 +172,22 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-9);
   animation: rise-in var(--duration-glide) var(--ease-out);
   max-width: calc(var(--dialog-width) * 1.6);
   padding: var(--space-10) var(--space-10) var(--space-11);
 }
 
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-9);
+}
+
 .pageHeader {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .pageTitle {
@@ -194,6 +200,7 @@
   max-width: 62ch;
   color: var(--color-text-muted);
   font-size: var(--text-md);
+  line-height: var(--leading-normal);
 }
 
 .group {
@@ -205,7 +212,7 @@
 }
 
 .groupTitle {
-  padding: var(--space-6) var(--space-7) var(--space-2);
+  padding: var(--space-7) var(--space-8) var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
@@ -215,7 +222,8 @@
 
 .groupNote {
   margin: 0;
-  padding: 0 var(--space-7) var(--space-4);
+  max-width: 72ch;
+  padding: 0 var(--space-8) var(--space-5);
   color: var(--color-text-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
@@ -224,7 +232,7 @@
 /* The first-run welcome: two questions, each above its picker, lined up with the cards. */
 /* A group that opens with its note (no title above it) still has room at the top. */
 .group > .groupNote:first-child {
-  padding-top: var(--space-6);
+  padding-top: var(--space-7);
 }
 
 .row {
@@ -232,12 +240,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4) var(--space-8);
-  padding: var(--space-6) var(--space-7);
+  gap: var(--space-5) var(--space-10);
+  padding: var(--space-7) var(--space-8);
 }
 
+/* A hairline between rows, so each setting reads as its own line. */
 .row + .row {
-  border-top: var(--border-width) solid var(--color-border-subtle);
+  border-top: var(--border-width) solid var(--color-border);
 }
 
 /* The text keeps a readable width; a control too wide to sit beside it goes underneath. */
@@ -245,7 +254,7 @@
   display: flex;
   flex: 1 1 calc(var(--space-10) * 7);
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -255,8 +264,10 @@
 }
 
 .rowDescription {
+  max-width: 64ch;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 
 .rowControl {

@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Search } from 'lucide-react'
+import { ArrowRight, Columns2, Command, CornerDownLeft, FolderGit2, GitBranch, MessageSquare, PanelRight, Play, Search, Settings2, SquarePlus, Zap, type LucideIcon } from 'lucide-react'
 import { cx } from '../../../lib/cx'
-import { rankPalette, type PaletteItem } from './palette-rank'
+import { groupRanked, rankPalette, type PaletteItem } from './palette-rank'
 import { usePalette } from './palette-store'
 import { usePaletteItems } from './usePaletteItems'
 import styles from './CommandPalette.module.css'
 
 const MAX_SHOWN = 60
+
+/** Each section's mark, so a long list reads at a glance; unknown groups get the arrow. */
+const GROUP_ICON: Record<string, LucideIcon> = {
+  'Open here': SquarePlus,
+  'Run script': Play,
+  'This worktree': Command,
+  'Side panel': PanelRight,
+  'Go to': FolderGit2,
+  Commands: Zap,
+  Lists: GitBranch,
+  'Panes and tabs': Columns2,
+  Chat: MessageSquare,
+  Settings: Settings2
+}
 
 /**
  * The command palette (ADR 0060): Ctrl+Shift+P (⌘K) finds any command, Workspace, worktree, agent
@@ -19,7 +33,9 @@ export function CommandPalette() {
   const ref = useRef<HTMLDialogElement>(null)
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState(0)
-  const shown = useMemo(() => rankPalette(items, query).slice(0, MAX_SHOWN), [items, query])
+  // One section per group (titled once, not on every row); `shown` is their rows in order, for the keys.
+  const sections = useMemo(() => groupRanked(rankPalette(items, query).slice(0, MAX_SHOWN)), [items, query])
+  const shown = useMemo(() => sections.flatMap((s) => s.items), [sections])
   const active = Math.min(picked, Math.max(0, shown.length - 1))
 
   useEffect(() => {
@@ -92,26 +108,55 @@ export function CommandPalette() {
           </div>
           <ul id="palette-list" role="listbox" aria-label="Results" className={styles.list}>
             {shown.length === 0 && <li className={styles.empty}>Nothing matches “{query}”.</li>}
-            {shown.map((item, i) => (
-              <li
-                key={item.id}
-                id={`palette-${i}`}
-                data-index={i}
-                role="option"
-                aria-selected={i === active}
-                className={cx(styles.item, i === active && styles.active)}
-                onMouseMove={() => i !== active && setPicked(i)}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => runItem(item)}
-              >
-                <span className={styles.group}>{item.group}</span>
-                <span className={styles.label}>{item.label}</span>
-                {item.hint && <span className={styles.hint}>{item.hint}</span>}
-                <span className={styles.flex} />
-                {item.keys && <kbd className={styles.keys}>{item.keys}</kbd>}
-              </li>
-            ))}
+            {sections.map((section, s) => {
+              const Icon = GROUP_ICON[section.group] ?? ArrowRight
+              return (
+                <li key={section.group} role="group" aria-labelledby={`palette-group-${s}`} className={styles.section}>
+                  <div id={`palette-group-${s}`} className={styles.sectionTitle}>
+                    {section.group}
+                  </div>
+                  <ul role="none" className={styles.rows}>
+                    {section.items.map((item) => {
+                      const i = shown.indexOf(item)
+                      const selected = i === active
+                      return (
+                        <li
+                          key={item.id}
+                          id={`palette-${i}`}
+                          data-index={i}
+                          role="option"
+                          aria-selected={selected}
+                          className={cx(styles.item, selected && styles.active)}
+                          onMouseMove={() => !selected && setPicked(i)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => runItem(item)}
+                        >
+                          <Icon className={styles.icon} aria-hidden />
+                          <span className={styles.text}>
+                            <span className={styles.label}>{item.label}</span>
+                            {item.hint && <span className={styles.hint}>{item.hint}</span>}
+                          </span>
+                          {item.keys && <kbd className={styles.keys}>{item.keys}</kbd>}
+                          {selected && <CornerDownLeft className={styles.enter} aria-hidden />}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </li>
+              )
+            })}
           </ul>
+          <footer className={styles.footer} aria-hidden>
+            <span>
+              <kbd className={styles.keys}>↑</kbd> <kbd className={styles.keys}>↓</kbd> choose
+            </span>
+            <span>
+              <kbd className={styles.keys}>Enter</kbd> open
+            </span>
+            <span>
+              <kbd className={styles.keys}>Esc</kbd> close
+            </span>
+          </footer>
         </div>
       )}
     </dialog>

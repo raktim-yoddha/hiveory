@@ -101,8 +101,7 @@ export function RoutinesPage() {
       </header>
       <div className={styles.awake}>
         <span>
-          <strong>Keep this computer awake for schedules.</strong> Holds it awake for the hour before a scheduled run and while one runs, while plugged in. A closed lid
-          still sleeps.
+          <strong>Keep this computer awake for schedules.</strong> From an hour before a run until it ends, while plugged in.
         </span>
         <Toggle label="Keep this computer awake for schedules" checked={settings.keepAwakeForRoutines} onChange={(keepAwakeForRoutines) => void updateSettings({ keepAwakeForRoutines })} />
       </div>

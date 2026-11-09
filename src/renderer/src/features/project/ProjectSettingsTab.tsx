@@ -35,7 +35,8 @@ export function ProjectSettingsTab({ project }: { project: Project }) {
   }, [project.id, project.repositoryRoot])
 
   return (
-    <div className={styles.section}>
+    // Under its Settings page header, so it adds no padding of its own (ADR 0062).
+    <div className={settings.stack}>
       <div className={settings.group}>
         <div className={settings.groupTitle}>General</div>
         <SettingRow

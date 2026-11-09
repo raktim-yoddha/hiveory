@@ -60,16 +60,16 @@ export function usePaletteItems(open: boolean): PaletteItem[] {
     const nav = () => useNavigation.getState()
     const items: PaletteItem[] = []
     if (here) {
-      if (chatUi) items.push({ id: 'chat-ui', group: 'Open here', label: 'Chat UI', hint: 'a chat; pick its CLI and model in its message box', run: () => chatUi() })
+      if (chatUi) items.push({ id: 'chat-ui', group: 'Open here', label: 'Chat UI', hint: 'chat with any CLI', run: () => chatUi() })
       for (const cli of clis.filter((c) => c.available)) {
-        items.push({ id: `cli:${cli.id}`, group: 'Open here', label: cli.displayName, hint: 'in a terminal', run: () => void agentActions.open(here.workspaceId, cli.id) })
+        items.push({ id: `cli:${cli.id}`, group: 'Open here', label: cli.displayName, run: () => void agentActions.open(here.workspaceId, cli.id) })
       }
       for (const s of projects.find((p) => p.id === here.projectId)?.settings?.scripts ?? []) {
         items.push({ id: `script:${s.name}`, group: 'Run script', label: s.name, hint: s.command, run: () => void runScript(here.workspaceId, here.projectId, s) })
       }
       // A hiveory:// link back to this worktree, for notes, chats and other apps (ADR 0061).
-      items.push({ id: 'copy-link', group: 'Open here', label: 'Copy a link to this worktree', hint: 'hiveory://open…', run: () => void runAction('Copy link', () => api('clipboard.writeText', { text: openLink(here.projectId, here.workspaceId) })) })
-      items.push({ id: 'workspace-settings', group: 'Open here', label: 'Workspace settings', run: () => nav().openSettings('workspace', here.projectId) })
+      items.push({ id: 'copy-link', group: 'This worktree', label: 'Copy a link to this worktree', run: () => void runAction('Copy link', () => api('clipboard.writeText', { text: openLink(here.projectId, here.workspaceId) })) })
+      items.push({ id: 'workspace-settings', group: 'This worktree', label: 'Workspace settings', run: () => nav().openSettings('workspace', here.projectId) })
       for (const tab of PANEL_TABS) items.push({ id: `panel:${tab.kind}`, group: 'Side panel', label: tab.label, run: () => nav().showPanelTab(here.workspaceId, tab.kind) })
     }
     for (const project of sortProjects(projects, readSort())) {

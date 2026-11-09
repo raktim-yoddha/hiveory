@@ -54,3 +54,17 @@ export function rankPalette(items: PaletteItem[], query: string): PaletteItem[] 
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((r) => r.item)
 }
+
+/**
+ * Ranked items gathered under their groups, so each group is one titled section: groups keep the order
+ * of their best match, items keep their rank inside a group.
+ */
+export function groupRanked(items: PaletteItem[]): Array<{ group: string; items: PaletteItem[] }> {
+  const sections = new Map<string, PaletteItem[]>()
+  for (const item of items) {
+    const list = sections.get(item.group)
+    if (list) list.push(item)
+    else sections.set(item.group, [item])
+  }
+  return [...sections].map(([group, list]) => ({ group, items: list }))
+}

@@ -50,3 +50,16 @@ keep the Workspaces in daily use on top. The phone had none of the Changes tab.
   and Workspaces on SSH hosts are not counted yet. A CLI that changes its history format shows less,
   never an error.
 - Find has no history or ranking by use; the list is rebuilt from the live stores each time.
+
+## Amendment (2026-11-09): Find in titled sections, roomier screens
+
+Decided by the product owner: Find and other screens were cramped and wordy.
+
+- Find lists its results in titled sections (each group named once, with its icon on every row), in
+  the order of each group's best match (`groupRanked`). Rows are taller with the label first and a
+  short hint after it; a footer shows ↑ ↓, Enter and Esc. Hints that only repeated themselves ("in a
+  terminal", the link's address) are gone; "Copy a link" and "Workspace settings" form a This worktree
+  section.
+- Settings rows, group titles and menus get more room (padding, line height, a hairline between
+  rows), within the design tokens, and the longest Settings, Remote, Schedules and board texts are cut
+  to one sentence.

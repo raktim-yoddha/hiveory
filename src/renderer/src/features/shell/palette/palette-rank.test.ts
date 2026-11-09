@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rankPalette, type PaletteItem } from './palette-rank'
+import { groupRanked, rankPalette, type PaletteItem } from './palette-rank'
 
 const item = (label: string, group = 'Commands', hint?: string): PaletteItem => ({ id: label, label, group, hint, run: () => undefined })
 const labels = (items: PaletteItem[]) => items.map((i) => i.label)
@@ -38,5 +38,13 @@ describe('command palette ranking (ADR 0060)', () => {
   it('takes characters that mean something in a pattern as plain text', () => {
     expect(() => rankPalette([item('a (b) [c] *d?')], '(b) [c *d?')).not.toThrow()
     expect(labels(rankPalette([item('a (b) [c] *d?')], '[c]'))).toEqual(['a (b) [c] *d?'])
+  })
+
+  it('gathers ranked items into sections in the order of their best match', () => {
+    const ranked = [item('b1', 'B'), item('a1', 'A'), item('b2', 'B'), item('a2', 'A')]
+    expect(groupRanked(ranked).map((s) => [s.group, labels(s.items)])).toEqual([
+      ['B', ['b1', 'b2']],
+      ['A', ['a1', 'a2']]
+    ])
   })
 })

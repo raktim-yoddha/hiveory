@@ -420,8 +420,9 @@ Uncommitted only: an undo button per file (Discard, confirmed) and the commit ba
 ### Find (ADR 0060)
 
 Ctrl+Shift+P (⌘K) or the sidebar footer's search button (also on the rail): a dialog near the top, a
-search box over results, each row: group (Open here, Side panel, Go to, Commands, Lists, Panes and
-tabs, Chat, Settings) · name · hint ……… keys. ↑ ↓ choose, Enter runs, Escape closes.
+search box over titled sections (Open here, This worktree, Run script, Side panel, Go to, Commands, Lists,
+Panes and tabs, Chat, Settings, ADR 0060 amendment); each row: section icon · name · short hint ……… keys, and ↵ on
+the chosen row. Footer: ↑ ↓ choose · Enter open · Esc close.
 
 ### Settings › Usage (ADR 0060)
 

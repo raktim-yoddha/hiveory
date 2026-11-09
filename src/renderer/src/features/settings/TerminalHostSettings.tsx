@@ -58,7 +58,7 @@ export function TerminalHostSettings() {
       <p className={styles.groupNote}>{status ? describe(status) : 'Checking…'}</p>
       <SettingRow
         title="Keep agents running when Hiveory quits"
-        description="Agents and terminals keep working in the terminal host after you quit, and through updates. When Hiveory opens again, every pane takes its terminal back where it is. Off: quitting stops them, and they resume their conversations next time. Quit and stop agents in the tray menu stops them once."
+        description="Agents and terminals keep working after you quit and through updates; each pane picks its terminal back up. Off: quitting stops them."
         control={
           <Toggle
             label="Keep agents running when Hiveory quits"
@@ -69,7 +69,7 @@ export function TerminalHostSettings() {
       />
       <SettingRow
         title="Keep them for"
-        description="How long agents and terminals keep running while Hiveory is closed, on this computer and on remote machines: until they finish, or a limit after which they are stopped."
+        description="How long they keep running while Hiveory is closed."
         control={
           <Select
             label="Keep them for"
@@ -87,7 +87,7 @@ export function TerminalHostSettings() {
       />
       <SettingRow
         title="Restart terminal host"
-        description="Ends every agent and terminal it holds and starts it fresh. Agents come back on their own, resuming their conversations."
+        description="Stops every agent and terminal it holds; agents come back and resume."
         control={
           <Button variant="secondary" onClick={() => setConfirming(true)} disabled={restarting}>
             Restart
