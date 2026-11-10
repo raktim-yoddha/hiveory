@@ -1,9 +1,9 @@
 /* global window, requestAnimationFrame */
 // The end-to-end harness shared by scripts/e2e*.mjs: launches the built app with a throwaway profile,
 // runs named tests, and calls the app's IPC. `app` and `page` are live bindings (a relaunch swaps them).
-import { mkdirSync, mkdtempSync, readFileSync, existsSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, join, resolve, sep } from 'node:path'
 import { _electron as electron } from 'playwright-core'
 
 export const shots = resolve(process.argv[2] ?? join(tmpdir(), 'hiveory-e2e'))
@@ -49,12 +49,74 @@ export const launch = async (extraEnv = {}) => {
 }
 export const close = async () => {
   closing = true
-  await app.close()
+  // A terminal host left running (`durableEnv`) inherits the app's output pipes, so Playwright's own
+  // close never settles: the process having exited is the end either way.
+  const proc = app.process()
+  const exited = proc.exitCode !== null ? Promise.resolve() : new Promise((done) => proc.once('exit', done))
+  await Promise.race([app.close().catch(() => undefined), exited])
   closing = false
 }
-export const relaunch = async () => {
+/** Quits and starts again; `whileClosed` runs in between (waiting, say, for something to end meanwhile). */
+export const relaunch = async (extraEnv = {}, whileClosed) => {
   await close()
-  await launch()
+  await whileClosed?.()
+  await launch(extraEnv)
+}
+
+/** The scripts the speed and durability runs start inside terminals and chats (ADR 0066). */
+export const fixtures = join(import.meta.dirname, 'e2e-fixtures')
+/** A path as a quoted shell argument that cmd, PowerShell and bash all read the same way. */
+export const shellPath = (file) => `"${file.split(sep).join('/')}"`
+
+/**
+ * Environment for a launch whose terminals and chat turns outlive the app in the terminal host, as
+ * they do for users (ADR 0050): its data stays inside the sandbox on every OS. End such a run with
+ * `stopTerminalHost`, never `close`, so nothing is left running.
+ */
+export const durableEnv = () => ({ HIVEORY_STOP_AGENTS_ON_QUIT: '0', XDG_DATA_HOME: local })
+
+/**
+ * A stand-in chat CLI: `copilot` on the returned PATH prints plain lines at the pace `configure`
+ * sets (its print mode is plain text, so no protocol is faked). Pass `env` to `launch`.
+ */
+export const fakeChatCli = () => {
+  const dir = join(sandbox, 'fake-bin')
+  mkdirSync(dir, { recursive: true })
+  const script = join(dir, 'fake-chat-cli.mjs')
+  copyFileSync(join(fixtures, 'fake-chat-cli.mjs'), script)
+  // Shaped like npm's own shims, which Hiveory reads to start the script with Node directly (never through cmd.exe).
+  if (process.platform === 'win32') writeFileSync(join(dir, 'copilot.cmd'), `@echo off\r\nnode "%~dp0${sep}fake-chat-cli.mjs" %*\r\n`)
+  else {
+    writeFileSync(join(dir, 'copilot'), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`)
+    chmodSync(join(dir, 'copilot'), 0o755)
+  }
+  const configure = (config) => writeFileSync(join(dir, 'fake-chat-cli.json'), JSON.stringify(config))
+  configure({})
+  // Windows names the variable "Path"; setting a second spelling would leave which one wins to chance.
+  const key = Object.keys(process.env).find((k) => k.toLowerCase() === 'path') ?? 'PATH'
+  return { cliId: 'copilot', configure, env: { [key]: `${dir}${delimiter}${process.env[key] ?? ''}` } }
+}
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+/** Quits a `durableEnv` launch with its agents stopped, and makes sure the terminal host is gone. */
+export const stopTerminalHost = async () => {
+  const pid = await value('terminalHost.status').then((s) => s.pid, () => undefined)
+  await app.evaluate(() => {
+    process.env.HIVEORY_STOP_AGENTS_ON_QUIT = '1'
+  })
+  await close()
+  for (let i = 0; pid && alive(pid) && i < 50; i++) await new Promise((r) => setTimeout(r, 200))
+  if (pid && alive(pid)) {
+    console.log(`  !! the terminal host (pid ${pid}) outlived a quit that stops agents; ending it`)
+    process.kill(pid)
+  }
 }
 
 export const shot = (name) => page.screenshot({ path: join(shots, `${name}.png`) }).catch(() => undefined)

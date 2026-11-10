@@ -31,6 +31,45 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
 
+  # What must survive closing Hiveory, and how fast it is (ADR 0066), in the built app on each system.
+  guards:
+    name: Durability and speed (${{ matrix.os }})
+    # Reported, not required, until this job has run green on all three systems.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Ubuntu 24.04 keeps unprivileged programs from the user namespaces Chromium's sandbox needs.
+      - if: runner.os == 'Linux'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Linux runners have no display: Electron draws into a virtual one.
+      - name: Durability
+        shell: bash
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} pnpm e2e:durability e2e-out
+      # Runners differ too much in speed to compare against a baseline: the numbers are kept with the run.
+      - name: Speed
+        shell: bash
+        env:
+          HIVEORY_PERF: report
+        run: ${{ runner.os == 'Linux' && 'xvfb-run -a' || '' }} pnpm e2e:perf e2e-out
+      - if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: guards-${{ matrix.os }}
+          path: e2e-out
+          if-no-files-found: ignore
+
   phone:
     name: Phone app
     runs-on: ubuntu-latest

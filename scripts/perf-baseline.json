@@ -1,0 +1,31 @@
+{
+  "platform": "win32",
+  "recordedOn": "2026-11-10",
+  "values": {
+    "startup.empty": 1546,
+    "startup.withChatHistory": 1629,
+    "memory.idle.total": 754.1,
+    "memory.idle.main": 156.9,
+    "memory.idle.window": 161.9,
+    "memory.idle.terminalHost": 106,
+    "click.sidebar.nextFrame": 37,
+    "click.sidebar.longestTask": 0,
+    "click.sidePanel.nextFrame": 41,
+    "click.sidePanel.longestTask": 0,
+    "click.worktreeSwitch.nextFrame": 44,
+    "click.worktreeSwitch.longestTask": 0,
+    "click.settings.nextFrame": 39,
+    "click.settings.longestTask": 0,
+    "busy.mainDelayP99": 10.8,
+    "busy.mainDelayMax": 12.9,
+    "busy.windowLongestTask": 0,
+    "busy.windowFps": 144,
+    "busy.typingEchoP50": 13.9,
+    "busy.typingEchoMax": 23.2,
+    "chat.mainDelayP99": 10.3,
+    "chat.windowLongestTask": 0,
+    "chat.windowBlocked": 0,
+    "chat.windowFps": 121.6,
+    "chat.sentPerCharacter": 130.3
+  }
+}

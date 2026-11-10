@@ -28,6 +28,7 @@
     "e2e:login-env": "node scripts/e2e-login-env.mjs",
     "e2e:layout": "node scripts/e2e-layout.mjs",
     "e2e:perf": "node scripts/e2e-perf.mjs",
+    "e2e:durability": "node scripts/e2e-durability.mjs",
     "mobile": "pnpm --dir mobile",
     "mobile:install": "pnpm --dir mobile install",
     "mobile:check": "pnpm --dir mobile check"
