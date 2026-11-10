@@ -1,6 +1,6 @@
 # Plan: Speed and memory
 
-Status: **Phase 0 (ADR 0066), flow control (ADR 0067) and chat deltas (ADR 0068) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
+Status: **Phase 0 (ADR 0066), flow control (ADR 0067), chat deltas (ADR 0068) and the second round of measurements (§7.2) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
 the order of the work: read §3.1 and §7 before the phases in §4. Each phase gets its ADR when it
 starts (rule 29), and nothing here becomes a rule until it is in AGENTS.md / CLAUDE.md.
 
@@ -431,11 +431,12 @@ Revised after Phase 0 (§3.1). Each step ends when its goals in `pnpm e2e:perf` 
 | done | Phase 0: measure and guard | S | baseline and guards exist | none |
 | done | **Flow control, end to end** (ADR 0067: the window acknowledges, main counts, the terminal host pauses the PTY), and the chunk ring buffer (Phase 1 step 1) | M | see §7.1 | an unwatched agent never slows down (unit tests, `e2e:durability`) |
 | done | Chat deltas (ADR 0068; Phase 1 step 3) | S | `chat.sentPerCharacter`: **1** (was 128; goal 3) | paired devices still get whole replies; on-screen order checked in `e2e:perf` |
-| 3 | A redraw scenario and re-render counts in `e2e:perf`, then only the Phase 1 steps the numbers call for (selectors, lazy screens, React Compiler, markdown by blocks) | S–M | set from the new numbers | low |
-| 4 | Phase 5: less background work, idle memory | S–M | `memory.idle.*` goals, set then | low, plus 2 product decisions |
+| done | A redraw scenario, CPU per process, where the window's time goes, idle cost and the memory floor in `e2e:perf` | S | see §7.2 | none |
+| 3 | Markdown by blocks (Phase 1 step 4): the one cost §7.2 found in the window | S | `chat.cpuWindow` and `chat.windowLayout` clearly down | low (final HTML identical) |
+| 4 | GPU memory of terminals: find what holds it, release it for terminals off screen (Phase 5 step 3) | S–M | `memory.idle.gpu`, `memory.loaded.gpu` goals, set then | low |
 | 5 | Phase 6: server anywhere | M | a headless Linux server passes the suites | low |
-| 6 | Phase 4: SQLite | M | decided from start-up and save numbers at a larger profile | medium (backup, dual-write) |
-| gated | Phase 2 (engine into `hiveoryd`), Phase 3 (direct stream), Phase 7 (Rust) | M–L | only if the numbers after step 1 still miss their goals | medium |
+| not called for | Selectors, React Compiler, lazy screens (rest of Phase 1), Phase 2 (engine into `hiveoryd`), Phase 3 (direct stream), Phase 4 (SQLite), git by events (Phase 5 step 1) | | §7.2: no number points at them on this machine | |
+| open | Phase 7 (Rust), now a memory question only: the terminal host holds 105 MB idle | L | §7.2 | product owner's call |
 
 ### 7.1 What flow control changed
 
@@ -457,6 +458,57 @@ the machine lets it (xterm.js gives each flooding terminal its own 12 ms slice p
 drawing budget per frame shared by all terminals would hold the goals on a slow day; it touches
 how every terminal is written, so it waits until the redraw scenario (step 3) shows whether real
 agents get near this load.
+
+### 7.2 The second round of measurements
+
+Same machine, four runs. CPU is in percent of one core.
+
+**Where the memory is.**
+
+| | Empty window | Four idle terminals | Eight agents after the runs |
+|---|---|---|---|
+| Main process | 151 MB | 157–160 MB | 170–180 MB |
+| Window | 122 MB | 159–162 MB | 450–580 MB |
+| GPU process | 172 MB | 260–264 MB | 447–455 MB |
+| Terminal host | not started | 105 MB | 160–220 MB |
+| Everything | **509 MB** | **748–761 MB** | **1,440–1,450 MB** |
+
+- **Two thirds of the idle footprint is there before any work**: Electron with an empty Hiveory
+  window is 509 MB. No change inside the app goes below that; only leaving Electron would.
+- A terminal costs about 34 MB (23 MB of it in the GPU process). The terminal host adds 105 MB
+  once: it is the Electron runtime run as Node.
+- Under load the window (scrollback of seven terminals, a long chat) and the GPU process grow
+  most. These are the two to work on.
+
+**Where the time goes.**
+
+| Scenario | Main late by (max) | Frames a second | Typing echo | CPU: main / window / GPU | Window's thread: script / layout |
+|---|---|---|---|---|---|
+| Idle, four terminals | | | | 1 / 0 / 0 | 0 / 0 |
+| Six terminals printing 250,000 chars/s | 11–14 ms | 98–143 | 14 ms | 11–17 / 38–54 / 27–35 | 15 / 0 |
+| **Six agent screens redrawing** (three in place at 20 fps, three full screen at 30 fps) | 9–11 ms | 119–140 | 14–16 ms | 7–10 / 43–65 / 41–71 | 26–39 / 0 |
+| 50,000-character chat reply | 8–9 ms | 133–139 | | 3–5 / **50–60** / 19–21 | 9–10 / **11** |
+
+(Counting frames costs about 4 of the window's and 2 of the GPU's percent by itself.)
+
+What follows:
+
+- **Idle is free**: no timers or polling worth removing. Git by events and "less background
+  work" would not show here.
+- **Agents redrawing their screens are handled**: six at once leave the app smooth, and main
+  spends 10% of a core. Moving the terminal engine out of main, or a direct stream to the
+  window, has nothing to win on this machine.
+- **The window's script time is small** (0 idle, 10% in chat, 26–39% only while six terminals
+  redraw, which is xterm.js itself). Nothing here calls for selectors or React Compiler.
+- **A streaming chat reply is the one cost in the window**: half a core or more, and 11% of
+  its thread in layout, because the whole reply's HTML is replaced on each update. Rendering by
+  blocks (Phase 1 step 4) addresses exactly that.
+- **Start-up** is 1.5–1.7 s with or without 200 chats of history: nothing calls for SQLite.
+- **Rust** would win back about 100 MB (the terminal host), 13% of the idle footprint, and
+  nothing in speed.
+
+Not measured: slower machines, macOS, Linux, SSH hosts, twenty agents, the Changes and Pull request
+tabs open, real CLIs (the fixtures draw like them but are not them).
 
 ---
 

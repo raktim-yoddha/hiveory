@@ -86,8 +86,29 @@ await test('start-up: an empty profile, then one with a long chat history', asyn
 
 await launch(env)
 
-/** Starts measuring: main's event-loop delay, and the window's long tasks and drawn frames. */
-const startProbe = async () => {
+/** CPU seconds each kind of process has used so far (the terminal host is not Electron's, so not here). */
+const cpuSeconds = async () => {
+  const processes = await app.evaluate(({ app: a }) => a.getAppMetrics().map((m) => ({ type: m.type, seconds: m.cpu.cumulativeCPUUsage ?? 0 })))
+  const sum = (type) => processes.filter((p) => p.type === type).reduce((n, p) => n + p.seconds, 0)
+  return { main: sum('Browser'), window: sum('Tab'), gpu: sum('GPU') }
+}
+/** Where the window's main thread spent its time so far, in seconds (Chromium's own counters). */
+let devtools
+const windowSeconds = async () => {
+  devtools ??= await page.context().newCDPSession(page)
+  await devtools.send('Performance.enable')
+  const { metrics: list } = await devtools.send('Performance.getMetrics')
+  const of = (name) => list.find((m) => m.name === name)?.value ?? 0
+  return { busy: of('TaskDuration'), script: of('ScriptDuration'), layout: of('LayoutDuration') + of('RecalcStyleDuration') }
+}
+let probe
+
+/**
+ * Starts measuring: main's event-loop delay, the window's long tasks and drawn frames, and the CPU
+ * each process uses. `frames: false` leaves the window alone (counting frames makes it draw every one).
+ */
+const startProbe = async ({ frames = true } = {}) => {
+  probe = { at: Date.now(), cpu: await cpuSeconds(), win: await windowSeconds() }
   await app.evaluate(() => {
     globalThis.__loop?.disable()
     globalThis.__loop = process.getBuiltinModule('node:perf_hooks').monitorEventLoopDelay({ resolution: 10 })
@@ -101,6 +122,9 @@ const startProbe = async () => {
     window.__frames = 0
     window.__probing = true
     window.__since = performance.now()
+  })
+  if (!frames) return
+  await page.evaluate(() => {
     const tick = () => {
       if (!window.__probing) return
       window.__frames++
@@ -122,7 +146,25 @@ const stopProbe = async () => {
     window.__obs.disconnect()
     return { fps: window.__frames / ((performance.now() - window.__since) / 1000), longest: Math.max(0, ...window.__long), blocked: window.__long.reduce((a, b) => a + b, 0) }
   })
-  return { main, win }
+  // As percentages of the time measured: of one CPU core for processes, of its main thread for the window.
+  const took = (Date.now() - probe.at) / 1000
+  const [cpuNow, winNow] = [await cpuSeconds(), await windowSeconds()]
+  const share = (now, before) => ((now - before) / took) * 100
+  const cpu = { main: share(cpuNow.main, probe.cpu.main), window: share(cpuNow.window, probe.cpu.window), gpu: share(cpuNow.gpu, probe.cpu.gpu) }
+  const thread = { busy: share(winNow.busy, probe.win.busy), script: share(winNow.script, probe.win.script), layout: share(winNow.layout, probe.win.layout) }
+  return { main, win, cpu, thread }
+}
+
+/**
+ * Where the time went. Under load these swing by a third between runs (power, heat, display rate),
+ * so they are reported, to steer by; `compare` is for the idle numbers, which hold still.
+ */
+const recordWork = (name, { cpu, thread }, compare = false) => {
+  record(`${name}.cpuMain`, cpu.main, '% of a core', { compare })
+  record(`${name}.cpuWindow`, cpu.window, '% of a core', { compare })
+  record(`${name}.cpuGpu`, cpu.gpu, '% of a core', { compare })
+  record(`${name}.windowScript`, thread.script, '% of its thread', { compare })
+  record(`${name}.windowLayout`, thread.layout, '% of its thread', { compare })
 }
 
 /** Types `data` into a terminal and times its echo reaching the window, in ms (null: none within 3 s). */
@@ -149,13 +191,18 @@ const echo = (instanceId, data) =>
 
 const printed = async (ids) => (await Promise.all(ids.map((instanceId) => value('terminal.snapshot', { instanceId })))).reduce((sum, s) => sum + s.end, 0)
 
+/** `node flood.mjs <rate> <seconds>`: lines printed at `rate` characters a second (0: as fast as it can). */
+const flood = (rate) => (lasts) => `node ${shellPath(join(fixtures, 'flood.mjs'))} ${rate} ${lasts}`
+/** `node tui.mjs <mode> <fps> <seconds>`: a screen redrawn in place, as agent CLIs draw. */
+const tui = (mode, fps) => (lasts) => `node ${shellPath(join(fixtures, 'tui.mjs'))} ${mode} ${fps} ${lasts}`
+
 /**
- * Runs `node flood.mjs <rate> <seconds>` in each of `loud`, and for `seconds` measures the app
- * while typing into `typist`, a quiet terminal beside them.
+ * Runs `command(seconds, index)` in each of `loud`, and for `seconds` measures the app while
+ * typing into `typist`, a quiet terminal beside them.
  */
-const underOutput = async (name, loud, typist, rate, seconds, { windowCompare = true } = {}) => {
+const underOutput = async (name, loud, typist, command, seconds, { windowCompare = true } = {}) => {
   const lasts = seconds + 3
-  for (const instanceId of loud) await value('terminal.write', { instanceId, data: `node ${shellPath(join(fixtures, 'flood.mjs'))} ${rate} ${lasts}\r` })
+  for (const [index, instanceId] of loud.entries()) await value('terminal.write', { instanceId, data: `${command(lasts, index)}\r` })
   await page.waitForTimeout(1200)
   const before = await printed(loud)
   await startProbe()
@@ -166,7 +213,8 @@ const underOutput = async (name, loud, typist, rate, seconds, { windowCompare = 
     echoes.push(await echo(typist, 'x'), await echo(typist, '\x7f'))
     await page.waitForTimeout(250)
   }
-  const { main, win } = await stopProbe()
+  const work = await stopProbe()
+  const { main, win } = work
   const took = (Date.now() - started) / 1000
   const after = await printed(loud)
   expect(after - before > 50_000, `${name}: the terminals printed only ${after - before} characters; is node on PATH?`)
@@ -177,13 +225,15 @@ const underOutput = async (name, loud, typist, rate, seconds, { windowCompare = 
   record(`${name}.windowLongestTask`, win.longest, 'ms', { goal: 50, compare: windowCompare })
   record(`${name}.windowFps`, win.fps, 'fps', { goal: 50, higherIsBetter: true, compare: windowCompare })
   record(`${name}.typingEchoP50`, median(times), 'ms', { goal: 50, compare: windowCompare })
-  record(`${name}.typingEchoMax`, Math.max(...times), 'ms', { goal: 100, compare: windowCompare })
+  // The slowest of a few dozen keystrokes: one hiccup moves it, so it is reported, not compared.
+  record(`${name}.typingEchoMax`, Math.max(...times), 'ms', { goal: 100, compare: false })
   // Whatever the machine, the app never freezes under output (ADR 0067).
   expect(main.max < 1000, `${name}: the main process ran ${Math.round(main.max)} ms late`)
   expect(win.longest < 1000, `${name}: the window was blocked for ${Math.round(win.longest)} ms`)
   expect(median(times) < 1000, `${name}: a typed character took ${Math.round(median(times))} ms to echo`)
   // How much was printed, for reading the numbers above; not a speed to hold.
   record(`${name}.outputPerSecond`, (after - before) / took / 1000, 'k chars/s', { compare: false })
+  if (windowCompare) recordWork(name, work)
   // Let the output end before the next measurement starts.
   await page.waitForTimeout((lasts - seconds) * 1000 + 500)
 }
@@ -232,6 +282,16 @@ let shell
 let chatAgent
 const terminals = []
 
+await test('memory: an empty window (what Electron and Hiveory cost before any work)', async () => {
+  await page.waitForTimeout(3000)
+  const processes = await app.evaluate(({ app: a }) => a.getAppMetrics().map((m) => ({ type: m.type, kb: m.memory.workingSetSize })))
+  const sum = (type) => processes.filter((p) => p.type === type).reduce((n, p) => n + p.kb, 0) / 1024
+  record('memory.empty.total', processes.reduce((n, p) => n + p.kb, 0) / 1024, 'MB')
+  record('memory.empty.main', sum('Browser'), 'MB')
+  record('memory.empty.window', sum('Tab'), 'MB')
+  record('memory.empty.gpu', sum('GPU'), 'MB')
+})
+
 await test('setup: a worktree with four terminals', async () => {
   await app.evaluate(({ dialog }, folder) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [folder] })
@@ -256,7 +316,23 @@ await test('memory: four idle terminals', async () => {
   record('memory.idle.total', mb.total, 'MB')
   record('memory.idle.main', mb.main, 'MB')
   record('memory.idle.window', mb.window, 'MB')
+  record('memory.idle.gpu', mb.gpu, 'MB')
   record('memory.idle.terminalHost', mb.host, 'MB')
+})
+
+await test('idle: four terminals at their prompts, nobody typing', async () => {
+  // What Hiveory costs while nothing happens. The window is not asked for frames, so it draws only what it would anyway.
+  await page.waitForTimeout(1000)
+  await startProbe({ frames: false })
+  await page.waitForTimeout(6000)
+  recordWork('idle', await stopProbe(), true)
+  // The other measurements count frames, which makes the window produce one on every display
+  // refresh. This is what that alone costs, to read their CPU numbers against.
+  await startProbe()
+  await page.waitForTimeout(4000)
+  const counting = await stopProbe()
+  record('probe.frameCountingCpuWindow', counting.cpu.window, '% of a core', { compare: false })
+  record('probe.frameCountingCpuGpu', counting.cpu.gpu, '% of a core', { compare: false })
 })
 
 await test('toggling the left sidebar', async () => {
@@ -317,20 +393,26 @@ await test('six agents printing at once (250,000 characters a second each), typi
   for (let i = 0; i < 3; i++) terminals.push((await value('agents.open', { workspaceId: primary.id, cliId: shell.id })).agent.id)
   await waitFor(async () => (await page.locator('.xterm').count()) >= 7, 'seven terminals on screen')
   await page.waitForTimeout(1500)
-  await underOutput('busy', terminals.slice(0, 6), terminals[6], 250_000, 6)
+  await underOutput('busy', terminals.slice(0, 6), terminals[6], flood(250_000), 6)
+})
+
+await test('six agent CLIs redrawing their screens (three in place at 20 fps, three full screen at 30 fps), typing into a seventh', async () => {
+  // What agents do most of the time: not printing lines, but redrawing a status box or the whole screen.
+  await underOutput('redraw', terminals.slice(0, 6), terminals[6], (lasts, index) => (index < 3 ? tui('inline', 20) : tui('fullscreen', 30))(lasts), 6)
 })
 
 await test('two terminals printing as fast as they can, typing into another', async () => {
   // Flow control (ADR 0067) keeps this from freezing the app: the programs wait for the window. The
   // window then draws as fast as the machine lets it, which varies twofold between runs (power and
   // heat), so its numbers are held to "never frozen" and their goals, not to the baseline.
-  await underOutput('flood', terminals.slice(0, 2), terminals[6], 0, 5, { windowCompare: false })
+  await underOutput('flood', terminals.slice(0, 2), terminals[6], flood(0), 5, { windowCompare: false })
 })
 
 await test('memory: right after the flood', async () => {
   const mb = await megabytes()
   record('memory.afterFlood.window', mb.window, 'MB', { goal: 400 })
-  record('memory.afterFlood.main', mb.main, 'MB')
+  // Swings between 160 and 260 MB with when the collector last ran: reported, not compared.
+  record('memory.afterFlood.main', mb.main, 'MB', { compare: false })
   record('memory.afterFlood.terminalHost', mb.host, 'MB')
 })
 
@@ -365,7 +447,8 @@ await test('a 50,000-character chat reply, streamed over ten seconds', async () 
   await startProbe()
   await value('chat.send', { chatId: agent.id, text: 'go' })
   await page.waitForFunction(() => window.__chatDone, null, { timeout: 60_000 })
-  const { main, win } = await stopProbe()
+  const work = await stopProbe()
+  const { main, win } = work
   const chat = await value('chat.get', { chatId: agent.id })
   const text = chat.messages.at(-1).parts.map((p) => p.text ?? '').join('')
   expect(text.trimEnd().endsWith('END-OF-REPLY') && !chat.messages.at(-1).error, 'the reply did not finish')
@@ -377,6 +460,7 @@ await test('a 50,000-character chat reply, streamed over ten seconds', async () 
   record('chat.windowFps', win.fps, 'fps', { goal: 50, higherIsBetter: true })
   // 1 = each character crosses to the window once. Re-sending the whole reply on each update makes it grow with length.
   record('chat.sentPerCharacter', ipc.chars / text.length, 'x', { goal: 3 })
+  recordWork('chat', work)
 })
 
 await test('a reply shows every line once and in order while it streams (ADR 0068)', async () => {
@@ -434,6 +518,7 @@ await test('memory: eight agents after the runs above', async () => {
   record('memory.loaded.total', mb.total, 'MB')
   record('memory.loaded.main', mb.main, 'MB')
   record('memory.loaded.window', mb.window, 'MB')
+  record('memory.loaded.gpu', mb.gpu, 'MB')
   record('memory.loaded.terminalHost', mb.host, 'MB')
 })
 
@@ -453,7 +538,7 @@ await test('no number is worse than the recorded baseline allows', async () => {
   }
   // A number passes at its goal, or when it is not half again worse than the baseline; small numbers
   // get a fixed allowance, since they jitter.
-  const allowance = { ms: 30, MB: 60, fps: 8, x: 0.5 }
+  const allowance = { ms: 30, MB: 60, fps: 8, x: 0.5, '% of a core': 10, '% of its thread': 10 }
   const worse = []
   for (const [name, m] of Object.entries(metrics)) {
     const was = baseline.values[name]

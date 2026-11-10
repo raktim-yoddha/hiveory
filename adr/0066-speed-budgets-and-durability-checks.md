@@ -58,3 +58,25 @@ shows, and ends when its goals are met with both suites passing.
 - The suites add about four minutes per system to CI.
 - Not covered yet: remote (SSH) hosts, the phone, and a server with clients. Their guards are
   added before the phases that touch them.
+
+## Amendment (2026-11-10): more is measured, and only steady numbers are compared
+
+After flow control (ADR 0067) and chat deltas (ADR 0068), `pnpm e2e:perf` also measures:
+
+- **agent screens redrawing**: six terminals running `scripts/e2e-fixtures/tui.mjs`, which draws
+  as agent CLIs do (a box redrawn in place, or the whole alternate screen, with cursor movement
+  and 24-bit color);
+- **where the time goes**, for every scenario: CPU of the main, window and GPU processes, and the
+  share of the window's thread spent in script and in layout (Chromium's own counters);
+- **idle cost**: the same, with four terminals at their prompts and nobody typing;
+- **the memory floor**: an empty window, before any work, and the GPU process in every memory row;
+- **a reply on screen while it streams**: every line once and in order (ADR 0068).
+
+Comparing against the baseline is kept to numbers that hold still between runs: medians, idle
+cost, memory at rest, and how late the main process runs. Numbers that swing with the machine's
+state are reported against their goals only: CPU shares under load, the slowest single keystroke,
+the window's numbers during an unbounded flood, and main-process memory right after it. Scenarios
+under output also fail outright if the app freezes (anything over one second).
+
+`HIVEORY_PERF_SOAK=<seconds>` leaves the app idle after the runs and prints memory every 20
+seconds, for chasing leaks.
