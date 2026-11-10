@@ -51,6 +51,7 @@ export const installEventBridge = (): (() => void) => {
     subscribe('app.notice', ({ level, message }) => useNotices.getState().push({ level, message })),
     subscribe('updates.changed', (status) => useUpdates.getState().set(status)),
     subscribe('chat.event', ({ chatId, message, summary }) => useChat.getState().applyEvent(chatId, message, summary)),
+    subscribe('chat.delta', ({ chatId, messageId, appends }) => useChat.getState().applyDelta(chatId, messageId, appends)),
     subscribe('browser.changed', (state) => useBrowser.getState().set(state)),
     subscribe('hosts.changed', ({ key, status }) => useHostLinks.getState().set(key, status)),
     subscribe('ssh.prompt', (prompt) => useSshPrompts.getState().add(prompt)),

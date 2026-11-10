@@ -102,8 +102,8 @@ const tray = new BackgroundTray(
 )
 
 // A window that is closing, or a payload that cannot be sent, never breaks the service that emitted.
-const emit: Emit = (event, payload) => {
-  for (const w of BrowserWindow.getAllWindows()) {
+const emit: Emit = (event, payload, audience) => {
+  for (const w of audience === 'clients' ? [] : BrowserWindow.getAllWindows()) {
     if (w.isDestroyed() || w.webContents.isDestroyed()) continue
     try {
       w.webContents.send(IPC_PREFIX + event, payload)
@@ -111,8 +111,8 @@ const emit: Emit = (event, payload) => {
       log.warn(`Could not send ${event}`, error)
     }
   }
-  // Clients of this machine's server get every event too.
-  guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
+  // Clients of this machine's server get every event too, unless it is for the window alone.
+  if (audience !== 'window') guard(log, 'Server events', () => container?.sharing.broadcast(event, payload))
   // Pluto sees agents start, stop and change status (ADR 0054).
   if (event === 'runtime.changed' || event === 'state.changed') guard(log, 'Pet link', () => container?.petLink.changed())
 }

@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
 import type { ChatChoice, CliInstance } from '@shared/domain'
 import { CHAT_CLI_IDS, type ChatAttachment, type ChatCatalog, type ChatMessage, type ChatSession, type ChatSummary, type UsageLimits } from '@shared/domain/chat'
+import { chatAppends, chatSent, type ChatSent } from '@shared/domain/chat-delta'
 import { fail } from '@shared/errors'
 import type { Logger } from '../../app/logger'
 import type { McpEndpoint } from '../cli/adapters/types'
@@ -394,6 +395,8 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
     let stderr = ''
     let lastEmit = 0
     let pending: NodeJS.Timeout | null = null
+    /** What the last update told viewers, to send only what was added since. */
+    let sent: ChatSent | null = null
     const push = (force = false): void => {
       const elapsed = Date.now() - lastEmit
       if (!force && elapsed < EMIT_EVERY_MS) {
@@ -404,7 +407,17 @@ export class ChatService extends EventEmitter<{ run: [chatId: string, running: b
         return
       }
       lastEmit = Date.now()
-      this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary: this.summary(chat) })
+      const summary = this.summary(chat)
+      const now = chatSent(reply, summary)
+      const appends = chatAppends(sent, now)
+      sent = now
+      // Anything but added text: everyone gets the whole reply.
+      if (!appends) return this.broadcast('chat.event', { chatId, message: structuredClone(reply), summary })
+      if (!appends.length) return
+      // Only text was added (ADR 0068): the window gets that text, so a long reply is not sent again
+      // on every update. Paired clients keep getting the whole reply (not copied when there are none).
+      this.broadcast('chat.delta', { chatId, messageId: reply.id, appends }, 'window')
+      this.broadcast('chat.event', { chatId, message: reply, summary }, 'clients')
     }
 
     const run: Run = existing ?? { stopped: false }

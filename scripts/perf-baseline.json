@@ -31,7 +31,7 @@
     "chat.windowLongestTask": 0,
     "chat.windowBlocked": 0,
     "chat.windowFps": 139.3,
-    "chat.sentPerCharacter": 129.5,
+    "chat.sentPerCharacter": 1,
     "memory.loaded.total": 1162.5,
     "memory.loaded.main": 171,
     "memory.loaded.window": 464.3,

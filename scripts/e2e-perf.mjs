@@ -1,4 +1,4 @@
-/* global window, requestAnimationFrame */
+/* global window, document, requestAnimationFrame */
 // How fast Hiveory is, in numbers (ADR 0066): start-up, the window's answer to clicks, six agents
 // printing at once, a terminal flood, a long chat reply, and memory. Terminals run in the terminal
 // host, as they do for users. Each number is checked against the recorded baseline
@@ -229,6 +229,7 @@ const report = (name, runs) => {
 
 let primary
 let shell
+let chatAgent
 const terminals = []
 
 await test('setup: a worktree with four terminals', async () => {
@@ -339,6 +340,7 @@ await test('a 50,000-character chat reply, streamed over ten seconds', async () 
   const lines = 500
   chatCli.configure({ lines, lineChars: 100, everyMs: 20 })
   const { agent } = await value('agents.open', { workspaceId: primary.id, cliId: chatCli.cliId, chatUi: true })
+  chatAgent = agent
   // What crosses to the window for this reply: the events, and the reply text they carry.
   await app.evaluate(({ BrowserWindow }) => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
@@ -376,6 +378,56 @@ await test('a 50,000-character chat reply, streamed over ten seconds', async () 
   // 1 = each character crosses to the window once. Re-sending the whole reply on each update makes it grow with length.
   record('chat.sentPerCharacter', ipc.chars / text.length, 'x', { goal: 3 })
 })
+
+await test('a reply shows every line once and in order while it streams (ADR 0068)', async () => {
+  // The window builds a streaming reply from the text added each time: what is on screen mid-reply
+  // must be exactly what was printed so far.
+  const lines = 24
+  chatCli.configure({ lines, everyMs: 120, end: 'END-OF-SECOND' })
+  // This reply is what follows its own question on the page.
+  const shown = async () => {
+    const all = await page.evaluate(() => document.body.innerText)
+    const second = all.slice(all.lastIndexOf('second-question') + 1)
+    return { numbers: [...second.matchAll(/^L(\d+) /gm)].map((m) => Number(m[1])), done: second.includes('END-OF-SECOND') }
+  }
+  await value('chat.send', { chatId: chatAgent.id, text: 'second-question' })
+  let checked = 0
+  const started = Date.now()
+  for (;;) {
+    const { numbers, done } = await shown()
+    if (Date.now() - started > 30_000) {
+      const chat = await value('chat.get', { chatId: chatAgent.id })
+      const last = chat.messages.at(-1)
+      throw new Error(`the reply did not finish on screen in 30 s: ${numbers.length} lines shown; main has ${chat.messages.length} messages, last ${last.role} streaming=${last.streaming} error=${last.error} length=${last.parts.map((p) => p.text ?? '').join('').length}`)
+    }
+    // Line 1 is a code block: the numbered lines start at 2 and never skip or repeat.
+    numbers.forEach((n, i) => expect(n === i + 2, `on screen mid-reply: lines ${numbers.join(', ')}`))
+    if (numbers.length && !done) checked++
+    if (done) {
+      expect(numbers.length === lines - 1, `the finished reply shows ${numbers.length} numbered lines, not ${lines - 1}`)
+      break
+    }
+    await page.waitForTimeout(200)
+  }
+  expect(checked >= 3, `the reply was only seen ${checked} times while it streamed`)
+})
+
+if (process.env.HIVEORY_PERF_SOAK) {
+  // Left idle after the runs above, reading the page as the check above does: does the window's memory hold?
+  await test(`soak: ${process.env.HIVEORY_PERF_SOAK} s idle`, async () => {
+    const until = Date.now() + Number(process.env.HIVEORY_PERF_SOAK) * 1000
+    let next = 0
+    while (Date.now() < until) {
+      await page.evaluate(() => document.body.innerText)
+      await page.waitForTimeout(200)
+      if (Date.now() > next) {
+        next = Date.now() + 20_000
+        const mb = await megabytes()
+        console.log(`      soak ${Math.round((Date.now() - until) / 1000 + Number(process.env.HIVEORY_PERF_SOAK))} s: window ${Math.round(mb.window)} MB, main ${Math.round(mb.main)} MB, gpu ${Math.round(mb.gpu)} MB`)
+      }
+    }
+  })
+}
 
 await test('memory: eight agents after the runs above', async () => {
   const mb = await megabytes()

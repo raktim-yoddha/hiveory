@@ -25,6 +25,7 @@ import type {
 import type { AgentPeek, AgentUpdate } from '../domain/agent-update'
 import type { HiveoryLink } from '../domain/links'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary, UsageLimits } from '../domain/chat'
+import type { ChatAppend } from '../domain/chat-delta'
 import type { ChangeSet, CommitSummary } from '../domain/changes'
 import type { UsageReport } from '../domain/usage'
 import type { TerminalHostStatus } from '../host/protocol'
@@ -887,6 +888,11 @@ export interface EventMap {
   'updates.changed': UpdateStatus
   /** Snapshot of the assistant message being streamed (or just finished). */
   'chat.event': { chatId: string; message: ChatMessage; summary: ChatSummary }
+  /**
+   * Text added to a streaming reply since the last event, for this computer's own window (ADR 0068).
+   * Paired clients get `chat.event` instead; everything but added text also comes as `chat.event`.
+   */
+  'chat.delta': { chatId: string; messageId: string; appends: ChatAppend[] }
   'browser.changed': BrowserState
   /** The link to a remote host changed (ADR 0025). */
   'hosts.changed': { key: string; status: HostLinkStatus }
@@ -913,6 +919,7 @@ const EVENTS: Record<EventName, true> = {
   'app.notice': true,
   'updates.changed': true,
   'chat.event': true,
+  'chat.delta': true,
   'browser.changed': true,
   'files.changed': true,
   'hosts.changed': true,

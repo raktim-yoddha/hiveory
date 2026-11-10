@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ChatAttachment, ChatCatalog, ChatMessage, ChatSession, ChatSummary } from '@shared/domain/chat'
+import { applyChatAppends, type ChatAppend } from '@shared/domain/chat-delta'
 import type { RequestOf } from '@shared/ipc/contract'
 import { api } from '../lib/api'
 import { reportError, runAction } from './notices'
@@ -21,6 +22,8 @@ interface ChatState {
   unqueue(chatId: string, index: number): Promise<void>
   loadCatalog(cliId: string, refresh?: boolean): Promise<void>
   applyEvent(chatId: string, message: ChatMessage, summary: ChatSummary): void
+  /** Adds streamed text to a reply (ADR 0068). */
+  applyDelta(chatId: string, messageId: string, appends: ChatAppend[]): void
 }
 
 const LAST_CLI_KEY = 'hiveory.chatCli'
@@ -120,6 +123,20 @@ export const useChat = create<ChatState>((set, get) => ({
       set((s) => ({ catalogs: { ...s.catalogs, [cliId]: { cliId, models: [], error: 'Could not list models.' } } }))
       reportError(error, 'List models')
     }
+  },
+
+  applyDelta: (chatId, messageId, appends) => {
+    const chat = get().chats[chatId]
+    if (!chat) return
+    const index = chat.messages.findIndex((m) => m.id === messageId)
+    const message = index >= 0 ? applyChatAppends(chat.messages[index]!, appends) : null
+    // Text this window does not hold the start of (it opened the chat mid-reply): the whole chat again.
+    if (!message) return void get().load(chatId)
+    set((s) => {
+      const current = s.chats[chatId]
+      if (!current || current.messages[index]?.id !== messageId) return {}
+      return { chats: { ...s.chats, [chatId]: { ...current, messages: current.messages.map((m, i) => (i === index ? message : m)) } } }
+    })
   },
 
   applyEvent: (chatId, message, summary) =>

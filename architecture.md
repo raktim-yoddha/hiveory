@@ -570,7 +570,8 @@ agent ──browser_* (MCP)──▶ BrowserTools ─▶ BrowserService (pages: 
 ```text
 Work agent in chat view: composer ─IPC chat.send─▶ ChatService ─spawn (no shell)─▶ CLI headless
         ▲                               │ stdout lines → parser → ChatAccumulator (text, tools, tasks, usage)
-        └──────── chat.event (snapshots, ~20/s) ◀──┘ persisted to userData/chats/<id>.json
+        └── chat.delta (added text, ~20/s; ADR 0068) ◀──┘ persisted to userData/chats/<id>.json
+            chat.event (the whole reply): first update, tools, tasks, the end; and every update for paired devices
    before/after each turn: Checkpoints ─ git add -A (GIT_INDEX_FILE=copy) + write-tree ─▶ TurnCheckpoint
 
 Changes tab (ADR 0058): ChangesPanel ─IPC changes.*─▶ ChangesService ─▶ WorktreeChanges ─ HostKit.exec(git)

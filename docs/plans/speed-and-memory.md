@@ -1,6 +1,6 @@
 # Plan: Speed and memory
 
-Status: **Phase 0 (ADR 0066) and flow control (ADR 0067) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
+Status: **Phase 0 (ADR 0066), flow control (ADR 0067) and chat deltas (ADR 0068) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
 the order of the work: read §3.1 and §7 before the phases in §4. Each phase gets its ADR when it
 starts (rule 29), and nothing here becomes a rule until it is in AGENTS.md / CLAUDE.md.
 
@@ -430,7 +430,7 @@ Revised after Phase 0 (§3.1). Each step ends when its goals in `pnpm e2e:perf` 
 |---|---|---|---|---|
 | done | Phase 0: measure and guard | S | baseline and guards exist | none |
 | done | **Flow control, end to end** (ADR 0067: the window acknowledges, main counts, the terminal host pauses the PTY), and the chunk ring buffer (Phase 1 step 1) | M | see §7.1 | an unwatched agent never slows down (unit tests, `e2e:durability`) |
-| 2 | Chat deltas (Phase 1 step 3) | S | `chat.sentPerCharacter` ≤ 3 | low (interfaces kept) |
+| done | Chat deltas (ADR 0068; Phase 1 step 3) | S | `chat.sentPerCharacter`: **1** (was 128; goal 3) | paired devices still get whole replies; on-screen order checked in `e2e:perf` |
 | 3 | A redraw scenario and re-render counts in `e2e:perf`, then only the Phase 1 steps the numbers call for (selectors, lazy screens, React Compiler, markdown by blocks) | S–M | set from the new numbers | low |
 | 4 | Phase 5: less background work, idle memory | S–M | `memory.idle.*` goals, set then | low, plus 2 product decisions |
 | 5 | Phase 6: server anywhere | M | a headless Linux server passes the suites | low |
