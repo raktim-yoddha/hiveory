@@ -165,6 +165,22 @@ export const disposeHostState = (state: HostState): void => {
 }
 
 /**
+ * No client holds the terminals now: their output is kept for the next one. A terminal its client
+ * had paused carries on, since nobody is left to say so (ADR 0067): a program never waits for a
+ * client that is gone.
+ */
+const keepOutput = (state: HostState): void => {
+  for (const t of state.terminals.values()) {
+    t.kept ??= []
+    try {
+      t.child.resume()
+    } catch {
+      // Exiting.
+    }
+  }
+}
+
+/**
  * Serves one client over `transport`. With `persist`, terminals and watchers
  * survive the transport closing: their output is kept until a later client
  * takes them back with `pty.attach`. Otherwise they end with it. A newer
@@ -174,7 +190,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
   const previous = state.out
   state.out = transport
   // Terminals wait for their new client to take them back; their output is kept meanwhile.
-  for (const t of state.terminals.values()) t.kept ??= []
+  keepOutput(state)
   for (const proc of state.procs.values()) proc.watched = false
   previous?.close()
 
@@ -362,6 +378,9 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
       try {
         if (frame.method === 'pty.write' && p.data !== undefined) child?.write(p.data)
         else if (frame.method === 'pty.resize' && p.cols && p.rows) child?.resize(p.cols, p.rows)
+        // The client's screen is behind: the program waits until it has caught up (ADR 0067).
+        else if (frame.method === 'pty.pause') child?.pause()
+        else if (frame.method === 'pty.resume') child?.resume()
       } catch {
         // A PTY that is exiting can refuse a write or resize; never fatal.
       }
@@ -375,7 +394,7 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
     for (const proc of state.procs.values()) proc.watched = false
     state.onDetach?.()
     if (!persist) return disposeHostState(state)
-    for (const t of state.terminals.values()) t.kept ??= []
+    keepOutput(state)
   })
 }
 

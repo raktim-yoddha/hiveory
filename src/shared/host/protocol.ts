@@ -161,6 +161,12 @@ export interface HostCalls {
 export interface HostNotifications {
   'pty.write': { ptyId: string; data: string }
   'pty.resize': { ptyId: string; cols: number; rows: number }
+  /**
+   * Flow control (ADR 0067): stop reading the terminal's output, so the program in it waits, and
+   * carry on. A daemon from before these frames ignores them; a client going away resumes.
+   */
+  'pty.pause': { ptyId: string }
+  'pty.resume': { ptyId: string }
   /** The app's answer to a `relay.mcp` request (null: accepted, no reply). */
   'relay.reply': { requestId: string; body: unknown }
 }

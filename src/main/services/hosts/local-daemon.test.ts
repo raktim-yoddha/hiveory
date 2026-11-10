@@ -194,6 +194,8 @@ const recordingBackend = () => {
         onExit: () => undefined,
         onError: () => undefined,
         onLink: (l) => void links.push(l),
+        pause: () => undefined,
+        resume: () => undefined,
         write: () => undefined,
         resize: () => undefined,
         kill: () => undefined

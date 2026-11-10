@@ -45,6 +45,14 @@ const MIRROR_SCROLLBACK = 2000
  * segfaults (exit 3) on resizes ~40ms apart at small sizes, never at 100ms+ (measured).
  */
 const RESIZE_INTERVAL_MS = 150
+/**
+ * Flow control (ADR 0067), with VS Code's numbers: the program is paused once the window has this
+ * many characters of its output still to draw, and carries on when the window is nearly through them.
+ */
+export const FLOW_HIGH = 100_000
+export const FLOW_LOW = 5_000
+/** A window that stays silent this long while the program waits is gone or stuck: the program carries on without it. */
+export const FLOW_STALL_MS = 2_000
 
 /**
  * One pseudo-terminal process with everything a pane needs: spawn deferred
@@ -64,6 +72,12 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
   private mirror: HeadlessTerminalType | null = null
   private lastResizeAt = 0
   private resizeTimer: NodeJS.Timeout | null = null
+  /** A window draws this output and says how far it got (`ack`); false: nobody does, and the program never waits. */
+  private watched = false
+  /** Characters sent to that window that it has not drawn yet. */
+  private unacked = 0
+  private paused = false
+  private stall: NodeJS.Timeout | null = null
 
   constructor(
     private readonly withMirror = false,
@@ -138,9 +152,52 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     }
   }
 
+  /**
+   * The window drew `chars` more characters of this terminal's output (ADR 0067). The first call
+   * says a window is drawing it: from then on a program that prints faster than the window draws
+   * waits for it, instead of filling memory and freezing the app.
+   */
+  ack(chars: number): void {
+    if (!this.watched) {
+      // What was sent before a window watched is not counted, so its acknowledgements are not either.
+      this.watched = true
+      this.unacked = 0
+      return
+    }
+    this.unacked = Math.max(0, this.unacked - chars)
+    if (!this.paused) return
+    if (this.unacked < FLOW_LOW) this.carryOn()
+    else this.armStall()
+  }
+
+  /** No window draws this terminal any more (it closed): the program never waits for one. */
+  unwatch(): void {
+    this.watched = false
+    this.unacked = 0
+    this.carryOn()
+  }
+
+  private carryOn(): void {
+    if (this.stall) clearTimeout(this.stall)
+    this.stall = null
+    if (!this.paused) return
+    this.paused = false
+    try {
+      this.process?.resume()
+    } catch {
+      // Exiting.
+    }
+  }
+
+  private armStall(): void {
+    if (this.stall) clearTimeout(this.stall)
+    this.stall = setTimeout(() => this.unwatch(), FLOW_STALL_MS)
+  }
+
   /** Stops the process without waiting for ConPTY teardown. Returns true if something was running. */
   stop(): boolean {
     const wasRunning = this.running
+    this.settleFlow()
     if (this.resizeTimer) clearTimeout(this.resizeTimer)
     this.resizeTimer = null
     if (this.pending) clearTimeout(this.pending.timer)
@@ -164,6 +221,8 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
    * ending it. Its output so far stays in `snapshot` for saving.
    */
   detach(): void {
+    // The terminal host lets a paused terminal carry on when this app goes away (ADR 0067).
+    this.settleFlow()
     if (this.resizeTimer) clearTimeout(this.resizeTimer)
     this.resizeTimer = null
     if (this.pending) clearTimeout(this.pending.timer)
@@ -176,6 +235,7 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
 
   /** Synchronous kill for app shutdown. */
   killNow(): void {
+    this.settleFlow()
     if (this.resizeTimer) clearTimeout(this.resizeTimer)
     this.resizeTimer = null
     if (this.pending) clearTimeout(this.pending.timer)
@@ -245,11 +305,15 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
       child.onExit(({ exitCode, signal }) => {
         if (this.process !== child) return
         this.process = null
+        this.settleFlow()
         this.flush()
         this.emit('exit', exitCode, signal)
       })
       child.onLink?.((linked) => {
-        if (this.process === child) this.emit('link', linked)
+        if (this.process !== child) return
+        // The terminal host let it carry on when the link dropped; it still has to wait for the window (ADR 0067).
+        if (linked && this.paused) child.pause()
+        this.emit('link', linked)
       })
       // A host daemon reports a failed spawn after the fact.
       child.onError((error) => {
@@ -284,5 +348,23 @@ export class PtySession extends EventEmitter<PtySessionEvents> {
     if (!outbox) return
     this.outbox = null
     this.emit('data', outbox.data, outbox.offset)
+    if (!this.watched) return
+    this.unacked += outbox.data.length
+    if (this.paused || this.unacked <= FLOW_HIGH || !this.process) return
+    this.paused = true
+    try {
+      this.process.pause()
+    } catch {
+      // Exiting.
+    }
+    this.armStall()
+  }
+
+  /** The process is gone or let go: nothing waits, and the next one starts with a clean count. */
+  private settleFlow(): void {
+    if (this.stall) clearTimeout(this.stall)
+    this.stall = null
+    this.paused = false
+    this.unacked = 0
   }
 }

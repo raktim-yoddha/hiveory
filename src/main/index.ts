@@ -127,7 +127,14 @@ const native = new NativeShell((event, payload) => {
 const openWindow = (): void => {
   const s = container?.settings.get()
   window = createMainWindow(targets, log, s?.theme, s && container?.themes.theme(s.vscodeTheme)?.chrome)
-  window.on('closed', () => (window = null))
+  window.on('closed', () => {
+    window = null
+    // No window draws the terminals now: no program waits for one (ADR 0067).
+    guard(log, 'Terminal flow', () => {
+      container?.runtime.unwatchAll()
+      container?.shells.unwatchAll()
+    })
+  })
   // Closing keeps the agents running: the window hides into the tray (unless that setting is off).
   window.on('close', (event) => {
     if (quitting || !container?.settings.get().keepRunningInBackground) return

@@ -153,7 +153,7 @@ const printed = async (ids) => (await Promise.all(ids.map((instanceId) => value(
  * Runs `node flood.mjs <rate> <seconds>` in each of `loud`, and for `seconds` measures the app
  * while typing into `typist`, a quiet terminal beside them.
  */
-const underOutput = async (name, loud, typist, rate, seconds, compare = true) => {
+const underOutput = async (name, loud, typist, rate, seconds, { windowCompare = true } = {}) => {
   const lasts = seconds + 3
   for (const instanceId of loud) await value('terminal.write', { instanceId, data: `node ${shellPath(join(fixtures, 'flood.mjs'))} ${rate} ${lasts}\r` })
   await page.waitForTimeout(1200)
@@ -172,12 +172,16 @@ const underOutput = async (name, loud, typist, rate, seconds, compare = true) =>
   expect(after - before > 50_000, `${name}: the terminals printed only ${after - before} characters; is node on PATH?`)
   // No echo within three seconds counts as three seconds.
   const times = echoes.map((e) => e ?? 3000)
-  record(`${name}.mainDelayP99`, main.p99, 'ms', { goal: 50, compare })
-  record(`${name}.mainDelayMax`, main.max, 'ms', { goal: 100, compare })
-  record(`${name}.windowLongestTask`, win.longest, 'ms', { goal: 50, compare })
-  record(`${name}.windowFps`, win.fps, 'fps', { goal: 50, higherIsBetter: true, compare })
-  record(`${name}.typingEchoP50`, median(times), 'ms', { goal: 50, compare })
-  record(`${name}.typingEchoMax`, Math.max(...times), 'ms', { goal: 100, compare })
+  record(`${name}.mainDelayP99`, main.p99, 'ms', { goal: 50 })
+  record(`${name}.mainDelayMax`, main.max, 'ms', { goal: 100 })
+  record(`${name}.windowLongestTask`, win.longest, 'ms', { goal: 50, compare: windowCompare })
+  record(`${name}.windowFps`, win.fps, 'fps', { goal: 50, higherIsBetter: true, compare: windowCompare })
+  record(`${name}.typingEchoP50`, median(times), 'ms', { goal: 50, compare: windowCompare })
+  record(`${name}.typingEchoMax`, Math.max(...times), 'ms', { goal: 100, compare: windowCompare })
+  // Whatever the machine, the app never freezes under output (ADR 0067).
+  expect(main.max < 1000, `${name}: the main process ran ${Math.round(main.max)} ms late`)
+  expect(win.longest < 1000, `${name}: the window was blocked for ${Math.round(win.longest)} ms`)
+  expect(median(times) < 1000, `${name}: a typed character took ${Math.round(median(times))} ms to echo`)
   // How much was printed, for reading the numbers above; not a speed to hold.
   record(`${name}.outputPerSecond`, (after - before) / took / 1000, 'k chars/s', { compare: false })
   // Let the output end before the next measurement starts.
@@ -316,15 +320,17 @@ await test('six agents printing at once (250,000 characters a second each), typi
 })
 
 await test('two terminals printing as fast as they can, typing into another', async () => {
-  // Unbounded output has no flow control yet, so these numbers swing widely: they are reported and
-  // held to their goals once the speed plan's flow control lands, not compared to the baseline.
-  await underOutput('flood', terminals.slice(0, 2), terminals[6], 0, 5, false)
+  // Flow control (ADR 0067) keeps this from freezing the app: the programs wait for the window. The
+  // window then draws as fast as the machine lets it, which varies twofold between runs (power and
+  // heat), so its numbers are held to "never frozen" and their goals, not to the baseline.
+  await underOutput('flood', terminals.slice(0, 2), terminals[6], 0, 5, { windowCompare: false })
 })
 
 await test('memory: right after the flood', async () => {
   const mb = await megabytes()
-  record('memory.afterFlood.window', mb.window, 'MB', { goal: 400, compare: false })
-  record('memory.afterFlood.main', mb.main, 'MB', { compare: false })
+  record('memory.afterFlood.window', mb.window, 'MB', { goal: 400 })
+  record('memory.afterFlood.main', mb.main, 'MB')
+  record('memory.afterFlood.terminalHost', mb.host, 'MB')
 })
 
 // ── A long chat reply ───────────────────────────────────────────────────────────────────────
@@ -373,11 +379,10 @@ await test('a 50,000-character chat reply, streamed over ten seconds', async () 
 
 await test('memory: eight agents after the runs above', async () => {
   const mb = await megabytes()
-  // What the flood left behind is still in these, so they are reported, not compared.
-  record('memory.loaded.total', mb.total, 'MB', { compare: false })
-  record('memory.loaded.main', mb.main, 'MB', { compare: false })
-  record('memory.loaded.window', mb.window, 'MB', { compare: false })
-  record('memory.loaded.terminalHost', mb.host, 'MB', { compare: false })
+  record('memory.loaded.total', mb.total, 'MB')
+  record('memory.loaded.main', mb.main, 'MB')
+  record('memory.loaded.window', mb.window, 'MB')
+  record('memory.loaded.terminalHost', mb.host, 'MB')
 })
 
 // ── Against the baseline ────────────────────────────────────────────────────────────────────

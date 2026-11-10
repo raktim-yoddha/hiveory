@@ -286,6 +286,16 @@ export class CliRuntimeManager extends EventEmitter<RuntimeManagerEvents> {
     this.sessions.get(instanceId)?.pty.resize(cols, rows)
   }
 
+  /** The window drew `chars` more characters of this agent's output (flow control, ADR 0067). */
+  ack(instanceId: string, chars: number): void {
+    this.sessions.get(instanceId)?.pty.ack(chars)
+  }
+
+  /** The window that drew the terminals is gone: no program waits for it. */
+  unwatchAll(): void {
+    for (const session of this.sessions.values()) session.pty.unwatch()
+  }
+
   /** A watching phone's size, or null when it stops watching (ADR 0048). */
   fitViewer(instanceId: string, key: string, size: { cols: number; rows: number } | null): void {
     this.sessions.get(instanceId)?.pty.fitViewer(key, size)

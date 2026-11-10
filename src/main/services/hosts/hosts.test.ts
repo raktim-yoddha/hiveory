@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { HOST_PROTOCOL, transportPair } from '@shared/host/protocol'
-import { serveHost } from '../../../host/host-server'
+import { attachHost, createHostState, disposeHostState, serveHost } from '../../../host/host-server'
 import { inProcessPty, type PtyBackend } from '../pty/pty-backend'
 import { PtySession } from '../pty/pty-session'
 import { HostClient, hostPtyBackend } from './host-client'
@@ -64,6 +64,46 @@ describe('execution host (hiveoryd protocol)', () => {
     expect(await exited).toBeNull()
     await expect(client.call('hello', { protocol: HOST_PROTOCOL })).rejects.toThrow('not connected')
   }, 20_000)
+
+  it('a paused terminal prints nothing until it is resumed, and carries on when its client goes away (ADR 0067)', async () => {
+    const state = createHostState()
+    const [clientSide, hostSide] = transportPair()
+    attachHost(state, hostSide, true)
+    const client = new HostClient(clientSide, { keepPtys: true })
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    try {
+      const { ptyId } = await client.call('pty.spawn', { file: process.execPath, args: ['-e', "let n=0;setInterval(()=>console.log('tick'+(++n)),15)"], cwd: tmpdir(), env, cols: 80, rows: 24 })
+      let printed = ''
+      client.bind(ptyId, { data: (d) => (printed += d), exit: () => undefined })
+      const ticks = (text: string): number => Math.max(0, ...[...text.matchAll(/tick(\d+)/g)].map((m) => Number(m[1])))
+      for (let i = 0; i < 100 && ticks(printed) < 5; i++) await sleep(50)
+      expect(ticks(printed)).toBeGreaterThanOrEqual(5)
+
+      client.notify('pty.pause', { ptyId })
+      await sleep(400) // what was already on its way arrives
+      const paused = ticks(printed)
+      await sleep(500)
+      expect(ticks(printed)).toBe(paused)
+
+      client.notify('pty.resume', { ptyId })
+      for (let i = 0; i < 100 && ticks(printed) < paused + 5; i++) await sleep(50)
+      expect(ticks(printed)).toBeGreaterThanOrEqual(paused + 5)
+
+      // Paused again, then its client goes away: it must not wait for a client that is gone.
+      client.notify('pty.pause', { ptyId })
+      await sleep(300)
+      const before = ticks(printed)
+      clientSide.close()
+      await sleep(600)
+      const [nextSide, nextHost] = transportPair()
+      attachHost(state, nextHost, true)
+      const next = new HostClient(nextSide, { keepPtys: true })
+      const kept = await next.call('pty.attach', { ptyId })
+      expect(kept.alive && ticks(kept.data)).toBeGreaterThan(before + 5)
+    } finally {
+      disposeHostState(state)
+    }
+  }, 30_000)
 
   it('falls back to an in-process PTY when no host is available', async () => {
     const result = await runEcho(hostPtyBackend(() => Promise.resolve(null), inProcessPty))

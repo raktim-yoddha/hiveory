@@ -182,10 +182,29 @@ let listening = false
 let theme: ITheme | null = null
 const fontReady = document.fonts?.load('13px "JetBrains Mono Variable"').catch(() => undefined) ?? Promise.resolve()
 
-const writeChunk = (entry: Entry, data: string, offset: number): void => {
+/**
+ * Flow control (ADR 0067), with VS Code's number: main hears how far each terminal's output has
+ * been drawn, in steps of this many characters, and makes a program that prints faster than that
+ * wait. Without it a flood queues up here and freezes the window.
+ */
+const ACK_CHARS = 5_000
+const drawn = new Map<string, number>()
+/** False once main refuses (a window paired to a Hiveory server is never waited for). */
+let acking = true
+const ack = (instanceId: string, chars: number): void => {
+  if (!acking) return
+  const total = (drawn.get(instanceId) ?? 0) + chars
+  if (total < ACK_CHARS) return void drawn.set(instanceId, total)
+  drawn.delete(instanceId)
+  void api('terminal.ack', { instanceId, chars: total }).catch(() => (acking = false))
+}
+
+/** Writes a live chunk; `instanceId` is told to main as drawn once the terminal has taken it in. */
+const writeChunk = (instanceId: string, entry: Entry, data: string, offset: number): void => {
   const end = offset + data.length
-  if (end <= entry.written) return
-  entry.term.write(entry.filter(offset >= entry.written ? data : data.slice(entry.written - offset)))
+  // Already on screen from the snapshot: nothing to draw, and nothing to wait for.
+  if (end <= entry.written) return ack(instanceId, data.length)
+  entry.term.write(entry.filter(offset >= entry.written ? data : data.slice(entry.written - offset)), () => ack(instanceId, data.length))
   entry.written = end
 }
 
@@ -196,9 +215,10 @@ const ensureListener = (): void => {
     const entry = entries.get(instanceId)
     // Output nobody can see marks the terminal's tab until it is on screen again.
     if (!entry?.visible) useTerminalActivity.getState().printed(instanceId)
-    if (!entry) return
+    // A terminal with no screen here (freed, or never shown) draws nothing: its output counts as drawn.
+    if (!entry) return ack(instanceId, data.length)
     if (entry.written < 0) entry.pending.push({ data, offset })
-    else writeChunk(entry, data, offset)
+    else writeChunk(instanceId, entry, data, offset)
   })
 }
 
@@ -332,7 +352,7 @@ const create = (instanceId: string, needs: LayoutNeeds): Entry => {
       entry.written = 0
     })
     .finally(() => {
-      for (const chunk of entry.pending) writeChunk(entry, chunk.data, chunk.offset)
+      for (const chunk of entry.pending) writeChunk(instanceId, entry, chunk.data, chunk.offset)
       entry.pending = []
     })
   return entry

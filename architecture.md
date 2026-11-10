@@ -599,6 +599,21 @@ CliRuntimeManager / ShellService ─▶ PtySession (buffer, headless mirror, rep
         └──────────────▶ inProcessPty (node-pty in main)
 ```
 
+### Flow control (ADR 0067)
+
+A program that prints faster than the window draws waits for it, so a flood never queues up in
+memory or freezes the app. The window acknowledges what it has drawn (`terminal.ack`, every 5,000
+characters); `PtySession` counts what is unacknowledged and pauses the program above 100,000
+characters, resuming below 5,000 (`pty.pause` / `pty.resume` to hiveoryd, `pause()` in-process).
+Nothing is counted until a window acknowledges, and a window that closes or stays silent for 2 s
+lets the program carry on: a server, a phone or a closed window never pauses an agent.
+
+```text
+node-pty ─▶ hiveoryd ─pty.data▶ PtySession ─terminal.data▶ window (xterm.js)
+   ▲            ▲                    │  unacknowledged > 100,000        │
+   └─ pause ────┴──── pty.pause ◀────┘◀──────── terminal.ack ───────────┘
+```
+
 ### Durable terminal host (ADR 0050)
 
 The local hiveoryd outlives the app, as remote ones do: daemon, mutual hello, ownership, keys,

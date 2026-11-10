@@ -100,6 +100,16 @@ export class ShellService extends EventEmitter<ShellServiceEvents> {
     this.shells.get(id)?.pty.resize(cols, rows)
   }
 
+  /** The window drew `chars` more characters of this terminal's output (flow control, ADR 0067). */
+  ack(id: string, chars: number): void {
+    this.shells.get(id)?.pty.ack(chars)
+  }
+
+  /** The window that drew the terminals is gone: no program waits for it. */
+  unwatchAll(): void {
+    for (const shell of this.shells.values()) shell.pty.unwatch()
+  }
+
   /** A watching phone's size, or null when it stops watching (ADR 0048). */
   fitViewer(id: string, key: string, size: { cols: number; rows: number } | null): void {
     this.shells.get(id)?.pty.fitViewer(key, size)

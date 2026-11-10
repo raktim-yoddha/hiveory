@@ -302,6 +302,11 @@ export const requestSchemas = {
     cols: z.number().int().min(20).max(1000),
     rows: z.number().int().min(5).max(1000)
   }),
+  /**
+   * Flow control (ADR 0067): this window drew `chars` more characters of the terminal's output.
+   * This computer's own window only: paired devices are never waited for (not a remote channel).
+   */
+  'terminal.ack': z.object({ instanceId: id, chars: z.number().int().min(1).max(100_000_000) }),
   'terminal.snapshot': z.object({ instanceId: id }),
   'layout.get': z.object({ workspaceId: id }),
   'layout.apply': z.object({ workspaceId: id, operation: layoutOperationSchema }),
@@ -695,6 +700,7 @@ export interface ResponseMap {
   'agents.applyPreset': void
   'terminal.write': void
   'terminal.resize': void
+  'terminal.ack': void
   'terminal.snapshot': TerminalSnapshot
   'layout.get': LayoutNode | null
   'layout.apply': LayoutNode | null

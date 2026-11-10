@@ -275,7 +275,7 @@ class HostedPty implements PtyHandle {
   private readonly exitListeners: ExitListener[] = []
   private readonly errorListeners: Array<(e: Error) => void> = []
   private readonly linkListeners: Array<(linked: boolean) => void> = []
-  private target: { write(d: string): void; resize(c: number, r: number): void; kill(): void } | null = null
+  private target: { write(d: string): void; resize(c: number, r: number): void; kill(): void; pause(): void; resume(): void } | null = null
   private queued: string[] = []
   private size: { cols: number; rows: number } | null = null
   private killed = false
@@ -321,6 +321,14 @@ class HostedPty implements PtyHandle {
     this.target?.kill()
   }
 
+  pause(): void {
+    this.target?.pause()
+  }
+
+  resume(): void {
+    this.target?.resume()
+  }
+
   private ready(target: NonNullable<HostedPty['target']>, spec: PtySpawnParams): void {
     this.target = target
     if (this.killed) return target.kill()
@@ -358,7 +366,9 @@ class HostedPty implements PtyHandle {
           {
             write: (data) => live.notify('pty.write', { ptyId, data }),
             resize: (cols, rows) => live.notify('pty.resize', { ptyId, cols, rows }),
-            kill: () => void live.call('pty.kill', { ptyId }).catch(() => undefined)
+            kill: () => void live.call('pty.kill', { ptyId }).catch(() => undefined),
+            pause: () => live.notify('pty.pause', { ptyId }),
+            resume: () => live.notify('pty.resume', { ptyId })
           },
           { ...spec, ...at }
         )

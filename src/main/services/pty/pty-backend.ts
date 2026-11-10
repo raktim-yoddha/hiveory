@@ -10,6 +10,9 @@ export interface PtyHandle {
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
+  /** Flow control (ADR 0067): stop reading its output, so the program waits; and carry on. */
+  pause(): void
+  resume(): void
   /** A host daemon's terminal: false while the link to it is down (the process may still run), true again once back. */
   onLink?(listener: (linked: boolean) => void): void
 }
@@ -40,7 +43,9 @@ export const inProcessPty: PtyBackend = {
       onError: () => undefined,
       write: (data) => child.write(data),
       resize: (cols, rows) => child.resize(cols, rows),
-      kill: () => child.kill()
+      kill: () => child.kill(),
+      pause: () => child.pause(),
+      resume: () => child.resume()
     }
   }
 }

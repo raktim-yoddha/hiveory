@@ -1,6 +1,6 @@
 # Plan: Speed and memory
 
-Status: **Phase 0 is done** (2026-11-10, ADR 0066); the rest is proposed. Phase 0's numbers changed
+Status: **Phase 0 (ADR 0066) and flow control (ADR 0067) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
 the order of the work: read §3.1 and §7 before the phases in §4. Each phase gets its ADR when it
 starts (rule 29), and nothing here becomes a rule until it is in AGENTS.md / CLAUDE.md.
 
@@ -429,15 +429,34 @@ Revised after Phase 0 (§3.1). Each step ends when its goals in `pnpm e2e:perf` 
 | Order | Work | Size | Goal it must meet | Risk to features |
 |---|---|---|---|---|
 | done | Phase 0: measure and guard | S | baseline and guards exist | none |
-| 1 | **Flow control, end to end** (Phase 2 step 4, built on today's path: the window acknowledges, main relays, the terminal host pauses the PTY; a bounded queue at each hop) | M | `flood.*` at goal: typing echoes within 100 ms during a flood, window under 400 MB after it | medium: an unwatched agent must never slow down (I1, I7, I8, I10) |
-| 2 | Chat deltas (Phase 1 step 3) and the chunk ring buffer (step 1) | S | `chat.sentPerCharacter` ≤ 3 | low (interfaces kept) |
+| done | **Flow control, end to end** (ADR 0067: the window acknowledges, main counts, the terminal host pauses the PTY), and the chunk ring buffer (Phase 1 step 1) | M | see §7.1 | an unwatched agent never slows down (unit tests, `e2e:durability`) |
+| 2 | Chat deltas (Phase 1 step 3) | S | `chat.sentPerCharacter` ≤ 3 | low (interfaces kept) |
 | 3 | A redraw scenario and re-render counts in `e2e:perf`, then only the Phase 1 steps the numbers call for (selectors, lazy screens, React Compiler, markdown by blocks) | S–M | set from the new numbers | low |
 | 4 | Phase 5: less background work, idle memory | S–M | `memory.idle.*` goals, set then | low, plus 2 product decisions |
 | 5 | Phase 6: server anywhere | M | a headless Linux server passes the suites | low |
 | 6 | Phase 4: SQLite | M | decided from start-up and save numbers at a larger profile | medium (backup, dual-write) |
 | gated | Phase 2 (engine into `hiveoryd`), Phase 3 (direct stream), Phase 7 (Rust) | M–L | only if the numbers after step 1 still miss their goals | medium |
 
-Step 1 is expected to remove the hangs.
+### 7.1 What flow control changed
+
+Two terminals printing as fast as they can, same machine, before and after (six runs after):
+
+| Number | Before | After | Goal |
+|---|---|---|---|
+| Main process late by, at most | 5–14 s | **15–50 ms** | 100 ms: met |
+| Window's longest blocked stretch | 3–8 s | **0–125 ms** | 50 ms: met in 3 runs of 6 |
+| Typed character echoes in (median) | over 3 s | **45–118 ms** | 50 ms: met in 3 runs of 6 |
+| Frames a second | 0.4–6 | **26–56** | 50: met in 3 runs of 6 |
+| Window memory after the flood | 870–1,050 MB | **458–529 MB** | 400 MB: not yet |
+| Terminal host memory with eight agents | up to 730 MB | **161–217 MB** | none |
+
+The freeze is gone. The window-side numbers varied twofold between runs with no code change
+(machine power and heat), so `e2e:perf` holds them to "never frozen" (under one second) and their
+goals, not to the baseline. What is left: during a flood the window draws terminals as fast as
+the machine lets it (xterm.js gives each flooding terminal its own 12 ms slice per turn). One
+drawing budget per frame shared by all terminals would hold the goals on a slow day; it touches
+how every terminal is written, so it waits until the redraw scenario (step 3) shows whether real
+agents get near this load.
 
 ---
 

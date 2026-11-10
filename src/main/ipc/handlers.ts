@@ -241,6 +241,7 @@ export const createHandlers = (c: Container, options: { trustPaths?: boolean } =
     c.shells.has(instanceId) ? c.shells.write(instanceId, data) : c.runtime.write(instanceId, data),
   'terminal.resize': ({ instanceId, cols, rows }) =>
     c.shells.has(instanceId) ? c.shells.resize(instanceId, cols, rows) : c.runtime.resize(instanceId, cols, rows),
+  'terminal.ack': ({ instanceId, chars }) => (c.shells.has(instanceId) ? c.shells.ack(instanceId, chars) : c.runtime.ack(instanceId, chars)),
   'terminal.snapshot': ({ instanceId }) =>
     c.shells.has(instanceId) ? c.shells.snapshot(instanceId) : c.runtime.snapshot(instanceId),
 
