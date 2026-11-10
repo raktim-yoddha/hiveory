@@ -4,6 +4,19 @@ import { GitCommandError } from '../git/git-service'
 import type { PtyBackend, PtyHandle, PtyStart } from '../pty/pty-backend'
 
 const CALL_TIMEOUT_MS = 30_000
+/** Events held for a terminal or run between the answer that started it and its `bind`. */
+const EARLY_MAX = 4096
+
+/** The terminal or run a successful call just started or took back alive, whose output now follows. */
+const startedId = (method: HostCall, params: unknown, value: unknown): string | undefined => {
+  const v = (value ?? {}) as { ptyId?: string; procId?: string; alive?: boolean }
+  const p = (params ?? {}) as { ptyId?: string; procId?: string }
+  if (method === 'pty.spawn') return v.ptyId
+  if (method === 'proc.spawn') return v.procId
+  if (method === 'pty.attach' && v.alive) return p.ptyId
+  if (method === 'proc.attach' && v.alive) return p.procId
+  return undefined
+}
 
 type ExitListener = (exit: { exitCode: number | null; signal: number | null }) => void
 
@@ -29,7 +42,7 @@ interface PtyListeners {
  */
 export class HostClient {
   private seq = 0
-  private readonly calls = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>()
+  private readonly calls = new Map<number, { method: HostCall; params: unknown; resolve: (v: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>()
   private readonly ptys = new Map<string, PtyListeners>()
   private readonly closeListeners: Array<() => void> = []
   private readonly fileListeners: Array<(e: HostEvents['files.changed']) => void> = []
@@ -37,6 +50,12 @@ export class HostClient {
   private readonly procs = new Map<string, ProcListeners & { delivered: number }>()
   private readonly relayHookListeners: Array<(e: HostEvents['relay.hook']) => void> = []
   private readonly relayMcpListeners: Array<(e: HostEvents['relay.mcp']) => void> = []
+  /**
+   * Output of a terminal or run that was just started or taken back and is not bound yet. Its
+   * first output can arrive in the same read as the answer to the call, ahead of the caller's
+   * `bind`; it is held here and handed over on `bind`, so nothing it printed is lost.
+   */
+  private readonly early = new Map<string, HostFrame[]>()
   private closed = false
 
   constructor(
@@ -65,7 +84,7 @@ export class HostClient {
         this.calls.delete(id)
         reject(new Error(`The host did not answer ${method} in time.`))
       }, timeoutMs)
-      this.calls.set(id, { resolve: resolve as (v: unknown) => void, reject, timer })
+      this.calls.set(id, { method, params, resolve: resolve as (v: unknown) => void, reject, timer })
       this.transport.send({ kind: 'call', id, method, params })
     })
   }
@@ -74,13 +93,25 @@ export class HostClient {
     if (!this.closed) this.transport.send({ kind: 'notify', method, params })
   }
 
+  /** Routes a terminal's output and end to `listeners`. Hand over what an attach returned first: output held since then follows at once. */
   bind(ptyId: string, listeners: PtyListeners): void {
     this.ptys.set(ptyId, listeners)
+    this.release(ptyId)
   }
 
-  /** Routes a headless run's output and end to `listeners`; `delivered` is how much stdout they already have. */
+  /**
+   * Routes a headless run's output and end to `listeners`; `delivered` is how much stdout they
+   * already have (what an attach returned). Output held since the attach follows at once.
+   */
   bindProc(procId: string, listeners: ProcListeners, delivered = 0): void {
     this.procs.set(procId, { ...listeners, delivered })
+    this.release(procId)
+  }
+
+  private release(id: string): void {
+    const held = this.early.get(id)
+    this.early.delete(id)
+    for (const frame of held ?? []) this.onFrame(frame)
   }
 
   /** Stops routing a run here (its chat let go of it: Hiveory quits with the run kept). */
@@ -105,7 +136,7 @@ export class HostClient {
         listeners.exit(result.code)
         continue
       }
-      this.procs.set(procId, { ...listeners, delivered: result.out.length })
+      this.bindProc(procId, listeners, result.out.length)
     }
     const moving = [...from.ptys]
     from.ptys.clear()
@@ -115,9 +146,10 @@ export class HostClient {
         listeners.exit({ exitCode: result.code, signal: result.signal })
         continue
       }
-      this.ptys.set(ptyId, listeners)
       listeners.moved?.(this)
+      // What it printed while the link was down, then (on bind) what it has printed since.
       if (result.data) listeners.data(result.data)
+      this.bind(ptyId, listeners)
     }
   }
 
@@ -165,14 +197,18 @@ export class HostClient {
       if (!call) return
       this.calls.delete(frame.id)
       clearTimeout(call.timer)
-      if (frame.ok) call.resolve(frame.value)
-      else call.reject(rebuild(frame.failure ?? { message: frame.error }))
+      if (frame.ok) {
+        // The answer and the first output can come in one read: hold that output until the caller binds.
+        const started = startedId(call.method, call.params, frame.value)
+        if (started && !this.ptys.has(started) && !this.procs.has(started)) this.early.set(started, [])
+        call.resolve(frame.value)
+      } else call.reject(rebuild(frame.failure ?? { message: frame.error }))
     } else if (frame.kind === 'event' && frame.event === 'files.changed') {
       for (const l of this.fileListeners) l(frame.params as HostEvents['files.changed'])
     } else if (frame.kind === 'event' && (frame.event === 'proc.data' || frame.event === 'proc.exit')) {
       const p = frame.params as { procId: string; stream?: 'out' | 'err'; data?: string; code?: number | null }
       const target = this.procs.get(p.procId)
-      if (!target) return
+      if (!target) return this.hold(p.procId, frame)
       if (frame.event === 'proc.exit') {
         this.procs.delete(p.procId)
         return target.exit(p.code ?? null)
@@ -186,7 +222,7 @@ export class HostClient {
     } else if (frame.kind === 'event') {
       const p = frame.params as { ptyId: string; data?: string; code?: number | null; signal?: number | null }
       const target = this.ptys.get(p.ptyId)
-      if (!target) return
+      if (!target) return this.hold(p.ptyId, frame)
       if (frame.event === 'pty.data') target.data(p.data ?? '')
       else if (frame.event === 'pty.exit') {
         this.ptys.delete(p.ptyId)
@@ -195,9 +231,19 @@ export class HostClient {
     }
   }
 
+  /** Keeps an event for a terminal or run whose caller has not bound yet; one nobody started here is dropped. */
+  private hold(id: string, frame: HostFrame): void {
+    const held = this.early.get(id)
+    if (!held) return
+    // ponytail: a caller that never binds would hold output forever; past this many events it is let go.
+    if (held.length >= EARLY_MAX) this.early.delete(id)
+    else held.push(frame)
+  }
+
   private onClose(): void {
     if (this.closed) return
     this.closed = true
+    this.early.clear()
     for (const call of this.calls.values()) {
       clearTimeout(call.timer)
       call.reject(new Error('The host disconnected.'))
@@ -296,6 +342,8 @@ class HostedPty implements PtyHandle {
       : client.call('pty.spawn', { ...spec, ...at }).then(({ ptyId }) => ({ ptyId, kept: '' }))
     begin.then(
       ({ ptyId, kept }) => {
+        // What it printed while nobody was attached comes first; binding then hands over what it has printed since.
+        if (kept) this.dataListeners.forEach((l) => l(kept))
         client.bind(ptyId, {
           data: (d) => this.dataListeners.forEach((l) => l(d)),
           exit: (e) => this.exitListeners.forEach((l) => l(e)),
@@ -315,7 +363,6 @@ class HostedPty implements PtyHandle {
           { ...spec, ...at }
         )
         if (adopt) {
-          if (kept) this.dataListeners.forEach((l) => l(kept))
           // A size change makes full-screen CLIs draw their whole screen again, at the pane's size.
           live.notify('pty.resize', { ptyId, cols: at.cols, rows: Math.max(2, at.rows - 1) })
           setTimeout(() => live.notify('pty.resize', { ptyId, ...(this.size ?? at) }), 60)
