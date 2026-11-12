@@ -346,3 +346,31 @@ Three things stop the remote design from simply running locally:
   - a server on the same profile took the kept terminal back;
   - the desktop then took it back from the same daemon;
   - Restart started a new daemon.
+
+## Amendment (2026-11-12): a socket path too long for the system moves to a short private folder
+
+Decided by the product owner, 2026-11-12.
+
+- **What was wrong.** A Unix socket's path is limited: 104 bytes on macOS, 108 on Linux, including
+  the closing NUL. §2 puts the socket in the profile's folder, and when that path is longer the
+  daemon cannot listen, never answers, and Hiveory falls back to the utility process: terminals and
+  chat turns then end when Hiveory quits. The guards (ADR 0066) found it on a macOS CI runner, whose
+  socket path was 108 bytes. A user with a long username on macOS (over about 28 characters) would
+  meet the same.
+- **Where the socket goes now.** When the path in the profile's folder would be too long
+  (`socketPathMax`: 103 bytes on macOS, 107 on Linux), the daemon listens in
+  `hiveoryd-<uid>-<hash of the profile folder>/hiveoryd-<protocol>.sock` inside the user's runtime
+  folder on Linux (`XDG_RUNTIME_DIR`, when set and absolute), else the system's temporary folder
+  (per user on macOS) (`shortSocketDir`). Otherwise nothing changes.
+- **That folder is checked before use** (`ownPrivateDir`): created `0700`, then it must be a real
+  folder (not a link), owned by this user, with no access for group or others. A folder someone else
+  made first is refused, and the daemon does not start, which leaves today's fallback. This is
+  tmux's rule for its sockets in `/tmp/tmux-<uid>`. The socket itself is still `0600`, published as
+  §3 says.
+- **Unchanged.** `endpoint.json`, with the token, stays in the profile's `0700` folder and records
+  the socket's path, which is how the app finds it; the mutual HMAC `hello` (§2) still decides who
+  may talk to the daemon, so finding the socket is never enough. Windows pipes are not affected.
+  The remote daemon's socket (`~/.hiveory-host/<version>/hiveoryd.sock`) is short and not affected.
+- **Tests.** `src/host/socket-dir.test.ts` covers the length rule with the CI runner's own path, and
+  on macOS and Linux that the folder is refused when others can enter it or it is a link, and that a
+  daemon listens for a profile folder whose own socket path the system refuses.

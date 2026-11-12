@@ -41,3 +41,25 @@ export const localEndpointPath = (dir: string, protocol: number, platform = proc
   platform === 'win32'
     ? `\\\\.\\pipe\\hiveoryd-${createHash('sha256').update(dir.toLowerCase()).digest('hex').slice(0, 16)}-${protocol}`
     : posix.join(dir, `hiveoryd-${protocol}.sock`)
+
+/**
+ * The longest socket path the system takes, in bytes: `sun_path` less its closing NUL (macOS and the
+ * BSDs 104, Linux 108). A longer one cannot be listened on, and the daemon would never start.
+ */
+export const socketPathMax = (platform: NodeJS.Platform = process.platform): number => (platform === 'linux' ? 107 : 103)
+
+/**
+ * Where a socket goes when the profile's own folder makes its path too long (ADR 0050 amendment):
+ * a folder of this user's own, named for the profile, in the per-user runtime folder on Linux
+ * (`XDG_RUNTIME_DIR`), else the system's temporary folder (per user on macOS). Null when the
+ * profile's folder is short enough, which keeps the socket where ADR 0050 §2 puts it.
+ */
+export const shortSocketDir = (
+  dir: string,
+  protocol: number,
+  { platform = process.platform, runtimeDir, tmp, uid }: { platform?: NodeJS.Platform; runtimeDir?: string; tmp: string; uid: number }
+): string | null => {
+  if (platform === 'win32' || Buffer.byteLength(localEndpointPath(dir, protocol, platform)) <= socketPathMax(platform)) return null
+  const base = platform === 'linux' && runtimeDir && posix.isAbsolute(runtimeDir) ? runtimeDir : tmp
+  return posix.join(base, `hiveoryd-${uid}-${createHash('sha256').update(dir).digest('hex').slice(0, 12)}`)
+}

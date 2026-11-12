@@ -2,15 +2,17 @@ import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { connect, createServer, type Server, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { HOST_PROTOCOL, type HostFrame, type HostTransport } from '@shared/host/protocol'
 import { adoptLoginShellPath } from '../main/app/shell-path'
 import { newToken } from '../main/services/hosts/handshake'
 import { lineTransport } from '../main/services/hosts/line-transport'
-import { localEndpointFile, localEndpointPath, type LocalEndpoint } from '../main/services/hosts/local-endpoint'
+import { localEndpointFile, localEndpointPath, shortSocketDir, socketPathMax, type LocalEndpoint } from '../main/services/hosts/local-endpoint'
 import { gracePolicy } from './grace'
 import { publish } from './endpoint-owner'
+import { ownPrivateDir } from './socket-dir'
 import { createRelay } from './relay'
 import { attachHost, createHostState, disposeHostState, gateHost, serveHost, type HostState } from './host-server'
 
@@ -89,6 +91,22 @@ const runDaemon = async (): Promise<void> => {
 }
 
 /**
+ * Where this computer's daemon listens: in its own folder, or, when that makes the socket's path
+ * longer than the system takes (a long home folder; macOS allows 104 bytes), in a short folder of
+ * this user's alone (ADR 0050 amendment). The app finds it either way: endpoint.json says where.
+ */
+const endpointPath = (dir: string): string => {
+  const uid = process.getuid?.() ?? 0
+  const short = shortSocketDir(dir, HOST_PROTOCOL, { runtimeDir: process.env.XDG_RUNTIME_DIR, tmp: tmpdir(), uid })
+  if (!short) return localEndpointPath(dir, HOST_PROTOCOL)
+  ownPrivateDir(short, uid)
+  const path = localEndpointPath(short, HOST_PROTOCOL)
+  if (Buffer.byteLength(path) > socketPathMax()) throw new Error(`hiveoryd: no socket path short enough (${path})`)
+  console.error(`hiveoryd: socket in ${short}, since the profile's folder makes its path too long`)
+  return path
+}
+
+/**
  * This computer's daemon (ADR 0050): started detached by the app, it keeps every terminal until it
  * ends, whether an app is attached or not, and exits only when it has neither terminals nor an app.
  * Its endpoint and token are in `<dir>/endpoint.json`, readable by this user only.
@@ -99,7 +117,7 @@ const runLocalDaemon = async (dir: string): Promise<void> => {
   mkdirSync(dir, { recursive: true, mode: 0o700 })
   const token = newToken()
   const incarnation = randomBytes(8).toString('hex')
-  const path = localEndpointPath(dir, HOST_PROTOCOL)
+  const path = endpointPath(dir)
   const file = join(dir, localEndpointFile(HOST_PROTOCOL))
   const forget = (): void => {
     // Only our own record: a newer daemon may already have written its own.
