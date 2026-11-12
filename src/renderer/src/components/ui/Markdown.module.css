@@ -14,6 +14,19 @@
   margin-bottom: 0;
 }
 
+/* A streaming reply's blocks (ADR 0068): no box of their own, so the reply lays out as one. */
+.block {
+  display: contents;
+}
+
+.md > .block:first-child > :first-child {
+  margin-top: 0;
+}
+
+.md > .block:last-child > :last-child {
+  margin-bottom: 0;
+}
+
 .md p,
 .md ul,
 .md ol,

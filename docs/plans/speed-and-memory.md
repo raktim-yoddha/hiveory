@@ -432,7 +432,7 @@ Revised after Phase 0 (§3.1). Each step ends when its goals in `pnpm e2e:perf` 
 | done | **Flow control, end to end** (ADR 0067: the window acknowledges, main counts, the terminal host pauses the PTY), and the chunk ring buffer (Phase 1 step 1) | M | see §7.1 | an unwatched agent never slows down (unit tests, `e2e:durability`) |
 | done | Chat deltas (ADR 0068; Phase 1 step 3) | S | `chat.sentPerCharacter`: **1** (was 128; goal 3) | paired devices still get whole replies; on-screen order checked in `e2e:perf` |
 | done | A redraw scenario, CPU per process, where the window's time goes, idle cost and the memory floor in `e2e:perf` | S | see §7.2 | none |
-| 3 | Markdown by blocks (Phase 1 step 4): the one cost §7.2 found in the window | S | `chat.cpuWindow` and `chat.windowLayout` clearly down | low (final HTML identical) |
+| done | Markdown by blocks (ADR 0068 amendment; Phase 1 step 4) | S | `chat.windowScript` 4.4% (was 9–10), `chat.windowLayout` 2.8% (was 11), `chat.cpuWindow` 42–45% (was 50–60) | final HTML identical; every prefix checked |
 | 4 | GPU memory of terminals: find what holds it, release it for terminals off screen (Phase 5 step 3) | S–M | `memory.idle.gpu`, `memory.loaded.gpu` goals, set then | low |
 | 5 | Phase 6: server anywhere | M | a headless Linux server passes the suites | low |
 | not called for | Selectors, React Compiler, lazy screens (rest of Phase 1), Phase 2 (engine into `hiveoryd`), Phase 3 (direct stream), Phase 4 (SQLite), git by events (Phase 5 step 1) | | §7.2: no number points at them on this machine | |

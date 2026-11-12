@@ -103,7 +103,7 @@ const Message = memo(function Message({ message, chatId, workspaceId }: { messag
     <div className={styles.assistant}>
       <div className={styles.assistantBody} data-reply>
         {message.parts.map((part, i) => (
-          <Part key={i} part={part} />
+          <Part key={i} part={part} streaming={Boolean(message.streaming)} />
         ))}
         {message.streaming && message.parts.length === 0 && (
           <span className={styles.thinking}>
@@ -122,8 +122,8 @@ const Message = memo(function Message({ message, chatId, workspaceId }: { messag
   )
 })
 
-const Part = memo(function Part({ part }: { part: ChatPart }) {
-  if (part.kind === 'text') return <Markdown text={part.text} />
+const Part = memo(function Part({ part, streaming }: { part: ChatPart; streaming: boolean }) {
+  if (part.kind === 'text') return <Markdown text={part.text} streaming={streaming} />
   if (part.kind === 'thinking') {
     return (
       <details className={styles.thought}>

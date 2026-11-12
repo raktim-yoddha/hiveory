@@ -44,3 +44,25 @@ whole reply for clients is not copied when no client is connected.
   block is left until the numbers call for it.
 - `e2e:perf` holds the ratio to 3 or less, and checks on screen that a streaming reply shows every
   line once and in order.
+
+## Amendment (2026-11-12): a streaming reply is drawn block by block
+
+The second round of measurements (`docs/plans/speed-and-memory.md` §7.2) found one cost left in
+the window: while a reply streamed, its whole markdown was parsed, sanitized and put back into the
+page on every update, about 10% of the window's thread in script and 11% in layout.
+
+- **While a reply streams**, its text is cut into top-level blocks (paragraphs, lists, code,
+  tables…) with marked's own lexer (`markdownBlocks` in
+  `src/renderer/src/components/ui/markdown-blocks.ts`). Each block is turned into HTML and
+  sanitized once, and keeps its place in the page; only the block still being written is redrawn.
+  A block is made again only when its source text changes, or when the reply's link definitions
+  change (a reference link resolves as the whole text says).
+- **Joined, the blocks' HTML is exactly the whole reply's**, at every point of the stream: a test
+  checks this for every prefix of a reply holding each kind of block. Only sanitizing differs: it
+  runs per block, so raw HTML that opens in one block and closes in another is shown differently
+  until the reply ends.
+- **When the reply ends** it is drawn whole, exactly as before.
+
+Measured on the same machine, the 50,000-character reply: the window's thread spends 4.4% in
+script (was 9–10%) and 2.7–2.8% in layout (was 11%); the window process uses 42–45% of a core
+(was 50–60%). A reply looks the same while it streams and once it ends (compared on screen).
