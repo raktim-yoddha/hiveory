@@ -208,6 +208,10 @@ export interface HostTransport {
   onFrame(listener: (frame: HostFrame) => void): void
   onClose(listener: () => void): void
   close(): void
+  /** Characters sent but not yet taken by the other side (a stream transport; absent: never backs up). */
+  backlog?(): number
+  /** Runs once when what was waiting has gone out. */
+  onDrain?(listener: () => void): void
 }
 
 /** Two connected in-memory transports (tests, and anything that runs a host in-process). */

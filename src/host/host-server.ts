@@ -97,6 +97,45 @@ interface HostedTerminal {
   /** Output since the last client went away; null while a client is attached. */
   kept: string[] | null
   keptSize: number
+  /** Its client asked it to wait (flow control, ADR 0067). */
+  heldByClient?: boolean
+  /** It waits for the line to its client to drain (ADR 0067 amendment). */
+  heldByLine?: boolean
+}
+
+/**
+ * Most output allowed to wait on the line to a client before the terminals sending it pause
+ * (ADR 0067 amendment). Flow control counts what the window has not drawn; this counts what the
+ * client has not even read. Without it, a terminal printing faster than the client reads filled
+ * the daemon (about 540 MB on macOS) and a keystroke's echo in another terminal waited behind it
+ * for seconds.
+ */
+const LINE_HIGH = 1024 * 1024
+
+/** Pauses a terminal while the line to the client holds more than LINE_HIGH; it reads again once that drains. */
+const holdForLine = (state: HostState, t: HostedTerminal): void => {
+  const out = state.out
+  if (t.heldByLine || !out || (out.backlog?.() ?? 0) <= LINE_HIGH) return
+  t.heldByLine = true
+  try {
+    t.child.pause()
+  } catch {
+    // Exiting.
+  }
+  out.onDrain?.(() => {
+    t.heldByLine = false
+    release(t)
+  })
+}
+
+/** Lets a terminal read again, unless something else still holds it. */
+const release = (t: HostedTerminal): void => {
+  if (t.heldByClient || t.heldByLine) return
+  try {
+    t.child.resume()
+  } catch {
+    // Exiting.
+  }
 }
 
 /**
@@ -172,11 +211,9 @@ export const disposeHostState = (state: HostState): void => {
 const keepOutput = (state: HostState): void => {
   for (const t of state.terminals.values()) {
     t.kept ??= []
-    try {
-      t.child.resume()
-    } catch {
-      // Exiting.
-    }
+    t.heldByClient = false
+    t.heldByLine = false
+    release(t)
   }
 }
 
@@ -217,7 +254,10 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
         terminal.kept.push(data)
         terminal.keptSize += data.length
         while (terminal.keptSize > MAX_KEPT && terminal.kept.length > 1) terminal.keptSize -= terminal.kept.shift()!.length
-      } else state.out?.send({ kind: 'event', event: 'pty.data', params: { ptyId, data } })
+      } else {
+        state.out?.send({ kind: 'event', event: 'pty.data', params: { ptyId, data } })
+        holdForLine(state, terminal)
+      }
     })
     child.onExit(({ exitCode, signal }) => {
       state.terminals.delete(ptyId)
@@ -374,13 +414,19 @@ export const attachHost = (state: HostState, transport: HostTransport, persist: 
       state.notifications[frame.method]!(frame.params)
     } else if (frame.kind === 'notify') {
       const p = frame.params as { ptyId: string; data?: string; cols?: number; rows?: number }
-      const child = state.terminals.get(p.ptyId)?.child
+      const terminal = state.terminals.get(p.ptyId)
+      const child = terminal?.child
       try {
         if (frame.method === 'pty.write' && p.data !== undefined) child?.write(p.data)
         else if (frame.method === 'pty.resize' && p.cols && p.rows) child?.resize(p.cols, p.rows)
         // The client's screen is behind: the program waits until it has caught up (ADR 0067).
-        else if (frame.method === 'pty.pause') child?.pause()
-        else if (frame.method === 'pty.resume') child?.resume()
+        else if (frame.method === 'pty.pause' && terminal) {
+          terminal.heldByClient = true
+          child?.pause()
+        } else if (frame.method === 'pty.resume' && terminal) {
+          terminal.heldByClient = false
+          release(terminal)
+        }
       } catch {
         // A PTY that is exiting can refuse a write or resize; never fatal.
       }

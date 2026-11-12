@@ -70,3 +70,21 @@ snapshots and offsets are identical.
   write (none known) would not slow down.
 - With an older terminal host still running after an update, its terminals have no flow control
   until they end.
+
+## Amendment (2026-11-12): the terminal host also pauses a terminal when its client is not reading
+
+Decided by the product owner, 2026-11-12.
+
+- **What was wrong.** Flow control counts what the window has not drawn. On macOS the main process
+  itself could not read a flooding terminal's output as fast as the terminal host sent it: the
+  backlog grew inside the host (about 540 MB) on the one connection to main, so the echo of a
+  keystroke in another terminal waited behind it for over 3 seconds, while main and the window
+  stayed idle enough never to ask for a pause. Diagnostics in `e2e:perf` (what the programs printed,
+  what reached main, when an echo reaches main) showed it on CI's macOS runner only.
+- **Decision.** The host pauses a terminal it is sending from while more than 1 MB waits on the
+  line to its client (`LINE_HIGH`), and lets it read again once the line drains. A terminal held
+  by its client (flow control) and by the line reads again only when neither holds it; a client
+  that goes away releases both. The line reader in main no longer copies its buffer once per
+  message, which was costly when terminals print fast in small pieces.
+- **Consequences.** A connection that never backs up (the utility process) never pauses anything.
+  The same applies to remote hosts, whose line to Hiveory is SSH.

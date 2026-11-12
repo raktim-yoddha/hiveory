@@ -21,10 +21,13 @@ export const lineTransport = (input: Readable, output: Writable, close: () => vo
   input.setEncoding('utf8')
   input.on('data', (chunk: string) => {
     buffer += chunk
+    // Lines are read where they lie and the rest is kept once: cutting the buffer after each line
+    // would copy it again per line, which falls behind when terminals print fast in small pieces.
+    let start = 0
     let newline = buffer.indexOf('\n')
     while (newline >= 0) {
-      const line = buffer.slice(0, newline).trim()
-      buffer = buffer.slice(newline + 1)
+      const line = buffer.slice(start, newline).trim()
+      start = newline + 1
       if (line) {
         try {
           const frame = JSON.parse(line) as HostFrame
@@ -33,8 +36,9 @@ export const lineTransport = (input: Readable, output: Writable, close: () => vo
           // A malformed line is ignored; the client times the call out.
         }
       }
-      newline = buffer.indexOf('\n')
+      newline = buffer.indexOf('\n', start)
     }
+    if (start) buffer = buffer.slice(start)
     if (buffer.length > MAX_FRAME) {
       buffer = ''
       end()
@@ -51,6 +55,8 @@ export const lineTransport = (input: Readable, output: Writable, close: () => vo
     },
     onFrame: (l) => void frames.push(l),
     onClose: (l) => void closes.push(l),
+    backlog: () => output.writableLength,
+    onDrain: (l) => void output.once('drain', l),
     close: () => {
       end()
       close()

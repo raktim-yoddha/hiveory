@@ -1,6 +1,8 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
-import { HOST_PROTOCOL, transportPair } from '@shared/host/protocol'
+import { PassThrough } from 'node:stream'
+import { HOST_PROTOCOL, transportPair, type HostFrame, type HostTransport } from '@shared/host/protocol'
+import { lineTransport } from './line-transport'
 import { attachHost, createHostState, disposeHostState, serveHost } from '../../../host/host-server'
 import { inProcessPty, type PtyBackend } from '../pty/pty-backend'
 import { PtySession } from '../pty/pty-session'
@@ -104,6 +106,60 @@ describe('execution host (hiveoryd protocol)', () => {
       disposeHostState(state)
     }
   }, 30_000)
+
+  it('a terminal pauses while the line to its client is backed up, and reads again once it drains (ADR 0067 amendment)', async () => {
+    const state = createHostState()
+    let backlog = 0
+    let drain: (() => void) | null = null
+    const ticks: string[] = []
+    let listener: (frame: HostFrame) => void = () => undefined
+    const transport: HostTransport = {
+      send: (frame) => {
+        if (frame.kind === 'event' && frame.event === 'pty.data') ticks.push((frame.params as { data: string }).data)
+        if (frame.kind === 'result') results.set(frame.id, frame)
+      },
+      onFrame: (l) => void (listener = l),
+      onClose: () => undefined,
+      close: () => undefined,
+      backlog: () => backlog,
+      onDrain: (l) => void (drain = l)
+    }
+    const results = new Map<number, HostFrame>()
+    attachHost(state, transport, true)
+    const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+    const count = (): number => Math.max(0, ...[...ticks.join('').matchAll(/tick(\d+)/g)].map((m) => Number(m[1])))
+    try {
+      listener({ kind: 'call', id: 1, method: 'pty.spawn', params: { file: process.execPath, args: ['-e', "let n=0;setInterval(()=>console.log('tick'+(++n)),15)"], cwd: tmpdir(), env, cols: 80, rows: 24 } })
+      for (let i = 0; i < 100 && count() < 5; i++) await sleep(50)
+      expect(count()).toBeGreaterThanOrEqual(5)
+      // The client stops reading: the next output pauses the terminal.
+      backlog = 2 * 1024 * 1024
+      await sleep(400)
+      const held = count()
+      await sleep(500)
+      expect(count()).toBeLessThanOrEqual(held + 1)
+      expect(drain).not.toBeNull()
+      // The line drains: it carries on.
+      backlog = 0
+      drain!()
+      for (let i = 0; i < 100 && count() < held + 5; i++) await sleep(50)
+      expect(count()).toBeGreaterThanOrEqual(held + 5)
+    } finally {
+      disposeHostState(state)
+    }
+  }, 30_000)
+
+  it('reads many messages in one piece, and one message split across pieces', () => {
+    const input = new PassThrough()
+    const got: HostFrame[] = []
+    lineTransport(input, new PassThrough(), () => undefined).onFrame((f) => void got.push(f))
+    const frame = (i: number): string => `${JSON.stringify({ kind: 'event', event: 'pty.data', params: { ptyId: 'p1', data: `chunk ${i}` } })}\n`
+    input.write(Array.from({ length: 500 }, (_, i) => frame(i)).join(''))
+    const split = frame(500)
+    input.write(split.slice(0, 20))
+    input.write(split.slice(20))
+    expect(got.map((f) => (f as { params: { data: string } }).params.data)).toEqual(Array.from({ length: 501 }, (_, i) => `chunk ${i}`))
+  })
 
   it('falls back to an in-process PTY when no host is available', async () => {
     const result = await runEcho(hostPtyBackend(() => Promise.resolve(null), inProcessPty))
