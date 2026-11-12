@@ -1,6 +1,6 @@
 # Plan: Speed and memory
 
-Status: **Phase 0 (ADR 0066), flow control (ADR 0067), chat deltas and markdown by blocks (ADR 0068), the second round of measurements (§7.2) and GPU renderers (ADR 0069) are done** (2026-11-10); the rest is proposed. Phase 0's numbers changed
+Status: **Phase 0 (ADR 0066), flow control (ADR 0067), chat deltas and markdown by blocks (ADR 0068), the second round of measurements (§7.2), GPU renderers (ADR 0069), the end-to-end round (§7.3, ADR 0070) and the Rust measurements (§7.5) are done** (2026-11-12); the rest is proposed. Phase 0's numbers changed
 the order of the work: read §3.1 and §7 before the phases in §4. Each phase gets its ADR when it
 starts (rule 29), and nothing here becomes a rule until it is in AGENTS.md / CLAUDE.md.
 
@@ -509,6 +509,63 @@ What follows:
 
 Not measured: slower machines, macOS, Linux, SSH hosts, twenty agents, the Changes and Pull request
 tabs open, real CLIs (the fixtures draw like them but are not them).
+
+### 7.3 The end-to-end round (2026-11-12)
+
+Every suite was run on Windows, and two were added for what none covered:
+
+| Suite | Result |
+|---|---|
+| `e2e` (79), `e2e:panes` (10), `e2e:layout` (5), `e2e:tools` (8), `e2e:changes` (5), `e2e:composer` (3), `e2e:login-env` (1), `e2e:native` (13), `e2e:durability` (5) | all 129 pass |
+| `e2e:flows` (new, 6): a Schedule run end to end, a queued chat message, saved prompts, presets, Sessions | 6/6 after the fix below |
+| `e2e:server` (new, 8): server mode driven like a paired desktop and a phone | 8/8 after the fixes below |
+| CI on macOS (ADR 0050 amendment) | terminal host reached again; quit-and-reopen passes there |
+
+Found and fixed:
+
+1. **A Schedule never delivered its instructions** to an agent that prints at the top of a fresh
+   terminal: readiness read only the bottom five rows, and its "two quiet seconds" counted from
+   the agent's opening. Fixed in `deliver.ts`, with tests that fail on the old code.
+2. **Programs waited for answers nobody sent** when no window drew their terminal (server mode, a
+   phone watching, a terminal freed off screen): PowerShell typed back one character every few
+   seconds. Main's copy of the screen now answers (ADR 0070).
+3. **A slow phone swelled the server**: about 1 GB in 8 s during a flood. A device more than 8 MB
+   behind is now disconnected and re-reads the screen when it reconnects (ADR 0070): 220 MB peak.
+4. **macOS: terminals did not survive quitting** when the profile's socket path was over 104 bytes
+   (ADR 0050 amendment).
+
+Not covered: SSH hosts (no SSH server here), the phone app's screens, real CLIs in Schedules.
+
+### 7.4 What similar apps do, second round
+
+| App | What it shows Hiveory | Hiveory now |
+|---|---|---|
+| **T3 Code** (pingdotgg/t3code): Node server, SQLite, web/desktop/phone clients | "Performance is a feature… a dropped frame is a bug." Regressions come from sending too much over the socket, endless CSS animations, and long lists. Clients subscribe only to what they view. Terminals: Ghostty compiled to WASM | Socket: chat deltas (ADR 0068) and terminal-filtered streams. Animations: four endless ones, all compositor-only (`transform`/`opacity`), one with reduced-motion; not measured as a cost. Lists: not yet measured at large counts |
+| **Paseo** (getpaseo/paseo): Node daemon, Expo app, Electron shell | Binary framing for terminal streams; live streams are for speed, a full fetch is authoritative; E2E-encrypted relay; the daemon serves the web UI | Same rule now for slow devices (ADR 0070). Binary framing and a web UI are not needed by any measurement |
+| **Orca** (stablyai/orca) | Producer-side PTY flow control (256 KB / 32 KB, 5 s failsafe); renderer ACK backpressure; a cap on every queue; parked renderers for hidden terminals; the model answers terminal queries | All in place: ADR 0067 (flow control, 2 s failsafe), ADR 0069 (renderers), ADR 0070 (queries, caps) |
+| **libghostty / ghostty-web** (Coder) | xterm.js-compatible terminal in WASM; parser about 3× xterm.js, a 10 MB flood about 4.5× faster; at VS Code's flow-control constants a 50 MB `cat` is about even (11.5 vs 10.6 MB/s) and Ctrl+C slower (62 vs 19 ms). Canvas 2D renderer; no parser hooks | Candidate only: see §7.5 |
+| **Electron** (Context7) | Show the window when ready, with a matching background colour; defer modules; never block main | Already done (`window.ts`) |
+
+### 7.5 Rust, measured (2026-11-12)
+
+The terminal host, the part a Rust rewrite would replace, measured on this machine:
+
+| Load | Terminal host CPU | Main CPU | Window CPU (§7.2) | Terminal host memory |
+|---|---|---|---|---|
+| Idle, 0 / 1 / 8 / 16 terminals | 0–0.8% | 0.2–2% | 0% | 68 / 79 / 134 / 196 MB |
+| Six agents redrawing | 2.9% | 10.6% | 43–65% | 201 MB |
+| Six terminals, 250,000 chars/s each | 5.5% | 12.9% | 38–54% | 195 MB |
+| Two terminals flooding | 21.8% | 27.6% | (draws at the window's pace) | 206 MB |
+
+What each Rust (or native) option could win, against what it costs:
+
+| Option | Fits Electron? | Could win | Costs | Verdict |
+|---|---|---|---|---|
+| Rewrite `hiveoryd` in Rust | yes, a sidecar binary | about 60 MB idle and ~5 MB per terminal; under 5% of a core at realistic load | every daemon service (git, files, worktrees, chat runs) built twice; remote hosts need it per platform | **no**: memory only, and modest |
+| Rust VT parser for main's screen copy (napi-rs, `alacritty_terminal`) | yes; copies at the boundary (V8 memory cage) | part of main's 10–13% under load | native builds for six targets; screen copy must match xterm.js | **not yet**: moving the copy into `hiveoryd` (Phase 2) is the TypeScript route if main ever matters |
+| Terminal in the window: xterm.js → ghostty-web (WASM; Zig, not Rust) | yes, WASM needs no native build | the window is the biggest CPU user under load (38–65%); parsing is a share of it | no WebGL renderer, no parser hooks (cursor tracking), different glyph drawing; Ctrl+C under flood slower | **the one to try**, behind a setting, measured with `e2e:perf` before any switch |
+| ripgrep (Rust, as VS Code ships it) for file search | yes, a bundled binary | search speed on large repositories | one more binary per platform | **measure first**: search was never timed |
+| Tauri (Rust app shell) instead of Electron | no: a rewrite | the 509 MB Electron floor | the built-in browser and agent browser tools (WebContentsView, DevTools protocol), xterm WebGL on WebKitGTK | **no** |
 
 ---
 
