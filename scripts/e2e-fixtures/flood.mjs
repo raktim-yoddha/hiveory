@@ -1,7 +1,19 @@
 // Prints colored lines into a terminal for a set time, then exits (speed runs, ADR 0066).
-// Usage: node flood.mjs <bytes per second, 0 = as fast as the terminal takes it> <seconds>
+// Usage: node flood.mjs <bytes per second, 0 = as fast as the terminal takes it> <seconds> [report.json]
+// With a report path it writes how much it printed, and how often the terminal made it wait.
+import { writeFileSync } from 'node:fs'
+
 const rate = Number(process.argv[2]) || 0
 const end = Date.now() + (Number(process.argv[3]) || 5) * 1000
+const report = process.argv[4]
+const started = Date.now()
+let written = 0
+let waits = 0
+let waitedMs = 0
+const done = () => {
+  if (report) writeFileSync(report, JSON.stringify({ written, waits, waitedMs, ms: Date.now() - started }))
+  process.exit(0)
+}
 
 // What a TUI redraw looks like to a terminal: color changes, text, line ends.
 let n = 0
@@ -17,17 +29,29 @@ if (rate) {
   const timer = setInterval(() => {
     if (Date.now() >= end) {
       clearInterval(timer)
-      return process.stdout.write('\r\nflood done\r\n', () => process.exit(0))
+      return process.stdout.write('\r\nflood done\r\n', done)
     }
-    process.stdout.write(block(rate / 50))
+    const text = block(rate / 50)
+    written += text.length
+    process.stdout.write(text)
   }, 20)
 } else {
   // Unpaced: write until the terminal pushes back, carry on when it drains.
   const pump = () => {
     while (Date.now() < end) {
-      if (!process.stdout.write(block(16_384))) return process.stdout.once('drain', pump)
+      const text = block(16_384)
+      written += text.length
+      if (!process.stdout.write(text)) {
+        // The terminal is not taking more: count how often, and for how long.
+        waits++
+        const at = Date.now()
+        return process.stdout.once('drain', () => {
+          waitedMs += Date.now() - at
+          pump()
+        })
+      }
     }
-    process.stdout.write('\r\nflood done\r\n', () => process.exit(0))
+    process.stdout.write('\r\nflood done\r\n', done)
   }
   pump()
 }

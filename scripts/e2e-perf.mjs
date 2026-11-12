@@ -194,10 +194,28 @@ const echo = (instanceId, data) =>
     [instanceId, data]
   )
 
+/** Types a character and its backspace, and times the first echo reaching main's copy of the output (null: none in 3 s). */
+const echoInMain = async (instanceId) => {
+  const before = (await value('terminal.snapshot', { instanceId })).end
+  const started = Date.now()
+  await value('terminal.write', { instanceId, data: 'y' })
+  let took = null
+  while (Date.now() - started < 3000) {
+    if ((await value('terminal.snapshot', { instanceId })).end > before) {
+      took = Date.now() - started
+      break
+    }
+    await page.waitForTimeout(10)
+  }
+  await value('terminal.write', { instanceId, data: '\x7f' })
+  return took
+}
+
 const printed = async (ids) => (await Promise.all(ids.map((instanceId) => value('terminal.snapshot', { instanceId })))).reduce((sum, s) => sum + s.end, 0)
 
-/** `node flood.mjs <rate> <seconds>`: lines printed at `rate` characters a second (0: as fast as it can). */
-const flood = (rate) => (lasts) => `node ${shellPath(join(fixtures, 'flood.mjs'))} ${rate} ${lasts}`
+/** `node flood.mjs <rate> <seconds> <report>`: lines printed at `rate` characters a second (0: as fast as it can). */
+const floodReport = (index) => join(sandbox, `flood-${index}.json`)
+const flood = (rate) => (lasts, index) => `node ${shellPath(join(fixtures, 'flood.mjs'))} ${rate} ${lasts} ${shellPath(floodReport(index))}`
 /** `node tui.mjs <mode> <fps> <seconds>`: a screen redrawn in place, as agent CLIs draw. */
 const tui = (mode, fps) => (lasts) => `node ${shellPath(join(fixtures, 'tui.mjs'))} ${mode} ${fps} ${lasts}`
 
@@ -213,9 +231,11 @@ const underOutput = async (name, loud, typist, command, seconds, { windowCompare
   await startProbe()
   const started = Date.now()
   const echoes = []
+  const mainEchoes = []
   while (Date.now() - started < seconds * 1000) {
     // A character, then the backspace that takes it away: two echoes, and the prompt stays empty.
     echoes.push(await echo(typist, 'x'), await echo(typist, '\x7f'))
+    mainEchoes.push(await echoInMain(typist))
     await page.waitForTimeout(250)
   }
   const work = await stopProbe()
@@ -232,15 +252,35 @@ const underOutput = async (name, loud, typist, command, seconds, { windowCompare
   record(`${name}.typingEchoP50`, median(times), 'ms', { goal: 50, compare: windowCompare })
   // The slowest of a few dozen keystrokes: one hiccup moves it, so it is reported, not compared.
   record(`${name}.typingEchoMax`, Math.max(...times), 'ms', { goal: 100, compare: false })
-  // Whatever the machine, the app never freezes under output (ADR 0067).
-  expect(main.max < 1000, `${name}: the main process ran ${Math.round(main.max)} ms late`)
-  expect(win.longest < 1000, `${name}: the window was blocked for ${Math.round(win.longest)} ms`)
-  expect(median(times) < 1000, `${name}: a typed character took ${Math.round(median(times))} ms to echo`)
+  // The same echo as main sees it: slow here too means it waited before main (in the terminal host or the PTY).
+  record(`${name}.diag.echoInMainP50`, median(mainEchoes.map((e) => e ?? 3000)), 'ms', { compare: false })
   // How much was printed, for reading the numbers above; not a speed to hold.
   record(`${name}.outputPerSecond`, (after - before) / took / 1000, 'k chars/s', { compare: false })
   if (windowCompare) recordWork(name, work)
   // Let the output end before the next measurement starts.
   await page.waitForTimeout((lasts - seconds) * 1000 + 500)
+  // Where output waits, for reading a slow echo: what the programs printed against what reached
+  // main, and how often the terminal made them wait (never: pausing a terminal does not hold it).
+  const reports = loud.map((_, i) => {
+    try {
+      return JSON.parse(readFileSync(floodReport(i), 'utf8'))
+    } catch {
+      return null
+    }
+  })
+  if (reports.every(Boolean)) {
+    const produced = reports.reduce((n, r) => n + r.written, 0)
+    const received = (await printed(loud)) - before
+    record(`${name}.diag.producedMB`, produced / 1e6, 'MB', { compare: false })
+    record(`${name}.diag.notReachedMainMB`, Math.max(0, produced - received) / 1e6, 'MB', { compare: false })
+    record(`${name}.diag.producerWaits`, reports.reduce((n, r) => n + r.waits, 0), 'times', { compare: false })
+    record(`${name}.diag.producerWaitedMs`, reports.reduce((n, r) => n + r.waitedMs, 0), 'ms', { compare: false })
+    for (const i of loud.keys()) rmSync(floodReport(i), { force: true })
+  }
+  // Last, so the numbers above are recorded either way. Whatever the machine, the app never freezes under output (ADR 0067).
+  expect(main.max < 1000, `${name}: the main process ran ${Math.round(main.max)} ms late`)
+  expect(win.longest < 1000, `${name}: the window was blocked for ${Math.round(win.longest)} ms`)
+  expect(median(times) < 1000, `${name}: a typed character took ${Math.round(median(times))} ms to echo`)
 }
 
 const megabytes = async () => {
